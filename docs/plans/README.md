@@ -12,6 +12,22 @@ is committed. The plan is the reviewable contract for the change; the PR then ex
   [../plan.md](../plan.md) links here once a plan exists. Plans are kept as-merged (a historical record
   of intent), not retro-edited to match drift.
 
+**When a merged decision falsifies an unimplemented plan, amend it one way** _(ruled 2026-11-11, after
+three plans drifted off V1-22 chunk 2's D1 in three different idioms)_:
+
+- A **dated `## Amendment` block** above the sections it supersedes, with a table **naming** each
+  superseded passage by section and quoted phrase — never by line, which the block itself moves. Leave
+  the old passage in place and **signpost it** with a one-line `⚠️ Superseded <date> — see § Amendment`
+  pointing at the block, because a deep link or a citation from another plan lands past any header
+  warning. Worked examples: [`v1-22-2-renderer-and-writer.md`](./v1-22-2-renderer-and-writer.md)
+  § Decisions and [`pick-1-movement-picker.md`](./pick-1-movement-picker.md) § Amendment.
+- A **dated in-place re-statement** for a plain statement of fact about the code — a line citation, a
+  module path, a "what the code does today" bullet. Quote what it replaced, so the record survives.
+  Reasoning and decisions take the first form; facts take this one.
+
+🔴 **Re-read every line citation you touch.** A stale `file:line` re-asserted inside a new line is
+worse than the stale line it replaced: it now carries today's date.
+
 ## Adversarial plan review (before implementation)
 
 A significant plan is authored at **Staff-SWE level** and then **hardened by an adversarial review

@@ -188,7 +188,9 @@ milestone does the full intersection against AUTH-1's file table, which names `l
 - **chunk 0** (a spreadsheet; no repo files) — **now**.
 - **B0** (`packages/db` migration + `db:verify`; no `apps/web` file) — after AUTH-1 1b's migration lands,
   because both are migrations and the numbering is serial.
-- **D1** (V1-22 chunks 2–3) — already unblocked per the roadmap. ⚠️ Chunk 2 edits the log form, and
+- **D1** (V1-22 chunks 2–3) — chunk 2 **shipped 2026-11-11** (#367); chunk 3 is next. ⚠️ _Corrected
+  2026-11-11:_ "Chunk 2 edits the log form" was true of the design, not of the chunk — its **D1** ruling
+  dropped the prescription identity from the submit payload, so it touched no `apps/web` UI file at all.
   AUTH-1 1c edits `actions.ts`; check the intersection at the time, per gate 1.
 - **PICK-1's plan and panel** (docs only), not its code.
 - **U0** (`components/ui/sheet.tsx`, a new file no AUTH-1 chunk names) — any time.
@@ -527,8 +529,10 @@ Rules the contract carries:
   the writer using `now()` (every shipped writer does) and never `clock_timestamp()`.
 - **The picker submits an id, not a name.** C1 adds a movement public id to the log submit schema; the
   free-text name path remains only for "use what I typed". That is a change to the Logging∩Authoring
-  seam (owner: Logging), so C1 and V1-22 chunk 2 — which adds a prescription public id to the **same**
-  schema — must not run at once.
+  seam (owner: Logging). ⚠️ _Corrected 2026-11-11:_ the clause "and V1-22 chunk 2 — which adds a
+  prescription public id to the **same** schema — must not run at once" is **void**. Chunk 2's **D1**
+  added nothing to `sessionMovementSchema`, and chunk 2 has merged (#367), so C1 is the schema's only
+  claimant.
 - **`RestoreResult` is per item**, because a cleared day restores as one event and may partly fail.
 - **No authored load crosses into the log form** — `MovementOptionDTO` has no load, the same boundary
   `ScaffoldRow` keeps ([V1-22 spec](./v1-22-authoring-program-editing.md) → contract rules).

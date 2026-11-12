@@ -285,9 +285,13 @@ set-state-in-effect` forbids the effect-based version.)
 
 ## 3a-iii — recorded decisions (its own plan later)
 
-- Match **logged ↔ prescribed by movement slug** (the export's key, `lib/dal/export.ts`;
-  `findOrCreateMovementId` resolves by slug), **filtered server-side in `page.tsx`**, where the program
-  rows are narrowed. No internal id reaches the client, and `ScaffoldRow` doesn't widen.
+- Match **logged ↔ prescribed by movement slug** — ⚠️ _but not "the export's key" any more
+  (corrected 2026-11-11):_ V1-22 chunk 2's **D1** moved the export's `prescribed` match to
+  `movement_id` (`packages/shared/src/csv/prescribed.ts`). The slug still works here because
+  `findOrCreateMovementId` resolves by slug and no internal id may reach the client; the justification
+  is that constraint, not parity with the export. **Filtered server-side in `page.tsx`**, where the
+  program rows are narrowed, and `ScaffoldRow` doesn't widen. (After PICK-1 PR 4 the scaffold can carry
+  `movementPublicId`, which 3a-iii's own plan should weigh.)
 - A **skipped** movement does not count as logged. The match is **count-aware** for a movement
   prescribed twice (warm-up + working). The filter runs **before** the 12-movement clamp.
 - **Visible, never silent:** "Loaded 3 movements. Left out 2 already logged today: Back squat, Bench."

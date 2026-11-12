@@ -281,10 +281,12 @@ and complete; this is the one thing it cannot reach.
 - **`.$type<RoutineConfig>()` is a compile-time cast only.** The stored JSONB is untrusted input; every
   read must `resolveRoutine` (which zod-parses). Treating the cast as validation is a hole.
 
-- **`programDayRows` selects BOTH `movements.name` and `movements.slug`.** The Today card renders the
-  name; the CSV export keys `prescribed` back to a logged movement by the **slug** (V1-13b), because
-  `name` is a display string — `"Front Squat"` — and would never match. Both come from one query so
-  neither side converts.
+- **`programDayRows` selects `movements.name`, `movements.slug` AND `prescriptions.movement_id`.** The
+  Today card renders the name. ⚠️ _Corrected 2026-11-11:_ this bullet used to say the CSV keys
+  `prescribed` back to a logged movement by the **slug** (V1-13b) — V1-22 chunk 2 replaced that with
+  the `movement_id` key, so the slug's remaining job here is the CSV's **`movement`** column and
+  `name`'s is display. The three come from one query so no side converts. See the frozen-`prescribed`
+  bullet below for the key that actually matches.
 
 - **`programDayRows` also carries the MOVEMENT's declaration — and that is not the coach's
   prescription (V1-26 PR-A).** `movementIsBodyweight` / `movementUnitDefault` come off the

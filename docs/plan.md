@@ -1719,6 +1719,12 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   footprint, and **flips `apps/web/lib/dal/entries.test.ts`'s pinned ordering assertion** — which is
   the only test in the repo proving the catalog write commits before the transaction opens, so it
   must be changed deliberately, never deleted.
+  ⚠️ **And since V1-22 chunk 2 (#367) it must move a SECOND reader with it.**
+  `writeStrengthSession` now calls `prescribedSnapshotsFor` **before** its transaction, from
+  `args.movements.map((m) => m.movementId)` (`packages/db/src/writers/strength-session.ts:318-327`):
+  taking names instead of ids leaves that call nothing to read, so the snapshot read moves inside too,
+  and the point-in-time semantics acceptance 9 asked for move with it. `db:verify`'s chunk-2 writer
+  block is the gate — probed 2026-11-11 by emptying the id list, which failed at `verify.ts:4830`.
   🔴 **And it is strictly harder than it looks:** inside the transaction the `23505` fallback can no
   longer catch-and-re-query, because a failed statement aborts the transaction (`25P02`) and would
   kill the whole session write. This PR owes a `SAVEPOINT` — the mechanic `verify.ts` already
