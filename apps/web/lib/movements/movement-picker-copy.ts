@@ -66,7 +66,13 @@ export const MOVEMENT_PICKER_COPY = {
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
 
   // ── The footer ──────────────────────────────────────────────────────────────────────────────────
-  useAsTyped: (name: string) => `Use "${name}" as typed`,
+  /**
+   * ⚠️ **Named `asTyped`, not `useAsTyped`.** The UI text is 'Use "…" as typed', but a key beginning
+   * `use` is read by `react-hooks/rules-of-hooks` as a React hook, and calling it inside a
+   * conditional branch — which is exactly where the footer calls it — is a lint error. Caught by
+   * the linter on the component's first build.
+   */
+  asTyped: (name: string) => `Use "${name}" as typed`,
   /**
    * 🔴 **The permanence warning, and every word of it is load-bearing** (UX3 4). A household movement
    * is visible to everyone in the household, and nothing in the app can delete it — not until
@@ -77,7 +83,7 @@ export const MOVEMENT_PICKER_COPY = {
    * PR that edits this string; promising it now would be the app telling someone a recovery exists
    * when it does not.
    */
-  useAsTypedHint: (name: string) =>
+  asTypedHint: (name: string) =>
     `Adds "${name}" to the list for everyone in your household. It can't be deleted, so check the spelling.`,
 
   // ── The card, and the Save line (PR 4 renders these; the strings live here) ─────────────────────

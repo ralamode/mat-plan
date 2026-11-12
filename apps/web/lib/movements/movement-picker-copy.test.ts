@@ -39,7 +39,7 @@ describe('MOVEMENT_PICKER_COPY — the counted sentences', () => {
 
 describe('the permanence warning', () => {
   it('names the movement, says who sees it, and says it cannot be deleted', () => {
-    const hint = COPY.useAsTypedHint('pullups');
+    const hint = COPY.asTypedHint('pullups');
     expect(hint).toContain('"pullups"');
     expect(hint).toContain('everyone in your household');
     expect(hint).toContain("can't be deleted");
@@ -48,7 +48,7 @@ describe('the permanence warning', () => {
   it('🔴 does NOT promise a rename — MOV-1 is what makes that true, and edits this string', () => {
     // Telling someone a recovery exists when it does not is worse than saying nothing. This holds
     // the line until C4r, and is the assertion MOV-1 has to change deliberately.
-    for (const text of [COPY.useAsTypedHint('x'), COPY.cardCreatedHint]) {
+    for (const text of [COPY.asTypedHint('x'), COPY.cardCreatedHint]) {
       expect(text.toLowerCase()).not.toContain('rename');
       expect(text.toLowerCase()).not.toContain('later');
     }
