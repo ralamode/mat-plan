@@ -263,7 +263,8 @@ none` is not an answer. The PR template carries the lines and the reasoning.
 ## Feature guides (docs/features/)
 
 A **large, atomic** feature — one you cannot change a part of without understanding the others — gets
-a guide at `docs/features/<slug>.md`. Today: strength logging, the write path, programming.
+a guide at `docs/features/<slug>.md`. Today: strength logging, the write path, programming, the
+movement picker.
 
 - **Read it before you start:** the file map, the invariants that live BETWEEN files, and the traps.
 - **Update it in the same PR as the code.** `pnpm guides:check` (CI's `quality` job) fails a PR that

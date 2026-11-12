@@ -310,7 +310,9 @@ and complete; this is the one thing it cannot reach.
   never an arbitrary pick. The rule lives once, in `packages/shared/src/csv/prescribed.ts`'s
   `liveMatchesByKey`, which the writer and the export both call; it keys on `movement_id` rather than
   the slug it used to, because a slug is only a proxy for the row the entry's `movement_id` names and
-  `MOV-1`'s rename breaks the proxy.
+  `MOV-1`'s rename breaks the proxy. ✅ **No later PR owes that switch** — chunk 2 shipped both sides
+  keyed on the id, so `movement-picker.md` invariant 7 is CLOSED and the two code comments that said
+  a `PICK-1` invariant "schedules a later PR to replace" the proxy are retired (`PICK-1` PR 3).
 
 - **V1-22 widened by GAP-3.** A movement's **load-slot set** (`vest`/`ankle`/`wrist`) is something a
   coach declares, and that authoring surface lands here — it is what keeps the child table invisible on
