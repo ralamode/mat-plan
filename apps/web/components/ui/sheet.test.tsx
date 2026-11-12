@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createRef, useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Sheet } from './sheet';
+import { Sheet, sheetStatusId } from './sheet';
 
 afterEach(() => {
   // The geometry tests install a stub; leave it behind and an unrelated test inherits a viewport.
@@ -102,7 +102,11 @@ async function closeVia(fn: () => void) {
 const headerClose = () => screen.getAllByRole('button', { name: /close/i })[0]!;
 
 describe('Sheet — the frame', () => {
-  it('names itself from the title, which is also the initial focus target', () => {
+  // ⚠️ **Renamed at PICK-1 PR 3.** It was called "names itself from the title, which is also the
+  // initial focus target" and asserted only the name — nothing in it looked at focus, and nothing in
+  // `sheet.tsx` wired `onOpenAutoFocus`, so the second half of the name was a claim no test made and
+  // no code kept. The name now says what it checks; the focus target has its own case below.
+  it('names itself from the title', () => {
     render(<Harness />);
     openAndCapture();
     // Radix wires `aria-labelledby` to the Title; the name is what a screen reader announces on
@@ -111,6 +115,79 @@ describe('Sheet — the frame', () => {
     expect(dialog().getAttribute('aria-labelledby')).toBeTruthy();
     const titleId = dialog().getAttribute('aria-labelledby')!;
     expect(document.getElementById(titleId)?.textContent).toBe('Pick a movement');
+  });
+
+  it('focuses what `initialFocus` names', () => {
+    // 🔴 What this CAN and CANNOT prove, stated so the next reader does not over-read it. It proves
+    // the sheet calls `focus()` on the right element — the wiring PICK-1 PR 3 added, which did not
+    // exist before. It does NOT prove where a real browser leaves focus: jsdom's focus handling
+    // under Radix's `FocusScope` would not settle that (four probes disagreed), so the question
+    // belongs to PR 4's e2e. A test that cannot answer a question should not be named for it.
+    const focused: string[] = [];
+    const Spy = () => {
+      const target = useRef<HTMLButtonElement>(null);
+      const trigger = useRef<HTMLButtonElement>(null);
+      const [open, setOpen] = useState(false);
+      return (
+        <main>
+          <button ref={trigger} type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <Sheet
+            id="spy"
+            open={open}
+            onOpenChange={setOpen}
+            title="Pick a movement"
+            returnFocusTo={trigger}
+            initialFocus={target}
+          >
+            <button ref={target} type="button" onFocus={() => focused.push('named target')}>
+              Named target
+            </button>
+          </Sheet>
+        </main>
+      );
+    };
+    render(<Spy />);
+    act(() => {
+      screen.getByRole('button', { name: 'Open' }).click();
+    });
+    expect(focused).toContain('named target');
+  });
+
+  it('focuses the TITLE when `initialFocus` is omitted', () => {
+    // 🔴 **Its own test, because the case above was named for both halves and asserted one.** The
+    // default is the claim this file has made since U0 — "the title is the initial focus target" —
+    // and until PR 3 wired `onOpenAutoFocus` nothing made it true. A test name that promises two
+    // behaviours and checks one is the shape that let the original slip through.
+    //
+    // ⚠️ Same limit as above: this proves the sheet CALLS `focus()` on the title, via the event that
+    // reaches it. Where a real browser leaves focus afterwards is PR 4's e2e.
+    const focusedText: (string | null)[] = [];
+    const onFocusIn = (e: Event) => focusedText.push((e.target as HTMLElement).textContent);
+    document.addEventListener('focusin', onFocusIn);
+    try {
+      render(<Harness />);
+      openAndCapture();
+      // The harness's own title, which is also what the `Dialog.Title` renders.
+      expect(focusedText).toContain('Pick a movement');
+    } finally {
+      document.removeEventListener('focusin', onFocusIn);
+    }
+  });
+
+  it('gives the in-sheet status region the id `sheetStatusId` derives, so a control can describe from it', () => {
+    render(<Harness status="3 matches" />);
+    openAndCapture();
+    const region = dialog().querySelector('[role="status"]');
+    // 🔴 **The LITERAL is on the assertion side, exactly once** — the deliberate exception in
+    // AGENTS.md's constants rule. Asserting `sheetStatusId('test-sheet')` here would put the helper
+    // on both sides, so changing the suffix would change both identically: probed, and it reported
+    // GREEN under a mutation that renamed `-status` to `-live`. A contract test that pins a value
+    // must not compute the expectation from the thing it is pinning.
+    expect(region?.id).toBe('test-sheet-status');
+    // …and the helper agrees with it, which is what makes a consumer safe to use the helper.
+    expect(sheetStatusId('test-sheet')).toBe(region?.id);
   });
 
   it('renders an overlay even for the full-screen sheet — the scroll lock lives on it', () => {
