@@ -114,10 +114,14 @@ describe('the browse list, with no query', () => {
       />,
     );
     open();
-    // The `<summary>` is not an h3, so Today's program sits between Recent and the first group by
-    // DOM order rather than appearing in this list — asserted separately below.
+    // 🔴 **Today's program IS in this list, and that is the point of the assertion.** This test
+    // first shipped without it, under a comment explaining that a `<summary>` is not an `h3` — which
+    // described the bug rather than the requirement. Heading navigation is how a screen-reader user
+    // skims a sheet this long, and the section it skipped was the day's actual program. The `h3`
+    // now sits inside the `summary`.
     expect(headings()).toEqual([
       COPY.recent,
+      COPY.todaysProgram,
       COPY.groupLabel('push'),
       COPY.groupLabel('pull'),
       COPY.groupLabel('legs'),
@@ -280,10 +284,16 @@ describe('the status region (criterion 46)', () => {
   it('counts matches, singular and plural', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
+    // `front squat` is an exact hit, so the status carries its reason too — the `{count}. {reason}`
+    // shape panel 2 · 2 decided, pinned whole rather than by substring.
     type('front squat');
-    expect(status()).toContain(COPY.statusCount(1));
+    expect(status()).toBe(`${COPY.statusCount(1)} ${COPY.statusAlreadyListed('Front Squat')}`);
+    // ⚠️ **`toBe`, not `toContain('matches')`** — which was the first draft and is satisfied by
+    // "No matches.", so the plural half of a test named "singular and plural" could not fail. The
+    // count is written out (3 of Back / Front / Goblet Squat) rather than taken from the rendered
+    // rows: an expectation computed from the subject agrees with it by construction.
     type('squat');
-    expect(status()).toContain('matches');
+    expect(status()).toBe(COPY.statusCount(3));
   });
 
   it('says No matches, and falls back to the some-words count', () => {
@@ -463,10 +473,15 @@ describe('Enter in the search box (panel 2 · 3)', () => {
   it('resolves TWO exact hits to the first, catalog before household', () => {
     // No seeded pair collides, but a pre-PICK-1 household row whose SLUG differs can share a key:
     // `Pullups` slugs to `pullups`, not `pull-up`, so it is not shadowed and Decision 5 lists it.
+    //
+    // 🔴 **The household row goes FIRST in the input, and that is what makes this test able to
+    // fail.** With the catalog row first, `Array.prototype.sort` is stable, so dropping the
+    // `isCatalog` term from the comparator leaves the same winner and the test stays green —
+    // probed. The rule under test is "catalog wins", so the input has to be ordered against it.
     const onPick = vi.fn();
     render(
       <Harness
-        data={{ options: [...ALL_CATALOG, householdOption('Pullups', 'h-dupe')] }}
+        data={{ options: [householdOption('Pullups', 'h-dupe'), ...ALL_CATALOG] }}
         onPick={onPick}
       />,
     );
@@ -518,6 +533,9 @@ describe('the rest of the contract', () => {
     const source = readFileSync('components/movements/movement-picker.tsx', 'utf8');
     expect(source).not.toMatch(/'use server'/);
     expect(source).not.toMatch(/from '@\/app\//);
+    // ⚠️ …and the RELATIVE form, which the alias pattern does not catch. `from '../../app/actions'`
+    // imports exactly the thing this test exists to forbid and passed the scan.
+    expect(source).not.toMatch(/from '[^']*\/app\//);
     expect(source).not.toMatch(/\baction=/);
   });
 

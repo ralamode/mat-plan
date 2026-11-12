@@ -121,7 +121,7 @@ describe('matchMovementOptions — the Decision 4 vector table', () => {
     expect(result.matches.map((o) => o.name)).toEqual(wanted);
     expect(result.exact).toBe(exact);
     // "Use as typed" is withheld by EITHER signal — that is the rule the picker reads.
-    expect(result.exact || result.aliasHit).toBe(withheld);
+    expect(result.exact || result.aliasHit !== null).toBe(withheld);
     if (someWords) expect(result.someWords.map((o) => o.name)).toEqual(someWords);
   });
 
@@ -129,12 +129,15 @@ describe('matchMovementOptions — the Decision 4 vector table', () => {
     const result = matchMovementOptions(SEEDED, 'press');
     expect(result.matches.map((o) => o.name)).toContain('Pallof Press');
     expect(result.matches.map((o) => o.name)).toContain('Overhead Shoulder Press');
-    expect(result.exact || result.aliasHit).toBe(false);
+    expect(result.exact || result.aliasHit !== null).toBe(false);
   });
 
-  it('an alias hits EXACTLY, so a prefix of it does not', () => {
-    expect(matchMovementOptions(SEEDED, 'rdl').aliasHit).toBe(true);
-    expect(matchMovementOptions(SEEDED, 'rd').aliasHit).toBe(false);
+  it('an alias hits EXACTLY, so a prefix of it does not, and names WHICH alias hit', () => {
+    // The authored casing, because that is what the picker's "also called RDL" tag renders — a
+    // boolean here would have left the component re-deriving which alias it was.
+    expect(matchMovementOptions(SEEDED, 'rdl').aliasHit).toBe('RDL');
+    expect(matchMovementOptions(SEEDED, 'R.D.L.').aliasHit).toBe('RDL');
+    expect(matchMovementOptions(SEEDED, 'rd').aliasHit).toBeNull();
   });
 
   it('someWords is empty whenever there are matches', () => {
@@ -192,7 +195,7 @@ describe('matchMovementOptions — the Decision 4 vector table', () => {
   it('an empty or punctuation-only query matches nothing and withholds nothing', () => {
     for (const query of ['', '   ', '—']) {
       const result = matchMovementOptions(SEEDED, query);
-      expect(result).toEqual({ matches: [], someWords: [], aliasHit: false, exact: false });
+      expect(result).toEqual({ matches: [], someWords: [], aliasHit: null, exact: false });
     }
   });
 });

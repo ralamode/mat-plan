@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { APP_LOCALE, formatList, plural, quote } from './plural';
+import { APP_LOCALE } from './locale';
+import { formatList, plural, quote } from './plural';
 
 describe('plural()', () => {
   it('picks English forms', () => {

@@ -7,9 +7,10 @@ import { formatList, plural, quote } from '@/lib/i18n/plural';
  * footer's guard copy (PICK-1 Decision 8, reuse S4).
  *
  * 🔴 **Its own module, NOT `lib/constants.ts`.** `AUTH-1` 1c edits that file, and a whole feature's
- * copy landing in it is a guaranteed conflict for no benefit. ⚠️ `MOV-1`'s plan cites
- * `movement-copy.ts` for the rename surface's strings (`mov-1-rename-movement.md`); whichever of the
- * two ships second renames, so there is one movement-copy module and not two.
+ * copy landing in it is a guaranteed conflict for no benefit. `MOV-1` **adds to THIS file** — its
+ * plan's file table lists this path as `EDIT (PICK-1 creates it)` and puts `MOVEMENT_RENAME_COPY`
+ * beside this const (`mov-1-rename-movement.md`, § Files). Nothing is renamed later; an earlier
+ * version of this comment invented a `movement-copy.ts` and an obligation to converge on it.
  *
  * ⚠️ **Several of these are functions, not strings, and that is deliberate** — a template literal
  * built at the call site is how the same sentence ends up phrased two ways on two screens. The
@@ -55,7 +56,14 @@ export const MOVEMENT_PICKER_COPY = {
    * as one breathless clause, and the three count strings disagreed with each other —
    * `statusNoMatches` and `statusSomeWords` already ended in one.
    */
-  statusCount: (n: number) => plural(n, { one: '1 match.', other: `${n} matches.` }),
+  /**
+   * ⚠️ **The `one` form interpolates `${n}` rather than writing `1`.** `one` is not "the number one"
+   * — in Russian, Ukrainian and Croatian it is the category for 21, 31, 101, … , so a hardcoded
+   * digit renders "1 match." for twenty-one matches the moment a locale lands. Every `one` form in
+   * this file carries the count for that reason; in English the two are indistinguishable, which is
+   * precisely why it has to be a rule rather than a thing noticed later.
+   */
+  statusCount: (n: number) => plural(n, { one: `${n} match.`, other: `${n} matches.` }),
   statusNoMatches: 'No matches.',
   /**
    * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
@@ -66,7 +74,7 @@ export const MOVEMENT_PICKER_COPY = {
    */
   statusSomeWords: (n: number) =>
     `No matches. ${plural(n, {
-      one: '1 movement matches',
+      one: `${n} movement matches`,
       other: `${n} movements match`,
     })} some of your words.`,
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
@@ -101,12 +109,19 @@ export const MOVEMENT_PICKER_COPY = {
   /**
    * Joins the Save summary when any card carries a created movement (UX3 3). Named quantities and
    * the quoted names, because "1 new movement" without the name is not a spelling check.
+   *
+   * ⚠️ **No names ⇒ `''`**, the same empty as `statusEmpty`, so PR 4's caller can interpolate it
+   * unconditionally. Without the guard it rendered "Saving adds 0 new movements: . Check the
+   * spelling." — a sentence about nothing, with a hole in it, on every ordinary save.
    */
   saveCreates: (names: readonly string[]) =>
-    `Saving adds ${plural(names.length, {
-      one: '1 new movement',
-      other: `${names.length} new movements`,
-      // ⚠️ `.join(', ')` was the first draft and is a localization bug of its own — the separator,
-      // the conjunction and the serial comma are all locale-specific (Arabic joins with و).
-    })}: ${formatList(names.map((n) => quote(n)))}. Check the spelling.`,
+    names.length === 0
+      ? ''
+      : `Saving adds ${plural(names.length, {
+          one: `${names.length} new movement`,
+          other: `${names.length} new movements`,
+          // ⚠️ `.join(', ')` was the first draft and is a localization bug of its own — the
+          // separator, the conjunction and the serial comma are all locale-specific (Arabic
+          // joins with و).
+        })}: ${formatList(names.map((n) => quote(n)))}. Check the spelling.`,
 } as const;

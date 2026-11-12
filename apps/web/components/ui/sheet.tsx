@@ -116,6 +116,17 @@ export type SheetProps = {
 let openSheets = 0;
 
 /**
+ * The sheet chrome's own words — **the primitive owns them, because the primitive renders them.**
+ *
+ * `Close` was written out three times: the header's ✕ `aria-label`, `FooterFallback`'s button, and
+ * the picker's own copy module. A consumer that passes its own `footer` still has to end it with
+ * Close (panel 2 · 7), so it needs the same word this file uses, and "the same word" is a constant,
+ * not a coincidence. ⚠️ `STRENGTH_COPY.close` in `lib/constants.ts` is a DIFFERENT control — an open
+ * toggle whose own docblock explains why it says Close and not Cancel — and stays where it is.
+ */
+export const SHEET_COPY = { close: 'Close' } as const;
+
+/**
  * The id of a sheet's in-sheet live region, derived from the sheet's own id so a consumer can point
  * `aria-describedby` at it without reaching into this file's markup (PICK-1 PR 3, criterion 46).
  *
@@ -312,7 +323,7 @@ function FooterFallback() {
   return (
     <Dialog.Close asChild>
       <Button type="button" variant="outline" size="lg" className="w-full text-base">
-        Close
+        {SHEET_COPY.close}
       </Button>
     </Dialog.Close>
   );
@@ -463,7 +474,7 @@ export function Sheet({
                 {title}
               </Dialog.Title>
               <Dialog.Close asChild>
-                <Button type="button" variant="ghost" size="icon" aria-label="Close">
+                <Button type="button" variant="ghost" size="icon" aria-label={SHEET_COPY.close}>
                   <span aria-hidden="true">✕</span>
                 </Button>
               </Dialog.Close>

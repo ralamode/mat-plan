@@ -117,7 +117,7 @@ describe('Sheet — the frame', () => {
     expect(document.getElementById(titleId)?.textContent).toBe('Pick a movement');
   });
 
-  it('focuses what `initialFocus` names, and the title when it names nothing', () => {
+  it('focuses what `initialFocus` names', () => {
     // 🔴 What this CAN and CANNOT prove, stated so the next reader does not over-read it. It proves
     // the sheet calls `focus()` on the right element — the wiring PICK-1 PR 3 added, which did not
     // exist before. It does NOT prove where a real browser leaves focus: jsdom's focus handling
@@ -153,6 +153,27 @@ describe('Sheet — the frame', () => {
       screen.getByRole('button', { name: 'Open' }).click();
     });
     expect(focused).toContain('named target');
+  });
+
+  it('focuses the TITLE when `initialFocus` is omitted', () => {
+    // 🔴 **Its own test, because the case above was named for both halves and asserted one.** The
+    // default is the claim this file has made since U0 — "the title is the initial focus target" —
+    // and until PR 3 wired `onOpenAutoFocus` nothing made it true. A test name that promises two
+    // behaviours and checks one is the shape that let the original slip through.
+    //
+    // ⚠️ Same limit as above: this proves the sheet CALLS `focus()` on the title, via the event that
+    // reaches it. Where a real browser leaves focus afterwards is PR 4's e2e.
+    const focusedText: (string | null)[] = [];
+    const onFocusIn = (e: Event) => focusedText.push((e.target as HTMLElement).textContent);
+    document.addEventListener('focusin', onFocusIn);
+    try {
+      render(<Harness />);
+      openAndCapture();
+      // The harness's own title, which is also what the `Dialog.Title` renders.
+      expect(focusedText).toContain('Pick a movement');
+    } finally {
+      document.removeEventListener('focusin', onFocusIn);
+    }
   });
 
   it('gives the in-sheet status region the id `sheetStatusId` derives, so a control can describe from it', () => {

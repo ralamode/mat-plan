@@ -4,7 +4,6 @@ import {
   MOVEMENT_NAME_MAX,
   MOVEMENT_PICKER_GROUPS,
   matchMovementOptions,
-  movementNameKey,
   movementNameSchema,
 } from '@mat-plan/shared';
 import { useDeferredValue, useId, useMemo, useRef, useState, type RefObject } from 'react';
@@ -12,7 +11,7 @@ import { useDeferredValue, useId, useMemo, useRef, useState, type RefObject } fr
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { Button } from '@/components/ui/button';
-import { Sheet, sheetStatusId } from '@/components/ui/sheet';
+import { SHEET_COPY, Sheet, sheetStatusId } from '@/components/ui/sheet';
 import { INPUT_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +33,10 @@ import { cn } from '@/lib/utils';
  */
 
 const SHEET_ID = 'movement-picker';
+// The two ids an `htmlFor` / `aria-describedby` pair needs on both sides. Derived once: a
+// `${SHEET_ID}-…` re-typed at the second site is how a label stops pointing at its field, silently.
+const SEARCH_ID = `${SHEET_ID}-search`;
+const TYPED_HINT_ID = `${SHEET_ID}-typed-hint`;
 
 /** What the picker needs to know about the day's program, as IDS on both sides (panel 2 · 6). */
 export type TodaysProgramForPicker = {
@@ -62,6 +65,20 @@ export type MovementPickerProps = {
 
 /** A row, plus the single tag it earns. One tag per row, by precedence (panel 2 · 5). */
 type Row = { option: MovementOptionDTO; tag: string | null };
+
+/**
+ * Ids → options, in the given order, **dropping what the map does not have.**
+ *
+ * Both id-driven sections need this and both must drop silently: a recent id can name a movement
+ * that has since been soft-deleted, and a prescription can name one outside the picker's map
+ * (panel 2 · 6). Rendering a hole, or an `undefined` row, is the failure to avoid.
+ */
+function resolveOptions(
+  ids: readonly string[],
+  byId: Map<string, MovementOptionDTO>,
+): MovementOptionDTO[] {
+  return ids.map((id) => byId.get(id)).filter((o): o is MovementOptionDTO => !!o);
+}
 
 export function MovementPicker({
   open,
@@ -100,14 +117,26 @@ export function MovementPicker({
     typeof window.matchMedia === 'function' &&
     !window.matchMedia('(pointer: coarse)').matches;
 
-  // Filtering runs on the deferred value so typing stays responsive over ~110 rows (FE-12's intent).
+  // 🔴 **ONE query drives everything below: the deferred one.** `query` itself reaches only the
+  // `<input>`'s own `value`. Filtering ~110 rows on the deferred value keeps typing responsive
+  // (FE-12's intent) — but the reason the immediate value is not *also* read anywhere is
+  // correctness, not performance.
   //
-  // ⚠️ **Two trimmed queries, and the difference is DEFERRED vs IMMEDIATE — not raw vs folded.**
-  // `deferredTrimmed` feeds the match, which is the expensive part; `trimmedQuery` drives the footer
-  // and the browse/search branch, which must track the keystroke so the button a thumb is reaching
-  // for does not lag a frame behind the text. Neither is folded: folding happens inside
-  // `matchMovementOptions`, and nothing in this file tests a FOLDED value for emptiness — which is
-  // the point of panel 2 · 4, below.
+  // React commits the urgent render with the OLD deferred value and corrects it in a second pass. So
+  // a render that mixes the two shows states that are briefly WRONG rather than merely stale. Both
+  // directions were real here: typing `f` into an empty box rendered **"No matches."** plus the loud
+  // create button against a match computed for `''` — so the live region announced "No matches." and
+  // then "N matches" on the first keystroke of EVERY search, which is precisely the read-once
+  // problem criterion 46 exists to prevent. The other way round, `rd` → `rdl` offered for one frame
+  // to create `rdl` against a stale `aliasHit`, and that button mints an undeletable household
+  // movement duplicating Romanian Deadlift — the exact case this component exists to withhold.
+  //
+  // An earlier fix held creation while the two disagreed. That patched one symptom of two; one value
+  // removes the class. The cost is that the footer lags a frame behind the text on a slow device,
+  // which is a thumb reaching for a button that is correct rather than one that is current.
+  //
+  // ⚠️ Not folded. Folding happens inside `matchMovementOptions`, and nothing in this file tests a
+  // FOLDED value for emptiness — the point of panel 2 · 4, below.
   const deferredTrimmed = useDeferredValue(query).trim();
 
   const result = useMemo(
@@ -124,10 +153,6 @@ export function MovementPicker({
     [data.options, deferredTrimmed],
   );
 
-  const byName = useMemo(
-    () => new Map(data.options.map((o) => [o.name, o] as const)),
-    [data.options],
-  );
   const byId = useMemo(
     () => new Map(data.options.map((o) => [o.publicId, o] as const)),
     [data.options],
@@ -142,11 +167,13 @@ export function MovementPicker({
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
     // `also called` fires ONLY on an alias hit, naming the alias that hit — otherwise it would
     // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
-    if (result.aliasHit && option.owner === 'catalog') {
-      const hit = option.aliases.find(
-        (a) => movementNameKey(a) === movementNameKey(deferredTrimmed),
-      );
-      if (hit) return COPY.tagAlsoCalled(hit);
+    //
+    // ⚠️ The alias comes from the MATCHER (`result.aliasHit` IS its text), and the test below is
+    // plain identity on authored strings. This used to re-run "fold both sides, compare keys" here,
+    // which is `movement-search.ts`'s rule and would have drifted from it the first time the fold
+    // changed.
+    if (result.aliasHit !== null && option.owner === 'catalog') {
+      if (option.aliases.includes(result.aliasHit)) return COPY.tagAlsoCalled(result.aliasHit);
     }
     if (option.publicId === currentId) return COPY.tagCurrent;
     if (inSearchResults && option.owner === 'catalog') return COPY.groupLabel(option.group);
@@ -164,12 +191,13 @@ export function MovementPicker({
     }));
 
   // ── The ordered candidate list, and what Enter may act on (panel 2 · 3) ─────────────────────────
-  const matches = result.matches
-    .map((m) => byName.get(m.name))
-    .filter((o): o is MovementOptionDTO => !!o);
-  const someWords = result.someWords
-    .map((m) => byName.get(m.name))
-    .filter((o): o is MovementOptionDTO => !!o);
+  // 🔴 The match result carries the DTO it was given, so there is nothing to look up. An earlier
+  // version re-keyed by `name` — which is not the identity, `publicId` is: two options sharing a
+  // display name collapsed to whichever was last in `data.options`, defeating the catalog-first tie
+  // rule and duplicating a React `key`. `MovementPickerData` promises no name uniqueness, so the
+  // component must not depend on Decision 5's read happening to shadow it.
+  const matches = result.matches.map((m) => m.option);
+  const someWords = result.someWords.map((m) => m.option);
   // Enter picks `matches[0]` iff unambiguous. Two `exact` hits resolve to the first — catalog-first by
   // Decision 4's tie rule, which is also the row the status names. `someWords` NEVER picks.
   const enterTarget =
@@ -180,26 +208,18 @@ export function MovementPicker({
   // to `''`; a fold-based check would drop them into browse mode and never render the disabled
   // footer Decision 8 promises for them. Probed by replacing this with a fold-based test, which
   // reddens the aria-disabled cases.
-  const trimmedQuery = query.trim();
-  // 🔴 **While the deferred value is catching up, creation is held.** `offersTyped` reads the
-  // IMMEDIATE query but `exact`/`aliasHit` come from the deferred one, so for one frame after the
-  // final `s` of `pullups` the footer offered to create it beside a match for `pullup` — the exact
-  // duplicate this component exists to withhold, and `movementSlug` would have minted it
-  // (`pullups` ≠ `pull-up`). A human tap inside one frame is implausible; the guard still should not
-  // have a hole by construction.
-  const settling = trimmedQuery !== deferredTrimmed;
-  const offersTyped = trimmedQuery !== '' && !result.exact && !result.aliasHit;
+  const offersTyped = deferredTrimmed !== '' && !result.exact && !result.aliasHit;
   // The reason comes from the SCHEMA, so the UI never hand-composes a rule the boundary owns. A name
   // breaking two rules shows the first, by `typedMovementNameIssues`' order.
   const typedNameIssue = useMemo(() => {
     if (!offersTyped) return null;
-    const parsed = movementNameSchema.safeParse(trimmedQuery);
+    const parsed = movementNameSchema.safeParse(deferredTrimmed);
     return parsed.success ? null : (parsed.error.issues[0]?.message ?? null);
-  }, [offersTyped, trimmedQuery]);
+  }, [offersTyped, deferredTrimmed]);
 
   // ── The status region: ONE shape, `{count}. {reason}`, one reason by precedence (panel 2 · 1-2) ──
   const status = (() => {
-    if (trimmedQuery === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
+    if (deferredTrimmed === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
     const count =
       matches.length > 0
         ? COPY.statusCount(matches.length)
@@ -221,10 +241,25 @@ export function MovementPicker({
   // Empty groups are omitted, so `wrestling` simply does not render until `C3` seeds it. The DTO
   // carries the group the DAL read out of `MOVEMENT_PICKER_ENTRIES`, so this trusts the DTO rather
   // than re-deriving it — one source, read once, at the boundary.
-  const groupSections = MOVEMENT_PICKER_GROUPS.map((group) => ({
+  //
+  // ⚠️ **Rendered to ELEMENTS here, not to data.** Two branches show the browse groups — the empty
+  // query, and "no matches at all" — and as a `.map()` written out at both sites the two had already
+  // drifted by one prop during review.
+  const browseGroups = MOVEMENT_PICKER_GROUPS.map((group) => ({
     group,
     rows: rowsFrom(data.options.filter((o) => o.owner === 'catalog' && o.group === group)),
-  })).filter(({ rows }) => rows.length > 0);
+  }))
+    .filter(({ rows }) => rows.length > 0)
+    .map(({ group, rows }) => (
+      <Section
+        key={group}
+        currentId={currentId}
+        onPick={pickExisting}
+        id={`${headingId}-${group}`}
+        heading={COPY.groupLabel(group)}
+        rows={rows}
+      />
+    ));
 
   return (
     <Sheet
@@ -237,12 +272,12 @@ export function MovementPicker({
       status={status}
       headerExtra={
         <div>
-          <label className="sr-only" htmlFor={`${SHEET_ID}-search`}>
+          <label className="sr-only" htmlFor={SEARCH_ID}>
             {COPY.searchLabel}
           </label>
           <input
             ref={searchRef}
-            id={`${SHEET_ID}-search`}
+            id={SEARCH_ID}
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -287,12 +322,12 @@ export function MovementPicker({
                 // candidates (panel 2 · 8): UX3 6 exists to steer toward them.
                 variant={matches.length > 0 || someWords.length > 0 ? 'ghost' : 'outline'}
                 size="lg"
-                aria-disabled={typedNameIssue !== null || settling}
-                aria-describedby={`${SHEET_ID}-typed-hint`}
+                aria-disabled={typedNameIssue !== null}
+                aria-describedby={TYPED_HINT_ID}
                 onClick={() => {
                   // focusable but inert, with the reason in the hint
-                  if (typedNameIssue || settling) return;
-                  onPick({ kind: 'typed', name: trimmedQuery });
+                  if (typedNameIssue) return;
+                  onPick({ kind: 'typed', name: deferredTrimmed });
                   onOpenChange(false);
                 }}
                 // `button.tsx` is `whitespace-nowrap`; a long typed name must wrap, not clip.
@@ -302,10 +337,10 @@ export function MovementPicker({
                 // nothing, and the only signal is a `text-xs` line underneath.
                 className="h-auto min-h-11 w-full whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
-                {COPY.asTyped(trimmedQuery)}
+                {COPY.asTyped(deferredTrimmed)}
               </Button>
-              <p id={`${SHEET_ID}-typed-hint`} className="text-muted-foreground text-xs">
-                {typedNameIssue ?? COPY.asTypedHint(trimmedQuery)}
+              <p id={TYPED_HINT_ID} className="text-muted-foreground text-xs">
+                {typedNameIssue ?? COPY.asTypedHint(deferredTrimmed)}
               </p>
             </>
           ) : null}
@@ -316,12 +351,12 @@ export function MovementPicker({
             className="w-full text-base"
             onClick={() => onOpenChange(false)}
           >
-            {COPY.close}
+            {SHEET_COPY.close}
           </Button>
         </div>
       }
     >
-      {trimmedQuery === '' ? (
+      {deferredTrimmed === '' ? (
         <>
           {data.recentIds && data.recentIds.length > 0 ? (
             <Section
@@ -329,9 +364,7 @@ export function MovementPicker({
               onPick={pickExisting}
               id={`${headingId}-recent`}
               heading={COPY.recent}
-              rows={rowsFrom(
-                data.recentIds.map((id) => byId.get(id)).filter((o): o is MovementOptionDTO => !!o),
-              )}
+              rows={rowsFrom(resolveOptions(data.recentIds, byId))}
             />
           ) : null}
           {todaysProgram && !alreadyIn ? (
@@ -344,16 +377,7 @@ export function MovementPicker({
               onPick={pickExisting}
             />
           ) : null}
-          {groupSections.map(({ group, rows }) => (
-            <Section
-              key={group}
-              currentId={currentId}
-              onPick={pickExisting}
-              id={`${headingId}-${group}`}
-              heading={COPY.groupLabel(group)}
-              rows={rows}
-            />
-          ))}
+          {browseGroups}
           <Section
             currentId={currentId}
             onPick={pickExisting}
@@ -384,18 +408,7 @@ export function MovementPicker({
       ) : (
         // No matches at all: the browse list stays reachable under the "No matches" status, so the
         // sheet is never a dead end.
-        <>
-          {groupSections.map(({ group, rows }) => (
-            <Section
-              key={group}
-              currentId={currentId}
-              onPick={pickExisting}
-              id={`${headingId}-${group}`}
-              heading={COPY.groupLabel(group)}
-              rows={rows}
-            />
-          ))}
-        </>
+        <>{browseGroups}</>
       )}
     </Sheet>
   );
@@ -419,7 +432,7 @@ function TodaysProgram({
   // ⚠️ A prescribed id with no option is DROPPED before the open/closed decision (panel 2 · 6) —
   // otherwise the `<details>` opens over a row it cannot render. It happens when a prescription names
   // a movement outside the picker map, or a household row that fell off Decision 5's list.
-  const options = program.ids.map((id) => byId.get(id)).filter((o): o is MovementOptionDTO => !!o);
+  const options = resolveOptions(program.ids, byId);
   if (options.length === 0) return null;
   // Open while any prescribed movement is NOT yet on a card; the list always shows every prescribed
   // row, so a second card for one stays one tap away — only the summary changes.
@@ -427,11 +440,17 @@ function TodaysProgram({
   return (
     <section aria-labelledby={headingId} className="mb-4">
       <details open={!allOnForm}>
-        <summary
-          id={headingId}
-          className="text-muted-foreground mb-1 min-h-11 text-sm font-semibold"
-        >
-          {allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
+        {/*
+          ⚠️ **The `h3` is INSIDE the `summary`**, not replaced by it. Every other section here is
+          headed by an `h3`, and a screen-reader user navigating by heading — which is how you skim a
+          long sheet — skipped straight past the one section holding the day's actual program,
+          because a bare `summary` is a disclosure button and not a heading. Nesting them keeps the
+          disclosure behaviour and puts the section back in the heading list.
+        */}
+        <summary className="min-h-11">
+          <h3 id={headingId} className="text-muted-foreground mb-1 inline text-sm font-semibold">
+            {allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
+          </h3>
         </summary>
         <OptionList rows={rowsFrom(options)} currentId={currentId} onPick={onPick} />
       </details>
@@ -460,8 +479,18 @@ function OptionList({
             className="focus-visible:ring-ring hover:bg-accent flex min-h-12 w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-left outline-none focus-visible:ring-3"
           >
             <span className="min-w-0 break-words text-base">{option.name}</span>
+            {/*
+              ⚠️ `aria-current` on the row already announces it, so the VISIBLE `current` tag is
+              hidden from assistive tech — otherwise the row reads "Back Squat, current, current".
+              Compared against the const itself because only THIS tag duplicates the state:
+              `already in Push A` and `also called RDL` outrank it and say something
+              `aria-current` does not.
+            */}
             {tag ? (
-              <span className="text-muted-foreground shrink-0 rounded border px-2 text-xs">
+              <span
+                aria-hidden={tag === COPY.tagCurrent || undefined}
+                className="text-muted-foreground shrink-0 rounded border px-2 text-xs"
+              >
                 {tag}
               </span>
             ) : null}
@@ -483,22 +512,20 @@ function Section({
   rows,
   currentId,
   onPick,
-  children,
 }: {
   id: string;
   heading: string;
   rows: Row[];
   currentId?: string;
   onPick: (option: MovementOptionDTO) => void;
-  children?: React.ReactNode;
 }) {
-  if (rows.length === 0 && !children) return null;
+  if (rows.length === 0) return null;
   return (
     <section aria-labelledby={id} className="mb-4">
       <h3 id={id} className="text-muted-foreground mb-1 text-sm font-semibold">
         {heading}
       </h3>
-      {children ?? <OptionList rows={rows} currentId={currentId} onPick={onPick} />}
+      <OptionList rows={rows} currentId={currentId} onPick={onPick} />
     </section>
   );
 }

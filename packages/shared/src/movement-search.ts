@@ -81,8 +81,17 @@ export type MovementMatchResult<T> = {
   readonly matches: readonly T[];
   /** Only populated when `matches` is empty: options matching ANY query word of 3+ letters. */
   readonly someWords: readonly T[];
-  /** The query's key equals one of an option's aliases — exact only, so `rd` does not hit `RDL`. */
-  readonly aliasHit: boolean;
+  /**
+   * The alias the query hit, **as authored** (`'RDL'`), or `null`. Exact only, so `rd` does not hit
+   * `RDL`.
+   *
+   * 🔴 **The TEXT, not a boolean, so no consumer re-derives the rule.** The picker tags an aliased
+   * row *also called RDL*, and with a boolean here it had to find the alias itself — a second copy of
+   * "fold both sides, compare keys" in a component, which would drift from this file the first time
+   * the fold changes. Truthiness still reads the same at every guard that only asks whether there
+   * was a hit.
+   */
+  readonly aliasHit: string | null;
   /** The query's key equals some option's key — the movement is already in the list. */
   readonly exact: boolean;
 };
@@ -121,7 +130,7 @@ export function matchMovementOptions<T extends MatchableMovement>(
 ): MovementMatchResult<T> {
   const folded = foldMovementQuery(query);
   const key = movementNameKey(query);
-  if (folded === '') return { matches: [], someWords: [], aliasHit: false, exact: false };
+  if (folded === '') return { matches: [], someWords: [], aliasHit: null, exact: false };
 
   const words = folded.split(' ');
   const prepared = options.map((option) => {
@@ -131,32 +140,40 @@ export function matchMovementOptions<T extends MatchableMovement>(
       folded: optionFolded,
       compact: optionFolded.replaceAll(' ', ''),
       key: movementNameKey(option.name),
-      aliasKeys: (option.aliases ?? []).map(movementNameKey),
+      // The alias that hit, found ONCE, here — `aliasHit`, the match test and the rank all read it,
+      // and so does the picker's tag, via the result. One expression of the rule.
+      matchedAlias: (option.aliases ?? []).find((a) => movementNameKey(a) === key),
     };
   });
 
   const exact = prepared.some((p) => p.key === key);
-  const aliasHit = prepared.some((p) => p.aliasKeys.includes(key));
+  const aliasHit = prepared.find((p) => p.matchedAlias !== undefined)?.matchedAlias ?? null;
 
   const matched = prepared.filter(
     (p) =>
       words.every((word) => p.folded.includes(word)) ||
       p.compact.includes(key) ||
-      p.aliasKeys.includes(key),
+      p.matchedAlias !== undefined,
   );
 
   // Rank: an alias hit or an exact key first, then a name that STARTS with the query, then the rest.
   // Within a rank, by name, catalog before household — so the order never depends on query order or
   // on how the database happened to return the rows.
   const rank = (p: (typeof prepared)[number]): number => {
-    if (p.aliasKeys.includes(key) || p.key === key) return 0;
+    if (p.matchedAlias !== undefined || p.key === key) return 0;
     if (p.folded.startsWith(folded) || p.compact.startsWith(key)) return 1;
     return 2;
   };
+  // ⚠️ **The last term compares the FOLDED strings, not `name.localeCompare(name)`.** A bare
+  // `localeCompare` reads the HOST's locale, so the same catalog sorted on a phone and in a Vitest
+  // run can disagree — under a comment two lines up promising the order never depends on anything
+  // but the data. Folded keys are lowercase and diacritic-free, so `<`/`>` is both deterministic and
+  // the comparison a reader expects. A second locale makes this an `Intl.Collator` built from the
+  // REQUEST locale and threaded in (`I18N-1`), never read from the host again.
   const byRankThenName = (a: (typeof prepared)[number], b: (typeof prepared)[number]): number =>
     rank(a) - rank(b) ||
     Number(b.option.isCatalog ?? false) - Number(a.option.isCatalog ?? false) ||
-    a.option.name.localeCompare(b.option.name);
+    (a.folded < b.folded ? -1 : a.folded > b.folded ? 1 : 0);
 
   const matches = [...matched].sort(byRankThenName).map((p) => p.option);
 

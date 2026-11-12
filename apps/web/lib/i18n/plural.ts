@@ -1,3 +1,5 @@
+import { APP_LOCALE } from './locale';
+
 /**
  * Counted and listed copy, through the platform's `Intl` — so a sentence with a number in it is
  * right in a locale nobody has configured yet.
@@ -27,16 +29,6 @@
  * has, and a new locale's extra forms are added to the SAME call sites, which is the point of routing
  * them through here instead of inlining a comparison.
  */
-
-/**
- * The app's locale. One entry today, and deliberately a named constant rather than a literal `'en'`
- * at each call site — `I18N-1` replaces its VALUE with a request-scoped read, and that is a one-line
- * change only if nothing hardcoded the string.
- *
- * ⚠️ Not a user preference yet. `<html lang>` is still `en` in `app/layout.tsx`, and the two must
- * agree; `I18N-1` is what makes both read the same source.
- */
-export const APP_LOCALE = 'en';
 
 /** The CLDR plural categories. A locale uses a subset; English uses `one` and `other`. */
 type PluralCategory = Intl.LDMLPluralRule;
@@ -84,7 +76,11 @@ export function formatList(
  * `Intl` has no API for them, so this cannot be solved by the platform — it is a catalog concern and
  * therefore `I18N-1`'s. It exists now so the call sites are already funnelled through one function
  * when that lands, rather than needing a sweep for `"${x}"`.
+ *
+ * ⚠️ **Takes no locale**, unlike its neighbours: an unused parameter is a lint warning and a promise
+ * the body does not keep. `I18N-1` adds the parameter in the same change that gives it something to
+ * do, and the call sites are already here.
  */
-export function quote(value: string, _locale: string = APP_LOCALE): string {
+export function quote(value: string): string {
   return `"${value}"`;
 }
