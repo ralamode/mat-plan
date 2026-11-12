@@ -37,9 +37,20 @@
 export function Announcer({
   message,
   className = 'sr-only',
+  id,
 }: {
   /** The text to announce. `''` is the mounted-and-silent state, which is the initial one. */
   message: string;
+  /**
+   * An id, so a CONTROL can point `aria-describedby` at this region (PICK-1 PR 3, criterion 46).
+   *
+   * ⚠️ **Describing a control is a second job, not a replacement for the live region's first one.**
+   * `role="status"` announces a CHANGE to whoever is listening; `aria-describedby` makes the same
+   * text part of a control's description, read when focus arrives. The picker's search box needs
+   * both — the match count should reach someone who moves to the field as well as someone already
+   * in it — and with no id there is no way to wire the second.
+   */
+  id?: string;
   /**
    * Defaults to `sr-only` — invisible, announced. Pass a visible class where the message is ALSO the
    * sighted confirmation: a form that works without JavaScript has no other way to report a save
@@ -48,7 +59,7 @@ export function Announcer({
   className?: string;
 }) {
   return (
-    <p role="status" className={className}>
+    <p role="status" id={id} className={className}>
       {message}
     </p>
   );

@@ -142,8 +142,18 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   line but not the character, so it reads like a syntax problem with the arrow or the quotes. → **Never
   put backticks in a Mermaid label**; write the identifier bare (`L["load — ONE text column"]`). Note
   GitHub renders the failure as a pink "Unable to render rich display" box with the raw source below it,
-  which is easy to miss if you post a PR and don't look at it. `<br/>`, `·`, `+`, `/` and parentheses
-  inside a quoted label are all fine — backticks are the trap. (docs/gap3-csv-samples, PR #121)
+  which is easy to miss if you post a PR and don't look at it. `<br/>`, `·`, `+`, `/`, `→` and
+  parentheses inside a quoted label are all fine — backticks are the trap. (docs/gap3-csv-samples,
+  PR #121)
+  - 🔴 **The second way to break a label, found the same way (by the maintainer, on a posted PR):**
+    an **escaped double quote inside a quoted label** — `T["'Add \"x\" as a new movement'"]`.
+    Mermaid has no `\"` escape, so the lexer ends the string at the backslash and the rest of the
+    label becomes garbage. → **Use single quotes inside a double-quoted label** (`'Add x as a new
+movement'`), which `architecture.md:99` already does and which renders. ⚠️ **The cheap check,
+    since there is no local renderer:** grep the diagrams that are known to render for the construct
+    you are about to use. `\"` appears **zero** times in `architecture.md`; quoted edge labels,
+    `{"…"}` rhombuses, apostrophes and `→` all appear there repeatedly. If a construct is in no
+    rendering diagram in the repo, that is the warning. (PICK-1 PR 3, #374)
 
 - **A red "Build Failed" on Vercel for a branch that contains no app — `The specified Root Directory
 "apps/web" does not exist`.** → Vercel builds **every pushed branch** by default, and the

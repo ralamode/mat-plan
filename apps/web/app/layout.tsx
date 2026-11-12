@@ -6,6 +6,7 @@ import { headers } from 'next/headers';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { CLERK_CSS_LAYER, clerkIsConfigured } from '@/lib/clerk';
+import { APP_LOCALE } from '@/lib/i18n/locale';
 import { APP_HOME_PATH, APP_NAME, SIGN_IN_PATH } from '@/lib/constants';
 
 import './globals.css';
@@ -116,7 +117,9 @@ export default async function RootLayout({
 
   return (
     <html
-      lang="en"
+      // The same constant `plural()` and `Intl.ListFormat` read, so the document's declared language
+      // cannot drift from the one its numbers and lists are formatted for.
+      lang={APP_LOCALE}
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >

@@ -1,7 +1,7 @@
 'use client';
 
 import { Dialog } from 'radix-ui';
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,24 @@ export type SheetProps = {
   /** A polite live region INSIDE the sheet (criterion 46). Pass a settled value. */
   status?: string;
   /**
+   * Where focus goes when the sheet OPENS. Defaults to the title.
+   *
+   * 🔴 **Added at PICK-1 PR 3, the first consumer that needs it — and the default is what makes this
+   * file's own claim true.** The title has carried the comment *"the initial focus target"* since U0
+   * shipped, and `sheet.test.tsx` had a case NAMED for it, but nothing wired `onOpenAutoFocus`:
+   * Radix's `FocusScope` picks the first candidate it finds and the title is `tabIndex={-1}`, so the
+   * title was never it. ⚠️ **Where focus landed instead is deliberately not recorded, because jsdom
+   * would not settle it** — probes ruled out the search box, the header Close and `document.body`
+   * without agreeing on an answer. That is a browser question and `PICK-1` PR 4's e2e owns it; what
+   * this prop fixes is that the target is now the consumer's choice with a stated default.
+   *
+   * ⚠️ **A consumer must not point this at a text input on touch.** Focusing a field raises the
+   * on-screen keyboard over the list the sheet exists to show (criterion 18). The picker passes its
+   * search ref only when `matchMedia('(pointer: coarse)')` is false, and leaves the default on a
+   * phone.
+   */
+  initialFocus?: RefObject<HTMLElement | null>;
+  /**
    * The design-inventory page scopes a candidate palette with `[data-tokens]` on a wrapper, but
    * `Dialog.Portal` mounts under `document.body` — outside every cell. Forwarded so the portaled
    * surface carries the palette it is demonstrating.
@@ -96,6 +114,29 @@ export type SheetProps = {
  * stack — but it has to fail loudly, or the second one ships and the back gesture goes strange.
  */
 let openSheets = 0;
+
+/**
+ * The sheet chrome's own words — **the primitive owns them, because the primitive renders them.**
+ *
+ * `Close` was written out three times: the header's ✕ `aria-label`, `FooterFallback`'s button, and
+ * the picker's own copy module. A consumer that passes its own `footer` still has to end it with
+ * Close (panel 2 · 7), so it needs the same word this file uses, and "the same word" is a constant,
+ * not a coincidence. ⚠️ `STRENGTH_COPY.close` in `lib/constants.ts` is a DIFFERENT control — an open
+ * toggle whose own docblock explains why it says Close and not Cancel — and stays where it is.
+ */
+export const SHEET_COPY = { close: 'Close' } as const;
+
+/**
+ * The id of a sheet's in-sheet live region, derived from the sheet's own id so a consumer can point
+ * `aria-describedby` at it without reaching into this file's markup (PICK-1 PR 3, criterion 46).
+ *
+ * Exported as a FUNCTION rather than left to each consumer to interpolate, for the usual reason: the
+ * suffix is a value two files must agree on, and the second place to write `${id}-status` by hand is
+ * where they stop agreeing (AGENTS.md → constants).
+ */
+export function sheetStatusId(sheetId: string): string {
+  return `${sheetId}-status`;
+}
 
 /**
  * 🔴 **Which DOCUMENT wrote the history entry — the discriminator the restore needs, and the e2e
@@ -199,11 +240,28 @@ function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
  * this "unverified on Next 16.4"; it is verified by source, and the e2e asserts no `load` fired.
  */
 function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean) => void): void {
-  /** One definition of "the top entry is mine", so the four call sites below cannot drift apart. */
-  const isOurEntry = () => {
+  /**
+   * One definition of "the top entry is mine", so the four call sites below cannot drift apart.
+   *
+   * ⚠️ **`useCallback` so the four dependency arrays can be honest.** As a plain function it was
+   * recreated every render, and `react-hooks/exhaustive-deps` warned four times that it was missing
+   * from the arrays — the only `react-hooks` warnings in the app. The arrays were already *correct*
+   * in substance (its one reactive input is `id`, which every array listed), so this is not a
+   * behaviour change: memoised on `[id]`, the callback's identity changes exactly when `id` does,
+   * which is exactly when those effects re-ran before. What it buys is that a future author who
+   * gives this function a second input gets a warning instead of a silently stale closure.
+   *
+   * ⚠️ **The `[id]` dependency is correct by reasoning, NOT by test — probed, and the probe reported
+   * GREEN.** Replacing it with `[]` leaves every case passing, because a sheet's `id` is a module
+   * constant at each call site (`SHEET_ID = 'movement-picker'`) and nothing re-renders a mounted
+   * sheet under a different one. Writing a test for that would pin a scenario no consumer produces.
+   * Recorded here so nobody reads the dependency as covered: if a consumer ever makes `id` dynamic,
+   * it needs a case, and this comment is the warning.
+   */
+  const isOurEntry = useCallback(() => {
     const state = window.history.state;
     return state?.sheet === id && state?.doc === DOCUMENT_TOKEN;
-  };
+  }, [id]);
 
   /**
    * 🔴 **The cross-route restore, which the same-route listener below cannot do.** A link inside the
@@ -223,7 +281,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
     if (restored.current) return;
     restored.current = true;
     if (!open && isOurEntry()) onOpenChange(true);
-  }, [open, id, onOpenChange]);
+  }, [open, isOurEntry, onOpenChange]);
 
   /**
    * 🔴 **One ALWAYS-ON listener, syncing both directions** — and the first draft got this wrong in a
@@ -243,12 +301,12 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
     };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
-  }, [open, id, onOpenChange]);
+  }, [open, isOurEntry, onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
     if (!isOurEntry()) window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
-  }, [open, id]);
+  }, [open, id, isOurEntry]);
 
   /**
    * 🔴 **The pop is keyed on the open→closed TRANSITION, not on `onOpenChange`.** It lived in the
@@ -267,7 +325,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
     const closed = wasOpen.current && !open;
     wasOpen.current = open;
     if (closed && isOurEntry()) window.history.back();
-  }, [open, id]);
+  }, [open, isOurEntry]);
 }
 
 /**
@@ -282,7 +340,7 @@ function FooterFallback() {
   return (
     <Dialog.Close asChild>
       <Button type="button" variant="outline" size="lg" className="w-full text-base">
-        Close
+        {SHEET_COPY.close}
       </Button>
     </Dialog.Close>
   );
@@ -299,11 +357,15 @@ export function Sheet({
   headerExtra,
   footer,
   status,
+  initialFocus,
   dataTokens,
 }: SheetProps) {
   // 🔴 A callback ref, NOT `useRef` — `useVisualViewport`'s docblock has the reason, and it is the
   // difference between the keyboard geometry running and silently doing nothing.
   const [content, setContent] = useState<HTMLDivElement | null>(null);
+  // The default `initialFocus` target. A plain `useRef` is right here: nothing measures the title, so
+  // no effect needs to re-run when it mounts.
+  const titleRef = useRef<HTMLHeadingElement>(null);
 
   const compact = useVisualViewport(open, content);
   useBackGesture(open, id, onOpenChange);
@@ -345,6 +407,12 @@ export function Sheet({
           // same reasoning has to be applied by hand.
           onPointerDownOutside={(e) => {
             if (!isDialog) e.preventDefault();
+          }}
+          onOpenAutoFocus={(e) => {
+            // See `initialFocus`. Radix would otherwise pick the first tabbable candidate, which is
+            // never the `tabIndex={-1}` title this file has always claimed is the target.
+            e.preventDefault();
+            (initialFocus?.current ?? titleRef.current)?.focus();
           }}
           onCloseAutoFocus={(e) => {
             // See note 2: Radix's own return is disabled for us, so this is the whole mechanism.
@@ -408,10 +476,13 @@ export function Sheet({
           >
             <div className="flex items-start gap-2">
               <Dialog.Title
+                ref={titleRef}
                 tabIndex={-1}
-                // The initial focus target, so on desktop this was the one moment a keyboard user
-                // had no indicator at all. `outline-none` + `focus-visible:ring-3` is this repo's
-                // idiom (`callout.tsx`, `INPUT_CLASS`).
+                // The initial focus target — and since PICK-1 PR 3 that is WIRED (`initialFocus`'s
+                // default) rather than asserted. On desktop this is the one moment a keyboard user
+                // would otherwise have no indicator at all, which is why it is focusable but not
+                // tabbable. `outline-none` + `focus-visible:ring-3` is this repo's idiom
+                // (`callout.tsx`, `INPUT_CLASS`).
                 className={cn(
                   'focus-visible:ring-ring min-w-0 flex-1 rounded font-semibold outline-none focus-visible:ring-3',
                   compact ? 'truncate text-base' : 'text-lg',
@@ -420,7 +491,7 @@ export function Sheet({
                 {title}
               </Dialog.Title>
               <Dialog.Close asChild>
-                <Button type="button" variant="ghost" size="icon" aria-label="Close">
+                <Button type="button" variant="ghost" size="icon" aria-label={SHEET_COPY.close}>
                   <span aria-hidden="true">✕</span>
                 </Button>
               </Dialog.Close>
@@ -448,7 +519,7 @@ export function Sheet({
           {/* Criterion 46. INSIDE the content, because Radix `aria-hidden`s every sibling of the
               portal while this is open, so a page-level region is dropped by a screen reader.
               `Announcer` rather than a fifth hand-rolled `<p role="status">` — see its docblock. */}
-          <Announcer message={status ?? ''} />
+          <Announcer id={sheetStatusId(id)} message={status ?? ''} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

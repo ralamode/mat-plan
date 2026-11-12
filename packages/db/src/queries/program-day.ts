@@ -120,8 +120,11 @@ export function programDayRows(
         // V1-22 chunk 2 (D1): the prescription's OWN movement FK, which is the key the frozen
         // `prescribed` snapshot and the export's live fallback both match on. The writer already
         // holds the entry's resolved `movement_id`, so matching id-to-id skips the slug proxy —
-        // and a slug proxy is exactly what `MOV-1`'s rename breaks and what `PICK-1`'s invariant 7
-        // schedules a later PR to replace. No join: `prescriptions` is already the FROM table.
+        // and a slug proxy is exactly what `MOV-1`'s rename breaks. ✅ `PICK-1`'s invariant 7 is
+        // CLOSED, not pending: it once scheduled a later PR to switch a slug compare to ids, and
+        // chunk 2 shipped both sides keyed on `movement_id`, so there is nothing to switch
+        // (retired by `PICK-1` PR 3; `movement-picker.md` invariant 7). No join: `prescriptions` is
+        // already the FROM table.
         //
         // The join is on this column, so it is equally `movements.id`; selected from `prescriptions`
         // because that is the table this query is FROM.
