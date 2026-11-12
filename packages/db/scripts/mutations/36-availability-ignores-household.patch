@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index d8fa742..60e5fa8 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -260,7 +260,7 @@ export function movementInHousehold(scope: HouseholdScope) {
+ export function movementIsAvailableTo(scope: HouseholdScope) {
+   return and(
+     isNull(schema.movements.deletedAt),
+-    or(movementIsGlobal(), movementInHousehold(scope)),
++    or(movementIsGlobal(), movementIsOwned()),
+   );
+ }
+ 

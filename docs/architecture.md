@@ -112,21 +112,14 @@ flowchart TD
   style RB fill:#fecaca,stroke:#b91c1c
 ```
 
-🔴 **Phase 1 before phase 2, because phase 2 is the only phase that writes.** A body refused for a
-bad id therefore commits nothing — not even a typed sibling's catalog row in the same submission.
-Swapped, the refusal still happens, just after a movement nothing can remove has landed with no
-session to explain it (`37-typed-before-ids.patch`).
+**Two shapes to read off it:** phase 2 is the only phase that writes, which is why phase 1 comes
+first; and the **red node is the seam** — phase 1 reads outside the transaction, so the re-check is
+what the rollback protects.
 
-🔴 **The red node is the seam; phase 1 is a pre-check.** `resolveSessionMovements` reads outside the
-transaction, so between it and the write a movement can be soft-deleted or — once `MOV-1`/`C4m`
-exist — repointed. The in-transaction re-check is what the rollback protects, exactly as the profile
-resolve beside it already is, and it guards the typed path too because `writeStrengthSession` takes
-`movementId: number` from its caller (`38-drop-in-tx-recheck.patch`).
-
-⚠️ **`movementName` on the id path is the DATABASE's**, which is why the resolved movement is built
-field by field rather than by spread: `entries.movement_name` is a CSV column, and a spread would let
-the client set it while the id decided the row. The two refusals — unknown id, another household's id
-— are **byte-identical** and interpolate neither id nor name.
+The invariant itself — the phase order, the seam, what the refusal may and may not say, and the one
+bounded consequence the id path creates — is [write-path.md](./features/write-path.md) → **14**. This
+section is the shape; that one is the rule. (§2f above is its neighbour and the two compose: §2g
+resolves the `movement_id` that §2f freezes.)
 
 ## 2c. Batch write path — logging a day's check-ins (V1-5)
 

@@ -17,7 +17,6 @@ import {
   MOVEMENT_NAME_MESSAGES,
   movementNameSchema,
   numberTooHighMessage,
-  typedMovementNameIssues,
   UNIT_LABELS,
   quantityCeiling,
 } from '@mat-plan/shared';
@@ -534,26 +533,37 @@ describe('logStrengthSessionSchema — the movement name, typed vs picked (PICK-
   });
 
   describe('the LABEL shape applies either way', () => {
+    // 🔴 `toEqual`, not `toContain`, and that is the whole point of this test. A blank card is the
+    // most common error a spare card on a gym floor produces, and PR 2's first draft answered it with
+    // TWO messages — `missing` plus `noLetter`, because a zod `.min()` failure does not abort the
+    // outer object's refinements, so check (7) ran on the empty string. `toContain` passed either
+    // way. `typedMovementNameIssues` now skips `noLetter` for an empty value.
     it.each([[undefined], [newId()]])(
-      'refuses a blank name with movementPublicId = %j',
+      'refuses a blank name with EXACTLY one message, movementPublicId = %j',
       (movementPublicId) => {
         const body = named(
           movementPublicId === undefined
             ? { movementName: '  ' }
             : { movementPublicId, movementName: '  ' },
         );
-        expect(messagesOf(body)).toContain(MOVEMENT_NAME_MESSAGES.missing);
+        expect(messagesOf(body)).toEqual([MOVEMENT_NAME_MESSAGES.missing]);
       },
     );
 
-    it('refuses an over-long name, and says so once', () => {
+    // ⚠️ **One fault, one message — but NOT because zod skips the refinement.** An earlier version of
+    // this test said check (7) is skipped "when the object shape already failed", and that is false:
+    // a `.min()`/`.max()` failure is non-aborting, so check (7) DOES run on a dirty object. This
+    // fixture earns one message only because a letters-only name breaks no typed-name rule. The case
+    // below is the proof, and it is the behaviour that belief hid.
+    it('refuses an over-long name with exactly that one message', () => {
       const long = 'a'.repeat(MOVEMENT_NAME_MAX + 1);
-      const msgs = messagesOf(named({ movementName: long }));
+      expect(messagesOf(named({ movementName: long }))).toEqual([MOVEMENT_NAME_MESSAGES.tooLong]);
+    });
+
+    it('reports BOTH faults for a name that is too long AND has a comma — check (7) runs on a dirty object', () => {
+      const msgs = messagesOf(named({ movementName: 'a,'.repeat(MOVEMENT_NAME_MAX) }));
       expect(msgs).toContain(MOVEMENT_NAME_MESSAGES.tooLong);
-      // One fault, one message: the typed-name rules run in the session superRefine, which zod skips
-      // when the object shape already failed — so a long name does not also collect `noLetter`
-      // (it has letters) or a duplicate `tooLong`.
-      expect(msgs.filter((m) => m === MOVEMENT_NAME_MESSAGES.tooLong)).toHaveLength(1);
+      expect(msgs).toContain(MOVEMENT_NAME_MESSAGES.commaOrLineBreak);
     });
 
     it('accepts exactly MOVEMENT_NAME_MAX characters', () => {
@@ -583,24 +593,45 @@ describe('movementNameSchema — the standalone typed-name schema (MOV-1 / V1-22
     expect(movementNameSchema.parse('  Back Squat  ')).toBe('Back Squat');
   });
 
-  it('agrees with typedMovementNameIssues on every vector — one rule set, two consumers', () => {
-    for (const name of ['Back Squat', 'a,b', '🙂', '1,2', '30" Box Jump', 'приседания']) {
-      const viaSchema = movementNameSchema.safeParse(name);
-      const viaFn = typedMovementNameIssues(name);
-      // The schema adds the label-shape rules on top, so compare only the typed-name messages.
-      const schemaTyped = viaSchema.success
-        ? []
-        : viaSchema.error.issues
-            .map((i) => i.message)
-            .filter((m) =>
-              (
-                [
-                  MOVEMENT_NAME_MESSAGES.commaOrLineBreak,
-                  MOVEMENT_NAME_MESSAGES.noLetter,
-                ] as string[]
-              ).includes(m),
-            );
-      expect(schemaTyped.sort()).toEqual([...viaFn].sort());
-    }
-  });
+  // 🔴 **The pair that can actually DRIFT is this schema against the SESSION path**, not this schema
+  // against `typedMovementNameIssues` — `movementNameSchema` is *defined as* `movementLabelSchema`
+  // plus that function, so comparing the two is the function compared with itself through a filter.
+  // (That is what the first version of this test did, and the reuse review caught it.) The session
+  // schema is a SECOND, independent composition of the same rule: a `superRefine` on the session
+  // object that calls the same function at its own issue path. Nothing but this pins that a typed
+  // name refused by one is refused by the other.
+  it.each(['Back Squat', 'a,b', '🙂', '1,2', '30" Box Jump', 'приседания', '  '])(
+    'refuses %j identically on the standalone schema and the session path',
+    (movementName) => {
+      const typedRules: string[] = [
+        MOVEMENT_NAME_MESSAGES.commaOrLineBreak,
+        MOVEMENT_NAME_MESSAGES.noLetter,
+      ];
+      const onlyTypedRules = (messages: string[]) =>
+        messages.filter((m) => typedRules.includes(m)).sort();
+
+      const standalone = movementNameSchema.safeParse(movementName);
+      const viaStandalone = onlyTypedRules(
+        standalone.success ? [] : standalone.error.issues.map((i) => i.message),
+      );
+
+      const session = logStrengthSessionSchema.safeParse({
+        profileId: newId(),
+        clientId: newId(),
+        movements: [
+          {
+            movementName,
+            unit: 'lb',
+            clientId: newId(),
+            sets: [{ reps: 5, weight: 135 }],
+          },
+        ],
+      });
+      const viaSession = onlyTypedRules(
+        session.success ? [] : session.error.issues.map((i) => i.message),
+      );
+
+      expect(viaSession).toEqual(viaStandalone);
+    },
+  );
 });

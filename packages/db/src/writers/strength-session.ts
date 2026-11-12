@@ -26,7 +26,7 @@ import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership
  * the app→packages edge, so it would fork a second writer — the drift this single-sourcing exists
  * to prevent). This is the `weeklyAdherenceRows` "one unit, two consumers" pattern applied to a
  * WRITER: pure Drizzle over the schema, parameterized over a `db | tx` executor, taking
- * PRE-RESOLVED catalog ids (the caller owns `findOrCreateMovementId` / `getActivityTypeIdByKey`,
+ * PRE-RESOLVED catalog ids (the caller owns `resolveSessionMovements` / `getActivityTypeIdByKey`,
  * which live app-side). No `server-only`, no app imports.
  */
 
@@ -59,7 +59,7 @@ async function reselectLiveByClientId(
 
 /**
  * A session movement with its catalog `movementId` already resolved (the caller owns
- * `findOrCreateMovementId`). Named distinctly from `@mat-plan/shared`'s `SessionMovementInput`
+ * `resolveSessionMovements`, in this package). Named distinctly from `@mat-plan/shared`'s `SessionMovementInput`
  * (the pre-resolution wire shape, no `movementId`) so importing both never collides.
  * `supersetClientId` is deliberately the UN-resolved wire key (unlike `movementId`): the `supersets`
  * row doesn't exist until the tx, so `writeStrengthSession` resolves it to a `superset_id` in-tx.

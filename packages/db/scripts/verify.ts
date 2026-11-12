@@ -5786,7 +5786,7 @@ console.log(
 // have moved it since: `ten-2a`, `ten-2b`, `ten-2c`.
 //
 // The function under test is `findOrCreateMovement`, the REAL core the app DAL's
-// `findOrCreateMovementId` delegates to (single-sourced in 1d exactly so this proof can run it;
+// `resolveSessionMovements` delegates to (single-sourced in 1d exactly so this proof can run it;
 // `apps/web/lib/dal/catalog.ts` is `server-only` and cannot execute here).
 
 // (a) The structural fact everything below follows from.
@@ -6174,10 +6174,12 @@ console.log(
 // `server-only` and cannot execute here, which is why resolution lives in `packages/db` at all
 // (write-path invariant 3): a re-typed lookalike could not PROVE the cross-household refusal.
 //
-// ⚠️ **NOT ONE NEW `movements` ROW IS CREATED BELOW**, deliberately. The TEN-2a/2c section further
-// down reads the whole table and asserts membership of exactly the ids a resolver touched, so a
-// fixture that found-or-created anything here would redden a gate that is about something else.
-// Case (a) is the one that *would* write, and the whole point is that it does not.
+// ⚠️ **NOT ONE NEW `movements` ROW IS CREATED BELOW**, deliberately — and ASSERTED, twice, rather
+// than left as a property of how the fixtures happen to be written: case (a) counts the table across
+// its refusal, and a second count spans (c)–(e). The reason it matters is that the TEN-2a/2c section
+// further down reads the whole table; a fixture that found-or-created a GLOBAL row would redden its
+// seed-membership assertion, and one that created a household-owned row would slip past every
+// discriminator there, which is exactly why the count is taken here instead.
 {
   /** A card the picker would submit: an id, plus a label the server must IGNORE in favour of the row. */
   const picked = (movementPublicId: string, clientId: string) => ({
@@ -6209,24 +6211,14 @@ console.log(
     'PICK-1 fixture: the row case (a) tries to steal is household B’s OWN (TEN-2c made that possible)',
   );
 
-  const countMovements = async () =>
-    (
-      (await db.execute(sql`select count(*)::int as count from movements`)).rows as unknown as {
-        count: number;
-      }[]
-    )[0].count;
-  const countSessions = async () =>
-    (
-      (await db.execute(sql`select count(*)::int as count from sessions`)).rows as unknown as {
-        count: number;
-      }[]
-    )[0].count;
-  const countEntries = async () =>
-    (
-      (await db.execute(sql`select count(*)::int as count from entries`)).rows as unknown as {
-        count: number;
-      }[]
-    )[0].count;
+  // One counter, three tables, via Drizzle's `$count` rather than a third copy of this file's
+  // inline `count(*)::int` cast — the second copy inside one block is the extract trigger
+  // (AGENTS.md → "Reuse small logic too").
+  const rowCounts = async () => ({
+    movements: await db.$count(schema.movements),
+    sessions: await db.$count(schema.sessions),
+    entries: await db.$count(schema.entries),
+  });
 
   // (a) 🔴 **A's request names B's own movement id, alongside a typed sibling that WOULD insert.**
   //
@@ -6245,24 +6237,30 @@ console.log(
     0,
     'PICK-1 fixture: the typed sibling slugs onto no existing row, in any namespace — so phase 2 really would insert it',
   );
-  const before = {
-    movements: await countMovements(),
-    sessions: await countSessions(),
-    entries: await countEntries(),
-  };
-  const foreignIdError = await assert.rejects(
-    async () =>
-      resolveSessionMovements(asPg, A_SCOPE, [
-        picked(bOwnRow.publicId, pickCid(1)),
-        typed(TYPED_SIBLING, pickCid(2)),
-      ]),
-    (err: unknown) =>
-      err instanceof MovementNotAvailableError && err.message === MOVEMENT_NOT_AVAILABLE,
+  const before = await rowCounts();
+  // ⚠️ Caught by hand rather than with `assert.rejects`, because (b) below COMPARES this message and
+  // `assert.rejects` resolves to `undefined`. An earlier draft assigned its return value and then
+  // compared (b)'s message against a `?? MOVEMENT_NOT_AVAILABLE` fallback — the constant compared
+  // with itself, which is the assertion-about-evidence failure this file exists to avoid.
+  const foreignIdError = await resolveSessionMovements(asPg, A_SCOPE, [
+    picked(bOwnRow.publicId, pickCid(1)),
+    typed(TYPED_SIBLING, pickCid(2)),
+  ]).then(
+    () => null,
+    (e: unknown) => e as Error,
+  );
+  assert.ok(
+    foreignIdError instanceof MovementNotAvailableError,
     'PICK-1 (a): household A naming household B’s own movement id is REFUSED — the resolver matches global-or-own under the CALLER’S scope, never any owned row',
   );
+  assert.equal(
+    foreignIdError.message,
+    MOVEMENT_NOT_AVAILABLE,
+    'PICK-1 (a): …with the named constant as its message, not a hand-typed string',
+  );
   assert.deepEqual(
-    [await countMovements(), await countSessions(), await countEntries()],
-    [before.movements, before.sessions, before.entries],
+    await rowCounts(),
+    before,
     'PICK-1 (a): …and the refusal wrote NOTHING — no movements row for the typed sibling, no session, no entry. Ids resolve before any insert, so a refused body commits no typed sibling (`NN-typed-before-ids.patch` swaps the phases and this is the assertion that goes red)',
   );
 
@@ -6293,13 +6291,19 @@ console.log(
   );
   assert.equal(
     unknownIdError?.message,
-    (foreignIdError as Error | undefined)?.message ?? MOVEMENT_NOT_AVAILABLE,
+    foreignIdError.message,
     'PICK-1 (b): …and BYTE-IDENTICAL to (a)’s — an unknown id and another household’s id are indistinguishable from outside, so the refusal is not an enumeration oracle',
   );
   assert.ok(
     !unknownIdError?.message.includes(UNKNOWN_ID),
     'PICK-1 (b): …and the message interpolates neither the id nor a name — a thrown value reaches Sentry verbatim, and a movement name is free text the notice warns may hold a person’s name',
   );
+
+  // The movements count from here to the end of (e). Cases (c)–(e) write SESSIONS, and the claim that
+  // "a resolver that minted something per call would show up" needed something to show up IN: (e)'s
+  // session-id and entry-count assertions cannot see a stray household-owned `movements` row, and
+  // neither can the TEN-2a/2c discriminators below (they admit an owned row with a NULL pattern).
+  const beforeHappyPath = await rowCounts();
 
   // (c) 🔴 **The happy path, end to end through the real writer: the id decides, and the id path
   // still FREEZES the V1-22 chunk-2 snapshot.**
@@ -6379,7 +6383,7 @@ console.log(
   // or a `MOV-1`/`C4m` repoint between the pre-check and the write looks like from the writer's side.
   // The in-transaction re-check must refuse and the whole graph must roll back.
   // `NN-drop-in-tx-recheck.patch` removes that check and this case goes red.
-  const beforeD = { sessions: await countSessions(), entries: await countEntries() };
+  const beforeD = await rowCounts();
   await assert.rejects(
     async () =>
       writeStrengthSession(asPg, {
@@ -6403,15 +6407,14 @@ console.log(
     'PICK-1 (d): the IN-TRANSACTION re-check refuses another household’s internal movement id even when phase 1 is bypassed — the pre-check is an optimisation, this is the seam',
   );
   assert.deepEqual(
-    [await countSessions(), await countEntries()],
-    [beforeD.sessions, beforeD.entries],
+    await rowCounts(),
+    beforeD,
     'PICK-1 (d): …and nothing committed — it throws inside the transaction, so the session and its entries roll back together',
   );
 
   // (e) **Replay.** The same session `clientId` twice, both times by id: one session, one entry per
   // movement, the SAME `sessionId` back. Idempotency is unchanged by the id path — which is worth a
-  // case because the resolver is a new step BEFORE the idempotent write, and a resolver that minted
-  // something per call would show up here.
+  // case because the resolver is a new step BEFORE the idempotent write.
   const pickedReplay = await writeStrengthSession(asPg, {
     profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
     scope: B_SCOPE,
@@ -6439,6 +6442,14 @@ console.log(
     ).length,
     2,
     'PICK-1 (e): …and exactly one entry per movement survives the replay',
+  );
+  // 🔴 **And the id path minted NO catalog row across (c), (d) and (e) together** — three writes, one
+  // of them replayed, none of them find-or-create. Without this the "not one new movements row" claim
+  // at the top of this block held only for case (a), which is the one that throws before phase 2.
+  assert.equal(
+    (await rowCounts()).movements,
+    beforeHappyPath.movements,
+    'PICK-1 (c)–(e): the id path created no `movements` row at all — three writes including a replay, and find-or-create was never reached',
   );
 
   console.log(
