@@ -250,6 +250,13 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
    * behaviour change: memoised on `[id]`, the callback's identity changes exactly when `id` does,
    * which is exactly when those effects re-ran before. What it buys is that a future author who
    * gives this function a second input gets a warning instead of a silently stale closure.
+   *
+   * ⚠️ **The `[id]` dependency is correct by reasoning, NOT by test — probed, and the probe reported
+   * GREEN.** Replacing it with `[]` leaves every case passing, because a sheet's `id` is a module
+   * constant at each call site (`SHEET_ID = 'movement-picker'`) and nothing re-renders a mounted
+   * sheet under a different one. Writing a test for that would pin a scenario no consumer produces.
+   * Recorded here so nobody reads the dependency as covered: if a consumer ever makes `id` dynamic,
+   * it needs a case, and this comment is the warning.
    */
   const isOurEntry = useCallback(() => {
     const state = window.history.state;
