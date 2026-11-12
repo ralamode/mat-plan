@@ -239,11 +239,12 @@ export function movementInHousehold(scope: HouseholdScope) {
  * `writers/strength-session.ts`).
  *
  * ⚠️ **The cost of hand-composing it at each site was concrete, not theoretical.** PICK-1 PR 2
- * shipped it that way first, and `36-availability-ignores-household.patch`'s first draft widened
+ * drafted it that way first, and `36-availability-ignores-household.patch`'s first version widened
  * only the **resolver's** copy — so nothing in the repo could have caught the **in-transaction**
  * copy being widened instead, which is the dangerous direction, since the pre-check is the one a
- * reader assumes is sufficient. Pointed at this helper, one patch reddens `db:verify` (a) and (d)
- * together.
+ * reader assumes is sufficient. Pointed at this helper, that widening now reaches **both** call
+ * sites from one edit. (`db:verify` is fail-fast, so case (a) is the assertion that reports it;
+ * the property that matters is that the in-transaction copy can no longer be widened alone.)
  *
  * ⚠️ **Sharing the expression does not collapse the defence into one.** What makes the re-check a
  * seam is *when* it runs — inside the transaction the rollback protects, after the profile resolve.
