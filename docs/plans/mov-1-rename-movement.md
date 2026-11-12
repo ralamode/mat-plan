@@ -257,12 +257,12 @@ how that row gets fixed. The bound only caps the payload.
 
 ### D6 — The new name on the day page: its own PR, scoped to the entry's household
 
-| Surface                                             | After a rename                                                                                                                                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| PICK-1's picker, program rows (`program-day.ts:98`) | the new name, because both read `movements.name` live                                                                                                                                                  |
-| The CSV `movement` column                           | D1                                                                                                                                                                                                     |
-| The CSV `prescribed` column                         | unchanged **by a rename** — a frozen row is never re-resolved, the live fallback keys on `movement_id`, and the snapshot holds no name. ⚠️ A **merge** is different; see fact 6 (re-stated 2026-11-11) |
-| **The day page's logged strength rows**             | **the old typo, unless the read changes** (fact 5)                                                                                                                                                     |
+| Surface                                              | After a rename                                                                                                                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| PICK-1's picker, program rows (`program-day.ts:115`) | the new name, because both read `movements.name` live                                                                                                                                                  |
+| The CSV `movement` column                            | D1                                                                                                                                                                                                     |
+| The CSV `prescribed` column                          | unchanged **by a rename** — a frozen row is never re-resolved, the live fallback keys on `movement_id`, and the snapshot holds no name. ⚠️ A **merge** is different; see fact 6 (re-stated 2026-11-11) |
+| **The day page's logged strength rows**              | **the old typo, unless the read changes** (fact 5)                                                                                                                                                     |
 
 **MOV-1a2 changes one read.** `listEntriesForDay` adds
 `leftJoin(schema.movements, and(eq(schema.entries.movementId, schema.movements.id), movementInHousehold(scope)))`

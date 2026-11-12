@@ -1,0 +1,1 @@
+PICK-1 (d): the IN-TRANSACTION re-check refuses another household’s internal movement id even when phase 1 is bypassed

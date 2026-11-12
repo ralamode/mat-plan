@@ -35,8 +35,15 @@ function quoteIfNeeded(value: string, field: string): string {
     // A comma in a movement name or a load would silently shift every later column. `text.ts`'s
     // `hasCommaOrLineBreak` already rejects these at the INPUT boundary; this is the export-side
     // backstop, because `/api/sync` and the seed can write rows the form never saw.
+    //
+    // ⚠️ **The VALUE is deliberately not in the message** (PICK-1 PR 2's security review). It used to
+    // be, as `got ${JSON.stringify(value)}` — and for the `movement` field that value is derived from
+    // the one free-text box `docs/privacy/notice.md` warns people may put a person's name into, while
+    // `apps/web/lib/sentry-scrub.ts` passes `exception.value` through verbatim. That is the same rule
+    // `findOrCreateMovement`'s docblock states for its own throws, and this module was outside it.
+    // The field NAME is enough to find the row; the operator has the database.
     throw new Error(
-      `CSV export: the '${field}' field cannot contain a comma (got ${JSON.stringify(value)}). ` +
+      `CSV export: the '${field}' field cannot contain a comma. ` +
         `Only ${[...QUOTABLE].join('/')} may be quoted; anything else would shift the row.`,
     );
   }

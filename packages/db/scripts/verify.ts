@@ -88,7 +88,12 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // TEN-1 1d: the REAL find-or-create the app DAL delegates to. `apps/web/lib/dal/catalog.ts` is
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
-import { findOrCreateMovement } from '../src/writers/movement-catalog';
+import {
+  findOrCreateMovement,
+  MOVEMENT_NOT_AVAILABLE,
+  MovementNotAvailableError,
+  resolveSessionMovements,
+} from '../src/writers/movement-catalog';
 import {
   findNameMatch,
   insertHouseholdMember,
@@ -5781,7 +5786,7 @@ console.log(
 // have moved it since: `ten-2a`, `ten-2b`, `ten-2c`.
 //
 // The function under test is `findOrCreateMovement`, the REAL core the app DAL's
-// `findOrCreateMovementId` delegates to (single-sourced in 1d exactly so this proof can run it;
+// `resolveSessionMovements` delegates to (single-sourced in 1d exactly so this proof can run it;
 // `apps/web/lib/dal/catalog.ts` is `server-only` and cannot execute here).
 
 // (a) The structural fact everything below follows from.
@@ -6161,6 +6166,303 @@ console.log(
     'Verdict: docs/plans/ten-1-household-scope.md → "1d as built"; ' +
     'docs/plans/ten-2b-scoped-movement-lookup.md; docs/plans/ten-2c-drop-global-slug-unique.md',
 );
+
+// ── PICK-1 PR 2: a movement id resolves ONLY in its own namespace ──────────────────────────────────
+//
+// The functions under test are the REAL ones the DAL calls — `resolveSessionMovements` (ids before
+// inserts) and `writeStrengthSession`'s in-transaction re-check. `apps/web/lib/dal/entries.ts` is
+// `server-only` and cannot execute here, which is why resolution lives in `packages/db` at all
+// (write-path invariant 3): a re-typed lookalike could not PROVE the cross-household refusal.
+//
+// ⚠️ **NOT ONE NEW `movements` ROW IS CREATED BELOW**, deliberately — and ASSERTED, twice, rather
+// than left as a property of how the fixtures happen to be written: case (a) counts the table across
+// its refusal, and a second count spans (c)–(e). The reason it matters is that the TEN-2a/2c section
+// further down reads the whole table; a fixture that found-or-created a GLOBAL row would redden its
+// seed-membership assertion, and one that created a household-owned row would slip past every
+// discriminator there, which is exactly why the count is taken here instead.
+{
+  /** A card the picker would submit: an id, plus a label the server must IGNORE in favour of the row. */
+  const picked = (movementPublicId: string, clientId: string) => ({
+    movementPublicId,
+    movementName: 'A LABEL THE ID MUST OVERRIDE',
+    unit: 'lb' as const,
+    clientId,
+    // `SessionMovementInput` carries `status` as a zod `.default()`, so the PARSED type has it
+    // required even though the wire field is optional — these fixtures stand in for parsed bodies.
+    status: ENTRY_STATUS.done,
+    sets: [{ reps: 5, weight: 100 }],
+  });
+  const typed = (movementName: string, clientId: string) => ({
+    movementName,
+    unit: 'lb' as const,
+    clientId,
+    status: ENTRY_STATUS.done,
+    sets: [{ reps: 5, weight: 100 }],
+  });
+  const pickCid = (n: number) => `019826b4-0000-7000-8000-0000000021${String(n).padStart(2, '0')}`;
+
+  const bOwnRow = await movementRow(bMovementId);
+  // `snapMovB` was selected as `{ id, slug, name }` for chunk 2, which needs no public id. The
+  // picker submits one, so read it from the same row rather than re-selecting the movement.
+  const snapMovBRow = await movementRow(snapMovB.id);
+  assert.equal(
+    bOwnRow.householdId,
+    verifyHh.id,
+    'PICK-1 fixture: the row case (a) tries to steal is household B’s OWN (TEN-2c made that possible)',
+  );
+
+  // One counter, three tables, via Drizzle's `$count` rather than a third copy of this file's
+  // inline `count(*)::int` cast — the second copy inside one block is the extract trigger
+  // (AGENTS.md → "Reuse small logic too").
+  const rowCounts = async () => ({
+    movements: await db.$count(schema.movements),
+    sessions: await db.$count(schema.sessions),
+    entries: await db.$count(schema.entries),
+  });
+
+  // (a) 🔴 **A's request names B's own movement id, alongside a typed sibling that WOULD insert.**
+  //
+  // ⚠️ The typed name is chosen to slug onto NO existing row in either namespace, so phase 2 would
+  // genuinely INSERT if it ran. That is what makes "zero new movements rows" an assertion rather
+  // than a tautology — and it is the assertion `36-availability-ignores-household.patch` reddens:
+  // widening `movementIsAvailableTo` to any owned row makes phase 1 succeed, phase 2 run, and this
+  // count move. ⚠️ That patch is aimed at the shared PREDICATE, not at the resolver alone, so the
+  // same one line also widens the in-transaction re-check case (d) checks; `db:verify` is fail-fast,
+  // so (a) is what reports.
+  const TYPED_SIBLING = 'PICK-1 Sibling That Must Not Land';
+  assert.equal(
+    (
+      await db
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(eq(schema.movements.slug, movementSlug(TYPED_SIBLING)))
+    ).length,
+    0,
+    'PICK-1 fixture: the typed sibling slugs onto no existing row, in any namespace — so phase 2 really would insert it',
+  );
+  const before = await rowCounts();
+  // ⚠️ Caught by hand rather than with `assert.rejects`, because (b) below COMPARES this message and
+  // `assert.rejects` resolves to `undefined`. An earlier draft assigned its return value and then
+  // compared (b)'s message against a `?? MOVEMENT_NOT_AVAILABLE` fallback — the constant compared
+  // with itself, which is the assertion-about-evidence failure this file exists to avoid.
+  const foreignIdError = await resolveSessionMovements(asPg, A_SCOPE, [
+    picked(bOwnRow.publicId, pickCid(1)),
+    typed(TYPED_SIBLING, pickCid(2)),
+  ]).then(
+    () => null,
+    (e: unknown) => e as Error,
+  );
+  assert.ok(
+    foreignIdError instanceof MovementNotAvailableError,
+    'PICK-1 (a): household A naming household B’s own movement id is REFUSED — the resolver matches global-or-own under the CALLER’S scope, never any owned row',
+  );
+  assert.equal(
+    foreignIdError.message,
+    MOVEMENT_NOT_AVAILABLE,
+    'PICK-1 (a): …with the named constant as its message, not a hand-typed string',
+  );
+  assert.deepEqual(
+    await rowCounts(),
+    before,
+    'PICK-1 (a): …and the refusal wrote NOTHING — no movements row for the typed sibling, no session, no entry. Ids resolve before any insert, so a refused body commits no typed sibling (`37-typed-before-ids.patch` swaps the phases and this is the assertion that goes red)',
+  );
+
+  // (b) An id that names no row at all. The message must be IDENTICAL to (a)'s, or the refusal is an
+  // oracle a caller can use to enumerate which movement public ids exist (security N2 — the same
+  // 404-never-403 rule ADR 0006 applies to profiles).
+  const UNKNOWN_ID = '019826b4-0000-7000-8000-0000000021ff';
+  assert.equal(
+    (
+      await db
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(eq(schema.movements.publicId, UNKNOWN_ID))
+    ).length,
+    0,
+    'PICK-1 fixture: the unknown id really names no row',
+  );
+  await assert.rejects(
+    async () => resolveSessionMovements(asPg, A_SCOPE, [picked(UNKNOWN_ID, pickCid(3))]),
+    (err: unknown) => err instanceof MovementNotAvailableError,
+    'PICK-1 (b): an unknown movement id is refused too',
+  );
+  const unknownIdError = await resolveSessionMovements(asPg, A_SCOPE, [
+    picked(UNKNOWN_ID, pickCid(4)),
+  ]).then(
+    () => null,
+    (e: unknown) => e as Error,
+  );
+  assert.equal(
+    unknownIdError?.message,
+    foreignIdError.message,
+    'PICK-1 (b): …and BYTE-IDENTICAL to (a)’s — an unknown id and another household’s id are indistinguishable from outside, so the refusal is not an enumeration oracle',
+  );
+  assert.ok(
+    !unknownIdError?.message.includes(UNKNOWN_ID),
+    'PICK-1 (b): …and the message interpolates neither the id nor a name — a thrown value reaches Sentry verbatim, and a movement name is free text the notice warns may hold a person’s name',
+  );
+
+  // The movements count from here to the end of (e). Cases (c)–(e) write SESSIONS, and the claim that
+  // "a resolver that minted something per call would show up" needed something to show up IN: (e)'s
+  // session-id and entry-count assertions cannot see a stray household-owned `movements` row, and
+  // neither can the TEN-2a/2c discriminators below (they admit an owned row with a NULL pattern).
+  const beforeHappyPath = await rowCounts();
+
+  // (c) 🔴 **The happy path, end to end through the real writer: the id decides, and the id path
+  // still FREEZES the V1-22 chunk-2 snapshot.**
+  //
+  // Two cards, both by public id, under household B's snapshot fixture (the same `verify_snapshot_block`
+  // / `skill` day chunk 2 proves against):
+  //   · `snapMovB` — a GLOBAL row the day DOES prescribe, with a comma and a per-kid reps override;
+  //   · `bOwnRow`  — household B's OWN row, which that day does NOT prescribe.
+  // So one proves the id path freezes a real rendered string and the other that it freezes `''` —
+  // which is what PICK-1's round-2 B1 asked for, restated against the mechanism chunk 2 shipped
+  // (the plan's § Amendment, 2026-11-11: there is no `prescriptionId` on the wire to carry).
+  const pickedResolved = await resolveSessionMovements(asPg, B_SCOPE, [
+    picked(snapMovBRow.publicId, pickCid(5)),
+    picked(bOwnRow.publicId, pickCid(6)),
+  ]);
+  assert.deepEqual(
+    pickedResolved.map((m) => m.movementId),
+    [snapMovB.id, bMovementId],
+    'PICK-1 (c): a global row and this household’s OWN row both resolve by public id, to exactly those rows',
+  );
+  assert.deepEqual(
+    pickedResolved.map((m) => m.movementName),
+    [snapMovB.name, bOwnRow.name],
+    'PICK-1 (c): …and each carries the DATABASE’S name, not the client’s label — "the id decides" is this assertion. A `{ ...m, movementId }` spread would have let the submitted label through',
+  );
+  const pickedWrite = await writeStrengthSession(asPg, {
+    profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+    scope: B_SCOPE,
+    day: '2026-03-09',
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: pickCid(7),
+    activityTypeId: scLiftActivityId,
+    dayRole: 'skill',
+    movements: pickedResolved,
+  });
+  const pickedRows = new Map(
+    (
+      await db
+        .select({
+          clientId: schema.entries.clientId,
+          movementId: schema.entries.movementId,
+          movementName: schema.entries.movementName,
+          snap: schema.entries.prescribedSnapshot,
+        })
+        .from(schema.entries)
+        .where(inArray(schema.entries.clientId, [pickCid(5), pickCid(6)]))
+    ).map((r) => [r.clientId, r] as const),
+  );
+  assert.deepEqual(
+    [pickedRows.get(pickCid(5))?.movementId, pickedRows.get(pickCid(6))?.movementId],
+    [snapMovB.id, bMovementId],
+    'PICK-1 (c): the written entries reference the rows the IDS named (criterion 17)',
+  );
+  assert.deepEqual(
+    [pickedRows.get(pickCid(5))?.movementName, pickedRows.get(pickCid(6))?.movementName],
+    [snapMovB.name, bOwnRow.name],
+    'PICK-1 (c): …and `entries.movement_name` is the DATABASE’S label — the column the day page renders, which a `{ ...m, movementId }` spread would have let the client set while the id decided the row. (The CSV’s `movement` column reads `movements.slug` through `movement_id` and never this column, so it was never the stake here.)',
+  );
+  // ⚠️ The expected string is the REWRITTEN one. Chunk 2's replay proof updated this prescription's
+  // target reps to `rewritten-after-the-fact` earlier in this file, deliberately and scoped to this
+  // block — so by the time PICK-1's session is written the live program says that, and freezing it is
+  // the point-in-time behaviour acceptance 9 asks for. Expecting chunk 2's original `3x4, last AMRAP`
+  // here would be expecting the snapshot to be stale, which is the opposite of what the column is for.
+  assert.equal(
+    pickedRows.get(pickCid(5))?.snap,
+    '3xrewritten-after-the-fact @ 65',
+    'PICK-1 (c): 🔴 the ID PATH still freezes the V1-22 chunk-2 snapshot — the global card’s day prescribes it, so what the program says AT THIS MOMENT is written. Chunk 2 matches on `movement_id`, which the resolver supplied; nothing on the wire names a prescription',
+  );
+  assert.equal(
+    pickedRows.get(pickCid(6))?.snap,
+    '',
+    'PICK-1 (c): …and a picked movement the day does NOT prescribe freezes the EMPTY STRING, not NULL — chunk 2 rule 2, unchanged by the id path',
+  );
+
+  // (d) 🔴 **THE TOCTOU SEAM.** `writeStrengthSession` is called DIRECTLY with household B's internal
+  // movement id under household A's scope — bypassing phase 1 entirely, which is what a soft-delete
+  // or a `MOV-1`/`C4m` repoint between the pre-check and the write looks like from the writer's side.
+  // The in-transaction re-check must refuse and the whole graph must roll back.
+  // `38-drop-in-tx-recheck.patch` removes that check and this case goes red.
+  const beforeD = await rowCounts();
+  await assert.rejects(
+    async () =>
+      writeStrengthSession(asPg, {
+        profilePublicId: SEED_PROFILE_PUBLIC_ID,
+        scope: A_SCOPE,
+        day: '2026-03-09',
+        sessionType: SESSION_TYPES[0],
+        sessionClientId: pickCid(8),
+        activityTypeId: scLiftActivityId,
+        movements: [
+          {
+            movementName: bOwnRow.name,
+            unit: 'lb',
+            movementId: bMovementId,
+            clientId: pickCid(9),
+            sets: [{ reps: 5, weight: 100 }],
+          },
+        ],
+      }),
+    (err: unknown) => err instanceof MovementNotAvailableError,
+    'PICK-1 (d): the IN-TRANSACTION re-check refuses another household’s internal movement id even when phase 1 is bypassed — the pre-check is an optimisation, this is the seam',
+  );
+  assert.deepEqual(
+    await rowCounts(),
+    beforeD,
+    'PICK-1 (d): …and nothing committed — it throws inside the transaction, so the session and its entries roll back together',
+  );
+
+  // (e) **Replay.** The same session `clientId` twice, both times by id: one session, one entry per
+  // movement, the SAME `sessionId` back. Idempotency is unchanged by the id path — which is worth a
+  // case because the resolver is a new step BEFORE the idempotent write.
+  const pickedReplay = await writeStrengthSession(asPg, {
+    profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+    scope: B_SCOPE,
+    day: '2026-03-09',
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: pickCid(7),
+    activityTypeId: scLiftActivityId,
+    dayRole: 'skill',
+    movements: await resolveSessionMovements(asPg, B_SCOPE, [
+      picked(snapMovBRow.publicId, pickCid(5)),
+      picked(bOwnRow.publicId, pickCid(6)),
+    ]),
+  });
+  assert.equal(
+    pickedReplay.sessionId,
+    pickedWrite.sessionId,
+    'PICK-1 (e): a replayed id-path session returns the SAME session public id',
+  );
+  assert.equal(
+    (
+      await db
+        .select({ id: schema.entries.id })
+        .from(schema.entries)
+        .where(inArray(schema.entries.clientId, [pickCid(5), pickCid(6)]))
+    ).length,
+    2,
+    'PICK-1 (e): …and exactly one entry per movement survives the replay',
+  );
+  // 🔴 **And the id path minted NO catalog row across (c), (d) and (e) together** — three writes, one
+  // of them replayed, none of them find-or-create. Without this the "not one new movements row" claim
+  // at the top of this block held only for case (a), which is the one that throws before phase 2.
+  assert.equal(
+    (await rowCounts()).movements,
+    beforeHappyPath.movements,
+    'PICK-1 (c)–(e): the id path created no `movements` row at all — three writes including a replay, and find-or-create was never reached',
+  );
+
+  console.log(
+    '✓ PICK-1 PR 2: a movement id resolves ONLY in its own namespace — another household’s own id ' +
+      'and an unknown id are byte-identical refusals that write nothing (not even the typed sibling ' +
+      'in the same body), a global row and this household’s own row both resolve and the DATABASE’S ' +
+      'name reaches the entry, the V1-22 chunk-2 snapshot still freezes on the id path, the ' +
+      'in-transaction re-check refuses a bypassed foreign id and rolls back, and replay is unchanged',
+  );
+}
 
 // ── TEN-2a/2c: the column, the FK, and the two indexes in their SOLE-ARBITER role ────────────────
 //

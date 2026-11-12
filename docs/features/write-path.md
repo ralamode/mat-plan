@@ -92,7 +92,7 @@ flowchart LR
 | `apps/web/lib/csv/prescribed-snapshot.ts` | `resolvePrescribed` — **frozen first, live only on NULL**. 🔴 Pure, and in its own module, because the expression it holds is the most dangerous in the chunk: `\|\|` in place of `??` sends every frozen `''` back to today's program, and `''` is what 11 of the 13 seeded prescriptions render. Inline in the DAL it had no unit-level pin; a probe proved the equivalent mutation at the _writer_ is harmless, so only this one needed the module.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `packages/db/src/queries/`                | The single-sourced, security-load-bearing reads: `household-profiles.ts` (the picker — the whole isolation boundary under ADR 0006), `household-scope.ts` (the resolver's own probe), `weekly-adherence.ts`, `export-month.ts`. Owned by name, not by prefix: `program-day.ts` belongs to [programming](./programming.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `packages/db/src/writers/`                | The write cores — transactional creates, single guarded-UPDATE amends — shared so the DAL **and** `db:verify` prove the same guard.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `…/writers/movement-catalog.ts`           | `findOrCreateMovement` — household-scoped since `TEN-2b`, with no `23505` fallback since `TEN-2d`, resolving **GLOBAL-FIRST**: the curated namespace (`household_id IS NULL`), then this household's own, then an insert into this household's own. Extracted in TEN-1 1d solely so `db:verify` could run the real function for the catalog verdict. 🔴 **Read its docblock before touching it** — it holds why the order is not household-first, the `23505` fallback that is the only control on the `TEN-2b→2c` denial window, and that fallback's price (a cross-household `entries.movement_id` that blocks household deletion). Status: [data-inventory.md](../privacy/data-inventory.md) §4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `…/writers/movement-catalog.ts`           | **Every way a movement is resolved, and the whole of it.** `findOrCreateMovement` — household-scoped since `TEN-2b`, resolving **GLOBAL-FIRST**: the curated namespace (`household_id IS NULL`), then this household's own, then an insert into this household's own. `resolveMovementByPublicId` + `resolveSessionMovements` + `MovementNotAvailableError` — `PICK-1` PR 2's id path, ids before inserts. 🔴 **Read its docblocks before touching it** — they hold why the order is not household-first, why the two phases are ordered, and why a refusal interpolates nothing. ⚠️ The `23505` fallback this row used to describe is **gone since `TEN-2d`**; what survives it is DATA (a cross-household `entries.movement_id` that blocks household deletion), measured at zero and asserted in `db:verify`. Status: [data-inventory.md](../privacy/data-inventory.md) §4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `apps/web/lib/dal/scoped.test.ts`         | TEN-1 1d's structural guard: nothing in `lib/dal` reaches `db` unscoped, and nothing builds its own ownership predicate. Two exception lists, both enumerated with a reason, both final. Not to be confused with `packages/db/src/scope.test.ts`, which guards the scope **type**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `packages/db/src/client.ts`               | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -293,12 +293,13 @@ flowchart LR
    - ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so
      TEN-1 buys _consistent scoping_ — B's data is unreachable from a request scoped to A. It does
      not prove the requester is who they claim. That is the most likely thing to over-claim here.
-   - 🔴 **ONE WRITE PATH IS OUTSIDE THIS INVARIANT, AND IS NOT YET BROUGHT IN:
-     `findOrCreateMovementId`.** `movements.household_id` exists (TEN-2a) but nothing reads or writes
-     it — see [data-inventory.md](../privacy/data-inventory.md) §4 for the status — so there is still
-     nothing scoped to scope by, and a `scope` parameter accepted and ignored would be worse than the
-     honest absence, which is why `findOrCreateMovement`
-     (`packages/db/src/writers/movement-catalog.ts`) still takes none. **TEN-2b** gives it one. TEN-1 chunk 1d **proved** the consequence in both directions against a real
+   - ✅ **THE ONE WRITE PATH THAT WAS OUTSIDE THIS INVARIANT IS NOW INSIDE IT.** `findOrCreateMovementId`
+     took no scope at all through TEN-2a (`movements.household_id` existed but nothing read it);
+     `TEN-2b` gave the core a `HouseholdScope`, and **`PICK-1` PR 2 deleted the app-side wrapper** —
+     every way a movement is resolved now lives in `packages/db/src/writers/movement-catalog.ts` and
+     takes a scope positionally. **The history below is kept because it is the measured verdict, not
+     a worry**, and because the record of what a shared catalog namespace costs is the argument
+     against re-introducing one. TEN-1 chunk 1d **proved** the consequence in both directions against a real
      database — `db:verify` → _"TEN-1 1d: the catalog verdict"_ — rather than asserting it:
      - one household typing a movement is handed another household's row, inheriting its `name`,
        `is_bodyweight` and `unit_default`, and `programDayRows` renders those on the **other**
@@ -318,6 +319,13 @@ flowchart LR
        by `apps/web/lib/dal/entries.test.ts` → _"find-or-create runs, and commits, before the refused
        write"_, which asserts on the SQL `logStrengthSession` emits that the movement `INSERT` precedes
        the session transaction's `BEGIN` and the profile resolve that refuses.
+       ✅ **`PICK-1` PR 2 narrowed this, and did not close it.** `resolveSessionMovements` resolves
+       every submitted movement **id** before it creates any typed name, so a body refused _for its
+       id_ now commits nothing at all — proved by `db:verify` (a), whose typed sibling is chosen to
+       slug onto no existing row so phase 2 really would insert, and by `37-typed-before-ids.patch`.
+       What survives is the original case: a typed name in a session the **profile** seam then
+       refuses. `TEN-2b-1` is the row that closes it, and since V1-22 chunk 2 it must carry the
+       snapshot read with it (see that row).
 
      **`TEN-2` is the fix**, and the recorded verdict is that it belongs in Beta 0 — before a second
      household exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built"_. Do not read
@@ -438,6 +446,56 @@ flowchart LR
     function to make miss. And the suite opens with a **non-vacuity floor** — `it.each([])` passes
     silently, so a registry filter that matches nothing would report success.
 
+14. 🔴 **A MOVEMENT is resolved in `packages/db`, ids before inserts, and re-checked inside the
+    transaction** (`PICK-1` PR 2, `writers/movement-catalog.ts`). Three parts, each load-bearing:
+
+    - **The id decides; the name is a label.** A submitted `movementPublicId` resolves through
+      `resolveMovementByPublicId`, and the writer receives `movements.name` **from the row** — never
+      the client's `movementName`. So the resolved movement is built **field by field**, not
+      `{ ...m, movementId }`: a spread would carry the client's label into
+      `entries.movement_name`, and silently undo this. `db:verify` (c) is what proves the
+      database's name arrives. ⚠️ **That column is NOT a CSV column** — the export's `movement`
+      column reads `movements.slug` through the entry's `movement_id`
+      (`queries/export-month.ts` → `csvMovement`) and never selects `movement_name`, which only
+      the day page reads (`lib/entries/entry-label.ts`). So the stake here is the day page's
+      label and the household's own record of what it logged, not a shifted CSV row.
+    - **Phase 1 resolves every id; only then does phase 2 find-or-create the typed names.** Phase 2
+      is the only phase that writes, so a body refused for a bad id commits **nothing** — not even
+      a typed sibling in the same submission. Swap the phases and the refusal still happens, just
+      after a catalog row nothing can remove has committed: `37-typed-before-ids.patch` is that
+      swap, and the assertion it reddens is "the refusal wrote NOTHING", never the refusal itself.
+    - **The seam is `assertMovementsAreAvailable`, inside the transaction** (`writers/strength-session.ts`),
+      after the profile resolve and before the first insert — exactly where `isLiveProfile` already
+      is, and for the same reason. Phase 1 is a pre-check **outside** the transaction, so between its
+      read and the write a movement can be soft-deleted or (once `MOV-1`/`C4m` exist) repointed. It
+      guards the typed path too, because the writer takes `movementId: number` from its caller.
+
+    **A refused id THROWS**, with a message that interpolates neither id nor name and is
+    byte-identical for "unknown" and "another household's" — the 404-never-403 rule ADR 0006 applies
+    to profiles, applied to the catalog, and the Sentry-verbatim rule `findOrCreateMovement`'s
+    docblock gives at length. It throws rather than returning a typed envelope because **no screen
+    can produce one**: the picker offers only rows its read returned, movements are never deleted,
+    and no merge exists. ⚠️ **`C4m` (merge) makes a dead id reachable and owns turning this into a
+    typed refusal.**
+
+    ⚠️ **One bounded consequence, recorded rather than built for.** `resolveMovementByPublicId`
+    deliberately accepts a household row whose slug a **global** row shadows (`PICK-1` Decision 2,
+    correctness S3): it is the household's own row with its own history, and refusing it would make
+    a row unusable by the only people who own it. Since V1-22 chunk 2 the frozen `prescribed`
+    snapshot keys on `movement_id`, so an entry on the **household** row misses a prescription
+    naming the **global** one and freezes `''` — where the typed path's global-first resolution
+    matches. Bounded three ways: production holds **zero** household-owned movements (census
+    2026-10-13, [data-inventory.md](../privacy/data-inventory.md)); `PICK-1` PR 4's list excludes
+    such a row, so the picker cannot offer one; and the CSV's `movement` column is unaffected,
+    because a shadowing slug is the same string. Two paths reach it — a crafted id, or a catalog
+    seed landing **after** a pick (`CAT-2` runs `db:seed` on merge).
+
+    ⚠️ **This note STAYS here, and `movement-picker.md` links to it** — an earlier draft said PR 3
+    would move it, which would have made PR 3 edit this file and quietly falsified the "PR 3 is not
+    gated on PR 2, any merge order" claim in the plan, the roadmap, the milestone and `status.md`
+    (`docs/parallel-work.md` Gate 1 is disjoint file globs, **feature guides included**). It belongs
+    here anyway: the behaviour is `resolveMovementByPublicId`'s, and this guide owns `writers/`.
+
 ## Traps
 
 - **A DB constraint reached by a crafted body is a 500 that discards the whole transaction.** For a
@@ -470,7 +528,8 @@ flowchart LR
     `getMetricDefinition` in `catalog.ts` are global reference reads.
     ✅ **`findOrCreateMovementId` was a fourth and is not any more** — `TEN-2b` scoped it, and
     `scoped.test.ts`'s dead-entry assertion is what forced its allowlist entry out rather than letting
-    it stand as coverage nobody re-earned. ✅ **`TEN-2c` dropped `movements_slug_unique`**, so each
+    it stand as coverage nobody re-earned. **`PICK-1` PR 2 then deleted the function itself**, so
+    `catalog.ts` holds no write path at all. ✅ **`TEN-2c` dropped `movements_slug_unique`**, so each
     household now holds its own row for a slug, and `TEN-2d` (0018) **deleted** the resolver's `23505`
     fallback — 0017 had already made it unreachable, and it outlived the drop by one PR only because
     nothing couples `migrate.yml` to the Vercel deploy. The denial window is closed. ⚠️ **That is still

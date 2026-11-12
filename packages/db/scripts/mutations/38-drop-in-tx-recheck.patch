@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
+index eb19508..138761d 100644
+--- a/packages/db/src/writers/strength-session.ts
++++ b/packages/db/src/writers/strength-session.ts
+@@ -377,8 +377,6 @@ export async function writeStrengthSession(
+       .limit(1);
+     if (!profile) throw new Error('Profile not found');
+ 
+-    await assertMovementsAreAvailable(tx, args.scope, args.movements);
+-
+     const session = await insertStrengthSessionRow(tx, {
+       profileId: profile.id,
+       day: args.day,

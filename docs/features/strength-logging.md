@@ -14,6 +14,13 @@ owns:
   - apps/web/app/p/[profileId]/set-display.ts
   - packages/shared/src/strength.ts
   - packages/shared/src/strength-session.ts
+  # PICK-1 PR 2: the movement-name rules invariant 9 describes (MOVEMENT_NAME_MAX,
+  # MOVEMENT_NAME_MESSAGES, movementLabelSchema, typedMovementNameIssues, movementNameSchema). Owned
+  # HERE rather than left unowned, so a later edit to the typed-name rules cannot pass `guides:check`
+  # without the guide that states them. ⚠️ PR 3 adds the picker's groups and aliases to this same
+  # file, keyed by slug, and may want `movement-picker.md` to own it instead — that is PR 3's call,
+  # and whichever guide holds it, the other links to it.
+  - packages/shared/src/movements.ts
   - packages/shared/src/quantity-slots.ts
   - packages/shared/src/units.ts
   - packages/db/src/writers/strength-session.ts
@@ -215,6 +222,33 @@ all derived from the one unit, so none can disagree with it:
    status means the writer omits the column and Postgres applies its own default. One default, in one
    place. Adding `.default()` anywhere here forks it and changes every stored row.
 
+9. 🔴 **The MOVEMENT id decides which row an entry references; `movementName` is a label**
+   (`PICK-1` PR 2). `sessionMovementSchema` carries an optional `movementPublicId`: present ⇒ the
+   movement is resolved by public id in `packages/db` and the writer receives `movements.name` **from
+   the row**; absent ⇒ today's typed path (`findOrCreateMovement`) runs, which is what the picker's
+   "use as typed" becomes. The full rule, the two phases and the in-transaction re-check live in
+   [write-path.md](./write-path.md) invariant 14 — this guide owns only what it means for the form
+   and the schema:
+
+   - **The typed-name rules apply ONLY to a typed name.** `movementName` keeps a label shape
+     (`movementLabelSchema`: trim, non-empty, `MOVEMENT_NAME_MAX`); the comma/line-break guard and the
+     at-least-one-letter rule live in `typedMovementNameIssues` and are applied by the session
+     `superRefine`'s check (7) **only where there is no `movementPublicId`**. 🔴 **An id-resolved
+     movement is never refused for its own name** — that name is whatever the catalog row holds, and
+     the household cannot fix it until `MOV-1`. Refusing it would make a row unusable by its owner.
+   - **The path is `['movements', i, 'movementName']`.** The action's `Movement N: <message>` mapping
+     keys on a numeric `path[1]`, so a check that reported at `['movements', i]` would silently turn
+     every one of these messages into something unlocatable.
+   - **The field is OPTIONAL on the wire and `actions.ts` is not edited.** It rides inside
+     `parsed.data.movements`, which the action forwards wholesale. ⚠️ **zod strips unknown keys**, so
+     a field missing from the schema vanishes silently and every picked movement falls back to the
+     typed path with every gate green — which is why `actions.test.ts` asserts the DAL received the
+     **value**, with `toMatchObject` on the whole argument rather than `objectContaining` (a key that
+     is simply absent satisfies the latter).
+   - ⚠️ **Two deliberate copy/behaviour changes.** An emoji- or digit-only typed name is now refused,
+     and `MOVEMENT_NAME_MESSAGES.missing` reads **"Choose a movement."** — after PR 4 the field is a
+     button that opens a picker, so "enter" names an interaction the screen no longer offers.
+
 5b. **The strength section is the day's record; the form is an island inside it (V1-24 3a-ii).**
 
 - **One renderer, two placements.** `StrengthSessionReceipt` renders a session in the section and in
@@ -367,9 +401,10 @@ Real ones, each with the file to look at.
   it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the form, the
   action and `ResolvedSessionMovement` are all unchanged.
 
-  ✅ **`findOrCreateMovementId` still runs BEFORE this, but it is SCOPED as of `TEN-2b`** — it takes
-  the same `HouseholdScope` `logStrengthSession` already resolved and passes it to the core
-  (`packages/db/src/writers/movement-catalog.ts`), which resolves **global-first**. So a movement a
+  ✅ **Movement resolution still runs BEFORE this, and it is SCOPED as of `TEN-2b`** — the DAL's
+  `findOrCreateMovementId` wrapper is gone (`PICK-1` PR 2 deleted it); `resolveSessionMovements`
+  takes the same `HouseholdScope` `logStrengthSession` already resolved and reaches
+  `findOrCreateMovement` for a typed name, which resolves **global-first**. So a movement a
   household types belongs to that household, and a session the seam then refuses leaves its catalog
   row in the **caller's own** namespace: garbage the deletion procedure removes, not a cross-tenant
   write. Moving the call inside the transaction is `TEN-2b-1`; `entries.test.ts` pins the current

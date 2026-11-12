@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { type HouseholdScope, findOrCreateMovement, schema } from '@mat-plan/db';
+import { schema } from '@mat-plan/db';
 import { eq } from 'drizzle-orm';
 import { cache } from 'react';
 
@@ -9,9 +9,13 @@ import { db } from './db';
 /**
  * Catalog lookups for the generalized entry write path (V1-1b). The catalog rows
  * (activity_types / metric_definitions) are stable reference data, so the read
- * helpers are request-`cache()`d (one query per key per request). `movements` is
- * the one write path here: the v0 strength form submits a free-text movement name,
- * so we FIND-OR-CREATE by slug — the v0→v1 bridge until the movement picker (V1-8).
+ * helpers are request-`cache()`d (one query per key per request).
+ *
+ * ✅ **As of PICK-1 PR 2 there is NO write path in this module.** `movements` used to be one — the
+ * v0 form submitted a free-text name and `findOrCreateMovementId` found-or-created by slug, the
+ * v0→v1 bridge until the picker. The **server half of that picker** is in now, and every way a
+ * movement is resolved — by public id, then by typed name — lives in
+ * `packages/db/src/writers/movement-catalog.ts`. (No screen sends an id until PR 4.)
  *
  * ## ⚠️ Two of the three unscoped `lib/dal` queries live here
  *
@@ -22,10 +26,12 @@ import { db } from './db';
  *   seeded from `packages/shared` (`architecture.md` § 4), shared by every household, with **no
  *   `household_id` column** to scope by. Resolving one reveals nothing about any household.
  *
- * ✅ **`findOrCreateMovementId` was the third, and TEN-2b removed it from that list** — it takes a
- * `HouseholdScope` now, so `scoped.test.ts`'s dead-entry assertion forced the entry out rather than
- * letting it stand as coverage nobody re-earned. Its remaining residual is not a scoping gap but the
- * TEN-2b→2c window; see its docblock below.
+ * ✅ **`findOrCreateMovementId` was the third; TEN-2b removed it from that list, and PICK-1 PR 2
+ * deleted the wrapper itself.** Movement resolution now lives wholly in `packages/db`
+ * (`writers/movement-catalog.ts` → `resolveSessionMovements`), which the DAL calls directly, so
+ * there is no app-side movement write path left here to scope. The reasoning that was in this
+ * wrapper's docblock — global-first and why, and the pre-2b residual closing at `TEN-2c-1` — lives
+ * in `findOrCreateMovement`'s own docblock, which is where the behaviour is.
  *
  * `reportScopeMiss`'s existence-only probe (`household.ts`) is the other unscoped query, allowlisted
  * separately by the same test, and `getHouseholdScope` is the scope point itself.
@@ -84,24 +90,4 @@ export const getMetricDefinition = cache(
 /** Confirm a metric_definition exists for `key`. Cached (delegates to the full lookup). */
 export async function assertMetricKeyExists(key: string): Promise<string> {
   return (await getMetricDefinition(key)).key;
-}
-
-/**
- * Find-or-create a movement from a free-text name and return its internal id.
- *
- * ✅ **Household-scoped as of TEN-2b** — it takes a `HouseholdScope` and resolves **GLOBAL-FIRST**:
- * the curated namespace (`household_id IS NULL`), then this household's own, then an insert into this
- * household's own. The core is `findOrCreateMovement` in
- * `packages/db/src/writers/movement-catalog.ts`, single-sourced per `write-path.md` invariant 3 so
- * `db:verify` runs **this** function rather than a re-typed lookalike — the only way the
- * cross-household behaviour could be *proved* rather than asserted. **Read that docblock before
- * changing anything here**: it holds the resolution order, why it is not household-first, and the
- * one residual below.
- *
- * ✅ **TEN-2c closed the DENIAL window** — `0017` dropped `movements_slug_unique`, so each household
- * now holds its own row for a slug and the core's `23505` fallback is unreachable (kept one more PR
- * for the deploy race, `TEN-2d`). ⚠️ **One residual survives:** the **pre-2b** rows still at `household_id IS NULL`, which global-first serves to every household — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing, via `movements_global_row_has_pattern`.
- */
-export async function findOrCreateMovementId(scope: HouseholdScope, name: string): Promise<number> {
-  return findOrCreateMovement(db, scope, name);
 }

@@ -160,7 +160,7 @@ describe('isUntouchedMovement — a status is a typed field (GAP-1 P1-1c / BUG-2
 
   it('check-then-UNCHECK returns the card to droppable (a mis-tap must not wedge the form)', () => {
     // The toggle sets `undefined`, not 'done'. Presence-checking would leave this card permanently
-    // un-droppable, blocking submit behind "Movement N: Enter a movement." with Remove as the only out.
+    // un-droppable, blocking submit behind "Movement N: Choose a movement." with Remove as the only out.
     expect(isUntouchedMovement(card({ status: undefined, sets: [] }))).toBe(true);
   });
 

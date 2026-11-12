@@ -5,7 +5,8 @@ import { uuidSchema } from './id';
 import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { numberTooHighMessage, strengthSetSchema } from './strength';
-import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
+import { movementLabelSchema, typedMovementNameIssues } from './movements';
+import { freeTextNoteSchema } from './text';
 import {
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
@@ -43,22 +44,29 @@ export const MAX_SETS_PER_MOVEMENT = 20;
  * movement has neither); paired + validated in the schema's superRefine.
  */
 export const sessionMovementSchema = z.object({
-  // GAP-1 P2-2 — the name reaches the CSV's `movement` column, which is joined raw, so a comma shifts
-  // every downstream field in the row and a newline splits it. REJECTED at the boundary (the same call
-  // `parseLoad` makes for the load field), never sanitised: the name is persisted VERBATIM in two
-  // columns — `movements.name` and `entries.movement_name` — so laundering the derived `movements.slug`
-  // would leave both commas in place and fix nothing. `"` stays legal (`30" Box Jump`), matching
-  // `parseLoad`. Nothing is lost by rejecting: `Bench, Close Grip` and `Bench Close Grip` already slug
-  // identically, so the comma carries no information the DB keeps.
-  movementName: z
-    .string()
-    .trim()
-    .min(1, 'Enter a movement.')
-    .max(100)
-    .refine(
-      (v) => !hasCommaOrLineBreak(v),
-      'A movement name can’t contain a comma or a line break.',
-    ),
+  // 🔴 PICK-1 Decision 1 — **the settled wire key, and the id ALONE decides.** Present ⇒ the movement
+  // is resolved by `movements.public_id` under the caller's household scope
+  // (`resolveMovementByPublicId`) and `movementName` below is a LABEL ONLY: the writer receives
+  // `movements.name` from the row, never the client's text. Absent ⇒ today's typed path
+  // (`findOrCreateMovement`) runs, which is "use as typed".
+  //
+  // ⚠️ **Deliberately NOT a xor with `movementName`.** The label has to stay on the wire because the
+  // action names a failing movement by its submitted name, and V1-30's review rejected "Movement N"
+  // (the index points at the submitted list, which drops untouched cards). "The id decides" gives the
+  // same safety, and `actions.test.ts` pins it: a body carrying BOTH an id and a different name
+  // writes the row the id names.
+  movementPublicId: uuidSchema.optional(),
+  // The LABEL shape only — `movementLabelSchema` (trim, non-empty, capped). The two rules that used
+  // to live inline here (no comma or line break, at least one letter) moved to
+  // `typedMovementNameIssues` and are applied by check (7) in the session `superRefine` **only to a
+  // movement without `movementPublicId`**: PICK-1 correctness S1 — an id-resolved movement must never
+  // be refused for a name the DATABASE supplied and the household cannot yet fix (`MOV-1` is what
+  // makes it fixable). The comma rule itself is unchanged and still a CSV-contract guard (GAP-1 P2-2)
+  // — ⚠️ though what it guards is the **slug** derived from this text, which is the export's
+  // `movement` column, and `csvRow` **throws** on a comma there rather than shifting the row.
+  // `entries.movement_name` is not exported; the claim that it was is corrected in
+  // `typedMovementNameIssues`' docblock, which now holds the full trace.
+  movementName: movementLabelSchema,
   // Every unit the form's Measuring picker offers (V1-30; the chain test in units.test.ts).
   unit: loggableUnitSchema,
   clientId: uuidSchema,
@@ -292,6 +300,35 @@ export const logStrengthSessionSchema = z
             message: numberTooHighMessage(UNIT_LABELS[m.unit].toLowerCase()),
           });
         }
+      }
+    }
+
+    /**
+     * (7) PICK-1 Decision 1 — **the typed-name rules, applied ONLY to a typed name.**
+     *
+     * A movement carrying `movementPublicId` is resolved from the catalog and its `movementName` is
+     * whatever `movements.name` holds, so refusing it here would refuse a row the household cannot
+     * edit until `MOV-1` ships (correctness S1). A movement WITHOUT one is free text, and gets both
+     * rules: no comma or line break (the CSV-contract guard GAP-1 P2-2 added) and at least one
+     * letter (new — `🙂`, `123` and `---` all slug to something and mint a catalog row nothing can
+     * remove, which is the hazard PICK-1 exists to close).
+     *
+     * ⚠️ **The path is `['movements', i, 'movementName']`, not `['movements', i]`.** It is where the
+     * inline refine reported from before this moved, so the action's `Movement N: <message>` mapping
+     * (which keys on a numeric `path[1]`) renders it unchanged. A new path would have silently
+     * changed every one of these messages into something else.
+     *
+     * ⚠️ One issue per rule, so a name that is BOTH `a,b` and letterless earns two — the repo's
+     * one-message-per-fault convention, same as the mode and ceiling loops above.
+     */
+    for (const [i, m] of val.movements.entries()) {
+      if (m.movementPublicId !== undefined) continue;
+      for (const message of typedMovementNameIssues(m.movementName)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['movements', i, 'movementName'],
+          message,
+        });
       }
     }
   });

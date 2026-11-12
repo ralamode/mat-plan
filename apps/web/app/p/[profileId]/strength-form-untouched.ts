@@ -33,7 +33,8 @@ export type MovementDraft = {
 /** True when a status is absent or explicitly the default — i.e. the athlete has expressed nothing.
  *  Compares to the DEFAULT, never to `undefined`: a card that was marked skipped and then UNMARKED must
  *  become droppable again, or a mis-tap on a spare blank card wedges the submit behind
- *  "Movement 3: Enter a movement." with Remove as the only escape. */
+ *  "Movement 3: Choose a movement." with Remove as the only escape (PICK-1 PR 2 renamed the
+ *  message; the shape of the trap is unchanged). */
 export const isDefaultStatus = (status: string | undefined): boolean =>
   (status ?? ENTRY_STATUS.done) === ENTRY_STATUS.done;
 

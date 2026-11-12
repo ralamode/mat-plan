@@ -1,5 +1,5 @@
 import { ENTRY_STATUS } from '@mat-plan/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
 
@@ -111,6 +111,39 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
   });
 });
 
+/**
+ * A recording db whose `movements` answers are split by WHICH lookup is asking: the public-id resolve
+ * (its WHERE names `public_id`) versus the slug lookups `findOrCreateMovement` makes.
+ * `publicIdRow` `null` is PICK-1's refusal case; it is never asked for a body that sends no id.
+ *
+ * 🔴 **The slug lookups MISS twice and then resolve, and that shape is load-bearing for BOTH suites
+ * below.** Since TEN-2b the resolver issues three `movements` selects — the global namespace, this
+ * household's own, then the re-resolve after the INSERT. A stub that answered the FIRST with an id
+ * would short-circuit at step 1, emit no INSERT, and silently stop exercising the catalog-order
+ * test's whole point (`insertMovement` ≥ 0, and `BEGIN` after it). So the two namespace lookups miss
+ * and only the post-INSERT re-resolve resolves.
+ *
+ * ⚠️ It also decides **what a failure says.** Probed: with PICK-1's two phases swapped, this shape
+ * reddens the `INSERT INTO "movements"` assertion — the thing that test is for — whereas a stub whose
+ * slug lookups always miss reddens `rejects.toThrow` first, with a message about a failed upsert,
+ * telling the next reader the wrong cause.
+ *
+ * Shared by both describes rather than typed twice, per this file's header.
+ */
+const dbWithMovements = async (publicIdRow: unknown[] | null) => {
+  let slugLookups = 0;
+  return (await import('./recording-db')).createRecordingDb((sql) => {
+    if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]];
+    if (/from "activity_types"/.test(sql)) return [[1, null]];
+    if (/^select .* from "movements"/.test(sql)) {
+      if (/"public_id"/.test(sql)) return publicIdRow === null ? [] : [publicIdRow];
+      slugLookups += 1;
+      return slugLookups >= 3 ? [[88]] : []; // 1 = global miss, 2 = own miss, 3 = found after INSERT
+    }
+    return [];
+  });
+};
+
 // TEN-1 1d review: `db:verify`'s "refused write survives" case is a FIXTURE — it calls
 // `findOrCreateMovement` itself before the refused `writeStrengthSession`, so it shows what that call
 // order does to the database but cannot fail if the DAL's order changed. This pins the order where the
@@ -120,27 +153,16 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
 // test is what has to change then, deliberately — TEN-2b itself did NOT move it.
 describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
   it('find-or-create runs, and commits, before the refused write', async () => {
-    // ⚠️ TEN-2b: the resolver now issues THREE `movements` selects — the global-namespace lookup,
-    // this household's own, then the re-resolve after the INSERT. A stub that answers the FIRST one
-    // with an id makes the resolver short-circuit at step 1, emit no INSERT, and this test's whole
-    // point (`insertMovement` ≥ 0, and `BEGIN` after it) silently stops being exercised. So the two
-    // namespace lookups MISS and only the post-INSERT re-resolve resolves.
     // ⚠️ Do NOT "fix" a failure here by dropping the `insertMovement` assertion: it is the only test
     // in the repo pinning that the catalog write COMMITS before the session transaction opens, which
     // `db:verify` cannot prove (its version is a fixture that calls find-or-create itself).
-    let movementSelects = 0;
-    const rows = (await import('./recording-db')).createRecordingDb((sql) => {
-      // The resolver's probe since 1c-4 — see `recording-db.ts`'s `oneHouseholdThenEmpty`.
-      // Both columns the membership query selects — a one-column row mints `role: undefined`,
-      // which `makeHouseholdScope` now rejects outright (PROF-1 b-s).
-      if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]];
-      if (/from "activity_types"/.test(sql)) return [[1, null]]; // { id, defaultUnit }
-      if (/^select .* from "movements"/.test(sql)) {
-        movementSelects += 1;
-        return movementSelects >= 3 ? [[77]] : []; // 1 = global miss, 2 = household miss, 3 = found
-      }
-      return []; // …and the in-transaction profile resolve finds nothing → the seam refuses
-    });
+    //
+    // The stub is `dbWithMovements` above — shared with the PICK-1 suite below rather than typed
+    // twice (this file's own header: "a second copy is the occurrence AGENTS.md makes the trigger to
+    // extract"). This body sends no `movementPublicId`, so the public-id branch is never asked and
+    // the argument is irrelevant here; the slug counter is what this test needs, and its reason is
+    // in that helper's docblock.
+    const rows = await dbWithMovements(null);
     vi.doMock('./db', () => ({ db: rows.db }));
     vi.resetModules();
     const { logStrengthSession: write } = await import('./entries');
@@ -167,10 +189,105 @@ describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
     const insertMovement = texts.findIndex((t) => t.startsWith('insert into "movements"'));
     const begin = texts.findIndex((t) => t === 'begin');
     const resolve = texts.findIndex((t, i) => i > begin && /from "profiles"/.test(t));
-    expect(insertMovement, 'findOrCreateMovementId was called').toBeGreaterThanOrEqual(0);
+    expect(insertMovement, 'find-or-create was called').toBeGreaterThanOrEqual(0);
     expect(begin, 'writeStrengthSession opened its transaction').toBeGreaterThan(insertMovement);
     expect(resolve, 'the in-transaction profile resolve ran after it').toBeGreaterThan(begin);
     expect(texts, 'the refused session rolled back').toContain('rollback');
+    vi.doUnmock('./db');
+    vi.resetModules();
+  });
+});
+
+// PICK-1 PR 2 — **ids before inserts**, pinned where the DAL actually runs it.
+//
+// `db:verify` proves the REFUSAL (case (a): zero new rows across two households) against a real
+// database. What it cannot see is the emitted statement ORDER inside one request, which is the thing
+// a later refactor would break silently: phase 2 is the only phase that writes, so if the two phases
+// swapped, a session naming one bad id plus one novel typed name would leave that name's catalog row
+// behind for ever with no session to explain it. These two tests are the order's only unit-level pin.
+describe('logStrengthSession — ids resolve before any insert (PICK-1 PR 2)', () => {
+  const idMovement = (movementPublicId: string, clientId: string) => ({
+    movementPublicId,
+    movementName: 'A label the id overrides',
+    unit: 'lb' as const,
+    clientId,
+    status: ENTRY_STATUS.done,
+    sets: [{ reps: 5, weight: 100 }],
+  });
+
+  it('a refused id commits no typed sibling: no INSERT, no BEGIN', async () => {
+    const rows = await dbWithMovements(null);
+    vi.doMock('./db', () => ({ db: rows.db }));
+    vi.resetModules();
+    const { logStrengthSession: write } = await import('./entries');
+    const { MOVEMENT_NOT_AVAILABLE } = await import('@mat-plan/db');
+
+    await expect(
+      write({
+        profilePublicId: PROFILE,
+        sessionType: 'strength',
+        clientId: '019826b4-0000-7000-8000-00000000c001',
+        day: '2026-09-30',
+        movements: [
+          idMovement(
+            '019826b4-0000-7000-8000-00000000c0ff',
+            '019826b4-0000-7000-8000-00000000c002',
+          ),
+          {
+            // A name that slugs to no seeded row, so phase 2 would genuinely insert.
+            movementName: 'PICK-1 Novel Typed Sibling',
+            unit: 'lb',
+            clientId: '019826b4-0000-7000-8000-00000000c003',
+            status: ENTRY_STATUS.done,
+            sets: [{ reps: 5, weight: 100 }],
+          },
+        ],
+      }),
+    ).rejects.toThrow(MOVEMENT_NOT_AVAILABLE);
+
+    const texts = rows.queries.map((q) => q.text.toLowerCase());
+    expect(
+      texts.filter((t) => t.startsWith('insert into "movements"')),
+      'a refused id must not commit the typed sibling',
+    ).toHaveLength(0);
+    expect(texts, 'and no session transaction opened').not.toContain('begin');
+  });
+
+  it('an id-only session reaches find-or-create not at all (criterion 17)', async () => {
+    const rows = await dbWithMovements([77, 'Back Squat', 'back_squat']);
+    vi.doMock('./db', () => ({ db: rows.db }));
+    vi.resetModules();
+    const { logStrengthSession: write } = await import('./entries');
+
+    // The profile resolve inside the transaction finds nothing (the stub's fallthrough), so the write
+    // is refused — irrelevant here: the assertion is about the CATALOG, which ran first.
+    await expect(
+      write({
+        profilePublicId: PROFILE,
+        sessionType: 'strength',
+        clientId: '019826b4-0000-7000-8000-00000000c011',
+        day: '2026-09-30',
+        movements: [
+          idMovement(
+            '019826b4-0000-7000-8000-00000000c0aa',
+            '019826b4-0000-7000-8000-00000000c012',
+          ),
+        ],
+      }),
+    ).rejects.toThrow();
+
+    const texts = rows.queries.map((q) => q.text.toLowerCase());
+    expect(
+      texts.filter((t) => t.startsWith('insert into "movements"')),
+      'the id path must never mint a catalog row',
+    ).toHaveLength(0);
+    // And it asked the public-id resolver exactly once — not a slug lookup wearing a different hat.
+    expect(
+      texts.filter((t) => /^select .* from "movements"/.test(t) && /"public_id"/.test(t)),
+    ).toHaveLength(1);
+  });
+
+  afterEach(() => {
     vi.doUnmock('./db');
     vi.resetModules();
   });

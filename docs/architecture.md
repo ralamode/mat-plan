@@ -89,6 +89,38 @@ sequenceDiagram
   UI-->>Kid: updated Today view
 ```
 
+## 2g. Resolving a movement — the id decides, ids before inserts (PICK-1 PR 2)
+
+```mermaid
+flowchart TD
+  S["submitted movements[]<br/>each: movementPublicId? + movementName"] --> P1
+  subgraph DB["packages/db · resolveSessionMovements — OUTSIDE the transaction"]
+    P1{"phase 1:<br/>every movementPublicId"} -->|resolves global-or-own| OK[row: id + name]
+    P1 -->|any miss| NO["throw MovementNotAvailableError<br/>'Movement not available'"]
+    OK --> P2["phase 2: findOrCreateMovement<br/>for the TYPED names only — INSERTS"]
+  end
+  P2 --> B["ResolvedSessionMovement[]<br/>built FIELD BY FIELD<br/>movementName = the DATABASE's"]
+  B --> W
+  subgraph TX["writeStrengthSession · db.transaction"]
+    W[isLiveProfile — the profile seam] --> RC{"assertMovementsAreAvailable<br/>global-or-own, re-checked HERE"}
+    RC -->|any not available| RB["throw → ROLLBACK<br/>nothing commits"]
+    RC -->|all available| I[insert session → entries → sets]
+  end
+  style P1 fill:#fde68a,stroke:#b45309
+  style RC fill:#fecaca,stroke:#b91c1c
+  style NO fill:#fecaca,stroke:#b91c1c
+  style RB fill:#fecaca,stroke:#b91c1c
+```
+
+**Two shapes to read off it:** phase 2 is the only phase that writes, which is why phase 1 comes
+first; and the **red node is the seam** — phase 1 reads outside the transaction, so the re-check is
+what the rollback protects.
+
+The invariant itself — the phase order, the seam, what the refusal may and may not say, and the one
+bounded consequence the id path creates — is [write-path.md](./features/write-path.md) → **14**. This
+section is the shape; that one is the rule. (§2f above is its neighbour and the two compose: §2g
+resolves the `movement_id` that §2f freezes.)
+
 ## 2c. Batch write path — logging a day's check-ins (V1-5)
 
 The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by
@@ -221,8 +253,10 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
   live households is the intended end state once a family is invited, so it would fire on every
   request forever. The creator is closed instead — `seed.ts` refuses to insert when a live household
   exists, which matters because `migrate.yml` seeds production on every merge.
-- ✅ **`movements` came inside the seam at `TEN-2b`.** `findOrCreateMovementId` takes a
-  `HouseholdScope` and resolves **global-first** — the curated namespace (`household_id IS NULL`),
+- ✅ **`movements` came inside the seam at `TEN-2b`.** Movement resolution takes a
+  `HouseholdScope` (`findOrCreateMovement`, and `resolveMovementByPublicId` since `PICK-1` PR 2;
+  the `findOrCreateMovementId` wrapper that used to sit in the DAL is deleted) and resolves
+  **global-first** — the curated namespace (`household_id IS NULL`),
   then this household's own, then an insert into this household's own — so a name a household types
   belongs to it and is deleted with it. ✅ **`TEN-2c` (migration `0017`) dropped the non-partial
   `movements_slug_unique`, so two households each hold their OWN row for one slug and the denial
