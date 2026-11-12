@@ -152,11 +152,35 @@ describe('matchMovementOptions — the Decision 4 vector table', () => {
     expect(matchMovementOptions(SEEDED, 'zz db').someWords).toEqual([]);
   });
 
-  it('is deterministic and ranks an exact key first', () => {
+  it('is deterministic — the input order does not change the output order', () => {
     const shuffled = [...SEEDED].reverse();
     const a = matchMovementOptions(SEEDED, 'squat').matches.map((o) => o.name);
     const b = matchMovementOptions(shuffled, 'squat').matches.map((o) => o.name);
     expect(a).toEqual(b);
+  });
+
+  it('🔴 ranks an EXACT key first, ahead of every other match', () => {
+    // The case that makes this load-bearing, and the reason it needed its own test: the picker's
+    // Enter and its status both read `matches[0]`. A household row named `Squat` plus the query
+    // `squat` is an exact hit — and with the rank term gone the list is plain name order, so
+    // `matches[0]` is **Back Squat**: Enter files a set against the wrong movement and the status
+    // announces "Already in the list as Back Squat."
+    //
+    // ⚠️ The test this replaces queried `squat` and asserted only determinism. No seeded name has
+    // the key `squat`, so it could not fail on the thing its name claimed — and over the 35 seeded
+    // names rank changes the order for only `v` and `a`, neither of which any test used. Deleting
+    // `rank(a) - rank(b) ||` left every suite green.
+    const own = { name: 'Squat', isCatalog: false };
+    const result = matchMovementOptions([...SEEDED, own], 'squat');
+    expect(result.exact).toBe(true);
+    expect(result.matches[0]?.name).toBe('Squat');
+  });
+
+  it('…then a PREFIX match, ahead of a mid-name one', () => {
+    // The second half of the rank, pinned by the one query where it changes the seeded order.
+    const names = matchMovementOptions(SEEDED, 'v').matches.map((o) => o.name);
+    expect(names[0]).toBe('V-Sit Crunches');
+    expect(names.slice(1)).toContain('Inverted Rows');
   });
 
   it('puts a catalog row before a household row of the same name', () => {

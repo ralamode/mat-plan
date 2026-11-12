@@ -92,9 +92,12 @@ function Harness({
 
 const open = () => act(() => void trigger().click());
 const search = () => screen.getByRole('searchbox', { name: COPY.searchLabel });
-const type = (value: string) => act(() => void fireEvent.change(search(), { target: { value } }));
+let lastTyped = '';
+const type = (value: string) => {
+  lastTyped = value.trim();
+  act(() => void fireEvent.change(search(), { target: { value } }));
+};
 const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-const optionNames = () => screen.getAllByRole('button').map((b) => b.textContent ?? '');
 const status = () => document.querySelector('[role="status"]')?.textContent ?? '';
 
 describe('the browse list, with no query', () => {
@@ -311,7 +314,12 @@ describe('the status region (criterion 46)', () => {
 });
 
 describe('"Use as typed"', () => {
-  const asTyped = () => screen.queryByRole('button', { name: /use .* as typed/i });
+  // ⚠️ Matched by the COPY, not a hand-written regex. The label changed from 'Use "X" as typed' to
+  // 'Add "X" as a new movement' on the UX review's finding that the button and its hint used two
+  // different verbs for one action — and a literal regex here meant six tests went red on a copy
+  // change rather than on a behaviour change.
+  const asTyped = () =>
+    screen.queryAllByRole('button').find((b) => b.textContent === COPY.asTyped(lastTyped)) ?? null;
 
   it('is offered for a novel name', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
@@ -371,23 +379,39 @@ describe('"Use as typed"', () => {
 });
 
 describe('the footer (panel 2 · 7)', () => {
-  const footerButtons = () => {
-    const footer = document.querySelector('[role="dialog"] > div:last-of-type');
-    return [...(footer?.querySelectorAll('button') ?? [])].map((b) => b.textContent);
-  };
-
   it('🔴 ALWAYS ends with Close — browsing, matching, and offering to create', () => {
     // The hazard: U0 renders a full-width outline Close when no footer is passed, so a conditional
     // footer swapped Close for an outline "Use as typed" at the SAME thumb position two keystrokes
     // apart — and that button mints a movement nothing can delete until V1-9b.
+    //
+    // ⚠️ An earlier version ended with `expect(footerButtons).toBeTruthy()` — a FUNCTION REFERENCE,
+    // always truthy, so that line asserted nothing and the helper it named was never called. Caught
+    // by the reuse review. The loop below is the whole test.
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
+    let checked = 0;
     for (const query of ['', 'front squat', 'pullups', 'zercher squat', '🙂']) {
       type(query);
       const buttons = screen.getAllByRole('button').map((b) => b.textContent);
-      expect(buttons[buttons.length - 1], `query: ${JSON.stringify(query)}`).toBe(COPY.close);
+      expect(buttons.at(-1), `query: ${JSON.stringify(query)}`).toBe(COPY.close);
+      checked += 1;
     }
-    expect(footerButtons).toBeTruthy();
+    // Anti-vacuity: a loop over an empty list passes silently (the `it.each([])` trap this repo
+    // already records), so the count is asserted too.
+    expect(checked).toBe(5);
+  });
+
+  it('…and Close is LAST, not merely present', () => {
+    // The precedence IS the hazard: Close existing somewhere while "Use as typed" sits where the
+    // thumb expects Close is exactly the state panel 2 · 7 refused.
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('zercher squat');
+    const labels = screen.getAllByRole('button').map((b) => b.textContent ?? '');
+    const closeAt = labels.lastIndexOf(COPY.close);
+    const typedAt = labels.indexOf(COPY.asTyped('zercher squat'));
+    expect(typedAt).toBeGreaterThanOrEqual(0);
+    expect(closeAt).toBeGreaterThan(typedAt);
   });
 });
 

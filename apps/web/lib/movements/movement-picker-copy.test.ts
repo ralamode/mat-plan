@@ -7,10 +7,12 @@ import { MOVEMENT_PICKER_COPY as COPY } from './movement-picker-copy';
 // ships silently: the first draft of `statusSomeWords` did exactly that, with a ternary that looked
 // like it handled the singular and collapsed to one string for every n.
 describe('MOVEMENT_PICKER_COPY — the counted sentences', () => {
+  // ⚠️ The terminal period is part of panel 2 · 2's `{count}. {reason}` shape — without it a screen
+  // reader runs the count into the reason as one clause. Asserted as literals here, once.
   it.each([
-    [1, '1 match'],
-    [2, '2 matches'],
-    [35, '35 matches'],
+    [1, '1 match.'],
+    [2, '2 matches.'],
+    [35, '35 matches.'],
   ])('statusCount(%i)', (n, expected) => {
     expect(COPY.statusCount(n)).toBe(expected);
   });

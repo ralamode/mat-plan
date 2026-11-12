@@ -27,7 +27,8 @@ export const MOVEMENT_PICKER_COPY = {
   recent: 'Recent',
   todaysProgram: "Today's program",
   /** The `<details>` summary when every prescribed movement is already on a card (UX1 2). */
-  todaysProgramAllOnForm: "Today's program (already on your form)",
+  /** ⚠️ "added", not "on your form" — "form" is our word for it, not a twelve-year-old's. */
+  todaysProgramAllOnForm: "Today's program (already added)",
   household: 'Your household',
   matches: 'Matches',
   someWords: 'Matches some of your words',
@@ -48,7 +49,13 @@ export const MOVEMENT_PICKER_COPY = {
    * to violate U0's own "mounted before any text" test.
    */
   statusEmpty: '',
-  statusCount: (n: number) => plural(n, { one: '1 match', other: `${n} matches` }),
+  /**
+   * ⚠️ **The terminal period is part of the shape, not punctuation taste.** Panel 2 · 2 decided
+   * `{count}. {reason}`; without it a screen reader reads "1 match Already in the list as Pull-Up"
+   * as one breathless clause, and the three count strings disagreed with each other —
+   * `statusNoMatches` and `statusSomeWords` already ended in one.
+   */
+  statusCount: (n: number) => plural(n, { one: '1 match.', other: `${n} matches.` }),
   statusNoMatches: 'No matches.',
   /**
    * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
@@ -72,7 +79,7 @@ export const MOVEMENT_PICKER_COPY = {
    * conditional branch — which is exactly where the footer calls it — is a lint error. Caught by
    * the linter on the component's first build.
    */
-  asTyped: (name: string) => `Use "${name}" as typed`,
+  asTyped: (name: string) => `Add ${quote(name)} as a new movement`,
   /**
    * 🔴 **The permanence warning, and every word of it is load-bearing** (UX3 4). A household movement
    * is visible to everyone in the household, and nothing in the app can delete it — not until
@@ -84,7 +91,7 @@ export const MOVEMENT_PICKER_COPY = {
    * when it does not.
    */
   asTypedHint: (name: string) =>
-    `Adds "${name}" to the list for everyone in your household. It can't be deleted, so check the spelling.`,
+    `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`,
 
   // ── The card, and the Save line (PR 4 renders these; the strings live here) ─────────────────────
   /** The Movement field's button when no movement is chosen yet. */

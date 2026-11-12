@@ -181,6 +181,13 @@ export function MovementPicker({
   // footer Decision 8 promises for them. Probed by replacing this with a fold-based test, which
   // reddens the aria-disabled cases.
   const trimmedQuery = query.trim();
+  // 🔴 **While the deferred value is catching up, creation is held.** `offersTyped` reads the
+  // IMMEDIATE query but `exact`/`aliasHit` come from the deferred one, so for one frame after the
+  // final `s` of `pullups` the footer offered to create it beside a match for `pullup` — the exact
+  // duplicate this component exists to withhold, and `movementSlug` would have minted it
+  // (`pullups` ≠ `pull-up`). A human tap inside one frame is implausible; the guard still should not
+  // have a hole by construction.
+  const settling = trimmedQuery !== deferredTrimmed;
   const offersTyped = trimmedQuery !== '' && !result.exact && !result.aliasHit;
   // The reason comes from the SCHEMA, so the UI never hand-composes a rule the boundary owns. A name
   // breaking two rules shows the first, by `typedMovementNameIssues`' order.
@@ -247,8 +254,17 @@ export function MovementPicker({
             }}
             maxLength={MOVEMENT_NAME_MAX}
             autoComplete="off"
+            // ⚠️ `autoCorrect` stays OFF — `rdl` → `roll` would be actively worse than no help.
             autoCorrect="off"
-            autoCapitalize="off"
+            // 🔴 **`words`, NOT `off`, and the reason is the CREATE half of this field.** Decision 8
+            // chose `autocapitalize off` for a search box; this box also creates. With it off, a kid
+            // typing `zercher squat` on a phone and tapping the footer puts **`zercher squat`** in
+            // the household's list, next to `Back Squat`, permanently — no rename until `MOV-1`, no
+            // delete until `V1-9b` — and the hint asks them to "check the spelling", which case is
+            // not. Capitalising costs matching NOTHING: every comparison goes through `foldName`,
+            // so `Rdl` still alias-hits `RDL` (probed). Found by the UX review of the built
+            // component; neither earlier panel weighed the create side.
+            autoCapitalize="words"
             spellCheck={false}
             enterKeyHint="search"
             placeholder={COPY.searchPlaceholder}
@@ -271,15 +287,20 @@ export function MovementPicker({
                 // candidates (panel 2 · 8): UX3 6 exists to steer toward them.
                 variant={matches.length > 0 || someWords.length > 0 ? 'ghost' : 'outline'}
                 size="lg"
-                aria-disabled={typedNameIssue !== null}
+                aria-disabled={typedNameIssue !== null || settling}
                 aria-describedby={`${SHEET_ID}-typed-hint`}
                 onClick={() => {
-                  if (typedNameIssue) return; // focusable but inert, with the reason in the hint
+                  // focusable but inert, with the reason in the hint
+                  if (typedNameIssue || settling) return;
                   onPick({ kind: 'typed', name: trimmedQuery });
                   onOpenChange(false);
                 }}
                 // `button.tsx` is `whitespace-nowrap`; a long typed name must wrap, not clip.
-                className="h-auto min-h-11 w-full whitespace-normal break-words text-base"
+                // ⚠️ **`aria-disabled:` styles, because `Button` only styles `disabled:`.** Round 1
+                // chose `aria-disabled` so a keyboard user could REACH the reason, not so a sighted
+                // user would lose the inert cue — without these the button looks live, the tap does
+                // nothing, and the only signal is a `text-xs` line underneath.
+                className="h-auto min-h-11 w-full whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
                 {COPY.asTyped(trimmedQuery)}
               </Button>
