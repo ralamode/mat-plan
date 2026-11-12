@@ -148,6 +148,13 @@
       "when": 1793984366840,
       "tag": "0020_prof1a0_profiles_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794509996943,
+      "tag": "0021_v1_9b_client_id_arbiters",
+      "breakpoints": true
     }
   ]
 }

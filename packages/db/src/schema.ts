@@ -191,8 +191,11 @@ export const householdMembers = pgTable(
     // BOTH the state-D constraint (one live household per Clerk account) AND the resolver's access
     // path — a partial unique index is a btree index, so a companion `idx_` on the same column with
     // the same predicate would buy nothing and cost a write on every insert and soft delete. The
-    // `uq_entries_client_id` precedent is the same shape.
     // ⚠️ Postgres has no partial UNIQUE *constraint*; this can only be an index.
+    // ⚠️ This used to cite `uq_entries_client_id` as "the same shape". It no longer is — V1-9b B0
+    // made every `client_id` unique NON-partial, for the reason written at that index. The shape
+    // this one shares is with the SLOT uniques (an ordinal, a day, a position), not with an
+    // offline identity.
     uniqueIndex('uq_household_members_clerk_user')
       .on(t.clerkUserId)
       .where(sql`${t.deletedAt} is null`),
@@ -252,10 +255,11 @@ export const profiles = pgTable(
     check('profiles_kind_check', sql`${t.kind} in ('kid', 'adult')`),
     index('idx_profiles_household').on(t.householdId), // covering index for the household FK
     /**
-     * 🔴 **NON-PARTIAL — the only `client_id` arbiter in this schema that is.** ADR 0008 decision 3.4
+     * 🔴 **NON-PARTIAL.** ADR 0008 decision 3.4
      * applied at birth rather than retrofitted. Every older arbiter is `WHERE deleted_at IS NULL`, so
      * a soft-deleted row stops being an `ON CONFLICT` target and a replay inserts a TWIN
-     * (`docs/decisions/0008-deletion.md:127`); V1-9b's B0 exists to re-predicate five of them. With no
+     * (`docs/decisions/0008-deletion.md:127`). ✅ **V1-9b B0 re-predicated those five**, so this is no
+     * longer the only one — it is the one that was right first, and the others cite it. With no
      * predicate, an archived — or later deleted — profile keeps its slot, so a retried "add" resolves
      * to the same athlete instead of minting a second one.
      *
@@ -279,7 +283,7 @@ export const entries = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     publicId: uuid('public_id').notNull().unique(),
-    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE via partial index below
+    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE (non-partial since V1-9b B0) via the index below
     profileId: bigint('profile_id', { mode: 'number' })
       .notNull()
       .references(() => profiles.id),
@@ -350,9 +354,15 @@ export const entries = pgTable(
     uniqueIndex('uq_entries_superset_order')
       .on(t.supersetId, t.supersetOrder)
       .where(sql`${t.deletedAt} is null`),
-    uniqueIndex('uq_entries_client_id')
-      .on(t.clientId)
-      .where(sql`${t.deletedAt} is null`),
+    // 🔴 **NON-partial since V1-9b B0** (ADR 0008 decision 3.4). A `client_id` is the OFFLINE
+    // IDENTITY of one write, not a slot: freeing it on a hide makes a soft-deleted row stop being an
+    // `ON CONFLICT` target, so a replay from a phone that never saw the hide inserts a TWIN instead
+    // of being recognised as the write it already made. The asymmetry with the partial uniques
+    // above is the point — those free an ordinal, a day or a position, which is exactly what a hide
+    // should free. The reasoning in full, including the consequence that an id can never be reused,
+    // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
+    // applied to the five older arbiters. `write-path.md` invariant 6.
+    uniqueIndex('uq_entries_client_id').on(t.clientId),
     // V1-24 PR 1d: ONE live weigh-in per (profile, day, slot). Scoped to bodyweight — a check-in or a
     // calisthenics bout may repeat on a day. Slot-ready for V1-32 (plan amendment, 2026-09-30).
     // - `coalesce(context, 'morning')`, not `context`: no writer sets `context` until 1e, and NULLs
@@ -413,9 +423,15 @@ export const entrySets = pgTable(
     uniqueIndex('uq_entry_sets_entry_idx')
       .on(t.entryId, t.idx)
       .where(sql`${t.deletedAt} is null`),
-    uniqueIndex('uq_entry_sets_client_id')
-      .on(t.clientId)
-      .where(sql`${t.deletedAt} is null`),
+    // 🔴 **NON-partial since V1-9b B0** (ADR 0008 decision 3.4). A `client_id` is the OFFLINE
+    // IDENTITY of one write, not a slot: freeing it on a hide makes a soft-deleted row stop being an
+    // `ON CONFLICT` target, so a replay from a phone that never saw the hide inserts a TWIN instead
+    // of being recognised as the write it already made. The asymmetry with the partial uniques
+    // above is the point — those free an ordinal, a day or a position, which is exactly what a hide
+    // should free. The reasoning in full, including the consequence that an id can never be reused,
+    // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
+    // applied to the five older arbiters. `write-path.md` invariant 6.
+    uniqueIndex('uq_entry_sets_client_id').on(t.clientId),
     check('entry_sets_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
   ],
 );
@@ -438,7 +454,7 @@ export const entrySets = pgTable(
  * into a length quantity. A CHECK cannot read another table; this is what replaces the convention.
  *
  * **`client_id`, no `public_id`** (AGENTS.md; the `entry_sets` idiom, NOT the config-table one): a
- * quantity is client-written log data in the offline replay graph, and the partial UNIQUE below does
+ * quantity is client-written log data in the offline replay graph, and the UNIQUE below does
  * NOT dedupe a replay that straddles a soft-delete. Nothing addresses a quantity directly — a set's
  * `public_id` plus its slot is the address — so there is no `public_id`.
  *
@@ -450,7 +466,7 @@ export const entrySetQuantities = pgTable(
   'entry_set_quantities',
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE via partial index below
+    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE (non-partial since V1-9b B0) via the index below
     entrySetId: bigint('entry_set_id', { mode: 'number' })
       .notNull()
       .references(() => entrySets.id, { onDelete: 'cascade' }),
@@ -482,9 +498,15 @@ export const entrySetQuantities = pgTable(
     uniqueIndex('uq_entry_set_quantities_set_slot')
       .on(t.entrySetId, t.slot)
       .where(sql`${t.deletedAt} is null`),
-    uniqueIndex('uq_entry_set_quantities_client_id')
-      .on(t.clientId)
-      .where(sql`${t.deletedAt} is null`),
+    // 🔴 **NON-partial since V1-9b B0** (ADR 0008 decision 3.4). A `client_id` is the OFFLINE
+    // IDENTITY of one write, not a slot: freeing it on a hide makes a soft-deleted row stop being an
+    // `ON CONFLICT` target, so a replay from a phone that never saw the hide inserts a TWIN instead
+    // of being recognised as the write it already made. The asymmetry with the partial uniques
+    // above is the point — those free an ordinal, a day or a position, which is exactly what a hide
+    // should free. The reasoning in full, including the consequence that an id can never be reused,
+    // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
+    // applied to the five older arbiters. `write-path.md` invariant 6.
+    uniqueIndex('uq_entry_set_quantities_client_id').on(t.clientId),
     // `weight_num` never had this (enforced only in parseLoad); the typed column gets it in the DB.
     check('entry_set_quantities_value_num_check', sql`${t.valueNum} >= 0`),
   ],
@@ -730,7 +752,7 @@ export const sessions = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     publicId: uuid('public_id').notNull().unique(),
-    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE via partial index below
+    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE (non-partial since V1-9b B0) via the index below
     profileId: bigint('profile_id', { mode: 'number' })
       .notNull()
       .references(() => profiles.id),
@@ -757,9 +779,15 @@ export const sessions = pgTable(
   },
   (t) => [
     index('idx_sessions_profile_date').on(t.profileId, t.activityDate), // covers the profile FK + hot path
-    uniqueIndex('uq_sessions_client_id')
-      .on(t.clientId)
-      .where(sql`${t.deletedAt} is null`),
+    // 🔴 **NON-partial since V1-9b B0** (ADR 0008 decision 3.4). A `client_id` is the OFFLINE
+    // IDENTITY of one write, not a slot: freeing it on a hide makes a soft-deleted row stop being an
+    // `ON CONFLICT` target, so a replay from a phone that never saw the hide inserts a TWIN instead
+    // of being recognised as the write it already made. The asymmetry with the partial uniques
+    // above is the point — those free an ordinal, a day or a position, which is exactly what a hide
+    // should free. The reasoning in full, including the consequence that an id can never be reused,
+    // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
+    // applied to the five older arbiters. `write-path.md` invariant 6.
+    uniqueIndex('uq_sessions_client_id').on(t.clientId),
     check(
       'sessions_session_type_check',
       sql`${t.sessionType} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core')`,
@@ -802,9 +830,15 @@ export const supersets = pgTable(
   },
   (t) => [
     index('idx_supersets_session').on(t.sessionId), // covering index for the session FK
-    uniqueIndex('uq_supersets_client_id')
-      .on(t.clientId)
-      .where(sql`${t.deletedAt} is null`),
+    // 🔴 **NON-partial since V1-9b B0** (ADR 0008 decision 3.4). A `client_id` is the OFFLINE
+    // IDENTITY of one write, not a slot: freeing it on a hide makes a soft-deleted row stop being an
+    // `ON CONFLICT` target, so a replay from a phone that never saw the hide inserts a TWIN instead
+    // of being recognised as the write it already made. The asymmetry with the partial uniques
+    // above is the point — those free an ordinal, a day or a position, which is exactly what a hide
+    // should free. The reasoning in full, including the consequence that an id can never be reused,
+    // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
+    // applied to the five older arbiters. `write-path.md` invariant 6.
+    uniqueIndex('uq_supersets_client_id').on(t.clientId),
   ],
 );
 

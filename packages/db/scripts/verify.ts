@@ -8841,4 +8841,131 @@ console.log(
   );
 }
 
+// ── V1-9b B0 — a hide no longer frees a `client_id` ───────────────────────────────────────────────
+//
+// 🔴 **The behavioural case comes FIRST, deliberately.** `db:verify` is fail-fast and the mutation
+// runner matches the FIRST AssertionError, so a structural `pg_indexes` check placed above would be
+// the assertion a mutation reddens — and "the index has no WHERE" is a restatement of the DDL, not
+// of the behaviour anyone depends on. The behaviour is: a replay of a write whose row was hidden
+// must NOT create a twin.
+//
+// Before B0 every one of the five arbiters was `WHERE deleted_at IS NULL`, so a soft-deleted row
+// left the index, stopped being an `ON CONFLICT` target, and a replay INSERTED A SECOND ROW
+// (ADR 0008 decision 3.4, `docs/decisions/0008-deletion.md:127`). V1-9b makes hiding a reachable
+// action, which turns that from latent into live.
+//
+// ⚠️ **What a pass here proves, and the one thing it does not.** It proves the twin is impossible
+// and that the live-row re-select refuses rather than attaching children to a dead row. It does NOT
+// prove the app reports that refusal well — `B1-2` owns the envelope; today it is a throw.
+{
+  const B0_SESSION_CID = '019826b4-0000-7000-8000-00000000b000';
+  const b0Args = {
+    ...flatArgs,
+    day: '2026-02-11',
+    sessionClientId: B0_SESSION_CID,
+    movements: [
+      {
+        movementName: 'Bench Press',
+        unit: 'lb',
+        movementId: movY.id,
+        clientId: '019826b4-0000-7000-8000-00000000b001',
+        sets: [{ reps: 8, weight: 95 }],
+      },
+    ],
+  } as const;
+
+  // 1 · Log it, then HIDE the entry the way V1-9b will: `deleted_at` on the row, nothing else.
+  const b0 = await writeStrengthSession(asPg, b0Args);
+  const [b0Session] = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.publicId, b0.sessionId));
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
+
+  // 2 · Replay the SAME graph. The hidden entry is still in the (now non-partial) index, so the
+  //     insert no-ops on conflict and the live re-select finds nothing — a refusal, not a twin.
+  //     🔴 This is the assertion the mutation patch reddens: with the predicate back, the insert
+  //     succeeds and this `rejects` never fires.
+  await assert.rejects(
+    () => writeStrengthSession(asPg, b0Args),
+    /no live row for client_id/,
+    'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
+      'frees the client_id',
+  );
+
+  // 3 · And the count is the direct evidence: ONE row carries that client_id, hidden or not.
+  const b0Rows = await db
+    .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
+  assert.equal(b0Rows.length, 1, 'V1-9b B0: the hidden entry was not twinned by the replay');
+  assert.ok(b0Rows[0].deletedAt !== null, 'V1-9b B0: …and it is still hidden');
+
+  // 4 · The session row itself: same client_id, still one row, and the replay reached it. (The
+  //     session was never hidden, so this is the ordinary replay path — it must keep working.)
+  const b0Sessions = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.clientId, B0_SESSION_CID));
+  assert.equal(b0Sessions.length, 1, 'V1-9b B0: the session was not twinned either');
+  assert.equal(b0Sessions[0].id, b0Session.id, 'V1-9b B0: and it is the same session row');
+
+  // 5 · The STRUCTURAL case, after the behaviour: none of the five indexes carries a predicate.
+  //     Read from `pg_indexes`, so it measures the LIVE schema the migration produced rather than
+  //     the TypeScript that generated it — the drift this would otherwise miss is a migration that
+  //     was hand-edited after `generate`.
+  const B0_INDEXES = [
+    'uq_sessions_client_id',
+    'uq_supersets_client_id',
+    'uq_entries_client_id',
+    'uq_entry_sets_client_id',
+    'uq_entry_set_quantities_client_id',
+  ] as const;
+  const b0Defs = await db.execute<{ indexname: string; indexdef: string }>(
+    sql`select indexname, indexdef from pg_indexes where indexname = any(${sql.param(
+      B0_INDEXES as unknown as string[],
+    )}::text[])`,
+  );
+  const b0Found = (b0Defs as unknown as { rows: { indexname: string; indexdef: string }[] }).rows;
+  assert.equal(
+    b0Found.length,
+    B0_INDEXES.length,
+    `V1-9b B0: all five client_id indexes exist (found ${b0Found.length})`,
+  );
+  for (const row of b0Found) {
+    assert.ok(
+      !/\bWHERE\b/i.test(row.indexdef),
+      `V1-9b B0: ${row.indexname} is non-partial — it carries no WHERE (${row.indexdef})`,
+    );
+  }
+
+  // 6 · …and the NINE arbiters that stay partial, so the structural case cannot be "passed" by
+  //     dropping every predicate in the schema. A hide SHOULD free a slot; it should not free an
+  //     identity, and that asymmetry is the whole decision.
+  const b0Partial = await db.execute<{ indexname: string; indexdef: string }>(
+    sql`select indexname, indexdef from pg_indexes
+        where indexname in ('uq_entries_superset_order', 'uq_entry_sets_entry_idx',
+                            'uq_entry_set_quantities_set_slot', 'uq_entries_profile_day_bodyweight')`,
+  );
+  const b0PartialRows = (
+    b0Partial as unknown as { rows: { indexname: string; indexdef: string }[] }
+  ).rows;
+  assert.ok(b0PartialRows.length >= 4, 'V1-9b B0: the slot arbiters are all present');
+  for (const row of b0PartialRows) {
+    assert.ok(
+      /\bWHERE\b/i.test(row.indexdef),
+      `V1-9b B0: ${row.indexname} is STILL partial — a hide frees a slot (${row.indexname})`,
+    );
+  }
+
+  console.log(
+    '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden entry is REFUSED rather ' +
+      'than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
+      'slot arbiters still do',
+  );
+}
+
 console.log('✓ verify passed');
