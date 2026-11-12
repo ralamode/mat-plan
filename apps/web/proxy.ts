@@ -198,8 +198,6 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const csp = buildCsp(nonce, isDev, clerkFrontendApiOrigin(clerkPublishableKey()));
 
-  const { pathname, search } = request.nextUrl;
-
   // 🔴 **Nothing is enforced here any more (AUTH-1 1d).** This function used to read `mp_gate` and
   // bounce an un-gated request to `/gate` before Clerk ran. Both are gone: the gate is deleted, and
   // the boundary is a session with a `household_members` row, checked where the work happens.
