@@ -1,5 +1,7 @@
 import { MOVEMENT_PICKER_GROUP_LABELS, type MovementPickerGroup } from '@mat-plan/shared';
 
+import { formatList, plural, quote } from '@/lib/i18n/plural';
+
 /**
  * Every string the movement picker shows — the picker itself, the card hint, the Save line and the
  * footer's guard copy (PICK-1 Decision 8, reuse S4).
@@ -46,17 +48,20 @@ export const MOVEMENT_PICKER_COPY = {
    * to violate U0's own "mounted before any text" test.
    */
   statusEmpty: '',
-  statusCount: (n: number) => (n === 1 ? '1 match' : `${n} matches`),
+  statusCount: (n: number) => plural(n, { one: '1 match', other: `${n} matches` }),
   statusNoMatches: 'No matches.',
   /**
    * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
    * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
-   * ternary that looked like it handled the singular and did not. The copy test pins both forms.
+   * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
+   * forms are named categories rather than a comparison, and a locale with more of them adds keys
+   * here instead of needing this sentence rewritten.
    */
   statusSomeWords: (n: number) =>
-    n === 1
-      ? 'No matches. 1 movement matches some of your words.'
-      : `No matches. ${n} movements match some of your words.`,
+    `No matches. ${plural(n, {
+      one: '1 movement matches',
+      other: `${n} movements match`,
+    })} some of your words.`,
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
 
@@ -85,7 +90,10 @@ export const MOVEMENT_PICKER_COPY = {
    * the quoted names, because "1 new movement" without the name is not a spelling check.
    */
   saveCreates: (names: readonly string[]) =>
-    `Saving adds ${names.length === 1 ? '1 new movement' : `${names.length} new movements`}: ${names
-      .map((n) => `"${n}"`)
-      .join(', ')}. Check the spelling.`,
+    `Saving adds ${plural(names.length, {
+      one: '1 new movement',
+      other: `${names.length} new movements`,
+      // ⚠️ `.join(', ')` was the first draft and is a localization bug of its own — the separator,
+      // the conjunction and the serial comma are all locale-specific (Arabic joins with و).
+    })}: ${formatList(names.map((n) => quote(n)))}. Check the spelling.`,
 } as const;

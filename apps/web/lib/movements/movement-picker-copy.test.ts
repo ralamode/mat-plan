@@ -20,13 +20,19 @@ describe('MOVEMENT_PICKER_COPY — the counted sentences', () => {
     expect(COPY.statusSomeWords(3)).toBe('No matches. 3 movements match some of your words.');
   });
 
-  it('saveCreates names every movement, and conjugates both ways', () => {
+  it('saveCreates names every movement, conjugates both ways, and joins the list properly', () => {
     // The names are the point: "1 new movement" without them is not a spelling check (UX3 3).
     expect(COPY.saveCreates(['pullups'])).toBe(
       'Saving adds 1 new movement: "pullups". Check the spelling.',
     );
+    // ⚠️ "and", not a bare comma — `.join(', ')` was the first draft and is wrong English for two
+    // items as well as being a localization bug. `Intl.ListFormat` gets both right.
     expect(COPY.saveCreates(['pullups', 'dips'])).toBe(
-      'Saving adds 2 new movements: "pullups", "dips". Check the spelling.',
+      'Saving adds 2 new movements: "pullups" and "dips". Check the spelling.',
+    );
+    // …and the serial comma appears from three, which no hand-rolled join would have produced.
+    expect(COPY.saveCreates(['pullups', 'dips', 'rows'])).toBe(
+      'Saving adds 3 new movements: "pullups", "dips", and "rows". Check the spelling.',
     );
   });
 });

@@ -2022,11 +2022,41 @@ verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each ro
 | 9   | `chore/ci-2-typecheck-packages`  | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                                                                                                   | short plan (CI config)                                    |
 | 10  | `test/v1-26-test-hardening`      | #171's test leftovers                                                                                                                                                                                 | exempt                                                    |
 
-## i18n — externalize strings (post-MVP, near the bottom)
+## I18N-1 — externalize strings (post-MVP, near the bottom)
 
 Replace every hardcoded user-facing string with a **key from an i18n library** (e.g. `next-intl`),
 **English as the default locale**, so the app can later be translated. Groundwork/refactor phase — no
 new user features.
+
+> 📐 **Partly started, and the library decision is DEFERRED with a reason** _(maintainer, 2026-11-12;
+> established in `PICK-1` PR 3)_. The question put was "which library pluralizes for us"; the answer
+> is that **pluralization needs no library**. `Intl.PluralRules` and `Intl.ListFormat` ship with the
+> platform, with full ICU in this runtime — checked: Polish's six forms and Arabic's
+> `zero/one/two/few/many` are correct, and `Intl.ListFormat` joins `a وb وc` in Arabic where a
+> hand-rolled `.join(', ')` cannot. What a library buys **on top** is message catalogs, ICU
+> MessageFormat and locale routing, which is this row's whole scope. Adopting one at a single locale
+> would pay that cost for none of the benefit.
+>
+> **So `apps/web/lib/i18n/plural.ts` exists now** — `plural()`, `formatList()`, `quote()` and
+> `APP_LOCALE` — and **every new counted or listed string goes through it**. It is what a library
+> would call underneath, so this row inherits the call sites rather than rewriting them.
+>
+> **What this row still owns:** the catalogs and the library choice; `APP_LOCALE` becoming a
+> request-scoped read that `<html lang>` reads from the same source; `quote()` gaining the locale's
+> own marks (« », „ ", 「 」 — no `Intl` API exists for these, which is why it is a catalog concern);
+> and **migrating the five remaining user-facing plural sites**, listed rather than counted because a
+> grep over-reports — `lib/constants.ts`'s `movementCount` and its `${sets} set/sets`,
+> `lib/entries/format-value-unit.ts`'s singular-vs-unit-label, `lib/programming/program-day.ts`'s
+> `setsLabel`, and `app/p/[profileId]/bodyweight-section.tsx`'s JSX branch. ⚠️ A sixth place changes
+> with them: `e2e/scaffold-submit.spec.ts` asserts one of those sentences verbatim. ⚠️ And a naive
+> `grep "=== 1 ?"` also returns `set-display.ts` (picking a reason, not a plural), two e2e helpers
+> and `publish-screenshots.ts` (tooling output in a PR comment) — none of which is user copy. _(First
+> drafted as "6 sites" from a looser grep; corrected on measuring.)_
+>
+> ⚠️ **The lesson that produced this, worth keeping:** a `n === 1 ? a : b` ternary _looks_ like it
+> handles the singular, which is how PR 3's first draft shipped `` `${n} match` + 'es' `` — one
+> string for every `n`, announcing _"1 matches some of your words"_. Review read the code and missed
+> it; reading the OUTPUT found it. Named categories make a missing form a missing key.
 
 - Extract all display copy — page/section text, form labels + placeholders, button text, empty/error
   states, and zod **validation messages** — into typed message catalogs (`en` first).
@@ -2037,6 +2067,27 @@ new user features.
 - Locale-aware formatting for dates/numbers/units (ties into the existing `formatDayLong` helper).
 
 _Exit: zero hardcoded user-facing strings; a second locale could be added by dropping in a catalog._
+
+## RTL-1 — logical properties, while it is still twelve sites
+
+🔴 **The one piece of localisation readiness where WAITING is the expensive choice**, which is why it
+is its own row above `I18N-1` rather than part of it. Measured 2026-11-12: the entire app uses
+**12** physical spacing utilities (`pl-` / `pr-` / `ml-` / `mr-`) and `app/layout.tsx` hardcodes
+`lang="en"` with no `dir`. Converting to Tailwind's logical properties (`ps-` / `pe-` / `ms-` / `me-`,
+and `start-` / `end-` for insets) costs an afternoon today and becomes a hundreds-of-sites sweep
+across every screen the roadmap still has to build.
+
+- **Sweep the 12 sites**, then add the convention to AGENTS.md → "UI PR rules" beside the existing
+  ≥44px and 360px rules: **logical properties, not physical** — `ps-3`, never `pl-3`.
+- **`dir` on `<html>`**, from the same source as `lang`, so a later locale sets both at once.
+- ⚠️ **It does not need `I18N-1`, and should not wait for it.** RTL is a layout property; the two
+  rows share a motivation and nothing else. A `dir="rtl"` smoke on one screen is enough to prove the
+  sweep, with no catalog and no second locale.
+- **Also check:** any `text-left` / `text-right`, `rounded-l` / `rounded-r`, and the icon-flip cases
+  (a back chevron points the other way in RTL; a ✕ does not).
+
+_Exit: no physical spacing utility in `apps/web`, `dir` set from the locale, and a convention line
+that keeps the next PR from reintroducing one._
 
 ## Backlog / ideas (post-MVP, to brainstorm)
 
