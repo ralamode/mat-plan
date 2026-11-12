@@ -26,8 +26,9 @@ import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership
  * the app→packages edge, so it would fork a second writer — the drift this single-sourcing exists
  * to prevent). This is the `weeklyAdherenceRows` "one unit, two consumers" pattern applied to a
  * WRITER: pure Drizzle over the schema, parameterized over a `db | tx` executor, taking
- * PRE-RESOLVED catalog ids (the caller owns `resolveSessionMovements` / `getActivityTypeIdByKey`,
- * which live app-side). No `server-only`, no app imports.
+ * PRE-RESOLVED catalog ids (the caller owns `resolveSessionMovements`, in THIS package, and
+ * `getActivityTypeIdByKey`, app-side —
+ * both resolved BEFORE the transaction opens). No `server-only`, no app imports.
  */
 
 /** The three graph tables that share the `client_id` + `deleted_at` idempotency shape. */
@@ -283,23 +284,6 @@ async function writeSessionStrengthEntry(
 }
 
 /**
- * Write a whole flat strength session graph in ONE transaction (V1-8-2): the `sessions` row + N
- * movement entries + their sets, per-row `ON CONFLICT DO NOTHING` at EVERY level (no parent
- * short-circuit — a crash after the session commit would otherwise orphan it; master R7). A full
- * replay dedupes row-by-row; a replay that adds a NEW movement attaches it to the RE-SELECTED
- * session id. The profile is resolved by `public_id` inside the tx (the F7 seam — never a raw
- * internal id from the request). Catalog ids (`activityTypeId`, each `movementId`) are resolved by
- * the caller and passed in. Returns the session's `public_id`.
- *
- * **TEN-1 1c: that in-transaction resolve is household-scoped.** It now runs the single-sourced
- * `isLiveProfile(publicId, scope)` rather than its own `and(eq(publicId, …), isNull(deletedAt))`
- * copy, so a profile outside `scope` resolves to nothing and the whole transaction throws
- * `Profile not found` — the same shape a soft-deleted or unknown profile already got, with nothing
- * written. The scope is **required**: an unconverted caller is a compile error, which is the only
- * mechanism that makes a sweep this wide safe (the plan's §Design 1). `db:verify`'s TEN-1 write
- * matrix proves the refusal in both directions and asserts the rollback left no session row.
- */
-/**
  * 🔴 **THE movement-namespace seam** (PICK-1 PR 2, security B1) — every `movement_id` about to be
  * written is a global (curated) row or one of THIS household's own, re-checked **inside the
  * transaction**, after the profile resolve and before the first insert.
@@ -315,7 +299,7 @@ async function writeSessionStrengthEntry(
  * and can only ever author into the caller's own namespace, so it cannot return a foreign row today
  * — but this writer takes `movementId: number` from its caller, and `db:verify` case (d) calls it
  * directly with another household's internal id to prove the seam holds for anything that gets here.
- * `NN-drop-in-tx-recheck.patch` removes this function's body and that case goes red.
+ * `38-drop-in-tx-recheck.patch` removes this function's body and that case goes red.
  *
  * One `count(*)` over the DISTINCT ids, compared to how many there were: cheaper than N reads, and a
  * count mismatch cannot tell which id was bad — which is the same non-oracle property
@@ -339,6 +323,24 @@ async function assertMovementsAreAvailable(
     .where(and(inArray(schema.movements.id, movementIds), movementIsAvailableTo(scope)));
   if ((row?.count ?? 0) !== movementIds.length) throw new MovementNotAvailableError();
 }
+
+/**
+ * Write a whole flat strength session graph in ONE transaction (V1-8-2): the `sessions` row + N
+ * movement entries + their sets, per-row `ON CONFLICT DO NOTHING` at EVERY level (no parent
+ * short-circuit — a crash after the session commit would otherwise orphan it; master R7). A full
+ * replay dedupes row-by-row; a replay that adds a NEW movement attaches it to the RE-SELECTED
+ * session id. The profile is resolved by `public_id` inside the tx (the F7 seam — never a raw
+ * internal id from the request). Catalog ids (`activityTypeId`, each `movementId`) are resolved by
+ * the caller and passed in. Returns the session's `public_id`.
+ *
+ * **TEN-1 1c: that in-transaction resolve is household-scoped.** It now runs the single-sourced
+ * `isLiveProfile(publicId, scope)` rather than its own `and(eq(publicId, …), isNull(deletedAt))`
+ * copy, so a profile outside `scope` resolves to nothing and the whole transaction throws
+ * `Profile not found` — the same shape a soft-deleted or unknown profile already got, with nothing
+ * written. The scope is **required**: an unconverted caller is a compile error, which is the only
+ * mechanism that makes a sweep this wide safe (the plan's §Design 1). `db:verify`'s TEN-1 write
+ * matrix proves the refusal in both directions and asserts the rollback left no session row.
+ */
 
 export async function writeStrengthSession(
   db: NodePgDatabase<Schema>,

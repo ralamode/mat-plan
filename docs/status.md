@@ -22,11 +22,14 @@ Behind that:
 **`CRUD-1` step 2 is CLOSED, and the milestone now waits on `PROG-1`.** `PROF-1` finished with
 `a-1u`'s picker form (#360), the duplicate-name warning on add (#361) and on rename (#363); **step
 6a shipped as U0, the shared sheet** (#364). Every remaining CRUD-1 step — 3, 4, 5, E and **6b
-(`PICK-1`)** — queues behind **`V1-22` chunk 2**, which they need the frozen `prescribed` snapshot from — D1 means chunk 2 itself touches no UI file. Chunk
-2's plan was panelled on 2026-11-11 (six lenses, four blocking defects in a plan whose
+(`PICK-1`)** — **queued** behind **`V1-22` chunk 2** because they shared its FILES
+(`writers/strength-session.ts`, `program-day.ts`, `verify.ts`) — ⚠️ _corrected 2026-11-11:_ never
+for the frozen snapshot, and never for `strength-form.tsx`, since D1 means chunk 2 touched no UI
+file. Chunk 2's plan was panelled on 2026-11-11 (six lenses, four blocking defects in a plan whose
 review-response log had read "not yet run"), both escalated questions were ruled on, and the chunk
-**shipped the same day**: the prescription is frozen at log time, so editing a program no longer
-rewrites exported history. That unblocks CRUD-1 steps 3, 4, 5, E and 6b.
+**shipped the same day** as #367: the prescription is frozen at log time, so editing a program no
+longer rewrites exported history. **That gate is spent** — 3 and 6b are startable, 4 gates on 3, 5
+on 4, and E still owes 3b's plan.
 
 Behind that, the write path it builds on:
 

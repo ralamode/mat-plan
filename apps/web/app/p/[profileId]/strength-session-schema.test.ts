@@ -575,7 +575,7 @@ describe('logStrengthSessionSchema — the movement name, typed vs picked (PICK-
   });
 });
 
-describe('movementNameSchema — the standalone typed-name schema (MOV-1 / V1-22 A4 import it)', () => {
+describe('movementNameSchema — the standalone typed-name schema (MOV-1 / V1-22 A4 will import it)', () => {
   // It is NOT what the session uses (that path needs its own issue paths), so its agreement with
   // `typedMovementNameIssues` is what keeps the two from drifting.
   it.each([

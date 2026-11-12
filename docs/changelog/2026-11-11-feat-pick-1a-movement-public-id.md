@@ -12,4 +12,7 @@
   and the household cannot fix until `MOV-1`. Two deliberate changes — an emoji- or digit-only typed
   name is now refused, and "Enter a movement." became "Choose a movement." Three new mutation patches
   (`36`–`38`) prove the three new proofs can fail, and `32`–`35` finally got the README rows the
-  directory's own procedure requires.
+  directory's own procedure requires. A five-lens review across two passes found no defect in the
+  code and fifteen in the record around it — including, in this PR's own first draft, a blank
+  movement name earning two error messages and the availability predicate hand-composed at both
+  sides of its own seam; all fixed, with the panel's verdicts in the plan's review-response log.

@@ -453,8 +453,12 @@ flowchart LR
       `resolveMovementByPublicId`, and the writer receives `movements.name` **from the row** — never
       the client's `movementName`. So the resolved movement is built **field by field**, not
       `{ ...m, movementId }`: a spread would carry the client's label into
-      `entries.movement_name`, which is a CSV column, and silently undo this. `db:verify` (c) is
-      what proves the database's name arrives.
+      `entries.movement_name`, and silently undo this. `db:verify` (c) is what proves the
+      database's name arrives. ⚠️ **That column is NOT a CSV column** — the export's `movement`
+      column reads `movements.slug` through the entry's `movement_id`
+      (`queries/export-month.ts` → `csvMovement`) and never selects `movement_name`, which only
+      the day page reads (`lib/entries/entry-label.ts`). So the stake here is the day page's
+      label and the household's own record of what it logged, not a shifted CSV row.
     - **Phase 1 resolves every id; only then does phase 2 find-or-create the typed names.** Phase 2
       is the only phase that writes, so a body refused for a bad id commits **nothing** — not even
       a typed sibling in the same submission. Swap the phases and the refusal still happens, just
@@ -484,8 +488,13 @@ flowchart LR
     2026-10-13, [data-inventory.md](../privacy/data-inventory.md)); `PICK-1` PR 4's list excludes
     such a row, so the picker cannot offer one; and the CSV's `movement` column is unaffected,
     because a shadowing slug is the same string. Two paths reach it — a crafted id, or a catalog
-    seed landing **after** a pick (`CAT-2` runs `db:seed` on merge). `PICK-1` PR 3 moves this note
-    into `movement-picker.md` beside that guide's dead-id invariant.
+    seed landing **after** a pick (`CAT-2` runs `db:seed` on merge).
+
+    ⚠️ **This note STAYS here, and `movement-picker.md` links to it** — an earlier draft said PR 3
+    would move it, which would have made PR 3 edit this file and quietly falsified the "PR 3 is not
+    gated on PR 2, any merge order" claim in the plan, the roadmap, the milestone and `status.md`
+    (`docs/parallel-work.md` Gate 1 is disjoint file globs, **feature guides included**). It belongs
+    here anyway: the behaviour is `resolveMovementByPublicId`'s, and this guide owns `writers/`.
 
 ## Traps
 

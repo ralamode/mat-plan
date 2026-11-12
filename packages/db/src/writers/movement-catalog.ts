@@ -206,7 +206,7 @@ export async function resolveMovementByPublicId(
  *
  * So **a refused body commits no typed sibling**. Swap the phases and a session naming one bad id
  * plus one novel typed name leaves the typed name's catalog row behind for ever, with no session to
- * explain it — the TEN-2b-1 residual gaining a new instance. `NN-typed-before-ids.patch` makes that
+ * explain it — the TEN-2b-1 residual gaining a new instance. `37-typed-before-ids.patch` makes that
  * swap and `db:verify` case (a) goes red on "zero new `movements` rows".
  *
  * ⚠️ **This is a PRE-CHECK, not the seam.** `writeStrengthSession` re-checks every `movementId`

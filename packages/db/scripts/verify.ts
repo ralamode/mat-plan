@@ -6224,8 +6224,11 @@ console.log(
   //
   // ⚠️ The typed name is chosen to slug onto NO existing row in either namespace, so phase 2 would
   // genuinely INSERT if it ran. That is what makes "zero new movements rows" an assertion rather
-  // than a tautology — and it is the line `NN-resolver-ignores-household.patch` reddens: widening the
-  // resolver to any owned row makes phase 1 succeed, phase 2 run, and this count move.
+  // than a tautology — and it is the assertion `36-availability-ignores-household.patch` reddens:
+  // widening `movementIsAvailableTo` to any owned row makes phase 1 succeed, phase 2 run, and this
+  // count move. ⚠️ That patch is aimed at the shared PREDICATE, not at the resolver alone, so the
+  // same one line also widens the in-transaction re-check case (d) checks; `db:verify` is fail-fast,
+  // so (a) is what reports.
   const TYPED_SIBLING = 'PICK-1 Sibling That Must Not Land';
   assert.equal(
     (
@@ -6261,7 +6264,7 @@ console.log(
   assert.deepEqual(
     await rowCounts(),
     before,
-    'PICK-1 (a): …and the refusal wrote NOTHING — no movements row for the typed sibling, no session, no entry. Ids resolve before any insert, so a refused body commits no typed sibling (`NN-typed-before-ids.patch` swaps the phases and this is the assertion that goes red)',
+    'PICK-1 (a): …and the refusal wrote NOTHING — no movements row for the typed sibling, no session, no entry. Ids resolve before any insert, so a refused body commits no typed sibling (`37-typed-before-ids.patch` swaps the phases and this is the assertion that goes red)',
   );
 
   // (b) An id that names no row at all. The message must be IDENTICAL to (a)'s, or the refusal is an
@@ -6360,7 +6363,7 @@ console.log(
   assert.deepEqual(
     [pickedRows.get(pickCid(5))?.movementName, pickedRows.get(pickCid(6))?.movementName],
     [snapMovB.name, bOwnRow.name],
-    'PICK-1 (c): …and `entries.movement_name` is the database’s label, so the CSV’s movement column cannot be set by the client on the id path',
+    'PICK-1 (c): …and `entries.movement_name` is the DATABASE’S label — the column the day page renders, which a `{ ...m, movementId }` spread would have let the client set while the id decided the row. (The CSV’s `movement` column reads `movements.slug` through `movement_id` and never this column, so it was never the stake here.)',
   );
   // ⚠️ The expected string is the REWRITTEN one. Chunk 2's replay proof updated this prescription's
   // target reps to `rewritten-after-the-fact` earlier in this file, deliberately and scoped to this
@@ -6382,7 +6385,7 @@ console.log(
   // movement id under household A's scope — bypassing phase 1 entirely, which is what a soft-delete
   // or a `MOV-1`/`C4m` repoint between the pre-check and the write looks like from the writer's side.
   // The in-transaction re-check must refuse and the whole graph must roll back.
-  // `NN-drop-in-tx-recheck.patch` removes that check and this case goes red.
+  // `38-drop-in-tx-recheck.patch` removes that check and this case goes red.
   const beforeD = await rowCounts();
   await assert.rejects(
     async () =>

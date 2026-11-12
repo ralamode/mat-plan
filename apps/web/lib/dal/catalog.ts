@@ -13,8 +13,9 @@ import { db } from './db';
  *
  * ✅ **As of PICK-1 PR 2 there is NO write path in this module.** `movements` used to be one — the
  * v0 form submitted a free-text name and `findOrCreateMovementId` found-or-created by slug, the
- * v0→v1 bridge until the picker. The picker is here, and resolution (by public id, then by typed
- * name) lives in `packages/db/src/writers/movement-catalog.ts`.
+ * v0→v1 bridge until the picker. The **server half of that picker** is in now, and every way a
+ * movement is resolved — by public id, then by typed name — lives in
+ * `packages/db/src/writers/movement-catalog.ts`. (No screen sends an id until PR 4.)
  *
  * ## ⚠️ Two of the three unscoped `lib/dal` queries live here
  *

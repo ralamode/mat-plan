@@ -23,7 +23,11 @@ three plans drifted off V1-22 chunk 2's D1 in three different idioms)_:
   § Decisions and [`pick-1-movement-picker.md`](./pick-1-movement-picker.md) § Amendment.
 - A **dated in-place re-statement** for a plain statement of fact about the code — a line citation, a
   module path, a "what the code does today" bullet. Quote what it replaced, so the record survives.
-  Reasoning and decisions take the first form; facts take this one.
+  Reasoning and decisions take the first form; facts take this one. ⚠️ **Which one a passage is can
+  be a judgement call**, and the PR that wrote this rule used both forms on one decision
+  (`mov-1-rename-movement.md`'s discharged chunk-2 note, `assign-1-assignments.md`'s struck
+  justification). Pick the form that leaves the next reader able to find what changed, and say which
+  you picked; do not treat the boundary as self-evident.
 
 🔴 **Re-read every line citation you touch.** A stale `file:line` re-asserted inside a new line is
 worse than the stale line it replaced: it now carries today's date.

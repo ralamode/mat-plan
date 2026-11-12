@@ -14,6 +14,13 @@ owns:
   - apps/web/app/p/[profileId]/set-display.ts
   - packages/shared/src/strength.ts
   - packages/shared/src/strength-session.ts
+  # PICK-1 PR 2: the movement-name rules invariant 9 describes (MOVEMENT_NAME_MAX,
+  # MOVEMENT_NAME_MESSAGES, movementLabelSchema, typedMovementNameIssues, movementNameSchema). Owned
+  # HERE rather than left unowned, so a later edit to the typed-name rules cannot pass `guides:check`
+  # without the guide that states them. ⚠️ PR 3 adds the picker's groups and aliases to this same
+  # file, keyed by slug, and may want `movement-picker.md` to own it instead — that is PR 3's call,
+  # and whichever guide holds it, the other links to it.
+  - packages/shared/src/movements.ts
   - packages/shared/src/quantity-slots.ts
   - packages/shared/src/units.ts
   - packages/db/src/writers/strength-session.ts
@@ -394,9 +401,10 @@ Real ones, each with the file to look at.
   it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the form, the
   action and `ResolvedSessionMovement` are all unchanged.
 
-  ✅ **`findOrCreateMovementId` still runs BEFORE this, but it is SCOPED as of `TEN-2b`** — it takes
-  the same `HouseholdScope` `logStrengthSession` already resolved and passes it to the core
-  (`packages/db/src/writers/movement-catalog.ts`), which resolves **global-first**. So a movement a
+  ✅ **Movement resolution still runs BEFORE this, and it is SCOPED as of `TEN-2b`** — the DAL's
+  `findOrCreateMovementId` wrapper is gone (`PICK-1` PR 2 deleted it); `resolveSessionMovements`
+  takes the same `HouseholdScope` `logStrengthSession` already resolved and reaches
+  `findOrCreateMovement` for a typed name, which resolves **global-first**. So a movement a
   household types belongs to that household, and a session the seam then refuses leaves its catalog
   row in the **caller's own** namespace: garbage the deletion procedure removes, not a cross-tenant
   write. Moving the call inside the transaction is `TEN-2b-1`; `entries.test.ts` pins the current
