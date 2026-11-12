@@ -79,7 +79,8 @@ milestone; both are recorded (D-3, D-5).
 - **READ-2a.** Today and the snapshot writer call `programDayRows` nowhere. Today renders one program card per
   **due** assignment, in `(active_from, id)` order, each named, and a rest day names each program's days
   (criteria 30, 43, proved on fixtures with fewer than seven weekdays). The snapshot writer matches
-  `prescriptionId` only inside the blocks of the periods covering the session's date.
+  **the entry's `movement_id`** (V1-22 chunk 2 D1, #367 — never a submitted prescription id) only
+  inside the blocks of the periods covering the session's date.
 - **READ-2b.** The export's live fallback is date-aware: a date before the athlete's first period resolves
   exactly as today's export does. For the seeded household **every export byte is unchanged**, proved by the
   pin tests below, and the census shows zero rows in the "changes" buckets.
@@ -390,10 +391,12 @@ export async function getTodayPrograms(
   workout?", one option per due program reading "{program} · {workout}", **defaulting to the first due
   program**. Each option's value carries the `blockPublicId` and the role, so two programs with the same role
   are distinct options. The choice drives which program scaffolds the form and the form's role default. It
-  is not sent to the server as a new field: a submitted `prescriptionId` already names its block, and the
-  snapshot writer matches inside the candidate set. Rendered only with two or more due, which is unreachable
-  until D4c or CLONE-1; it is typed and unit-tested now so the scaffold question is not left to whoever ships
-  the second block.
+  is not sent to the server as a new field. ⚠️ _(Amended 2026-11-11.)_ The reason given here was _"a
+  submitted `prescriptionId` already names its block"_, and chunk 2's **D1** dropped that field, so the
+  reason is struck. The conclusion stands on READ-2b case (b) instead — an overlap freezes `''`, which
+  is this plan's own answer to ADR 0007 OQ2; see § "The snapshot writer (READ-2a)". Rendered only with
+  two or more due, which is unreachable until D4c or CLONE-1; it is typed and unit-tested now so the
+  scaffold question is not left to whoever ships the second block.
 - **One day-role rule** (UX lens 3 S5). `dayRoleForPage(today)`: the selected (default: first) due program's
   role when `state = 'due'`, otherwise `null`. The date-line badge and the form's default both read it, so they
   cannot disagree. A `null` default already means "Not a programmed day" (`strength-section.tsx:40`), so no
@@ -414,14 +417,37 @@ export async function getTodayPrograms(
 
 ### The snapshot writer (READ-2a)
 
-V1-22 chunk 2's `prescribedSnapshotsFor`, in **`packages/db/src/writers/prescribed-snapshot.ts`**
-(`v1-22-2-renderer-and-writer.md:441`), calls `programDayRows(exec, { profilePublicId, dayRole })` and matches the
-submitted `prescriptionId` against those rows. ⚠️ **This is the coupling the spec's D4 row does not mention.** If
-Today shows block B (assigned) while the writer reads block C (the newest), the form submits B's prescription
-id, the writer finds no match, and the snapshot stays **NULL** for ever. READ-2a therefore changes the writer's
-candidate set to `candidateBlocks(rows, sessionDate)`'s `covered` periods, the set Today reads, so "both paths
-consume the same rows" (that plan's by-construction argument) still holds. That is why Today and the writer
-ship in **one** PR (2a), and the export, which can lag safely, in another (2b).
+V1-22 chunk 2's `prescribedSnapshotsFor`, in **`packages/db/src/writers/prescribed-snapshot.ts`**, calls
+`programDayRows(db, { profilePublicId, dayRole, scope })` and matches **the entry's resolved `movement_id`**
+against those rows (chunk 2 **D1**, #367).
+
+⚠️ **This is the coupling the spec's D4 row does not mention, and chunk 2 as shipped sharpened it**
+_(re-stated 2026-11-11; the paragraph here described a submitted prescription id and a NULL outcome, and
+both are wrong)_. `programDayRows` resolves the **newest** live block that programs the role
+(`id DESC LIMIT 1`, `packages/db/src/queries/program-day.ts:71-102`), and chunk 2's rule 2 says a session
+with an asserted day role **always freezes** — never NULL. So if Today shows block B (assigned) while the
+writer reads block C (the newest):
+
+- C prescribes that movement too → **C's numbers are frozen onto a session logged against B's plan**,
+  permanently, and nothing distinguishes the row from a correct one. The old text's NULL would at least
+  have been visible.
+- C does not prescribe it → **`''` frozen permanently**, not the NULL that would have re-resolved later.
+
+READ-2a's fix is unchanged and now load-bearing rather than tidy: change the writer's candidate set to
+`candidateBlocks(rows, sessionDate)`'s `covered` periods, the set Today reads, so "both paths consume the
+same rows" (that plan's by-construction argument) still holds. That is why Today and the writer ship in
+**one** PR (2a), and the export, which can lag safely, in another (2b).
+
+**And the overlap D1 might look like it re-opens is already decided — by this plan.** Two due programs
+that both prescribe a movement on one role freeze `''`, which is **READ-2b case (b)** below, the answer
+this plan gives **ADR 0007 open question 2** with Insight's sign-off: _"neither, for now: the set of
+covering assignments with today's ambiguity rule"_, because a discriminated key needs
+`entries.prescription_id`, which **V1-22 chunk 6** owes (`v1-22-2-renderer-and-writer.md` D1 reaches the
+same place: "chunk 6's FK is where disambiguation belongs"). So the "Which workout?" choice staying off
+the wire costs nothing it did not already cost, and nothing here is for the maintainer to re-decide.
+⚠️ The one thing to **not** do is narrow the writer's candidate set by a submitted block id: the export's
+NULL-row fallback has no such id, so the two paths would stop consuming the same rows — the
+by-construction argument above is what forbids it.
 
 ### The export: exactly which bytes can change (READ-2b)
 
@@ -446,7 +472,7 @@ ambiguity rule (`export.ts:131`, two matches → `''`) applied across blocks. A 
 | #   | Case                                                                         | Old            | New                  | Reachable when                                                        |
 | --- | ---------------------------------------------------------------------------- | -------------- | -------------------- | --------------------------------------------------------------------- |
 | a   | a covering period's block is not the newest block for that role              | newest block's | the assigned block's | a household holds two live blocks. **Not before D4c or CLONE-1**      |
-| b   | two covering blocks both prescribe `(role, slug)`                            | one block's    | `''` (ambiguous)     | as (a)                                                                |
+| b   | two covering blocks both prescribe `(role, movement_id)`                     | one block's    | `''` (ambiguous)     | as (a)                                                                |
 | c   | the athlete was assigned before, nothing covers the row's date (`none_open`) | newest block's | `''`                 | after 1b-a (taken off, then logs against an asserted role)            |
 | d   | an **adult** (A1's guard) with a covering period                             | `''`           | the assigned block's | after 1b-a (a parent puts an adult on a program); the intended change |
 
@@ -455,13 +481,13 @@ it runs today's resolution, guard included (D-12). That is what keeps a parent's
 correction, from rewriting history (correctness S1). **So at READ-2b's merge the expected number of changed cells
 in production is zero**, and a test and a census back it:
 
-- **Unit pin** (`apps/web/lib/programming/prescribed-snapshot.test.ts`, the chunk-2 module). A property test: for
+- **Unit pin** (`apps/web/lib/csv/prescribed-snapshot.test.ts` — the chunk-2 module's shipped home). A property test: for
   any rows, and periods whose covering blocks all equal the newest block, the new resolution is
   **byte-identical** to the old; and for any date before `firstActiveFrom` it is byte-identical whatever the
   periods say. Cases (a)–(d) each have one fixture with the before and after strings on the assertion side,
   each **non-empty**, because 11 of 13 live prescriptions render `''` and an equality over `''` passes vacuously
   (`v1-22-authoring-program-editing.md:61-64`).
-- **`db:verify`.** `prescriptionRowsForBlocks` over two blocks with the same `(role, slug)` returns both rows,
+- **`db:verify`.** `prescriptionRowsForBlocks` over two blocks with the same `(role, movement_id)` returns both rows,
   so case (b) is computed from real SQL. A foreign block returns zero rows.
 - **The existing e2e** `apps/web/e2e/export-full-day.spec.ts` keeps its two pins (`:226`, `:246`) under `pnpm e2e:local`.
 - **A read-only census, run by the operator before merge and pasted into the PR.** It reports, as **aggregate
@@ -1185,18 +1211,18 @@ or updates its backlog row in `docs/plan.md` (scope S6). Listed once here.
 
 ### READ-1
 
-| Path                                                                             | Change | What & why                                                                                                                                                |
-| -------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/queries/program-assignments.ts`                                 | NEW    | `assignmentPeriodRows`, `prescriptionRowsForBlocks`, `blockWorkoutSignatures`, `candidateBlocks` (pure, typed)                                            |
-| `packages/shared/src/schedule.ts` (+ test)                                       | EDIT   | `isOpenOn`                                                                                                                                                |
-| `packages/db/src/queries/program-day.ts`                                         | EDIT   | Extract `programRowColumns`; `:74`'s hop → `programBlockInHousehold(scope)` if PROF-1 a-g has not. Behaviour identical                                    |
-| `packages/db/src/index.ts`                                                       | EDIT   | Export the new queries                                                                                                                                    |
-| `packages/db/scripts/verify.ts`                                                  | EDIT   | The BOLA probe from both scopes; two blocks, one `(role, slug)` → two rows; `candidateBlocks`' four kinds on real rows, soft-deleted-only → ever-assigned |
-| `packages/db/scripts/mutations/NN-assigned-block-skips-household.{patch,expect}` | NEW    | Drops the conjunct from `prescriptionRowsForBlocks`; `db:verify` must go RED                                                                              |
-| `packages/db/scripts/corrections/registry.ts` (+ its test)                       | EDIT   | `assign-never-assigned-kids` (above). Aggregate output only                                                                                               |
-| `docs/privacy/data-inventory.md`, `docs/runbooks.md`                             | EDIT   | **Only if SCHED-1 has not:** `program_assignments` and `program_assignment_weekdays` rows, counts, DELETEs and pre-flight (e) (privacy B2)                |
-| `docs/features/programming.md`                                                   | EDIT   | `owns:` gains `packages/db/src/queries/program-assignments.ts` (SCHED-1 panel, `:739`)                                                                    |
-| `docs/features/write-path.md`                                                    | EDIT   | It owns `packages/db/src/writers/` only if `ownership.ts` is touched                                                                                      |
+| Path                                                                             | Change | What & why                                                                                                                                                       |
+| -------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/queries/program-assignments.ts`                                 | NEW    | `assignmentPeriodRows`, `prescriptionRowsForBlocks`, `blockWorkoutSignatures`, `candidateBlocks` (pure, typed)                                                   |
+| `packages/shared/src/schedule.ts` (+ test)                                       | EDIT   | `isOpenOn`                                                                                                                                                       |
+| `packages/db/src/queries/program-day.ts`                                         | EDIT   | Extract `programRowColumns`; `:74`'s hop → `programBlockInHousehold(scope)` if PROF-1 a-g has not. Behaviour identical                                           |
+| `packages/db/src/index.ts`                                                       | EDIT   | Export the new queries                                                                                                                                           |
+| `packages/db/scripts/verify.ts`                                                  | EDIT   | The BOLA probe from both scopes; two blocks, one `(role, movement_id)` → two rows; `candidateBlocks`' four kinds on real rows, soft-deleted-only → ever-assigned |
+| `packages/db/scripts/mutations/NN-assigned-block-skips-household.{patch,expect}` | NEW    | Drops the conjunct from `prescriptionRowsForBlocks`; `db:verify` must go RED                                                                                     |
+| `packages/db/scripts/corrections/registry.ts` (+ its test)                       | EDIT   | `assign-never-assigned-kids` (above). Aggregate output only                                                                                                      |
+| `docs/privacy/data-inventory.md`, `docs/runbooks.md`                             | EDIT   | **Only if SCHED-1 has not:** `program_assignments` and `program_assignment_weekdays` rows, counts, DELETEs and pre-flight (e) (privacy B2)                       |
+| `docs/features/programming.md`                                                   | EDIT   | `owns:` gains `packages/db/src/queries/program-assignments.ts` (SCHED-1 panel, `:739`)                                                                           |
+| `docs/features/write-path.md`                                                    | EDIT   | It owns `packages/db/src/writers/` only if `ownership.ts` is touched                                                                                             |
 
 ### READ-2a
 
@@ -1217,13 +1243,13 @@ or updates its backlog row in `docs/plan.md` (scope S6). Listed once here.
 
 ### READ-2b
 
-| Path                                                     | Change | What & why                                                                                                                                               |
-| -------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/lib/dal/export.ts`                             | EDIT   | `prescribedFor` (`:113-135`) per row date through `candidateBlocks`; history kinds keep `programDayRows`                                                 |
-| `apps/web/lib/csv/prescribed-snapshot.ts` (+ `.test.ts`) | EDIT   | `liveMatchesByKey (V1-22 chunk 2 D1: keyed on `movement_id`, not the slug this row assumed)`; the byte pins, cases (a)–(d) and the before-first property |
-| `docs/csv-export-contract.md`                            | EDIT   | `prescribed`'s fallback: "the blocks assigned on that date; before the first assignment, as before"                                                      |
-| `docs/runbooks.md`                                       | EDIT   | The read-only census (aggregates only)                                                                                                                   |
-| `docs/features/programming.md`                           | EDIT   | `guides:check`                                                                                                                                           |
+| Path                                                     | Change | What & why                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/lib/dal/export.ts`                             | EDIT   | `prescribedFor` (`:113-135`) per row date through `candidateBlocks`; history kinds keep `programDayRows`                                                                                                                                                                                                                                  |
+| `apps/web/lib/csv/prescribed-snapshot.ts` (+ `.test.ts`) | EDIT   | `resolvePrescribed` / `rolesNeedingLiveMatch` — the date-aware fallback; the byte pins, cases (a)–(d) and the before-first property. ⚠️ _Corrected 2026-11-11:_ `liveMatchesByKey` is not here — it is in `packages/shared/src/csv/prescribed.ts`, keyed on `movement_id` (chunk 2 D1), and that file is where the ambiguity rule changes |
+| `docs/csv-export-contract.md`                            | EDIT   | `prescribed`'s fallback: "the blocks assigned on that date; before the first assignment, as before"                                                                                                                                                                                                                                       |
+| `docs/runbooks.md`                                       | EDIT   | The read-only census (aggregates only)                                                                                                                                                                                                                                                                                                    |
+| `docs/features/programming.md`                           | EDIT   | `guides:check`                                                                                                                                                                                                                                                                                                                            |
 
 ### 1a-db (ASSIGN-1's, unconditional; D-11)
 
@@ -1337,7 +1363,7 @@ records the correction's second `--apply`.
 written** (contract 4).
 
 **`db:verify` (PGlite, rolled-back fixtures, the TEN-2a idiom).** READ-1: the candidate-set BOLA probe from
-**both** households' scopes; two blocks with the same `(role, slug)` → two rows; the four candidate kinds. 1a-db:
+**both** households' scopes; two blocks with the same `(role, movement_id)` → two rows; the four candidate kinds. 1a-db:
 one rejected insert per constraint. 1b-w: no row ever has `active_to < active_from` after put → change the same
 day → change the next day → take off the same day, **and** for a row whose `active_from` is tomorrow; a same-day
 change leaves exactly one live period; the stored `phase_offset` makes `workoutDue` on the new period's first day
