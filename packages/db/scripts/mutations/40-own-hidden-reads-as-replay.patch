@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index 17b6fe1..c033c41 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -136,9 +136,6 @@ export async function writeCheckinEntries(
+     if (holder.profileId !== args.profileId) {
+       return { clientId: v.clientId, outcome: 'conflict' as const };
+     }
+-    if (holder.deletedAt !== null) {
+-      return { clientId: v.clientId, outcome: 'own_hidden' as const };
+-    }
+     return { clientId: v.clientId, outcome: 'replay' as const, publicId: holder.publicId };
+   });
+ }

@@ -65,6 +65,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
+import { writeCheckinEntries } from '../src/writers/checkin';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { prescribedSnapshotsFor } from '../src/writers/prescribed-snapshot';
 import { householdProfileRows } from '../src/queries/household-profiles';
@@ -9049,6 +9050,119 @@ console.log(
     '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden entry is REFUSED rather ' +
       'than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
       'slot arbiters still do',
+  );
+}
+
+// ── V1-9b B1-1 — the check-in writer tells four outcomes apart ────────────────────────────────────
+//
+// 🔴 **This section is the reason the insert moved out of `apps/web/lib/dal/entries.ts`**
+// (correctness 6). Its only coverage there was an emitted-SQL assertion — the SHAPE of the query,
+// never its behaviour against rows — and `verify.ts` imports only `../src/*`, so a writer the app
+// keeps to itself is a writer no real database ever tests.
+//
+// What changed to make a boolean insufficient: **B0** made the five `client_id` arbiters
+// non-partial, so a hidden row no longer *shares* its `client_id`, it **holds** it. A replay of a
+// hidden check-in therefore conflicts instead of twinning — and the old code read that conflict as
+// `created: false`, which the action renders as "already logged" about a row that was deleted.
+//
+// ⚠️ Four outcomes, and the only one that is a behaviour change is `own_hidden`. `created` and
+// `replay` are what the boolean already distinguished; `conflict` and `own_hidden` are the two
+// meanings it collapsed into one. Nothing user-visible moves until `B1-2` maps them.
+{
+  const CI_DAY = '2026-02-19';
+  const ciActivityId = await activityTypeIdByKey('brush_teeth');
+  // The two session fixtures already in scope, rather than a third pair re-queried by public id —
+  // `conflict` only means anything if these are genuinely different rows, so that is asserted.
+  const ciProfile = sessionProfileA;
+  const otherProfile = sessionProfileB;
+  assert.notEqual(
+    ciProfile.id,
+    otherProfile.id,
+    'V1-9b B1-1: the two profile fixtures are different rows, or `conflict` cannot be distinguished',
+  );
+
+  const ciValue = (clientId: string) => ({
+    publicId: newId(),
+    clientId,
+    activityDate: CI_DAY,
+    unit: 'count',
+    valueNum: '1',
+    activityTypeId: ciActivityId,
+    metricKey: null,
+    status: ENTRY_STATUS.done,
+  });
+
+  const CID_CREATED = '019826b4-0000-7000-8000-00000000c101';
+  const CID_HIDDEN = '019826b4-0000-7000-8000-00000000c102';
+  const CID_FOREIGN = '019826b4-0000-7000-8000-00000000c103';
+
+  // 1 · `created` — the ordinary path, and the only outcome that writes.
+  const first = await writeCheckinEntries(asPg, {
+    profileId: ciProfile.id,
+    values: [ciValue(CID_CREATED), ciValue(CID_HIDDEN)],
+  });
+  assert.deepEqual(
+    first.map((r) => r.outcome),
+    ['created', 'created'],
+    'V1-9b B1-1: a first write creates every row',
+  );
+
+  // 2 · Hide one of them the way V1-9b will — `deleted_at` on the row, nothing else.
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.clientId, CID_HIDDEN));
+
+  // 3 · Another profile takes a third id, so the same submit can meet a foreign holder.
+  await db.insert(schema.entries).values({ ...ciValue(CID_FOREIGN), profileId: otherProfile.id });
+
+  // 4 · Replay all three in ONE call: a live row, a hidden row, and another profile's row.
+  //     🔴 This is the assertion the mutation patch reddens. Collapse `own_hidden` into `replay`
+  //     (or drop the `deleted_at` branch) and the middle element changes.
+  const replay = await writeCheckinEntries(asPg, {
+    profileId: ciProfile.id,
+    values: [ciValue(CID_CREATED), ciValue(CID_HIDDEN), ciValue(CID_FOREIGN)],
+  });
+  assert.deepEqual(
+    replay.map((r) => r.outcome),
+    ['replay', 'own_hidden', 'conflict'],
+    "V1-9b B1-1: a live row replays, this profile's hidden row is own_hidden, and another " +
+      "profile's row is a conflict — never all three as one boolean",
+  );
+
+  // 5 · The hidden row STAYS hidden, and was not twinned. The whole point of B0, re-proved one
+  //     level up: the refusal must not have written anything.
+  const hiddenRows = await db
+    .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.clientId, CID_HIDDEN));
+  assert.equal(hiddenRows.length, 1, 'V1-9b B1-1: the hidden check-in was not twinned by a replay');
+  assert.ok(hiddenRows[0].deletedAt !== null, 'V1-9b B1-1: …and it is still hidden');
+
+  // 6 · `replay` carries the ORIGINAL row's public id, not a fresh one. A caller that re-linked a
+  //     receipt to a newly minted id would point at a row that does not exist.
+  const [liveRow] = await db
+    .select({ publicId: schema.entries.publicId })
+    .from(schema.entries)
+    .where(and(eq(schema.entries.clientId, CID_CREATED), isNull(schema.entries.deletedAt)));
+  const replayed = replay[0];
+  assert.ok(replayed.outcome === 'replay', 'V1-9b B1-1: the live id replayed');
+  assert.equal(
+    replayed.publicId,
+    liveRow.publicId,
+    'V1-9b B1-1: a replay returns the EXISTING row public id',
+  );
+
+  // 7 · An empty submit writes nothing and asks the database nothing.
+  assert.deepEqual(
+    await writeCheckinEntries(asPg, { profileId: ciProfile.id, values: [] }),
+    [],
+    'V1-9b B1-1: an empty item list is a no-op',
+  );
+
+  console.log(
+    '✓ V1-9b B1-1: the check-in writer distinguishes created / replay / own_hidden / conflict — a ' +
+      "replay of this profile's HIDDEN row is never reported as logged, and never twinned",
   );
 }
 

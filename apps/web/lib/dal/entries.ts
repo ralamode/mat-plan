@@ -8,6 +8,7 @@ import {
   schema,
   updateBodyweightEntryById,
   updateStrengthSetById,
+  writeCheckinEntries,
   writeStrengthSession,
 } from '@mat-plan/db';
 import {
@@ -423,10 +424,9 @@ export async function logCheckinEntries(args: {
     return {
       publicId: newId(),
       clientId: i.clientId,
-      profileId: profile.id,
       activityDate: args.day,
       // no `kind` — V1-5 is the first kind-less writer (V1-1c relaxed it for exactly this)
-      unit: unit as Unit,
+      unit,
       valueNum: String(i.value), // ALWAYS set — see the shape-CHECK trap above
       // movementName intentionally omitted — must stay NULL for the same CHECK
       activityTypeId: activity.id,
@@ -436,26 +436,21 @@ export async function logCheckinEntries(args: {
     };
   });
 
-  const inserted = await db
-    .insert(schema.entries)
-    .values(values)
-    // ⚠️ The `client_id` UNIQUE is NON-partial since V1-9b B0; the predicate is kept here for
-    // deploy-order safety (a supplied predicate still infers against a non-partial index, so the
-    // index and the arbiter can change in either order). Do not tidy it — `write-path.md`
-    // invariant 6. Consequence: a replay of a HIDDEN check-in now conflicts and reports
-    // `created: false` for every item, which the action turns into "already logged" — a typed
-    // refusal, where before B0 it inserted a twin.
-    .onConflictDoNothing({
-      target: schema.entries.clientId,
-      where: isNull(schema.entries.deletedAt),
-    })
-    .returning({ publicId: schema.entries.publicId, clientId: schema.entries.clientId });
+  // V1-9b B1-1: the INSERT moved to `packages/db/src/writers/checkin.ts`, so `db:verify` runs the
+  // real statement against a real database instead of an emitted-SQL assertion about its shape.
+  // Everything above stays here for the reason `logStrengthSession` keeps its own resolution: the
+  // catalog reads are cached reference data, and the profile resolve is household-scoped.
+  const written = await writeCheckinEntries(db, { profileId: profile.id, values });
 
-  const byClientId = new Map(inserted.map((r) => [r.clientId, r.publicId]));
-  return args.items.map((i) => ({
-    clientId: i.clientId,
-    id: byClientId.get(i.clientId) ?? null,
-    created: byClientId.has(i.clientId),
+  // ⚠️ **The four outcomes are collapsed back to today's two fields, deliberately.** `own_hidden` and
+  // `conflict` both become `created: false`, which is exactly what this function returned before —
+  // so no action, test or screen changes in this PR (`B1-2` owns the mapping and the copy). The
+  // distinction is not lost, it is simply not yet asked for: it is proved in `db:verify` and
+  // returned by the writer, ready for the caller that will use it.
+  return written.map((r) => ({
+    clientId: r.clientId,
+    id: r.outcome === 'created' || r.outcome === 'replay' ? r.publicId : null,
+    created: r.outcome === 'created',
   }));
 }
 
