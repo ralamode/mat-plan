@@ -1,5 +1,11 @@
 # CSV export contract (V1-13)
 
+> ⚠️ **No longer a contract (2026-11-13, [ADR 0009](./decisions/0009-retire-the-byte-faithful-csv-contract.md)).**
+> The external workflow this file protected is no longer in use. This file now **describes the export
+> as it currently ships**; the format is ours to change. A change keeps the export complete for what the
+> [privacy notice](./privacy/notice.md) promises, updates this file, and may adopt standard RFC 4180
+> quoting. Where the text below says "must" about bytes, read it as "currently does".
+
 The **authoritative** description of the four legacy CSVs the app must emit. Sourced from Ray's actual
 workflow repo (2026-08-05), not inferred. Where a claim here contradicts [spec.md](./spec.md), **this
 file wins** — spec.md was written from a stale internal spec.
