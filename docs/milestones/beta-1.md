@@ -435,6 +435,74 @@ Their deliverables are unchanged and still written below; only when they start h
       de-named.
 - [ ] SEC-3 merged: server-side errors carry no bodyweight to Sentry.
 
+## The remaining path to Beta 0 — sequence and sizing (2026-11-13)
+
+🔴 **The headline: almost nothing left for Beta 0 is feature work.** The exit criteria above are
+ops, privacy and one manual run-through. Meanwhile the lanes in flight — `UI-5`, `PICK-1` PR 4,
+`V1-22` chunk 3, `PROG-1` — are **not in the gate at all**. That is not an argument against them;
+it is an argument for knowing which is which.
+
+### What the gate already has
+
+Ticked but not crossed off above, verified 2026-11-13: `TEN-1` ✅ · `AUTH-1` ✅ (complete 2026-11-05)
+· `OPS-1` ✅ (2026-10-09) · `PRIV-2` ✅ (2026-10-15) · `SEC-3` ✅ (2026-10-01) · `OSS-1` ✅
+(2026-10-08) · `ONB-0` ✅ (2026-10-07).
+
+### What is left, in dependency order
+
+Sizes are **PRs**, calibrated against this repo's own measured distribution over the last 60 merges:
+median **368** insertions, p25 **174**, p75 **906**. So S ≈ ≤200, M ≈ ~400, L ≈ ~900+.
+
+| #   | Work                                                                  | Why it gates Beta 0                                                                                 | PRs               | Size  | Waits on                   |
+| --- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------- | ----- | -------------------------- |
+| 1   | **`V1-9b` B1-1** — the hide/restore writer, `packages/` only          | The run-through requires "delete a mis-logged entry"                                                | 1                 | M     | ✅ B0 (shipped 2026-11-12) |
+| 2   | **`V1-9b` B1-2** — the entry actions and DAL                          | same                                                                                                | 1                 | M     | 1                          |
+| 3   | **`V1-24` 3b** — the removed-entries list                             | B1-3's screen sits on it; **no plan file yet**                                                      | 1–2               | M     | —                          |
+| 4   | **`V1-9b` B1-3** — the hide UI                                        | The run-through's "delete" step is this screen                                                      | 1                 | M     | 2, 3                       |
+| 5   | **`V1-9b` B2** — clear a day                                          | Completes the row; not strictly in the gate                                                         | 1                 | S–M   | 4                          |
+| 6   | **`OPS-3`** — per-household restore, rehearsed, + the deletion ledger | _"Until it exists, a mistaken deletion is not recoverable without rolling back every other family"_ | 1 + a drill       | M     | —                          |
+| 7   | **`OPS-2`** — split the seed into reference vs fixtures               | The prod seed must not re-create a deleted household                                                | 1                 | M     | —                          |
+| 8   | **`PRIV-3`** — household deletion as a guarded script                 | `PRIV-1`'s "deletion run once end to end" box                                                       | 2                 | M + S | 6, 7                       |
+| 9   | **`DX-5(a)`** — required status checks                                | "merge gates are enforced"                                                                          | repo-admin, no PR | —     | —                          |
+| 10  | **The PII scan over every ref**                                       | Branches **and** PR refs, not just `HEAD`                                                           | 1                 | S     | —                          |
+| 11  | **The phone run-through**                                             | iOS Safari + Android Chrome, unaided                                                                | manual            | —     | 4                          |
+| 12  | **`PRIV-1` sign-off**                                                 | A dated decision by the accountable role                                                            | —                 | —     | 11                         |
+
+**≈ 10–11 PRs plus two manual steps**, of which **5–6 are the `V1-9b` arc** and four are ops/privacy.
+
+### Three dependencies worth seeing before sequencing
+
+1. 🔴 **`OPS-3` and the runbook stub are the same work.** `runbooks.md`'s restore section is
+   `_TODO — document creating a pre-migration Neon restore point/branch_`. `V1-9b` B0's plan cited it
+   as its rollback floor and the panel caught that it is unwired. Writing it discharges `OPS-3` **and**
+   retroactively makes B0's rollback claim true. Highest leverage item on the list.
+2. **`V1-24` 3b has no plan and sits in the middle of the `V1-9b` chain** (B1-3 waits on it). It is
+   the one unplanned thing inside the gate.
+3. **`PRIV-3` needs a runner change with its own plan** — `Correction.run` takes no target, so it
+   needs `--household <public_id>`; and no household id may be committed, because that plus the public
+   Applied table would publish a register of who asked to be erased.
+
+### Velocity, measured — and why not to trust it too far
+
+PRs merged to `main` per week: W40 **58** · W41 **62** · W42 **16** · W43 **13** · W44 **17** ·
+W45 **33** · W46 **21** (partial). Recent sustained rate ≈ **20/week**; the October spikes were
+documentation-heavy weeks.
+
+⚠️ **PR count is a poor proxy for effort and the mix is what matters.** On 2026-11-12 five PRs
+merged, ranging from a one-line eslint config to a migration with a production gate and a two-lens
+review. At this list's mix — several M-sized PRs with panels, two needing plans, one needing a
+production drill — the honest read is **2–4 working weeks of the ~4h/wk budget**, with items 6 and 8
+carrying the most uncertainty because both touch production data for the first time.
+
+**Do not read a date off this.** It is an ordering with sizes; a timeline needs the velocity figure
+revisited against the actual mix, which is a separate exercise.
+
+### What is in flight and NOT in the gate
+
+`UI-5` (planned, panelled) → `PICK-1` PR 4 → `UI-3`; `V1-22` chunk 3's implementation; `DX-13`;
+`PROG-1`'s order. All worth doing; none of it moves Beta 0 closer. **If the goal is to invite family
+#1, items 1–12 above are the list.**
+
 ## Beta 1 — 3–5 families, all the major features
 
 Starts after family #1 has used Beta 0 for two weeks **and Ray has read their feedback and decided to
