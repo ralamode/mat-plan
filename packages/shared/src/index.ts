@@ -2,6 +2,10 @@
 // The canonical home for domain enums/constants (AGENTS.md constants convention):
 // define a value once here, import it in the app, engine, and DB seed.
 export * from './db-environment';
+export * from './date';
+// V1-9b — the hide/restore wire contract (ADR 0008's "delete"): the row caps, the fixed-format UTC
+// event token, and the per-item restore reasons.
+export * from './hide';
 export * from './units';
 export * from './quantity-slots';
 export * from './enums';

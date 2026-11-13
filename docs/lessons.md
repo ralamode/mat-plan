@@ -7,6 +7,18 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## Database / migrations
 
+- **A microsecond-precision proof cannot fail on PGlite, because its `now()` is milliseconds.**
+  → `V1-9b` B1-1b's whole point is that a hide token must stay TEXT: Postgres stores `timestamptz` to
+  microseconds, a JS `Date` holds milliseconds, so a token round-tripped through `new Date(...)` no
+  longer matches its own row. The proof took the token from `now()` and restored by it — and the
+  mutation that maps it through a `Date` stayed **GREEN**, because PGlite's clock had produced
+  `.123000` in the first place and there was nothing to truncate. `db:verify` runs on PGlite, so the
+  trap is unreproducible from the clock. → **Write the fixture's `deleted_at` by hand**
+  (`timestamptz '2026-08-05 12:00:00.123456+00'`) and assert the read emits all six digits before
+  restoring by it. ⚠️ Generalises past timestamps: any proof about precision, locale or a server
+  default needs the value PINNED in the fixture, not sampled from the environment the proof runs in —
+  otherwise the environment decides whether the assertion has teeth.
+
 - **A migration adding a table with a COMPOSITE foreign key aborts with `there is no unique constraint
 matching given keys for referenced table "<parent>"`, even though the parent obviously has one.** →
   `drizzle-kit generate` emits statements in a fixed order — `CREATE TABLE` → `ADD CONSTRAINT … FOREIGN

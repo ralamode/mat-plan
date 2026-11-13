@@ -140,6 +140,34 @@ function amendableBodyweight(entryId: string) {
 }
 
 /**
+ * The bodyweight day-slot predicate — **the natural key of `BODYWEIGHT_DAY_UNIQUE_INDEX`, as a
+ * reusable conjunct.**
+ *
+ * 🔴 **Extracted at `V1-9b` B1-1 because it now has a second caller** (reuse S5). Branch (b) below
+ * asks *"does this day's slot already hold another weigh-in?"*; `restoreHidden` asks *"who is holding
+ * the slot this restore wants?"* — the same question, and a second hand-written copy of this
+ * `and(...)` is a copy free to drift from the index it mirrors. An answer that disagreed with the
+ * index would report a free slot and then take a `23505`, or report `slot_taken` against a row the
+ * index would have accepted.
+ *
+ * ⚠️ `coalesce(context, 'morning') = 'morning'`, not `context IS NULL`: the index keys on the
+ * coalesced expression, so a row written with an explicit `'morning'` occupies the same slot as one
+ * written with `NULL`. Matching that exactly is the whole point of sharing it.
+ *
+ * ⚠️ It does **not** include `deleted_at IS NULL`. Callers add it — and `restoreHidden` deliberately
+ * does, since only a LIVE row can hold a slot, while a hidden one is exactly what is being restored
+ * into it.
+ */
+export function bodyweightSlot(profileId: number, day: string) {
+  return and(
+    eq(schema.entries.profileId, profileId),
+    eq(schema.entries.activityDate, day),
+    eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+    sql`coalesce(${schema.entries.context}, ${DEFAULT_BODYWEIGHT_CONTEXT}) = ${DEFAULT_BODYWEIGHT_CONTEXT}`,
+  );
+}
+
+/**
  * Insert ONE weigh-in (V1-24 PR 1e) — the create half of the bodyweight write path, single-sourced HERE
  * so `db:verify` drives the IDENTICAL statement the app runs (drizzle's parameterised path), as the
  * amend above does.
@@ -227,19 +255,12 @@ export async function insertBodyweightEntry(
     .limit(1);
   if (own) return { id: own.publicId };
 
-  // (b): the day's slot already holds ANOTHER submit's weigh-in. Same key as the index.
+  // (b): the day's slot already holds ANOTHER submit's weigh-in. Same key as the index, through the
+  // one shared predicate — `restoreHidden` asks the same question and must get the same answer.
   const [taken] = await exec
     .select({ id: schema.entries.id })
     .from(schema.entries)
-    .where(
-      and(
-        eq(schema.entries.profileId, args.profileId),
-        eq(schema.entries.activityDate, args.day),
-        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
-        isNull(schema.entries.deletedAt),
-        sql`coalesce(${schema.entries.context}, ${DEFAULT_BODYWEIGHT_CONTEXT}) = ${DEFAULT_BODYWEIGHT_CONTEXT}`,
-      ),
-    )
+    .where(and(bodyweightSlot(args.profileId, args.day), isNull(schema.entries.deletedAt)))
     .limit(1);
   if (taken) return { dayTaken: true };
 

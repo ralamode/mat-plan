@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isoDaySchema } from '@mat-plan/shared';
+
 /**
  * Date helpers for the "declared date" of an entry (activity_date is a plain DATE,
  * not a timestamp).
@@ -12,8 +14,15 @@ import { z } from 'zod';
  * server resolves the active tz in `lib/active-timezone.ts`.
  */
 
-/** A declared date on the wire: `YYYY-MM-DD`. */
-export const isoDaySchema = z.iso.date();
+/**
+ * A declared date on the wire: `YYYY-MM-DD`.
+ *
+ * ⚠️ **Re-exported from `@mat-plan/shared` since `V1-9b` B1-1, not declared here.** The shared
+ * package needed it for `hide.ts`'s wire schemas and cannot import from `apps/web`; two declarations
+ * would be a day format free to disagree across the wire. Import it from either place — they are the
+ * same object.
+ */
+export { isoDaySchema };
 
 /**
  * The LOCAL date+time parts of the instant `now`, in `timeZone` — the shared `formatToParts`
