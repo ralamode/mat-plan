@@ -27,8 +27,9 @@ skill's `description` is its index entry).
 
 ## What this is
 
-A portable, entity-based activity logger (kids' wrestling S&C + Ray's PPL), offline-capable, that
-also exports byte-faithful CSVs for an existing Claude workflow. Built at ~4h/wk → **scope
+A portable, entity-based activity logger (kids' wrestling S&C + Ray's PPL), offline-capable, with a
+data export families can take with them (no longer byte-faithful to a legacy workflow:
+[ADR 0009](./docs/decisions/0009-retire-the-byte-faithful-csv-contract.md)). Built at ~4h/wk → **scope
 discipline is a first-class constraint.** The one inviolable product rule: **the LLM never authors
 loads/weights** (bad loads are an injury risk) — the model may draft _definitions_ a human confirms,
 never live prescriptions.
