@@ -1407,6 +1407,18 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
   Small; no plan needed.
 
+- **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
+  2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
+  INP < 200 ms · CLS < 0.1) is written in AGENTS.md and ADR 0001 but nothing measures it. **(a)** Land
+  ADR 0001's deferred real-user monitoring exactly as its 2026-08-11 amendment requires: production
+  only, gated through `lib/env.ts`, CSP updated. **(b)** A client-bundle size budget per route that
+  fails CI when exceeded, so a dependency's cost is seen in the PR that adds it. **Before Beta 1.**
+  Needs a plan (touches CI).
+
+- **PERF-2 — Lighthouse CI on the main app pages.** _(maintainer, 2026-11-13.)_ Lab scores for the
+  pages V1-12 already scans with axe (`/`, Today, the routine editor), as a trend and a regression
+  signal rather than a hard gate at first. **Before the club pilot.** Needs a plan (touches CI).
+
 ## BETA — share with other families ([milestone](./milestones/beta-1.md))
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
