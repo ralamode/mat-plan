@@ -4,7 +4,8 @@ Read this before writing code. It encodes the project's decisions so agents don'
 are enforced by CI and pre-commit hooks, **not** by a reviewer's memory. `CLAUDE.md` and
 `.cursor/rules` are thin pointers to this file — keep the rules here (DRY).
 
-See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan.md](./docs/plan.md)
+See also: [docs/principles.md](./docs/principles.md) (the principles every plan and PR is held to, and their tie-break order),
+[docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan.md](./docs/plan.md)
 (PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md),
 [docs/lessons.md](./docs/lessons.md) (recurring gotchas + fixes),
 [docs/features/](./docs/features/) (per-feature guides — **read before changing a feature**),
