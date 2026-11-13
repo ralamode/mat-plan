@@ -12,3 +12,8 @@ packages/db/migrations
 # Generated from docs/privacy/notice.md (reviewed as markdown; regenerated verbatim).
 # A formatter rewrite here fails the byte-exact drift test on a fix nobody made.
 apps/web/lib/privacy/notice-content.ts
+
+# Playwright snapshot baselines (written by `--update-snapshots`, compared byte-for-byte).
+# A formatter rewrite here reddens the geometry guard on a change nobody made — Prettier collapsed
+# its arrays onto one line and the six baselines failed with IDENTICAL values (UI-5).
+**/*-snapshots/

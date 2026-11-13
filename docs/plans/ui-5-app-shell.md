@@ -443,3 +443,39 @@ Both were the defect this repo names most often: an assertion that cannot fail, 
 `ID-1`'s six keep-open items: **not engaged.** This plan adds no column, no scope field and no
 authority check; it changes layout only, and touches no identity, household, role, sharing or
 catalog surface. Recorded so the next reader sees the check ran rather than wondering.
+
+## What implementation changed — the plan was wrong in four places
+
+Recorded here rather than silently absorbed, because three of the four were found by the test suite
+on the first run and one by reading the code the plan had reasoned about.
+
+| #   | The plan said                                                                                   | What shipped, and why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | `/p` gets the rail like every other authenticated page (only the no-household branch opts out)  | **`/p` renders no rail in any of its three states.** The rail IS the athlete switcher and `/p` is the athlete switcher, so the rail rendered a second link to every athlete — same accessible name, same `href` — beside the tile it duplicated. ⚠️ **The plan anticipated exactly this collision class for the _Settings_ label and did not count it for the athletes themselves.** `e2e/steps.ts:64` (`selectProfile`, a regex on the name) failed on the first run at the setup project's 1280px, before any test of this PR's own ran. |
+| D2  | Two inline links get `lg:hidden`: `p/[profileId]/page.tsx:176` and `p/page.tsx:131`             | **Neither does; nothing is hidden at any width.** That bullet was written for the two-static-link rail, where `← All athletes` would have duplicated a "Home" item. The rail that shipped replaces the SWITCHING function of `/p`, not `/p`: that page is the only home of sign out, the theme toggle, Add an athlete and the archived count. Hiding the way there at `lg` would have stranded all four on a laptop — and with D1 there is no rail on `/p` to make its own settings row redundant either.                                  |
+| D3  | `site-footer.tsx`'s `/sign-in` suppression stays; `nav-rail.tsx` is the one `'use client'` leaf | **The suppression is deleted and the PR ships no client component.** The footer left the root layout, so `/sign-in` never mounts it — a `return null` for a tree it is not in is a branch no render can reach, and `a11y.spec.ts` already asserts the zero `contentinfo` count structurally. `usePathname()` stays for `aria-current`, which is unrelated. The rail needed no hook at all: `current` is a prop.                                                                                                                            |
+| D4  | The 1280px case belongs in `a11y.spec.ts`; the 390px geometry pin goes there too                | Split. The geometry pin is its own file (`e2e/ui5-geometry.spec.ts`) because it runs in the `chromium` project and its baselines had to be recorded on the pre-shell commit; the 1280px block is in `a11y.spec.ts` where axe lives. `expectLinkTapTargets` took a `root` parameter on the way — it scoped to `getByRole('main')` internally, which is exactly where the rail is not.                                                                                                                                                       |
+
+**One addition the plan did not ask for:** an 820px case asserting the tablet is still the single
+centred column, as _properties_ (`main` is 672px wide, centred) rather than a snapshot — so it needed
+no baseline from the pre-shell commit and can never go stale against a content change.
+
+**Both new tests were probed RED** before being trusted: the footer moved inside `<main>` reddens the
+jsdom nesting assertion, and a `<main>` added to `settings/page.tsx` reddens the source scan.
+
+### One defect the tests did not find, and the test that now does
+
+**`/p` at 1280 lost its centring.** The shell's `lg:` classes — `lg:mx-0 lg:max-w-none lg:px-8` —
+exist to turn a centred column into the grid's **second cell**, and they were written
+unconditionally. On the one page that renders no rail there is no grid for them to belong to, so
+they pinned the picker against the left edge of a 1280px window with ~600px of nothing beside it,
+and left the footer centred on the window instead of under the content.
+
+Every gate was green: `verify`, 113 e2e tests, the geometry pin (which measures 390 and 360, where
+no `lg:` class applies), and axe (which has no opinion about where a column sits). **A desktop
+screenshot is what showed it** — the one artifact in this repo's UI process that a human reads.
+
+The classes are now gated on `showRail`, and `a11y.spec.ts`'s 1280px block measures the picker:
+`main` is 672px wide, centred, with the footer at the same x. The general rule it illustrates, worth
+carrying into PR 4 where a third track arrives: **a width-conditional class and a
+presence-conditional region have to agree, and only a measurement says whether they do.**

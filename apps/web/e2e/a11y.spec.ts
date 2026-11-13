@@ -15,7 +15,9 @@ import {
   APP_HOME_PATH,
   BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
+  MAIN_CONTENT_ID,
   MIN_TAP_TARGET_PX,
+  NAV_RAIL_COPY,
   PARTIAL_SETS_COPY,
   PRIVACY_PATH,
   SETTINGS_PATH,
@@ -720,9 +722,18 @@ test.describe('scaffolded state', () => {
  * Links that act as buttons (link CARDS, the landing's CTAs, the gate's way back) — opted back into the
  * tap-target bar one by one, since `INTERACTIVE` excludes links under SC 2.5.8's inline-link exception.
  * `expected` pins how many there are, so a page that lost one (or rendered none) cannot pass.
+ *
+ * ⚠️ **`root`, not `page`, since `UI-5`.** It read `page.getByRole('main')` internally, which is
+ * exactly the scope the nav rail is outside of — `site-footer.tsx`'s docblock records that staying
+ * outside `main` is what keeps these counts stable. A second copy differing only in its root would
+ * have been the third version of this loop in the file.
  */
-async function expectLinkTapTargets(page: Page, context: string, expected?: number): Promise<void> {
-  const links = await page.getByRole('main').getByRole('link').all();
+async function expectLinkTapTargets(
+  root: Locator,
+  context: string,
+  expected?: number,
+): Promise<void> {
+  const links = await root.getByRole('link').all();
   if (expected === undefined) {
     expect(links.length, `${context}: found no links — selector is wrong`).toBeGreaterThan(0);
   } else {
@@ -741,7 +752,7 @@ test('profile tiles are large touch targets (the link-card exception to the inli
 }) => {
   // A profile tile is a CARD acting as a button, so it is opted back in explicitly.
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
-  await expectLinkTapTargets(page, 'profile picker');
+  await expectLinkTapTargets(page.getByRole('main'), 'profile picker');
 });
 
 /**
@@ -780,7 +791,7 @@ test.describe('public routes', () => {
       await page.goto('/', { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `landing (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `landing (${viewport.width}px)`);
-      await expectLinkTapTargets(page, `landing (${viewport.width}px)`, 2);
+      await expectLinkTapTargets(page.getByRole('main'), `landing (${viewport.width}px)`, 2);
     });
 
     /**
@@ -841,7 +852,11 @@ test.describe('public routes', () => {
       await page.goto(SIGN_IN_PATH, { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `sign-in, dark state (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `sign-in, dark state (${viewport.width}px)`);
-      await expectLinkTapTargets(page, `sign-in, dark state (${viewport.width}px)`, 2);
+      await expectLinkTapTargets(
+        page.getByRole('main'),
+        `sign-in, dark state (${viewport.width}px)`,
+        2,
+      );
 
       // 🔴 **Positive content assertions, which the plan asked for and the first pass omitted.**
       // The three checks above would all pass on a page whose heading and copy had vanished — axe
@@ -1037,5 +1052,146 @@ test.describe('U0 — the sheet, open', () => {
     await openSheet(page);
     await page.reload({ waitUntil: 'networkidle' });
     await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+});
+
+/**
+ * **UI-5 — the shell at 1280px, the only width where the rail exists.**
+ *
+ * 🔴 **Why this block has to exist at all.** Every other test in this file runs at 390 or 360, and
+ * the rail is `hidden lg:flex` — so at those widths it is not in the accessible tree and NOTHING in
+ * the suite renders it. A rail with unlabelled links, a broken `aria-current`, 32px rows or a
+ * contrast failure would ship green. This is the file's first desktop scan, and the comment at the
+ * top ("MOBILE ONLY by design … desktop is the secondary case") still holds for the rest of it: the
+ * justification here is not a wider matrix, it is **a component that only exists at this width**.
+ *
+ * ⚠️ `isMobile`/`hasTouch` off and `deviceScaleFactor` back to 1 — the `a11y` project turns all three
+ * on for phone emulation, and phone emulation at a 1280px viewport is neither thing.
+ */
+test.describe('UI-5 · the app shell at 1280px', () => {
+  const DESKTOP = { width: 1280, height: 900 };
+  test.use({ viewport: DESKTOP, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+
+  const rail = (page: Page) => page.getByRole('navigation', { name: NAV_RAIL_COPY.label });
+
+  test('the rail renders, is labelled, and clears the tap-target bar', async ({ page }) => {
+    await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+    await expect(rail(page)).toBeVisible();
+    // `expected` is deliberately absent: the seed's athlete count is not this test's subject, and
+    // pinning it would make a seed change look like a layout regression. The non-vacuity floor
+    // inside the helper ("found no links") is what this call needs from it.
+    await expectLinkTapTargets(rail(page), 'the nav rail at 1280px');
+    await expect(rail(page).getByRole('link', { name: NAV_RAIL_COPY.settings })).toBeVisible();
+
+    await expectNoAxeViolations(page, 'Today with the rail (1280px)');
+    // The rail is a second column, so a width regression shows up as the page scrolling sideways.
+    await expectNoHorizontalOverflow(page, 'Today with the rail (1280px)');
+  });
+
+  test('the open athlete is the one marked current', async ({ page }) => {
+    await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+    // One `aria-current` in the rail, and it points at the page we are on. `current` arrives as a
+    // prop from the page rather than from `usePathname()`, which is what keeps the shell free of a
+    // client boundary — and also what makes it possible to get wrong silently.
+    const marked = rail(page).locator('[aria-current="page"]');
+    await expect(marked).toHaveCount(1);
+    await expect(marked).toHaveAttribute('href', new RegExp(SEED_PROFILE_PUBLIC_ID));
+  });
+
+  test('household settings marks the settings row, not an athlete', async ({ page }) => {
+    await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+
+    const marked = rail(page).locator('[aria-current="page"]');
+    await expect(marked).toHaveCount(1);
+    await expect(marked).toHaveText(NAV_RAIL_COPY.settings);
+  });
+
+  /**
+   * 🔴 **The skip link, which is the whole reason the rail needed one.** With navigation first in the
+   * DOM, a keyboard user would otherwise tab every athlete before reaching the logging form on every
+   * page. axe will never ask for this — `bypass` is satisfied by landmarks alone — so the only proof
+   * it works is pressing Tab and following it.
+   */
+  test('the first Tab reaches a skip link that moves focus into <main>', async ({ page }) => {
+    await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+    await page.keyboard.press('Tab');
+    const focused = page.locator(':focus');
+    await expect(focused).toHaveText(NAV_RAIL_COPY.skipToContent);
+    // It must also become VISIBLE on focus, or it is a link a sighted keyboard user cannot see
+    // themselves land on (`sr-only focus:not-sr-only`).
+    await expect(focused).toBeVisible();
+
+    await page.keyboard.press('Enter');
+    // `<main tabIndex={-1}>` is what makes the jump move FOCUS rather than only the scroll position.
+    // Without it the hash navigates and the next Tab returns to the rail.
+    await expect(page.locator(`#${MAIN_CONTENT_ID}:focus`)).toHaveCount(1);
+  });
+
+  /**
+   * 🔴 **`/p` at 1280: no rail, and STILL A CENTRED COLUMN.** This test exists because the first
+   * implementation failed it. The shell's `lg:` classes — `lg:mx-0 lg:max-w-none lg:px-8` — turn a
+   * centred column into the grid's second cell, and they were written unconditionally. On the one
+   * page with no rail there is no grid for them to belong to, so they simply pinned the picker to
+   * the left edge of a 1280px window with ~600px of nothing beside it. Every test passed; a desktop
+   * screenshot is what showed it.
+   *
+   * The lesson is the general one for this shell: **a width-conditional class and a
+   * presence-conditional region have to agree**, and only a measurement says whether they do.
+   */
+  test('the picker has no rail and keeps its centred column', async ({ page }) => {
+    await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+
+    await expect(
+      rail(page),
+      '/p IS the athlete switcher — a rail would link every athlete twice',
+    ).toHaveCount(0);
+
+    const box = await page.evaluate(() => {
+      const r = document.querySelector('main')!.getBoundingClientRect();
+      const f = document.querySelector('footer')!.getBoundingClientRect();
+      return { x: Math.round(r.x), width: Math.round(r.width), footerX: Math.round(f.x) };
+    });
+    expect(box.width, 'main keeps max-w-2xl').toBe(672);
+    expect(box.x, 'main is centred, not flattened against the left edge').toBe(
+      Math.round((DESKTOP.width - 672) / 2),
+    );
+    // The footer follows the content, not the window: the same miss would have left it centred on
+    // 1280 while the page sat at the left.
+    expect(box.footerX, 'the footer is under the content').toBe(box.x);
+  });
+
+  /**
+   * The public routes have no rail and no athletes — `AppShell` is not in their tree at all. Worth a
+   * line because the shell replaced the ROOT LAYOUT's footer: `/` and `/privacy` render `SiteFooter`
+   * themselves now, and the failure mode of that move is a route that renders two `contentinfo`
+   * landmarks or none.
+   */
+  test('the public routes render no rail, and exactly one footer', async ({ page }) => {
+    for (const path of ['/', PRIVACY_PATH, SIGN_IN_PATH]) {
+      await page.goto(path, { waitUntil: 'networkidle' });
+      await expect(rail(page), `${path} has no nav rail`).toHaveCount(0);
+      await expect(page.getByRole('main'), `${path} has one main`).toHaveCount(1);
+      // ⚠️ `/sign-in` renders NO footer by design (it carries its own mark and privacy link), and
+      // the sign-in block above already asserts that count directly — so this loop asserts the
+      // footer only where there should be one, rather than restating the other case here.
+      if (path !== SIGN_IN_PATH) {
+        await expect(page.getByRole('contentinfo'), `${path} has one footer`).toHaveCount(1);
+      }
+    }
+  });
+
+  test('one main landmark and one contentinfo, with the footer outside main', async ({ page }) => {
+    await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+    // ⚠️ **axe cannot assert this** — `landmark-one-main`, `landmark-no-duplicate-main` and
+    // `landmark-unique` are all tagged `best-practice`, and `expectNoAxeViolations` scans
+    // `wcag2a`/`wcag2aa` only. The source scan in `app/pages-need-a-session.test.ts` proves no page
+    // DECLARES a second one; this proves the rendered page has one.
+    await expect(page.getByRole('main')).toHaveCount(1);
+    await expect(page.getByRole('contentinfo')).toHaveCount(1);
+    await expect(page.locator('main footer')).toHaveCount(0);
   });
 });

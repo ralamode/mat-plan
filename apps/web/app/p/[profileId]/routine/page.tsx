@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { listProfiles } from '@/lib/dal/profiles';
+import { AppShell } from '@/components/layout/app-shell';
 import { notFound } from 'next/navigation';
 
-import { NAME_WRAP_CLASS, NAV_LINK_CLASS, PAGE_SHELL_CLASS, athletePath } from '@/lib/constants';
+import { NAME_WRAP_CLASS, NAV_LINK_CLASS, athletePath } from '@/lib/constants';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
@@ -42,7 +44,7 @@ export default async function RoutineEditorPage({
   if (!profile) notFound();
 
   return (
-    <main className={PAGE_SHELL_CLASS}>
+    <AppShell athletes={await listProfiles()} current={{ athlete: profileId }}>
       <header className="flex flex-col gap-2">
         {/* ⚠️ `NAV_LINK_CLASS` (so `min-h-11`) and `NAME_WRAP_CLASS` arrived at PROF-1 a-r. This page
             is UNLINKED since criterion 11, but it still renders and `e2e/a11y.spec.ts` still scans
@@ -63,6 +65,6 @@ export default async function RoutineEditorPage({
         initialOrder={profile.routine.order}
         catalog={routineCatalogItems()}
       />
-    </main>
+    </AppShell>
   );
 }

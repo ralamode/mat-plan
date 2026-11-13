@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { listProfiles } from '@/lib/dal/profiles';
+import { AppShell } from '@/components/layout/app-shell';
 import { newId } from '@mat-plan/shared';
 
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
@@ -13,7 +15,6 @@ import {
   ALL_ATHLETES_LINK,
   APP_HOME_PATH,
   NAV_LINK_CLASS,
-  PAGE_SHELL_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
@@ -80,16 +81,16 @@ export default async function AddAthletePage() {
   const { state, canArchiveAthletes } = await householdState();
   if (state === HOUSEHOLD_STATE.none) {
     return (
-      <main className={PAGE_SHELL_CLASS}>
+      <AppShell athletes={await listProfiles()}>
         <NoHouseholdState />
-      </main>
+      </AppShell>
     );
   }
 
   const programsAnything = await householdProgramsAnything();
 
   return (
-    <main className={PAGE_SHELL_CLASS}>
+    <AppShell athletes={await listProfiles()}>
       {/* 🔴 **The back link is ABOVE the form, in the header — the day page's placement.** It was
           below the submit in the first version, which a UX lens measured at ~5 tab stops and ~y=700
           on a phone: this is the one screen a person may want to leave WITHOUT committing, so the
@@ -126,6 +127,6 @@ export default async function AddAthletePage() {
           `${ATHLETE_FORM_COPY.kindRecoveryMemberBefore} ${SETTINGS_COPY.ownerOnly}`
         )}
       </p>
-    </main>
+    </AppShell>
   );
 }

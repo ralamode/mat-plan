@@ -1,11 +1,11 @@
+import { AppShell } from '@/components/layout/app-shell';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PAGE_SHELL_CLASS } from '@/lib/constants';
 
 /** Suspense fallback for the picker and Today while they fetch from the DB (V0-10). Lives under `p/`
  *  (OSS-2), not the root: at the root it would front the public landing, which awaits nothing. */
 export default function Loading() {
   return (
-    <main aria-busy="true" className={PAGE_SHELL_CLASS}>
+    <AppShell busy>
       <span className="sr-only">Loading…</span>
       <div className="flex flex-col gap-2">
         <Skeleton className="h-9 w-28" />
@@ -15,6 +15,6 @@ export default function Loading() {
         <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />
       </div>
-    </main>
+    </AppShell>
   );
 }

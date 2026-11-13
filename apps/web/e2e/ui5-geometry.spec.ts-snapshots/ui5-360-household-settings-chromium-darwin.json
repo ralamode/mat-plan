@@ -1,0 +1,23 @@
+{
+  "mainXWidth": [
+    0,
+    360
+  ],
+  "mainPadding": [
+    "16px",
+    "48px",
+    "48px"
+  ],
+  "mainRowGap": "32px",
+  "footerOffset": 0,
+  "h1XWidth": [
+    16,
+    328
+  ],
+  "firstControlX": [
+    86,
+    67
+  ],
+  "mainCount": 1,
+  "footerInsideMain": false
+}

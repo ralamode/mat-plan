@@ -208,6 +208,17 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **Six snapshot baselines failed with values IDENTICAL to the committed ones.** → `pnpm format`
+  formats `**/*.json`, which includes a Playwright `*-snapshots/` directory. Prettier collapsed each
+  baseline's arrays onto one line and added a trailing newline; `toMatchSnapshot` compares
+  **bytes**, so every one of them went red on a change nobody made, while reporting a diff that
+  looks like real movement until you parse both sides. → **`**/*-snapshots/` is in
+  `.prettierignore`** (UI-5), beside `packages/db/migrations` and the generated notice module, for
+  the same reason all three are there: a file written by a tool and compared verbatim is not the
+  formatter's to rewrite. ⚠️ **Never `--update-snapshots` to clear this** — on a guard whose whole
+  premise is "recorded before the change", that silently re-records the thing it was meant to
+  catch. Diff the values (`json.load` both sides) and fix the formatter.
+
 - **The browser cache was there, and the step it protected still reached the network on every
   run.** → `Install Chromium` ran `playwright install --with-deps chromium`. The `--with-deps` half
   shells out to `apt-get`, which is **not** what `~/.cache/ms-playwright` caches — so a cache hit

@@ -1,3 +1,5 @@
+import { listProfiles } from '@/lib/dal/profiles';
+import { AppShell } from '@/components/layout/app-shell';
 import { readsHouseholdProgram, DAY_ROLE_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -28,6 +30,7 @@ import {
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 import {
+  ALL_ATHLETES_LINK,
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   CLOSED_DAY_NOTICE,
@@ -35,7 +38,6 @@ import {
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
   NOTHING_TO_EXPORT,
-  PAGE_SHELL_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
@@ -164,7 +166,7 @@ export default async function TodayPage({
   const strengthOnPage = routineBlocks.some((b) => b.kind === 'strength');
 
   return (
-    <main className={PAGE_SHELL_CLASS}>
+    <AppShell athletes={await listProfiles()} current={{ athlete: profileId }}>
       {/* Reports the device tz → `tz` cookie so the RSC computes the local day (V1-6c). Renders nothing. */}
       <TimeZoneSync serverTimeZone={timeZone} />
       <header className="flex flex-col gap-2">
@@ -173,8 +175,17 @@ export default async function TodayPage({
             made the same switch. `min-h-11` for the reason the edit link below carries it: this is
             the recovery path on a phone, and `e2e/a11y.spec.ts` excludes <a> from its tap-target
             scan, so nothing in CI would notice its absence. */}
+        {/* ⚠️ `ALL_ATHLETES_LINK`, and **visible at every width**. `/p/new` has read it from the
+            constant since `lib/constants.ts:550`; this page, the screen that sentence was written
+            for, still spelled it out. One string, two renderers.
+
+            🔴 **It is NOT `lg:hidden`, a deviation from the plan's Decision 4.** That bullet was
+            written for a rail of two static links, where this would have been an exact duplicate of
+            "Home". The rail that shipped is the athlete SWITCHER, and `/p` is more than switching:
+            it is the only home of sign out, the theme toggle, Add an athlete and the archived
+            count. Hiding this at `lg` would strand all four on a laptop. */}
         <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
-          ← All athletes
+          {ALL_ATHLETES_LINK}
         </Link>
         {/* `NAME_WRAP_CLASS` (D11): a 40-character unbroken name is wider than a 360px phone's 328px
             of usable width at this type size. ⚠️ a-g's plan row claimed this wrap had shipped; it had
@@ -449,6 +460,6 @@ export default async function TodayPage({
       >
         {ATHLETE_FORM_COPY.renameLink(profile.name)}
       </Link>
-    </main>
+    </AppShell>
   );
 }

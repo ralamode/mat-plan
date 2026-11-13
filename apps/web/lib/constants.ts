@@ -343,6 +343,17 @@ export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as cons
 export const NAV_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3';
 
+/**
+ * A nav ROW — a full-width, bordered, tappable row. `NAV_LINK_CLASS` above is `w-fit` for inline
+ * arrow links ("← All athletes"); this is its block-level sibling.
+ *
+ * ⚠️ **Named at its second use, which is the trigger.** `app/p/page.tsx` hand-typed it for the
+ * settings row; `UI-5`'s nav rail wants exactly the same shape for every item, and a third copy is
+ * how a focus ring or a tap-target height ends up different on one of them.
+ */
+export const NAV_ROW_CLASS =
+  'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3';
+
 export const QUIET_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
 
@@ -555,8 +566,28 @@ export const ALL_ATHLETES_LINK = '← All athletes';
  *
  * `flex-1` matters: the root layout is a flex column, so without it a short page's `<main>` collapses
  * to its content height and the footer rides up under the fold.
+ *
+ * ⚠️ **Split in two at `UI-5`, and the split is the whole point.** `PAGE_COLUMN_CLASS` is the
+ * spacing; `PAGE_SHELL_CLASS` is that spacing plus the centred 672px width, byte-identical to what
+ * it has always been. The app shell needs the spacing WITHOUT the centring — it supplies its own
+ * width — and the first draft of `UI-5`'s plan re-typed `flex flex-col gap-8 px-4 py-12` inside the
+ * shell, which is the ninth literal this docblock forbids. Composed instead, "the phone layout is
+ * unchanged" is true by construction rather than by two strings happening to agree.
  */
-export const PAGE_SHELL_CLASS = 'mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12';
+export const PAGE_COLUMN_CLASS = 'flex w-full flex-1 flex-col gap-8 px-4 py-12';
+export const PAGE_SHELL_CLASS = `mx-auto max-w-2xl ${PAGE_COLUMN_CLASS}`;
+
+/**
+ * The width a page's CONTENT reads at, whatever the column around it is.
+ *
+ * 🔴 **`UI-5` makes the main region wide; it does not make the form wide.** Measured at 1280 with a
+ * nav rail, an uncapped region gives the log form ~1000px: `strength-form.tsx`'s movement row is
+ * `flex-1`, so the Movement input alone grows to ~650-700px for a ten-character name, and the
+ * `justify-between` list rows put a label and its value ~992px apart. `design.md` says design at the
+ * narrow width and let it scale **up** — scaling up is not stretching. If the form itself should be
+ * wider, that is `UI-1`'s call; it owns the form's shape.
+ */
+export const PAGE_CONTENT_CLASS = 'w-full max-w-2xl';
 
 /**
  * The shared text/number `<input>` styling — the single source for the app's form fields (the
@@ -1157,6 +1188,22 @@ export const UNDO_LABEL = 'Undo';
  * assertion to it (`getByRole('alert')` is ambiguous once Next's route announcer mounts). This is the
  * moment it gained a second consumer, which is the trigger AGENTS.md names.
  */
+/**
+ * The app shell's nav rail (`UI-5`). The label is **"Settings"**, deliberately not
+ * `SETTINGS_COPY.heading` ("Household settings"): the archived day page, `/p/new` and `/edit` each
+ * render that phrase as a prose link, and two visible links with the same accessible name on one
+ * page is the Playwright strict-mode collision #333 already shipped once.
+ */
+export const NAV_RAIL_COPY = {
+  label: 'Primary',
+  athletes: 'Athletes',
+  settings: 'Settings',
+  skipToContent: 'Skip to content',
+} as const;
+
+/** The shell's `<main>` id — the skip link's target, named once because two files need it. */
+export const MAIN_CONTENT_ID = 'main';
+
 export const NAME_ERROR_ID = 'athlete-name-error';
 export const UNDO_BUTTON_ATTR = 'data-undo-button';
 export const ANNOUNCE_AFTER_FOCUS_MS = 60;

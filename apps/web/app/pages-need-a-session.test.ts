@@ -404,3 +404,86 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(session, 'the principal must exist before it can key the limiter').toBeLessThan(limiter);
   });
 });
+
+/**
+ * **UI-5's landmark invariant as a test.** The shell exists so that `<main>` is declared in ONE place
+ * instead of nine, and two things depend on that being true and staying true:
+ *
+ * - `components/ui/sheet.tsx:433` patches `tabIndex` onto `document.querySelector('main')` for its
+ *   focus fallback. `querySelector` takes the FIRST match, so a second `<main>` silently decides which
+ *   element that fallback lands on.
+ * - 🔴 **axe will never say so.** `landmark-no-duplicate-main`, `landmark-one-main` and
+ *   `landmark-unique` are all tagged `best-practice`, and `e2e/a11y.spec.ts` scans `wcag2a`/`wcag2aa`
+ *   only. A duplicate landmark is invisible to every automated check this repo runs — which is why it
+ *   gets a source scan rather than a note in a docblock.
+ *
+ * The scan is textual on purpose: it is checking what the source DECLARES, not what a render produces,
+ * so a page that reintroduces its own `<main>` fails here at `pnpm test` speed.
+ */
+describe('UI-5 · one <main>, declared in the shell', () => {
+  /**
+   * The pages that render their own `<main>`, each because it is not an app screen.
+   *
+   * ⚠️ **A named list, not an exclusion pattern.** A new page that needs its own landmark has to be
+   * added here with a reason, which is the point: the failure is the conversation.
+   */
+  const OWN_MAIN: Record<string, string> = {
+    // A full-width token gallery (UI-3), deliberately `max-w-5xl` — wider than the shell's content
+    // measure, with no athlete to switch to and no rail to show.
+    'design/tokens/page.tsx': 'the UI-3 token gallery is a full-width tool, not an app screen',
+  };
+
+  const authenticated = pages.filter((f) => !isPublicPath(routeOf(f)));
+
+  it('finds the authenticated pages (an empty glob would pass everything below)', () => {
+    expect(authenticated.length).toBeGreaterThan(4);
+  });
+
+  // ⚠️ The non-vacuity floor above counts pages; this one proves the MATCHER works. Without it a
+  // typo in the regex would pass every page silently — the shape of defect this suite's own header
+  // warns about twice.
+  it('the matcher catches a bare <main> (a broken regex would pass everything)', () => {
+    expect(/<main[\s>]/.test('return <main className="x">hi</main>;')).toBe(true);
+    expect(/<main[\s>]/.test('return <AppShell>hi</AppShell>;')).toBe(false);
+  });
+
+  it.each(authenticated.map((f) => [relative(APP_DIR, f), f]))('%s', (name, file) => {
+    const src = code(file);
+    const declaresMain = /<main[\s>]/.test(src);
+    const usesShell = /<AppShell[\s>]/.test(src);
+
+    if (name in OWN_MAIN) {
+      expect(declaresMain, `${name} is listed in OWN_MAIN (${OWN_MAIN[name]})`).toBe(true);
+      expect(usesShell, `${name} renders its own <main>, so it must not also use AppShell`).toBe(
+        false,
+      );
+      return;
+    }
+
+    expect(usesShell, `${name} must render <AppShell> — or join OWN_MAIN with a reason`).toBe(true);
+    expect(
+      declaresMain,
+      `${name} must not declare its own <main>; the shell owns the landmark`,
+    ).toBe(false);
+    // The constant the shell replaced. A page still spreading it is a page the shell did not reach:
+    // it would centre a second column inside the grid cell and ignore the rail entirely.
+    expect(src).not.toMatch(/\bPAGE_SHELL_CLASS\b/);
+  });
+
+  /**
+   * `app/p/loading.tsx` by NAME, because the glob above is `**​/page.tsx` and would never see it —
+   * and it is the file that matters most here. It renders a `<main aria-busy>` that sits in the DOM
+   * BESIDE the streamed page's for as long as the stream takes: the one moment this app really does
+   * have two `<main>` elements. It was the geometry guard's first red, before `networkidle`.
+   */
+  it('app/p/loading.tsx renders the shell, and keeps its aria-busy', () => {
+    const file = join(APP_DIR, 'p/loading.tsx');
+    expect(existsSync(file), 'app/p/loading.tsx exists (a renamed file would pass vacuously)').toBe(
+      true,
+    );
+    const src = code(file);
+    expect(src).toMatch(/<AppShell[\s>]/);
+    expect(src).not.toMatch(/<main[\s>]/);
+    expect(src, 'the busy state is what this file is FOR').toMatch(/\bbusy\b/);
+  });
+});

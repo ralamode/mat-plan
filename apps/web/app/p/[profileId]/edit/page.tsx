@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { listProfiles } from '@/lib/dal/profiles';
+import { AppShell } from '@/components/layout/app-shell';
 import { notFound } from 'next/navigation';
 
 import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
@@ -8,7 +10,6 @@ import {
   ATHLETE_FORM_COPY,
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
-  PAGE_SHELL_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
@@ -78,7 +79,7 @@ export default async function RenameAthletePage({
   const from = inAppReferrer((await searchParams).from, own);
 
   return (
-    <main className={PAGE_SHELL_CLASS}>
+    <AppShell athletes={await listProfiles()} current={{ athlete: profileId }}>
       <header className="flex flex-col gap-2">
         {/* ⚠️ `min-h-11` (inside `NAV_LINK_CLASS`) is load-bearing and UNGUARDED by the a11y spec,
             which excludes <a> from its tap-target scan (the SC 2.5.8 inline-text exception). It is
@@ -134,7 +135,7 @@ export default async function RenameAthletePage({
           SETTINGS_COPY.ownerOnly
         )}
       </p>
-    </main>
+    </AppShell>
   );
 }
 

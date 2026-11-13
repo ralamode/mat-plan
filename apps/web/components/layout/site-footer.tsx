@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS, SIGN_IN_PATH } from '@/lib/constants';
-import { matchesPathTree } from '@/lib/public-paths';
+import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 /**
  * PRIV-2 — the one `<footer>`, in the root layout, so the privacy notice is reachable from every
@@ -42,15 +42,19 @@ import { matchesPathTree } from '@/lib/public-paths';
  * instead of overflowing. `min-h-11` on each link is the gate's pattern, and the footer sits OUTSIDE
  * `<main>`, so the a11y spec's `expectLinkTapTargets` counts are untouched.
  */
-export function SiteFooter() {
+export function SiteFooter({ inShell = false }: { inShell?: boolean } = {}) {
   const pathname = usePathname();
-  // 🔴 **Not on the sign-in subtree** _(maintainer, 2026-11-05)_. That screen carries the mark as its
-  // own home link above the card and one `/privacy` link below it, so both of this footer's
-  // destinations are already present — rendering it there would be two links to `/` and two to
-  // `/privacy` on one page, the duplicate-destination problem this file's own docblock argues
-  // against. ⚠️ `matchesPathTree`, not equality: `/sign-in` is a catch-all (`[[...rest]]`) and OAuth
-  // lands on its CHILDREN, so an exact check would put the footer back mid-handshake.
-  if (pathname !== null && matchesPathTree(SIGN_IN_PATH, pathname)) return null;
+  // ✅ **The `/sign-in` suppression is GONE at `UI-5`, and `usePathname()` is still here.** The
+  // suppression existed because the ROOT LAYOUT rendered this footer on every route, including the
+  // one screen that already carries both of its destinations (the mark above the card, a `/privacy`
+  // link below it). `UI-5` moves the footer out of the layout: `AppShell` renders it on the
+  // authenticated screens and `/` and `/privacy` render it themselves, so `/sign-in` simply never
+  // mounts it. A `return null` for a tree it is no longer in would be a branch no render can reach —
+  // `e2e/a11y.spec.ts`'s 1280px block asserts the zero `contentinfo` count structurally instead.
+  //
+  // ⚠️ The hook stays, for `aria-current` below. The structural fix removed a condition, not the
+  // reason this is a client component: a server-rendered pathname is stale after a soft nav, which
+  // is the bug `1d` found here.
 
   const items = [
     { href: '/', label: FOOTER_COPY.home },
@@ -58,7 +62,16 @@ export function SiteFooter() {
   ] as const;
 
   return (
-    <footer className="mx-auto w-full max-w-2xl px-4 pt-8 pb-6">
+    <footer
+      className={cn(
+        'mx-auto w-full max-w-2xl px-4 pt-8 pb-6',
+        // At `lg` inside the shell the footer is the grid's second cell, so it takes the cell's
+        // width and alignment; below `lg` — and on every page without a rail — it keeps the same
+        // centred `max-w-2xl` column it has always had, which is what keeps it under the content
+        // rather than under the middle of the window.
+        inShell && 'lg:mx-0 lg:max-w-none',
+      )}
+    >
       {/* Left-aligned on phones, centred from `sm` up _(maintainer, 2026-11-05)_. The footer's own
           column is `max-w-2xl`, so left-aligned links sit at the left edge of a centred 672px box —
           which on a wide screen reads as "off-centre" rather than "left-aligned", especially under a
