@@ -308,9 +308,17 @@ flowchart LR
 
 ## 2e. The app shell — one frame, two layouts, one `<main>` (UI-5)
 
-Every authenticated page renders inside `components/layout/app-shell.tsx`. Below `lg` the shell is
-the single centred column the app has always had; at `lg` and up it adds a nav rail — **the athlete
-switcher**, so a laptop changes kid without a round trip through `/p`.
+Every authenticated **app screen** renders inside `components/layout/app-shell.tsx`. Below `lg` the
+shell is the single centred column the app has always had; at `lg` and up it adds a nav rail — **the
+athlete switcher**, so a laptop changes kid without a round trip through `/p`.
+
+⚠️ **Two authenticated routes are deliberately outside it**, both named in `OWN_MAIN` or its sibling
+list in `app/pages-need-a-session.test.ts`: `/design/tokens` (a full-width token gallery, not an app
+screen) and the root error boundary (`app/error.tsx`, which replaces the page rather than filling
+it). Both declare their own `<main>`, and the error boundary renders `SiteFooter` itself — ⚠️ this
+PR's footer move is what made that necessary, and it **supersedes `PRIV-2`'s "one `<footer>` in the
+root layout, not three use sites"**: a layout cannot know the pathname, so the choice was three use
+sites or two `contentinfo` landmarks on `/sign-in`.
 
 **The shell is a seam, which is why it is here.** `<main>`, the `<footer>` and the skip link are
 declared in exactly one file instead of nine, and two things depend on that: `sheet.tsx` patches

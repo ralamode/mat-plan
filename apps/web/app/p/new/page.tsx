@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { listProfiles } from '@/lib/dal/profiles';
-import { AppShell } from '@/components/layout/app-shell';
 import { newId } from '@mat-plan/shared';
+
+import { AppShell } from '@/components/layout/app-shell';
+import { listProfiles } from '@/lib/dal/profiles';
 
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';

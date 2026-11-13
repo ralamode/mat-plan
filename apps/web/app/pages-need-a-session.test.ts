@@ -433,6 +433,13 @@ describe('UI-5 · one <main>, declared in the shell', () => {
     'design/tokens/page.tsx': 'the UI-3 token gallery is a full-width tool, not an app screen',
   };
 
+  // ⚠️ **One definition each, used by the self-test below AND the per-page assertions.** They were
+  // written twice — a literal in the self-test and the same literal in the loop — so a typo in the
+  // second was invisible to the first: the self-test proved a COPY worked. A correctness lens
+  // caught it, and it is the exact defect this suite's header warns about twice.
+  const MAIN_TAG_RE = /<main[\s>]/;
+  const SHELL_TAG_RE = /<AppShell[\s>]/;
+
   const authenticated = pages.filter((f) => !isPublicPath(routeOf(f)));
 
   it('finds the authenticated pages (an empty glob would pass everything below)', () => {
@@ -443,14 +450,16 @@ describe('UI-5 · one <main>, declared in the shell', () => {
   // typo in the regex would pass every page silently — the shape of defect this suite's own header
   // warns about twice.
   it('the matcher catches a bare <main> (a broken regex would pass everything)', () => {
-    expect(/<main[\s>]/.test('return <main className="x">hi</main>;')).toBe(true);
-    expect(/<main[\s>]/.test('return <AppShell>hi</AppShell>;')).toBe(false);
+    expect(MAIN_TAG_RE.test('return <main className="x">hi</main>;')).toBe(true);
+    expect(MAIN_TAG_RE.test('return <AppShell>hi</AppShell>;')).toBe(false);
+    expect(SHELL_TAG_RE.test('return <AppShell busy>hi</AppShell>;')).toBe(true);
+    expect(SHELL_TAG_RE.test('return <AppShellSomethingElse />;')).toBe(false);
   });
 
   it.each(authenticated.map((f) => [relative(APP_DIR, f), f]))('%s', (name, file) => {
     const src = code(file);
-    const declaresMain = /<main[\s>]/.test(src);
-    const usesShell = /<AppShell[\s>]/.test(src);
+    const declaresMain = MAIN_TAG_RE.test(src);
+    const usesShell = SHELL_TAG_RE.test(src);
 
     if (name in OWN_MAIN) {
       expect(declaresMain, `${name} is listed in OWN_MAIN (${OWN_MAIN[name]})`).toBe(true);
@@ -471,19 +480,30 @@ describe('UI-5 · one <main>, declared in the shell', () => {
   });
 
   /**
-   * `app/p/loading.tsx` by NAME, because the glob above is `**​/page.tsx` and would never see it —
-   * and it is the file that matters most here. It renders a `<main aria-busy>` that sits in the DOM
-   * BESIDE the streamed page's for as long as the stream takes: the one moment this app really does
-   * have two `<main>` elements. It was the geometry guard's first red, before `networkidle`.
+   * The two `loading.tsx` files by NAME, because the glob above is `**​/page.tsx` and would never see
+   * them — and they are the files that matter most here. Each renders a `<main aria-busy>` that sits
+   * in the DOM BESIDE the streamed page's for as long as the stream takes: the one moment this app
+   * really does have two `<main>` elements. That was the geometry guard's first red, before
+   * `networkidle`.
+   *
+   * ⚠️ **Two of them, and the pairing is the point** (`UI-5`): `/p` renders no rail and a day page
+   * renders one, so a single shared fallback had to reserve the wrong frame for one of them and
+   * shift the column 32px when the page resolved. `nav` is what each asserts.
    */
-  it('app/p/loading.tsx renders the shell, and keeps its aria-busy', () => {
-    const file = join(APP_DIR, 'p/loading.tsx');
-    expect(existsSync(file), 'app/p/loading.tsx exists (a renamed file would pass vacuously)').toBe(
-      true,
-    );
+  const LOADING = [
+    { path: 'p/loading.tsx', nav: false, why: '/p has no rail — the page IS the athlete switcher' },
+    { path: 'p/[profileId]/loading.tsx', nav: true, why: 'a day page reserves the rail column' },
+  ] as const;
+
+  it.each(LOADING.map((l) => [l.path, l] as const))('%s renders the shell', (name, spec) => {
+    const file = join(APP_DIR, spec.path);
+    expect(existsSync(file), `${name} exists (a renamed file would pass vacuously)`).toBe(true);
     const src = code(file);
-    expect(src).toMatch(/<AppShell[\s>]/);
-    expect(src).not.toMatch(/<main[\s>]/);
+    expect(src).toMatch(SHELL_TAG_RE);
+    expect(src).not.toMatch(MAIN_TAG_RE);
     expect(src, 'the busy state is what this file is FOR').toMatch(/\bbusy\b/);
+    // `nav={false}` opts out of the reserved rail column; its absence opts in. Asserted per file
+    // because getting it backwards is invisible at phone widths and is a layout shift at `lg`.
+    expect(src.includes('nav={false}'), spec.why).toBe(!spec.nav);
   });
 });

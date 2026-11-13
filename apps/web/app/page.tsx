@@ -1,7 +1,7 @@
-import { SiteFooter } from '@/components/layout/site-footer';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { SiteFooter } from '@/components/layout/site-footer';
 import { GitHubMark } from '@/components/landing/github-mark';
 import { MatPlanMark } from '@/components/brand/mat-plan-mark';
 import { Button } from '@/components/ui/button';

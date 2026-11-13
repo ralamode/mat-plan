@@ -6,8 +6,11 @@ import type { ProfileDTO } from '@/lib/dal/profiles';
 import {
   MAIN_CONTENT_ID,
   NAV_RAIL_COPY,
-  PAGE_COLUMN_CLASS,
+  PAGE_COLUMN_BOX_CLASS,
   PAGE_CONTENT_CLASS,
+  PAGE_MEASURE_CLASS,
+  PAGE_STACK_CLASS,
+  SHELL_CELL_CLASS,
 } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -50,24 +53,41 @@ export function AppShell({
   /** What this page is, so the rail can mark it without reading the pathname. */
   current?: NavRailCurrent;
   /**
-   * `false` on `/p`'s no-household branch: there are no athletes and no settings link, so a rail
-   * there would be an empty region or one item pointing at the page you are already on.
+   * `false` on **`/p`, in all three of its states** — the only authenticated page with no rail.
+   * That page IS the athlete switcher, so a rail there renders a second link to every athlete
+   * beside the tile it duplicates. The rule and its reasoning live at `app/p/page.tsx`; this is a
+   * pointer, not a second copy.
    */
   nav?: boolean;
   /** `app/p/loading.tsx` keeps its `aria-busy`; the shell would otherwise swallow it. */
   busy?: boolean;
 }) {
   const showRail = nav && (athletes?.length ?? 0) > 0;
+  // 🔴 **The GRID, separately from the RAIL.** `app/p/[profileId]/loading.tsx` has no data — a
+  // Suspense fallback cannot await one — so keying the grid on `athletes.length` made every desktop
+  // navigation into a day page render a centred 672px column, then snap to a 1024px cell beside a
+  // rail that had just unmounted. That is a layout shift on the one interaction this feature adds,
+  // and three review lenses found it independently. The frame is reserved while busy and filled
+  // with an inert placeholder; only the rail's CONTENT waits for data.
+  const showFrame = showRail || (nav && busy);
 
   return (
     <div
       className={cn(
         'flex w-full flex-1 flex-col',
-        // ⚠️ `lg:grid` with `items-start` so the rail does not stretch to the page's height. The
-        // grid deliberately sets neither `transform` nor `overflow` — both break `position: fixed`
-        // in the sheet's overlay, and both are the kind of property added later for a scroll
-        // affordance without anyone connecting the two.
-        showRail && 'lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start',
+        // ⚠️ `lg:grid` with `items-start` so the rail does not stretch to the page's height.
+        //
+        // 🔴 **Nothing here may become a scroll container, and the reason is NOT the one first
+        // written in this comment.** The draft said `overflow` and `transform` "break
+        // `position: fixed` in the sheet's overlay"; an architecture lens showed both halves are
+        // wrong — the sheet portals to `document.body` (`sheet.tsx`), so the shell is not an
+        // ancestor of the overlay at all, and `overflow` never changes a fixed element's
+        // containing block in the first place. The true constraint is that **the document must
+        // stay THE scroller**: `RemoveScroll` locks `body` while the sheet is open, the overflow
+        // helper and the geometry pin both measure `documentElement`, and the rail's `sticky`
+        // sticks to the nearest scrolling ancestor. An `overflow-y-auto` added here or on `<main>`
+        // takes that over silently. The rail scrolls itself instead — see `nav-rail.tsx`.
+        showFrame && 'lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start',
       )}
     >
       {/*
@@ -77,12 +97,25 @@ export function AppShell({
       */}
       <a
         href={`#${MAIN_CONTENT_ID}`}
-        className="focus-visible:ring-ring bg-background sr-only z-50 rounded-lg px-4 py-3 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus-visible:ring-3"
+        // ⚠️ **The `focus:` padding is not a duplicate of the base padding — it is the repair.**
+        // Tailwind's `not-sr-only` resets `padding: 0` (that is how it undoes `sr-only`), and it
+        // lands at higher specificity than a plain `px-4`, so the focused link was a ~24px box of
+        // bare text with a ring hugging the glyphs. `min-h-11` + `inline-flex items-center` make it
+        // a real target; `e2e/a11y.spec.ts` measures the box rather than asking Playwright whether
+        // it is "visible", which an `sr-only` 1×1 clip also satisfies.
+        className="focus-visible:ring-ring bg-background sr-only z-50 rounded-lg focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:inline-flex focus:min-h-11 focus:items-center focus:px-4 focus:py-3 focus-visible:ring-3"
       >
         {NAV_RAIL_COPY.skipToContent}
       </a>
 
-      {showRail && <NavRail athletes={athletes ?? []} current={current} />}
+      {showRail ? (
+        <NavRail athletes={athletes ?? []} current={current} />
+      ) : showFrame ? (
+        // The reserved column while the page streams. `aria-hidden` and empty: it is a width, not a
+        // landmark, so the `navigation` count a screen reader (and `a11y.spec.ts`) sees is
+        // unchanged — the frame is reserved without announcing a navigation that is not there yet.
+        <div aria-hidden className="hidden lg:block" />
+      ) : null}
 
       <main
         id={MAIN_CONTENT_ID}
@@ -99,12 +132,21 @@ export function AppShell({
         // a 1280px window — which is exactly what `/p` did when they were unconditional, and what a
         // desktop screenshot of the picker showed.
         className={cn(
-          PAGE_COLUMN_CLASS,
-          'mx-auto max-w-2xl',
-          showRail && 'lg:mx-0 lg:max-w-none lg:px-8',
+          PAGE_COLUMN_BOX_CLASS,
+          // A flex column so the wrapper's `flex-1` can stretch it, which is what keeps the footer
+          // at the bottom of a short page. ⚠️ **No `gap` here.** `<main>` has exactly one child, so
+          // a gap on it would separate nothing — and the first version of this file put
+          // `PAGE_STACK_CLASS`'s spacing on BOTH elements, which left the geometry guard pinning
+          // the inert copy. Two review lenses found it independently.
+          'flex flex-1 flex-col',
+          'mx-auto',
+          PAGE_MEASURE_CLASS,
+          showFrame && `${SHELL_CELL_CLASS} lg:px-8`,
         )}
       >
-        <div className={cn(PAGE_CONTENT_CLASS, 'flex flex-1 flex-col gap-8')}>{children}</div>
+        {/* The page's own stack: the measure, and the gap between its top-level children. This is
+            the element the geometry guard reads, because it is the one with the children. */}
+        <div className={cn(PAGE_CONTENT_CLASS, PAGE_STACK_CLASS)}>{children}</div>
       </main>
 
       {/*
@@ -113,8 +155,8 @@ export function AppShell({
         authenticated page — and `expectLinkTapTargets` counts links inside `main`, which
         `site-footer.tsx`'s own docblock records as the reason it sits outside.
       */}
-      <div className={cn(showRail && 'lg:col-start-2')}>
-        <SiteFooter inShell={showRail} />
+      <div className={cn(showFrame && 'lg:col-start-2')}>
+        <SiteFooter inShell={showFrame} />
       </div>
     </div>
   );

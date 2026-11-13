@@ -7,8 +7,16 @@ import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 /**
- * PRIV-2 — the one `<footer>`, in the root layout, so the privacy notice is reachable from every
- * screen rather than only by typing the URL, and so a family inside the app can find it too.
+ * PRIV-2 — the app's one `<footer>`, so the privacy notice is reachable from every screen rather
+ * than only by typing the URL, and so a family inside the app can find it too.
+ *
+ * ⚠️ **It left the root layout at `UI-5`** and is now rendered by four callers: `AppShell` (every
+ * app screen), `app/page.tsx`, `app/privacy/page.tsx` and `app/error.tsx`. PRIV-2 chose the layout
+ * explicitly to avoid "three use sites that drift" — that paragraph is marked superseded in its own
+ * plan, with the reason: a layout cannot read the pathname, so once `/sign-in` needed the footer
+ * absent, "one definition" meant a client component on every route or two `contentinfo` landmarks
+ * on that screen. The drift PRIV-2 feared is guarded instead by `e2e/a11y.spec.ts`, which asserts
+ * the `contentinfo` count per route.
  *
  * Two items, because `/privacy` is the SECOND room a stranger can walk into: someone arriving from a
  * consent screen with no idea what this app is needs a way to the landing. ⚠️ The precedent cited

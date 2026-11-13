@@ -44,7 +44,13 @@ import {
   shownWeight,
   strengthSection,
 } from './steps';
-import { expectNoHorizontalOverflow, MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
+import {
+  DESKTOP_VIEWPORT,
+  expectNoHorizontalOverflow,
+  MOBILE_VIEWPORT,
+  NARROW_VIEWPORT,
+  navRail,
+} from './contexts';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -1069,10 +1075,9 @@ test.describe('U0 — the sheet, open', () => {
  * on for phone emulation, and phone emulation at a 1280px viewport is neither thing.
  */
 test.describe('UI-5 · the app shell at 1280px', () => {
-  const DESKTOP = { width: 1280, height: 900 };
-  test.use({ viewport: DESKTOP, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+  test.use({ viewport: DESKTOP_VIEWPORT, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
 
-  const rail = (page: Page) => page.getByRole('navigation', { name: NAV_RAIL_COPY.label });
+  const rail = navRail;
 
   test('the rail renders, is labelled, and clears the tap-target bar', async ({ page }) => {
     await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
@@ -1120,9 +1125,20 @@ test.describe('UI-5 · the app shell at 1280px', () => {
     await page.keyboard.press('Tab');
     const focused = page.locator(':focus');
     await expect(focused).toHaveText(NAV_RAIL_COPY.skipToContent);
-    // It must also become VISIBLE on focus, or it is a link a sighted keyboard user cannot see
-    // themselves land on (`sr-only focus:not-sr-only`).
-    await expect(focused).toBeVisible();
+
+    // 🔴 **MEASURED, not `toBeVisible()` — which here was theatre.** Playwright calls an element
+    // visible when it has a non-empty box, and an `sr-only` link is a 1×1 clipped box: the
+    // assertion passed with `focus:not-sr-only` deleted entirely. A UX lens caught it. A skip link
+    // a sighted keyboard user cannot see themselves land on is the one failure mode this feature
+    // has, so the box is what gets asserted.
+    const box = await focused.boundingBox();
+    expect(box, 'the focused skip link has a box').not.toBeNull();
+    expect(box!.width, 'wider than the 1px sr-only clip').toBeGreaterThan(50);
+    expect(
+      box!.height,
+      'the skip link is a real target — `not-sr-only` resets padding to 0, so the focus state has ' +
+        'to put it back',
+    ).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
 
     await page.keyboard.press('Enter');
     // `<main tabIndex={-1}>` is what makes the jump move FOCUS rather than only the scroll position.
@@ -1156,7 +1172,7 @@ test.describe('UI-5 · the app shell at 1280px', () => {
     });
     expect(box.width, 'main keeps max-w-2xl').toBe(672);
     expect(box.x, 'main is centred, not flattened against the left edge').toBe(
-      Math.round((DESKTOP.width - 672) / 2),
+      Math.round((DESKTOP_VIEWPORT.width - 672) / 2),
     );
     // The footer follows the content, not the window: the same miss would have left it centred on
     // 1280 while the page sat at the left.

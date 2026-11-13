@@ -131,8 +131,12 @@ test('the day page links to Rename, which renames the athlete and returns', asyn
   await expect(
     page.getByRole('heading', { name: `Rename ${SEED_PROFILE_2_NAME}`, level: 1 }),
   ).toBeVisible();
-  // Just the label under the heading — no caption, no control.
-  await expect(page.getByText(PROFILE_KIND_LABELS.kid, { exact: true })).toBeVisible();
+  // Just the label under the heading — no caption, no control. ⚠️ Scoped to `main`: the `chromium`
+  // project runs at 1280, where `UI-5`'s nav rail also prints each athlete's kind, so an unscoped
+  // `getByText` is a strict-mode violation the moment a household has more than one athlete.
+  await expect(
+    page.getByRole('main').getByText(PROFILE_KIND_LABELS.kid, { exact: true }),
+  ).toBeVisible();
   // …and offers no way to CHANGE it (D7). Neither a radio nor a disabled one.
   await expect(page.getByRole('radio')).toHaveCount(0);
 

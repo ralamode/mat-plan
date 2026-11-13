@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
+import { SiteFooter } from '@/components/layout/site-footer';
 
 /**
  * Route error boundary (V0-10). Catches anything thrown while rendering the
@@ -23,15 +24,24 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-12">
-      <ErrorState
-        title="Something went wrong"
-        description="We couldn’t load this page. This is usually temporary — try again."
-      >
-        <Button variant="outline" onClick={reset}>
-          Try again
-        </Button>
-      </ErrorState>
-    </main>
+    /*
+      ⚠️ **The footer is rendered HERE since `UI-5`.** It used to come from the root layout, which
+      put it on every route for free; `UI-5` moved it into `AppShell` and the two public pages, and
+      this boundary is in neither. Without this line a database outage showed a screen with no route
+      to `/` or to the privacy notice — the failure state is the worst place to lose both.
+    */
+    <>
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-12">
+        <ErrorState
+          title="Something went wrong"
+          description="We couldn’t load this page. This is usually temporary — try again."
+        >
+          <Button variant="outline" onClick={reset}>
+            Try again
+          </Button>
+        </ErrorState>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

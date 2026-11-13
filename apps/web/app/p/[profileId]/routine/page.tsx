@@ -1,11 +1,10 @@
 import Link from 'next/link';
-import { listProfiles } from '@/lib/dal/profiles';
-import { AppShell } from '@/components/layout/app-shell';
 import { notFound } from 'next/navigation';
 
+import { AppShell } from '@/components/layout/app-shell';
 import { NAME_WRAP_CLASS, NAV_LINK_CLASS, athletePath } from '@/lib/constants';
 import { requireSession } from '@/lib/dal/session';
-import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
 
 import { RoutineEditor } from './routine-editor';
@@ -44,7 +43,12 @@ export default async function RoutineEditorPage({
   if (!profile) notFound();
 
   return (
-    <AppShell athletes={await listProfiles()} current={{ athlete: profileId }}>
+    <AppShell athletes={await listProfiles()} current={{ athlete: profile.id }}>
+      {/* ⚠️ `profile.id`, **not** the `profileId` URL segment. `uuidSchema` is `z.uuid()`, which
+          accepts upper-case hex, and the `uuid` column matches case-insensitively — so
+          `/p/AAAAAAAA-…` renders this page while `athlete.id === currentAthlete` finds nothing and
+          the rail marks no row. The DTO carries the canonical id; identity is not re-derived from
+          the request. */}
       <header className="flex flex-col gap-2">
         {/* ⚠️ `NAV_LINK_CLASS` (so `min-h-11`) and `NAME_WRAP_CLASS` arrived at PROF-1 a-r. This page
             is UNLINKED since criterion 11, but it still renders and `e2e/a11y.spec.ts` still scans

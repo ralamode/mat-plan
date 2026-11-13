@@ -23,8 +23,9 @@ CSS-variable tokens, so a reskin is a token change and both themes are already d
 
 ## Layout — the app shell
 
-Every authenticated screen is rendered inside **`apps/web/components/layout/app-shell.tsx`** (UI-5).
-A page writes its own content and nothing about its frame.
+Every authenticated **app screen** is rendered inside **`apps/web/components/layout/app-shell.tsx`**
+(UI-5). A page writes its own content and nothing about its frame. (Two routes opt out by design:
+`/design/tokens` and the root error boundary — see [architecture.md](./architecture.md) § 2e.)
 
 | Width       | What the shell renders                                                     |
 | ----------- | -------------------------------------------------------------------------- |
@@ -40,6 +41,10 @@ A page writes its own content and nothing about its frame.
 - `<main id="main">` and the one `<footer>` are declared **only** in the shell, which is what makes
   the skip link and the sheet's focus fallback deterministic. `app/pages-need-a-session.test.ts`
   fails a page that declares its own.
+- **The rail is a column, not a page.** It wraps names (never truncates — PROF-1 D11), shows each
+  athlete's kind as the picker tile does, and scrolls itself when a large household outgrows the
+  viewport. The **open row is outlined, not filled**: a muted line on `--accent` measures 4.34:1 in
+  the light palette, under AA.
 - **Tailwind v4 breakpoints are `rem`-based**, so `lg` is 64rem — not 1024 device pixels for a reader
   at enlarged browser text. Design the switch as "when there is room", not "on a laptop".
 

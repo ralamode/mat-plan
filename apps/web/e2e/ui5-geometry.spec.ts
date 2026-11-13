@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-import { MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
+import { MOBILE_VIEWPORT, NARROW_VIEWPORT, TABLET_VIEWPORT, navRail } from './contexts';
 import { SEED_PROFILE_ROUTE } from './steps';
-import { SETTINGS_PATH, ADD_ATHLETE_PATH, NAV_RAIL_COPY } from '@/lib/constants';
+import { SETTINGS_PATH, ADD_ATHLETE_PATH } from '@/lib/constants';
 
 /**
  * **UI-5 acceptance 3: the phone layout does not move.**
@@ -46,21 +46,44 @@ async function geometryOf(page: import('@playwright/test').Page) {
     // run at it without reading, and then it guards nothing. So: x and width, not y and height;
     // the `h1`'s x, not its y; and the footer as an OFFSET from main's bottom rather than an
     // absolute position.
+    // ⚠️ **Scoped UNDER `main`.** These were `document.querySelector` calls, which also see the nav
+    // rail — `display: none` at these widths, but first in the DOM. The day the rail grows a
+    // `<button>` or an `<h1>`, a document-wide query would report `[0, 0]` and turn every phone case
+    // red for a desktop-only change. That is the brittleness this file's header says gets a guard
+    // deleted.
     const rect = (sel: string) => {
+      const r = main?.querySelector(sel)?.getBoundingClientRect();
+      return r ? [Math.round(r.x), Math.round(r.width)] : null;
+    };
+    // 🔴 **The element that actually SPACES the page, which is not always `<main>`.** Inside the
+    // shell `<main>` has one child — the content wrapper — and the page's children live in that, so
+    // `main`'s own `row-gap` separates nothing. Pinning it was pinning an inert value: `gap-8` could
+    // become `gap-4` on the wrapper with this guard green. Two review lenses found it independently.
+    // Outside the shell `<main>` IS the stack, which is what the pre-shell baseline measured, and
+    // the value is the same 32px either way.
+    const rect0 = (sel: string) => {
       const r = document.querySelector(sel)?.getBoundingClientRect();
       return r ? [Math.round(r.x), Math.round(r.width)] : null;
     };
+    const stack = main?.children.length === 1 ? (main.firstElementChild as HTMLElement) : main;
     return {
-      mainXWidth: rect('main'),
+      mainXWidth: rect0('main'),
       mainPadding: cs ? [cs.paddingLeft, cs.paddingTop, cs.paddingBottom] : null,
-      mainRowGap: cs?.rowGap ?? null,
+      stackRowGap: stack ? getComputedStyle(stack).rowGap : null,
       // 🔴 The footer's y RELATIVE to main's bottom. Absolute y would move with any content change
-      // above it; the gap is what `flex-1` and the footer's placement actually control.
+      // above it.
       footerOffset: (() => {
         const f = document.querySelector('footer')?.getBoundingClientRect();
         const m = main?.getBoundingClientRect();
         return f && m ? Math.round(f.y - (m.y + m.height)) : null;
       })(),
+      // The footer sits below the fold on every page measured here — true because these three are
+      // all taller than a phone. ⚠️ **This is NOT the `flex-1` proof**; see the short-page block at
+      // the bottom of this file for that. It is here because a footer that climbed above the fold
+      // on a tall page would mean something had gone badly wrong with the column.
+      footerBelowFold:
+        (document.querySelector('footer')?.getBoundingClientRect().bottom ?? 0) >=
+        window.innerHeight,
       h1XWidth: rect('h1'),
       firstControlX: rect('input:not([type=hidden]), button, select'),
       mainCount: document.querySelectorAll('main').length,
@@ -74,8 +97,9 @@ async function geometryOf(page: import('@playwright/test').Page) {
  * the commit before `AppShell` existed — the layout the app has had since the scaffold.
  *
  * Every number here is **layout-driven**, not text-driven: `main`'s box is the viewport, its padding
- * and `row-gap` come from `PAGE_COLUMN_CLASS`, the `h1` is a block element so its width is the
- * content box, and `footerOffset` is 0 because the footer abuts `main`. ⚠️ `firstControlX` is the
+ * come from the page-class constants, the `h1` is a block element so its width is the content box,
+ * `footerOffset` is 0 because the footer abuts `main`, and `footerBelowFold` is true because every
+ * one of these pages is taller than a phone — on a SHORT page it is `flex-1` that keeps it true. ⚠️ `firstControlX` is the
  * one that touches text metrics — the settings page's first button is sized by its label — so if it
  * ever disagrees between a Mac and the Linux runner, **that field is what to drop**, not the file.
  */
@@ -83,7 +107,8 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
   '390-the day page': {
     mainXWidth: [0, 390],
     mainPadding: ['16px', '48px', '48px'],
-    mainRowGap: '32px',
+    stackRowGap: '32px',
+    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 358],
     firstControlX: [330, 44],
@@ -93,7 +118,8 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
   '390-household settings': {
     mainXWidth: [0, 390],
     mainPadding: ['16px', '48px', '48px'],
-    mainRowGap: '32px',
+    stackRowGap: '32px',
+    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 358],
     firstControlX: [86, 67],
@@ -103,7 +129,8 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
   '390-add an athlete': {
     mainXWidth: [0, 390],
     mainPadding: ['16px', '48px', '48px'],
-    mainRowGap: '32px',
+    stackRowGap: '32px',
+    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 358],
     firstControlX: [29, 16],
@@ -113,7 +140,8 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
   '360-the day page': {
     mainXWidth: [0, 360],
     mainPadding: ['16px', '48px', '48px'],
-    mainRowGap: '32px',
+    stackRowGap: '32px',
+    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 328],
     firstControlX: [300, 44],
@@ -123,7 +151,8 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
   '360-household settings': {
     mainXWidth: [0, 360],
     mainPadding: ['16px', '48px', '48px'],
-    mainRowGap: '32px',
+    stackRowGap: '32px',
+    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 328],
     firstControlX: [86, 67],
@@ -133,7 +162,8 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
   '360-add an athlete': {
     mainXWidth: [0, 360],
     mainPadding: ['16px', '48px', '48px'],
-    mainRowGap: '32px',
+    stackRowGap: '32px',
+    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 328],
     firstControlX: [29, 16],
@@ -166,7 +196,7 @@ for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
         // unchanged because below `lg` there is no grid. A visible nav here is a phone regression
         // that this file's snapshot would report as green.
         await expect(
-          page.getByRole('navigation', { name: NAV_RAIL_COPY.label }),
+          navRail(page),
           `the nav rail is not visible at ${viewport.width}px`,
         ).toHaveCount(0);
 
@@ -192,14 +222,13 @@ for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
  * at the default 16px root, which is what the suite runs at.
  */
 test.describe('the tablet width is still the phone layout', () => {
-  const TABLET = { width: 820, height: 1180 };
-  test.use({ viewport: TABLET });
+  test.use({ viewport: TABLET_VIEWPORT });
 
   for (const { name, path } of PAGES) {
-    test(`${name} renders one centred column at ${TABLET.width}px`, async ({ page }) => {
+    test(`${name} renders one centred column at ${TABLET_VIEWPORT.width}px`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'networkidle' });
 
-      await expect(page.getByRole('navigation', { name: NAV_RAIL_COPY.label })).toHaveCount(0);
+      await expect(navRail(page)).toHaveCount(0);
 
       const box = await page.evaluate(() => {
         const r = document.querySelector('main')!.getBoundingClientRect();
@@ -208,7 +237,48 @@ test.describe('the tablet width is still the phone layout', () => {
       // `max-w-2xl` (42rem = 672px) centred: the single column, unchanged by the shell.
       expect(box.width, 'main keeps its measure').toBe(672);
       expect(box.x, 'main is centred, not pushed right by a rail column').toBe(
-        Math.round((TABLET.width - 672) / 2),
+        Math.round((TABLET_VIEWPORT.width - 672) / 2),
+      );
+    });
+  }
+});
+
+/**
+ * **`flex-1`, proved on a page short enough for it to matter.**
+ *
+ * 🔴 **`footerOffset` was written as this guard and could not be.** The footer is the next flex
+ * sibling after `<main>`, so the offset between them is 0 whether or not `main` stretches — delete
+ * `flex-1` and a short page's footer rides up under the fold with that field still reading 0. The
+ * plan's Risks table named it as the mitigation for exactly this risk. A correctness lens found it,
+ * and a `pnpm probe` then showed the first replacement could not fail either: every page in `PAGES`
+ * is taller than a phone viewport, so the footer is below the fold no matter what the column does.
+ *
+ * ⚠️ **So the viewport is TALL and the page is SHORT.** At 2400px these two pages are ~700px of
+ * content, and `flex-1` is the only thing that grows `<main>` to put the footer on the bottom edge.
+ * Measured: with it, `footer.bottom === innerHeight`; without it the footer lands mid-screen with
+ * white space under it — the "footer rides up under the fold" regression, visible at last.
+ */
+test.describe('a short page still pushes the footer to the bottom', () => {
+  test.use({ viewport: { width: MOBILE_VIEWPORT.width, height: 2400 } });
+
+  for (const { name, path } of PAGES.filter((p) => p.path !== SEED_PROFILE_ROUTE)) {
+    test(`${name} fills the viewport`, async ({ page }) => {
+      await page.goto(path, { waitUntil: 'networkidle' });
+
+      const { footerBottom, viewportHeight, mainHeight } = await page.evaluate(() => ({
+        footerBottom: Math.round(document.querySelector('footer')!.getBoundingClientRect().bottom),
+        viewportHeight: window.innerHeight,
+        mainHeight: Math.round(document.querySelector('main')!.getBoundingClientRect().height),
+      }));
+
+      expect(
+        footerBottom,
+        'the footer sits on the bottom edge — `flex-1` grew <main> to fill the column',
+      ).toBe(viewportHeight);
+      // Stated separately so a failure says WHICH half broke: a collapsed `<main>` reads as its
+      // content height, far short of the viewport.
+      expect(mainHeight, '<main> stretched rather than hugging its content').toBeGreaterThan(
+        viewportHeight / 2,
       );
     });
   }

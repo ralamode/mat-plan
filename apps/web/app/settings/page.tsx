@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
 
-import { listProfiles } from '@/lib/dal/profiles';
 import { AppShell } from '@/components/layout/app-shell';
 import { AthleteList } from '@/app/settings/athlete-list';
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { SETTINGS_COPY } from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
-import { listHouseholdAthletes } from '@/lib/dal/profiles';
+import { listHouseholdAthletes, listProfiles } from '@/lib/dal/profiles';
 import { requireSession } from '@/lib/dal/session';
 
 export const metadata: Metadata = { title: SETTINGS_COPY.heading };

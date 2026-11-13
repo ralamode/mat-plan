@@ -1,6 +1,6 @@
-import { SiteFooter } from '@/components/layout/site-footer';
 import type { Metadata } from 'next';
 
+import { SiteFooter } from '@/components/layout/site-footer';
 import { NOTICE_TITLE } from '@/lib/privacy/notice-content';
 
 import { NoticeArticle } from './notice-article';

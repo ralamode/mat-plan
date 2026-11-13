@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // renders it, so the hook has to answer something — any authenticated route will do.
 vi.mock('next/navigation', () => ({ usePathname: () => '/p' }));
 
-import { PROFILE_KIND } from '@mat-plan/shared';
+import { PROFILE_KIND, PROFILE_KIND_LABELS } from '@mat-plan/shared';
 
-import { MAIN_CONTENT_ID, NAV_RAIL_COPY, athletePath } from '@/lib/constants';
+import { MAIN_CONTENT_ID, NAV_RAIL_COPY, SETTINGS_COPY, athletePath } from '@/lib/constants';
 import type { ProfileDTO } from '@/lib/dal/profiles';
 
 import { AppShell } from './app-shell';
@@ -81,15 +81,27 @@ describe('AppShell — the landmarks', () => {
 describe('AppShell — when the rail appears', () => {
   const rail = () => screen.queryByRole('navigation', { name: NAV_RAIL_COPY.label });
 
-  it('lists every athlete, linked to their own day page', () => {
+  it('lists every athlete, linked to their own day page, with their kind', () => {
     render(<AppShell athletes={ATHLETES}>body</AppShell>);
 
     expect(rail()).not.toBeNull();
     for (const athlete of ATHLETES) {
+      // 🔴 **Name AND kind**, which is why the accessible name is the two together. The app permits
+      // duplicate names and relies on the kind line to tell them apart — `/edit` records that as
+      // the reason a picker tile shows both — so a switcher that showed only the name would render
+      // two identical rows for a Child and an Adult who share one. A UX lens found it.
+      // ⚠️ Matched by REGEX, not by the full composed name: Chromium joins the two spans with a
+      // space ("Athlete One Child") and jsdom's accessible-name implementation does not
+      // ("Athlete OneChild"). The kind is asserted from `textContent` below instead, so this test
+      // pins the behaviour rather than one engine's string-joining.
+      const link = screen.getByRole('link', { name: new RegExp(athlete.name) });
       expect(
-        screen.getByRole('link', { name: athlete.name }).getAttribute('href'),
+        link.getAttribute('href'),
         'the rail invents no destination — every item is a link /p already renders',
       ).toBe(athletePath(athlete.id));
+      expect(link.textContent, 'the kind is what tells two same-named athletes apart').toContain(
+        PROFILE_KIND_LABELS[athlete.kind],
+      );
     }
   });
 
@@ -102,12 +114,9 @@ describe('AppShell — when the rail appears', () => {
 
     // `aria-current` from a PROP, not `usePathname()` — which is what keeps this whole PR free of a
     // client boundary. The page knows what it is; the rail does not have to ask the router.
-    expect(screen.getByRole('link', { name: ATHLETES[1].name }).getAttribute('aria-current')).toBe(
-      'page',
-    );
-    expect(
-      screen.getByRole('link', { name: ATHLETES[0].name }).getAttribute('aria-current'),
-    ).toBeNull();
+    const linkFor = (a: ProfileDTO) => screen.getByRole('link', { name: new RegExp(a.name) });
+    expect(linkFor(ATHLETES[1]).getAttribute('aria-current')).toBe('page');
+    expect(linkFor(ATHLETES[0]).getAttribute('aria-current')).toBeNull();
   });
 
   it('labels the settings row "Settings", never "Household settings"', () => {
@@ -124,7 +133,10 @@ describe('AppShell — when the rail appears', () => {
     expect(
       screen.getByRole('link', { name: NAV_RAIL_COPY.settings }).getAttribute('aria-current'),
     ).toBe('page');
-    expect(screen.queryByRole('link', { name: 'Household settings' })).toBeNull();
+    // ⚠️ `SETTINGS_COPY.heading`, not a re-typed 'Household settings'. This asserts the ABSENCE of
+    // another constant's value, so a literal here would quietly stop proving anything the day that
+    // wording changes — the opposite of the contract-test exception, which pins a const's OWN value.
+    expect(screen.queryByRole('link', { name: SETTINGS_COPY.heading })).toBeNull();
   });
 
   it('renders no rail with no athletes, and none when the page opts out', () => {

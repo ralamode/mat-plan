@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { listProfiles } from '@/lib/dal/profiles';
-import { AppShell } from '@/components/layout/app-shell';
 import { notFound } from 'next/navigation';
+
+import { AppShell } from '@/components/layout/app-shell';
 
 import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
 
@@ -16,7 +16,7 @@ import {
   athletePath,
 } from '@/lib/constants';
 import { householdState } from '@/lib/dal/household';
-import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
 import { requireSession } from '@/lib/dal/session';
 
 import { RenameForm } from './rename-form';
@@ -79,7 +79,12 @@ export default async function RenameAthletePage({
   const from = inAppReferrer((await searchParams).from, own);
 
   return (
-    <AppShell athletes={await listProfiles()} current={{ athlete: profileId }}>
+    <AppShell athletes={await listProfiles()} current={{ athlete: profile.id }}>
+      {/* ⚠️ `profile.id`, **not** the `profileId` URL segment. `uuidSchema` is `z.uuid()`, which
+          accepts upper-case hex, and the `uuid` column matches case-insensitively — so
+          `/p/AAAAAAAA-…` renders this page while `athlete.id === currentAthlete` finds nothing and
+          the rail marks no row. The DTO carries the canonical id; identity is not re-derived from
+          the request. */}
       <header className="flex flex-col gap-2">
         {/* ⚠️ `min-h-11` (inside `NAV_LINK_CLASS`) is load-bearing and UNGUARDED by the a11y spec,
             which excludes <a> from its tap-target scan (the SC 2.5.8 inline-text exception). It is

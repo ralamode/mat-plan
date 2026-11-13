@@ -27,3 +27,27 @@
   lands with `PICK-1` PR 4 and its first real consumer. Seven lenses reviewed the plan; two of its
   claims were false and are recorded as pushbacks, and `expectLinkTapTargets` grew a `root`
   parameter because the rail is, by design, outside `main`.
+  **A four-lens panel then read the built code, after CI was green, and that is the half worth
+  reading.** Every finding below had passed `pnpm verify`, 114 e2e tests and axe. Three assertions
+  could not fail: the geometry guard pinned a `row-gap` on an element with one child (so the gap a
+  phone sees could change with the guard green); `footerOffset` could not detect the `flex-1`
+  regression the plan's Risks table named it for, because the footer is the next flex sibling
+  either way; and the skip link's `toBeVisible()` passes on a 1×1 `sr-only` clip — which mattered,
+  because `not-sr-only` resets `padding: 0` and the focused link was a 24px box of bare text. All
+  three are now probed RED. The rail **truncated athlete names**, which `PROF-1` D11 forbids for
+  every element that renders one, and showed no **kind**, which is how this app tells two
+  same-named athletes apart — adding it then failed axe at 1280, because muted text on `--accent`
+  measures 4.34:1 in the light palette, so the open row is outlined rather than filled. Its
+  `<h2>Athletes</h2>` preceded every page's `<h1>` and was a second identical heading on
+  `/settings`; it is a `<p>` with `aria-labelledby` now. A `sticky` rail with no max-height hid its
+  own Settings row for any household past eleven athletes. `app/p/loading.tsx` dropped the rail, so
+  every desktop navigation into a day page shifted the column — on the one interaction this feature
+  adds — which is why the day subtree now has its own skeleton and the grid is reserved while busy.
+  `current` passed the raw URL segment, and `z.uuid()` accepts upper-case. And a comment this PR
+  wrote confidently — that the grid avoids `transform`/`overflow` because they break the sheet's
+  `position: fixed` — was **wrong on both counts**: the sheet portals to `body`, and `overflow`
+  never changes a fixed element's containing block. ⚠️ **`PRIV-2`'s "one `<footer>` in the root
+  layout, not three use sites" is superseded**, recorded in its own plan: a layout cannot read the
+  pathname, so once `/sign-in` needed the footer absent that choice was a client component on every
+  route or two `contentinfo` landmarks. The root error boundary renders the footer again — a
+  database outage had been showing a screen with no route to the privacy notice.
