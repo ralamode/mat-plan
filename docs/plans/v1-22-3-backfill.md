@@ -4,6 +4,9 @@
 **Spec:** [v1-22-authoring-program-editing](../specs/v1-22-authoring-program-editing.md) (`:149`) ·
 **Milestone:** [PROG-1](../milestones/prog-1-programs-and-scheduling.md)
 
+> ⚠️ **Re-scoped 2026-11-13 — revise before implementing.** This backfill's acceptance is that it **changes no CSV bytes**; [ADR 0009](../decisions/0009-retire-the-byte-faithful-csv-contract.md) retires that contract (R11). Re-justify it for history views (what an athlete was asked to do on a past day, for rows logged before `prescribed_snapshot` existed), or drop it. The revision decides; nothing here runs until then. Authority:
+> [CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13). The rest of this plan stands until its revision.
+
 > ⚠️ **Read [chunk 2's § Decisions](./v1-22-2-renderer-and-writer.md) first.** D1 reshaped the wire,
 > D2 settled what this chunk writes on a miss, and **A6 is why this chunk writes no e2e spec.**
 

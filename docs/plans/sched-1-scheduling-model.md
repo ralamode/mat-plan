@@ -13,6 +13,9 @@
 > the ADR's _text_ it is because the text's measurement has drifted or its mechanism does not exist —
 > each such departure is called out in "Corrections to the ADR's measurements", with what I measured.
 
+> ⚠️ **Re-scoped 2026-11-13 — revise before implementing.** Add the block-level week template table (R2) beside the assignment and weekday tables, and make the resolver return an **ordered list** of workouts (R5). Chunks 1a–1b (pure day primitives, the resolver's move to `packages/shared`) are unaffected in kind; 1c's DDL and 1e's Today read change. Authority:
+> [CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13). The rest of this plan stands until its revision.
+
 ## Goal
 
 SCHED-1 replaces the one hardcoded app const that answers "what is this athlete supposed to do

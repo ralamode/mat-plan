@@ -5,6 +5,31 @@
 document's charter · **Relates:** [ADR 0002](./0002-calisthenics-ramp-targets.md) (the one
 materialized-plan table this repo already has)
 
+> ## Amendment 1 (2026-11-13) — decided by the maintainer, to be folded in when this ADR is signed
+>
+> The [PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) (R1–R11)
+> changes four things below. This ADR is still _Proposed_ and must be signed before SCHED-1 1c; it is
+> signed **with** this amendment, not before it.
+>
+> - **Decision 1, "The assignment schedules a BLOCK, not a workout… Nothing in the backlog needs it":
+>   superseded.** Something now does. A program may carry a **week template**: per weekday, an
+>   ordered list of 0..n workouts, each slot with an optional display label. It is owned by the
+>   **block**, for the reason decision 2 gives for the anchor (athletes on one program must not drift
+>   apart invisibly). Shape, for SCHED-1's revision to confirm: `block_day_workouts(block_id, weekday,
+idx, workout_id, label NULL)`, `UNIQUE (block_id, weekday, idx)`, the weekday from `WEEKDAYS`. The
+>   assignment's weekday rows keep their meaning (the days this athlete is on) and filter the
+>   template. Rotation (decision 2) is the other mode; a block has one or the other.
+> - **Decision 2: unchanged** for rotation. The resolver's contract becomes an **ordered list** of
+>   workouts due on a date (empty on a rest day); rotation yields a list of one.
+> - **Decision 3, the `workouts` arc: re-priced, and now the path.** The cap on workouts goes (R1), so
+>   workouts need real identity: `prescriptions` key on `workout_id`. Two of the five named costs
+>   existed only for the export (the slug grammar and the export's `DAY_ROLES` gate) and fall away
+>   under [ADR 0009](./0009-retire-the-byte-faithful-csv-contract.md). The rule that a rename must not
+>   rewrite history **stays**: what a logged session shows as its workout is frozen at log time, by
+>   whatever mechanism the revised plan chooses, never a live join to an editable name.
+> - **Decision 5: unchanged.** Dueness stays derived; the recorded verdict judges the day's ordered
+>   list (a day is done when its workouts are, per MOT-1's own rule).
+
 > **This is the second draft.** The first decided the same five questions and then **authorized five
 > new tables and a `DROP COLUMN` on live data** on the strength of them. A five-lens panel found that
 > three of those tables have no consumer in the backlog, that the destructive arc is **six PRs rather

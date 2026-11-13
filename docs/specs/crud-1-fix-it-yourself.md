@@ -17,6 +17,62 @@
 > D2; V1-22 chunk 2 gates C1). Prototype: [`docs/prototypes/crud-1/index.html`](../prototypes/crud-1/index.html).
 > Procedure: [`write-spec`](../../.claude/skills/write-spec/SKILL.md).
 
+> ⚠️ **PROG-1 was re-scoped on 2026-11-13** — see [§ PROG-1 re-scope](#prog-1-re-scope-2026-11-13). Where
+> anything below disagrees with that section on workouts, scheduling or what an item tracks, **that
+> section wins**.
+
+## PROG-1 re-scope (2026-11-13)
+
+**Why.** The maintainer's household runs a real program that PROG-1, as specified, cannot hold: six
+different days a week plus a rest day; two to four workouts a day in a fixed order (a morning
+conditioning session, pull-up sets spread through the day, an evening lift, a nightly stretch); about
+ten distinct workouts, several reused on more than one day; items that are only ever checked off.
+A simpler household (push / pull / legs, three days a week) has to fit the same model. The household
+starts using the app when it can create, customise and schedule its own workouts, so this is Beta 1's
+core, not a later shape. These decisions are the maintainer's (2026-11-13) and supersede the parts of
+this spec, ADR 0007 and the PROG-1 plans they contradict.
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Supersedes                                                                                                     |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| R1  | **No cap on workouts.** A program holds any number of workouts. The parent names them (or leaves the default) and can reuse one on several days.                                                                                                                                                                                                                                                                                                                                              | M24's "at most three"; V1-22 A4's `MAX_WORKOUTS` and its `strength_a/b/c` slug CHECK                           |
+| R2  | **A week template.** For each weekday a program lists **0, 1 or many workouts, in order**, each slot with an optional free-text label ("Morning", "Night"). The template is a property of the **program**, so athletes on the same program see the same day.                                                                                                                                                                                                                                  | "Labelled workouts on chosen weekdays — the next shape, not this one" (§ Recurrence); pins keyed by assignment |
+| R3  | **Rotation stays as the second mode.** A program either has a week template or rotates its workouts on the athlete's scheduled days (Q13, Q13b and the phase offset unchanged).                                                                                                                                                                                                                                                                                                               | —                                                                                                              |
+| R4  | **The assignment still says which days an athlete is on.** An athlete's weekday set filters the template: a weekday outside it is a rest day for that athlete, never a miss.                                                                                                                                                                                                                                                                                                                  | —                                                                                                              |
+| R5  | **The resolver returns the day's workouts as an ordered list** (empty on a rest day). Rotation mode returns a list of one. Streaks and HIST-1 read the same resolver.                                                                                                                                                                                                                                                                                                                         | `workoutDue(…) → DayRole \| null`                                                                              |
+| R6  | **Every item has a tracking type**, chosen from a closed menu when the item is created: **Check** (no fields) · **Duration** · **Count** (one number) · **Reps** · **Weight × reps** · **Time per set** · **Distance**. Every item can be checked off whatever its type; ✓ on an untouched item accepts what was prescribed. A type is locked once the item has logged history (make a new item instead). Movements and household activities become one picker of items. Tracked as `ITEM-1`. | PICK-1's movement-only picker; ACT-1's separate activity editor                                                |
+| R7  | **"Write it" numbers are Count items** placed in the workout ("Round 3 attacks" after the conditioning block). No per-item custom fields.                                                                                                                                                                                                                                                                                                                                                     | —                                                                                                              |
+| R8  | **Per item, the author writes instructions and chooses whether the athlete gets a note field** (default **off**). Instructions are always shown when present.                                                                                                                                                                                                                                                                                                                                 | TGT-1's single note                                                                                            |
+| R9  | **Supersets are defined in the program** as defaults the log inherits. Editing one during a workout, and optionally saving it back to the program, is a later add-on. Tracked as `SUPERSET-1`.                                                                                                                                                                                                                                                                                                | ADR 0003 is log-only today; it stays the log-side model                                                        |
+| R10 | **The builder edits in place, and logging reuses its cards.** One screen of item cards (no screen per item); on a phone, adding opens a full-screen, multi-select picker. The log form shows the same cards with values to fill, a "previous" value per set row, and a done state per row. The pattern is prototyped and panelled before V1-22 chunk 4 and PICK-1 PR 4 are planned.                                                                                                           | The prototype's per-prescription edit screen                                                                   |
+| R11 | **The CSV no longer constrains any of this** ([ADR 0009](../decisions/0009-retire-the-byte-faithful-csv-contract.md)).                                                                                                                                                                                                                                                                                                                                                                        | ADR 0007 d3's export-driven costs; V1-22 chunk 3's byte acceptance                                             |
+
+**Two shapes this must hold, as acceptance for the revised plans:**
+
+- **Simple:** "Push", "Pull", "Legs" pinned to Monday, Wednesday and Friday; nothing on other days.
+- **Complex:** Monday = conditioning (Morning) → strength A (Night) → stretch (Night); Tuesday = pull-up
+  sets (All day) → weighted stance (Night) → stretch; … Sunday = nothing. The stretch workout is one
+  workout used on six days.
+
+**Out of this re-scope, on purpose:** a follow-along interval timer (`TIMER-1`; athletes time
+intervals themselves and log the result), conditional days ("tournament day: warm-up only"),
+progression rules, partner rotation, a weekly check-in, and reference cards. Each is an instruction
+or a note until it has its own row.
+
+**What each document owes** (amendments land before any affected chunk starts; each revised plan
+gets a light re-panel by the lenses whose findings it changes):
+
+| Document                                                     | Owes                                                                                                                                  |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [ADR 0007](../decisions/0007-scheduling-model.md)            | Signed with Amendment 1 (R1, R2, R5, R11): workout-level scheduling in scope; the template on the block; the `workouts` arc re-priced |
+| § Recurrence (below)                                         | Read through this section; the M24 subsection is now this milestone's                                                                 |
+| [SCHED-1](../plans/sched-1-scheduling-model.md)              | The template table beside the assignment and weekday tables; the resolver's list return                                               |
+| [ASSIGN-1](../plans/assign-1-assignments.md)                 | `workoutsDue` (ordered list); the template branch beside rotation; READ-2b's pinned-CSV work re-checked against ADR 0009              |
+| [V1-22 A4](../plans/v1-22-a4-create-program.md)              | Unlimited, reusable, named workouts; arranging them on the week; the `workouts` arc as re-priced                                      |
+| [V1-22 chunk 3](../plans/v1-22-3-backfill.md)                | Re-justified for history views, or dropped                                                                                            |
+| [TGT-1](../plans/tgt-1-typed-targets.md)                     | Instructions + the athlete-note switch (R8); targets per tracking type (R6)                                                           |
+| [PICK-1](../plans/pick-1-movement-picker.md) / ACT-1 / CAT-3 | One picker of typed items (R6); PR 4's UX per R10                                                                                     |
+| `ITEM-1`, `SUPERSET-1`                                       | New rows in [plan.md](../plan.md)                                                                                                     |
+
 ## Why this exists
 
 Nine backlog rows each own a piece of "a household can create, change and remove what it put in the
@@ -677,6 +733,8 @@ additive nullable `rrule text` on `program_assignments`, with the rows staying t
 dueness; (2) a "Custom…" beside the day toggles opening a rule builder (the calendar apps' pattern);
 (3) expansion in the pure resolver in `packages/shared`, with a library only after the dependency review
 SECURITY.md requires. An `.ics` export would be lossless from the rows today; no row asks for one.
+
+⚠️ _Superseded 2026-11-13: this is now **this** milestone's shape, owned by the block, with an ordered list per day — see [§ PROG-1 re-scope](#prog-1-re-scope-2026-11-13), R2 and R5._
 
 **Labelled workouts on chosen weekdays — the next shape, not this one** _(the maintainer, round 4,
 M24: "We will be able to use labeled workouts on any day recurring in the future")_. Beside the rotation

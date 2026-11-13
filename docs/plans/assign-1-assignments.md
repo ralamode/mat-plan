@@ -13,6 +13,9 @@
 > round-1 claims re-measured at `5d99dd0`. The ASSIGN-1 ↔ RETIRE-1 cross-plan contract (orchestrator,
 > 2026-10-23) is applied verbatim; its thirteen points (plus item 14 and the 4/5 clarification, settled later) are cited below as **contract N**.
 
+> ⚠️ **Re-scoped 2026-11-13 — revise before implementing.** `workoutDue → workoutsDue` returning an ordered list (R5); a **template** branch beside rotation, reading the block's week template filtered by the athlete's weekday set (R2, R4); READ-2b's pinned CSV cells re-checked against ADR 0009, which retires the byte contract they protect. Authority:
+> [CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13). The rest of this plan stands until its revision.
+
 ## Goal
 
 Two things are true today. Every athlete in a household gets that household's newest block on every day: `programDayRows`
