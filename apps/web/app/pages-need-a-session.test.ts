@@ -404,3 +404,119 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(session, 'the principal must exist before it can key the limiter').toBeLessThan(limiter);
   });
 });
+
+/**
+ * **UI-5's landmark invariant as a test.** The shell exists so that `<main>` is declared in ONE place
+ * instead of nine, and two things depend on that being true and staying true:
+ *
+ * - `components/ui/sheet.tsx:433` patches `tabIndex` onto `document.querySelector('main')` for its
+ *   focus fallback. `querySelector` takes the FIRST match, so a second `<main>` silently decides which
+ *   element that fallback lands on.
+ * - 🔴 **axe will never say so.** `landmark-no-duplicate-main`, `landmark-one-main` and
+ *   `landmark-unique` are all tagged `best-practice`, and `e2e/a11y.spec.ts` scans `wcag2a`/`wcag2aa`
+ *   only. A duplicate landmark is invisible to every automated check this repo runs — which is why it
+ *   gets a source scan rather than a note in a docblock.
+ *
+ * The scan is textual on purpose: it is checking what the source DECLARES, not what a render produces,
+ * so a page that reintroduces its own `<main>` fails here at `pnpm test` speed.
+ */
+describe('UI-5 · one <main>, declared in the shell', () => {
+  /**
+   * The pages that render their own `<main>`, each because it is not an app screen.
+   *
+   * ⚠️ **A named list, not an exclusion pattern.** A new page that needs its own landmark has to be
+   * added here with a reason, which is the point: the failure is the conversation.
+   */
+  const OWN_MAIN: Record<string, string> = {
+    // A full-width token gallery (UI-3), deliberately `max-w-5xl` — wider than the shell's content
+    // measure, with no athlete to switch to and no rail to show.
+    'design/tokens/page.tsx': 'the UI-3 token gallery is a full-width tool, not an app screen',
+  };
+
+  // ⚠️ **One definition each, used by the self-test below AND the per-page assertions.** They were
+  // written twice — a literal in the self-test and the same literal in the loop — so a typo in the
+  // second was invisible to the first: the self-test proved a COPY worked. A correctness lens
+  // caught it, and it is the exact defect this suite's header warns about twice.
+  const MAIN_TAG_RE = /<main[\s>]/;
+  const SHELL_TAG_RE = /<AppShell[\s>]/;
+
+  const authenticated = pages.filter((f) => !isPublicPath(routeOf(f)));
+
+  it('finds the authenticated pages (an empty glob would pass everything below)', () => {
+    expect(authenticated.length).toBeGreaterThan(4);
+  });
+
+  // ⚠️ The non-vacuity floor above counts pages; this one proves the MATCHER works. Without it a
+  // typo in the regex would pass every page silently — the shape of defect this suite's own header
+  // warns about twice.
+  it('the matcher catches a bare <main> (a broken regex would pass everything)', () => {
+    expect(MAIN_TAG_RE.test('return <main className="x">hi</main>;')).toBe(true);
+    expect(MAIN_TAG_RE.test('return <AppShell>hi</AppShell>;')).toBe(false);
+    expect(SHELL_TAG_RE.test('return <AppShell busy>hi</AppShell>;')).toBe(true);
+    expect(SHELL_TAG_RE.test('return <AppShellSomethingElse />;')).toBe(false);
+  });
+
+  it.each(authenticated.map((f) => [relative(APP_DIR, f), f]))('%s', (name, file) => {
+    const src = code(file);
+    const declaresMain = MAIN_TAG_RE.test(src);
+    const usesShell = SHELL_TAG_RE.test(src);
+
+    if (name in OWN_MAIN) {
+      expect(declaresMain, `${name} is listed in OWN_MAIN (${OWN_MAIN[name]})`).toBe(true);
+      expect(usesShell, `${name} renders its own <main>, so it must not also use AppShell`).toBe(
+        false,
+      );
+      return;
+    }
+
+    expect(usesShell, `${name} must render <AppShell> — or join OWN_MAIN with a reason`).toBe(true);
+    expect(
+      declaresMain,
+      `${name} must not declare its own <main>; the shell owns the landmark`,
+    ).toBe(false);
+    // The constant the shell replaced. A page still spreading it is a page the shell did not reach:
+    // it would centre a second column inside the grid cell and ignore the rail entirely.
+    expect(src).not.toMatch(/\bPAGE_SHELL_CLASS\b/);
+  });
+
+  /**
+   * The two `loading.tsx` files by NAME, because the glob above is `**​/page.tsx` and would never see
+   * them — and they are the files that matter most here. Each renders a `<main aria-busy>` that sits
+   * in the DOM BESIDE the streamed page's for as long as the stream takes: the one moment this app
+   * really does have two `<main>` elements. That was the geometry guard's first red, before
+   * `networkidle`.
+   *
+   * ⚠️ **Two of them, and the pairing is the point** (`UI-5`): `/p` renders no rail and a day page
+   * renders one, so a single shared fallback had to reserve the wrong frame for one of them and
+   * shift the column 32px when the page resolved. `nav` is what each asserts.
+   */
+  const LOADING = [
+    { path: 'p/loading.tsx', nav: false, why: '/p has no rail — the page IS the athlete switcher' },
+    { path: 'p/[profileId]/loading.tsx', nav: true, why: 'a day page reserves the rail column' },
+    {
+      path: 'p/new/loading.tsx',
+      nav: true,
+      why: '/p/new renders a rail, so its fallback reserves one',
+    },
+  ] as const;
+
+  // 🔴 **Anchored to the `<AppShell` TAG, not to the file.** `/\bbusy\b/` over the whole source is
+  // satisfied by an `aria-busy` on any element (`\b` treats `-` as a boundary) and by any identifier
+  // named `busy`; `includes('nav={false}')` by that prop on any JSX element. Either file could drop
+  // the prop from `AppShell`, keep the string elsewhere, and stay green — which is the same
+  // "assertion that cannot fail on the thing it names" class this suite already fixed three of.
+  // `[^>]*` spans newlines, so a multi-line tag still matches.
+  const shellProp = (prop: string) => new RegExp(`<AppShell\\b[^>]*\\b${prop}`);
+
+  it.each(LOADING.map((l) => [l.path, l] as const))('%s renders the shell', (name, spec) => {
+    const file = join(APP_DIR, spec.path);
+    expect(existsSync(file), `${name} exists (a renamed file would pass vacuously)`).toBe(true);
+    const src = code(file);
+    expect(src).toMatch(SHELL_TAG_RE);
+    expect(src).not.toMatch(MAIN_TAG_RE);
+    expect(src, 'the busy state is what this file is FOR').toMatch(shellProp('busy'));
+    // `nav={false}` opts out of the reserved rail column; its absence opts in. Asserted per file
+    // because getting it backwards is invisible at phone widths and is a layout shift at `lg`.
+    expect(shellProp('nav=\\{false\\}').test(src), spec.why).toBe(!spec.nav);
+  });
+});

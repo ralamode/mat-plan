@@ -21,6 +21,36 @@ CSS-variable tokens, so a reskin is a token change and both themes are already d
   desktop-only fixed widths; content wraps/stacks gracefully from ~360px through desktop. UI PRs are
   screenshotted at mobile + tablet + desktop (AGENTS.md) — a layout that only works wide is a defect.
 
+## Layout — the app shell
+
+Every authenticated **app screen** is rendered inside **`apps/web/components/layout/app-shell.tsx`**
+(UI-5). A page writes its own content and nothing about its frame. (Two routes opt out by design:
+`/design/tokens` and the root error boundary — see [architecture.md](./architecture.md) § 2e.)
+
+| Width       | What the shell renders                                                     |
+| ----------- | -------------------------------------------------------------------------- |
+| below `lg`  | one centred column, `max-w-2xl` — today's layout, unchanged                |
+| `lg` and up | a 16rem nav rail, then the page; the content keeps its `max-w-2xl` measure |
+
+- **The rail is the athlete switcher**, not a menu: it lists the household's live athletes plus
+  Settings, so a laptop can change kid without a round trip through `/p`. It invents no destination.
+- **The content stays at `max-w-2xl` in the wide cell.** A measured form at ~1000px grows a movement
+  input to ~650px for a ten-character name; the principle above says scale **up**, not stretch.
+- **`/p` renders no rail** — it is itself the athlete switcher, so a rail there would link every
+  athlete twice on one page.
+- `<main id="main">` and the one `<footer>` are declared **only** in the shell, which is what makes
+  the skip link and the sheet's focus fallback deterministic. `app/pages-need-a-session.test.ts`
+  fails a page that declares its own.
+- **The rail is a column, not a page.** It wraps names (never truncates — PROF-1 D11), shows each
+  athlete's kind as the picker tile does, and scrolls itself when a large household outgrows the
+  viewport. The **open row is outlined, not filled**: a muted line on `--accent` measures 4.34:1 in
+  the light palette, under AA.
+- **Tailwind v4 breakpoints are `rem`-based**, so `lg` is 64rem — not 1024 device pixels for a reader
+  at enlarged browser text. Design the switch as "when there is room", not "on a laptop".
+
+Plan and the alternatives that were rejected: [plans/ui-5-app-shell.md](./plans/ui-5-app-shell.md).
+Regions in context: [architecture.md](./architecture.md).
+
 ## Tokens
 
 Defined as CSS variables in `apps/web/app/globals.css` (`:root` = light, `.dark` = dark), exposed to

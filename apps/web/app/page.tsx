@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { SiteFooter } from '@/components/layout/site-footer';
 import { GitHubMark } from '@/components/landing/github-mark';
 import { MatPlanMark } from '@/components/brand/mat-plan-mark';
 import { Button } from '@/components/ui/button';
@@ -33,30 +34,33 @@ export const metadata: Metadata = {
  */
 export default function LandingPage() {
   return (
-    <main className={`${PAGE_SHELL_CLASS} md:justify-center`}>
-      <header className="flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <MatPlanMark className="size-8" />
-          <h1 className="text-3xl font-semibold tracking-tight">{APP_NAME}</h1>
-        </div>
-        <p className="max-w-prose text-xl font-semibold tracking-tight text-balance">
-          {LANDING_COPY.lead}
-        </p>
-        <p className="text-muted-foreground max-w-prose">{LANDING_COPY.origin}</p>
-      </header>
-      <div className="flex flex-col gap-3">
-        <Button asChild size="lg" className={CTA_CLASS}>
-          <a href={`${GITHUB_REPO_URL}${LANDING_COPY.sourceAnchor}`}>
-            <GitHubMark />
-            {LANDING_COPY.sourceCta}
-          </a>
-        </Button>
-        <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
-          {/* No `?from=`: sign-in's own redirect config decides where login lands, so "where does
+    <>
+      <main className={`${PAGE_SHELL_CLASS} md:justify-center`}>
+        <header className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <MatPlanMark className="size-8" />
+            <h1 className="text-3xl font-semibold tracking-tight">{APP_NAME}</h1>
+          </div>
+          <p className="max-w-prose text-xl font-semibold tracking-tight text-balance">
+            {LANDING_COPY.lead}
+          </p>
+          <p className="text-muted-foreground max-w-prose">{LANDING_COPY.origin}</p>
+        </header>
+        <div className="flex flex-col gap-3">
+          <Button asChild size="lg" className={CTA_CLASS}>
+            <a href={`${GITHUB_REPO_URL}${LANDING_COPY.sourceAnchor}`}>
+              <GitHubMark />
+              {LANDING_COPY.sourceCta}
+            </a>
+          </Button>
+          <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
+            {/* No `?from=`: sign-in's own redirect config decides where login lands, so "where does
               login land" has one answer (and stays server-resolved if HH-1 makes home dynamic). */}
-          <Link href={SIGN_IN_PATH}>{LANDING_COPY.signInCta}</Link>
-        </Button>
-      </div>
-    </main>
+            <Link href={SIGN_IN_PATH}>{LANDING_COPY.signInCta}</Link>
+          </Button>
+        </div>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

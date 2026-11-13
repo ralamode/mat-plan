@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { headers } from 'next/headers';
 
-import { SiteFooter } from '@/components/layout/site-footer';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { CLERK_CSS_LAYER, clerkIsConfigured } from '@/lib/clerk';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -124,10 +123,14 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider nonce={nonce}>
-          {body}
-          <SiteFooter />
-        </ThemeProvider>
+        {/*
+          ⚠️ **The footer is NOT here any more (`UI-5`).** It is rendered by `AppShell` for every
+          authenticated page and by the two public pages that show it. A layout cannot read the
+          pathname in this Next version, so it could not render for public routes only — and
+          keeping it here as well as in the shell would put two `contentinfo` landmarks on every
+          authenticated page.
+        */}
+        <ThemeProvider nonce={nonce}>{body}</ThemeProvider>
       </body>
     </html>
   );

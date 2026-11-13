@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 // Relative imports only: the tsx-run screenshot scripts reach this through `capture.ts`.
-import { PICKER_COPY } from '../lib/constants';
+import { NAV_RAIL_COPY, PICKER_COPY } from '../lib/constants';
 
 /**
  * Shared e2e context values (OSS-2). Kept dependency-light (no `@mat-plan/db`, unlike `steps.ts`).
@@ -26,6 +26,25 @@ export const MOBILE_VIEWPORT = { width: 390, height: 844 };
  * a copy whose comment read "mirrors `a11y.spec.ts`'s own constant" — a copy that knew it was one.
  */
 export const NARROW_VIEWPORT = { width: 360, height: 780 };
+
+/**
+ * ~iPad Air portrait. **Below Tailwind's `lg` (64rem), so this is still the phone layout** — which
+ * is the whole reason `UI-5` measures it: a tablet must not get a half-built desktop.
+ *
+ * Lifted here at `UI-5`, which would have been the THIRD copy of the pair (`a11y.spec.ts` and
+ * `scripts/capture.ts` each had one) — the same trigger that lifted `NARROW_VIEWPORT`.
+ */
+export const TABLET_VIEWPORT = { width: 820, height: 1180 };
+
+/** A laptop, and the only width at which the app shell's nav rail exists at all. */
+export const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
+
+/**
+ * The app shell's nav rail (`UI-5`). It is `hidden lg:flex`, so below `lg` this resolves to
+ * **zero** elements — which is what the phone specs assert, and why the locator is shared rather
+ * than spelled out in each.
+ */
+export const navRail = (page: Page) => page.getByRole('navigation', { name: NAV_RAIL_COPY.label });
 
 /** The picker's `<h1>` — what "landed on the app home" looks like. */
 export const pickerHeading = (page: Page) =>

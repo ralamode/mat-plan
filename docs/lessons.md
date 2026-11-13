@@ -208,6 +208,20 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **`toMatchSnapshot` is the wrong tool for a layout baseline, and it fails twice before it tells
+  you so.** → UI-5 pinned the pre-shell phone geometry as six JSON snapshots. (1) `pnpm format`
+  formats `**/*.json` — Prettier collapsed each baseline's arrays onto one line, and since
+  `toMatchSnapshot` compares **bytes**, all six went red with **identical values**, showing a diff
+  that reads like real movement until you parse both sides. (2) The deeper one: Playwright suffixes
+  a snapshot with the **platform** (`…-chromium-darwin.json`), so the Linux runner saw no baseline
+  at all and failed — and the baseline it wanted **could not be produced**, because recording it
+  would mean running the pre-shell commit on Linux. → **Write the expected geometry as literal
+  values in the spec.** It runs on every platform, no formatter owns it, and the numbers sit in the
+  diff where a reviewer reads them. ⚠️ **Never reach for `--update-snapshots` here**: on a guard
+  whose premise is "recorded BEFORE the change", that silently re-records the thing it exists to
+  catch. (A screenshot comparison is different — there the platform suffix is correct, because the
+  pixels really do differ.)
+
 - **The browser cache was there, and the step it protected still reached the network on every
   run.** → `Install Chromium` ran `playwright install --with-deps chromium`. The `--with-deps` half
   shells out to `apt-get`, which is **not** what `~/.cache/ms-playwright` caches — so a cache hit

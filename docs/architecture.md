@@ -306,6 +306,52 @@ flowchart LR
   DAL -->|"revalidatePath('/p/'+id)"| TODAY
 ```
 
+## 2e. The app shell — one frame, two layouts, one `<main>` (UI-5)
+
+Every authenticated **app screen** renders inside `components/layout/app-shell.tsx`. Below `lg` the
+shell is the single centred column the app has always had; at `lg` and up it adds a nav rail — **the
+athlete switcher**, so a laptop changes kid without a round trip through `/p`.
+
+⚠️ **Two authenticated routes are deliberately outside it**, both named in `OWN_MAIN` or its sibling
+list in `app/pages-need-a-session.test.ts`: `/design/tokens` (a full-width token gallery, not an app
+screen) and the root error boundary (`app/error.tsx`, which replaces the page rather than filling
+it). Both declare their own `<main>`, and the error boundary renders `SiteFooter` itself — ⚠️ this
+PR's footer move is what made that necessary, and it **supersedes `PRIV-2`'s "one `<footer>` in the
+root layout, not three use sites"**: a layout cannot know the pathname, so the choice was three use
+sites or two `contentinfo` landmarks on `/sign-in`.
+
+**The shell is a seam, which is why it is here.** `<main>`, the `<footer>` and the skip link are
+declared in exactly one file instead of nine, and two things depend on that: `sheet.tsx` patches
+`tabIndex` onto `document.querySelector('main')` for its focus fallback, and `privacy.spec.ts`
+clicks `getByRole('contentinfo')` — a `<footer>` nested inside `<main>` is not exposed as
+`contentinfo` at all. ⚠️ **No automated check would catch a second `<main>`:** axe's
+`landmark-no-duplicate-main` is tagged `best-practice` and the scan runs `wcag2a`/`wcag2aa`, so the
+guard is a source scan in `app/pages-need-a-session.test.ts`.
+
+```mermaid
+flowchart TD
+  PAGE["app/**/page.tsx<br/>(RSC — writes content only)"]
+  SHELL["AppShell<br/>(server component, no client boundary)"]
+  RAIL["NavRail — hidden lg:flex<br/>athletes + Settings"]
+  MAIN["main#main tabIndex=-1<br/>content capped at max-w-2xl"]
+  FOOT["SiteFooter — sibling of main<br/>('use client', aria-current)"]
+  SKIP["skip link → #main"]
+  PR4["PICK-1 PR 4<br/>context rail (third track)"]
+
+  PAGE -->|"children"| SHELL
+  PAGE -->|"athletes, current — the page knows what it is,<br/>so no usePathname and no client boundary"| SHELL
+  SHELL --> SKIP
+  SHELL -->|"only when athletes exist AND nav !== false"| RAIL
+  SHELL --> MAIN
+  SHELL --> FOOT
+  SHELL -.->|"not yet — a page-level prop cannot host<br/>a picker that lives in a client form"| PR4
+  RAIL -->|"aria-current='page' on the open athlete"| MAIN
+```
+
+⚠️ **`/p` passes `nav={false}`** in all three of its states: it _is_ the athlete switcher, so a rail
+there would render a second link to every athlete beside the tile it duplicates. The no-household
+branch was already excluded for the adjacent reason — a rail pointing at the page you are on.
+
 ## 2f. The `prescribed` column — frozen at log time, live only as a fallback (V1-22 chunk 2)
 
 ```mermaid

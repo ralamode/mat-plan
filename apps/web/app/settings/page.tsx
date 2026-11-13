@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 
+import { AppShell } from '@/components/layout/app-shell';
 import { AthleteList } from '@/app/settings/athlete-list';
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
-import { PAGE_SHELL_CLASS, SETTINGS_COPY } from '@/lib/constants';
+import { SETTINGS_COPY } from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
-import { listHouseholdAthletes } from '@/lib/dal/profiles';
+import { listHouseholdAthletes, listProfiles } from '@/lib/dal/profiles';
 import { requireSession } from '@/lib/dal/session';
 
 export const metadata: Metadata = { title: SETTINGS_COPY.heading };
@@ -40,18 +41,18 @@ export default async function SettingsPage() {
   // there but has nobody in it.
   if (state === HOUSEHOLD_STATE.none) {
     return (
-      <main className={PAGE_SHELL_CLASS}>
+      <AppShell athletes={await listProfiles()} current={'settings'}>
         <NoHouseholdState />
-      </main>
+      </AppShell>
     );
   }
 
   const athletes = await listHouseholdAthletes();
 
   return (
-    <main className={PAGE_SHELL_CLASS}>
+    <AppShell athletes={await listProfiles()} current={'settings'}>
       <h1 className="text-3xl font-semibold tracking-tight">{SETTINGS_COPY.heading}</h1>
       <AthleteList athletes={athletes} canArchive={canArchiveAthletes} />
-    </main>
+    </AppShell>
   );
 }

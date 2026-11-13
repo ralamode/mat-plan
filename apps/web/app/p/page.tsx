@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { AppShell } from '@/components/layout/app-shell';
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 
@@ -14,8 +15,8 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireSession } from '@/lib/dal/session';
 import { clerkIsConfigured } from '@/lib/clerk';
 import {
+  NAV_ROW_CLASS,
   NO_HOUSEHOLD_COPY,
-  PAGE_SHELL_CLASS,
   PICKER_COPY,
   PICKER_EMPTY_COPY,
   SETTINGS_COPY,
@@ -68,7 +69,20 @@ export default async function ProfilePickerPage() {
   const archivedCount = noHousehold ? 0 : (await listHouseholdAthletes()).length - profiles.length;
 
   return (
-    <main className={PAGE_SHELL_CLASS}>
+    /*
+      ⚠️ **`nav={false}` — `/p` is the ONLY authenticated page with no rail, in all three of its
+      states.** `UI-5`'s rail IS the athlete switcher, and this page is the athlete switcher; a rail
+      here renders a second link to every athlete, with the same accessible name and the same
+      `href`, beside the tile it duplicates. That is the collision class the plan anticipated for
+      the Settings label and did not count for the athletes themselves — `e2e/steps.ts:64`
+      (`selectProfile`, a regex on the name) found it on the first run at the setup project's
+      1280px, where the rail is visible.
+
+      The plan's stated purpose survives intact: "switch kid without a round trip through `/p`"
+      wants no rail on `/p`. The no-household branch was already excluded for the adjacent reason —
+      a rail pointing at the page you are on.
+    */
+    <AppShell nav={false}>
       <header className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight">
           {noHousehold ? NO_HOUSEHOLD_COPY.heading : PICKER_COPY.heading}
@@ -128,10 +142,9 @@ export default async function ProfilePickerPage() {
           the target (NAV_LINK_CLASS's `w-fit` is for a one-word arrow link, not a row). */}
       {noHousehold ? null : (
         <nav aria-label="Household">
-          <Link
-            href={SETTINGS_PATH}
-            className="focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3"
-          >
+          {/* `NAV_ROW_CLASS`: this row's classes and the rail's are the same row, and were the
+              same string written twice until `UI-5` named it. */}
+          <Link href={SETTINGS_PATH} className={NAV_ROW_CLASS}>
             <span className="text-sm font-medium">{SETTINGS_COPY.navLink}</span>
             {archivedCount > 0 ? (
               <span className="text-muted-foreground text-sm">
@@ -164,6 +177,6 @@ export default async function ProfilePickerPage() {
           </p>
         </div>
       </div>
-    </main>
+    </AppShell>
   );
 }

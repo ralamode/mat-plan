@@ -49,8 +49,10 @@ export const metadata: Metadata = {
  * server-rendered panel saying so.
  * 🔴 **The dark state is now a genuine dead end, and that is a deliberate narrowing.** Until `1d` it
  * offered the access code as a forward step; there is no such step any more, so its only exits are
- * the mark (to `/`) and the privacy link. ⚠️ `SiteFooter` hides itself on this subtree, so those two
- * links are the page's own — do not delete them expecting the footer to cover it.
+ * the mark (to `/`) and the privacy link. ⚠️ **No `SiteFooter` reaches this subtree at all** — `UI-5` moved it out of the root
+ * layout, so these two links are the page's own and nothing else supplies them. (It used to render
+ * everywhere and suppress itself here; the suppression is gone because the render is.) Do not
+ * delete them expecting a footer to cover it.
  *
  * ⚠️ **First paint is always our text, never the vendor's.** This is the only screen whose content
  * depends on two bundles fetched from a CDN, and `@clerk/shared`'s loader waits 15s before giving up
@@ -162,9 +164,8 @@ export default function SignInPage() {
           lone underlined line above a self-contained card read as a stray fragment. The disclosure
           is still on this screen and still before anything irreversible happens — a reader who taps
           Google without reading it was never going to read it above the button either. It duplicates
-          a footer destination on purpose — on every OTHER route: `SiteFooter` carries `/privacy` as chrome
-            there, but returns `null` here,
-          this is the screen's own disclosure. */}
+          a footer destination on purpose — on every OTHER route `SiteFooter` carries `/privacy` as
+          chrome; this screen renders no footer (`UI-5`), so this is its own disclosure. */}
       {/* ⚠️ `mx-auto`: `QUIET_LINK_CLASS` is `inline-flex`, so in this centred column the link
           otherwise hugs the left edge under centred text — which reads as a mistake rather than a
           choice. Caught on the dark-state capture, not in review. */}
