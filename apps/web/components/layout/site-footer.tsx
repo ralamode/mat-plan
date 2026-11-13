@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS } from '@/lib/constants';
+import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS, SHELL_CELL_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 /**
@@ -77,7 +77,7 @@ export function SiteFooter({ inShell = false }: { inShell?: boolean } = {}) {
         // width and alignment; below `lg` — and on every page without a rail — it keeps the same
         // centred `max-w-2xl` column it has always had, which is what keeps it under the content
         // rather than under the middle of the window.
-        inShell && 'lg:mx-0 lg:max-w-none',
+        inShell && SHELL_CELL_CLASS,
       )}
     >
       {/* Left-aligned on phones, centred from `sm` up _(maintainer, 2026-11-05)_. The footer's own

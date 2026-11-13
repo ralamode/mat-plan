@@ -493,7 +493,20 @@ describe('UI-5 · one <main>, declared in the shell', () => {
   const LOADING = [
     { path: 'p/loading.tsx', nav: false, why: '/p has no rail — the page IS the athlete switcher' },
     { path: 'p/[profileId]/loading.tsx', nav: true, why: 'a day page reserves the rail column' },
+    {
+      path: 'p/new/loading.tsx',
+      nav: true,
+      why: '/p/new renders a rail, so its fallback reserves one',
+    },
   ] as const;
+
+  // 🔴 **Anchored to the `<AppShell` TAG, not to the file.** `/\bbusy\b/` over the whole source is
+  // satisfied by an `aria-busy` on any element (`\b` treats `-` as a boundary) and by any identifier
+  // named `busy`; `includes('nav={false}')` by that prop on any JSX element. Either file could drop
+  // the prop from `AppShell`, keep the string elsewhere, and stay green — which is the same
+  // "assertion that cannot fail on the thing it names" class this suite already fixed three of.
+  // `[^>]*` spans newlines, so a multi-line tag still matches.
+  const shellProp = (prop: string) => new RegExp(`<AppShell\\b[^>]*\\b${prop}`);
 
   it.each(LOADING.map((l) => [l.path, l] as const))('%s renders the shell', (name, spec) => {
     const file = join(APP_DIR, spec.path);
@@ -501,9 +514,9 @@ describe('UI-5 · one <main>, declared in the shell', () => {
     const src = code(file);
     expect(src).toMatch(SHELL_TAG_RE);
     expect(src).not.toMatch(MAIN_TAG_RE);
-    expect(src, 'the busy state is what this file is FOR').toMatch(/\bbusy\b/);
+    expect(src, 'the busy state is what this file is FOR').toMatch(shellProp('busy'));
     // `nav={false}` opts out of the reserved rail column; its absence opts in. Asserted per file
     // because getting it backwards is invisible at phone widths and is a layout shift at `lg`.
-    expect(src.includes('nav={false}'), spec.why).toBe(!spec.nav);
+    expect(shellProp('nav=\\{false\\}').test(src), spec.why).toBe(!spec.nav);
   });
 });

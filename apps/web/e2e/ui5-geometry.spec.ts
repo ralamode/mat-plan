@@ -77,13 +77,6 @@ async function geometryOf(page: import('@playwright/test').Page) {
         const m = main?.getBoundingClientRect();
         return f && m ? Math.round(f.y - (m.y + m.height)) : null;
       })(),
-      // The footer sits below the fold on every page measured here — true because these three are
-      // all taller than a phone. ⚠️ **This is NOT the `flex-1` proof**; see the short-page block at
-      // the bottom of this file for that. It is here because a footer that climbed above the fold
-      // on a tall page would mean something had gone badly wrong with the column.
-      footerBelowFold:
-        (document.querySelector('footer')?.getBoundingClientRect().bottom ?? 0) >=
-        window.innerHeight,
       h1XWidth: rect('h1'),
       firstControlX: rect('input:not([type=hidden]), button, select'),
       mainCount: document.querySelectorAll('main').length,
@@ -98,8 +91,12 @@ async function geometryOf(page: import('@playwright/test').Page) {
  *
  * Every number here is **layout-driven**, not text-driven: `main`'s box is the viewport, its padding
  * come from the page-class constants, the `h1` is a block element so its width is the content box,
- * `footerOffset` is 0 because the footer abuts `main`, and `footerBelowFold` is true because every
- * one of these pages is taller than a phone — on a SHORT page it is `flex-1` that keeps it true. ⚠️ `firstControlX` is the
+ * and `footerOffset` is 0 because the footer abuts `main`.
+ *
+ * ⚠️ **A `footerBelowFold` field was here and is gone.** On a page taller than the viewport it can
+ * only be false if the footer sits ABOVE `<main>`, which `footerOffset === 0` already pins — a field
+ * with no independent failure mode, on a guard whose whole story is assertions that could not fail.
+ * The `flex-1` proof it was mistaken for is the short-page block at the bottom of this file. ⚠️ `firstControlX` is the
  * one that touches text metrics — the settings page's first button is sized by its label — so if it
  * ever disagrees between a Mac and the Linux runner, **that field is what to drop**, not the file.
  */
@@ -108,7 +105,6 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
     mainXWidth: [0, 390],
     mainPadding: ['16px', '48px', '48px'],
     stackRowGap: '32px',
-    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 358],
     firstControlX: [330, 44],
@@ -119,7 +115,6 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
     mainXWidth: [0, 390],
     mainPadding: ['16px', '48px', '48px'],
     stackRowGap: '32px',
-    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 358],
     firstControlX: [86, 67],
@@ -130,7 +125,6 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
     mainXWidth: [0, 390],
     mainPadding: ['16px', '48px', '48px'],
     stackRowGap: '32px',
-    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 358],
     firstControlX: [29, 16],
@@ -141,7 +135,6 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
     mainXWidth: [0, 360],
     mainPadding: ['16px', '48px', '48px'],
     stackRowGap: '32px',
-    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 328],
     firstControlX: [300, 44],
@@ -152,7 +145,6 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
     mainXWidth: [0, 360],
     mainPadding: ['16px', '48px', '48px'],
     stackRowGap: '32px',
-    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 328],
     firstControlX: [86, 67],
@@ -163,7 +155,6 @@ const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
     mainXWidth: [0, 360],
     mainPadding: ['16px', '48px', '48px'],
     stackRowGap: '32px',
-    footerBelowFold: true,
     footerOffset: 0,
     h1XWidth: [16, 328],
     firstControlX: [29, 16],
@@ -179,7 +170,7 @@ for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
     for (const { name, path } of PAGES) {
       test(`${name} is unchanged`, async ({ page }) => {
         // ⚠️ `networkidle`, the suite's idiom (`day-navigation.spec.ts:18`). At the default
-        // `load` the measurement caught `app/p/loading.tsx`'s `<main aria-busy>` still in the DOM
+        // `load` the measurement caught a `loading.tsx`'s `<main aria-busy>` still in the DOM
         // beside the streamed page's, and reported two `<main>` elements — a timing artifact, not
         // the duplicate landmark it looks like.
         await page.goto(path, { waitUntil: 'networkidle' });
@@ -265,11 +256,31 @@ test.describe('a short page still pushes the footer to the bottom', () => {
     test(`${name} fills the viewport`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'networkidle' });
 
-      const { footerBottom, viewportHeight, mainHeight } = await page.evaluate(() => ({
-        footerBottom: Math.round(document.querySelector('footer')!.getBoundingClientRect().bottom),
-        viewportHeight: window.innerHeight,
-        mainHeight: Math.round(document.querySelector('main')!.getBoundingClientRect().height),
-      }));
+      const { footerBottom, viewportHeight, mainHeight, contentHeight } = await page.evaluate(
+        () => {
+          const main = document.querySelector('main')!;
+          return {
+            footerBottom: Math.round(
+              document.querySelector('footer')!.getBoundingClientRect().bottom,
+            ),
+            viewportHeight: window.innerHeight,
+            mainHeight: Math.round(main.getBoundingClientRect().height),
+            contentHeight: (main.firstElementChild as HTMLElement).scrollHeight,
+          };
+        },
+      );
+
+      // 🔴 **The precondition, asserted rather than assumed.** This proof only works while the page
+      // is SHORTER than the viewport — `flex-1` is what closes the gap, and there is no gap to close
+      // on a page that already overflows. `/settings` renders one row per athlete on a database the
+      // whole suite shares (`fullyParallel`), and `athletes.spec.ts` adds several per run, so the
+      // fixture grows. Without this line the eventual failure would read "flex-1 broke" when the
+      // truth is "the fixture outgrew the viewport" — and a guard that lies about why it is red is
+      // one someone silences.
+      expect(
+        contentHeight,
+        'the fixture must stay shorter than the viewport, or this proves nothing about flex-1',
+      ).toBeLessThan(viewportHeight);
 
       expect(
         footerBottom,

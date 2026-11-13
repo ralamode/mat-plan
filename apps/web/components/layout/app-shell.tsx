@@ -59,7 +59,11 @@ export function AppShell({
    * pointer, not a second copy.
    */
   nav?: boolean;
-  /** `app/p/loading.tsx` keeps its `aria-busy`; the shell would otherwise swallow it. */
+  /**
+   * A Suspense fallback: keeps its `aria-busy`, and **reserves the rail's column** so the content
+   * does not jump when the page resolves. The three `loading.tsx` files under `app/p/` are its only
+   * callers, one per route whose frame differs.
+   */
   busy?: boolean;
 }) {
   const showRail = nav && (athletes?.length ?? 0) > 0;

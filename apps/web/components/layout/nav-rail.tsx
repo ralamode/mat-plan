@@ -69,14 +69,16 @@ export function NavRail({
       // `hidden lg:flex` is plain CSS on plain links — permitted, unlike hiding a live region, which
       // `announcer.tsx` rule 3 forbids. `sticky top-0` so the rail stays put on a long day page.
       //
-      // ⚠️ **`max-h-screen overflow-y-auto` is not decoration.** A sticky element TALLER than the
+      // ⚠️ **`max-h-screen` is not decoration.** A sticky element TALLER than the
       // scrollport is pinned at `top: 0` with its tail unreachable until the page scrolls to its
       // end — so the Settings row, which is last, would be invisible on a laptop. The household cap
-      // is `MAX_HOUSEHOLD_ATHLETES` (25), which at ~50px a row is ~1360px: well past a 1366×768
-      // laptop's ~650px of viewport. Today's three-athlete household never hits it; the households
-      // the product allows do. The rail scrolls ITSELF — never the grid or `<main>`, which would
-      // take the document's scrolling over (see `app-shell.tsx`).
-      className="hidden lg:sticky lg:top-0 lg:flex lg:max-h-screen lg:flex-col lg:gap-2 lg:overflow-y-auto lg:p-4"
+      // is `MAX_HOUSEHOLD_ATHLETES` (25). A row is 20px (`text-sm`) + 16 (`text-xs`) + 24 (`py-3`)
+      // + 2 (border) = **62px**, 82 with a wrapped name — so 25 athletes is ~1.8k px, well past a
+      // 1366×768 laptop's ~650px of viewport. (An earlier draft of this comment said ~50px; the
+      // conclusion only gets stronger with the real number.) Today's three-athlete household never hits it; the households
+      // the product allows do. The rail caps its own height and the LIST inside it scrolls — never
+      // the grid or `<main>`, which would take the document's scrolling over (see `app-shell.tsx`).
+      className="hidden lg:sticky lg:top-0 lg:flex lg:max-h-screen lg:flex-col lg:gap-2 lg:p-4"
     >
       {/*
         🔴 **A `<p>`, not an `<h2>`.** The rail precedes the page's `<h1>` in the DOM on every
@@ -93,7 +95,18 @@ export function NavRail({
         {NAV_RAIL_COPY.athletes}
       </p>
 
-      <ul aria-labelledby={ATHLETES_LABEL_ID} className="flex flex-col gap-1">
+      {/*
+        🔴 **The LIST scrolls, not the whole rail.** `max-h-screen overflow-y-auto` on the `<nav>`
+        made Settings *reachable* on a large household; it did not make it *near* — it is the last
+        row, so a parent on a 1366×768 laptop with nine or more athletes scrolled the rail to find
+        it. Confining the scroll to the `<ul>` (`min-h-0` so a flex child may shrink below its
+        content) keeps Settings pinned below the fold line of the list, always visible, with the
+        keyboard order unchanged.
+      */}
+      <ul
+        aria-labelledby={ATHLETES_LABEL_ID}
+        className="flex min-h-0 flex-col gap-1 overflow-y-auto"
+      >
         {athletes.map((athlete) => {
           const isCurrent = athlete.id === currentAthlete;
           return (
@@ -101,7 +114,7 @@ export function NavRail({
               <Link
                 href={athletePath(athlete.id)}
                 aria-current={isCurrent ? 'page' : undefined}
-                className={cn(NAV_ROW_CLASS, isCurrent && CURRENT_ROW_CLASS)}
+                className={cn('group', NAV_ROW_CLASS, isCurrent && CURRENT_ROW_CLASS)}
               >
                 {/* 🔴 `NAME_WRAP_CLASS`, not `truncate` — PROF-1 D11 is "every element that renders
                     an athlete's name", and its docblock already records that the rule drifted once.
@@ -109,11 +122,20 @@ export function NavRail({
                     ~27 characters against a 40-character cap, so two siblings sharing a prefix would
                     read as the same row. The `<h1>` on the same page wraps the same name. */}
                 <span className={cn('text-sm', NAME_WRAP_CLASS)}>{athlete.name}</span>
-                {/* The kind, as the picker tile shows it. The app PERMITS duplicate names and
+                {/* The kind, as the picker tile shows it — the same name/kind PAIR, at the rail's
+                    smaller scale (`text-sm`/`text-xs` here against the tile's `text-lg`/`text-sm`),
+                    not the same type sizes. The app PERMITS duplicate names and
                     `/edit` records that a tile "shows name AND kind, so a Child and an Adult sharing
                     a name are already distinct" — a second switcher without it would be two
                     identical rows. One display map, beside `PROFILE_KINDS`. */}
-                <span className="text-muted-foreground text-xs">
+                {/* 🔴 **`group-hover:text-foreground` is the contrast fix, not a flourish.**
+                    `NAV_ROW_CLASS` fills the row with `--accent` on hover, and muted text on accent
+                    is the **4.34:1** pair that failed axe on the current row — WCAG 1.4.3 covers
+                    every state, but axe only ever sees the rendered one, so CI cannot catch a hover.
+                    Un-muting on hover keeps the fill affordance and clears AA. (The global
+                    alternative — nudging `--muted-foreground` to L 0.545, which measures 4.54 on
+                    accent — is a design-token change and belongs to `UI-3`, not a layout PR.) */}
+                <span className="text-muted-foreground group-hover:text-foreground text-xs">
                   {PROFILE_KIND_LABELS[athlete.kind]}
                 </span>
               </Link>
