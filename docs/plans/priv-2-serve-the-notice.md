@@ -636,12 +636,22 @@ export const QUIET_LINK_CLASS =
 ```
 
 One `<footer>` in the root layout, so it is on every screen — not three use sites that drift, and not
-public-routes-only, which would leave a family unable to find the notice from inside the app. A
-`<ul>` of two `<li>`s (AGENTS.md: `ul`/`li` for lists), **no `<nav>`** — one `contentinfo` landmark is
-enough and a second unlabeled landmark is what axe's `landmark-unique` complains about. Preflight's
-`list-style: none` is **correct** here: this is a chrome link row, not prose. (That it must be _undone_
-for the notice's lists and _kept_ for the footer's is the whole reason § Preflight is specified per
-block rather than as one class string.)
+public-routes-only, which would leave a family unable to find the notice from inside the app.
+
+> ⚠️ **SUPERSEDED by `UI-5` (2026-11-13), on the mechanism, not the goal.** The footer left the root
+> layout for four use sites: `AppShell`, `/`, `/privacy` and the root error boundary. The forcing
+> argument is that a layout **cannot know the pathname** (Next 16), so once the sign-in screen needed
+> the footer suppressed, "one definition in the layout" meant either a client component reading
+> `usePathname()` on every route or two `contentinfo` landmarks on `/sign-in`. `UI-5` needed `<main>`
+> and the footer to be grid siblings anyway. **The goal this paragraph states is intact** — a family
+> inside the app still reaches the notice from every app screen, now via the shell — and the drift
+> this paragraph feared is guarded by `e2e/a11y.spec.ts`, which asserts the `contentinfo` count per
+> route. See [ui-5-app-shell.md](./ui-5-app-shell.md). A
+> `<ul>` of two `<li>`s (AGENTS.md: `ul`/`li` for lists), **no `<nav>`** — one `contentinfo` landmark is
+> enough and a second unlabeled landmark is what axe's `landmark-unique` complains about. Preflight's
+> `list-style: none` is **correct** here: this is a chrome link row, not prose. (That it must be _undone_
+> for the notice's lists and _kept_ for the footer's is the whole reason § Preflight is specified per
+> block rather than as one class string.)
 
 **360px layout, with the width math done rather than left to flex-wrap.** `px-4` on the footer leaves a
 **328px** content box. `mat-plan` (~62px at 14px) + `gap-x-4` (16px) + `Privacy notice` (~95px) ≈

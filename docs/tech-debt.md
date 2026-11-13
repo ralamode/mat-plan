@@ -15,6 +15,40 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
+
+- **What & why it's debt:** `--muted-foreground` is oklch L 0.556 and `--accent` is L 0.97, which
+  measures **4.34:1** — under WCAG AA's 4.5 for small text. (Dark clears it at 5.83; `--muted` is the
+  same value as `--accent`, so it is the same pair.) `UI-5`'s axe run at 1280 found it the first time
+  it ran, on the nav rail's current row. **It is not confined to the rail:** `NAV_ROW_CLASS` fills on
+  `hover:bg-accent`, so the archived-count line on `/p`'s settings row (`app/p/page.tsx`) has the
+  same pair in its hover state today.
+- **Why nothing in CI says so:** axe measures the rendered state only. A hover or focus ground it
+  never enters is invisible to it, though WCAG 1.4.3 covers every state.
+- **What `UI-5` did instead:** removed the pair from the two places it would have shipped it — the
+  rail's open row is outlined rather than filled, and its kind line un-mutes on hover
+  (`group-hover:text-foreground`). Both are local; the token is untouched.
+- **The fix, when someone takes it:** nudge `--muted-foreground` to **oklch(0.545)**, which measures
+  **4.54** on accent and 4.96 on background. An L shift of 0.011 is not perceptible, and it clears
+  the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
+  [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
+
+### The nav rail unmounts during a switch between athletes (added 2026-11-13)
+
+- **What & why it's debt:** clicking an athlete in `UI-5`'s rail changes the `[profileId]` segment,
+  so Next renders `app/p/[profileId]/loading.tsx` for it — `<AppShell busy>` with no athletes. The
+  **frame** is held (that is what the `busy` placeholder is for, and it is what stops the column
+  jumping), but the rail's **content** — the thing the user just clicked — blinks out and back for
+  the length of the round trip. Layout-stable, so not a CLS regression; it is the eye's anchor
+  disappearing.
+- **Why it is not fixed in `UI-5`:** the cure is structural. A Next **layout** wraps `loading.js`
+  and would hold the rail across the switch for free, but `UI-5`'s plan rejected a layout seam for
+  recorded reasons (a layout cannot read the pathname, cannot pass data to children, and uncached
+  data in one blocks navigation). The other option — a route group giving `/p` its own boundary and
+  dropping the day-subtree fallback — trades the skeleton away on a slow connection.
+- **Where it belongs:** `PICK-1` PR 4 adds the third grid track and is the next PR to touch this
+  seam; the plan's § For PR 4 is the place to settle it.
+
 ### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
 
 - **What & why it's debt:** `PROF-1 a-1d` added a duplicate warning that offers **Restore** when the

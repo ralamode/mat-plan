@@ -850,6 +850,23 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     and phone-first design. The rail adds to the phone layout and never changes it.
   - **Owes** a plan, a UX panel (full, three lenses), and screenshots at three widths. Not a P0. Native
     apps are a later, separate question; this row is the web app only.
+  - 📐 **Planned 2026-11-13: [ui-5-app-shell](./plans/ui-5-app-shell.md)**, panelled by seven lenses
+    (the four standing ones plus the UX panel at full depth). ⚠️ **The panel moved the context rail
+    out of this row's first PR** — a page-level `rail` prop cannot host `PICK-1`'s picker, which
+    lives inside a client form, so the slot lands in PR 4 with its first real consumer. `UI-5` ships
+    the grid and the nav rail. ⚠️ **And the rail wants `xl`, not `lg`:** measured, three regions at
+    1024px leave the strength form 336px — narrower than a 390px phone. The open question (is the
+    nav rail the athlete switcher?) was answered **yes** _(maintainer, 2026-11-13)_.
+  - ✅ **The shell and the nav rail shipped 2026-11-13.** Two regions at `lg`, the single column
+    below it, and the landmarks collapsed into one file. Three things the plan did not predict:
+    **`/p` renders no rail** (it is itself the athlete switcher, so a rail there linked every athlete
+    twice — found by the e2e suite's own `selectProfile` on the first run); **no inline link became
+    `lg:hidden`** (`/p` is more than switching — it is the only home of sign out, the theme toggle,
+    Add an athlete and the archived count, so hiding the way there would strand all four on a
+    laptop); and the footer's `/sign-in` suppression was **deleted** rather than kept, since the
+    footer left the root layout and that screen no longer mounts it at all.
+  - **Still open, and now `PICK-1` PR 4's to land:** the **context rail** — the third grid track,
+    with the movement picker as its first real consumer.
 
 - **UI-1 — the form is the day: the program card becomes the rendered form.** _(maintainer,
   2026-10-06.)_ Today shows a read-only program card listing the day's movements, then a button that

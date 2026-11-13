@@ -343,6 +343,17 @@ export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as cons
 export const NAV_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3';
 
+/**
+ * A nav ROW — a full-width, bordered, tappable row. `NAV_LINK_CLASS` above is `w-fit` for inline
+ * arrow links ("← All athletes"); this is its block-level sibling.
+ *
+ * ⚠️ **Named at its second use, which is the trigger.** `app/p/page.tsx` hand-typed it for the
+ * settings row; `UI-5`'s nav rail wants exactly the same shape for every item, and a third copy is
+ * how a focus ring or a tap-target height ends up different on one of them.
+ */
+export const NAV_ROW_CLASS =
+  'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3';
+
 export const QUIET_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
 
@@ -555,8 +566,50 @@ export const ALL_ATHLETES_LINK = '← All athletes';
  *
  * `flex-1` matters: the root layout is a flex column, so without it a short page's `<main>` collapses
  * to its content height and the footer rides up under the fold.
+ *
+ * 🔴 **Split THREE ways at `UI-5`, after the first two-way split put the gap on the wrong element.**
+ * The shell's `<main>` is a column with exactly ONE child (the content wrapper), so a `gap-8` there
+ * renders nothing — and the geometry guard was pinning that inert value while the gap the page
+ * actually sees lived in a second literal on the wrapper. A review lens caught it. The three pieces
+ * are now whatever each element genuinely needs:
+ *
+ * - {@link PAGE_MEASURE_CLASS} — the 672px measure. Written once; `PAGE_CONTENT_CLASS` and
+ *   `PAGE_SHELL_CLASS` both build on it, and the shell's `<main>` uses it directly.
+ * - {@link PAGE_COLUMN_BOX_CLASS} — the column's box: full width, the side gutter, the vertical
+ *   breathing room. No width cap and no gap.
+ * - {@link PAGE_STACK_CLASS} — the flex column AND the gap between a page's top-level children.
+ *   ⚠️ **It belongs on whichever element HAS those children**: `<main>` on a page outside the
+ *   shell, the content wrapper inside it. Put it on both and the outer one is dead weight that a
+ *   test can pin without guarding anything.
+ *
+ * `PAGE_SHELL_CLASS` is all three, and its value is byte-identical to what it has always been.
  */
-export const PAGE_SHELL_CLASS = 'mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12';
+export const PAGE_MEASURE_CLASS = 'max-w-2xl';
+export const PAGE_COLUMN_BOX_CLASS = 'w-full px-4 py-12';
+export const PAGE_STACK_CLASS = 'flex flex-1 flex-col gap-8';
+export const PAGE_SHELL_CLASS = `mx-auto ${PAGE_MEASURE_CLASS} ${PAGE_COLUMN_BOX_CLASS} ${PAGE_STACK_CLASS}`;
+
+/**
+ * The width a page's CONTENT reads at, whatever the column around it is.
+ *
+ * 🔴 **`UI-5` makes the main region wide; it does not make the form wide.** Measured at 1280 with a
+ * nav rail, an uncapped region gives the log form ~1000px: `strength-form.tsx`'s movement row is
+ * `flex-1`, so the Movement input alone grows to ~650-700px for a ten-character name, and the
+ * `justify-between` list rows put a label and its value ~992px apart. `design.md` says design at the
+ * narrow width and let it scale **up** — scaling up is not stretching. If the form itself should be
+ * wider, that is `UI-1`'s call; it owns the form's shape.
+ */
+export const PAGE_CONTENT_CLASS = `w-full ${PAGE_MEASURE_CLASS}`;
+
+/**
+ * What an element becomes when it is a CELL of the app shell's `lg` grid rather than a centred
+ * column: the cell decides its width and position, so the centring and the cap come off.
+ *
+ * ⚠️ **`<main>` and the footer must agree**, or the footer centres on the window while the content
+ * sits beside the rail — `a11y.spec.ts` asserts `footer.x === main.x` at 1280 for exactly that
+ * reason. One string, two elements (`app-shell.tsx` and `site-footer.tsx`).
+ */
+export const SHELL_CELL_CLASS = 'lg:mx-0 lg:max-w-none';
 
 /**
  * The shared text/number `<input>` styling — the single source for the app's form fields (the
@@ -1160,6 +1213,31 @@ export const UNDO_LABEL = 'Undo';
 export const NAME_ERROR_ID = 'athlete-name-error';
 export const UNDO_BUTTON_ATTR = 'data-undo-button';
 export const ANNOUNCE_AFTER_FOCUS_MS = 60;
+
+/**
+ * The app shell's nav rail (`UI-5`).
+ *
+ * 🔴 **`settings` is "Settings", deliberately NOT `SETTINGS_COPY.heading` ("Household settings").**
+ * The archived day page, `/p/new` and `/edit` each render that phrase as a prose link, and two
+ * visible links with the same accessible name on one page is the Playwright strict-mode collision
+ * #333 already shipped once. ⚠️ This is the one place that reasoning lives — `nav-rail.tsx` and the
+ * shell's test point here rather than restating it.
+ *
+ * `athletes` reads {@link SETTINGS_COPY}'s word rather than a second copy of it: it is the same
+ * label over the same list of live athletes, and `/settings` renders both at `lg`.
+ */
+export const NAV_RAIL_COPY = {
+  label: 'Primary',
+  athletes: SETTINGS_COPY.athletes,
+  settings: 'Settings',
+  skipToContent: 'Skip to content',
+} as const;
+
+/**
+ * The shell's `<main>` id — the skip link's target, and what `sheet.tsx` resolves its focus
+ * fallback by. Named once because those two files must agree.
+ */
+export const MAIN_CONTENT_ID = 'main';
 
 /**
  * Why the export control is disabled for an athlete who has logged nothing — **maintainer decision

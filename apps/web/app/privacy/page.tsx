@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { SiteFooter } from '@/components/layout/site-footer';
 import { NOTICE_TITLE } from '@/lib/privacy/notice-content';
 
 import { NoticeArticle } from './notice-article';
@@ -50,8 +51,11 @@ export const metadata: Metadata = {
  */
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-12">
-      <NoticeArticle />
-    </main>
+    <>
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-12">
+        <NoticeArticle />
+      </main>
+      <SiteFooter />
+    </>
   );
 }

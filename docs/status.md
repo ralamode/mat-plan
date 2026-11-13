@@ -19,6 +19,14 @@ transaction. No screen sends an id until PR 4, so nothing is visible yet. **PR 3
 and the component, with its own guide — and mounts nothing. PR 4 is what a person will see, and it
 owes a UX panel plus three-width screenshots.
 
+✅ **And the frame it mounts into now exists: `UI-5`, the app shell.** At `lg` and up every
+authenticated screen is a 16rem nav rail — **the athlete switcher** — plus the page; below it the
+single centred column is unchanged, pinned by a geometry guard recorded on the pre-shell commit. The
+app's `<main>`, its one `<footer>` and its first skip link are declared in one file instead of nine.
+⚠️ **The context rail is not in it** — a page-level prop cannot host a picker that lives inside a
+client form, so the third grid track is now part of **`PICK-1` PR 4**, with the picker as its first
+real consumer.
+
 📍 **Where Beta 0 sits, because it is further forward than it looks.** Its gate is **~10–11 PRs
 plus two manual steps** — five or six of them the `V1-9b` delete/restore arc, four ops and privacy
 ([the sequence](./milestones/beta-1.md)). ⚠️ **The lanes that feel like progress are not in it:**

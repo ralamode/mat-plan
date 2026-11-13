@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObjec
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { MAIN_CONTENT_ID } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 /**
@@ -428,12 +429,20 @@ export function Sheet({
             // The trigger can be re-rendered away by the very action that closed the sheet (a pick
             // replaces the card it was on). `focus()` on a detached node is a SILENT no-op, which
             // would leave a screen-reader user at the top of the document.
-            const fallback = document.querySelector('main');
+            const fallback =
+              document.getElementById(MAIN_CONTENT_ID) ?? document.querySelector('main');
             if (!(fallback instanceof HTMLElement)) return;
-            // 🔴 **The `tabIndex` is set here, not assumed.** `focus()` on an element that is not
-            // focusable is another silent no-op, and NO `<main>` in `apps/web/app/**` carries a
-            // `tabIndex` — so this fallback did nothing in the real app while its unit test passed,
-            // because the test harness had added one. `-1` keeps it out of the tab order.
+            // 🔴 **The `tabIndex` is set here when the landmark does not already carry one.**
+            // `focus()` on an element that is not focusable is another silent no-op, and this used
+            // to do nothing in the real app while its unit test passed, because the harness had
+            // added one that no page had.
+            //
+            // ✅ **`UI-5` changed that: `AppShell` sets `id` and `tabIndex={-1}` on the one
+            // `<main>` it declares**, so every authenticated app screen is now focusable by
+            // construction and this branch is the fallback for the pages OUTSIDE the shell — the
+            // root error boundary and `/design/tokens` (`OWN_MAIN` in
+            // `app/pages-need-a-session.test.ts`). Hence `getElementById` first: the shell's id is
+            // the precise target, and `querySelector('main')` stays as the fallback's fallback.
             if (!fallback.hasAttribute('tabindex')) fallback.tabIndex = -1;
             fallback.focus();
           }}

@@ -36,8 +36,9 @@ function Harness({
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  // Bare `<main>` on purpose — see the detached-trigger test. No `<main>` in the app has a
-  // `tabIndex`, so a harness that adds one hides a fallback that does nothing.
+  // Bare `<main>` on purpose — see the detached-trigger test. It stands for a page OUTSIDE the app
+  // shell (the error boundary, `/design/tokens`), which is where the runtime patch still earns its
+  // keep; a harness that adds a `tabIndex` hides a fallback that does nothing.
   return (
     <main>
       <button ref={trigger} type="button" onClick={() => setOpen(true)}>
@@ -263,10 +264,14 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
     function Detached() {
       const [open, setOpen] = useState(true);
       // 🔴 **A BARE `<main>`, no `tabIndex`** — and that is the point of this harness. The first
-      // version wrote `<main tabIndex={-1}>`, which no `<main>` in `apps/web/app/**` actually has,
-      // so the test asserted focus landing on an element the real app leaves unfocusable. It passed
-      // while the fallback was a silent no-op in production. Keep this bare: it is what proves the
-      // component makes its own target focusable.
+      // version wrote `<main tabIndex={-1}>`, which NO page then had, so the test asserted focus
+      // landing on an element the real app left unfocusable. It passed while the fallback was a
+      // silent no-op in production.
+      //
+      // ⚠️ **`UI-5` made the app's shell pages focusable** (`AppShell` sets `id` + `tabIndex={-1}`),
+      // so this harness no longer stands for every page — it stands for the two outside the shell,
+      // which is precisely the case the runtime patch now exists for. Keep it bare: it is what
+      // proves the component still makes its own target focusable when nothing else did.
       return (
         <main>
           <Sheet
