@@ -14,8 +14,17 @@ import { SETTINGS_PATH, ADD_ATHLETE_PATH, NAV_RAIL_COPY } from '@/lib/constants'
  * spacing or ordering change passes both. Meanwhile UI-5 moves `<main>` into a shell, relocates the
  * footer and migrates `flex-1` — three ways to shift a phone silently.
  *
- * So the geometry is measured and pinned. The numbers below were recorded on the commit **before**
- * the shell landed; if an edit moves the phone, this is what says so.
+ * So the geometry is measured and pinned. The numbers in `BEFORE` were recorded by running this
+ * file's `geometryOf` on the commit **before** the shell landed; if an edit moves the phone, they
+ * are what says so.
+ *
+ * 🔴 **Literal expectations, NOT `toMatchSnapshot`, and the reason is that CI could never have a
+ * baseline.** Playwright suffixes a snapshot with the platform (`…-chromium-darwin.json`), so the
+ * six files recorded here were invisible to the Linux runner, which reported them as missing and
+ * failed — and the baseline it wanted **cannot be produced**, because recording it would mean
+ * running the pre-shell commit on Linux. Inline numbers run everywhere, need no `--update-snapshots`
+ * path (the gesture that would have silently re-recorded the very thing this guards), and show the
+ * expected layout in the diff where a reviewer reads it.
  *
  * ⚠️ **Rounded to whole pixels** — sub-pixel differences between runs are noise, a 1px layout shift
  * is not something this guard needs to catch, and brittleness here would get the test deleted.
@@ -60,6 +69,79 @@ async function geometryOf(page: import('@playwright/test').Page) {
   });
 }
 
+/**
+ * **The pre-shell geometry, one entry per page per width.** Recorded by this file's `geometryOf` on
+ * the commit before `AppShell` existed — the layout the app has had since the scaffold.
+ *
+ * Every number here is **layout-driven**, not text-driven: `main`'s box is the viewport, its padding
+ * and `row-gap` come from `PAGE_COLUMN_CLASS`, the `h1` is a block element so its width is the
+ * content box, and `footerOffset` is 0 because the footer abuts `main`. ⚠️ `firstControlX` is the
+ * one that touches text metrics — the settings page's first button is sized by its label — so if it
+ * ever disagrees between a Mac and the Linux runner, **that field is what to drop**, not the file.
+ */
+const BEFORE: Record<string, Awaited<ReturnType<typeof geometryOf>>> = {
+  '390-the day page': {
+    mainXWidth: [0, 390],
+    mainPadding: ['16px', '48px', '48px'],
+    mainRowGap: '32px',
+    footerOffset: 0,
+    h1XWidth: [16, 358],
+    firstControlX: [330, 44],
+    mainCount: 1,
+    footerInsideMain: false,
+  },
+  '390-household settings': {
+    mainXWidth: [0, 390],
+    mainPadding: ['16px', '48px', '48px'],
+    mainRowGap: '32px',
+    footerOffset: 0,
+    h1XWidth: [16, 358],
+    firstControlX: [86, 67],
+    mainCount: 1,
+    footerInsideMain: false,
+  },
+  '390-add an athlete': {
+    mainXWidth: [0, 390],
+    mainPadding: ['16px', '48px', '48px'],
+    mainRowGap: '32px',
+    footerOffset: 0,
+    h1XWidth: [16, 358],
+    firstControlX: [29, 16],
+    mainCount: 1,
+    footerInsideMain: false,
+  },
+  '360-the day page': {
+    mainXWidth: [0, 360],
+    mainPadding: ['16px', '48px', '48px'],
+    mainRowGap: '32px',
+    footerOffset: 0,
+    h1XWidth: [16, 328],
+    firstControlX: [300, 44],
+    mainCount: 1,
+    footerInsideMain: false,
+  },
+  '360-household settings': {
+    mainXWidth: [0, 360],
+    mainPadding: ['16px', '48px', '48px'],
+    mainRowGap: '32px',
+    footerOffset: 0,
+    h1XWidth: [16, 328],
+    firstControlX: [86, 67],
+    mainCount: 1,
+    footerInsideMain: false,
+  },
+  '360-add an athlete': {
+    mainXWidth: [0, 360],
+    mainPadding: ['16px', '48px', '48px'],
+    mainRowGap: '32px',
+    footerOffset: 0,
+    h1XWidth: [16, 328],
+    firstControlX: [29, 16],
+    mainCount: 1,
+    footerInsideMain: false,
+  },
+};
+
 for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
   test.describe(`phone geometry at ${viewport.width}px`, () => {
     test.use({ viewport });
@@ -88,11 +170,8 @@ for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
           `the nav rail is not visible at ${viewport.width}px`,
         ).toHaveCount(0);
 
-        // ⚠️ `toMatchSnapshot` takes a string or Buffer — handed an object it fails with
-        // `file.slice is not a function`, which names nothing. Stringify, which also makes the
-        // committed baseline readable in a diff.
-        expect(JSON.stringify(geometry, null, 2)).toMatchSnapshot(
-          `ui5-${viewport.width}-${name.replace(/\s+/g, '-')}.json`,
+        expect(geometry, `${name} at ${viewport.width}px`).toEqual(
+          BEFORE[`${viewport.width}-${name}`],
         );
       });
     }
