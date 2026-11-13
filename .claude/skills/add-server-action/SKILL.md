@@ -40,9 +40,13 @@ enums and units. Never re-type an allowed value.
   `db:verify` can prove it on PGlite.
 - Resolve ownership **inside** the query by joining through `profiles.publicId`. Never accept an
   internal bigint id.
-- Idempotency: `.onConflictDoNothing({ target: t.clientId, where: isNull(t.deletedAt) })`. The
-  predicate must be repeated because the unique index is partial. Then re-select the live row, so a
-  replay returns the same result.
+- Idempotency: `.onConflictDoNothing({ target: t.clientId, where: isNull(t.deletedAt) })`, then
+  re-select **the live row** so a replay returns the same result.
+  ⚠️ Since `V1-9b` B0 **no `client_id` unique is partial**, so the `where:` is no longer required to
+  infer — it is kept because a supplied predicate still matches a non-partial index, which lets the
+  index and the arbiter change in either order. The live-row re-select is the part that matters now:
+  a conflict can be with a HIDDEN row, and an unguarded re-select would attach children to a dead
+  parent. Throw on a miss (`write-path.md` invariant 6).
 - Return a **DTO** (`public_id` as `id`), never a raw row. Derive derived columns from the source
   value (e.g. dimension from unit) rather than trusting input.
 

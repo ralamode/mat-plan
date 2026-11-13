@@ -462,16 +462,30 @@ soft-deleted row today**, so it stays in the database indefinitely and a replace
 
 ⚠️ **Correction (2026-10-18, [ADR 0008](../decisions/0008-deletion.md)):** this section previously said
 _"every uniqueness arbiter is `WHERE deleted_at IS NULL`"_. That is wrong, and it was wrong when written.
-**Fourteen are partial** on `deleted_at`, so a soft delete frees the **natural** key — `client_id`, the
-weigh-in day, the quantity arity, every ordinal-within-parent. **The `public_id` UNIQUE on all fifteen
+**Fourteen were partial** on `deleted_at`, so a soft delete freed the **natural** key — `client_id`, the
+weigh-in day, the quantity arity, every ordinal-within-parent. ⚠️ **`V1-9b` B0 (2026-11-12) took
+`client_id` out of that list**, in all five remaining tables; see the dated note below. **The `public_id` UNIQUE on all fifteen
 soft-deletable tables is not**, so a soft-deleted row **keeps its addressable id**; and `movements`' two
 arbiters are partial on `household_id` instead. The rule is _"a soft delete frees the natural key and keeps
 the public one"_, not _"it frees everything"_. Two consequences people were told the wrong version of:
 un-deleting a row can **fail** where a live row took the freed slot, and a hidden profile is still
 addressable, so restoring its export path needs no migration.
 
-🔴 **One exception, added deliberately at `PROF-1` a-0 (2026-11-06): `uq_profiles_client_id` is NOT
-partial** — the first `client_id` arbiter in this database that is not. So for `profiles`, and only
+🔴 **`client_id` is no longer in the freed set at all, as of `V1-9b` B0 (2026-11-12).** All five
+remaining arbiters — `sessions`, `supersets`, `entries`, `entry_sets`, `entry_set_quantities` — went
+non-partial, so a hide frees a **slot** (an ordinal, a day, a position) and never an **offline
+identity**. **Ten** arbiters stay partial on `deleted_at`: superset order, weigh-in day, set ordinal,
+quantity slot, readiness day, ramp week, block slug, prescription slot, target pair — and
+`uq_household_members_clerk_user`, one live membership per Clerk account, which is a constraint
+rather than a slot. ⚠️ **Counted off `0021_snapshot.json`, not off the plan**, which said nine
+because it predates that index; two further partial uniques key on `movements.household_id` rather
+than `deleted_at` and are untouched by any of this.
+**What a reader is owed, stated plainly:** a `client_id` can never be reused for a different row,
+even after the first is purged — and the "un-deleting can fail" hazard below therefore **does not
+apply to `client_id`** on any table. It still applies to the nine slots.
+
+🔴 **Where it started: `PROF-1` a-0 (2026-11-06) built `uq_profiles_client_id` non-partial** — the
+first in this database, and the precedent B0 generalised. So for `profiles`, and only
 `profiles`, a soft delete does **not** free the natural key, and the "un-deleting can fail" hazard
 above does not apply: the slot stays with the athlete who had it, and a retried "add" resolves to
 that same athlete rather than minting a second one. ADR 0008 decision 3.4 is the reasoning; the other

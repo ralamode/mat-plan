@@ -342,16 +342,42 @@ flowchart LR
 5. **Idempotency is a client UUIDv7 + a DB UNIQUE + `ON CONFLICT`** — never an app-level "does it
    exist?" check, which races. Per-row at every level of a graph, with no parent short-circuit.
 
-6. **A partial unique index needs its predicate repeated in `ON CONFLICT`.** Every `client_id` unique
-   in this schema is `WHERE deleted_at IS NULL`, so the arbiter must say so too or Postgres rejects the
-   statement outright. drizzle: `onConflictDoUpdate({ target, targetWhere })`.
-   ⚠️ **Bodyweight's CREATE is the exception: target-less `ON CONFLICT DO NOTHING` (V1-24 PR 1e).**
-   It has two uniques, `uq_entries_client_id` and 1d's natural key `uq_entries_profile_day_bodyweight`
-   (one live weigh-in per `(profile, day, coalesce(context, 'morning'))`, an EXPRESSION drizzle's
-   `target` cannot name). `insertBodyweightEntry` (`packages/db/src/writers/bodyweight.ts`) uses NO
-   target, so every unique index is an arbiter: there is no spec to mis-infer, and a concurrent re-POST
-   waits and does nothing instead of raising `23505`. It pays the three costs explicitly, and a change
-   to it must keep paying them:
+6. ✅ **No `client_id` unique is partial any more — `V1-9b` B0 was the change.** All five
+   (`sessions`, `supersets`, `entries`, `entry_sets`, `entry_set_quantities`) were
+   `WHERE deleted_at IS NULL`, which meant a hidden row stopped being an `ON CONFLICT` target and a
+   replay of the same write inserted a **twin**. `uq_profiles_client_id` was built right at
+   `PROF-1` a-0 and is now the rule rather than the exception (ADR 0008 decision 3.4).
+   🔴 **The arbiters still say `where: isNull(deletedAt)`, and that is deliberate — do not "tidy" it
+   in the PR that changes an index.** A supplied predicate still infers against a non-partial index
+   (`db:verify` exercises the real writer and proves it), so the two can change in either order
+   without a window where neither works. Dropping the `where:` in the same deploy as the index change
+   is how you get a statement that matches nothing in between.
+   ⚠️ **A NEW `client_id` arbiter is non-partial from birth** — the rule is in the
+   `db-migration` skill.
+   ⚠️ **The trap B0 creates, in all four writers that key on `client_id`** — replaying a write whose
+   row was hidden is now a **refusal** rather than a duplicate. Each answers differently, and that
+   is worth knowing before B1-2 unifies them:
+   - **strength** → `reselectLiveByClientId` throws `no live row for client_id`, which reaches
+     `error.tsx` and loses the form. `db:verify`'s B0 case asserts it; mutation `39` proves it fails.
+   - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
+     branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
+     now names this case. Also asserted in the B0 block.
+   - **check-ins** → `created: false, id: null` per item, which the action renders as "already
+     logged": a typed refusal, and the best of the four.
+   - **life activities** → the action ignores the per-item result, so a hidden replay reports plain
+     success and writes nothing. Pre-existing shape, now reachable; B1-2 owns it.
+     🔴 **All four were a silent TWIN before B0**, which is the defect, so a refusal — even an ugly one
+     — is the improvement. `V1-9b` B1-2 is what turns each into a typed envelope.
+     **Still true for a PARTIAL index, of which ten remain on `deleted_at`:** the predicate must be
+     repeated or Postgres rejects the statement outright. drizzle:
+     `onConflictDoUpdate({ target, targetWhere })`.
+     ⚠️ **Bodyweight's CREATE is the exception: target-less `ON CONFLICT DO NOTHING` (V1-24 PR 1e).**
+     It has two uniques, `uq_entries_client_id` and 1d's natural key `uq_entries_profile_day_bodyweight`
+     (one live weigh-in per `(profile, day, coalesce(context, 'morning'))`, an EXPRESSION drizzle's
+     `target` cannot name). `insertBodyweightEntry` (`packages/db/src/writers/bodyweight.ts`) uses NO
+     target, so every unique index is an arbiter: there is no spec to mis-infer, and a concurrent re-POST
+     waits and does nothing instead of raising `23505`. It pays the three costs explicitly, and a change
+     to it must keep paying them:
    - **(a) `RETURNING` is empty on any conflict** → it re-selects; it never assumes a row.
    - **(b) a second device's different weight must not read as success** → the re-select branches: the
      row is THIS submit's (`client_id` AND profile match, live, AND a weigh-in) → `{ id }`; the day's slot

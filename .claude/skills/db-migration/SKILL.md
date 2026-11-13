@@ -19,7 +19,8 @@ PR rules". Traps: [docs/lessons.md](../../../docs/lessons.md) → "Database / mi
   `client_id` UUIDv7 with a **NON-partial** unique index for anything new — a partial arbiter stops
   arbitrating once the row hides, so a replay inserts a twin
   ([ADR 0008](../../../docs/decisions/0008-deletion.md) 3.4; `uq_profiles_client_id`, migration
-  `0020`, is the first built that way) — `timestamptz` everywhere, `deleted_at` for soft delete, an FK plus a covering index on every ref, and
+  `0020`, was the first built that way, and `V1-9b` B0 — migration `0021` — re-predicated the five
+  older ones, so this is now the whole schema's rule and not a new-table convention) — `timestamptz` everywhere, `deleted_at` for soft delete, an FK plus a covering index on every ref, and
   `idx_<table>_<cols>` naming.
 - Enums are **reference tables seeded from a `packages/shared` as-const array**, or text + CHECK for
   status. Never `pgEnum`.

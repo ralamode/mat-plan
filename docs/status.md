@@ -31,7 +31,10 @@ file. Chunk 2's plan was panelled on 2026-11-11 (six lenses, four blocking defec
 review-response log had read "not yet run"), both escalated questions were ruled on, and the chunk
 **shipped the same day** as #367: the prescription is frozen at log time, so editing a program no
 longer rewrites exported history. **That gate is spent** — 3 and 6b are startable, 4 gates on 3, 5
-on 4, and E still owes 3b's plan.
+on 4, and E still owes 3b's plan. ✅ **Step 3 is now in: `V1-9b` B0 made the five `client_id`
+arbiters non-partial**, so hiding a row no longer frees the key that identifies an offline write —
+the prerequisite B1's delete and restore is built on. Nothing a person can see changed; what changed
+is that a replay of a hidden write is a refusal rather than a twin.
 
 Behind that, the write path it builds on:
 

@@ -82,7 +82,7 @@ sequenceDiagram
   Zod-->>Act: typed value (or field errors)
   Act->>DAL: logEntry(dto)
   DAL->>DAL: getCurrentUser() + verify household ownership
-  DAL->>DB: tx: session → entry → entry_set<br/>ON CONFLICT(client_id) DO UPDATE (LWW)
+  DAL->>DB: tx: session → entry → entry_set<br/>ON CONFLICT(client_id) DO NOTHING + re-select live
   DB-->>DAL: rows
   DAL-->>Act: minimal DTO
   Act-->>UI: {ok:true} + revalidate
@@ -375,7 +375,7 @@ flowchart LR
   C -- no --> B
   C -- yes --> D["POST /api/sync<br/>batch = whole session graph"]
   D --> E["DAL: authz + zod"]
-  E --> F[("Neon: upsert ON CONFLICT client_id<br/>LWW = client-supplied timestamp")]
+  E --> F[("Neon: upsert ON CONFLICT client_id<br/>LWW = client-supplied timestamp — v1.5 TARGET, not today")]
   F --> G["per-item results"]
   G --> H["mark synced,<br/>clear from outbox"]
   G -->|"semantic dupe"| I["client-side dedupe<br/>(profile/date/activity/movement/set-idx)"]
@@ -479,7 +479,7 @@ erDiagram
   entries {
     bigint id PK
     uuid public_id UK "anti-IDOR"
-    uuid client_id "UNIQUE partial (offline idempotency)"
+    uuid client_id "UNIQUE non-partial (V1-9b B0) — the identity is never freed"
     bigint activity_type_id FK
     bigint movement_id FK "nullable — set_list only"
     text metric_key FK "nullable — single_metric only"

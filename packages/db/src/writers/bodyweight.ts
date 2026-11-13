@@ -244,8 +244,21 @@ export async function insertBodyweightEntry(
   if (taken) return { dayTaken: true };
 
   // (c): DO NOTHING suppressed a conflict that is neither — never answer with something plausible.
+  //
+  // 🔴 **Since V1-9b B0 this is REACHABLE with a known cause, so it no longer says "unexpected" and
+  // stops there.** `uq_entries_client_id` is non-partial now, so a HIDDEN weigh-in still holds its
+  // `client_id`: a replay of one whose day slot has since been freed conflicts here, misses (a)
+  // (`deleted_at IS NULL`) and misses (b) (the day is free), and lands on this throw. Before B0 the
+  // hidden row was outside the partial index and the insert simply **inserted a twin** — which is
+  // the defect B0 exists to close, arriving through the one writer that infers no target.
+  //
+  // ⚠️ It is still a throw, not a typed envelope: `V1-9b` B1-2 owns that for every writer at once,
+  // and inventing one here would be a second answer to the same question. `db:verify`'s B0 block
+  // asserts this case; the two 1e cases that also reach (c) (a foreign metric's `client_id`, an
+  // evening-only day) are unaffected and still match the first half of this message.
   throw new Error(
     'insertBodyweightEntry: the insert was a no-op, but it is neither a replay of this submit nor ' +
-      "the day's weigh-in — an unexpected unique conflict.",
+      "the day's weigh-in — so it is a replay of a HIDDEN weigh-in whose day is now free " +
+      '(V1-9b B0), or an unexpected unique conflict.',
   );
 }

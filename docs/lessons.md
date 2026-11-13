@@ -796,6 +796,28 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- 🔴 **A commit made while `pnpm db:mutations` was running committed a MUTATION PATCH into the
+  branch, and every gate stayed green.** → The mutation runner applies a patch to the working tree,
+  runs `db:verify`, asserts RED, then reverts. A `git commit` during that window runs lint-staged,
+  which **stashes unstaged changes** — pulling the applied patch out from under the runner. Two
+  things then went wrong at once: the runner's revert no longer matched, so it left the patch applied
+  (`db:mutations` exited 1, which read as a real failure); and lint-staged restored the patch into
+  the **staged** set, so `37-typed-before-ids` — which swaps the two phases of
+  `resolveSessionMovements`, deliberately breaking the PICK-1 ordering guarantee — landed in a commit
+  whose message was about documentation.
+  - **How it was caught:** the `verify` exit code was 1 with no assertion to explain it, and
+    `git status` showed a modified file the branch had no business touching. ⚠️ **`git restore` is
+    the wrong fix** — it restores _from HEAD_, which is where the corruption already was, and it
+    overwrote the one correct copy. `git checkout origin/main -- <path>` is the fix.
+  - **The rule:** **never commit, stage, or stash while `db:mutations` (or `pnpm verify`) is
+    running.** They are not read-only — the mutation gate writes to the tree by design. If a long
+    verify is in flight, wait for it; `probe.mjs` is safe to interleave only because it snapshots
+    first and restores from the snapshot rather than from HEAD, which is the same lesson one level
+    up.
+  - **What nearly hid it:** the branch diff had 3,500 insertions (a drizzle snapshot), so one
+    20-line file in `--stat` is easy to skim past. `git diff origin/main...HEAD --name-only` and
+    asking "does this branch have any business touching that file?" is the check.
+
 - **A commit message described a correction the file did not carry — because the edit asserted, failed,
   and the commit ran anyway.** → A scripted edit anchored on an exact string; `prettier` had since
   padded that string (a markdown table cell) so the anchor missed and the script raised. The commit

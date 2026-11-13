@@ -1708,10 +1708,21 @@ async function upsertReturningId(
     .values(values as never)
     .onConflictDoNothing({ target: table.clientId, where: isNull(table.deletedAt) })
     .returning({ id: table.id });
-  return (
-    row?.id ??
-    (await db.select({ id: table.id }).from(table).where(eq(table.clientId, clientId)))[0].id
-  );
+  if (row) return row.id;
+  // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the production writer's
+  // `reselectLiveByClientId` shape, not a shortcut.** Before V1-9b B0 the partial UNIQUE kept a
+  // hidden row out of the index, so a conflict implied a LIVE row and an unguarded re-select was
+  // merely sloppy. B0 puts hidden rows back in the index, so a conflict can now be WITH a hidden
+  // row — and this re-select would hand its id back and attach children to a dead parent. The
+  // writer's own docblock names this helper as the place that dropped the guard; B0 is where that
+  // stops being true.
+  const [live] = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
+    .limit(1);
+  if (!live) throw new Error(`no live row for client_id ${clientId}`);
+  return live.id;
 }
 
 /** Insert a strength member/standalone entry (kind=NULL, movement_id+movement_name set) + its set,
@@ -8838,6 +8849,206 @@ console.log(
     '✓ PROF-1 a-1d: the duplicate warning folds names, is scoped to the household, survives a ' +
       'NULL client_id, reports archived matches so Restore is reachable, prefers a live match ' +
       'over an archived one, and never answers duplicate to a replay of a successful add',
+  );
+}
+
+// ── V1-9b B0 — a hide no longer frees a `client_id` ───────────────────────────────────────────────
+//
+// 🔴 **The behavioural case comes FIRST, deliberately.** `db:verify` is fail-fast and the mutation
+// runner matches the FIRST AssertionError, so a structural `pg_indexes` check placed above would be
+// the assertion a mutation reddens — and "the index has no WHERE" is a restatement of the DDL, not
+// of the behaviour anyone depends on. The behaviour is: a replay of a write whose row was hidden
+// must NOT create a twin.
+//
+// Before B0 every one of the five arbiters was `WHERE deleted_at IS NULL`, so a soft-deleted row
+// left the index, stopped being an `ON CONFLICT` target, and a replay INSERTED A SECOND ROW
+// (ADR 0008 decision 3.4, `docs/decisions/0008-deletion.md:127`). V1-9b makes hiding a reachable
+// action, which turns that from latent into live.
+//
+// ⚠️ **What a pass here proves, and the one thing it does not.** It proves the twin is impossible
+// and that the live-row re-select refuses rather than attaching children to a dead row. It does NOT
+// prove the app reports that refusal well — `B1-2` owns the envelope; today it is a throw.
+{
+  const B0_SESSION_CID = '019826b4-0000-7000-8000-00000000b000';
+  const b0Args = {
+    ...flatArgs,
+    day: '2026-02-11',
+    sessionClientId: B0_SESSION_CID,
+    movements: [
+      {
+        movementName: 'Bench Press',
+        unit: 'lb',
+        movementId: movY.id,
+        clientId: '019826b4-0000-7000-8000-00000000b001',
+        sets: [{ reps: 8, weight: 95 }],
+      },
+    ],
+  } as const;
+
+  // 1 · Log it, then HIDE the entry the way V1-9b will: `deleted_at` on the row, nothing else.
+  const b0 = await writeStrengthSession(asPg, b0Args);
+  const [b0Session] = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.publicId, b0.sessionId));
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
+
+  // 2 · Replay the SAME graph. The hidden entry is still in the (now non-partial) index, so the
+  //     insert no-ops on conflict and the live re-select finds nothing — a refusal, not a twin.
+  //     🔴 This is the assertion the mutation patch reddens: with the predicate back, the insert
+  //     succeeds and this `rejects` never fires.
+  await assert.rejects(
+    () => writeStrengthSession(asPg, b0Args),
+    /no live row for client_id/,
+    'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
+      'frees the client_id',
+  );
+
+  // 3 · And the count is the direct evidence: ONE row carries that client_id, hidden or not.
+  const b0Rows = await db
+    .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
+  assert.equal(b0Rows.length, 1, 'V1-9b B0: the hidden entry was not twinned by the replay');
+  assert.ok(b0Rows[0].deletedAt !== null, 'V1-9b B0: …and it is still hidden');
+
+  // 4 · The session row itself: same client_id, still one row, and the replay reached it. (The
+  //     session was never hidden, so this is the ordinary replay path — it must keep working.)
+  const b0Sessions = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.clientId, B0_SESSION_CID));
+  assert.equal(b0Sessions.length, 1, 'V1-9b B0: the session was not twinned either');
+  assert.equal(b0Sessions[0].id, b0Session.id, 'V1-9b B0: and it is the same session row');
+
+  // 4b · 🔴 **The OTHER writer B0 changes, which the strength case cannot reach.**
+  //      `insertBodyweightEntry` infers no target (`onConflictDoNothing()` — every unique
+  //      arbitrates, V1-24 1e), so it has its own three-branch fallback. Post-B0 a replay of a
+  //      HIDDEN weigh-in whose day slot has since been freed conflicts on the non-partial
+  //      `uq_entries_client_id`, misses (a) because that row is not live, misses (b) because the day
+  //      is free, and lands on the throw in (c). **Before B0 it inserted a twin** — the same defect,
+  //      through the one writer with no arbiter to re-predicate.
+  //
+  //      ⚠️ **What this case is and is NOT proven by, probed three ways.** 1e reaches (c) by two
+  //      other routes (a foreign metric's `client_id`, an evening-only day), and because `db:verify`
+  //      is fail-fast and 1e runs first, every single-literal mutation that breaks this case breaks
+  //      an earlier one too: restoring the index predicate reddens the strength case above;
+  //      dropping (a)'s liveness guard reddens 1e's dead-row case; swallowing the (c) throw reddens
+  //      1e's foreign-metric case. So this case is **not independently isolable today** — said
+  //      plainly rather than implied.
+  //
+  //      What it does catch, and nothing else would: a future change that answers THIS route
+  //      plausibly while leaving 1e's routes throwing — a fourth branch that looks up hidden rows
+  //      and returns one's id, say, which is the exact "success reported, nothing saved" shape (a)'s
+  //      liveness guard exists to prevent. It also pins the no-twin count for a writer the strength
+  //      case never touches.
+  // ⚠️ Ids in the `0000b9b0…` region because `…b0XX` is MINTED BY A GENERATOR elsewhere in this
+  //    file: the first draft reused `…00000000b010`, which a pushups entry already held, and the
+  //    target-less `DO NOTHING` swallowed that `public_id` conflict straight into the (c) throw —
+  //    presenting as "the writer refuses a fresh weigh-in", which reads like a product bug. Pick a
+  //    region, do not pick a number.
+  const B0_BW_DAY = '2026-12-02';
+  const b0WeighInType = await activityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  const b0BwArgs = {
+    profileId: bwOwnerRow.id,
+    unit: 'lb',
+    notes: null,
+    activityTypeId: b0WeighInType,
+    kind: ENTRY_KIND.bodyweight,
+    publicId: '019826b4-0000-7000-8000-0000b9b00001',
+    clientId: '019826b4-0000-7000-8000-0000b9b00002',
+    day: B0_BW_DAY,
+    value: 81,
+  };
+  await insertBodyweightEntry(asPg, b0BwArgs);
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.clientId, b0BwArgs.clientId));
+  await assert.rejects(
+    () =>
+      insertBodyweightEntry(asPg, {
+        ...b0BwArgs,
+        publicId: '019826b4-0000-7000-8000-0000b9b00003',
+      }),
+    /a replay of a HIDDEN weigh-in whose day is now free/,
+    'V1-9b B0: replaying a HIDDEN weigh-in onto its now-free day is REFUSED, not duplicated',
+  );
+  const b0BwRows = await db
+    .select({ id: schema.entries.id })
+    .from(schema.entries)
+    .where(
+      and(
+        eq(schema.entries.profileId, bwOwnerRow.id),
+        eq(schema.entries.activityDate, B0_BW_DAY),
+        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+      ),
+    );
+  assert.equal(b0BwRows.length, 1, 'V1-9b B0: …and the hidden weigh-in was not twinned');
+
+  // 5 · The STRUCTURAL case, after the behaviour: none of the five indexes carries a predicate.
+  //     Read from `pg_indexes`, so it measures the LIVE schema the migration produced rather than
+  //     the TypeScript that generated it — the drift this would otherwise miss is a migration that
+  //     was hand-edited after `generate`.
+  const B0_INDEXES = [
+    'uq_sessions_client_id',
+    'uq_supersets_client_id',
+    'uq_entries_client_id',
+    'uq_entry_sets_client_id',
+    'uq_entry_set_quantities_client_id',
+  ] as const;
+  const b0Defs = await db.execute<{ indexname: string; indexdef: string }>(
+    sql`select indexname, indexdef from pg_indexes where indexname = any(${sql.param(
+      B0_INDEXES as unknown as string[],
+    )}::text[])`,
+  );
+  const b0Found = (b0Defs as unknown as { rows: { indexname: string; indexdef: string }[] }).rows;
+  assert.equal(
+    b0Found.length,
+    B0_INDEXES.length,
+    `V1-9b B0: all five client_id indexes exist (found ${b0Found.length})`,
+  );
+  for (const row of b0Found) {
+    assert.ok(
+      !/\bWHERE\b/i.test(row.indexdef),
+      `V1-9b B0: ${row.indexname} is non-partial — it carries no WHERE (${row.indexdef})`,
+    );
+  }
+
+  // 6 · …and FOUR of the arbiters that stay partial, so the structural case cannot be "passed" by
+  //     dropping every predicate in the schema. A hide SHOULD free a slot; it should not free an
+  //     identity, and that asymmetry is the whole decision.
+  //
+  //     ⚠️ **Four of TEN, and the comment used to say nine.** Counted off `0021_snapshot.json`:
+  //     twelve partial unique indexes, ten of them on `deleted_at` (the ten below plus
+  //     `uq_household_members_clerk_user`, which is a one-live-membership constraint rather than a
+  //     slot) and two on `movements.household_id`. The plan's enumeration listed nine because it
+  //     predates the Clerk-user index. Four named here is enough to defeat "drop every predicate";
+  //     asserting the full count would redden on every unrelated new partial index, which is a
+  //     maintenance tax for a weaker signal.
+  const b0Partial = await db.execute<{ indexname: string; indexdef: string }>(
+    sql`select indexname, indexdef from pg_indexes
+        where indexname in ('uq_entries_superset_order', 'uq_entry_sets_entry_idx',
+                            'uq_entry_set_quantities_set_slot', 'uq_entries_profile_day_bodyweight')`,
+  );
+  const b0PartialRows = (
+    b0Partial as unknown as { rows: { indexname: string; indexdef: string }[] }
+  ).rows;
+  assert.equal(b0PartialRows.length, 4, 'V1-9b B0: all four named slot arbiters are present');
+  for (const row of b0PartialRows) {
+    assert.ok(
+      /\bWHERE\b/i.test(row.indexdef),
+      `V1-9b B0: ${row.indexname} is STILL partial — a hide frees a slot (${row.indexname})`,
+    );
+  }
+
+  console.log(
+    '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden entry is REFUSED rather ' +
+      'than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
+      'slot arbiters still do',
   );
 }
 
