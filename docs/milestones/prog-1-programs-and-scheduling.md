@@ -1,5 +1,11 @@
 # PROG-1 — programs and scheduling
 
+> ⚠️ **Re-scoped 2026-11-13** ([CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13)): no cap on workouts, a week
+> template (0..n ordered workouts per weekday) beside rotation, items with a tracking type, supersets
+> defined in the program. The goal below gains: _"put any number of named workouts on each weekday,
+> in order"_. The decisions table's "at most three" row is superseded (R1). Steps are re-ordered when
+> the revised plans land; none starts before then.
+
 > **Status: proposed 2026-10-23, awaiting the maintainer's approval of the plans.** A cross-PR milestone,
 > not an implementation plan. **What** each step must make true lives in the
 > [spec](../specs/crud-1-fix-it-yourself.md), cited by criterion number; this file orders the steps and
@@ -26,15 +32,15 @@ program and choose its days"_ (`beta-1.md:438`); the streaks half of that box is
 
 **Made** (quoted in the spec's review-response log):
 
-| Decision                                                                                   | Where             |
-| ------------------------------------------------------------------------------------------ | ----------------- |
-| The default program is **The Daily Five** via ONB-2's writer, never `PROGRAM_SEED`         | M22, criterion 33 |
-| Programs have labelled **workouts** (at most three); a "day" is a weekday and nothing else | M24, Q16, 42      |
-| A skipped day never shifts the program; the rotation counts **scheduled** days             | Q13, Q13b, 40     |
-| Archiving a program someone is on resolves each of them in place first                     | Q3                |
-| HIST-1 is timeline first                                                                   | Q4                |
-| Per-athlete targets are typed: the movement's own quantity, **one** weight, and a note     | M31 → M34, 50–51  |
-| Labelled workouts pinned to recurring weekdays come later, and nothing here may block them | M24, Recurrence   |
+| Decision                                                                                                                                                          | Where             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| The default program is **The Daily Five** via ONB-2's writer, never `PROGRAM_SEED`                                                                                | M22, criterion 33 |
+| ~~Programs have labelled **workouts** (at most three)~~ — **superseded 2026-11-13 (R1, R2):** any number, arranged on a week template; a "day" is still a weekday | M24, Q16, 42, R1  |
+| A skipped day never shifts the program; the rotation counts **scheduled** days                                                                                    | Q13, Q13b, 40     |
+| Archiving a program someone is on resolves each of them in place first                                                                                            | Q3                |
+| HIST-1 is timeline first                                                                                                                                          | Q4                |
+| Per-athlete targets are typed: the movement's own quantity, **one** weight, and a note                                                                            | M31 → M34, 50–51  |
+| Labelled workouts pinned to recurring weekdays come later, and nothing here may block them                                                                        | M24, Recurrence   |
 
 **To decide — before the step that depends on it:**
 

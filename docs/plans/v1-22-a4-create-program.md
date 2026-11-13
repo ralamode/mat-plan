@@ -1,5 +1,8 @@
 # V1-22 A4 — create a program
 
+> ⚠️ **Re-scoped 2026-11-13 — revise before implementing.** **No workout cap** (R1): `MAX_WORKOUTS`, the `strength_a/b/c` slug CHECK and the 'Up to 3 workouts for now' hint go. Workouts are named, unlimited and reusable across days, the parent arranges them on the **week template** (R2), and the editor follows R10. The `workouts` arc this plan rejected as option F is now the path, re-priced by ADR 0007 Amendment 1 and ADR 0009. Authority:
+> [CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13). The rest of this plan stands until its revision.
+
 > Backlog: [plan.md](../plan.md) row **V1-22** (scope A, chunk **A4**) · Spec:
 > [crud-1-fix-it-yourself.md](../specs/crud-1-fix-it-yourself.md) chunk **D4c** · Milestone:
 > [PROG-1](../milestones/prog-1-programs-and-scheduling.md) · Branch: `feat/v1-22-a4-create-program`

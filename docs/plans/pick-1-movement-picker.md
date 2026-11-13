@@ -1,5 +1,8 @@
 # PICK-1 — the movement picker (with U0, the shared sheet)
 
+> ⚠️ **Re-scoped 2026-11-13 — revise before implementing.** PRs 1–3 have shipped and stand. **PR 4** (mounting) follows R10: on a phone, adding opens a full-screen, multi-select picker with a sticky add-count button, prototyped and panelled first. Movements and household activities converge into one picker of **typed items** (R6, `ITEM-1`). Authority:
+> [CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13). The rest of this plan stands until its revision.
+
 > Backlog: [plan.md](../plan.md) → [PICK-1](../plan.md#pick-1) (`plan.md:161-219`) · Spec:
 > [crud-1-fix-it-yourself.md](../specs/crud-1-fix-it-yourself.md) chunks **U0** and **C1** · Milestone:
 > [CRUD-1](../milestones/crud-1-fix-it-yourself.md) · Branch: `feat/pick-1-movement-picker` (one branch

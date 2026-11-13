@@ -181,7 +181,9 @@ and panelled; the milestones order them.
 - **ASSIGN-1 (with ASSIGN-READ) — put an athlete on a program on chosen weekdays; move, change days,
   take off, with Undo.** ([plan](./plans/assign-1-assignments.md), [PROG-1](./milestones/prog-1-programs-and-scheduling.md) steps 4–5.) ASSIGN-READ makes
   Today and the export read the athlete's assignments instead of the newest block, which changes CSV
-  bytes and needs Insight's sign-off.
+  bytes and needs Insight's sign-off. ⚠️ _2026-11-13:_ re-scoped — an ordered list of workouts per day
+  from the program's week template, beside rotation ([re-scope](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) R2–R5); the CSV sign-off is moot
+  under ADR 0009.
 
 <a id="tgt-1"></a>
 
@@ -193,7 +195,27 @@ and panelled; the milestones order them.
 
 - **ACT-1 — household activities picked from a generic starter set.** No plan yet; starts with an
   edge-case brainstorm. The activities editor stays hidden until it ships (spec M30, M33). In neither
-  milestone.
+  milestone. ⚠️ _2026-11-13:_ converges with `ITEM-1` — a household activity becomes an item with a
+  tracking type ([re-scope](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) R6).
+
+<a id="item-1"></a>
+
+- **ITEM-1 — every item has a tracking type, chosen when it is created.** _(maintainer, 2026-11-13;
+  [re-scope](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) R6–R8.)_ A closed menu: **Check** · **Duration** · **Count** · **Reps** ·
+  **Weight × reps** · **Time per set** · **Distance**. Every item can be checked off whatever its type,
+  and ✓ on an untouched item accepts what was prescribed. The type is locked once the item has
+  history. Movements and household activities (`ACT-1`) become one picker of items (`PICK-1`). "Write
+  it" numbers are Count items. Per item, the author writes instructions and chooses whether the athlete
+  gets a note field (default off). Builds on the existing quantity slots and `activity_types.input_shape`.
+  **Pillar:** Logging & Measurement. **Needs a spec section or plan** before code; PROG-1, Beta 1.
+
+<a id="superset-1"></a>
+
+- **SUPERSET-1 — supersets defined in the program, as defaults the log inherits.** _(maintainer,
+  2026-11-13; [re-scope](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) R9.)_ Today a superset exists only on logged entries (ADR 0003), so it
+  is rebuilt every session. The program groups prescriptions; the log form starts from that grouping.
+  **Later add-on:** change a superset during a workout and choose whether it is saved back to the
+  program. **Pillar:** Authoring & Scheduling. PROG-1, Beta 1.
 
 <a id="pick-1"></a>
 

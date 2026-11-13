@@ -1,5 +1,8 @@
 # TGT-1 — typed per-athlete targets: the movement's own quantity, one weight, and a note
 
+> ⚠️ **Re-scoped 2026-11-13 — revise before implementing.** Per item: the author's **instructions** (always shown) and a switch for whether the athlete gets a **note field** (default off) replace the single note (R8). Targets follow the item's **tracking type** (R6), so a Check item has none and a Count item has one number. Authority:
+> [CRUD-1 spec → PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13). The rest of this plan stands until its revision.
+
 > Backlog: TGT-1 _(proposed; its `plan.md` row, and the later contract row, are filed when the PR
 > carrying this plan opens)_ · Spec: [crud-1-fix-it-yourself.md](../specs/crud-1-fix-it-yourself.md)
 > chunk **D8** · Milestone: [PROG-1](../milestones/prog-1-programs-and-scheduling.md) step 10 ·
