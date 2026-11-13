@@ -297,28 +297,51 @@ again immediately before merge, as with 1d (`runbooks.md:56`):
 
 ```sql
 begin read only;
-select t, count(*) filter (where n > 1)                         as dup_client_ids,
-          count(*) filter (where n > 1 and live > 0 and hid > 0) as hidden_live_pairs,
-          sum(hid)                                               as hidden_rows
-from (
-  select 'entries' t, client_id, count(*) n,
-         count(*) filter (where deleted_at is null) live,
+-- ⚠️ The table list is a VALUES join, NOT five bare UNIONs grouped by name. Grouped, a table with
+-- ZERO rows produces no group and silently DISAPPEARS from the result — the first run of this read
+-- (2026-11-12) returned four rows for five tables because `supersets` was empty, and the pass
+-- condition "0 in every row" is unreadable when a row can be absent rather than zero. Every table
+-- now reports, empty or not.
+select tbl,
+       coalesce(count(*) filter (where n > 1), 0)                         as dup_client_ids,
+       coalesce(count(*) filter (where n > 1 and live > 0 and hid > 0), 0) as hidden_live_pairs,
+       coalesce(sum(hid), 0)                                              as hidden_rows
+from (values ('entries'), ('entry_sets'), ('entry_set_quantities'), ('sessions'), ('supersets')) v(tbl)
+left join lateral (
+  select client_id, count(*) n,
+         count(*) filter (where deleted_at is null)     live,
          count(*) filter (where deleted_at is not null) hid
-    from entries group by client_id
-  union all select 'entry_sets', client_id, count(*), count(*) filter (where deleted_at is null),
-         count(*) filter (where deleted_at is not null) from entry_sets group by client_id
-  union all select 'entry_set_quantities', client_id, count(*), count(*) filter (where deleted_at is null),
-         count(*) filter (where deleted_at is not null) from entry_set_quantities group by client_id
-  union all select 'sessions', client_id, count(*), count(*) filter (where deleted_at is null),
-         count(*) filter (where deleted_at is not null) from sessions group by client_id
-  union all select 'supersets', client_id, count(*), count(*) filter (where deleted_at is null),
-         count(*) filter (where deleted_at is not null) from supersets group by client_id
-) g group by t order by t;
+  from entries where v.tbl = 'entries' group by client_id
+  union all
+  select client_id, count(*), count(*) filter (where deleted_at is null),
+         count(*) filter (where deleted_at is not null)
+  from entry_sets where v.tbl = 'entry_sets' group by client_id
+  union all
+  select client_id, count(*), count(*) filter (where deleted_at is null),
+         count(*) filter (where deleted_at is not null)
+  from entry_set_quantities where v.tbl = 'entry_set_quantities' group by client_id
+  union all
+  select client_id, count(*), count(*) filter (where deleted_at is null),
+         count(*) filter (where deleted_at is not null)
+  from sessions where v.tbl = 'sessions' group by client_id
+  union all
+  select client_id, count(*), count(*) filter (where deleted_at is null),
+         count(*) filter (where deleted_at is not null)
+  from supersets where v.tbl = 'supersets' group by client_id
+) g on true
+group by tbl order by tbl;
 rollback;
 ```
 
-**Pass:** `dup_client_ids = 0` in every row. A non-partial index needs hidden/hidden pairs gone too.
+**Pass:** `dup_client_ids = 0` in every row, and **five rows come back** — one per table, a count of
+`0` where the table is empty. A non-partial index needs hidden/hidden pairs gone too.
 `hidden_rows ≥ 2` on `entries` is expected (the 1c rows).
+
+✅ **Run 2026-11-12 against production: PASSED.** `dup_client_ids = 0` and `hidden_live_pairs = 0`
+everywhere, `hidden_rows = 2` on `entries` (the 1c weigh-ins), all other tables empty of hidden rows.
+⚠️ That run used the earlier UNION form and returned **four** rows for five tables, because
+`supersets` held no rows at all and so produced no group — benign (an empty table cannot hold a
+duplicate) but exactly the kind of absence a reader has to count to notice. Hence the rewrite above.
 
 **If a pair exists:** resolve it with a correction that **selects by predicate**, never by committed
 ids (privacy S6, and PRIV-3's no-identifier rule).
