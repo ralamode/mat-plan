@@ -1238,7 +1238,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     - **Tabata:** 20s work and 10s rest, 8 rounds by default, all editable.
 
     Both are settings for **one interval engine**, which later covers circuits, timed rounds and the
-    rest timer between sets.
+    rest timer between sets. ⚠️ **So a per-exercise rest timer is THIS row, not a new one**
+    _(2026-11-13)_ — it is the same engine with a one-interval setting, and filing it separately
+    would buy a second implementation of the thing this row exists to build once.
 
   - **Shape:** a pure sequence builder (format + settings → an ordered list of intervals: label,
     movement, duration, and kind: prepare, work or rest) with unit tests, and a screen that only plays
@@ -1254,6 +1256,32 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     V1-22 and PROG-1); which voice to use.
   - **Gated on nothing** for a timer with typed-in movement names. Choosing movements from the catalog
     uses PICK-1. **Owes** a plan and a full UX panel (a new screen) when scoped.
+
+- **FUEL-1 — logging what an athlete ate and drank.** _(captured 2026-11-13, not scoped.)_ The
+  maintainer wants meal and water logging after the core — streaks and history — is in place. It is
+  **Block 2** on [roadmap.md](./roadmap.md)'s long arc.
+  - **The easy half:** this is a new `activity_type` over a schema already built for typed
+    quantities (ADR 0004). Water is a quantity with a unit; a meal is a label plus optional
+    quantities. No new shape is needed, which is why it fits where it does.
+  - 🔴 **The hard half, and the reason this row exists rather than a one-line "add food":** food
+    data about a minor is a **new category of personal data to hold**, with a different sensitivity
+    from a rep count. It pulls in the privacy inventory, a retention answer and a line in the
+    published notice — and, near an athlete who cuts weight, it is adjacent to disordered-eating
+    territory, which is a product-safety question before it is a schema one. The repo's standing
+    rule applies with force: the model may classify or extract, a human decides.
+  - **Owes** a privacy-lens review on its plan, an inventory update in the same PR, and a decision
+    on whether anything here is ever shown to anyone but the athlete and their guardian.
+
+- **PROGS-1 — the screen that lists an athlete's programs.** _(captured 2026-11-13, not scoped.)_
+  `CLONE-1` and `RETIRE-1` both assume a list of programs exists to clone from and to archive
+  within; neither row owns **the screen**. It needs one-line summaries, duplicate and archive, and
+  it is the natural home for `RETIRE-1`'s archived set. Queries largely exist; the design does not.
+
+- **PROGS-2 — a program's summary line: how long it takes, and what it works.** _(captured
+  2026-11-13, not scoped.)_ "How long is this?" is the question a parent actually asks, and
+  estimated duration is answerable from the prescriptions. **Muscles worked is not**: it needs the
+  equipment and primary/secondary-muscle columns that [`CAT-3`](#cat-3) adds, so this row is gated
+  on `CAT-3` and should not be attempted before it.
 
 ## DX — agent & developer tooling ([skills index](../.claude/skills/README.md))
 
