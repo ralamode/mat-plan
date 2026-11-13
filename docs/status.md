@@ -27,6 +27,12 @@ app's `<main>`, its one `<footer>` and its first skip link are declared in one f
 client form, so the third grid track is now part of **`PICK-1` PR 4**, with the picker as its first
 real consumer.
 
+📍 **Where Beta 0 sits, because it is further forward than it looks.** Its gate is **~10–11 PRs
+plus two manual steps** — five or six of them the `V1-9b` delete/restore arc, four ops and privacy
+([the sequence](./milestones/beta-1.md)). ⚠️ **The lanes that feel like progress are not in it:**
+`UI-5`, `PICK-1` PR 4 and `V1-22` chunks 4–6 gate nothing for Beta 0. Where that sits in the longer
+order is [roadmap.md](./roadmap.md) § The long arc.
+
 Behind that:
 
 **`CRUD-1` step 2 is CLOSED, and the milestone now waits on `PROG-1`.** `PROF-1` finished with
