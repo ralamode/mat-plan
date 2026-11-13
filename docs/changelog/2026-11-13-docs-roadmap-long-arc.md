@@ -1,20 +1,21 @@
-- **2026-11-13** — **The roadmap says what order the next two years go in, and Beta 0 stops looking
-  like the end of it** ([roadmap](../roadmap.md) § The long arc, [beta-1](../milestones/beta-1.md) §
-  The remaining path). The repo could already tell you the next step in each pillar, and could tell
-  you each cross-pillar dependency **if you went looking for it** — `ID-1` precedes `SOCIAL-1`,
-  `PUB-1` and `COACH-1`; `MOT-1`'s streak breaks on a rest day unless `SCHED-1` can say what was
-  due. What no document said was the **order**, which is how a hinge gets skipped and the feed turns
-  out unbuildable. The long arc is four blocks of ids — logging, streaks, identity, other people —
-  with the two gates pointed at the rows that own them, not restated here (`roadmap.md` is a pointer
-  document). 🔴 **The correction that matters most: Beta 0 is not at the end of that arc, it sits
-  inside the first block and is nearly disjoint from it.** Its gate is ~10–11 PRs and two manual
-  steps, of which five or six are the `V1-9b` delete/restore arc and four are ops and privacy;
-  `UI-5`, `PICK-1` PR 4 and `V1-22` 4–6 are **not in it at all**. That sequence had been sitting
-  un-merged on a local branch, which is a poor place for the answer to "when is beta". Three rows
-  are filed for work the arc depends on and nothing owned: **`FUEL-1`** (meal and water logging —
-  easy on a schema already built for typed quantities, hard because food data about a minor is a new
-  category to hold, next to weight-cutting), **`PROGS-1`** (the list screen `CLONE-1` and `RETIRE-1`
-  both assume) and **`PROGS-2`** (a program's duration and muscles-worked, gated on `CAT-3`). A
-  fourth candidate was **not** filed: a per-exercise rest timer is `TIMER-1`'s own engine with a
-  one-interval setting, and its row now says so, so nobody files it twice. Two stale claims that
-  `V1-22` chunk 3 has "no plan file yet" are corrected — it merged as #375.
+- **2026-11-13** — **The roadmap says what order the releases go in, and Beta 0 stops looking like
+  the first slice of the product** ([roadmap](../roadmap.md) § The long arc, [beta-1](../milestones/beta-1.md) §
+  The remaining path). The repo could already tell you the next step in each pillar, and each
+  cross-pillar dependency **if you went looking for it** — `ID-1` precedes `SOCIAL-1`, `PUB-1` and
+  `COACH-1`; `MOT-1`'s streak breaks on a rest day unless `SCHED-1` can say what was due. What no
+  document said was the **order**. The long arc is now four **releases**, each defined by who may
+  use the app: Beta 0 (one invited family), Beta 1 (3–5 families), **Pilot** (one local club) and
+  Open. It names the milestones and rows that land in each, with three gates pointed at the rows
+  that own them. It also fixes three words: **release** (a who-may-use-it gate), **milestone** (an
+  id'd bundle inside one) and **row**. "Block" is dropped because it is already `program_blocks`.
+  🔴 **Beta 0 is nearly disjoint from the feature work.** Its gate is ~10–11 PRs and two manual
+  steps, mostly the `V1-9b` delete/restore arc plus ops and privacy; `UI-5`, `PICK-1` PR 4 and
+  `V1-22` 4–6 are **not in it**. The Pilot has **no milestone document yet**, and its club layer
+  (clubs, challenges, a club feed) has no rows; both are named as gaps rather than invented here.
+  The PROG-1 re-scope (week template, no workout cap, item tracking types) is flagged as pending its
+  own PR. Three rows are filed for work nothing owned: **`FUEL-1`** (meal and water logging),
+  **`PROGS-1`** (the program list screen) and **`PROGS-2`** (duration and muscles worked, gated on
+  `CAT-3`). A per-exercise rest timer is **not** filed: it is `TIMER-1`'s engine with a one-interval
+  setting, and the row says so. Also corrected: two stale "no plan file yet" claims for `V1-22` chunk 3
+  (#375); the CRUD-1 milestone's Beta 0/1 split, where `V1-24` 3b is Beta 0 because `V1-9b` B1-3 sits
+  on it; and the Insight pillar owning "the CSV contract", which ADR 0009 retires.
