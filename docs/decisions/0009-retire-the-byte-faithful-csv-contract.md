@@ -21,9 +21,10 @@ The contract was never only about the export file. It has been a constraint on d
 - **The workout cap.** V1-22 A4 caps a program at three workouts (`MAX_WORKOUTS`, a
   `workouts.slug CHECK IN ('strength_a','strength_b','strength_c')`) because the slug is written into
   the CSV's `session_type` column.
-- **ADR 0007 decision 3's costs.** The slug grammar (a comma in `session_type` throws the whole
-  export), the two exact-set `day_role` CHECKs, and the export's `DAY_ROLES` gate are three of its
-  five named costs. They are why the full `workouts` arc was priced at six PRs and deferred.
+- **ADR 0007 decision 3's costs.** Two of its five named costs exist only for the export: the slug
+  grammar (a comma in `session_type` throws the whole export) and the export's `DAY_ROLES` gate. A
+  third (the extra soft-delete level) also edits the contract's `session_type` section. Together they
+  are part of why the full `workouts` arc was priced at six PRs and deferred.
 - **V1-22 chunk 3** (planned, not built): a backfill whose acceptance is that it _changes no bytes_.
 - **ASSIGN-READ's READ-2b**: "the cells that can move", pinned for a contract another pillar owns.
 - **Non-standard quoting**: the export is "Not RFC-4180" and throws on a comma rather than quoting it.
