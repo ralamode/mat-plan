@@ -57,7 +57,7 @@ The contract was never only about the export file. It has been a constraint on d
 | Document            | What changes                                                                           |
 | ------------------- | -------------------------------------------------------------------------------------- |
 | V1-22 A4            | The three-workout cap and the `strength_a/b/c` slug CHECK lose their reason            |
-| ADR 0007 decision 3 | The full `workouts` arc loses three of its five costs; re-price it                     |
+| ADR 0007 decision 3 | The full `workouts` arc loses its export-driven costs; re-price it                     |
 | V1-22 chunk 3       | Re-justify (history views) or drop                                                     |
 | ASSIGN-1 → READ-2b  | The pinned "cells that can move" work shrinks or goes                                  |
 | The export itself   | May adopt RFC 4180 quoting, an athlete-named layout, new files (check-ins, activities) |
