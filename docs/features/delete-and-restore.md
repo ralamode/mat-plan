@@ -9,8 +9,12 @@ owns:
 # Delete and restore
 
 What a person calls **Delete**, the database calls `deleted_at`. The row stays: it keeps its values,
-its `public_id`, its `created_at` and its `client_id`, and it is restorable until `PRIV-3`'s purge
-hard-deletes it. [ADR 0008](../decisions/0008-deletion.md) is the contract;
+its `public_id`, its `created_at` and its `client_id`.
+
+⚠️ **It is restorable indefinitely, because nothing purges a hidden row.** `PRIV-3` owns the purge and
+the restore window, and `PRIV-3` **has no plan yet** — so "until it is removed" describes an intention,
+not a schedule. [data-inventory.md](../privacy/data-inventory.md) §5 is the one owner of retention and
+says the same thing; if these two ever disagree, the inventory is right. [ADR 0008](../decisions/0008-deletion.md) is the contract;
 [the plan](../plans/v1-9b-delete-and-restore.md) holds the decisions and their alternatives.
 
 🔴 **Read this before touching anything that reads `entries`.** The invariants here live _between_
@@ -31,8 +35,22 @@ filter. None of them can be checked by looking at a single file.
 
 ## Invariants that live between files
 
-**1 · `hide.ts` is the only writer of `deleted_at`.** Not a convention — it is what makes invariant 3
-a finite claim. A second writer means the audit below has to be redone against a second caller.
+**1 · `hide.ts` is the only writer of `deleted_at` the APP can reach.** That is what makes invariant 3
+a finite claim — but the unqualified version ("the only writer") is **false**, and a privacy lens
+caught it. There are three:
+
+| Writer                                                | Reachable by                | Production       |
+| ----------------------------------------------------- | --------------------------- | ---------------- |
+| `writers/hide.ts`                                     | the app, from `B1-2` on     | not yet          |
+| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run | **has been run** |
+| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB   | no               |
+
+🔴 **The consequence `B1-3` has to decide, so it is written down here rather than discovered:**
+`hiddenEntriesForDay` does **not** distinguish a row the person hid from a row the _correction_ hid.
+Production already holds correction-hidden weigh-ins, so the moment `B1-3` renders the hidden region
+they appear as restorable items nobody deleted — and restoring one would answer `slot_taken` against
+the keeper the correction left in place. Showing them, hiding them, or labelling them is a product
+call, and it is `B1-3`'s.
 
 **2 · The event token is TEXT, end to end, and never passes through a `Date`.** A hide event is
 `(profile, day, deleted_at)`. Postgres stores `timestamptz` to **microseconds**; a JavaScript `Date`
@@ -61,7 +79,13 @@ still returns them, which is why each one reaches ownership through the parent.
 | `insertBodyweightEntry` branch (b)                           | `bodyweightSlot` + `deleted_at IS NULL`                            | `verify.ts` V1-24 1d                                                                    |
 | `movement-ownership.ts`                                      | **deliberately none**                                              | asserted unchanged — a tombstone still holds its FK and still blocks a household delete |
 
-**4 · A hide is all-or-nothing, and a replay is `ok`.** If any id is not an owned entry of that
+**4 · A hide is all-or-nothing, and a replay is `ok` — including a MIXED one.** ⚠️ If some named ids
+are already hidden and some are live, the call mints a new event for the live ones and returns **that**
+token; the older ids keep theirs and answer `changed` on a restore under the new one. A retry of that
+same mixed call returns the same (newest) token rather than refusing — which it did not, until a
+review lens found it.
+
+If any id is not an owned entry of that
 athlete on that day — live _or already hidden_ — the whole call is `notFound`. ⚠️ The count is of ids
 **found**, not rows **updated**: the `UPDATE` touches only live rows, so a replay updates zero and is
 still `ok`. Reading the update's row count as the answer turns every replay into `notFound`, and it
@@ -88,5 +112,7 @@ commit the holder's hide.
 - **`activity_date` is a plain `DATE`.** `hiddenDayCounts` returns it as text; mapping it through a
   `Date` gives a calendar day a timezone it never had (V1-6c).
 - **A session's `feel` note outlives its entries.** Hiding every entry of a session leaves the
-  `sessions` row, and its free-text note with it. The purge must hard-delete orphaned grouping rows —
-  recorded as a requirement on `PRIV-3` in the plan, and stated plainly in the notice until then.
+  `sessions` row, and its free-text note — a child's own words — with it. The purge must hard-delete
+  orphaned grouping rows, recorded as a requirement on `PRIV-3` in the plan. ⚠️ **It is not yet in the
+  notice or in the inventory's §8**, and this guide previously said it was; `B1-3`/`B2` own adding it
+  (plan requirement 2).

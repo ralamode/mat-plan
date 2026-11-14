@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isoDaySchema } from './date';
+import { keyBySelf } from './enums';
 import { uuidSchema } from './id';
 
 /**
@@ -8,8 +9,9 @@ import { uuidSchema } from './id';
  *
  * 🔴 **"Hide", never "delete", in every name here.** `deleted_at` is a tombstone the row keeps: the
  * entry is still present, still holds its `client_id` (non-partial since B0), and is still
- * restorable. Naming these `delete*` would invite the next author to assume the row is gone, which
- * is the assumption ADR 0008 exists to forbid until the purge (`PRIV-3`) ships.
+ * restorable — **indefinitely**, since nothing purges a hidden row and `PRIV-3`, which owns the
+ * purge, has no plan yet. Naming these `delete*` would invite the next author to assume the row is
+ * gone, which is the assumption ADR 0008 exists to forbid.
  */
 
 /**
@@ -86,9 +88,7 @@ export const hiddenAtSchema = z
  * does not exist yet would be a contract this PR cannot honour.
  */
 export const RESTORE_REASONS = ['ok', 'slot_taken', 'changed', 'not_found'] as const;
-export const RESTORE_REASON = Object.fromEntries(RESTORE_REASONS.map((r) => [r, r])) as {
-  readonly [K in (typeof RESTORE_REASONS)[number]]: K;
-};
+export const RESTORE_REASON = keyBySelf(RESTORE_REASONS);
 export const restoreReasonSchema = z.enum(RESTORE_REASONS);
 export type RestoreReason = z.infer<typeof restoreReasonSchema>;
 
