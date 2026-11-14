@@ -547,7 +547,8 @@ improves before anyone is invited, and the invited family gets per-athlete days 
 2. **Scheduling:** `SCHED-1` 1b, 1d, 1e → `ASSIGN-READ` → `ASSIGN-1` (per-athlete days, several
    programs, Move, Change days, Undo) · rotation for created programs (R3) · **the nothing-due-day
    rule**, including optional workouts → `MOT-1`.
-3. **Before the first invite:** `ONB-2` (a new household's first program, on `FAM-1`'s `workouts`) ·
+3. **Before the first invite:** `ONB-2`, re-scoped 2026-11-14 (proposed): a new household browses 2–3
+   curated starters and tries one as an editable copy, or builds its own; no single default program ·
    V1-22 A4-3c and A4-4 · `PROGS-1`. Then invite family #1.
 4. **During the two weeks:** authoring depth: `TGT-1` · changing a superset mid-workout · the
    athlete's note (R8) · `ITEM-1` with `ACT-1` · `CLONE-1` → `RETIRE-1` → `HIST-1`, with V1-22 chunk
