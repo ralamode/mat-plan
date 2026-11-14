@@ -220,7 +220,7 @@ and panelled; the milestones order them.
   is rebuilt every session. The program groups prescriptions; the log form starts from that grouping.
   **Later add-on:** change a superset during a workout and choose whether it is saved back to the
   program. **Pillar:** Authoring & Scheduling. PROG-1, Beta 1.
-  ⚠️ _2026-11-14:_ stays **Beta 1**; [FAM-1](./milestones/fam-1-family-program.md) recommends leaving it out of the slice.
+  ⚠️ _2026-11-14 (maintainer):_ the program-defined grouping moves **into [FAM-1](./milestones/fam-1-family-program.md)** (steps 4b, 8b, 11b, 13b), so Beta 0. The later add-on stays Beta 1.
 
 <a id="pick-1"></a>
 

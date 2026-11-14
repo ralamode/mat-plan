@@ -538,19 +538,25 @@ the feedback check-in decides the widening to 3–5 (see the note under "Beta 0"
 `FAM-1` takes the slice of PROG-1 that one household on one program needs; what it leaves moves
 here, in this order:
 
-1. **Before the first invite:** `ONB-2` (a new household's first program, now on `FAM-1`'s
-   `workouts`) · V1-22 A4-3c and A4-4 · `PROGS-1`. Then invite family #1.
-2. **During the two weeks:** R10 for set-based items with `FEED-0` · `PICK-1` PR 4 · `MOV-1` · the
-   rest of `V1-24`.
-3. **Scheduling for other families:** `SCHED-1` 1b, 1d, 1e → `ASSIGN-READ` → `ASSIGN-1` (per-athlete
-   days, several programs, Undo) · rotation for created programs (R3).
-4. **The nothing-due-day rule**, including optional workouts → `MOT-1`.
-5. **Authoring depth:** `TGT-1` · `SUPERSET-1` · the athlete's note (R8) · `ITEM-1` with `ACT-1` ·
-   `CLONE-1` → `RETIRE-1` → `HIST-1`, with V1-22 chunk 3's verdict. V1-22 chunks 4 and 5 are proposed
-   for dropping (`FAM-1` → "To decide").
-6. **Widen to 3–5:** household members by invitation, step-up, self-serve deletion, client-side
+⚠️ _Revised 2026-11-14 (maintainer): logging and scheduling come first_, so the household's own use
+improves before anyone is invited, and the invited family gets per-athlete days on day one.
+`FAM-1` now also takes supersets and per-row strength logging.
+
+1. **Logging:** `FEED-0` · the rest of `V1-24` (2b may fold into `FAM-1` step 13b) · `PICK-1` PR 4 ·
+   `MOV-1` · structured worn load (GAP-3 PR 4b).
+2. **Scheduling:** `SCHED-1` 1b, 1d, 1e → `ASSIGN-READ` → `ASSIGN-1` (per-athlete days, several
+   programs, Move, Change days, Undo) · rotation for created programs (R3) · **the nothing-due-day
+   rule**, including optional workouts → `MOT-1`.
+3. **Before the first invite:** `ONB-2` (a new household's first program, on `FAM-1`'s `workouts`) ·
+   V1-22 A4-3c and A4-4 · `PROGS-1`. Then invite family #1.
+4. **During the two weeks:** authoring depth: `TGT-1` · changing a superset mid-workout · the
+   athlete's note (R8) · `ITEM-1` with `ACT-1` · `CLONE-1` → `RETIRE-1` → `HIST-1`, with V1-22 chunk
+   3's verdict.
+5. **Widen to 3–5:** household members by invitation, step-up, self-serve deletion, client-side
    Sentry, the audit log, the support runbooks.
-7. `CAT-3`, `V1-16`, `PROGS-2`.
+6. `CAT-3`, `V1-16`, `PROGS-2`.
+
+Each group is planned, prototyped and signed off when Beta 1 is planned, after Beta 0's sign-off.
 
 The list below is kept as written; the bullets above set the order.
 
