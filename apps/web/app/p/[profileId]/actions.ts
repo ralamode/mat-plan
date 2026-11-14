@@ -19,11 +19,12 @@ import { z } from 'zod';
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import {
   AMEND_ERROR_COPY,
-  athletePath,
-  athleteRoutinePath,
   BODYWEIGHT_COPY,
+  HIDE_COPY,
   NO_PROFILE_LOG,
   NO_PROFILE_SAVE,
+  athletePath,
+  athleteRoutinePath,
 } from '@/lib/constants';
 import {
   CHECKIN_FIELDS,
@@ -184,6 +185,7 @@ export async function logCheckinsAction(
     // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
     //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
     const items = [];
+    const fieldKeyByClientId = new Map<string, string>();
     const fieldErrors: Record<string, string[]> = {};
     for (const f of CHECKIN_FIELDS) {
       const raw = formData.get(valueInputName(f.key));
@@ -206,6 +208,9 @@ export async function logCheckinsAction(
         value: value.data,
         clientId: clientId.data,
       });
+      // V1-9b B1-2: the writer answers per `client_id`, and a refusal has to name the FIELD it
+      // belongs to — "one of these failed" over ten rows tells a person nothing they can act on.
+      fieldKeyByClientId.set(clientId.data, f.key);
     }
 
     if (Object.keys(fieldErrors).length > 0) {
@@ -236,6 +241,20 @@ export async function logCheckinsAction(
     });
 
     revalidatePath(athletePath(profile.id));
+
+    // 🔴 **`own_hidden` is reported per field, and never as success** (V1-9b criterion 9). These are
+    // items whose `client_id` is held by this athlete's own DELETED row — so nothing was written,
+    // and "already logged" would be false twice over. A mixed batch is the case that matters: some
+    // rows saved, one did not, and the person needs to know WHICH.
+    const ownHidden = results.filter((r) => r.outcome === 'own_hidden');
+    if (ownHidden.length > 0) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const r of ownHidden) {
+        const key = fieldKeyByClientId.get(r.clientId);
+        if (key) fieldErrors[key] = [HIDE_COPY.loggedThenDeleted];
+      }
+      return { ok: false, error: HIDE_COPY.loggedThenDeletedSome, fieldErrors };
+    }
 
     // A conflict on every item means nothing was written. `client_id` UNIQUE is GLOBAL
     // (not profile-scoped), so silently reporting success here would mask a lost write.
@@ -458,12 +477,22 @@ export async function logLifeActivitiesAction(
     const profile = await getProfileByPublicId(profileId.data);
     if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
-    await logCheckinEntries({ profilePublicId: profile.id, day: entryDay, items: [item] });
+    const [result] = await logCheckinEntries({
+      profilePublicId: profile.id,
+      day: entryDay,
+      items: [item],
+    });
     revalidatePath(athletePath(profile.id));
 
-    // A one-tap life activity is idempotent by its fixed `client_id`: a replay (double-tap) dedupes via
-    // ON CONFLICT and the end state is identical — that IS success, not the destructive "already logged"
-    // error the batch check-in path returns (where a partial conflict can mean a genuinely lost write).
+    // 🔴 **The result used to be DISCARDED here, and that is half of the lost write.** A one-tap life
+    // activity is idempotent by its `client_id`, so a double-tap dedupes and the end state is
+    // identical — that IS success. But `own_hidden` is not a replay: the id is held by this
+    // athlete's own DELETED row, nothing was written, and returning `ok` would report a save that
+    // did not happen (criterion 9). The other half of the fix is in `life-form.tsx`, where the
+    // button's key now carries the day and the row's id so a dead id is not re-submitted at all.
+    if (result?.outcome === 'own_hidden') {
+      return { ok: false, error: HIDE_COPY.loggedThenDeleted };
+    }
     return { ok: true, error: null };
   });
 }
