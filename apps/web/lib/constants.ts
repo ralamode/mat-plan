@@ -1256,6 +1256,28 @@ export const NOTHING_TO_EXPORT = 'Nothing logged yet, so there is nothing to exp
  * `editStrengthSetAction` had `'That set could not be found.'` inline; a second amend surface would
  * have re-worded the same failure. One place, so the two cannot answer it differently.
  */
+/**
+ * V1-9b — what a person is told when a write lands on their own **deleted** row.
+ *
+ * 🔴 **`own_hidden` is never `ok`** (criterion 9). After B0 made the `client_id` arbiters
+ * non-partial, a hidden row HOLDS its id, so a replay conflicts instead of twinning — and reporting
+ * that as "already logged" tells a kid their tap was saved when nothing was written.
+ *
+ * ⚠️ **Almost nothing can reach this string, and that is by design rather than by luck.** A UX panel
+ * walked every UI path: the button's key now carries the day and the row's id, so a fresh id is
+ * minted after a delete, after a day change and after a refusal. What is left is `/api/sync`'s
+ * replay (v1.5), a no-JS form resubmission, and a crafted POST. So this is a **contract string**,
+ * not an affordance — do not build UI around it, and do not assume a person has seen it.
+ *
+ * The second clause is only true because the form rotates its `client_id` on any `ok: false`
+ * envelope (`life-form.tsx`). If that ever goes, this sentence becomes a lie and must go with it.
+ */
+export const HIDE_COPY = {
+  loggedThenDeleted: 'That was deleted earlier, so nothing was logged — tap again to log it now.',
+  /** The batch form's header when one of several items landed on a deleted row; the row says which. */
+  loggedThenDeletedSome: "One of these was deleted earlier, so it wasn't logged — see below.",
+} as const;
+
 export const AMEND_ERROR_COPY = {
   /**
    * The row is gone, was never theirs, or is not amendable. ONE message for all three **on purpose**:

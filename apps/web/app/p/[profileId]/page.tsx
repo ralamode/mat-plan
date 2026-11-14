@@ -142,11 +142,23 @@ export default async function TodayPage({
 
   // V1-7: which life activities (wake / wrestling practice) are already logged today, so their
   // one-tap buttons render inert. Derived from the same fetched entries (no extra query).
-  const loggedLifeKeys = entries
-    .map((e) => e.activityKey)
-    .filter(
-      (k): k is string => k !== null && (LIFE_ACTIVITY_KEYS as readonly string[]).includes(k),
-    );
+  //
+  // 🔴 **A MAP to the entry's id since `V1-9b` B1-2, not a set of keys** — because the button's
+  // React identity has to change when the row behind it does. The key `a.key` alone let one
+  // `LifeButton` instance, and the `client_id` in its state, survive a day change: tap Wrestling
+  // practice today, press ‹, tap it again, and the second tap replays TODAY's row and writes
+  // nothing for yesterday. (`<section key={`b${i}`}>` is keyed by block index, so React reconciles
+  // the same instance across days.) The id is also what makes the button's identity change after a
+  // delete, which is what `B1-3` needs.
+  //
+  // ⚠️ Deterministic when a day somehow holds two rows for one key — nothing in the schema forbids
+  // it — because `listEntriesForDay` returns `(created_at, id)` order and the FIRST wins.
+  const loggedLifeEntryIds = new Map<string, string>();
+  for (const e of entries) {
+    if (e.activityKey === null) continue;
+    if (!(LIFE_ACTIVITY_KEYS as readonly string[]).includes(e.activityKey)) continue;
+    if (!loggedLifeEntryIds.has(e.activityKey)) loggedLifeEntryIds.set(e.activityKey, e.id);
+  }
 
   // V1-24 PR 1a: every bodyweight row on the day (usually zero or one) — what makes the weigh-in
   // surface render the RECEIPT instead of an empty input. Derived from the entries already fetched
@@ -340,7 +352,7 @@ export default async function TodayPage({
                 <LifeForm
                   profileId={profile.id}
                   day={day}
-                  loggedLifeKeys={loggedLifeKeys}
+                  loggedLifeEntryIds={loggedLifeEntryIds}
                   activityKeys={block.keys}
                 />
               ) : null}
