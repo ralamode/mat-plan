@@ -352,6 +352,56 @@ flowchart TD
 there would render a second link to every athlete beside the tile it duplicates. The no-household
 branch was already excluded for the adjacent reason — a rail pointing at the page you are on.
 
+## 2h. Hide and restore — what "delete" does to a row (V1-9b B1-1)
+
+`deleted_at` is a tombstone, not a deletion: the row keeps its values, its `public_id`, its
+`created_at` and its `client_id`, and stays restorable until `PRIV-3`'s purge. The invariants and the
+full reader audit are in [delete-and-restore.md](./features/delete-and-restore.md); this is the shape.
+
+🔴 **Two things decide everything else here.** A hide event is `(profile, day, deleted_at)` carried
+as **fixed-format UTC text** — one transaction shares one `now()`, so a folded row is one event, and
+the token never passes through a JS `Date` (Postgres keeps microseconds, a `Date` keeps
+milliseconds). And `ON DELETE CASCADE` is **hard-delete only**, so a hidden entry keeps **live
+children**: every reader must reach ownership through the parent, or it returns the sets of a row
+the person deleted.
+
+```mermaid
+sequenceDiagram
+  participant P as Person
+  participant W as writers/hide.ts
+  participant DB as entries
+  participant R as every other reader
+
+  P->>W: hide [ids] on (profile, day)
+  W->>DB: one tx — every id owned, that day? else notFound
+  DB-->>W: deleted_at = now() · ONE token
+  W-->>P: hiddenAt (six-digit UTC text)
+  Note over DB,R: children keep deleted_at IS NULL —<br/>readers reach ownership through the PARENT
+  R->>DB: month export · adherence · amends
+  DB-->>R: the hidden parent AND its live children are absent
+
+  P->>W: restore [ids] under token, keepInsteadOf?
+  loop per item, in its own SAVEPOINT
+    W->>DB: lock the item (FOR UPDATE), scoped
+    alt already live
+      W-->>P: ok (replay)
+    else hidden under a DIFFERENT token
+      W-->>P: changed — the holder is NEVER touched
+    else the day's weigh-in slot is held, no swap asked
+      W-->>P: slot_taken + heldBy
+    else swap
+      W->>DB: hide the holder (owned · same slot · live)
+      W->>DB: restore the item (guarded by the token)
+      W-->>P: ok — or ROLLBACK TO SAVEPOINT
+    end
+  end
+```
+
+⚠️ **The savepoint is the half-swap guard.** "Use this one instead" hides a live weigh-in to make room
+for the one being restored; without a per-item savepoint, a restore that then failed would commit the
+holder's hide and leave the item hidden too — the person loses both. A refusal therefore leaves by
+`throw`, because returning it would commit.
+
 ## 2f. The `prescribed` column — frozen at log time, live only as a fallback (V1-22 chunk 2)
 
 ```mermaid

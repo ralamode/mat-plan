@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index 204f8dc..81a61de 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -298,7 +298,7 @@ async function restoreOne(
+       and(
+         eq(schema.entries.id, item.id),
+         isNotNull(schema.entries.deletedAt),
+-        sql`${schema.entries.deletedAt} = ${args.hiddenAt}::timestamptz`,
++        sql`${schema.entries.deletedAt} = ${new Date(args.hiddenAt).toISOString()}::timestamptz`,
+       ),
+     )
+     .returning({ id: schema.entries.id });

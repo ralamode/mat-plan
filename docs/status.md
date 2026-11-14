@@ -50,6 +50,12 @@ arbiters non-partial**, so hiding a row no longer frees the key that identifies 
 the prerequisite B1's delete and restore is built on. Nothing a person can see changed; what changed
 is that a replay of a hidden write is a refusal rather than a twin.
 
+✅ **And `B1-1` is in, in two halves.** The check-in insert moved to `packages/db` where `db:verify`
+can run the real statement (#385), and then the hide/restore core landed: **one writer for
+`deleted_at`, one reader that returns tombstones, and an audit proving every other reader filters
+them** ([guide](./features/delete-and-restore.md)). Still nothing a person can see — **`B1-2` is the
+first half of this arc that is visible**, and it is next.
+
 Behind that, the write path it builds on:
 
 **`PROF-1` a-1w shipped the athlete CREATE path, DARK — no screen reached it yet**

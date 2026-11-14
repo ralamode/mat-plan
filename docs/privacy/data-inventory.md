@@ -456,9 +456,24 @@ a parent the consequence, this file links the cause.
 
 ## 5. "Deleted" does not mean deleted
 
-There is **no hard `DELETE` anywhere** in the app or the DAL. Soft delete is the only delete, and it is
-written in exactly one place in the app tree (a committed data correction). **Nothing purges a
-soft-deleted row today**, so it stays in the database indefinitely and a replacement coexists with it.
+There is **no hard `DELETE` anywhere** in the app or the DAL. Soft delete is the only delete.
+**Nothing purges a soft-deleted row today**, so it stays in the database indefinitely and a
+replacement coexists with it.
+
+⚠️ **Updated 2026-11-13 (`V1-9b` B1-1b).** This paragraph said soft delete was "written in exactly
+one place in the app tree (a committed data correction)". There are now **three** writers of
+`entries.deleted_at`, and the distinction between them is what matters here:
+
+| Writer                                                            | Reachable by                                                     | Touches production?       |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------- |
+| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                        | **yes** — it has been run |
+| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **nothing yet** — no action or UI imports it until `B1-2`/`B1-3` | not yet                   |
+| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                        | no                        |
+
+**Nothing stored, received or retained changed in B1-1b**: no column, no processor, no new reader
+audience, and the month export is proved unchanged (restoring returns it deep-equal). The
+behavioural rewrite of §1 and §5 — _the app now writes `deleted_at`, through `entry-actions.ts`_ —
+belongs to **`B1-2`**, which is the PR that makes it reachable.
 
 ⚠️ **Correction (2026-10-18, [ADR 0008](../decisions/0008-deletion.md)):** this section previously said
 _"every uniqueness arbiter is `WHERE deleted_at IS NULL`"_. That is wrong, and it was wrong when written.

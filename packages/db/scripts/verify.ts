@@ -65,7 +65,10 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
+import type { Executor } from '../src/writers/executor';
 import { writeCheckinEntries } from '../src/writers/checkin';
+import { hideEntries, restoreHidden } from '../src/writers/hide';
+import { hiddenDayCounts, hiddenEntriesForDay } from '../src/queries/hidden-entries';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { prescribedSnapshotsFor } from '../src/writers/prescribed-snapshot';
 import { householdProfileRows } from '../src/queries/household-profiles';
@@ -138,6 +141,16 @@ const asPg = db as unknown as NodePgDatabase<typeof schema>;
 
 /** The transaction handle `db.transaction` hands its callback — derived here, never re-typed. */
 type VerifyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * The same `as unknown as` widening `asPg` performs, for a TRANSACTION handle.
+ *
+ * ⚠️ PGlite's `PgTransaction` is structurally incompatible with node-postgres' (`Results` has no
+ * `oid`), so a writer typed on `Executor` will not take a PGlite `tx` without it. The runtime shapes
+ * agree — this file's whole premise — which is exactly what `asPg` already asserts for the database
+ * handle; this is that cast at one level down, named once rather than inline per call.
+ */
+const asTx = (tx: VerifyTx) => tx as unknown as Executor;
 
 /**
  * Assert `fn` rejects with a Postgres error whose violated constraint is `constraintName`,
@@ -9163,6 +9176,789 @@ console.log(
   console.log(
     '✓ V1-9b B1-1: the check-in writer distinguishes created / replay / own_hidden / conflict — a ' +
       "replay of this profile's HIDDEN row is never reported as logged, and never twinned",
+  );
+}
+
+// ── V1-9b B1-1b — hide and restore, and every reader that must not see a tombstone ────────────────
+//
+// 🔴 **The reader audit comes first, because it is the claim with the widest blast radius.** ADR 0008
+// decision 2 says a hidden row is invisible everywhere except the surface built to show it. That is
+// a statement about EVERY query in the app, so it is proved one reader at a time rather than
+// asserted in a docblock. `docs/features/delete-and-restore.md` carries the table; this is its proof.
+//
+// ⚠️ **The trap this section exists for:** `ON DELETE CASCADE` is hard-delete only. Hiding an entry
+// leaves its `entry_sets` and `entry_set_quantities` rows with `deleted_at IS NULL` — live children
+// of a dead parent — so a reader that filters only its own table still returns them. Every reader
+// below therefore has to reach ownership through the PARENT, and that is what is asserted.
+{
+  const HIDE_DAY = '2026-08-04';
+  const hideScope = A_SCOPE;
+  const hideProfilePublicId = '019826b4-0000-7000-8000-0000000009a0'; // sessionProfileA
+  const bwActivityId = await activityTypeIdByKey('weigh_in');
+
+  const uuidArrayOf = (ids: readonly string[]) => sql`${sql.param(ids)}::uuid[]`;
+
+  const bwEntry = async (publicId: string, day: string, value: number) => {
+    const [row] = await db
+      .insert(schema.entries)
+      .values({
+        publicId,
+        clientId: newId(),
+        profileId: sessionProfileA.id,
+        activityDate: day,
+        kind: ENTRY_KIND.bodyweight,
+        unit: 'lb',
+        valueNum: String(value),
+        activityTypeId: bwActivityId,
+        metricKey: SEED_METRIC_KEYS.bodyweight,
+        status: ENTRY_STATUS.done,
+      })
+      .returning({ id: schema.entries.id });
+    return row;
+  };
+
+  // ── 1 · A hide is one event, and its token survives six fractional digits ──────────────────────
+  //
+  // The token is TEXT end to end. Postgres stores microseconds; a JS `Date` holds milliseconds, so a
+  // token that round-trips through drizzle's date mapping comes back ROUNDED and no longer matches
+  // its own row. Mutation 41 maps it through `new Date(...).toISOString()` and this goes red.
+  const E1 = '019826b4-0000-7000-8000-00000000d101';
+  const E2 = '019826b4-0000-7000-8000-00000000d102';
+  await bwEntry(E1, HIDE_DAY, 60);
+
+  // Three ids hidden in ONE transaction share ONE token — `now()`, not `clock_timestamp()`.
+  const M1 = '019826b4-0000-7000-8000-00000000d201';
+  const M2 = '019826b4-0000-7000-8000-00000000d202';
+  const M3 = '019826b4-0000-7000-8000-00000000d203';
+  const MULTI_DAY = '2026-08-05';
+  for (const [i, id] of [M1, M2, M3].entries()) {
+    await db.insert(schema.entries).values({
+      publicId: id,
+      clientId: newId(),
+      profileId: sessionProfileA.id,
+      activityDate: MULTI_DAY,
+      unit: 'count',
+      valueNum: String(i + 1),
+      activityTypeId: await activityTypeIdByKey('brush_teeth'),
+      metricKey: null,
+      status: ENTRY_STATUS.done,
+    });
+  }
+  // 🔴 **TWO hide statements, 10 ms apart, in ONE transaction.** The first version hid all three ids
+  // in a single UPDATE and slept *after* it — which proves nothing: `now()` is stable within one
+  // statement no matter what, so a `clock_timestamp()` mutation stayed green. A db-safety lens
+  // measured PGlite's `clock_timestamp()` at millisecond resolution, so 10 ms between two statements
+  // is what makes the transaction-scoped property observable here. This is also the shape a swap
+  // relies on: hide the holder and restore the item in one transaction, one event.
+  const multi = await db.transaction(async (tx) => {
+    const first = await hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: MULTI_DAY,
+      entryPublicIds: [M1],
+    });
+    await tx.execute(sql`select pg_sleep(0.01)`);
+    const rest = await hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: MULTI_DAY,
+      entryPublicIds: [M2, M3],
+    });
+    assert.ok('hiddenAt' in first && 'hiddenAt' in rest, 'V1-9b B1-1b: both hides succeed');
+    assert.equal(
+      first.hiddenAt,
+      rest.hiddenAt,
+      'V1-9b B1-1b: 🔴 two statements 10ms apart in ONE transaction share ONE token — this is the ' +
+        'assertion `clock_timestamp()` breaks, and a single-statement hide could never have shown it',
+    );
+    return rest;
+  });
+  assert.ok('hiddenAt' in multi, 'V1-9b B1-1b: hiding three ids in one call succeeds');
+  const multiTokens = await db
+    .select({
+      t: sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+    })
+    .from(schema.entries)
+    .where(
+      sql`${schema.entries.publicId} = any(array[${sql.join(
+        [M1, M2, M3].map((i) => sql`${i}`),
+        sql`, `,
+      )}]::uuid[])`,
+    );
+  assert.equal(
+    new Set(multiTokens.map((r) => r.t)).size,
+    1,
+    'V1-9b B1-1b: three rows hidden in ONE transaction share ONE token — now(), not clock_timestamp()',
+  );
+  assert.match(
+    multi.hiddenAt,
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/,
+    'V1-9b B1-1b: the token is fixed-format UTC text with six fractional digits',
+  );
+
+  // 🔴 **The microsecond case needs a hand-written `deleted_at`, and finding that out is the point.**
+  // The first version of this proof restored by the token `now()` had just produced and called that
+  // the round-trip test. It was **vacuous**: PGlite's `now()` resolves to MILLISECONDS, so a token
+  // mapped through a JS `Date` loses nothing and mutation 41 stayed green. `db:verify` runs on
+  // PGlite, so the trap this guards cannot be reproduced from the clock at all — the plan's own test
+  // plan says to set the fixture's `deleted_at` to six fractional digits, and this is why.
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: sql`timestamptz '2026-08-05 12:00:00.123456+00'` })
+    .where(sql`${schema.entries.publicId} = any(${uuidArrayOf([M1, M2, M3])})`);
+  const [microToken] = await db
+    .select({
+      t: sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+    })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, M1));
+  assert.equal(
+    microToken.t,
+    '2026-08-05T12:00:00.123456Z',
+    'V1-9b B1-1b: the read emits all six fractional digits (a truncating format would pass every ' +
+      'other assertion here)',
+  );
+
+  // Restoring BY that token succeeds only if the writer compared the TEXT. Mutation 41 maps it
+  // through `new Date(...)`, which truncates `.123456` to `.123000`, matches zero rows, and reports
+  // `changed` — an item the person cannot get back, with no error anywhere.
+  const restoredByToken = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: MULTI_DAY,
+      hiddenAt: microToken.t,
+      entryPublicIds: [M1, M2, M3],
+    }),
+  );
+  assert.deepEqual(
+    restoredByToken.map((r) => r.reason),
+    ['ok', 'ok', 'ok'],
+    'V1-9b B1-1b: the six-digit token matches its own rows — a Date round-trip would not',
+  );
+
+  // ── 2 · All or nothing, and a replay ──────────────────────────────────────────────────────────
+  const foreignHide = await db.transaction((tx) =>
+    hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      entryPublicIds: [E1, E2], // E2 was never created
+    }),
+  );
+  assert.deepEqual(
+    foreignHide,
+    { notFound: true },
+    'V1-9b B1-1b: one unknown id makes the WHOLE hide notFound — never a partial hide',
+  );
+  const [stillLive] = await db
+    .select({ deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, E1));
+  assert.equal(stillLive.deletedAt, null, 'V1-9b B1-1b: …and the valid id stayed live');
+
+  const hide1 = await db.transaction((tx) =>
+    hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      entryPublicIds: [E1],
+    }),
+  );
+  assert.ok('hiddenAt' in hide1, 'V1-9b B1-1b: the weigh-in hides');
+  const hide1Replay = await db.transaction((tx) =>
+    hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      entryPublicIds: [E1],
+    }),
+  );
+  assert.deepEqual(
+    hide1Replay,
+    hide1,
+    'V1-9b B1-1b: hiding an already-hidden entry is a REPLAY with the same token, not notFound ' +
+      '(the row count of the UPDATE is zero — reading that as the answer is the obvious bug)',
+  );
+
+  // ── 2b · A MIXED hide, and the retry that used to answer notFound ─────────────────────────────
+  //
+  // 🔴 **The regression test for a real bug, found by a correctness lens and not by any gate.** Two
+  // devices render the same day. Device 2 hides X. Device 1 taps Delete on [X, Y]: X is already
+  // hidden, Y is not, so a NEW event covers Y. If the response is lost and the client retries the
+  // identical call, every id is now hidden under two different tokens — and the first version of
+  // this writer demanded a single shared token, so it answered `notFound` for rows that exist, are
+  // owned, and are hidden. The fix returns the NEWEST token, so the retry repeats the first answer.
+  {
+    const MX = '019826b4-0000-7000-8000-00000000d801';
+    const MY = '019826b4-0000-7000-8000-00000000d802';
+    const MIX_DAY = '2026-08-08';
+    await bwEntry(MX, MIX_DAY, 64);
+    await db.insert(schema.entries).values({
+      publicId: MY,
+      clientId: newId(),
+      profileId: sessionProfileA.id,
+      activityDate: MIX_DAY,
+      unit: 'count',
+      valueNum: '1',
+      activityTypeId: await activityTypeIdByKey('brush_teeth'),
+      metricKey: null,
+      status: ENTRY_STATUS.done,
+    });
+
+    const hideX = await db.transaction((tx) =>
+      hideEntries(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: hideScope,
+        day: MIX_DAY,
+        entryPublicIds: [MX],
+      }),
+    );
+    assert.ok('hiddenAt' in hideX, 'V1-9b B1-1b: the first device hides X');
+    // ⚠️ PGlite's clock is millisecond-resolution, so two events inside one tick share a token and
+    // the "new event" assertion below would fail for a reason that is not the writer's.
+    await db.execute(sql`select pg_sleep(0.01)`);
+
+    const mixed = await db.transaction((tx) =>
+      hideEntries(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: hideScope,
+        day: MIX_DAY,
+        entryPublicIds: [MX, MY],
+      }),
+    );
+    assert.ok(
+      'hiddenAt' in mixed,
+      'V1-9b B1-1b: a mixed hide succeeds and mints a new event for Y',
+    );
+    assert.notEqual(mixed.hiddenAt, hideX.hiddenAt, '…a NEW token, since Y was hidden just now');
+
+    const retried = await db.transaction((tx) =>
+      hideEntries(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: hideScope,
+        day: MIX_DAY,
+        entryPublicIds: [MX, MY],
+      }),
+    );
+    assert.deepEqual(
+      retried,
+      mixed,
+      'V1-9b B1-1b: 🔴 retrying the mixed call returns the SAME answer — it used to answer ' +
+        'notFound about rows that exist, are owned and are hidden',
+    );
+  }
+
+  // ── 3 · slot_taken, and the swap in both bad orders (Decision 8) ───────────────────────────────
+  const B_WEIGH = '019826b4-0000-7000-8000-00000000d301';
+  await bwEntry(B_WEIGH, HIDE_DAY, 61); // B now holds the day's slot, live
+
+  const refused = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      hiddenAt: hide1.hiddenAt,
+      entryPublicIds: [E1],
+    }),
+  );
+  assert.equal(refused[0].reason, 'slot_taken', 'V1-9b B1-1b: restoring into a taken slot refuses');
+  assert.equal(
+    refused[0].heldBy?.entryPublicId,
+    B_WEIGH,
+    'V1-9b B1-1b: …and names the holder, so the screen can offer "Use {value} instead"',
+  );
+  const [aStillHidden] = await db
+    .select({ deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, E1));
+  assert.ok(aStillHidden.deletedAt !== null, 'V1-9b B1-1b: A stays hidden after a refusal');
+  const [bUntouched] = await db
+    .select({ deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, B_WEIGH));
+  assert.equal(bUntouched.deletedAt, null, 'V1-9b B1-1b: …and B was never touched');
+
+  // Bad order 1: the item is not hidden under THIS token. The holder must not be touched.
+  const badToken = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      hiddenAt: '2020-01-01T00:00:00.000000Z',
+      entryPublicIds: [E1],
+      keepInsteadOf: B_WEIGH,
+    }),
+  );
+  assert.equal(badToken[0].reason, 'changed', 'V1-9b B1-1b: a stale token answers changed');
+  const [bAfterBadToken] = await db
+    .select({ deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, B_WEIGH));
+  assert.equal(
+    bAfterBadToken.deletedAt,
+    null,
+    'V1-9b B1-1b: 🔴 the holder is NOT hidden when the item is not hidden under the token — this ' +
+      'is Decision 8 ORDERING (step 3 returns before step 4), which is what this assertion proves. ' +
+      'The savepoint covers a different path — holder hidden, then the restore fails — which cannot ' +
+      'be produced in-process because the row is locked; that one rests on reading drizzle, and the ' +
+      'guide says so rather than claiming this proves it',
+  );
+
+  // Bad order 2: the named holder is not the row holding the slot.
+  const wrongHolder = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      hiddenAt: hide1.hiddenAt,
+      entryPublicIds: [E1],
+      keepInsteadOf: '019826b4-0000-7000-8000-00000000dead',
+    }),
+  );
+  assert.equal(
+    wrongHolder[0].reason,
+    'slot_taken',
+    'V1-9b B1-1b: naming a holder that does not hold the slot refuses rather than guessing',
+  );
+
+  // The swap, correctly ordered: A comes back live and B goes hidden under a NEW token.
+  const swap = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      hiddenAt: hide1.hiddenAt,
+      entryPublicIds: [E1],
+      keepInsteadOf: B_WEIGH,
+    }),
+  );
+  assert.equal(swap[0].reason, 'ok', 'V1-9b B1-1b: the swap succeeds');
+  const swapped = await db
+    .select({ publicId: schema.entries.publicId, deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(sql`${schema.entries.publicId} = any(array[${sql`${E1}`}, ${sql`${B_WEIGH}`}]::uuid[])`);
+  const a = swapped.find((r) => r.publicId === E1);
+  const b = swapped.find((r) => r.publicId === B_WEIGH);
+  assert.equal(a?.deletedAt, null, 'V1-9b B1-1b: A is live after the swap');
+  assert.ok(b?.deletedAt !== null, 'V1-9b B1-1b: …and B is hidden under its own new event');
+
+  // A replay of the swap is `ok` with no further change (the item is already live).
+  const swapReplay = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: HIDE_DAY,
+      hiddenAt: hide1.hiddenAt,
+      entryPublicIds: [E1],
+      keepInsteadOf: B_WEIGH,
+    }),
+  );
+  assert.equal(swapReplay[0].reason, 'ok', 'V1-9b B1-1b: replaying the swap is ok, with no change');
+
+  // ── 4 · The TEN-1 matrix, both directions ─────────────────────────────────────────────────────
+  const BW_HOUSE_B = '019826b4-0000-7000-8000-00000000d401';
+  await bwEntry(BW_HOUSE_B, '2026-08-06', 62);
+  const crossHide = await db.transaction((tx) =>
+    hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: B_SCOPE, // household B asking about household A's athlete
+      day: '2026-08-06',
+      entryPublicIds: [BW_HOUSE_B],
+    }),
+  );
+  assert.deepEqual(
+    crossHide,
+    { notFound: true },
+    "V1-9b B1-1b: household B cannot hide household A's entry — the SAME answer as unknown",
+  );
+  const crossRead = await hiddenEntriesForDay(asPg, {
+    profilePublicId: hideProfilePublicId,
+    scope: B_SCOPE,
+    day: HIDE_DAY,
+  });
+  assert.deepEqual(
+    crossRead,
+    [],
+    "V1-9b B1-1b: …and cannot READ A's hidden rows either (the read is scoped too)",
+  );
+
+  // ── 5 · The reader audit: a hidden parent hides its live children everywhere ───────────────────
+  const AUDIT_DAY = '2027-03-07'; // a month NOTHING else in this file occupies — see below
+  const auditArgs = {
+    ...flatArgs,
+    day: AUDIT_DAY,
+    sessionClientId: '019826b4-0000-7000-8000-00000000d500',
+    movements: [
+      {
+        movementName: 'Bench Press',
+        unit: 'lb',
+        movementId: movY.id,
+        clientId: '019826b4-0000-7000-8000-00000000d501',
+        sets: [{ reps: 5, weight: 100 }],
+      },
+    ],
+  } as const;
+  await writeStrengthSession(asPg, auditArgs);
+  const monthOf = (day: string) => day.slice(0, 7);
+
+  const beforeStrength = await strengthMonthRows(asPg, {
+    profilePublicId: hideProfilePublicId,
+    scope: hideScope,
+    month: monthOf(AUDIT_DAY),
+  });
+  const beforeMonths = await loggedMonths(asPg, {
+    profilePublicId: hideProfilePublicId,
+    scope: hideScope,
+  });
+  assert.ok(beforeStrength.length > 0, 'V1-9b B1-1b: the audit fixture is in the export');
+
+  const [auditEntry] = await db
+    .select({ publicId: schema.entries.publicId })
+    .from(schema.entries)
+    .where(eq(schema.entries.clientId, auditArgs.movements[0].clientId));
+  const auditHide = await db.transaction((tx) =>
+    hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: AUDIT_DAY,
+      entryPublicIds: [auditEntry.publicId],
+    }),
+  );
+  assert.ok('hiddenAt' in auditHide, 'V1-9b B1-1b: the strength entry hides');
+
+  // 🔴 Its SETS are still `deleted_at IS NULL` — live children of a dead parent. That is the trap.
+  const liveChildren = await db
+    .select({ id: schema.entrySets.id })
+    .from(schema.entrySets)
+    .innerJoin(schema.entries, eq(schema.entrySets.entryId, schema.entries.id))
+    .where(
+      and(eq(schema.entries.publicId, auditEntry.publicId), isNull(schema.entrySets.deletedAt)),
+    );
+  assert.ok(
+    liveChildren.length > 0,
+    'V1-9b B1-1b: the hidden entry still has LIVE children — ON DELETE CASCADE is hard-delete only, ' +
+      'so every reader must reach ownership through the PARENT',
+  );
+
+  assert.deepEqual(
+    await strengthMonthRows(asPg, {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      month: monthOf(AUDIT_DAY),
+    }),
+    beforeStrength.filter((r) => r.date !== AUDIT_DAY),
+    'V1-9b B1-1b: strengthMonthRows drops the hidden entry AND its live sets',
+  );
+
+  // 🔴 **Criterion 16's first half, which nothing asserted.** The audit fixture is the only thing in
+  // `2026-09`, so hiding it must make the month DISAPPEAR from `loggedMonths`. The earlier version
+  // put this fixture in a month holding five other rows, so the "unchanged again" assertion below
+  // was comparing a list that never moved — it could not fail. A correctness lens caught it.
+  const hasAuditMonth = (rows: typeof beforeMonths) =>
+    rows.some((r) => r.month === monthOf(AUDIT_DAY));
+  assert.ok(hasAuditMonth(beforeMonths), 'V1-9b B1-1b: the audit month is in loggedMonths before');
+  assert.ok(
+    !hasAuditMonth(
+      await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideScope }),
+    ),
+    "V1-9b B1-1b: 🔴 hide the month's only entry and loggedMonths DROPS the month (criterion 16)",
+  );
+
+  // Criterion 16: hide a month, and the month leaves `loggedMonths`; restore, and it is deep-equal.
+  const restoredAudit = await db.transaction((tx) =>
+    restoreHidden(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: AUDIT_DAY,
+      hiddenAt: auditHide.hiddenAt,
+      entryPublicIds: [auditEntry.publicId],
+    }),
+  );
+  assert.equal(restoredAudit[0].reason, 'ok', 'V1-9b B1-1b: the strength entry restores');
+  assert.deepEqual(
+    await strengthMonthRows(asPg, {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      month: monthOf(AUDIT_DAY),
+    }),
+    beforeStrength,
+    'V1-9b B1-1b: 🔴 restore brings the export back DEEP-EQUAL — public_id, created_at and every ' +
+      'value preserved (criterion 16, the self-serve half)',
+  );
+  assert.deepEqual(
+    await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideScope }),
+    beforeMonths,
+    'V1-9b B1-1b: …and loggedMonths has the month back',
+  );
+
+  // ── 5b · The rest of the reader audit, because the guide's table claims one case PER ROW ──────
+  //
+  // 🔴 **This block exists because a security lens caught the PR claiming a six-reader audit that
+  // exercised two.** The code was right — every reader does filter — but a guide cell pointing at a
+  // proof that is not there is worse than an empty cell: the next author trusts it. These are the
+  // four that were cited and missing.
+  {
+    // (a) `bodyweightMonthRows` — a hidden weigh-in leaves the bodyweight export. `B_WEIGH` is
+    //     hidden at this point (the swap put it there).
+    const bwMonth = await bodyweightMonthRows(asPg, {
+      profilePublicId: hideProfilePublicId,
+      month: '2026-08',
+      scope: hideScope,
+    });
+    assert.ok(
+      bwMonth.every((r) => r.value !== '61.000'),
+      'V1-9b B1-1b: a hidden weigh-in is absent from bodyweightMonthRows',
+    );
+    assert.ok(
+      bwMonth.some((r) => r.value === '60.000'),
+      '…and the live one it was swapped for IS present (so the filter is not just an empty read)',
+    );
+
+    // (b) `weeklyAdherence` (Q7) — a hidden calisthenics bout leaves the week's sum, and a restore
+    //     brings it back. The week is the one the ramp fixture already seeds.
+    const adherenceArgs = {
+      profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
+      weekStart: RAMP_TEST_WEEK_START,
+      activityTypeId: calisthenicsId,
+      metricKeys: CALISTHENICS_METRIC_KEYS,
+      scope: A_SCOPE,
+    } as const;
+    const beforeAdherence = await weeklyAdherenceRows(asPg, adherenceArgs);
+    const sumFor = (rows: typeof beforeAdherence) =>
+      rows.find((r) => r.metricKey === METRIC_KEYS.pushups)?.actualSum ?? null;
+    const beforeDone = sumFor(beforeAdherence);
+    assert.ok(beforeDone !== null, 'V1-9b B1-1b: the adherence fixture has a push-up sum to lose');
+    const [rampEntry] = await db
+      .select({ publicId: schema.entries.publicId, day: schema.entries.activityDate })
+      .from(schema.entries)
+      .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+      .where(
+        and(
+          eq(schema.profiles.publicId, RAMP_TEST_PROFILE_PUBLIC_ID),
+          eq(schema.entries.metricKey, METRIC_KEYS.pushups),
+          isNull(schema.entries.deletedAt),
+          // ⚠️ The three predicates that make this DETERMINISTIC. The fixture holds decoys —
+          // a `skipped` bout and one outside the week — and `weeklyAdherenceRows` counts neither,
+          // so picking one by scan order would make the sum not move and fail for a reason that is
+          // not the writer's. A verification pass caught it as a latent flake.
+          eq(schema.entries.status, ENTRY_STATUS.done),
+          gte(schema.entries.activityDate, RAMP_TEST_WEEK_START),
+          sql`${schema.entries.activityDate} < (${RAMP_TEST_WEEK_START}::date + 7)`,
+        ),
+      )
+      .orderBy(schema.entries.activityDate)
+      .limit(1);
+    assert.ok(rampEntry, 'V1-9b B1-1b: the adherence fixture has a live push-up bout to hide');
+
+    const rampHide = await db.transaction((tx) =>
+      hideEntries(asTx(tx), {
+        profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
+        scope: A_SCOPE,
+        day: rampEntry.day,
+        entryPublicIds: [rampEntry.publicId],
+      }),
+    );
+    assert.ok('hiddenAt' in rampHide, 'V1-9b B1-1b: the bout hides');
+    const afterDone = sumFor(await weeklyAdherenceRows(asPg, adherenceArgs));
+    assert.ok(
+      afterDone === null || Number(afterDone) < Number(beforeDone),
+      "V1-9b B1-1b: Q7 — a hidden bout LEAVES the week's adherence sum",
+    );
+    await db.transaction((tx) =>
+      restoreHidden(asTx(tx), {
+        profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
+        scope: A_SCOPE,
+        day: rampEntry.day,
+        hiddenAt: rampHide.hiddenAt,
+        entryPublicIds: [rampEntry.publicId],
+      }),
+    );
+    assert.equal(
+      sumFor(await weeklyAdherenceRows(asPg, adherenceArgs)),
+      beforeDone,
+      '…and a restore brings it back',
+    );
+
+    // (c) The amends ride `ownedEntryIds`, which filters tombstones — so amending a HIDDEN weigh-in
+    //     answers notFound, and leaves `deleted_at` alone.
+    const amendHidden = await updateBodyweightEntryById(asPg, {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      entryId: B_WEIGH,
+      value: 99,
+      unit: 'lb',
+      seenValue: 61,
+    });
+    // `null` is this amend's "not found" — the same answer a foreign id gets (`V1-24` 1b), which is
+    // the point: a hidden entry is indistinguishable from one that was never yours.
+    assert.equal(
+      amendHidden,
+      null,
+      'V1-9b B1-1b: amending a HIDDEN entry answers notFound (ownedEntryIds filters tombstones)',
+    );
+    const [afterAmend] = await db
+      .select({ deletedAt: schema.entries.deletedAt, value: schema.entries.valueNum })
+      .from(schema.entries)
+      .where(eq(schema.entries.publicId, B_WEIGH));
+    assert.ok(afterAmend.deletedAt !== null, '…and it is still hidden');
+    assert.equal(afterAmend.value, '61.000', '…with its value untouched');
+
+    // (d) `movement-ownership.ts` carries NO `deleted_at` conjunct, deliberately: a tombstoned row
+    //     still holds its FK, so it still blocks a household delete and must still be counted.
+    //
+    // 🔴 **Asserted as the FK itself, not as the census, and the difference is why this case was
+    // rewritten.** The first version compared `crossHouseholdMovementRefs` before and after a hide —
+    // but that census reads `{0, 0, 0}` across this whole fixture by design (TEN-2c's "price paid"),
+    // so it compared zero to zero and would have passed with a `deleted_at` conjunct added. A
+    // verification pass caught it. What actually carries the invariant is that the hidden row keeps
+    // its `movement_id`: that is why a tombstone is still a reference, and why the census must not
+    // filter them out.
+    const auditHide2 = await db.transaction((tx) =>
+      hideEntries(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: hideScope,
+        day: AUDIT_DAY,
+        entryPublicIds: [auditEntry.publicId],
+      }),
+    );
+    assert.ok('hiddenAt' in auditHide2, 'V1-9b B1-1b: re-hide the audit entry');
+
+    const [hiddenRef] = await db
+      .select({ movementId: schema.entries.movementId, deletedAt: schema.entries.deletedAt })
+      .from(schema.entries)
+      .where(eq(schema.entries.publicId, auditEntry.publicId));
+    assert.ok(hiddenRef.deletedAt !== null, 'V1-9b B1-1b: the audit entry is hidden');
+    assert.equal(
+      hiddenRef.movementId,
+      movY.id,
+      'V1-9b B1-1b: 🔴 a HIDDEN entry still holds its movement_id — the reference survives the ' +
+        'tombstone, which is exactly why movement-ownership.ts carries no deleted_at conjunct and ' +
+        'why a household delete is still blocked by it',
+    );
+
+    await db.transaction((tx) =>
+      restoreHidden(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: hideScope,
+        day: AUDIT_DAY,
+        hiddenAt: auditHide2.hiddenAt,
+        entryPublicIds: [auditEntry.publicId],
+      }),
+    );
+  }
+
+  // ── 5c · The boundary cases restore had none of ─────────────────────────────────────────────────
+  //
+  // 🔴 `restoreOne` is the one function here that writes a tombstone onto a LIVE row it was not asked
+  // about (the holder hide). Its only ownership check is the locked SELECT — and nothing exercised
+  // it. A security lens pointed out that the highest-blast-radius write in the PR had no boundary
+  // proof at all.
+  {
+    const crossRestore = await db.transaction((tx) =>
+      restoreHidden(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: B_SCOPE, // household B, naming household A's athlete
+        day: HIDE_DAY,
+        hiddenAt: hide1.hiddenAt,
+        entryPublicIds: [B_WEIGH],
+        keepInsteadOf: E1, // …and naming A's LIVE row as the one to hide
+      }),
+    );
+    assert.deepEqual(
+      crossRestore.map((r) => r.reason),
+      ['not_found'],
+      "V1-9b B1-1b: household B cannot restore household A's row",
+    );
+    const [e1AfterCross] = await db
+      .select({ deletedAt: schema.entries.deletedAt })
+      .from(schema.entries)
+      .where(eq(schema.entries.publicId, E1));
+    assert.equal(
+      e1AfterCross.deletedAt,
+      null,
+      "V1-9b B1-1b: 🔴 …and naming A's live row as `keepInsteadOf` did NOT hide it — the holder " +
+        'write is reached only through the scoped lock',
+    );
+
+    const unknownId = await db.transaction((tx) =>
+      restoreHidden(asTx(tx), {
+        profilePublicId: hideProfilePublicId,
+        scope: hideScope,
+        day: HIDE_DAY,
+        hiddenAt: hide1.hiddenAt,
+        entryPublicIds: ['019826b4-0000-7000-8000-00000000dea0'],
+      }),
+    );
+    assert.deepEqual(
+      unknownId.map((r) => r.reason),
+      ['not_found'],
+      'V1-9b B1-1b: an unknown id gets the SAME answer as a wrong household — one message, as the ' +
+        'shipped amends do',
+    );
+
+    assert.deepEqual(
+      await hiddenDayCounts(asPg, {
+        profilePublicId: hideProfilePublicId,
+        scope: B_SCOPE,
+        exceptDay: HIDE_DAY,
+      }),
+      [],
+      "V1-9b B1-1b: household B cannot count A's hidden days either",
+    );
+  }
+
+  // ── 6 · The hidden read, which is the ONE reader that must see tombstones ──────────────────────
+  const hiddenNow = await hiddenEntriesForDay(asPg, {
+    profilePublicId: hideProfilePublicId,
+    scope: hideScope,
+    day: HIDE_DAY,
+  });
+  assert.deepEqual(
+    hiddenNow.map((r) => r.entryPublicId),
+    [B_WEIGH],
+    'V1-9b B1-1b: the hidden read returns the swapped-out weigh-in, and only it',
+  );
+  // Hide a row on a day nothing else in this file touches, so the POSITIVE case is ours and not an
+  // accident of fixture ordering 300 lines up.
+  const COUNT_DAY = '2026-08-09';
+  const COUNT_ID = '019826b4-0000-7000-8000-00000000d901';
+  await bwEntry(COUNT_ID, COUNT_DAY, 63);
+  await db.transaction((tx) =>
+    hideEntries(asTx(tx), {
+      profilePublicId: hideProfilePublicId,
+      scope: hideScope,
+      day: COUNT_DAY,
+      entryPublicIds: [COUNT_ID],
+    }),
+  );
+
+  const otherDays = await hiddenDayCounts(asPg, {
+    profilePublicId: hideProfilePublicId,
+    scope: hideScope,
+    exceptDay: HIDE_DAY,
+  });
+  // 🔴 **A positive assertion first.** Both checks below are `every(...)`, and `[].every(...)` is
+  // `true` — so with only those, inverting the reader's `isNotNull` to `isNull` left this green. A
+  // db-safety lens and a correctness lens both caught it.
+  assert.deepEqual(
+    otherDays.find((d) => d.day === COUNT_DAY),
+    { day: COUNT_DAY, hidden: 1 },
+    'V1-9b B1-1b: hiddenDayCounts REPORTS a day with a hidden item, and counts it',
+  );
+  assert.ok(
+    otherDays.every((d) => d.day !== HIDE_DAY),
+    'V1-9b B1-1b: …excludes the day being viewed',
+  );
+  assert.ok(
+    otherDays.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d.day)),
+    'V1-9b B1-1b: …and returns the day as TEXT, never a Date that would pick up a timezone',
+  );
+
+  console.log(
+    '✓ V1-9b B1-1b: a hide is ONE event carried as six-digit UTC text; all-or-nothing, replay-safe ' +
+      'and household-scoped; the swap never half-commits; and a hidden parent disappears from every ' +
+      'reader while its live children survive, restoring deep-equal',
   );
 }
 

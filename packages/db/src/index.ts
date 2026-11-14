@@ -41,6 +41,10 @@ export * from './queries/household-scope';
 // The single-sourced strength-session write core (V1-8-2), run by both the app DAL and db:verify.
 export * from './writers/bodyweight';
 export * from './writers/checkin';
+// V1-9b B1-1b: the ONLY module that writes `entries.deleted_at`, and the only read that returns
+// tombstones (ADR 0008 decisions 2 and 3.3).
+export * from './writers/hide';
+export * from './queries/hidden-entries';
 // The single-sourced find-or-create for `movements` (TEN-1 1d). Extracted so db:verify proves the
 // catalog's CROSS-HOUSEHOLD behaviour against the same function the app runs — `movements` has no
 // `household_id`, so that behaviour is TEN-2's verdict, not something this seam can close.
