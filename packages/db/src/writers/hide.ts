@@ -124,9 +124,17 @@ export async function hideEntries(
     // returned `notFound` otherwise — which made a retry of a MIXED call fail after it had already
     // succeeded: hide [X, Y] where X was already hidden under T0 mints T1 for Y, and the retry then
     // sees {T0, T1} and refuses rows that exist, are owned, and are hidden. A correctness lens
-    // traced it. The newest token is the event this call created, so the retry returns the same
-    // answer as the first attempt; the older ids answer `changed` on restore, which is exactly
-    // Decision 3's table.
+    // traced it.
+    //
+    // ⚠️ **"Newest" is the latest transaction START, not provably "the event this call created."**
+    // `now()` is the transaction clock, so a caller whose transaction began earlier but committed
+    // later mints the OLDER token, and its retry then answers with the other caller's newer one.
+    // That is still a success carrying a valid token, and the ids under the older event answer
+    // `changed` on a restore — Decision 3's table — so the behaviour is right either way. The
+    // precise claim is: a retry never refuses rows that exist, are owned and are hidden.
+    //
+    // Lexicographic order is chronological here because the format is fixed-width in every field
+    // (`YYYY-MM-DD"T"HH24:MI:SS.US"Z"`, no `FM`), which the six-digit assertion in `db:verify` pins.
     return tokens.length === 0 ? null : tokens.sort()[tokens.length - 1];
   };
 
@@ -157,10 +165,15 @@ export async function hideEntries(
 
   const tokens = new Set(updated.map((r) => r.hiddenAt));
 
-  // ⚠️ **Zero rows is a REPLAY, not a failure** — and the earlier version of this code threw here
-  // with a message blaming `now()`. Even with the lock above, a transaction that waited can find
-  // every row hidden by the winner; that is the same answer as the all-hidden branch, reached one
-  // statement later.
+  // ⚠️ **Zero rows is a REPLAY, not a failure** — the earlier version threw here with a message
+  // blaming `now()` for what was a locking gap.
+  //
+  // With the `FOR UPDATE` above this branch is in fact **unreachable**: a transaction that waited
+  // re-reads the winner's committed version, so every already-hidden row is caught by the
+  // all-hidden branch one statement earlier. It is kept as defence rather than deleted, because the
+  // cost is one comparison and the failure it would otherwise produce is a throw on a successful
+  // replay. A verification pass established the unreachability; the comment says so rather than
+  // implying this is a live path.
   if (tokens.size === 0) {
     const token = await newestExistingToken();
     return token === null ? { notFound: true } : { hiddenAt: token };
@@ -241,6 +254,11 @@ export async function restoreHidden(
       // so nothing is half-written — but rethrowing would lose every OTHER item's result in the same
       // call and surface as `error.tsx`. The plan's file table promised this mapping and the first
       // implementation silently dropped it; a db-safety lens and a correctness lens both caught it.
+      //
+      // ⚠️ **Verified by READING the drivers, not by a test.** The error shape was traced through
+      // drizzle's `DrizzleQueryError` (`cause`), node-postgres' `DatabaseError` (`code`,
+      // `constraint`) and PGlite's equivalent — all three carry what this matches. It has no
+      // `db:verify` case because the race needs two connections and PGlite has one.
       if (isBodyweightSlotConflict(error)) {
         results.push({ entryPublicId, reason: RESTORE_REASON.slot_taken });
         continue;

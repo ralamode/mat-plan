@@ -9738,8 +9738,16 @@ console.log(
           eq(schema.profiles.publicId, RAMP_TEST_PROFILE_PUBLIC_ID),
           eq(schema.entries.metricKey, METRIC_KEYS.pushups),
           isNull(schema.entries.deletedAt),
+          // ⚠️ The three predicates that make this DETERMINISTIC. The fixture holds decoys —
+          // a `skipped` bout and one outside the week — and `weeklyAdherenceRows` counts neither,
+          // so picking one by scan order would make the sum not move and fail for a reason that is
+          // not the writer's. A verification pass caught it as a latent flake.
+          eq(schema.entries.status, ENTRY_STATUS.done),
+          gte(schema.entries.activityDate, RAMP_TEST_WEEK_START),
+          sql`${schema.entries.activityDate} < (${RAMP_TEST_WEEK_START}::date + 7)`,
         ),
       )
+      .orderBy(schema.entries.activityDate)
       .limit(1);
     assert.ok(rampEntry, 'V1-9b B1-1b: the adherence fixture has a live push-up bout to hide');
 
@@ -9797,8 +9805,15 @@ console.log(
     assert.equal(afterAmend.value, '61.000', '…with its value untouched');
 
     // (d) `movement-ownership.ts` carries NO `deleted_at` conjunct, deliberately: a tombstoned row
-    //     still holds its FK and still blocks a household delete. Asserted unchanged across a hide.
-    const refsBefore = await crossHouseholdMovementRefs(asPg);
+    //     still holds its FK, so it still blocks a household delete and must still be counted.
+    //
+    // 🔴 **Asserted as the FK itself, not as the census, and the difference is why this case was
+    // rewritten.** The first version compared `crossHouseholdMovementRefs` before and after a hide —
+    // but that census reads `{0, 0, 0}` across this whole fixture by design (TEN-2c's "price paid"),
+    // so it compared zero to zero and would have passed with a `deleted_at` conjunct added. A
+    // verification pass caught it. What actually carries the invariant is that the hidden row keeps
+    // its `movement_id`: that is why a tombstone is still a reference, and why the census must not
+    // filter them out.
     const auditHide2 = await db.transaction((tx) =>
       hideEntries(asTx(tx), {
         profilePublicId: hideProfilePublicId,
@@ -9808,12 +9823,20 @@ console.log(
       }),
     );
     assert.ok('hiddenAt' in auditHide2, 'V1-9b B1-1b: re-hide the audit entry');
-    assert.deepEqual(
-      await crossHouseholdMovementRefs(asPg),
-      refsBefore,
-      'V1-9b B1-1b: movement-ownership is UNCHANGED by a hide — a tombstone still holds its FK, ' +
-        'which is why that census carries no deleted_at conjunct',
+
+    const [hiddenRef] = await db
+      .select({ movementId: schema.entries.movementId, deletedAt: schema.entries.deletedAt })
+      .from(schema.entries)
+      .where(eq(schema.entries.publicId, auditEntry.publicId));
+    assert.ok(hiddenRef.deletedAt !== null, 'V1-9b B1-1b: the audit entry is hidden');
+    assert.equal(
+      hiddenRef.movementId,
+      movY.id,
+      'V1-9b B1-1b: 🔴 a HIDDEN entry still holds its movement_id — the reference survives the ' +
+        'tombstone, which is exactly why movement-ownership.ts carries no deleted_at conjunct and ' +
+        'why a household delete is still blocked by it',
     );
+
     await db.transaction((tx) =>
       restoreHidden(asTx(tx), {
         profilePublicId: hideProfilePublicId,
