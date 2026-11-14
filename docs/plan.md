@@ -183,13 +183,15 @@ and panelled; the milestones order them.
   Today and the export read the athlete's assignments instead of the newest block, which changes CSV
   bytes and needs Insight's sign-off. ⚠️ _2026-11-13:_ re-scoped — an ordered list of workouts per day
   from the program's week template, beside rotation ([re-scope](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) R2–R5); the CSV sign-off is moot
-  under ADR 0009.
+  under ADR 0009. ⚠️ _2026-11-14:_ a thin cut moves to **Beta 0** in [FAM-1](./milestones/fam-1-family-program.md) (Today reads an athlete's
+  open assignment; "Start using this program", no Undo). The rest stays Beta 1.
 
 <a id="tgt-1"></a>
 
 - **TGT-1 — typed per-athlete targets: the movement's own quantity, one weight, and a note.**
   ([plan](./plans/tgt-1-typed-targets.md), [PROG-1](./milestones/prog-1-programs-and-scheduling.md) step 10.) Ranges allowed (spec M41); lengths stored in
-  inches (M40).
+  inches (M40). ⚠️ _2026-11-14:_ only `prescriptions.note` (the instructions, R8) moves to **Beta 0**,
+  in [FAM-1](./milestones/fam-1-family-program.md) step 4; the typed targets stay Beta 1.
 
 <a id="act-1"></a>
 
@@ -208,6 +210,8 @@ and panelled; the milestones order them.
   it" numbers are Count items. Per item, the author writes instructions and chooses whether the athlete
   gets a note field (default off). Builds on the existing quantity slots and `activity_types.input_shape`.
   **Pillar:** Logging & Measurement. **Needs a spec section or plan** before code; PROG-1, Beta 1.
+  ⚠️ _2026-11-14:_ **moves to Beta 0 in part**, as [FAM-1](./milestones/fam-1-family-program.md) step 3 (the type and the menu) and its
+  d2 spec section. The activity convergence (`ACT-1`) stays Beta 1.
 
 <a id="superset-1"></a>
 
@@ -216,6 +220,7 @@ and panelled; the milestones order them.
   is rebuilt every session. The program groups prescriptions; the log form starts from that grouping.
   **Later add-on:** change a superset during a workout and choose whether it is saved back to the
   program. **Pillar:** Authoring & Scheduling. PROG-1, Beta 1.
+  ⚠️ _2026-11-14:_ stays **Beta 1**; [FAM-1](./milestones/fam-1-family-program.md) recommends leaving it out of the slice.
 
 <a id="pick-1"></a>
 
@@ -1586,6 +1591,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   every push; the seed writes Ray's family with public fixed UUIDs and re-creates them if deleted, and
   expands ramp targets over every kid in the database. Split into `seedReference` and `seedFixtures`;
   keep `PROGRAM_SEED` reaching prod until V1-22; scope ramp targets by household. _(Beta 0.)_
+  ⚠️ _2026-11-14:_ removing `PROGRAM_SEED` from production (the OPS-2 plan's Q3) is proposed as
+  [FAM-1](./milestones/fam-1-family-program.md) step 1, right after this row's split.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
@@ -2249,6 +2256,7 @@ no filter"` → three, because a name became typeable), which is a real accuracy
 
 - **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_
   📋 **Plan: [plans/sched-1-scheduling-model.md](./plans/sched-1-scheduling-model.md)** (2026-10-11) — five chunks, the first two with no DB; it does **not** close this row.
+  ⚠️ _2026-11-14:_ chunks **1a and 1c** move to **Beta 0** in [FAM-1](./milestones/fam-1-family-program.md) (steps 2 and 5); 1b, 1d and 1e stay Beta 1.
   📐 **Model: [ADR 0007](./decisions/0007-scheduling-model.md)** — recurrence is a weekday SET as rows
   (no RRULE) and `daily` is seven rows; rotation becomes an anchor + an ordered list **on the block**
   (not the assignment — one program must not get N phases, or co-training siblings desynchronize) and

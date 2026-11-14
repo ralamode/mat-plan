@@ -88,6 +88,12 @@ until Beta 1.** _"No one will use the app in this stage, until we can program ou
 
 The text below is kept as written; read "invite family #1" as Beta 1's first step.
 
+⚠️ **Added 2026-11-14 (maintainer): Beta 0 ends with [`FAM-1` — the family program](./fam-1-family-program.md)**,
+after the work in "The remaining path" below. It is the thinnest slice of the PROG-1 re-scope that
+holds the household's real program, and it is the point at which the household starts using the app.
+The draft recommends running the phone run-through and the `PRIV-1` sign-off **after** it, so they
+cover the Today an invited family will see and the new tables.
+
 ```mermaid
 flowchart LR
   N[0 · now: PII purge, merge gates] --> AU
@@ -484,6 +490,10 @@ median **368** insertions, p25 **174**, p75 **906**. So S ≈ ≤200, M ≈ ~400
 
 **≈ 10–11 PRs plus two manual steps**, of which **5–6 are the `V1-9b` arc** and four are ops/privacy.
 
+⚠️ _Added 2026-11-14:_ **13 · [`FAM-1`](./fam-1-family-program.md)** follows, ≈ 3–4 docs PRs + 18 code PRs
+and a week of real use (its first program write waits on 7, and its logging and Today steps on 3–5). It owns
+removing `PROGRAM_SEED` from production, which this table's item 7 (`OPS-2`) leaves open as its Q3.
+
 ### Three dependencies worth seeing before sequencing
 
 1. 🔴 **`OPS-3` and the runbook stub are the same work.** `runbooks.md`'s restore section is
@@ -523,6 +533,26 @@ Starts after family #1 has used Beta 0 for two weeks **and Ray has read their fe
 widen.**
 ⚠️ _Re-stated 2026-11-14:_ family #1 is now invited **at** Beta 1 and uses Beta 1 for two weeks;
 the feedback check-in decides the widening to 3–5 (see the note under "Beta 0"). That check-in is a step, not an afterthought — it is the reason for the beta.
+
+⚠️ **Re-ordered 2026-11-14 (proposed, with [`FAM-1`](./fam-1-family-program.md); the maintainer decides).**
+`FAM-1` takes the slice of PROG-1 that one household on one program needs; what it leaves moves
+here, in this order:
+
+1. **Before the first invite:** `ONB-2` (a new household's first program, now on `FAM-1`'s
+   `workouts`) · V1-22 A4-3c and A4-4 · `PROGS-1`. Then invite family #1.
+2. **During the two weeks:** R10 for set-based items with `FEED-0` · `PICK-1` PR 4 · `MOV-1` · the
+   rest of `V1-24`.
+3. **Scheduling for other families:** `SCHED-1` 1b, 1d, 1e → `ASSIGN-READ` → `ASSIGN-1` (per-athlete
+   days, several programs, Undo) · rotation for created programs (R3).
+4. **The nothing-due-day rule**, including optional workouts → `MOT-1`.
+5. **Authoring depth:** `TGT-1` · `SUPERSET-1` · the athlete's note (R8) · `ITEM-1` with `ACT-1` ·
+   `CLONE-1` → `RETIRE-1` → `HIST-1`, with V1-22 chunk 3's verdict. V1-22 chunks 4 and 5 are proposed
+   for dropping (`FAM-1` → "To decide").
+6. **Widen to 3–5:** household members by invitation, step-up, self-serve deletion, client-side
+   Sentry, the audit log, the support runbooks.
+7. `CAT-3`, `V1-16`, `PROGS-2`.
+
+The list below is kept as written; the bullets above set the order.
 
 - **Programs:** **V1-22** (edit a program — its plan sizes it at four PRs) and **SCHED-1** (which days
   a program runs; a fixed-weekday first cut is fine).

@@ -5,6 +5,12 @@
 > defined in the program. The goal below gains: _"put any number of named workouts on each weekday,
 > in order"_. The decisions table's "at most three" row is superseded (R1). Steps are re-ordered when
 > the revised plans land; none starts before then.
+>
+> ⚠️ **Sliced 2026-11-14 (maintainer):** [FAM-1 — the family program](./fam-1-family-program.md) takes
+> the thinnest slice of this milestone into **Beta 0**: SCHED-1 1a and 1c, A4-0 and A4-1 (re-scoped,
+> expand only), a thin cut of ASSIGN-READ and ASSIGN-1 ("Start using this program", no Undo), the
+> instructions column from TGT-1c, and the builder. Everything else here stays in Beta 1, and its
+> plans' revisions build on what FAM-1 ships.
 
 > **Status: proposed 2026-10-23, awaiting the maintainer's approval of the plans.** A cross-PR milestone,
 > not an implementation plan. **What** each step must make true lives in the
