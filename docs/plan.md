@@ -1479,7 +1479,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   drafted by a model session, pending confirmation.)_ **Status: model-drafted definition, not yet
   confirmed — Ray (or a qualified coach) signs off each dose before it is seeded; the seed PR cites the
   sign-off.** Full definition, movement table, catalog additions and how-to copy:
-  [programs/daily-five-default.md](./programs/daily-five-default.md). _(Beta 0.)_
+  [programs/daily-five-default.md](./programs/daily-five-default.md). _(Beta 0.)_ ⚠️ _Re-stated
+  2026-11-14 (maintainer): **Beta 1**, with the first invite — see
+  [beta-1 → Beta 0](./milestones/beta-1.md#beta-0--one-invited-family). Was "(Beta 0.)"._
 
   ONB-0 establishes that a brand-new household's first screen is **Ray's family's routine**. That is one
   of two shapes: `routine_config` is an ordered list of activity keys; a **program** is

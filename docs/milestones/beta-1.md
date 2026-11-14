@@ -74,6 +74,20 @@ login, child accounts, kid PINs.
 
 ## Beta 0 — one invited family
 
+⚠️ **Re-scoped 2026-11-14 (maintainer): Beta 0 is the maintainer's family only; nobody is invited
+until Beta 1.** _"No one will use the app in this stage, until we can program our own workouts."_ So:
+
+- **Beta 0** is the safety and correction work on the maintainer's own household. Every exit criterion
+  below still applies; together they now mean **ready to invite**, not "invite family #1". The phone
+  run-through is done by the maintainer on a fresh test household.
+- **The invite moves to Beta 1.** The chart's `invite family #1` node is Beta 1's first step, and the
+  two-week check-in in "Beta 1" below now runs **on the first invited family, on Beta 1**, before
+  widening to 3–5.
+- **`ONB-2` moves to Beta 1** with the invite it existed for: its job is that a stranger's first day
+  is not the maintainer's program. Its dose sign-off waits with it.
+
+The text below is kept as written; read "invite family #1" as Beta 1's first step.
+
 ```mermaid
 flowchart LR
   N[0 · now: PII purge, merge gates] --> AU
@@ -506,7 +520,9 @@ revisited against the actual mix, which is a separate exercise.
 ## Beta 1 — 3–5 families, all the major features
 
 Starts after family #1 has used Beta 0 for two weeks **and Ray has read their feedback and decided to
-widen.** That check-in is a step, not an afterthought — it is the reason for the beta.
+widen.**
+⚠️ _Re-stated 2026-11-14:_ family #1 is now invited **at** Beta 1 and uses Beta 1 for two weeks;
+the feedback check-in decides the widening to 3–5 (see the note under "Beta 0"). That check-in is a step, not an afterthought — it is the reason for the beta.
 
 - **Programs:** **V1-22** (edit a program — its plan sizes it at four PRs) and **SCHED-1** (which days
   a program runs; a fixed-weekday first cut is fine).
