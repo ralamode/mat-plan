@@ -2317,10 +2317,28 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   runbook's hand-maintained delete order, and the panel found exactly that class of defect by
   reading. _(Beta 0.)_
 
+  📐 **Planned 2026-11-13** ([plan](./plans/priv-3-guarded-deletion.md)); four-lens panel, plan only.
+  The work is four PRs:
+  1. The shared per-household table list (`packages/db/src/household-graph.ts`) and its `db:verify`
+     catalog proof. `OPS-3` builds on this list.
+  2. A delete core in `packages/db`, typed `OwnerScope`.
+  3. The `erase-household` correction that wraps the core.
+  4. The per-athlete erasure the notice already promises.
+
+  The purge window `N` (item 2) is a deferred section of the same plan, built after `V1-9b` B1-3. The
+  plan proposes 30 days. ⚠️ **The plan recommends against the `--household` flag described above**: it
+  would read the target from the environment through a hidden prompt, the channel
+  `household-claim-2026-10-25` already uses. That needs no argv change, but the runner still gains a
+  `kind: 'erasure'` output mode. This is maintainer question Q1, and the paragraph above is not
+  re-worded until Q1 is answered.
+
   **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
   long as the household is active.** There is no rolling window and no summarize-then-discard step:
-  - Summaries would break the byte-faithful CSV export, the v2 engine's per-set history, and
-    [CLONE-1](#clone-1)'s "who ran which version" record.
+  - Summaries would break the export's completeness, the v2 engine's per-set history, and
+    [CLONE-1](#clone-1)'s "who ran which version" record. _(Re-stated 2026-11-13. It read "the
+    byte-faithful CSV export", which [ADR 0009](./decisions/0009-retire-the-byte-faithful-csv-contract.md)
+    retired. The conclusion does not change: 0009 decision 3(a) still requires the export to stay
+    complete for what the notice says it contains.)_
   - A summary of a child's bodyweight is still a child's health data, so summarizing does not reduce
     the privacy exposure.
   - The volume is trivial (about 51 rows in prod after several weeks).
