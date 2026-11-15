@@ -36,7 +36,7 @@ stretch); more than a dozen distinct workouts, some reused on most days; and ite
 ever checked off. The re-scope's "simple" shape (three workouts pinned to Monday, Wednesday and
 Friday) has to fit too.
 
-**The accepted prototype** is [Beta 0's, v10](../prototypes/beta-0/index.html) (2026-11-15, after d3).
+**The accepted prototype** is [Beta 0's, v11](../prototypes/beta-0/index.html) (2026-11-15: v10, after d3, brought in line with the plan).
 Every FAM-1 step is checked against it ([prototypes README](../prototypes/README.md#the-accepted-prototype-for-each-release)).
 
 ## What the slice leaves out, and why that is safe
