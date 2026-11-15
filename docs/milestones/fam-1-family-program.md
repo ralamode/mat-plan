@@ -102,6 +102,11 @@ a description until it has its own row.
 
 ## The steps
 
+> ⚠️ **Superseded 2026-11-15 — see [the FAM-1 plan](../plans/fam-1-family-program.md) §5–§7** for the
+> step ids, gates, lanes and delivery slices. The plan split and re-homed several steps (4a, 6, 11,
+> 12), added the ones this table lacks, and redid the slices. What follows is kept as the record of
+> the reasoning.
+
 ```mermaid
 flowchart LR
   OPS2[OPS-2 split] --> S1[1 · seed leaves prod]
@@ -201,6 +206,11 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## Delivery slices (proposed 2026-11-14)
 
+> ⚠️ **Superseded 2026-11-15 — see [the FAM-1 plan](../plans/fam-1-family-program.md) §5–§7** for the
+> step ids, gates, lanes and delivery slices. The plan split and re-homed several steps (4a, 6, 11,
+> 12), added the ones this table lacks, and redid the slices. What follows is kept as the record of
+> the reasoning.
+
 **Why.** The steps above are layers: schema, then writers, then the editor, then Today. Read in
 number order, nothing runs end to end until about step 15. The two riskiest changes are 5b and 12,
 which change the busiest read and must leave legacy output byte-identical, and 11a, the per-row
@@ -238,6 +248,11 @@ action, the states it must handle (empty, loading, error, done), its 360px rules
 rejects ([DX-14](../plan.md)).
 
 ## Lanes and the contract (proposed 2026-11-14)
+
+> ⚠️ **Superseded 2026-11-15 — see [the FAM-1 plan](../plans/fam-1-family-program.md) §5–§7** for the
+> step ids, gates, lanes and delivery slices. The plan split and re-homed several steps (4a, 6, 11,
+> 12), added the ones this table lacks, and redid the slices. What follows is kept as the record of
+> the reasoning.
 
 The slices above set the **order of integration**. This section sets **who works in parallel**
 inside each slice. The gates are [parallel-work.md](../parallel-work.md)'s, chiefly gate 1

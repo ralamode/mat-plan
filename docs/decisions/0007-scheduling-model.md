@@ -271,6 +271,19 @@ prescription_id IS NOT NULL AND deleted_at IS NULL`. A second device's ✓ on th
 - `CHECK (prescription_id IS NULL OR session_id IS NOT NULL)`: a linked row has a session, so the
   arbiter always applies (NULLs are distinct in a unique index).
 
+**Also authorized (d2 gap review, 2026-11-15):**
+
+- **`uq_entries_superset_order` is recreated** as `UNIQUE (superset_id, superset_order) WHERE deleted_at
+IS NULL AND prescription_id IS NULL`. Today it allows one live entry per place in a superset
+  (`schema.ts:354`); with one entry per ✓ row, every set of a superset member holds the same place, so a
+  second set would fail. A linked row is kept unique by the row arbiter above; unlinked rows keep
+  today's rule.
+- **`prescriptions.client_id`**: nullable UUIDv7 (legacy and seeded rows have none; a template row
+  always has one, writer plus `db:verify`), with `UNIQUE (workout_id, client_id)`, non-partial like
+  every `client_id`. The builder's save names each item by it, so a save matches rows whatever their
+  order, a reorder never detaches a logged row from its prescription, and a replayed save adds nothing.
+  This revises the body's "config → no `client_id`" for template prescriptions only.
+
 **What this changes in Amendment 2:**
 
 - **§6's "entries need no arbiter, because each row write carries its own `client_id`"** is
@@ -282,7 +295,12 @@ prescription_id IS NOT NULL AND deleted_at IS NULL`. A second device's ✓ on th
 - **§8, erasure:** entries are deleted before `prescriptions` already, so the order is unchanged; the
   runbook's pre-flight also checks for another household's entry pointing at this household's
   prescriptions.
-- **§10, proofs:** the arbiter rejects a twin ✓ and frees a hidden row's place; both-or-neither holds;
+- **§1's `BLOCK_KINDS`** is named `PROGRAM_BLOCK_KINDS` in code (the short name is taken,
+  `apps/web/lib/privacy/notice-model.ts:46`). **§2's `RESERVED_PROGRAM_SLUGS`** was never built and is
+  not needed: a template block's slug takes a `-2`, `-3`… suffix on a household collision (d2, D9).
+- **§10, proofs:** the arbiter rejects a twin ✓ and frees a hidden row's place; a linked row without
+  a set or a session is refused; two sets of one superset member commit; a `client_id` is unique in its
+  workout and a replayed save adds nothing;
   a cross-household prescription is flagged; purging a prescription that has a logged entry commits,
   with the pointer set to NULL and the snapshot kept, against the real CHECKs.
 
