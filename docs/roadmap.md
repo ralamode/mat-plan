@@ -127,18 +127,32 @@ document it belongs to, linked.
 
 ```mermaid
 flowchart LR
-  B0["Beta 0<br/>one invited family"] --> B1["Beta 1<br/>3–5 families"]
+  B0["Beta 0<br/>the maintainer's family"] --> B1["Beta 1<br/>first invited family, then 3–5"]
   B1 --> P["Pilot<br/>one local club"]
   P --> O["Open"]
   style B0 fill:#e3edf6
 ```
 
-| Release    | Who may use it                   | What lands in it                                                                                                                                                                                                                                                                 | Exit                                                                                   |
-| ---------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Beta 0** | one invited family               | **Ops and privacy, not features:** `V1-9b` B1–B2 (with `V1-24` 3b, which B1-3 sits on), `OPS-3`, `OPS-2`, `PRIV-3`, `DX-5(a)`, the PII scan, a phone run-through, then `PRIV-1` sign-off — sequenced in [beta-1 → the remaining path](./milestones/beta-1.md)                    | [beta-1 → Beta 0 exit criteria](./milestones/beta-1.md)                                |
-| **Beta 1** | 3–5 families                     | The rest of [CRUD-1](./milestones/crud-1-fix-it-yourself.md) (`PICK-1`, `MOV-1`, `V1-24`); [PROG-1](./milestones/prog-1-programs-and-scheduling.md) (`V1-22`, `SCHED-1`, `ASSIGN-1`, `TGT-1`, `CLONE-1`, `RETIRE-1`, `HIST-1`); `MOT-1`; `INVITE-1`; `CAT-3`; `PROGS-*`; `V1-16` | [beta-1 → Beta 1 exit criteria](./milestones/beta-1.md)                                |
-| **Pilot**  | one local club (~50–70 athletes) | `ID-1` → the club layer (`COACH-1`; clubs, challenges and a club feed have **no rows yet**) → `SHARE-1` (share a program by link)                                                                                                                                                | **No milestone document yet** — to be written, so the releases before it have a target |
-| **Open**   | anyone                           | `SOCIAL-1`, `PUB-1`, and what the pilot teaches                                                                                                                                                                                                                                  | —                                                                                      |
+| Release    | Who may use it                   | What lands in it                                                                                                                                                                                                                                                                                                                                        | Exit                                                                                   |
+| ---------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Beta 0** | the maintainer's family only     | **Ops and privacy, not features:** `V1-9b` B1–B2 (with `V1-24` 3b, which B1-3 sits on), `OPS-3`, `OPS-2`, `PRIV-3`, `DX-5(a)`, the PII scan, a phone run-through, then `PRIV-1` sign-off — sequenced in [beta-1 → the remaining path](./milestones/beta-1.md) — then [`FAM-1`](./milestones/fam-1-family-program.md), the family program _(2026-11-14)_ | [beta-1 → Beta 0 exit criteria](./milestones/beta-1.md)                                |
+| **Beta 1** | first invited family, then 3–5   | The rest of [CRUD-1](./milestones/crud-1-fix-it-yourself.md) (`PICK-1`, `MOV-1`, `V1-24`); [PROG-1](./milestones/prog-1-programs-and-scheduling.md) (`V1-22`, `SCHED-1`, `ASSIGN-1`, `TGT-1`, `CLONE-1`, `RETIRE-1`, `HIST-1`); `MOT-1`; `INVITE-1`; `CAT-3`; `PROGS-*`; `V1-16`                                                                        | [beta-1 → Beta 1 exit criteria](./milestones/beta-1.md)                                |
+| **Pilot**  | one local club (~50–70 athletes) | `ID-1` → the club layer (`COACH-1`; clubs, challenges and a club feed have **no rows yet**) → `SHARE-1` (share a program by link)                                                                                                                                                                                                                       | **No milestone document yet** — to be written, so the releases before it have a target |
+| **Open**   | anyone                           | `SOCIAL-1`, `PUB-1`, and what the pilot teaches                                                                                                                                                                                                                                                                                                         | —                                                                                      |
+
+⚠️ **Re-scoped 2026-11-14 (maintainer): no family is invited until Beta 1.** A family will not use the app
+until it can program its own workouts, so Beta 0 is **the maintainer's family only**, on the
+multi-family-safe foundation; its exit criteria are unchanged and now mean _ready to invite_. The
+first invited family arrives with Beta 1; the two-week check-in moves with it, before widening to
+3–5. `ONB-2` (The Daily Five) moves to Beta 1 with the invite it served. Details:
+[beta-1 → Beta 0](./milestones/beta-1.md#beta-0--one-invited-family).
+
+⚠️ **Added 2026-11-14 (maintainer): Beta 0 ends with [`FAM-1` — the family program](./milestones/fam-1-family-program.md)**,
+the thinnest slice of the PROG-1 re-scope that holds the household's real program: unlimited named
+workouts on a week template, typed items, per-item instructions, a one-screen builder and logging
+the new item kinds on Today. It takes `SCHED-1` 1a and 1c, A4-1's expand and a thin cut of
+`ASSIGN-READ` / `ASSIGN-1`, and it owns removing `PROGRAM_SEED` from production (`OPS-2` Q3). The
+rest of `PROG-1` stays in Beta 1; the draft lists what moves and proposes Beta 1's order.
 
 `FUEL-1` (meal and water logging) is Beta 1 at the earliest, and only once its privacy questions are
 answered (its row).

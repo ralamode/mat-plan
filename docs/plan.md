@@ -183,13 +183,15 @@ and panelled; the milestones order them.
   Today and the export read the athlete's assignments instead of the newest block, which changes CSV
   bytes and needs Insight's sign-off. ⚠️ _2026-11-13:_ re-scoped — an ordered list of workouts per day
   from the program's week template, beside rotation ([re-scope](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) R2–R5); the CSV sign-off is moot
-  under ADR 0009.
+  under ADR 0009. ⚠️ _2026-11-14:_ a thin cut moves to **Beta 0** in [FAM-1](./milestones/fam-1-family-program.md) (Today reads an athlete's
+  open assignment; "Start using this program", no Undo). The rest stays Beta 1.
 
 <a id="tgt-1"></a>
 
 - **TGT-1 — typed per-athlete targets: the movement's own quantity, one weight, and a note.**
   ([plan](./plans/tgt-1-typed-targets.md), [PROG-1](./milestones/prog-1-programs-and-scheduling.md) step 10.) Ranges allowed (spec M41); lengths stored in
-  inches (M40).
+  inches (M40). ⚠️ _2026-11-14:_ only `prescriptions.note` (the instructions, R8) moves to **Beta 0**,
+  in [FAM-1](./milestones/fam-1-family-program.md) step 4; the typed targets stay Beta 1.
 
 <a id="act-1"></a>
 
@@ -208,6 +210,8 @@ and panelled; the milestones order them.
   it" numbers are Count items. Per item, the author writes instructions and chooses whether the athlete
   gets a note field (default off). Builds on the existing quantity slots and `activity_types.input_shape`.
   **Pillar:** Logging & Measurement. **Needs a spec section or plan** before code; PROG-1, Beta 1.
+  ⚠️ _2026-11-14:_ **moves to Beta 0 in part**, as [FAM-1](./milestones/fam-1-family-program.md) step 3 (the type and the menu) and its
+  d2 spec section. The activity convergence (`ACT-1`) stays Beta 1.
 
 <a id="superset-1"></a>
 
@@ -216,6 +220,7 @@ and panelled; the milestones order them.
   is rebuilt every session. The program groups prescriptions; the log form starts from that grouping.
   **Later add-on:** change a superset during a workout and choose whether it is saved back to the
   program. **Pillar:** Authoring & Scheduling. PROG-1, Beta 1.
+  ⚠️ _2026-11-14 (maintainer):_ the program-defined grouping moves **into [FAM-1](./milestones/fam-1-family-program.md)** (steps 4b, 8b, 11b, 13b), so Beta 0. The later add-on stays Beta 1.
 
 <a id="pick-1"></a>
 
@@ -1447,6 +1452,94 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
   Small; no plan needed.
 
+- **DX-14 — ideas adapted from an open-source agent-skills collection.** _(maintainer, 2026-11-14.)_
+  We evaluated [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (MIT) skill by
+  skill against ours. It is **not installed**: about ten of its skills duplicate stronger, repo-specific
+  ones here, and its conventions (`tasks/plan.md`, `SPEC.md`) would fork ours. These are adapted, in our
+  own words and format, as small PRs. The first two before FAM-1's code steps:
+  1. **Prove-it for fixes.** A `fix` PR includes a test shown failing on the parent commit.
+     Nothing asks for this today. It goes in the
+     [definition of done](./definition-of-done.md) and in `review-pr`'s tests dimension.
+  2. **A clean console in `ui-screenshot`.** A capture fails on any console error or warning, so
+     hydration warnings on the phone-first builder can't slip through.
+  3. **`refine-idea`** (skills backlog #5): before a spec, ask one question at a time, each with a
+     proposed answer; stop for an explicit yes; end with a "Not doing, and why" list. It is how product
+     decisions such as the streak rule were actually settled.
+  4. **`doubt-check`** (skills backlog #4): for a decision made mid-implementation, a fresh reviewer
+     gets the artifact and its contract, **never the author's reasoning**; three rounds at most. It
+     reuses the existing lens agents. Panels review plans and `review-pr` reviews diffs; nothing
+     reviews a call made halfway through a migration.
+  5. **A routing guard for skills**, with a self-test: trigger phrases mapped to the skill they
+     should start, failing on a miss or a collision ("shipit" reaches three skills today). It also
+     trims the six descriptions that are step lists of about 500 characters, and gives each skill an
+     exit checklist (8 of 12 have none).
+  6. **`write-spec` additions:**
+     - an "assumptions I'm making" block;
+     - a **delta spec** for changing a shipped spec;
+     - a **launch and rollback** section for milestone specs, which the club pilot needs.
+  7. **Small folds:**
+     - in `start-task` and `plan-with-panel`: "flag it as unverified when the pinned docs don't
+       cover it", which closes skills backlog #3;
+     - in `add-server-action`: force an error and find it in Sentry;
+     - in `review-pr`: a finding names the fix, the author's evidence gets checked, and an
+       unmeasured performance claim reads "not measured";
+     - in `ship-pr`: a handoff checklist when a session ends mid-task.
+
+  8. **`write-spec` learns to split a milestone into lanes.** _(maintainer, 2026-11-14.)_
+     - **Chunk 0 is a contract PR:** zod schemas, named fixtures, and the list of tests not yet
+       written. It is real code, reviewed by the lenses.
+     - **A Lanes section:** per lane, the globs it owns, the contract it reads, its fixtures and its
+       exit.
+     - **Integration slices:** thin first, then widened, never a sprint at the end.
+     - **A guard** with a self-test fails when two lanes' globs overlap
+       ([parallel-work.md](./parallel-work.md) gate 1, made mechanical).
+       FAM-1 is the first user ([lanes](./milestones/fam-1-family-program.md)).
+
+  **Considered and skipped,** each with its reason, so nobody re-evaluates them:
+  - context engineering: AGENTS.md, the feature guides and the SessionStart hook cover it;
+  - frontend UI: `DESIGN.md`, the UX lens, `ui-screenshot` and the 360px rule cover it. Only the
+    "design contract" line (the screen's job, primary action, required states, patterns to reject)
+    goes into FAM-1's d3;
+  - CI, git workflow, security, API design, deprecation, ADRs and simplification are all covered by
+    stronger repo rules;
+  - performance ledgers and constraint ratchets wait until there is a number to protect.
+
+  A table of what was taken and why goes into [working-with-agents](./working-with-agents.md), with
+  credit to the source. **Built in a separate thread.** Each item is a small `chore(dx)` PR; none
+  needs a plan except 5 (a new guard).
+
+- **DX-15 — the workflow, distilled: a portable skill pack.** _(maintainer, 2026-11-14.)_ The
+  skills here encode how this repo plans and ships, but most of them assume its paths and commands.
+  Another repo could adopt the method if the generic part were separate from the mat-plan part. Do
+  that, **in this repo first**, as two layers:
+  1. **A core of repo-agnostic skills**, one per stage of the loop:
+     - `plan-release`: plan, prototype, feedback, sign-off, one release at a time;
+     - `refine-idea` (DX-14.3);
+     - `write-spec` with its contract PR, lanes and integration slices (DX-14.8);
+     - `plan-with-panel`;
+     - `doubt-check` (DX-14.4);
+     - `ship-pr`;
+     - `review-pr`, with the lens agents and their reporting contract;
+     - `hold-the-bar`.
+       Each core skill reads a small per-repo **config**: paths, gate commands, where plans and specs
+       live. It must not hard-code them.
+  2. **An adapter layer** that stays here: `db-migration`, `add-server-action`, `data-correction`,
+     `ui-screenshot` and the config itself.
+
+  **The rules that make it "battle-tested", each one checkable:**
+  - **Every rule cites the incident that earned it,** as the skills already do by PR number. A rule
+    with no incident is marked a hypothesis.
+  - **The routing guard (DX-14.5)** and a **dry run per skill** are its tests.
+  - **The method is written once, in [working-with-agents](./working-with-agents.md):**
+    - the cheapest place to catch each kind of flaw: shape in a contract PR, behaviour in a
+      prototype, mid-build decisions in `doubt-check`, implementation in review;
+    - integrate first;
+    - lanes split by contract.
+
+  **Order:** after DX-14's items land, and only once FAM-1's slice 1 has exercised the contract PR
+  and the lanes. A method is packaged after it has worked once, not before. Packaging it as a Claude
+  Code plugin, or in its own repo, is the last step.
+
 - **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
   2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
   INP < 200 ms · CLS < 0.1) is written in AGENTS.md and ADR 0001 but nothing measures it. **(a)** Land
@@ -1497,7 +1590,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   drafted by a model session, pending confirmation.)_ **Status: model-drafted definition, not yet
   confirmed — Ray (or a qualified coach) signs off each dose before it is seeded; the seed PR cites the
   sign-off.** Full definition, movement table, catalog additions and how-to copy:
-  [programs/daily-five-default.md](./programs/daily-five-default.md). _(Beta 0.)_
+  [programs/daily-five-default.md](./programs/daily-five-default.md). _(Beta 0.)_ ⚠️ _Re-stated
+  2026-11-14 (maintainer): **Beta 1**, with the first invite — see
+  [beta-1 → Beta 0](./milestones/beta-1.md#beta-0--one-invited-family). Was "(Beta 0.)"._
 
   ONB-0 establishes that a brand-new household's first screen is **Ray's family's routine**. That is one
   of two shapes: `routine_config` is an ordered list of activity keys; a **program** is
@@ -1602,6 +1697,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   every push; the seed writes Ray's family with public fixed UUIDs and re-creates them if deleted, and
   expands ramp targets over every kid in the database. Split into `seedReference` and `seedFixtures`;
   keep `PROGRAM_SEED` reaching prod until V1-22; scope ramp targets by household. _(Beta 0.)_
+  ⚠️ _2026-11-14:_ removing `PROGRAM_SEED` from production (the OPS-2 plan's Q3) is proposed as
+  [FAM-1](./milestones/fam-1-family-program.md) step 1, right after this row's split.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
@@ -2265,6 +2362,7 @@ no filter"` → three, because a name became typeable), which is a real accuracy
 
 - **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_
   📋 **Plan: [plans/sched-1-scheduling-model.md](./plans/sched-1-scheduling-model.md)** (2026-10-11) — five chunks, the first two with no DB; it does **not** close this row.
+  ⚠️ _2026-11-14:_ chunks **1a and 1c** move to **Beta 0** in [FAM-1](./milestones/fam-1-family-program.md) (steps 2 and 5); 1b, 1d and 1e stay Beta 1.
   📐 **Model: [ADR 0007](./decisions/0007-scheduling-model.md)** — recurrence is a weekday SET as rows
   (no RRULE) and `daily` is seven rows; rotation becomes an anchor + an ordered list **on the block**
   (not the assignment — one program must not get N phases, or co-training siblings desynchronize) and
@@ -3253,6 +3351,40 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
 
        Needs a **UX panel**: this is a motivational surface aimed at a child, and getting it wrong costs
        retention rather than correctness.
+
+    5. **What counts, with several programs per athlete. SETTLED (maintainer, 2026-11-14).**
+       _"When you make a plan and you count things toward a streak, it is a commitment."_ Once an athlete
+       can be on several programs ([FAM-1](./milestones/fam-1-family-program.md) step 15c), "the day's
+       routine" becomes several workouts. The rule:
+       - **Every counting workout due that day must be done**, or the streak breaks unless the day is
+         excused. This keeps constraint 4's "everything due".
+       - **Every workout counts by default**, with a per-workout **"Counts toward the streak"** switch
+         the programmer can turn off. This replaces constraint 3's opt-in flag with an opt-out.
+       - **A day with no counting workout due is neutral.** Doing a non-counting workout, such as a
+         stretch, does not change that: intentional days off are neutral.
+       - **Done means every prescribed row checked.** Extra sets are allowed, never required, and a
+         lighter set counts once checked.
+       - **Practice keeps the streak only on a day with nothing counting due.** It never replaces a
+         counting workout.
+       - **Doing someone else's workout for a day counts, as a swap** for one of the athlete's own.
+       - **Excused days:** an adult excuses their own day; a parent excuses a child's; a child cannot.
+         **A reason is required. There is no cap.** An excused day is neutral, **shown in the streak
+         wherever streaks appear**, and listed with its reason. This is the excused day constraint 4
+         flagged as the cheap mitigation, now in scope.
+       - **The day's verdict records the rule it judged by** (ADR 0007 decision 5's snapshot), so
+         changing a workout's switch never rewrites past days.
+
+       **Settled the same day:**
+       - **A swap:** the athlete picks which of their due counting workouts it replaces, when that day
+         has one.
+       - **The first day on a program:** doing the due workouts starts the streak at 1; not doing them
+         leaves no streak started, so there is nothing to break.
+
+       **Open for MOT-1's plan:**
+       - the excused-day writer, and its privacy row (a free-text reason about a child is personal
+         data, often health data);
+       - **who else can see a reason.** Recommendation for COACH-1 (Pilot): a coach with permission
+         sees that a day was excused, **never why**, unless the parent shares that one reason.
 
   > **Product reframe this surfaced (Ray, 2026-09-16) — worth more than the feature.** The roadmap has
   > treated **strength programming** as the core and habits as the supporting cast. Ray's actual primary
