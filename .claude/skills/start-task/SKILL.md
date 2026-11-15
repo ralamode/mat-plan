@@ -52,6 +52,10 @@ Read these in order and stop as soon as you have enough:
    `mermaid`, `squash`).
 5. **Standing decisions** in the user's memory (for example, the A/B rotation is calendar-indexed on
    purpose). Don't "fix" a recorded decision.
+6. **The pinned docs, for any library behaviour you'll rely on.** The versions in `package.json` are
+   newer than most training data, so check that version's own docs (`apps/web/AGENTS.md` says where
+   Next's live). **When they don't cover it, mark the claim _unverified_** in the plan or PR, with the
+   probe that would settle it. Don't state it as fact.
 
 ## 3. Classify the change and state the obligations up front
 

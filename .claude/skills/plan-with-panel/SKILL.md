@@ -33,6 +33,9 @@ The bar:
 - **Risks / rollback** name real failure modes (for this app that usually means data integrity on the
   write path, the "LLM never authors loads" rule, and ownership scoping by `household_id`).
 - **Out-of-scope** is explicit. At ~4h/wk that section is load-bearing.
+- **A claim about how a library behaves cites the pinned version's docs, or says _unverified_** with
+  the probe that would settle it ([start-task](../start-task/SKILL.md) step 2). The panel attacks the
+  unverified claims first.
 - Ground every claim in code you have opened. Cite `path:line`.
 - 🔴 **Find the row that already owns the question, and never assert one does not exist without
   grepping for it.** Search `docs/plan.md` and `docs/roadmap.md` for the **capability**, not the id you

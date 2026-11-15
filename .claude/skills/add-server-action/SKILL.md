@@ -103,6 +103,13 @@ use its `form(fields)` helper. Required describes:
 - A writer in `packages/db`: add a `db:verify` section proving ownership rejection and replay against
   real Postgres semantics.
 
+**Then force one error and find it in Sentry.** A test can't prove the wrapper is wired to a real
+project. Throw once inside the `withServerActionInstrumentation` callback, **uncommitted**, against a
+build with `SENTRY_DSN` set (local `.env.local`, or the preview if its scope has one). Submit the
+form and confirm the event arrives under the action's name, then revert. Never commit the throw:
+`hold-the-bar` flags a stub throw, rightly. With no DSN reachable, the PR says **Sentry: not
+verified**, never "instrumented".
+
 ## Red flags
 
 - `db`, `process.env` or a Drizzle import in the action file.

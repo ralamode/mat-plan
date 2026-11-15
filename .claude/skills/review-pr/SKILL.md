@@ -167,7 +167,8 @@ with no rule citation is taste. Mark it P2, or drop it.
 
 11. **Performance / CWV.** Nothing measures the budget (LCP < 2.5s, INP < 200ms, CLS < 0.1), so look
     for the causes: client JS where RSC works, unbounded queries on a hot path (`profile_id, date`),
-    layout shift from late content, images without `next/image`.
+    layout shift from late content, images without `next/image`. **A performance claim nobody
+    measured reads _not measured_**, in the PR and in the review, never "faster" or "no impact".
 
 **Don't re-flag accepted debt.** Check [docs/tech-debt.md](../../../docs/tech-debt.md) first. A known
 item is a finding only if this PR makes it worse.
@@ -181,6 +182,12 @@ item is a finding only if this PR makes it worse.
 | **P2** | Follow-up or nit; file it rather than block                                                                   | naming, a clearer comment, a test that could be tighter                                                                               |
 
 ## 5. Verify before reporting
+
+- **Every finding names its fix,** a concrete change, not "consider…". A finding you can't propose a
+  fix for is a question; ask it as one.
+- **Check the author's evidence, not only the code.** Re-run at least one thing the description
+  claims (a test said to fail on the parent, a probe, a measurement). A claim you couldn't reproduce
+  is a finding in itself: say what you ran and what you got.
 
 For every P0 and P1, re-open the cited code and try to **disprove** the finding. Is it handled
 elsewhere? Is it accepted debt? Does the test already cover it? Drop what doesn't survive. A short,

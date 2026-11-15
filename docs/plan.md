@@ -1482,7 +1482,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      - an "assumptions I'm making" block;
      - a **delta spec** for changing a shipped spec;
      - a **launch and rollback** section for milestone specs, which the club pilot needs.
-  7. **Small folds:**
+  7. ✅ **Small folds** (2026-11-14):
      - in `start-task` and `plan-with-panel`: "flag it as unverified when the pinned docs don't
        cover it", which closes skills backlog #3;
      - in `add-server-action`: force an error and find it in Sentry;
