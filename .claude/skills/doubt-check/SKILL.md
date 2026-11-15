@@ -1,6 +1,6 @@
 ---
 name: doubt-check
-description: Get a fresh, unanchored second opinion on ONE decision made mid-implementation — a deviation from the plan, a call the plan left open, a migration step, a correction's keeper row, an auth or ownership change — by handing a lens agent the artifact and its contract but never the reasoning, for at most three rounds. Use when you're about to commit a choice nobody reviewed, when you catch yourself writing "I decided to…", or when the user says "doubt this", "sanity-check this call", "second opinion".
+description: Get a fresh, unanchored second opinion on ONE decision made mid-implementation — a deviation from the plan, a call the plan left open, a migration step, a correction's keeper row, an auth or ownership change — from a lens agent that sees the artifact and its contract, never the reasoning. Use when you're about to commit a choice nobody reviewed, when you catch yourself writing "I decided to…", or when the user says "doubt this", "sanity-check this call", "second opinion".
 ---
 
 # Doubt-check one decision

@@ -1470,9 +1470,14 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      reuses the existing lens agents. Panels review plans and `review-pr` reviews diffs; nothing
      reviews a call made halfway through a migration.
   5. **A routing guard for skills**, with a self-test: trigger phrases mapped to the skill they
-     should start, failing on a miss or a collision ("shipit" reaches three skills today). It also
-     trims the six descriptions that are step lists of about 500 characters, and gives each skill an
-     exit checklist (8 of 12 have none).
+     should start, failing on a miss or a collision. It also trims the descriptions that are step
+     lists, and gives each skill an exit checklist.
+     - ✅ **5a** ([plan](./plans/dx-14-5-skill-routing-guard.md), 2026-11-14): `skills:check` fails
+       when one skill's quoted trigger reaches another's trigger clause, or a description is over 500
+       characters or quotes no trigger. Measured then: "shipit" / "ship it" split between
+       `keep-mergeable` and `ship-pr` (now `keep-mergeable`'s, by the maintainer's call), and four
+       descriptions over 500 characters.
+     - **5b:** an exit checklist for every skill (none of 14 has one).
   6. **`write-spec` additions:**
      - an "assumptions I'm making" block;
      - a **delta spec** for changing a shipped spec;

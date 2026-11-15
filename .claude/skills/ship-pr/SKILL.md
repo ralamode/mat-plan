@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Take a finished mat-plan branch to an open, reviewable PR without dropping a per-PR obligation — the local gates (verify, guides, hold-the-bar, e2e:local when needed), a changelog fragment and status/plan/lessons in the same PR, Conventional Commit, the template body, the DoD pass — and check main after the squash merge. Use when the work is done and the user says "ship it", "open the PR", "commit and push", "wrap this up", or after a merge to confirm main.
+description: Take a finished mat-plan branch to an open, reviewable PR without dropping a per-PR obligation — the local gates (verify, guides, hold-the-bar, e2e:local when needed), a changelog fragment and status/plan/lessons in the same PR, Conventional Commit, the template body, the DoD pass — and check main after the squash merge. Use when the work is done and the user says "open the PR", "commit and push", "wrap this up", or after a merge to confirm main.
 ---
 
 # Ship a PR
