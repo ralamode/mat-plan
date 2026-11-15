@@ -1500,6 +1500,15 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      - **A guard** with a self-test fails when two lanes' globs overlap
        ([parallel-work.md](./parallel-work.md) gate 1, made mechanical).
        FAM-1 is the first user ([lanes](./milestones/fam-1-family-program.md)).
+  9. **Lanes stay parallel once they run.** _(maintainer, 2026-11-14;
+     [the five risks](./parallel-work.md#once-lanes-run-what-turns-them-back-into-one-queue).)_
+     - **The guide gate learns that the most specific owner wins:** a file matched by a narrower
+       `owns:` entry in another guide owes only that guide. Today a broad prefix such as
+       `write-path.md`'s `packages/db/src/writers/` claims every new subdirectory too, so a guide per
+       lane ([the rule](./features/README.md#guides-for-work-run-in-lanes)) relieves nothing. A gate
+       change, so it ships with a self-test case.
+     - **`write-spec`** asks for contract tests on both sides of each chunk-0 shape, against the same
+       named fixture, and for a pending-column field when a lane needs a column chunk 0 missed.
 
   **Considered and skipped,** each with its reason, so nobody re-evaluates them:
   - context engineering: AGENTS.md, the feature guides and the SessionStart hook cover it;

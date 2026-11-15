@@ -261,14 +261,20 @@ migration chain is the critical path, because each migration is observed applied
 **the milestone moves at lane A's pace plus the integration steps**: roughly 13 PR-lengths of
 calendar time instead of 23 in a row. That is an estimate, to be checked against slice 1.
 
-**What would serialize the lanes again, and the fix:**
+**Keeping the lanes parallel.** The general risks and fixes are in
+[parallel-work → Once lanes run](../parallel-work.md#once-lanes-run-what-turns-them-back-into-one-queue).
+Here they mean:
 
-- **`docs/features/programming.md` takes one PR at a time,** and 12 steps edit it. Either split it per
-  lane in d2, or let only integration PRs edit it.
-- **The migration journal and `schema.ts` belong to lane A only.** A lane that needs a column asks
-  lane A for it.
-- **A fixture that drifts from the schema.** The fixtures are parsed by the schema in a test, so drift
-  fails CI.
+- **Guides:** the hotspot is `write-path.md`, not `programming.md`. It owns `packages/db/src/writers/`,
+  `apps/web/lib/dal/`, `seed.ts` and `export-month.ts`, so steps 1, 6, 7, 11a, 11b and 14 would all
+  edit it. Lane guides `fam-1-schema.md`, `fam-1-builder.md`, `fam-1-today.md` and `fam-1-writers.md`
+  (paths fixed by d2) relieve it once the gate change lands (DX-14 item 9). Seams that stay ordered:
+  `program-day.ts`, `strength-session.ts`, `seed.ts`.
+- **Columns:** lane A owns the schema; chunk 0 lists every column slices 1–4 need. Step 4b is the
+  riskiest migration, so its order stays.
+- **Fixtures:** both sides test against named fixtures, for example `monday-two-programs`.
+- **Composing file:** only integration edits `apps/web/app/p/[profileId]/page.tsx`.
+- **Contract:** slice 1 tests it.
 
 **For d2 to settle:**
 
