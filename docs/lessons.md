@@ -516,7 +516,18 @@ access token`, which reads like a permissions problem with the repo. The cause w
   shipped instead of after the branch. Easy to hit when a panel changes the design mid-branch and the
   commit stops matching the branch name. **Fix:** run `pnpm status:check "$(git merge-base origin/main
 HEAD)"` before opening a PR — the bare form takes a different path and may pass where CI will not,
-  because CI passes `BASE_SHA`. _(2026-10-22.)_
+  because CI passes an explicit base (since 2026-11-14, the merge ref's first parent; entry below).
+  _(2026-10-22.)_
+
+- **A docs PR fails the status guard as "a feat branch", and the feat commit isn't on the branch.**
+  → CI checks out the merge ref (`refs/pull/<n>/merge`), built from `main` as it is now, but the
+  event's `pull_request.base.sha` is `main` when the event was created. A `feat` that merged in
+  between sat inside `base.sha..HEAD`, so its subject was read as the branch's (#388 on #387, run
+  43662580861). Every PR guard with a base read the same stale value. **Diagnose:** the run's
+  checkout log prints `Merge <head> into <base>`; if that `<base>` differs from the step's
+  `BASE_SHA`, this is it. **Fixed:** `ci.yml`'s "Resolve PR base" step hands every guard the merge
+  ref's first parent ([plan](./plans/ci-pr-base-merge-ref.md)); a push to the branch was the old
+  workaround. _(2026-11-14.)_
 
 - **A control the code wires can still be OFF in production, and the docs will not notice.** →
   `lib/rate-limit.ts` fails **open** when `UPSTASH_REDIS_REST_URL`/`_TOKEN` are unset (correct for
