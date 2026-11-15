@@ -6,7 +6,7 @@
 > [V1-9b](./v1-9b-delete-and-restore.md) B2 (its 2026-11-15 Amendment). Milestones:
 > [CRUD-1](../milestones/crud-1-fix-it-yourself.md) track E, and
 > [FAM-1](../milestones/fam-1-family-program.md), whose steps 11a–13b wait on this. **Accepted
-> prototype:** Beta 0's **v10** at [`docs/prototypes/beta-0/`](../prototypes/beta-0/index.html) (#411,
+> prototype:** Beta 0's **v11** (v10 of #411 plus this PR's read-only older days) at [`docs/prototypes/beta-0/`](../prototypes/beta-0/index.html) (#411,
 > 2026-11-15). This is **Beta 0**.
 >
 > **Branches:** 3b-0 `db/v1-24-3b-0-practice-one-per-day` · 3b-page `feat/v1-24-3b-page-old-forms-leave` ·
@@ -79,12 +79,13 @@ the new page until slice 3, so nobody loses a habit _(maintainer, 2026-11-15, as
   form, waits for FAM-1 13b's surface instead.
 - **Their Server Actions stay**, tested in Vitest, though nothing on the page posts to them. Wake is the
   exception (D3), because its section is the one this plan rebuilds.
-- **`CLOSED_DAY_NOTICE`** becomes v10's _"This day is closed for new logs. You can still change
-  bodyweight or delete a mistake."_ (`index.html:2514-2517`, the no-workout branch). Change stays on a
-  closed day (the amend has no day bound, V1-24 1b). **A blank Save on a closed day is a deletion:**
-  the day is closed to new logs, so the value cannot be re-entered. That is the "delete a mistake" the
-  notice offers; the Save under a blank field reads **Clear** on a closed day so it says so. A
-  prototype-round item (v10 shows no closed-day blank).
+- **Days before yesterday are read-only** _(maintainer, 2026-11-15)_. Only today and yesterday (the
+  existing writable window, `apps/web/lib/entries/declared-day.ts:26`) can be logged, changed or
+  cleared. On an older day the page shows what was logged as text: no ✓, no Change, no field, no
+  **Clear this day…**. `CLOSED_DAY_NOTICE` becomes v11's _"This day is read-only. Only today and
+  yesterday can be logged or changed."_ This **supersedes V1-24 1b's "a logged weight is correctable on
+  every day including closed ones"**: a weigh-in found wrong a week later stays as logged, or is fixed
+  with a correction (`db:correct`), as before 1b.
 - **Guides:** `strength-logging.md` and `programming.md` (its Today lines) say the form and the program
   card are off the page until FAM-1 13b. Neither owns `page.tsx`, so the PR names them rather than
   relying on `guides:check`.
@@ -95,22 +96,24 @@ v10.
 - **✓ replaces Log**: a `button` with `aria-label="Log bodyweight"`, the existing ≥44px target.
 - **`Last time 72.5 lb`**: the profile's latest live weigh-in **before** the viewed day, read in the DAL
   with the day's entries (one more indexed query on `(profile_id, day)`). Omitted when there is none.
-- **Change → Cancel / Save.** Saving a **blank** field clears the weigh-in, through a new pinned
+- **Change → Cancel / Save**, on today and yesterday only. `editBodyweightAction` gains the
+  writable-window bound the create path has (`resolveDeclaredDay`, read from the row's day), so a
+  crafted POST cannot change an older day; a boundary test proves it. Saving a **blank** field clears the weigh-in, through a new pinned
   writer, `clearSingleValue` in `packages/db/src/writers/`, **not** a bare `hideEntries` call (which
   hides any owned entry on the day, with no metric pin or stale check, `hide.ts:83-96`). It refuses
   unless the row is live, carries the expected metric, and still holds the value the form showed
   (`seenValue`, the amend's guard, `bodyweight.ts:27-52`); it reads the day from the row, so the form
   posts no day. It writes one hide with no reason. `editBodyweightSchema` (`packages/shared/src/bodyweight.ts:131-137`)
   accepts a blank as "clear". No tomb renders and no Undo exists: the empty field returns, so
-  re-entering is the recovery on a writable day.
+  re-entering is the recovery.
 - **A fresh `client_id` per unlogged mount.** The create row mints its id when it mounts and is
   unmounted while a value shows (today's `form-${day}` key), so re-entering after a clear never replays
   the hidden row's id (no `own_hidden`) and 0012, being live-only, does not count the hidden row.
-- **Copy (v10):** errors `Enter your bodyweight, then ✓.` and the existing
+- **Copy (v10/v11):** errors `Enter your bodyweight, then ✓.` and the existing
   `IMPLAUSIBLE_BODYWEIGHT_MESSAGE`; announcements `Bodyweight logged`, `Bodyweight changed to 72.5 lb`,
   `Bodyweight cleared`. **Focus:** after Save, on Change; after a clear, on the field.
 - ⚠️ **The range stays `BODYWEIGHT_BOUNDS`** (20–500 lb, `packages/shared/src/bodyweight.ts:35-38`).
-  v10 checks 40–400. The shared bound is a recorded decision with its reasoning; v10's numbers go on
+  v11 checks 40–400. The shared bound is a recorded decision with its reasoning; its numbers go on
   the next prototype round's list.
 
 **D3 — Practice (3b-0, 3b-life).**
@@ -126,8 +129,8 @@ v10.
   its 23505 catch from the bodyweight index alone (`hide.ts:280-284, :345`) to both, so a Restore all
   after a clear and a re-entered practice refuses that item instead of throwing.
 - **The action:** `logLifeActivitiesAction` takes `minutes`, zod-validated as a whole number from 1 to a
-  new `PRACTICE_MINUTES_MAX` (300, v10's) in `packages/shared` beside the metric. The existing
-  `MAX_QUANTITY_BY_UNIT.min` of 1440 is a unit cap, not a typo guard. Errors (v10): `Enter the minutes,
+  new `PRACTICE_MINUTES_MAX` (300, the prototype's) in `packages/shared` beside the metric. The existing
+  `MAX_QUANTITY_BY_UNIT.min` of 1440 is a unit cap, not a typo guard. Errors (v10/v11): `Enter the minutes,
 then ✓.` / `Enter whole minutes, 1 to 300.` `DEFAULT_PRACTICE_MINUTES`
   (`apps/web/lib/life/life-activities.ts:32`) is deleted.
 - **An amend**, `editPracticeAction`, beside `editBodyweightAction`, through a writer in
@@ -136,7 +139,7 @@ then ✓.` / `Enter whole minutes, 1 to 300.` `DEFAULT_PRACTICE_MINUTES`
 - **Wake leaves the action's trusted set**, so a crafted POST cannot log one; the Wake arm is deleted.
   `life:wake` stays in the routine catalog until FAM-1 replaces the routine. Old Wake entries are old
   entries: not shown.
-- **Announcements and focus** (v10): `Wrestling practice logged`, `…changed to 45 min`, `…cleared`;
+- **Announcements and focus** (v10/v11): `Wrestling practice logged`, `…changed to 45 min`, `…cleared`;
   focus on Change after a log or a save, on the field after a clear. The field unmounts on a log, so a
   `role="status"` region mounted in both states carries the message (round 1's UX-B2).
 - **Retired:** `SAVED_STATE_COPY.lifeLogged` ("· logged today").
@@ -190,7 +193,7 @@ re-pointed. Each deletion is named in the PR with the coverage that remains.
 | `packages/shared/src/bodyweight.ts`                                                | EDIT   | `editBodyweightSchema` accepts a blank as a clear.                                          |
 | `apps/web/e2e/bodyweight-receipt.spec.ts`, `steps.ts`                              | EDIT   | `Log weight` → the ✓ button; clear, then re-enter.                                          |
 | `apps/web/lib/dal/entries.ts`                                                      | EDIT   | The "last time" read.                                                                       |
-| `apps/web/lib/constants.ts`                                                        | EDIT   | v10's copy.                                                                                 |
+| `apps/web/lib/constants.ts`                                                        | EDIT   | v11's copy.                                                                                 |
 | `docs/features/write-path.md`, `delete-and-restore.md`                             | EDIT   | A blank amend is a hide.                                                                    |
 
 **3b-life**
@@ -201,7 +204,7 @@ re-pointed. Each deletion is named in the PR with the coverage that remains.
 | `apps/web/app/p/[profileId]/actions.ts` (+ tests)         | EDIT   | `minutes`; Wake refused; `editPracticeAction`. |
 | `packages/db/src/writers/` (+ `db:verify`)                | NEW    | The practice amend writer.                     |
 | `packages/shared`, `apps/web/lib/life/life-activities.ts` | EDIT   | `PRACTICE_MINUTES_MAX`; delete the default.    |
-| `apps/web/lib/constants.ts`                               | EDIT   | v10's copy; delete `SAVED_STATE_COPY`.         |
+| `apps/web/lib/constants.ts`                               | EDIT   | v11's copy; delete `SAVED_STATE_COPY`.         |
 | `docs/features/write-path.md`                             | EDIT   | The life action's new shape.                   |
 
 Each PR also carries `docs/plan.md`, the milestone chart and a changelog fragment.
@@ -216,12 +219,15 @@ Each PR also carries `docs/plan.md`, the milestone chart and a changelog fragmen
 4. **3b-life:** practice logs the minutes typed into an empty field; Change and blank-clear behave as
    bodyweight's; no day shows Wake; a POST with `activityKey=wake`, or with minutes missing, 0, 301 or
    45.5, is refused.
-5. axe and the 360px checks pass on Today's open and closed states.
+5. A day before yesterday shows no ✓, Change, field or Clear, and the server refuses a log, a change or
+   a clear there.
+6. axe and the 360px checks pass on Today's open and closed states.
 
 ## Test plan
 
 - **Boundary tests** (AGENTS.md → Backend) for the life action and `editPracticeAction`:
-  unauthenticated, wrong owner, bad body. **Each starts from one valid body with minutes**, so each
+  unauthenticated, wrong owner, bad body, **and a day before yesterday** (also for
+  `editBodyweightAction`). **Each starts from one valid body with minutes**, so each
   fails on its own guard and not on zod. Plus 1, 300, 301 and 45.5, and a same-`client_id` replay that
   produces one row.
 - **`db:verify`:** the index and the typed `dayTaken` (3b-0); Restore all into a re-entered practice refuses that item; the practice amend pins its metric; `clearSingleValue` refuses a wrong metric, a stale `seenValue` and a hidden row, and writes one hide with no reason.
@@ -247,34 +253,34 @@ Each PR also carries `docs/plan.md`, the milestone chart and a changelog fragmen
 - The program's workouts, row-completed logging and per-row edit: FAM-1 12, 13 and 13b.
 - A practice default from the program: FAM-1, when a program can prescribe a life item.
 
-## Prototype-fidelity check (2026-11-15, against v10)
+## Prototype-fidelity check (2026-11-15, against v11)
 
-| v10                                                                                                | This plan                                   |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Bodyweight: "Last time" hint, field, ✓; logged row with time and Change; Cancel/Save; blank clears | Same (D2)                                   |
-| Bodyweight range 40–400 lb                                                                         | **Keeps 20–500** (shared bound); next round |
-| Practice: empty field, ✓, Change, blank clears; 1–300 whole minutes                                | Same (D3)                                   |
-| No Wake; no Check-ins or Strength section; no past rows                                            | Same                                        |
-| Closed day: "This day is closed for new logs."                                                     | Same                                        |
-| Announcements and focus targets for log, change and clear                                          | Same                                        |
+| v11                                                                                                                             | This plan                                   |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Bodyweight: "Last time" hint, field, ✓; logged row with time and Change; Cancel/Save; blank clears                              | Same (D2)                                   |
+| Bodyweight range 40–400 lb                                                                                                      | **Keeps 20–500** (shared bound); next round |
+| Practice: empty field, ✓, Change, blank clears; 1–300 whole minutes                                                             | Same (D3)                                   |
+| No Wake; no Check-ins or Strength section; no past rows                                                                         | Same                                        |
+| Older days read-only: no ✓, Change, field or Clear; "This day is read-only. Only today and yesterday can be logged or changed." | Same (D1)                                   |
+| Announcements and focus targets for log, change and clear                                                                       | Same                                        |
 
-Cases v10 does not show, for its next round: two phones logging practice on one day (3b-0's typed
+Cases v11 does not show, for its next round: two phones logging practice on one day (3b-0's typed
 refusal) and that refusal's copy.
 
 ## Review-response log (adversarial panel)
 
 ### Round 3 — a correctness re-check of this version (2026-11-15)
 
-| #   | Finding                                                                                                        | Verdict  | Where it went                                                        |
-| --- | -------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| R1  | **BLOCKING:** Restore all throws on the new practice index: restore's slot check and catch are bodyweight-only | accepted | D3; 3b-0 edits `hide.ts`; a `db:verify` case                         |
-| R2  | **BLOCKING:** a second phone's practice ✓ would be a bare 23505: the insert arbitrates on `client_id` only     | accepted | D3; 3b-0's target-less insert with `dayTaken`                        |
-| R3  | Blank → `hideEntries` drops the amend's metric pin and stale check, and needs a day the form doesn't post      | accepted | D2: a pinned `clearSingleValue`; the schema accepts a blank          |
-| R4  | The closed-day sentence contradicted v10 and the code; a closed-day blank is unrecoverable                     | accepted | D1: v10's sentence; a closed-day blank is a deletion, labelled Clear |
-| R5  | `hide_reason`'s lifecycle unspecified                                                                          | accepted | V1-9b Amendment, B2-0                                                |
-| R6  | The e2e table deleted the weigh-in a11y test and missed two specs                                              | accepted | e2e table                                                            |
-| R7  | Re-entering after a clear must mint a fresh `client_id`                                                        | accepted | D2                                                                   |
-| R8  | Stale references (the notice's lines; v10 "when published")                                                    | accepted | Fixed                                                                |
+| #   | Finding                                                                                                        | Verdict  | Where it went                                               |
+| --- | -------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
+| R1  | **BLOCKING:** Restore all throws on the new practice index: restore's slot check and catch are bodyweight-only | accepted | D3; 3b-0 edits `hide.ts`; a `db:verify` case                |
+| R2  | **BLOCKING:** a second phone's practice ✓ would be a bare 23505: the insert arbitrates on `client_id` only     | accepted | D3; 3b-0's target-less insert with `dayTaken`               |
+| R3  | Blank → `hideEntries` drops the amend's metric pin and stale check, and needs a day the form doesn't post      | accepted | D2: a pinned `clearSingleValue`; the schema accepts a blank |
+| R4  | The closed-day sentence contradicted v10 and the code; a closed-day blank is unrecoverable                     | accepted | Resolved by the maintainer: older days are read-only (D1)   |
+| R5  | `hide_reason`'s lifecycle unspecified                                                                          | accepted | V1-9b Amendment, B2-0                                       |
+| R6  | The e2e table deleted the weigh-in a11y test and missed two specs                                              | accepted | e2e table                                                   |
+| R7  | Re-entering after a clear must mint a fresh `client_id`                                                        | accepted | D2                                                          |
+| R8  | Stale references (the notice's lines; v10 "when published")                                                    | accepted | Fixed                                                       |
 
 ### Round 2 — the first re-scope draft (2026-11-15)
 

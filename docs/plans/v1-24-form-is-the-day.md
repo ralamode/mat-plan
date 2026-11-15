@@ -11,6 +11,9 @@
 > ([3b plan](./v1-24-3b-logs-in-place.md)). The PR 2 and PR 3 sections below record what was planned
 > before that.
 >
+> ⚠️ **Also 2026-11-15:** days before yesterday become read-only, which supersedes PR 1b's "a logged
+> weight is correctable on every day including closed ones" (3b plan, D1).
+>
 > **This file is the whole V1-24 arc: one `## File-by-file` section per PR, each carrying its own
 > panel log, and each recording its own branch at its heading.** It is appended to as the arc ships.
 >

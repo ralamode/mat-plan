@@ -220,6 +220,9 @@ Decisions 1, 3 and 4 are unchanged._
   clears and never a blank-cleared value (V1-9b B2-0).
 - **Earlier entries are not shown until FAM-1 is done**, so they cannot be deleted one by one. A clear
   hides them with the rest of the day, and its dialog says so.
+- **Days before yesterday are read-only.** Logging, changing, clearing and Restore all work on today and
+  yesterday only, so a hide is restorable while its day is open, not until the purge. A clear's rows on
+  a day that has closed stay hidden until the purge.
 - **When per-row removal returns** (FAM-1 11a and 11b: un-ticking a row), it is a hide under this ADR.
 
 ## Review-response log

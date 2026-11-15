@@ -538,12 +538,19 @@
     gap: 10px;
   }
 
+  /* A read-only day shows its numbers as text, not as fields (maintainer, 2026-11-15). */
+  input[readonly] {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
   .scrim {
     position: fixed;
     inset: 0;
     background: oklch(0 0 0 / 45%);
     display: grid;
-    place-items: center;
+    /* Top-anchored (maintainer, 2026-11-15): the phone keyboard never covers the buttons. */
+    place-items: start center;
     z-index: 20;
     padding: 16px;
   }
@@ -981,7 +988,10 @@
     <strong>Beta 0 prototype</strong>
     <select id="ver" class="ver" aria-label="Prototype version">
       <option value="">
-        v10 · Nov 15 · one day page for every day; bodyweight edit-only (current, FAM-1 d3)
+        v11 · Nov 15 · days before yesterday are read-only; clear dialog at the top (current)
+      </option>
+      <option value="history/v10-2026-11-15-one-day-page.html">
+        v10 · Nov 15 · one day page for every day; bodyweight edit-only (FAM-1 d3)
       </option>
       <option value="history/v9-2026-11-14-several-programs.html">
         v9 · Nov 14 · several programs per person, copy to program (accepted)
@@ -1510,7 +1520,7 @@
         flash: null,
       };
     }
-    var KEY = 'matplan-beta0-proto-v10';
+    var KEY = 'matplan-beta0-proto-v11';
     var S;
     try {
       S = JSON.parse(localStorage.getItem(KEY)) || seed();
@@ -1661,9 +1671,13 @@
             e.at +
             '</span></div>' +
             // Edit-only (maintainer, 2026-11-15): Change, never Delete, so there is one per day.
-            '<div class="row"><button class="txt" data-act="edit" data-id="' +
-            e.id +
-            '" aria-label="Change bodyweight">Change</button></div></div>',
+            // Days before yesterday are read-only (maintainer, 2026-11-15): no Change there.
+            (w
+              ? '<div class="row"><button class="txt" data-act="edit" data-id="' +
+                e.id +
+                '" aria-label="Change bodyweight">Change</button></div>'
+              : '') +
+            '</div>',
         );
       });
       if (!logged && w) {
@@ -1718,11 +1732,15 @@
               (k === 'wake' ? 'Woke' : f.label) +
               '</span></div><div class="row"><span class="val hint">' +
               (k === 'wake' ? e.at : e.value + ' min') +
-              '</span><button class="txt" data-act="edit" data-id="' +
-              e.id +
-              '" aria-label="Change ' +
-              f.label +
-              '">Change</button></div></div>',
+              '</span>' +
+              (w
+                ? '<button class="txt" data-act="edit" data-id="' +
+                  e.id +
+                  '" aria-label="Change ' +
+                  f.label +
+                  '">Change</button>'
+                : '') +
+              '</div></div>',
           );
         });
         if (liveEs.length || !w) return;
@@ -2197,23 +2215,24 @@
         var e = rowEntry(day, slot, it.iid, s),
           on = e && !e.hidden;
         if (on) done++;
-        // A closed day keeps an un-ticked row in place, so a slip is re-ticked, not lost.
-        if (!wr && !e) continue;
+        // Days before yesterday are read-only (maintainer, 2026-11-15): only what was logged shows.
+        if (!wr && !on) continue;
         shown++;
         var base = 'r-' + slot + '-' + it.iid + '-' + s;
         var lbl = name + (setBased ? ' set ' + s : '');
-        var ck =
-          '<button class="ck" data-act="row" data-slot="' +
-          slot +
-          '" data-iid="' +
-          it.iid +
-          '" data-set="' +
-          s +
-          '" aria-pressed="' +
-          (on ? 'true' : 'false') +
-          '" aria-label="' +
-          esc((on ? 'Logged: ' : 'Log ') + lbl) +
-          '">✓</button>';
+        var ck = !wr
+          ? '<span class="tick" aria-label="Logged">✓</span>'
+          : '<button class="ck" data-act="row" data-slot="' +
+            slot +
+            '" data-iid="' +
+            it.iid +
+            '" data-set="' +
+            s +
+            '" aria-pressed="' +
+            (on ? 'true' : 'false') +
+            '" aria-label="' +
+            esc((on ? 'Logged: ' : 'Log ') + lbl) +
+            '">✓</button>';
         var inputs = fs
           .map(function (f) {
             var pid0 = base + '-' + f.f,
@@ -2240,7 +2259,9 @@
                 : '') +
               ' data-f="' +
               f.f +
-              '">'
+              '"' +
+              (wr ? '' : ' readonly') +
+              '>'
             );
           })
           .join('');
@@ -2262,7 +2283,13 @@
           var pv1 = previous(it.iid, 1, day);
           rows +=
             '<div class="one"><span class="grow hint">' +
-            (t === 'check' ? (on ? 'Done' : '') : pv1 ? 'Last time ' + esc(fmt(it, pv1.v)) : '') +
+            (t === 'check'
+              ? on
+                ? 'Done'
+                : ''
+              : pv1 && wr
+                ? 'Last time ' + esc(fmt(it, pv1.v))
+                : '') +
             '</span>' +
             (inputs
               ? inputs.replace('<input ', '<input style="width:72px" ') +
@@ -2493,9 +2520,13 @@
           cleared.length +
           ' entr' +
           (cleared.length > 1 ? 'ies' : 'y') +
-          ' hidden</span><button class="txt" data-act="restore-day" data-ev="' +
-          cleared[0].event +
-          '">Restore all</button>' +
+          ' hidden</span>' +
+          // Restore all is a change, so it follows the read-only rule (maintainer, 2026-11-15).
+          (wr
+            ? '<button class="txt" data-act="restore-day" data-ev="' +
+              cleared[0].event +
+              '">Restore all</button>'
+            : '') +
           chip('V1-9b B2') +
           '</div>';
       var fut = future(day);
@@ -2511,11 +2542,8 @@
           '</div>';
       if (!wr && !fut)
         html +=
-          '<div class="notice">This day is closed for new logs. ' +
-          (none
-            ? 'You can still change bodyweight or delete a mistake. '
-            : 'You can still change a logged number, or un-check a row to delete it. ') +
-          chip('V1-24 3b Q4') +
+          '<div class="notice">This day is read-only. Only today and yesterday can be logged or changed. ' +
+          chip('V1-24 3b') +
           '</div>';
       var lifeAll = all.filter(function (e) {
         return e.cat === 'life';
@@ -2606,7 +2634,7 @@
       slots.forEach(function (x) {
         html += renderWorkout(day, x.key, x.sl, x.p, wr, many);
       });
-      if (liveN) html += '<button class="back" data-act="clear">Clear this day…</button>';
+      if (liveN && wr) html += '<button class="back" data-act="clear">Clear this day…</button>';
       return html;
     }
 
@@ -3960,13 +3988,23 @@
         esc(A.name) +
         ' logged that day: ' +
         esc(clearSummary(S.ath, S.day)) +
-        '. You can restore it all at once.</p>' +
+        '. You can restore it all at once.' +
+        // PRIV-3 requirement 2 (maintainer, 2026-11-15): say the note outlives the clear.
+        (hasEarlier(S.ath, S.day)
+          ? ' A strength session’s “How did it feel?” note is kept, though the day page doesn’t show it.'
+          : '') +
+        '</p>' +
         '<label class="stack" style="gap:4px"><span>Type <b>delete</b> to confirm</span><input type="text" id="clr-in" autocomplete="off" autocapitalize="none"></label>' +
         '<div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="modal-close">Cancel</button><button class="btn danger" id="clr-go" data-act="clear-confirm" disabled>Clear day</button></div></div></div>';
       var inp = document.getElementById('clr-in');
       inp.focus();
       inp.addEventListener('input', function () {
         document.getElementById('clr-go').disabled = inp.value.trim().toLowerCase() !== 'delete';
+      });
+    }
+    function hasEarlier(aid, day) {
+      return live(dayEntries(aid, day)).some(function (e) {
+        return e.cat !== 'row' && e.cat !== 'bw' && e.cat !== 'life';
       });
     }
     function clearSummary(aid, day) {

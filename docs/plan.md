@@ -2885,7 +2885,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
     **3b-page** the old Check-ins and Strength forms, the "Logged entries" list and the "Calisthenics
     today" card leave the page · **3b-bw** bodyweight logs with ✓ and a blank Change clears it ·
     **3b-life** practice is an empty minutes field, entered once then changed; no Wake. Earlier entries
-    are not shown until FAM-1 is done.
+    are not shown until FAM-1 is done, and days before yesterday are read-only.
   - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
     re-run just before 1d merges. `migrate.yml` runs on every push to main with no gate, so a 1d that
     lands before the data is clean fails the index build and then **re-fails on every later push**,
