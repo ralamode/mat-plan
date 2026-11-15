@@ -160,9 +160,12 @@ flowchart LR
      separate budgets for one person: `rate-limit.test.ts` drains each to its own number.
    - ⚠️ **The parameter does not move the call.** The session still comes first, the limiter second,
      both before the caller's zod parse, and the order guard below is unchanged.
-   - **Which policy an action uses is asserted per action.** The matrix's limiter row expects the
-     default unless the action's binding declares `limit`, so an action that passes the looser
-     policy without saying so in its test is red.
+   - **Which policy an action uses is asserted twice.** The matrix's limiter row expects the
+     default unless the action's binding declares `limit`, compared **by identity**, so an action
+     that passes the looser policy without saying so in its test is red, and so is one that passes a
+     look-alike object. And `mutating-actions.test.ts` pins the list of actions that hand
+     `enterMutation` a second argument at all, read from source, so the 5× budget is granted in a
+     list a person reads and not only in a module's own test.
 
    🔴 **The in-process call is MORE load-bearing after `1d`, not less.** The proxy's gate bounce used
    to be a second, independent thing standing between a stranger and an action; it is gone, so these
@@ -238,9 +241,12 @@ flowchart LR
      (`ActionBindings`, `ValidBodies`), pinned with `@ts-expect-error` in
      `test/action-matrix.test.ts` and so held by `pnpm typecheck`, not by `vitest run`.
 
-   ⚠️ **Two pinned lines are still edited by hand, on purpose.** A new module is added to the module
-   list in `pages-need-a-session.test.ts`, and a household-addressed action to the list in
-   `mutating-actions.test.ts`. Each exists so a person reads the change; neither is owned by a guide.
+   ⚠️ **Three pinned lists are still edited by hand, on purpose.** A new module is added to the
+   module list in `pages-need-a-session.test.ts`; a household-addressed action to the household list
+   in `mutating-actions.test.ts`; and an action that enters with `ROW_WRITE_RATE_LIMIT` to the
+   row-policy list in the same file, which a source scan of every module is compared against (empty
+   today). Each exists so a person reads the change, each is one entry per line and sorted so two
+   PRs adding one each merge cleanly, and neither file is owned by a guide.
    ⚠️ **Each module's matrix asserts its OWN writers.** A refusal asserts that no writer this module's
    bindings declare ran; over the merged table it was every writer any module declared. The half
    that went was unreachable: an action can only call what its module imports, and a writer the
@@ -548,6 +554,13 @@ flowchart LR
     action lands in exactly one addressing matrix and that the actions carrying a `scopeMiss` are
     exactly the household rows; that the app has a household-addressed action, and which, stays
     pinned in `mutating-actions.test.ts`.
+    🔴 **A household-addressed action that CARRIES AN ID is not covered by this matrix alone**
+    (review of FAM-1 step 0b, for step 7a). The matrix gives a household action one lever, its
+    `scopeMiss` thunk, which drives "no household resolved". `addAthleteAction` carries no id, so
+    that is its whole question. "Rename this program" or "save this workout", addressed by a program
+    id, is also `scope: 'household'`, and would pass every row while its DAL accepted another
+    household's id. Such an action owes its own foreign-id row in its module's test (the same
+    refusal bytes, no write) and a `db:verify` proof of the writer's refusal against two households.
 
 14. 🔴 **A MOVEMENT is resolved in `packages/db`, ids before inserts, and re-checked inside the
     transaction** (`PICK-1` PR 2, `writers/movement-catalog.ts`). Three parts, each load-bearing:

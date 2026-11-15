@@ -374,10 +374,13 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
         // parameter: an action is counted against the default budget unless its binding declares
         // another. So "no action uses the row-write policy yet" is this row, for every action,
         // rather than a sentence in a PR.
-        expect(checkMutationLimit).toHaveBeenCalledWith(
-          principal,
-          bindings[name]!.limit ?? MUTATION_RATE_LIMIT,
-        );
+        const expected = bindings[name]!.limit ?? MUTATION_RATE_LIMIT;
+        expect(checkMutationLimit).toHaveBeenCalledWith(principal, expected);
+        // 🔴 By IDENTITY as well. `toHaveBeenCalledWith` compares deeply, so an action passing a
+        // look-alike `{ attempts: 600, window: '5 m' }` would satisfy a binding that declares the
+        // row policy, while `limiterFor` (which also selects by identity) counted it against the
+        // default. The policy an action is held to is the exported const itself.
+        expect(vi.mocked(checkMutationLimit).mock.calls[0]?.[1]).toBe(expected);
       });
     });
 

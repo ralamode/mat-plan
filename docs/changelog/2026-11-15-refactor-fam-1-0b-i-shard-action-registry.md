@@ -21,5 +21,11 @@
   D23) with its own limiter instance and key prefix, so the day page's row writes will not spend the
   default budget; the matrix asserts every action is still limited by the default. The tenancy scan
   (`lib/dal/scoped.test.ts`) reads every directory under `lib/dal`, shown on a planted nested leak.
-  `moveUp` / `moveDown` in `lib/routine/editor.ts` are generic over the element. No schema change, no
-  migration, no new dependency, no change to production behaviour.
+  `moveUp` / `moveDown` in `lib/routine/editor.ts` are generic over the element.
+  **From review, in the same PR:** `use-server-exports.test.ts` found Server Action modules by
+  matching the directive against raw source, so a module that opened with a comment was skipped by
+  the one guard that checks what it exports; it now reads `serverActionModules()`, shown on a planted
+  module. The actions that enter with the row-write policy are a pinned list compared with a source
+  scan (empty today), the matrix compares the policy by identity, and the hand-edited pins are one
+  entry per line so two lanes adding a module merge. No schema change, no migration, no new
+  dependency, no change to production behaviour.

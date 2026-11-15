@@ -35,9 +35,20 @@ import { keyBySelf } from '@mat-plan/shared';
  * - a registry entry without a binding or a valid body is a **type** error at the
  *   `describeActionMatrices` call (`ActionBindings`, pinned in `test/action-matrix.test.ts`).
  *
- * ⚠️ **Two pinned lines are still edited by hand, on purpose**, because each exists to be read by a
- * person: the list of Server Action modules in `app/pages-need-a-session.test.ts`, and, for a
- * household-addressed action, the list in `mutating-actions.test.ts`.
+ * ⚠️ **Pinned lists are still edited by hand, on purpose**, because each exists to be read by a
+ * person: the list of Server Action modules in `app/pages-need-a-session.test.ts` (every module);
+ * and in `mutating-actions.test.ts`, the household-addressed actions and the actions that enter with
+ * `ROW_WRITE_RATE_LIMIT`. Each is one entry per line, sorted, so two PRs adding one each merge.
+ *
+ * 🔴 **A HOUSEHOLD-addressed action that carries an id owes a foreign-id proof of its own.** The
+ * matrix gives a household action exactly one lever, its `scopeMiss` thunk, and that drives "no
+ * household resolved". It does not drive "this id belongs to another household". `addAthleteAction`
+ * carries no id, so for it the scope miss is the whole question. An action such as "rename this
+ * program" or "save this workout", addressed by a program id rather than a `profileId`, is
+ * `scope: 'household'` and passes every matrix row while its DAL could still accept a foreign id.
+ * Its module's test adds a row that hands it another household's id and asserts the same refusal
+ * bytes and no write, and the writer's refusal is proved in `db:verify` against two households
+ * (`docs/features/write-path.md` invariants 2 and 13).
  *
  * Two existing modules follow this: `./actions.ts` and `app/p/profile-actions.ts`.
  */
