@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { PGlite } from '@electric-sql/pglite';
 import {
   ACTIVITY_CATEGORIES,
   ACTIVITY_INPUT_SHAPES,
@@ -60,12 +59,9 @@ import {
   uuidSchema,
 } from '@mat-plan/shared';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
-import type { Executor } from '../src/writers/executor';
 import { writeCheckinEntries } from '../src/writers/checkin';
 import { hideEntries, restoreHidden } from '../src/writers/hide';
 import { hiddenDayCounts, hiddenEntriesForDay } from '../src/queries/hidden-entries';
@@ -129,6 +125,23 @@ import {
   seed,
   seedProgram,
 } from '../src/seed';
+// FAM-1 step 0c: the database and the proof helpers this file used to define live in the harness, so
+// the lanes' proof modules beside it can import the same ones. Bodies unchanged; see harness.ts.
+import { verifyDay } from './verify/day';
+import {
+  asPg,
+  assertCheckCoversConst,
+  assertRefTableMatches,
+  asTx,
+  columnCatalogShape,
+  columnsOf,
+  db,
+  expectRejectedBy,
+  type VerifyContext,
+} from './verify/harness';
+import { verifyProgram } from './verify/program';
+import { verifySchema } from './verify/schema';
+import { verifySingleValues } from './verify/single-values';
 
 /**
  * Verifies the migration + seed against an in-process Postgres (PGlite) — no
@@ -136,121 +149,6 @@ import {
  * idempotent (run twice → identical), and the tagged-union CHECK is enforced.
  * The real DB gates (Docker PG + Neon branch) land at V0-11 in CI.
  */
-const db = drizzle(new PGlite(), { schema, casing: 'snake_case' });
-const asPg = db as unknown as NodePgDatabase<typeof schema>;
-
-/** The transaction handle `db.transaction` hands its callback — derived here, never re-typed. */
-type VerifyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * The same `as unknown as` widening `asPg` performs, for a TRANSACTION handle.
- *
- * ⚠️ PGlite's `PgTransaction` is structurally incompatible with node-postgres' (`Results` has no
- * `oid`), so a writer typed on `Executor` will not take a PGlite `tx` without it. The runtime shapes
- * agree — this file's whole premise — which is exactly what `asPg` already asserts for the database
- * handle; this is that cast at one level down, named once rather than inline per call.
- */
-const asTx = (tx: VerifyTx) => tx as unknown as Executor;
-
-/**
- * Assert `fn` rejects with a Postgres error whose violated constraint is `constraintName`,
- * read off `cause.constraint` (the node-postgres / PGlite error shape). Extracted from the two
- * inline copies this file grew (V1-1c's activity_type_id guard + V1-5's shape-CHECK trap) and
- * reused for the V1-6b-1 ramp_targets rejections — one idiom, so a rename fails in one place.
- *
- * **TEN-2a: pass `tx` when the probe runs inside an enclosing transaction.** A failed statement
- * aborts the whole transaction, so a second probe would fail `25P02` and this helper would report
- * `got '(none)'` for a constraint that is working perfectly. With `tx` each probe runs in its own
- * nested `tx.transaction(...)` — drizzle emits `SAVEPOINT` / `ROLLBACK TO SAVEPOINT` — so the
- * enclosing transaction survives every rejection. `fn` must issue its statements on that same `tx`:
- * PGlite has ONE connection, so a query on the module-level `db` inside a transaction waits forever.
- */
-async function expectRejectedBy(
-  constraintName: string,
-  fn: () => Promise<unknown>,
-  tx?: VerifyTx,
-): Promise<void> {
-  let violated: string | undefined;
-  try {
-    if (tx) {
-      await tx.transaction(async () => {
-        await fn();
-      });
-    } else {
-      await fn();
-    }
-  } catch (e) {
-    violated = (e as { cause?: { constraint?: string } })?.cause?.constraint;
-  }
-  assert.equal(
-    violated,
-    constraintName,
-    `expected rejection by constraint '${constraintName}', got '${violated ?? '(none)'}'`,
-  );
-}
-
-/**
- * A reference table must equal its shared-const source EXACTLY, in BOTH directions — a row the const
- * doesn't know about is drift just as much as a const member with no row.
- *
- * Extracted at GAP-3 (reuse panel): `units` open-coded this as two loops, and `quantity_slots` was
- * about to open-code it a second time. Both now call this, so the parity RULE lives once even though
- * the two tables' columns differ.
- */
-function assertRefTableMatches(
-  table: string,
-  dbRows: readonly Record<string, unknown>[],
-  constRows: readonly Record<string, unknown>[],
-): void {
-  const norm = (rows: readonly Record<string, unknown>[]) =>
-    rows.map((r) => JSON.stringify(Object.entries(r).sort())).sort();
-  assert.deepEqual(
-    norm(dbRows),
-    norm(constRows),
-    `${table} rows equal their shared const EXACTLY (both directions)`,
-  );
-}
-
-/**
- * The column set of a table, keyed by name → data_type — the `information_schema.columns` cast shape
- * lives ONCE here (the routine_config + entries checks both call it, plus the V1-10 tables).
- *
- * It carries `data_type` only. Nullability and the column default are catalog facts this shape
- * cannot express, so a check that needs them calls `columnCatalogShape` below rather than widening
- * this Map and churning its four existing callers.
- */
-async function columnsOf(tableName: string): Promise<Map<string, string>> {
-  const res = await db.execute(
-    sql`select column_name, data_type from information_schema.columns where table_name = ${tableName}`,
-  );
-  const rows = (res as unknown as { rows: { column_name: string; data_type: string }[] }).rows;
-  return new Map(rows.map((r) => [r.column_name, r.data_type]));
-}
-
-/**
- * The three catalog facts about ONE column that `columnsOf` cannot carry: declared type, NULLability
- * and the stored default. Returns `undefined` when the column does not exist.
- *
- * Extracted at TEN-2a, its second consumer (TEN-1 1a's `households.synthetic` readback was the
- * first, converted in the same PR). ⚠️ `expectRejectedBy` cannot reach NULLability either — a NOT
- * NULL violation is `23502`, which carries a column, not a named constraint — so this readback is
- * the only way to assert that a column shipped nullable, or didn't.
- */
-async function columnCatalogShape(
-  tableName: string,
-  columnName: string,
-): Promise<{ data_type: string; is_nullable: string; column_default: string | null } | undefined> {
-  const res = await db.execute(
-    sql`select data_type, is_nullable, column_default from information_schema.columns
-        where table_name = ${tableName} and column_name = ${columnName}`,
-  );
-  return (
-    res as unknown as {
-      rows: { data_type: string; is_nullable: string; column_default: string | null }[];
-    }
-  ).rows[0];
-}
-
 await migrate(db, { migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)) });
 console.log('✓ migration applied to PGlite');
 
@@ -1172,30 +1070,6 @@ await expectRejectedBy('entries_shape_check', () =>
 );
 console.log('✓ V1-5: shape CHECK rejects a kind-less check-in missing value_num');
 
-// CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
-// its shared const (pins the schema CHECKs to the single source of truth — one can't drift
-// from the other without this failing). V1-2 extends this from input_shape to the movement
-// pattern + metric value_type/aggregation CHECKs (their columns are now catalog-populated).
-async function assertCheckCoversConst(conname: string, values: readonly string[]): Promise<void> {
-  const res = await db.execute(sql`
-    SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = ${conname}`);
-  const rows = (res as unknown as { rows: { def: string }[] }).rows;
-  assert.equal(rows.length, 1, `${conname} exists`);
-  const def = rows[0].def;
-  for (const value of values) {
-    assert.ok(def.includes(`'${value}'`), `${conname} includes shared const member '${value}'`);
-  }
-  // BOTH directions: the CHECK's accepted set must equal the shared const EXACTLY — an inlined literal the
-  // const doesn't have (a misspelling, or a value the app can't map) is drift the coverage loop above misses.
-  // pg_get_constraintdef quotes enum literals with single quotes (identifiers use double quotes), so every
-  // single-quoted token IS an accepted value.
-  const inlined = [...new Set([...def.matchAll(/'([^']*)'/g)].map((m) => m[1]))].sort();
-  assert.deepEqual(
-    inlined,
-    [...values].sort(),
-    `${conname} accepts EXACTLY its shared const (no extra/misspelled literal)`,
-  );
-}
 // GAP-3 — the DB CHECK and the shared UNIT_DIMENSIONS const must agree EXACTLY, in both directions.
 // Without this the column is a convention with a CHECK beside it rather than a single source of truth.
 // ── GAP-3: quantity_slots + entry_set_quantities ──────────────────────────────────────────────────
@@ -9961,5 +9835,16 @@ console.log(
       'reader while its live children survive, restoring deep-equal',
   );
 }
+
+// ── FAM-1 step 0c: the lanes' proof modules. Each is called exactly ONCE, here, and LAST ─────────
+// Last on purpose (`verify/harness.ts` → `VerifyContext` has the reasoning): nothing in this file
+// runs after them, so rows a lane writes cannot change what an assertion above counts, and a lane's
+// proof cannot become the FIRST failure under one of `mutations/*.patch`, whose `.expect` names it.
+// A lane adds proofs inside its own module; it does not add a call here.
+const verifyContext: VerifyContext = { A_SCOPE, A_MEMBER_SCOPE, B_SCOPE };
+await verifySchema(verifyContext);
+await verifyProgram(verifyContext);
+await verifyDay(verifyContext);
+await verifySingleValues(verifyContext);
 
 console.log('✓ verify passed');

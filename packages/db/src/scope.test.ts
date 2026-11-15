@@ -426,6 +426,28 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
       'a scope minted in verify.ts needs an entry in MINTED_SCOPES saying what it is FOR',
     ).toEqual(Object.keys(MINTED_SCOPES).sort());
   });
+
+  it('a db:verify proof module never mints a scope at a call site either (FAM-1 step 0c)', () => {
+    // Step 0c gave each data lane its own proof module under `scripts/verify/`, which the check
+    // above does not read. The modules are handed `verify.ts`'s three scopes (`VerifyContext`), but
+    // a proof that must deep-equal a contract fixture needs a household of its own, so a mint there
+    // is legitimate. The half of the rule that needs no shared list holds for it all the same:
+    // every mint is a named `const`, never an argument. (No `MINTED_SCOPES` entry is asked for: a
+    // list here that every lane must edit would undo the split.)
+    const modules = sources('packages/db/scripts/verify/*.ts');
+    expect(modules.length, 'the proof modules were found').toBeGreaterThanOrEqual(4);
+
+    const inline = modules.filter((f) => {
+      const src = code(join(REPO, f));
+      const mints = src.match(/householdScopeForScript\(/g) ?? [];
+      const declared = src.match(/const\s+[A-Za-z_$][\w$]*\s*=\s*householdScopeForScript\(/g) ?? [];
+      return mints.length !== declared.length;
+    });
+    expect(
+      inline,
+      'every householdScopeForScript() in scripts/verify/*.ts must be a named const — never inline at a call site',
+    ).toEqual([]);
+  });
 });
 
 describe('the scope constructors refuse an unresolved id', () => {
