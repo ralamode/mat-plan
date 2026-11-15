@@ -9,6 +9,7 @@ import {
   updateBodyweightEntryById,
   updateStrengthSetById,
   writeCheckinEntries,
+  type CheckinWriteResult,
   writeStrengthSession,
 } from '@mat-plan/db';
 import {
@@ -361,6 +362,12 @@ export type CheckinResult = {
   clientId: string;
   id: string | null; // public_id of the row this item wrote; null if it conflicted
   created: boolean;
+  /**
+   * What the writer actually answered (`V1-9b` B1-2). `created` is `outcome === 'created'` and stays
+   * for the callers that only ask "did it write" — but **`own_hidden` must never be reported as
+   * logged** (criterion 9), and that is a distinction `created: false` cannot carry.
+   */
+  outcome: CheckinWriteResult['outcome'];
 };
 
 /**
@@ -442,15 +449,13 @@ export async function logCheckinEntries(args: {
   // catalog reads are cached reference data, and the profile resolve is household-scoped.
   const written = await writeCheckinEntries(db, { profileId: profile.id, values });
 
-  // ⚠️ **The four outcomes are collapsed back to today's two fields, deliberately.** `own_hidden` and
-  // `conflict` both become `created: false`, which is exactly what this function returned before —
-  // so no action, test or screen changes in this PR (`B1-2` owns the mapping and the copy). The
-  // distinction is not lost, it is simply not yet asked for: it is proved in `db:verify` and
-  // returned by the writer, ready for the caller that will use it.
+  // ✅ **`B1-2`: the outcome is carried through.** B1-1a collapsed the four into `{ created, id }`
+  // so nothing above it had to change; the caller that needed the distinction has arrived.
   return written.map((r) => ({
     clientId: r.clientId,
     id: r.outcome === 'created' || r.outcome === 'replay' ? r.publicId : null,
     created: r.outcome === 'created',
+    outcome: r.outcome,
   }));
 }
 

@@ -1045,6 +1045,24 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
 ## Later — ideas captured, not scoped
 
+- **LIFE-1 — the Wake button on a past day writes TODAY's wake, and can write a second one.**
+  _(found by a UX panel during `V1-9b` B1-2, 2026-11-14; not scoped.)_ `logLifeActivitiesAction`
+  derives Wake's `entryDay` from `new Date()` regardless of the day being viewed (Wake is a "now"
+  event — day, clock minutes and `event_at` all from one instant), while the day page renders the
+  life buttons on **any writable day**, which includes yesterday. So: open yesterday, tap Wake, and
+  the row lands on **today** — yesterday's page shows nothing changed, and nothing stops a second
+  Wake being written for today.
+  - **Why it surfaced now.** It is pre-existing (the "now" semantics came with `V1-7`, the day nav
+    with `V1-15`), and until `B1-2` an accidental `client_id` collision sometimes masked the
+    duplicate. B1-2 mints a fresh id per day — correctly, it fixes a different lost write — which
+    removes the mask. **B1-2 widened a hole it did not dig**, which is why this is filed rather than
+    folded in.
+  - **The decision is a product one**, which is why it is not a bug fix in `B1-2`: render Wake inert
+    on a day that is not today (with what explanation?), omit it entirely, or let a past-day Wake
+    declare the viewed day and stop being a "now" event. The third changes what Wake MEANS, so it is
+    not a tidy-up.
+  - ⚠️ `wrestling_practice` is unaffected — it already resolves the **declared** day from the form.
+
 - **SYNTH-1 — a synthetic household generator, and EVAL-0 grown into the eval harness every AI
   feature reports into.** _(captured 2026-10-12, not scoped.)_ [EVAL-0](./plans/eval-0-gate-before-model.md)
   is planned as AI-1's two gates: accuracy, and a binary never-emits-a-load invariant. Every AI row
