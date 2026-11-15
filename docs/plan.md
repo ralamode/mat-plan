@@ -1562,6 +1562,27 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   and the lanes. A method is packaged after it has worked once, not before. Packaging it as a Claude
   Code plugin, or in its own repo, is the last step.
 
+- **DX-16 — lanes for a whole release, and a shape freeze before the contract.** _(maintainer,
+  2026-11-14.)_ Two additions to the method DX-14 item 8 and item 9 built for one milestone.
+  1. **Release-level lanes.** Once every row of a release is planned, one pass over all of them, not
+     milestone by milestone: their file globs and guides intersected with `pnpm guides:check`'s lane
+     guard, the cross-milestone seams named, and the order written down. Today `seed.ts` is already a
+     three-way queue (OPS-2 PR 2, PRIV-3 PR 2, FAM-1 step 1) that no single milestone's lanes show.
+  2. **A shape freeze between the approved prototype and the contract PR**, so the contract is
+     derived from the prototype rather than redrawn, and changes little once lanes start:
+     - **the prototype's data becomes the named fixtures**;
+     - **a trace table:** every prototype interaction → action → writer shape → read shape → screen
+       state. A row that does not trace is a gap;
+     - **the unshown states:** every case the prototype never showed (empty, error, a past day, two
+       programs on one day) gets a written decision and a fixture ([parallel-work.md](./parallel-work.md)
+       gate 5, made concrete);
+     - **a second opinion:** `doubt-check` hands a fresh reviewer only the contract and the prototype
+       and asks it to build slice 1 (gate 2's handoff test);
+     - **after the freeze,** a shape change goes through integration and is counted.
+       Lands in `write-spec` (and `plan-release` under DX-15) with a dry run. **First user:** FAM-1, d3 then
+       d2, with Beta 0's release-level pass once every Beta 0 row is planned. **Measured:** shape changes
+       after the freeze, and where each flaw was caught. Needs a small plan (a skill change plus a check).
+
 - **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
   2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
   INP < 200 ms · CLS < 0.1) is written in AGENTS.md and ADR 0001 but nothing measures it. **(a)** Land
