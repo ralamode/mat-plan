@@ -71,6 +71,13 @@ One row in the plan's review-response log under **Mid-build checks** (or in the 
 a plan-exempt change): the decision, the lens, the rounds, and the outcome (changed, held with a
 probe, or escalated). A check nobody can find didn't happen.
 
+## Done when
+
+- [ ] The brief held the artifact, its contract and a one-sentence decision, and no reasoning.
+- [ ] The reviewer was a fresh named agent, never a fork.
+- [ ] Three rounds at most; a finding still live after round three sits under `## Needs a decision`.
+- [ ] The check is a row under "Mid-build checks" in the plan's log, or in the PR description.
+
 ## Red flags
 
 - The brief explains why ("I went with X because…").

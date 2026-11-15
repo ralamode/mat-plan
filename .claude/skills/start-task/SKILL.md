@@ -87,6 +87,13 @@ write the reason into the roadmap's "In flight", rather than discovering it in a
 At ~4h/wk, the one-concern / <400-line target is a real constraint. If the task clearly exceeds it,
 propose the split (1a/1b/1c, as in `gap1-p1-*`, `v1-18-*`) before starting, not after.
 
+## Done when
+
+- [ ] A worktree cut from a freshly fetched `main`, on a branch named `<type>/<id>-<slug>`.
+- [ ] The backlog row, any existing plan, the feature guide and `docs/lessons.md` were read.
+- [ ] The task's obligations were stated: plan and panels, UX panel, backend checklist, migration, guide.
+- [ ] Overlap with the other worktrees was checked against gate 1.
+
 ## Red flags
 
 - About to edit code on `main`, or on a branch cut before the latest merge.

@@ -313,7 +313,23 @@ export function checkRouting(skills) {
   return problems;
 }
 
-/** `{ name, description }` for each `.claude/skills/<name>/SKILL.md`. */
+/**
+ * Every skill ends with an exit checklist (DX-14 item 5b): a `## Done when` section holding at least
+ * one `- [ ]` box, so an agent can tell "I followed the steps" from "the result is right". Pure, like
+ * checkRouting: `skills` is `[{ name, body }]`.
+ */
+export function checkDoneWhen(skills) {
+  return skills.flatMap(({ name, body }) => {
+    const at = body.search(/^## Done when\s*$/m);
+    if (at === -1) return [`${name}: no \`## Done when\` exit checklist`];
+    const rest = body.slice(at).split('\n').slice(1);
+    const end = rest.findIndex((l) => /^## /.test(l));
+    const section = (end === -1 ? rest : rest.slice(0, end)).join('\n');
+    return /^- \[ \] \S/m.test(section) ? [] : [`${name}: \`## Done when\` has no \`- [ ]\` item`];
+  });
+}
+
+/** `{ name, description, body }` for each `.claude/skills/<name>/SKILL.md`. */
 function readSkills() {
   const dir = join(ROOT, '.claude/skills');
   if (!existsSync(dir)) return [];
@@ -323,7 +339,7 @@ function readSkills() {
       const text = readFileSync(join(dir, e.name, 'SKILL.md'), 'utf8');
       const fm = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? '';
       const description = /^description:[ \t]*(\S.*)$/m.exec(fm)?.[1]?.trim() ?? null;
-      return { name: e.name, description };
+      return { name: e.name, description, body: text };
     });
 }
 
@@ -338,7 +354,7 @@ function isEntryPoint() {
 if (isEntryPoint()) {
   const files = SOURCES.flatMap((s) => markdownFiles(join(ROOT, s)));
   const skills = readSkills();
-  const problems = [...files.flatMap(checkFile), ...checkRouting(skills)];
+  const problems = [...files.flatMap(checkFile), ...checkRouting(skills), ...checkDoneWhen(skills)];
   if (problems.length) {
     console.error(`Skills guard FAILED — ${problems.length} problem(s):\n`);
     for (const p of problems) console.error(`  ✗ ${p}`);

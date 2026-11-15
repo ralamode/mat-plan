@@ -86,6 +86,14 @@ right area heading, in the house format:
 
 If a check or convention could have prevented it, propose that too: the durable fix beats the note.
 
+## Done when
+
+- [ ] The exact failing step and its log line are quoted.
+- [ ] `docs/lessons.md` was searched before debugging.
+- [ ] It was reproduced locally with the matching command, or the PR says why it couldn't be.
+- [ ] The cause is fixed: no timeout padded, no check skipped or silenced.
+- [ ] A failure that took more than one attempt has a lessons entry in the same PR.
+
 ## Red flags
 
 - A third push in a row that says "fix CI".

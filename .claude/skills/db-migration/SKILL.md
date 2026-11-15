@@ -111,6 +111,14 @@ Neon-branch apply** yet (tech-debt.md), so don't cite one.
   lands only after no deployed code reads the column.
 - Before a destructive or backfill step: cut a Neon restore branch ([runbooks.md](../../../docs/runbooks.md)).
 
+## Done when
+
+- [ ] The generated SQL is committed and hand-hardened: `lock_timeout` and `statement_timeout`, breakpoints, NOT NULL via a backfill.
+- [ ] No applied migration was edited, and `drizzle-kit generate` leaves a clean tree.
+- [ ] Seeds come from `packages/shared` consts and are idempotent.
+- [ ] Each new constraint has a `db:verify` proof.
+- [ ] The PR states the deploy order: expand before the app, contract after.
+
 ## Red flags
 
 - A modified file under `packages/db/migrations/` that already exists on `main`.

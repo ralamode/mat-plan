@@ -75,6 +75,13 @@ DATABASE_URL_UNPOOLED=<prod direct> pnpm --filter @mat-plan/db db:correct <name>
 Add a row to the README's **Applied** table (name / what / cause). That table is the record of
 what ran; the `Correction` type has no applied flag. Ship it with `ship-pr` (`feat(db): …` or `fix(db): …`), with the backlog row for the cause linked.
 
+## Done when
+
+- [ ] The bug that wrote the bad data has its own backlog row or PR; this only treats the data.
+- [ ] The correction is in the registry, idempotent, dry-run by default, and guarded to the exact rows.
+- [ ] It was rehearsed locally and dry-run against prod, and the dry-run output was read.
+- [ ] After `--apply`, a second run prints 0 changes, and the README's Applied table has its row.
+
 ## Red flags
 
 - `--apply` before the user has seen the dry run.
