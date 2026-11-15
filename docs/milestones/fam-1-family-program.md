@@ -153,6 +153,7 @@ flowchart LR
   D3 --> D2[d2 · FAM-1 plan + ITEM-1 section]
   D2 --> S1
   D2 --> S2[2 · SCHED-1 1a]
+  S2 --> C0[0 · the contract: 0a, 0b, 0c]
   D2 --> M3[3 · tracking type]
   M3 --> M4a[4a · workouts + week]
   D1 --> M4a
