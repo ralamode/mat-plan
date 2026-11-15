@@ -3,6 +3,7 @@ import {
   MOVEMENT_PICKER_ENTRIES,
   MOVEMENT_SEED_ROWS,
   MOVEMENT_NAME_MESSAGES,
+  TRACKING_TYPE,
   type MovementPickerGroup,
 } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -21,6 +22,10 @@ afterEach(cleanup);
 // Not hand-written options: the grouping, the aliases and the names are what PR 4's DAL will read out
 // of `MOVEMENT_PICKER_ENTRIES`, so a test over invented rows would pass while the real catalog did
 // something else.
+//
+// `trackingType` is `weight_reps` on every option here: it is the default FAM-1 step 3 gives the
+// column, and no seeded row carries its own type until that step types each built-in by slug. From
+// then on `catalogOption` reads the row's.
 const catalogOption = (name: string): MovementOptionDTO => {
   const row = MOVEMENT_SEED_ROWS.find((r) => r.name === name);
   if (!row) throw new Error(`fixture: no seeded movement named ${name}`);
@@ -34,6 +39,7 @@ const catalogOption = (name: string): MovementOptionDTO => {
     aliases: entry.aliases ?? [],
     unitDefault: row.unitDefault,
     isBodyweight: row.isBodyweight,
+    trackingType: TRACKING_TYPE.weight_reps,
   };
 };
 
@@ -43,6 +49,7 @@ const householdOption = (name: string, publicId: string): MovementOptionDTO => (
   owner: 'household',
   unitDefault: null,
   isBodyweight: false,
+  trackingType: TRACKING_TYPE.weight_reps,
 });
 
 const ALL_CATALOG = MOVEMENT_SEED_ROWS.map((r) => catalogOption(r.name));
@@ -560,6 +567,22 @@ describe('the rest of the contract', () => {
     // @ts-expect-error — `load` must not exist on a movement option.
     void option.load;
     expect(option.unitDefault === null || typeof option.unitDefault === 'string').toBe(true);
+  });
+
+  it('a movement option says how it is tracked, and a pick hands that on', () => {
+    // FAM-1 step 0b. The tracking type is a declaration too (which fields a card has), never a
+    // number, so it rides on the option the picker already returns.
+    const onPick = vi.fn();
+    const squat = catalogOption('Front Squat');
+    render(<Harness data={{ options: [squat] }} onPick={onPick} />);
+    open();
+    const row = screen.getAllByRole('button').find((b) => b.textContent?.startsWith(squat.name));
+    act(() => void fireEvent.click(row!));
+
+    expect(onPick).toHaveBeenCalledWith({
+      kind: 'existing',
+      option: expect.objectContaining({ trackingType: TRACKING_TYPE.weight_reps }),
+    });
   });
 
   it('every group label comes from the shared map', () => {

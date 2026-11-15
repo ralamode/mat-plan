@@ -33,15 +33,15 @@ path and **creating** the deliberate one.
 
 ## The map
 
-| File                                                | What                                                                                                                                       |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`. Pure, no React, no DB.                       |
-| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.       |
-| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them. |
-| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                             |
-| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                            |
-| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                              |
-| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                    |
+| File                                                | What                                                                                                                                                                                |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`. Pure, no React, no DB.                                                                |
+| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                |
+| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them. |
+| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                                                                      |
+| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                     |
+| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                       |
+| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                             |
 
 ## Invariants
 
@@ -57,11 +57,19 @@ path and **creating** the deliberate one.
    source scan. A typed name is created by the caller's save — the set's today, the program's at
    `D2` — which is what lets `D2`'s editor mount the same component (criterion 34).
 
-3. 🔴 **A declaration is not a magnitude.** `MovementOptionDTO` carries `unitDefault` and
-   `isBodyweight` — what kind of thing the movement _is_ — and has no `load`, `reps` or `sets`, pinned
-   by `@ts-expect-error`. Picking a movement may seed a card's unit and load mode; it may never
-   prefill a number. This is the app's one inviolable product rule (AGENTS.md; strength-logging
-   invariant 1).
+3. 🔴 **A declaration is not a magnitude.** `MovementOptionDTO` carries `unitDefault`,
+   `isBodyweight` and `trackingType` — what kind of thing the movement _is_ — and has no `load`,
+   `reps` or `sets`, pinned by `@ts-expect-error`. Picking a movement may seed a card's unit, load
+   mode and fields; it may never prefill a number. This is the app's one inviolable product rule
+   (AGENTS.md; strength-logging invariant 1).
+
+   **`trackingType`** (FAM-1 step 0b) is one of the seven `TRACKING_TYPES`: how the item is logged,
+   set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The program
+   builder's item picker (step 9) shows it under each name. ⚠️ **No read fills it yet.** The column
+   arrives in step 3 and the picker's read in step 6a, homed in `packages/db/src/queries/program/`
+   ([program-writers.md](./program-writers.md)), not in the `queries/movement-options.ts` this
+   guide's frontmatter note expects. Until then only fixtures build the DTO: the tests here, and
+   the contract's `picker-options` ([program-contract.md](./program-contract.md)).
 
 4. **"Use as typed" is withheld on an exact or alias hit**, and that is the whole point. Typing `rdl`
    must offer Romanian Deadlift, never mint a household movement called "rdl". The rule lives in

@@ -1,0 +1,1001 @@
+import {
+  addDays,
+  dayPlanSchema,
+  hiddenAtSchema,
+  newId,
+  PROGRAM_REFUSAL,
+  programViewSchema,
+  QUANTITY_SLOT,
+  ROW_REFUSAL,
+  TRACKING_TYPE,
+  TRACKING_TYPES,
+  WORKOUT_NAME_MAX,
+  type DayPlan,
+  type RowResult,
+  type RowWrite,
+} from '@mat-plan/shared';
+import {
+  adultProgramWithCopy,
+  closedDayLoggedOnly,
+  everyTypeOnce,
+  familyProgram,
+  familyProgramAfterTakeOff,
+  FIXTURE_TODAY,
+  fixtureIds,
+  futurePreview,
+  heavyADraft,
+  heavyASupersets,
+  newWorkoutEmpty,
+  programsList,
+  todayStretchingFirst,
+  todayTwoPrograms,
+  workoutLeftTheWeek,
+  yesterdayEditedAfterLogging,
+} from '@mat-plan/shared/program/fixtures';
+import { describe, expect, it } from 'vitest';
+
+import { appSources, code, WEB_DIR } from '@/test/source-scan';
+
+import { createFakeDayActions, createFakeProgramActions, type FakeProgramState } from './fakes';
+import { pickerOptions } from './picker-options';
+
+/**
+ * The fakes follow the accepted prototype's rules (FAM-1 plan §8, "Behaviour"). Each rule a fake
+ * implements is held here, so a screen built against a fake is built against the rule and not
+ * against an accident of the fake.
+ */
+
+// ── The day ─────────────────────────────────────────────────────────────────────────────────────
+
+/** A fake over a fixture, and the latest plan it handed back. */
+function day(fixture: DayPlan) {
+  let latest = fixture;
+  const fake = createFakeDayActions(fixture, (plan) => void (latest = plan));
+  return { ...fake, plan: () => latest };
+}
+
+const itemOf = (plan: DayPlan, name: string) => {
+  for (const workout of plan.workouts) {
+    const item = workout.items.find((i) => i.name === name);
+    if (item) return { workout, item };
+  }
+  throw new Error(`no item named ${name}`);
+};
+
+/** The first row of the named item that is not logged yet, as an empty ✓ on it. */
+function tick(plan: DayPlan, name: string, values: RowWrite['values'] = { quantities: [] }) {
+  const { workout, item } = itemOf(plan, name);
+  const row = item.rows.find((r) => !r.logged);
+  if (!row || !workout.workoutPublicId || !item.prescriptionPublicId) {
+    throw new Error(`no open, prescribed row on ${name}`);
+  }
+  return {
+    clientId: newId(),
+    profilePublicId: plan.profilePublicId,
+    day: plan.day,
+    workoutPublicId: workout.workoutPublicId,
+    prescriptionPublicId: item.prescriptionPublicId,
+    set: row.set,
+    values,
+  } satisfies RowWrite;
+}
+
+function succeeded(result: RowResult) {
+  if (!result.ok) throw new Error(`refused: ${result.reason}`);
+  return result;
+}
+
+const lb = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'lb' as const, value });
+
+describe('the fake DayActions: ✓', () => {
+  it('an empty ✓ logs the prescription for every tracking type: every-type-once', async () => {
+    // The fixture logs each type's first row as prescribed. Clear them, tick each with nothing
+    // typed, and the fake must store what the fixture holds.
+    const cleared = structuredClone(everyTypeOnce);
+    for (const workout of cleared.workouts) {
+      workout.progress.done = 0;
+      for (const item of workout.items) for (const row of item.rows) row.logged = null;
+    }
+    const { actions } = day(cleared);
+    const items = everyTypeOnce.workouts.flatMap((w) => w.items);
+    expect(items.map((i) => i.trackingType)).toEqual([...TRACKING_TYPES]);
+    for (const item of items) {
+      const result = succeeded(await actions.logRow(tick(cleared, item.name)));
+      expect(result.values, item.name).toEqual(item.rows[0]?.logged?.values);
+    }
+  });
+
+  it('an empty ✓ fills the row, its prescribed text and the workout’s count', async () => {
+    // Athlete Two's Heavy A has nothing logged: 4 × 8 @ 25 lb on the bench.
+    const { actions, plan } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const result = succeeded(await actions.logRow(write));
+
+    expect(result.values).toEqual({ reps: 8, quantities: [lb(25)] });
+    const { workout, item } = itemOf(plan(), 'DB bench press');
+    expect(item.rows.find((r) => r.set === write.set)?.logged).toEqual({
+      entryPublicId: result.entryPublicId,
+      values: result.values,
+      prescribedText: item.prescribedText,
+    });
+    expect(workout.progress.done).toBe(
+      itemOf(heavyASupersets, 'DB bench press').workout.progress.done + 1,
+    );
+    expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
+  });
+
+  it('logs what was typed in place of the prescription', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press', { reps: 6, quantities: [lb(30)] });
+    expect(succeeded(await actions.logRow(write)).values).toEqual({
+      reps: 6,
+      quantities: [lb(30)],
+    });
+  });
+
+  it('a Check logs with nothing measured', async () => {
+    const { actions } = day(heavyASupersets);
+    const check = heavyASupersets.workouts
+      .flatMap((w) => w.items)
+      .find((i) => i.trackingType === TRACKING_TYPE.check);
+    expect(check, 'the fixture has a Check item').toBeDefined();
+    const result = succeeded(await actions.logRow(tick(heavyASupersets, check!.name)));
+    expect(result.values).toEqual({ quantities: [] });
+  });
+
+  it('a value that is not a number is bad_value, and nothing is logged', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    for (const reps of [Number.NaN, '8' as unknown as number, 2.5]) {
+      expect(await actions.logRow({ ...write, values: { reps, quantities: [] } })).toEqual({
+        ok: false,
+        reason: ROW_REFUSAL.bad_value,
+      });
+    }
+    expect(plan()).toBe(heavyASupersets);
+  });
+
+  it('a number in another unit than the item logs in is bad_value', async () => {
+    const { actions } = day(heavyASupersets);
+    const kg = { slot: QUANTITY_SLOT.primary, unit: 'kg' as const, value: 12 };
+    const write = tick(heavyASupersets, 'DB bench press', { quantities: [kg] });
+    expect(await actions.logRow(write)).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+  });
+
+  it('a retry under the same clientId answers as the first call did and logs once', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const first = await actions.logRow(write);
+    expect(await actions.logRow(write)).toEqual(first);
+    const { item } = itemOf(plan(), 'DB bench press');
+    expect(item.rows.filter((r) => r.logged)).toHaveLength(1);
+  });
+
+  it('a second ✓ on a logged row is slot_taken', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    await actions.logRow(write);
+    expect(await actions.logRow({ ...write, clientId: newId() })).toEqual({
+      ok: false,
+      reason: ROW_REFUSAL.slot_taken,
+    });
+  });
+
+  it('a set past the prescribed ones is "+ Add set"', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const before = itemOf(heavyASupersets, 'DB bench press');
+    const write = { ...tick(heavyASupersets, 'DB bench press'), set: before.item.rows.length + 1 };
+    succeeded(await actions.logRow(write));
+
+    const after = itemOf(plan(), 'DB bench press');
+    expect(after.item.rows).toHaveLength(before.item.rows.length + 1);
+    expect(after.workout.progress).toEqual({
+      done: before.workout.progress.done + 1,
+      total: before.workout.progress.total + 1,
+    });
+  });
+
+  it('refuses a row of another athlete, another day or a prescription that is not there', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const refused = async (change: Partial<RowWrite>) => {
+      const result = await actions.logRow({ ...write, clientId: newId(), ...change });
+      return result.ok ? 'ok' : result.reason;
+    };
+    expect(await refused({ profilePublicId: fixtureIds.athlete('a1') })).toBe(
+      ROW_REFUSAL.not_found,
+    );
+    expect(await refused({ day: addDays(write.day, -1) })).toBe(ROW_REFUSAL.not_found);
+    expect(await refused({ prescriptionPublicId: newId() })).toBe(ROW_REFUSAL.program_changed);
+  });
+
+  it('a workout that left the week takes no new row', async () => {
+    const off = workoutLeftTheWeek.workouts.find((w) => !w.scheduled);
+    const item = off?.items.find((i) => i.prescriptionPublicId);
+    expect(off && item, 'the fixture has an off-week workout with a live item').toBeTruthy();
+    const { actions } = day(workoutLeftTheWeek);
+    const result = await actions.logRow({
+      clientId: newId(),
+      profilePublicId: workoutLeftTheWeek.profilePublicId,
+      day: workoutLeftTheWeek.day,
+      workoutPublicId: off!.workoutPublicId!,
+      prescriptionPublicId: item!.prescriptionPublicId!,
+      set: item!.rows.length + 1,
+      values: { quantities: [] },
+    });
+    expect(result).toEqual({ ok: false, reason: ROW_REFUSAL.not_scheduled });
+  });
+
+  it.each([
+    ['a closed day', closedDayLoggedOnly],
+    ['a future day', futurePreview],
+  ])('%s is read-only: no ✓, no un-tick, no Change', async (_name, fixture) => {
+    const { actions } = day(fixture);
+    const closed = { ok: false, reason: ROW_REFUSAL.closed_day };
+    const { profilePublicId, day: on } = fixture;
+    const workout = fixture.workouts[0]!;
+    const item = workout.items[0]!;
+    expect(
+      await actions.logRow({
+        clientId: newId(),
+        profilePublicId,
+        day: on,
+        workoutPublicId: workout.workoutPublicId!,
+        prescriptionPublicId: item.prescriptionPublicId!,
+        set: 1,
+        values: { quantities: [] },
+      }),
+    ).toEqual(closed);
+
+    const logged = fixture.workouts
+      .flatMap((w) => w.items.flatMap((i) => i.rows))
+      .find((r) => r.logged);
+    if (!logged?.logged) return; // a future day has no rows at all
+    const { entryPublicId, values } = logged.logged;
+    expect(await actions.untickRow({ profilePublicId, day: on, entryPublicId })).toEqual(closed);
+    expect(await actions.amendRow({ profilePublicId, entryPublicId, values })).toEqual(closed);
+  });
+});
+
+describe('the fake DayActions: un-tick, re-tick and Change', () => {
+  /** Every type's first row is logged as prescribed in this fixture. */
+  const loggedBench = () => {
+    const { item } = itemOf(everyTypeOnce, 'DB bench press');
+    const logged = item.rows[0]?.logged;
+    if (!logged) throw new Error('the fixture logs the bench press');
+    return logged;
+  };
+  const { profilePublicId, day: on } = everyTypeOnce;
+
+  it('un-tick leaves no tomb, and answers with a token re-tick takes', async () => {
+    const { actions, plan } = day(everyTypeOnce);
+    const { entryPublicId, values } = loggedBench();
+    const before = itemOf(everyTypeOnce, 'DB bench press').workout.progress.done;
+
+    const unticked = succeeded(
+      await actions.untickRow({ profilePublicId, day: on, entryPublicId }),
+    );
+    expect(unticked.values).toEqual(values);
+    expect(hiddenAtSchema.safeParse(unticked.hiddenAt).success).toBe(true);
+    let now = itemOf(plan(), 'DB bench press');
+    expect(now.item.rows[0]).toMatchObject({ set: 1, logged: null });
+    expect(now.workout.progress.done).toBe(before - 1);
+
+    const reticked = await actions.retickRow({
+      profilePublicId,
+      day: on,
+      entryPublicId,
+      hiddenAt: unticked.hiddenAt!,
+    });
+    expect(reticked).toEqual({ ok: true, entryPublicId, values });
+    now = itemOf(plan(), 'DB bench press');
+    expect(now.item.rows[0]?.logged).toEqual(loggedBench());
+    expect(now.workout.progress.done).toBe(before);
+    expect(plan()).toEqual(everyTypeOnce);
+  });
+
+  it('a replayed un-tick answers with the same token', async () => {
+    const { actions } = day(everyTypeOnce);
+    const input = { profilePublicId, day: on, entryPublicId: loggedBench().entryPublicId };
+    const first = await actions.untickRow(input);
+    expect(await actions.untickRow(input)).toEqual(first);
+  });
+
+  it('re-tick refuses another token, and a row that was logged again', async () => {
+    const { actions } = day(everyTypeOnce);
+    const { entryPublicId } = loggedBench();
+    const unticked = succeeded(
+      await actions.untickRow({ profilePublicId, day: on, entryPublicId }),
+    );
+    const retick = { profilePublicId, day: on, entryPublicId, hiddenAt: unticked.hiddenAt! };
+
+    expect(await actions.retickRow({ ...retick, hiddenAt: '2026-11-14T00:00:00.000000Z' })).toEqual(
+      { ok: false, reason: ROW_REFUSAL.not_found },
+    );
+    succeeded(
+      await actions.logRow(tick(itemOnly(everyTypeOnce, 'DB bench press'), 'DB bench press')),
+    );
+    expect(await actions.retickRow(retick)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+  });
+
+  it('the ✓ that made an un-ticked row answers own_hidden from then on', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const { entryPublicId } = succeeded(await actions.logRow(write));
+    await actions.untickRow({
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+      entryPublicId,
+    });
+    expect(await actions.logRow(write)).toEqual({ ok: false, reason: ROW_REFUSAL.own_hidden });
+    // A new ✓ is a new attempt.
+    expect((await actions.logRow({ ...write, clientId: newId() })).ok).toBe(true);
+  });
+
+  it('a row whose item left the workout can be un-ticked and ticked back', async () => {
+    const removed = yesterdayEditedAfterLogging.workouts
+      .flatMap((w) => w.items)
+      .find((i) => i.prescriptionPublicId === null);
+    const logged = removed?.rows[0]?.logged;
+    expect(logged, 'the fixture has a logged row whose prescription was removed').toBeTruthy();
+    const { actions, plan } = day(yesterdayEditedAfterLogging);
+    const ids = {
+      profilePublicId: yesterdayEditedAfterLogging.profilePublicId,
+      day: yesterdayEditedAfterLogging.day,
+      entryPublicId: logged!.entryPublicId,
+    };
+
+    // Change is not offered on such a row.
+    expect(await actions.amendRow({ ...ids, values: logged!.values })).toEqual({
+      ok: false,
+      reason: ROW_REFUSAL.program_changed,
+    });
+
+    const unticked = succeeded(await actions.untickRow(ids));
+    // Its rows are in neither number of "6 of 10": the count is the same with the row un-ticked.
+    expect(plan()).not.toEqual(yesterdayEditedAfterLogging);
+    expect(plan().workouts.map((w) => w.progress)).toEqual(
+      yesterdayEditedAfterLogging.workouts.map((w) => w.progress),
+    );
+    succeeded(await actions.retickRow({ ...ids, hiddenAt: unticked.hiddenAt! }));
+    expect(plan()).toEqual(yesterdayEditedAfterLogging);
+    // A replayed re-tick finds the row live and answers as the first did.
+    expect((await actions.retickRow({ ...ids, hiddenAt: unticked.hiddenAt! })).ok).toBe(true);
+  });
+
+  it('a workout that left the week is read-only: no un-tick, no Change', async () => {
+    const off = workoutLeftTheWeek.workouts.find((w) => !w.scheduled);
+    const logged = off?.items.flatMap((i) => i.rows).find((r) => r.logged)?.logged;
+    expect(logged, 'the off-week workout has a logged row').toBeTruthy();
+    const { actions, plan } = day(workoutLeftTheWeek);
+    const { profilePublicId, day: on } = workoutLeftTheWeek;
+    const refused = { ok: false, reason: ROW_REFUSAL.not_scheduled };
+    const { entryPublicId, values } = logged!;
+    expect(await actions.untickRow({ profilePublicId, day: on, entryPublicId })).toEqual(refused);
+    expect(await actions.amendRow({ profilePublicId, entryPublicId, values })).toEqual(refused);
+    expect(plan()).toBe(workoutLeftTheWeek);
+  });
+
+  it('Change replaces a logged row’s numbers', async () => {
+    const { actions, plan } = day(everyTypeOnce);
+    const { entryPublicId } = loggedBench();
+    const values = { reps: 5, quantities: [lb(35)] };
+    expect(await actions.amendRow({ profilePublicId, entryPublicId, values })).toEqual({
+      ok: true,
+      entryPublicId,
+      values,
+    });
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.values).toEqual(values);
+  });
+
+  it('Change keeps the old number when the new one is blank or not a number', async () => {
+    const { actions, plan } = day(everyTypeOnce);
+    const { entryPublicId } = loggedBench();
+    const refused = { ok: false, reason: ROW_REFUSAL.bad_value };
+    // Blank: no reps, or no load. Unlike a ✓, there is no prescription to fall back on.
+    expect(
+      await actions.amendRow({ profilePublicId, entryPublicId, values: { quantities: [lb(35)] } }),
+    ).toEqual(refused);
+    expect(
+      await actions.amendRow({
+        profilePublicId,
+        entryPublicId,
+        values: { reps: 5, quantities: [] },
+      }),
+    ).toEqual(refused);
+    expect(
+      await actions.amendRow({
+        profilePublicId,
+        entryPublicId,
+        values: { reps: Number.NaN, quantities: [lb(35)] },
+      }),
+    ).toEqual(refused);
+    expect(plan()).toBe(everyTypeOnce);
+  });
+});
+
+/** The same plan with one item's first row cleared, to build a ✓ for a row the fake has un-ticked. */
+function itemOnly(plan: DayPlan, name: string): DayPlan {
+  const copy = structuredClone(plan);
+  const row = itemOf(copy, name).item.rows[0];
+  if (row) row.logged = null;
+  return copy;
+}
+
+describe('the fake DayActions: the switch and the program order', () => {
+  it('failNext makes the next call fail once with retry, and changes nothing', async () => {
+    const { actions, failNext, plan } = day(todayTwoPrograms);
+    const open = todayTwoPrograms.workouts
+      .flatMap((w) => w.items)
+      .find((i) => i.prescriptionPublicId && i.rows.some((r) => !r.logged));
+    expect(open, 'today has a row still to log').toBeDefined();
+    const write = tick(todayTwoPrograms, open!.name);
+
+    failNext();
+    expect(await actions.logRow(write)).toEqual({ ok: false, reason: ROW_REFUSAL.retry });
+    expect(plan()).toBe(todayTwoPrograms);
+    // The retry reuses the clientId (plan D24) and goes through.
+    expect((await actions.logRow(write)).ok).toBe(true);
+  });
+
+  it('reordering the programs gives the day the prototype shows: today-stretching-first', async () => {
+    const { actions, plan } = day(todayTwoPrograms);
+    const result = await actions.reorderPrograms({
+      profilePublicId: todayTwoPrograms.profilePublicId,
+      programPublicIds: todayTwoPrograms.currentPrograms.map((p) => p.programPublicId).reverse(),
+    });
+    expect(result).toEqual({ ok: true });
+    expect(plan()).toEqual(todayStretchingFirst);
+  });
+
+  it('refuses an order that is not the athlete’s full list', async () => {
+    const { actions } = day(todayTwoPrograms);
+    const { profilePublicId } = todayTwoPrograms;
+    const [first] = todayTwoPrograms.currentPrograms.map((p) => p.programPublicId);
+    const invalid = { ok: false, reason: PROGRAM_REFUSAL.invalid };
+    expect(await actions.reorderPrograms({ profilePublicId, programPublicIds: [first!] })).toEqual(
+      invalid,
+    );
+    expect(
+      await actions.reorderPrograms({ profilePublicId, programPublicIds: [first!, newId()] }),
+    ).toEqual(invalid);
+    expect(
+      await actions.reorderPrograms({ profilePublicId, programPublicIds: [first!, first!] }),
+    ).toEqual(invalid);
+  });
+});
+
+// ── The program builder ─────────────────────────────────────────────────────────────────────────
+
+function builder(seed: Partial<FakeProgramState> = {}) {
+  const start: FakeProgramState = {
+    programs: [...programsList],
+    program: familyProgram,
+    items: [...pickerOptions],
+    ...seed,
+  };
+  let latest = start;
+  const fake = createFakeProgramActions(start, (state) => void (latest = state));
+  return { ...fake, state: () => latest, view: () => latest.program! };
+}
+
+const refusal = (reason: keyof typeof PROGRAM_REFUSAL) => ({ ok: false, reason });
+const [heavyA, conditioning] = [
+  familyProgram.workouts.find((w) => w.name === 'Heavy A')!,
+  familyProgram.workouts.find((w) => w.name === 'Conditioning')!,
+];
+
+describe('the fake ProgramActions: programs', () => {
+  it('a program is created by naming it, once per clientId', async () => {
+    const { actions, state } = builder();
+    const input = { clientId: newId(), name: 'Off season' };
+    const created = await actions.createProgram(input);
+    expect(created.ok).toBe(true);
+    expect(await actions.createProgram(input)).toEqual(created);
+    expect(state().programs.map((p) => p.name)).toEqual([
+      ...programsList.map((p) => p.name),
+      'Off season',
+    ]);
+  });
+
+  it('refuses an empty name and a name another program has', async () => {
+    const { actions } = builder();
+    expect(await actions.createProgram({ clientId: newId(), name: '  ' })).toEqual(
+      refusal('invalid'),
+    );
+    expect(await actions.createProgram({ clientId: newId(), name: familyProgram.name })).toEqual(
+      refusal('name_taken'),
+    );
+  });
+
+  it('a rename shows on the list, the page and the Put-on dialog, and not on a frozen "from"', async () => {
+    const { actions, state, view } = builder();
+    const { programPublicId } = familyProgram;
+    await actions.copyWorkout({
+      clientId: newId(),
+      workoutPublicId: heavyA.workoutPublicId,
+      toProgramPublicId: programPublicId,
+      weekdays: [],
+      label: null,
+    });
+    expect(await actions.renameProgram({ programPublicId, name: 'Winter block' })).toEqual({
+      ok: true,
+    });
+    // Where the copy came from is the program's name on the day of the copy.
+    expect(view().workouts.map((w) => w.copiedFrom?.programName ?? null)).toContain(
+      familyProgram.name,
+    );
+    expect(view().candidates.map((c) => c.keeps)).toEqual(
+      familyProgram.candidates.map((c) =>
+        c.keeps.map((kept) => (kept === familyProgram.name ? 'Winter block' : kept)),
+      ),
+    );
+    expect(view().name).toBe('Winter block');
+    expect(state().programs.find((p) => p.programPublicId === programPublicId)?.name).toBe(
+      'Winter block',
+    );
+    expect(view().candidates.flatMap((c) => c.keeps)).not.toContain(familyProgram.name);
+    expect(programViewSchema.safeParse(view()).success).toBe(true);
+
+    const other = programsList.find((p) => p.programPublicId !== programPublicId)!;
+    expect(await actions.renameProgram({ programPublicId, name: other.name })).toEqual(
+      refusal('name_taken'),
+    );
+    expect(await actions.renameProgram({ programPublicId: newId(), name: 'Nobody’s' })).toEqual(
+      refusal('not_found'),
+    );
+  });
+});
+
+describe('the fake ProgramActions: workouts and the week', () => {
+  it('saves a new workout once, however often the save is replayed', async () => {
+    const { actions, view } = builder();
+    const draft = { ...newWorkoutEmpty, name: 'Mobility' };
+    const saved = await actions.saveWorkout(draft);
+    expect(saved.ok).toBe(true);
+    expect(await actions.saveWorkout(draft)).toEqual(saved);
+    expect(view().workouts.filter((w) => w.name === 'Mobility')).toEqual([
+      {
+        workoutPublicId: saved.ok && saved.workoutPublicId,
+        name: 'Mobility',
+        itemCount: 0,
+        usedOn: [],
+        copiedFrom: null,
+      },
+    ]);
+  });
+
+  it('saves an edit in place', async () => {
+    const { actions, view } = builder();
+    const draft = { ...heavyADraft, name: 'Heavy day', items: heavyADraft.items.slice(0, 2) };
+    expect(await actions.saveWorkout(draft)).toEqual({
+      ok: true,
+      workoutPublicId: heavyADraft.workoutPublicId,
+    });
+    expect(view().workouts).toHaveLength(familyProgram.workouts.length);
+    expect(view().workouts.find((w) => w.workoutPublicId === heavyA.workoutPublicId)).toMatchObject(
+      { name: 'Heavy day', itemCount: 2, usedOn: heavyA.usedOn },
+    );
+  });
+
+  it('refuses a workout with no name, a name the program already has, and one it does not hold', async () => {
+    const { actions } = builder();
+    expect(await actions.saveWorkout(newWorkoutEmpty)).toEqual(refusal('invalid'));
+    expect(await actions.saveWorkout({ ...newWorkoutEmpty, name: heavyA.name })).toEqual(
+      refusal('name_taken'),
+    );
+    expect(await actions.saveWorkout({ ...heavyADraft, workoutPublicId: newId() })).toEqual(
+      refusal('not_found'),
+    );
+    expect(await actions.saveWorkout({ ...heavyADraft, programPublicId: newId() })).toEqual(
+      refusal('not_found'),
+    );
+  });
+
+  it('saves a week, and each workout says which days use it, Monday first', async () => {
+    const { actions, view } = builder();
+    const days = structuredClone(familyProgram.week);
+    days[0] = [{ workoutPublicId: heavyA.workoutPublicId, label: 'Evening' }];
+    expect(
+      await actions.saveWeek({ programPublicId: familyProgram.programPublicId, days }),
+    ).toEqual({ ok: true });
+    expect(view().week[0]).toEqual(days[0]);
+    expect(
+      view().workouts.find((w) => w.workoutPublicId === heavyA.workoutPublicId)?.usedOn,
+    ).toEqual([...heavyA.usedOn, 0]);
+    expect(programViewSchema.safeParse(view()).success).toBe(true);
+  });
+
+  it('a workout runs at most once a day: once_per_day', async () => {
+    const { actions, view } = builder();
+    const days = structuredClone(familyProgram.week);
+    const slot = { workoutPublicId: heavyA.workoutPublicId, label: null };
+    days[0] = [slot, { ...slot, label: 'Evening' }];
+    expect(
+      await actions.saveWeek({ programPublicId: familyProgram.programPublicId, days }),
+    ).toEqual(refusal('once_per_day'));
+    expect(view()).toBe(familyProgram);
+  });
+
+  it('refuses a week that names a workout the program does not have', async () => {
+    const { actions } = builder();
+    const days = structuredClone(familyProgram.week);
+    days[0] = [{ workoutPublicId: newId(), label: null }];
+    expect(
+      await actions.saveWeek({ programPublicId: familyProgram.programPublicId, days }),
+    ).toEqual(refusal('not_found'));
+  });
+
+  it('a copy inside one program is renamed within the limit and says where it came from', async () => {
+    const { actions, view } = builder();
+    const long = 'A workout name of thirty chars';
+    expect(long).toHaveLength(WORKOUT_NAME_MAX);
+    await actions.saveWorkout({ ...heavyADraft, name: long });
+    const copy = {
+      clientId: newId(),
+      workoutPublicId: heavyA.workoutPublicId,
+      toProgramPublicId: familyProgram.programPublicId,
+      weekdays: [0 as const, 3 as const],
+      label: 'Evening',
+    };
+    const copied = await actions.copyWorkout(copy);
+    expect(copied.ok).toBe(true);
+    // A replay adds nothing.
+    expect(await actions.copyWorkout(copy)).toEqual(copied);
+
+    const made = view().workouts.filter((w) => w.copiedFrom);
+    expect(made).toEqual([
+      {
+        workoutPublicId: copied.ok && copied.workoutPublicId,
+        name: 'A workout name of thirt (copy)',
+        itemCount: heavyA.itemCount,
+        usedOn: [3, 0],
+        copiedFrom: { programName: familyProgram.name, on: FIXTURE_TODAY },
+      },
+    ]);
+    expect(made[0]?.name).toHaveLength(WORKOUT_NAME_MAX);
+    expect(view().week[3].at(-1)).toEqual({
+      workoutPublicId: made[0]?.workoutPublicId,
+      label: 'Evening',
+    });
+    expect(programViewSchema.safeParse(view()).success).toBe(true);
+  });
+
+  it('a copy into another program answers with its id and leaves this page alone', async () => {
+    const { actions, view } = builder();
+    const [other] = familyProgram.otherPrograms;
+    const copied = await actions.copyWorkout({
+      clientId: newId(),
+      workoutPublicId: conditioning.workoutPublicId,
+      toProgramPublicId: other!.programPublicId,
+      weekdays: [1],
+      label: null,
+    });
+    expect(copied.ok).toBe(true);
+    expect(view()).toEqual(familyProgram);
+    expect(
+      await actions.copyWorkout({
+        clientId: newId(),
+        workoutPublicId: conditioning.workoutPublicId,
+        toProgramPublicId: newId(),
+        weekdays: [],
+        label: null,
+      }),
+    ).toEqual(refusal('not_found'));
+  });
+});
+
+describe('the fake ProgramActions: items and athletes', () => {
+  it('a new item joins the picker; an existing name selects that item, with its own type', async () => {
+    const { actions, state } = builder();
+    const made = await actions.newItem({
+      name: 'Bear crawl',
+      trackingType: TRACKING_TYPE.distance,
+    });
+    expect(made).toMatchObject({ ok: true, trackingType: TRACKING_TYPE.distance, existed: false });
+    expect(state().items.at(-1)).toMatchObject({ name: 'Bear crawl', owner: 'household' });
+
+    const pushUps = pickerOptions.find((o) => o.name === 'Push-ups')!;
+    // The picker's "same movement" rule, not a name's fold: "push ups" is Push-ups.
+    expect(
+      await actions.newItem({ name: ' push ups ', trackingType: TRACKING_TYPE.check }),
+    ).toEqual({
+      ok: true,
+      itemPublicId: pushUps.publicId,
+      trackingType: pushUps.trackingType,
+      existed: true,
+    });
+    expect(state().items).toHaveLength(pickerOptions.length + 1);
+  });
+
+  it('take off ends a program after today: family-program-after-take-off', async () => {
+    const { actions, view } = builder();
+    const result = await actions.takeOff({
+      programPublicId: familyProgram.programPublicId,
+      profilePublicId: fixtureIds.athlete('a2'),
+    });
+    expect(result).toEqual({ ok: true });
+    expect(view()).toEqual(familyProgramAfterTakeOff);
+  });
+
+  it('put on starts today or tomorrow, skips whoever is on it, and needs someone picked', async () => {
+    const { actions, state, view } = builder();
+    const { programPublicId } = familyProgram;
+    const off = familyProgram.candidates.find((c) => !c.on)!;
+    const on = familyProgram.candidates.find((c) => c.on)!;
+    const tomorrow = addDays(FIXTURE_TODAY, 1);
+
+    expect(await actions.putOn({ programPublicId, profilePublicIds: [], from: tomorrow })).toEqual(
+      refusal('invalid'),
+    );
+    expect(
+      await actions.putOn({
+        programPublicId,
+        profilePublicIds: [off.profilePublicId],
+        from: addDays(FIXTURE_TODAY, 2),
+      }),
+    ).toEqual(refusal('invalid'));
+    expect(
+      await actions.putOn({ programPublicId, profilePublicIds: [newId()], from: tomorrow }),
+    ).toEqual(refusal('not_found'));
+
+    expect(
+      await actions.putOn({
+        programPublicId,
+        profilePublicIds: [off.profilePublicId, on.profilePublicId],
+        from: tomorrow,
+      }),
+    ).toEqual({ ok: true });
+    expect(view().athletes).toEqual([
+      ...familyProgram.athletes,
+      {
+        profilePublicId: off.profilePublicId,
+        name: off.name,
+        since: tomorrow,
+        lastDay: null,
+        alsoOn: off.keeps,
+      },
+    ]);
+    // The Family program is first in the household's order, so it leads what they keep.
+    expect(view().candidates.find((c) => c.profilePublicId === off.profilePublicId)).toEqual({
+      ...off,
+      on: true,
+      keeps: [familyProgram.name, ...off.keeps],
+    });
+    expect(state().programs.find((p) => p.programPublicId === programPublicId)?.athletes).toContain(
+      off.name,
+    );
+
+    // Taken off before they start, they simply leave, on the page and on the list.
+    await actions.takeOff({ programPublicId, profilePublicId: off.profilePublicId });
+    expect(view()).toEqual(familyProgram);
+    expect(state().programs).toEqual(programsList);
+  });
+
+  it('failNext makes the next call fail once with retry', async () => {
+    const { actions, failNext, state } = builder();
+    const input = { clientId: newId(), name: 'Off season' };
+    failNext();
+    expect(await actions.createProgram(input)).toEqual(refusal('retry'));
+    expect(state().programs).toHaveLength(programsList.length);
+    expect((await actions.createProgram(input)).ok).toBe(true);
+  });
+});
+
+describe('the fakes: rules found in review', () => {
+  it('a name is taken whatever its case or spacing: "heavy a" beside "Heavy A"', async () => {
+    const { actions } = builder();
+    const { programPublicId } = familyProgram;
+    // A workout, in its program.
+    expect(await actions.saveWorkout({ ...newWorkoutEmpty, name: 'heavy a' })).toEqual(
+      refusal('name_taken'),
+    );
+    expect(await actions.saveWorkout({ ...newWorkoutEmpty, name: 'Héavy  A' })).toEqual(
+      refusal('name_taken'),
+    );
+    // Saving Heavy A under its own name, re-cased, is not a clash with itself.
+    expect((await actions.saveWorkout({ ...heavyADraft, name: 'HEAVY A' })).ok).toBe(true);
+    // A program, in the household: created and renamed.
+    expect(
+      await actions.createProgram({ clientId: newId(), name: familyProgram.name.toUpperCase() }),
+    ).toEqual(refusal('name_taken'));
+    const other = programsList.find((p) => p.programPublicId !== programPublicId)!;
+    expect(
+      await actions.renameProgram({ programPublicId, name: other.name.toLowerCase() }),
+    ).toEqual(refusal('name_taken'));
+  });
+
+  it('"+ Add set" past the next set adds each set before it, and only a set type has a second row', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const before = itemOf(heavyASupersets, 'DB bench press');
+    const sets = before.item.rows.length;
+    succeeded(await actions.logRow({ ...tick(heavyASupersets, 'DB bench press'), set: sets + 2 }));
+    const after = itemOf(plan(), 'DB bench press');
+    expect(after.item.rows.map((r) => r.set)).toEqual(
+      Array.from({ length: sets + 2 }, (_, i) => i + 1),
+    );
+    expect(after.workout.progress).toEqual({
+      done: before.workout.progress.done + 1,
+      total: before.workout.progress.total + 2,
+    });
+    expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
+
+    const check = heavyASupersets.workouts
+      .flatMap((w) => w.items)
+      .find((i) => i.trackingType === TRACKING_TYPE.check)!;
+    expect(await actions.logRow({ ...tick(heavyASupersets, check.name), set: 2 })).toEqual({
+      ok: false,
+      reason: ROW_REFUSAL.bad_value,
+    });
+  });
+
+  it('a number the type has no field for is bad_value, never dropped', async () => {
+    const { actions } = day(heavyASupersets);
+    const bad = { ok: false, reason: ROW_REFUSAL.bad_value };
+    const distance = { slot: QUANTITY_SLOT.distance, unit: 'm' as const, value: 40 };
+    expect(
+      await actions.logRow(tick(heavyASupersets, 'DB bench press', { quantities: [distance] })),
+    ).toEqual(bad);
+    const check = heavyASupersets.workouts
+      .flatMap((w) => w.items)
+      .find((i) => i.trackingType === TRACKING_TYPE.check)!;
+    expect(
+      await actions.logRow(tick(heavyASupersets, check.name, { reps: 3, quantities: [] })),
+    ).toEqual(bad);
+  });
+
+  it('an empty ✓ asks for a number the prescription cannot give', async () => {
+    // Reps written as text ("10 per side") give no whole number to copy (plan D13).
+    const noReps = structuredClone(heavyASupersets);
+    itemOf(noReps, 'DB bench press').item.target.reps = null;
+    const { actions } = day(noReps);
+    const write = tick(noReps, 'DB bench press');
+    expect(await actions.logRow(write)).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+    expect(
+      succeeded(await actions.logRow({ ...write, values: { reps: 9, quantities: [] } })).values,
+    ).toEqual({ reps: 9, quantities: [lb(25)] });
+  });
+
+  it('a reorder leaves a workout that left the week last', async () => {
+    const { actions, plan } = day(workoutLeftTheWeek);
+    const ids = workoutLeftTheWeek.currentPrograms.map((p) => p.programPublicId);
+    expect(ids.length, 'the fixture athlete is on two programs').toBeGreaterThan(1);
+    expect(
+      await actions.reorderPrograms({
+        profilePublicId: workoutLeftTheWeek.profilePublicId,
+        programPublicIds: ids.toReversed(),
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      plan()
+        .workouts.map((w) => w.scheduled)
+        .lastIndexOf(true),
+    ).toBe(plan().workouts.filter((w) => w.scheduled).length - 1);
+    expect(plan().workouts.at(-1)?.name).toBe(workoutLeftTheWeek.workouts.at(-1)?.name);
+    expect(plan().programs.map((p) => p.programPublicId)).toEqual(ids.toReversed());
+    expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
+  });
+
+  it('put on lists athletes in the household’s order, on the page and on the list', async () => {
+    // Only Adult One is on their program; Athlete Two comes before them in the household.
+    const { actions, state, view } = builder({ program: adultProgramWithCopy });
+    const { programPublicId } = adultProgramWithCopy;
+    const two = adultProgramWithCopy.candidates.find((c) => c.name === 'Athlete Two')!;
+    expect(two.on).toBe(false);
+    expect(
+      await actions.putOn({
+        programPublicId,
+        profilePublicIds: [two.profilePublicId],
+        from: FIXTURE_TODAY,
+      }),
+    ).toEqual({ ok: true });
+    const household = adultProgramWithCopy.candidates.map((c) => c.name);
+    const inOrder = (names: string[]) => household.filter((name) => names.includes(name));
+    const onPage = view().athletes.map((a) => a.name);
+    expect(onPage).toContain('Athlete Two');
+    expect(onPage[0]).toBe('Athlete Two');
+    expect(onPage).toEqual(inOrder(onPage));
+    const onList = state().programs.find((p) => p.programPublicId === programPublicId)!.athletes;
+    expect(onList).toEqual(onPage);
+    // They keep their other programs, and this one takes its place in the household's order: last.
+    expect(view().candidates.find((c) => c.name === 'Athlete Two')?.keeps).toEqual([
+      ...two.keeps,
+      adultProgramWithCopy.name,
+    ]);
+    expect(programViewSchema.safeParse(view()).success).toBe(true);
+  });
+
+  it('a second copy inside one program meets the name the first took', async () => {
+    const { actions, view } = builder();
+    const copy = () => ({
+      clientId: newId(),
+      workoutPublicId: heavyA.workoutPublicId,
+      toProgramPublicId: familyProgram.programPublicId,
+      weekdays: [],
+      label: null,
+    });
+    expect((await actions.copyWorkout(copy())).ok).toBe(true);
+    expect(await actions.copyWorkout(copy())).toEqual(refusal('name_taken'));
+    expect(view().workouts.filter((w) => w.copiedFrom)).toHaveLength(1);
+  });
+
+  it('refuses a week that is not a week, and one for a program that is not on screen', async () => {
+    const { actions } = builder();
+    const { programPublicId, week } = familyProgram;
+    expect(
+      await actions.saveWeek({ programPublicId, days: { 0: [] } as unknown as typeof week }),
+    ).toEqual(refusal('invalid'));
+    const [other] = familyProgram.otherPrograms;
+    expect(await actions.saveWeek({ programPublicId: other!.programPublicId, days: week })).toEqual(
+      refusal('not_found'),
+    );
+  });
+
+  it('failNext fails every member once, before it looks at what was sent', async () => {
+    const dayFake = createFakeDayActions(todayTwoPrograms);
+    for (const [name, action] of Object.entries(dayFake.actions)) {
+      dayFake.failNext();
+      const failed = await (action as (input: unknown) => Promise<unknown>)({});
+      expect(failed, name).toEqual({ ok: false, reason: ROW_REFUSAL.retry });
+      const next = await (action as (input: unknown) => Promise<unknown>)({});
+      expect(next, `${name}, the call after`).not.toEqual(failed);
+    }
+    const programs = builder();
+    for (const [name, action] of Object.entries(programs.actions)) {
+      programs.failNext();
+      const failed = await (action as (input: unknown) => Promise<unknown>)({});
+      expect(failed, name).toEqual(refusal('retry'));
+      const next = await (action as (input: unknown) => Promise<unknown>)({});
+      expect(next, `${name}, the call after`).toEqual(refusal('invalid'));
+    }
+  });
+});
+
+// ── Containment ─────────────────────────────────────────────────────────────────────────────────
+
+describe('the fakes stay on the preview route', () => {
+  /**
+   * A production route passes the real actions it has, never a fake (plan §6). So no module outside
+   * the preview route's own directory may import this one. Fixtures are held the same way: they are
+   * preview and test data.
+   */
+  const outside = appSources().filter((file) => !file.startsWith(`${WEB_DIR}/app/design/program/`));
+
+  it('finds the sources (an empty glob would pass the scan below)', () => {
+    expect(outside.length).toBeGreaterThan(100);
+  });
+
+  /**
+   * A path that ends in the fakes, the picker fixture or the contract's fixtures, however it is
+   * spelled: by the alias, by the package subpath, or relatively. A sibling under `app/design/`
+   * reaches the fakes as `./program/fakes`, with no `design/` in the path at all.
+   */
+  const IMPORTS_PREVIEW_DATA = /(^|\/)program\/(fakes|picker-options|fixtures)\b/;
+
+  it('the matcher sees every spelling of the import', () => {
+    for (const source of [
+      `import { createFakeDayActions } from '@/app/design/program/fakes';`,
+      `import { createFakeDayActions } from './program/fakes';`,
+      `import { createFakeDayActions } from '../program/fakes';`,
+      `import { pickerOptions } from '../design/program/picker-options';`,
+      `import { familyProgram } from '@mat-plan/shared/program/fixtures';`,
+      `import { familyProgram } from '../../packages/shared/src/program/fixtures/index';`,
+      `const fakes = await import('./program/fakes');`,
+    ]) {
+      expect(IMPORTS_PREVIEW_DATA.test(source), source).toBe(true);
+    }
+    for (const source of [
+      `import { DayScreen } from '@/components/day/day-screen';`,
+      `import type { DayPlan } from '@mat-plan/shared';`,
+      `import { listPrograms } from '@/lib/dal/program/programs';`,
+      `import { previewHref } from './program/preview-registry';`,
+    ]) {
+      expect(IMPORTS_PREVIEW_DATA.test(source), source).toBe(false);
+    }
+  });
+
+  it('nothing outside app/design/program imports the fakes or the fixtures', () => {
+    const importers = outside.filter((file) => IMPORTS_PREVIEW_DATA.test(code(file)));
+    expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
+  });
+});

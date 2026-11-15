@@ -1,4 +1,4 @@
-import type { MovementPickerGroup, Unit } from '@mat-plan/shared';
+import type { MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
 
 /**
  * The DTOs the movement picker renders (PICK-1 Decision 5).
@@ -18,10 +18,17 @@ import type { MovementPickerGroup, Unit } from '@mat-plan/shared';
  * measured in pounds" is a property of the movement; "do 95 lb" is a prescription. So this type has
  * no `load`, no `reps` and no `sets`, a test pins that with `@ts-expect-error`, and picking a
  * movement can never prefill a number.
+ *
+ * `trackingType` (FAM-1 step 0b) is a declaration in the same sense: how the item is logged, one of
+ * the seven `TRACKING_TYPES`, set once on the item (FAM-1 plan D1, D25). The program builder's item
+ * picker shows it under each name and the workout editor reads it to choose a card's fields.
+ * ⚠️ **No read fills it yet.** The column arrives in FAM-1 step 3 and the picker's read in step 6a
+ * (`packages/db/src/queries/program/movement-options.ts`); until then only fixtures build this DTO.
  */
 type Declaration = {
   readonly unitDefault: Unit | null;
   readonly isBodyweight: boolean;
+  readonly trackingType: TrackingType;
 };
 
 /**

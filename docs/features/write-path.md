@@ -111,6 +111,23 @@ flowchart LR
 | `apps/web/lib/dal/scoped.test.ts`            | TEN-1 1d's structural guard: nothing in `lib/dal` reaches `db` unscoped, and nothing builds its own ownership predicate. Two exception lists, both enumerated with a reason, both final. Not to be confused with `packages/db/src/scope.test.ts`, which guards the scope **type**. 🔴 **It scans every directory under `lib/dal`, not only the top level** (FAM-1 step 0b): `lib/dal/program/` and `lib/dal/day/` are covered from the PR that creates them. Because neither holds a query yet, the suite plants a nested leak in a temp directory and runs the same listing and detectors over it; a declaration's id carries its relative path (`program/x.ts#name`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `packages/db/src/client.ts`                  | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
+### Where the new pieces are documented
+
+FAM-1's lanes each have their own guide, which owns the directory that lane's new files go in
+([features README → lanes](./README.md#guides-for-work-run-in-lanes)). A file under one of these
+paths owes **its lane's guide, not this one**, though this guide's invariants still apply to it; each
+lane guide says which.
+
+| Path                                                                              | Guide                                      |
+| --------------------------------------------------------------------------------- | ------------------------------------------ |
+| `packages/db/src/writers/program/` (`seed-fixtures.ts` above), `queries/program/` | [program-writers.md](./program-writers.md) |
+| `packages/db/src/writers/day/`, `queries/day/`                                    | [day-writers.md](./day-writers.md)         |
+| `apps/web/lib/dal/program/`, `apps/web/app/programs/` (its actions)               | [program-builder.md](./program-builder.md) |
+| `apps/web/lib/dal/day/`                                                           | [day-page.md](./day-page.md)               |
+
+The shapes those lanes agree on, the fakes and the preview route are
+[program-contract.md](./program-contract.md).
+
 ## Invariants
 
 1. **Every Server Action is a PUBLIC endpoint.** Page middleware does not protect it — it is a POST

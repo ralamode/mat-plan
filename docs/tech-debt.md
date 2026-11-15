@@ -54,6 +54,19 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
   [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
 
+### The a11y checks have two copies (added 2026-11-15, FAM-1 step 0b)
+
+- **What & why it's debt:** `apps/web/e2e/a11y-checks.ts` exports `expectNoAxeViolations` and
+  `expectTapTargets` for `program-preview-a11y.spec.ts`, and `a11y.spec.ts` still holds its own
+  private copies of both, with `targetOf` and `describe`. They were lifted while another open PR
+  was rewriting `a11y.spec.ts`, so that file was left alone rather than edited under it.
+- **Impact:** a change to the tap-target rule (the selector, the 44px bar, the label rule) made in
+  one copy leaves the other scanning by the old rule, and both stay green.
+- **The fix:** the next PR that edits `a11y.spec.ts` deletes its four private functions and imports
+  the two from `./a11y-checks`. Its long comments, which hold the reasoning for each rule, move to
+  that module with them. Mechanical, no behaviour change.
+- **Severity:** low. Two copies of about 60 lines, in tests, with a named owner for the fix.
+
 ### The nav rail unmounts during a switch between athletes (added 2026-11-13)
 
 - **What & why it's debt:** clicking an athlete in `UI-5`'s rail changes the `[profileId]` segment,

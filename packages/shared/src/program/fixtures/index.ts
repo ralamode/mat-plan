@@ -12,7 +12,7 @@ import {
   workoutDraft,
   workoutOf,
 } from './build';
-import { fixtureIds } from './ids';
+import { FIXTURE_ITEM_KEYS, fixtureIds } from './ids';
 import {
   baseCatalog,
   baseProgram,
@@ -34,7 +34,8 @@ import {
  * Every fixture is deep-frozen: one object is shared by every test in a process, so a consumer that
  * needs to change one clones it first (`structuredClone`).
  *
- * `picker-options` is not here: it uses the web's `MovementOptionDTO`, so it is step 0b's.
+ * `picker-options` is not here: it uses the web's `MovementOptionDTO`, so it is step 0b's
+ * (`apps/web/app/design/program/picker-options.ts`), built from `FIXTURE_ITEMS` below.
  */
 
 export { FIXTURE_SWITCH_DAY, FIXTURE_TODAY } from './world';
@@ -50,6 +51,21 @@ function deepFreeze<T>(value: T): T {
 
 const YESTERDAY = '2026-11-13';
 const seeded = stamped(seedWorld());
+
+// ── The item catalog ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The prototype's item catalog (`baseCatalog()`), in its order, under the contract's ids: every item
+ * a fixture names, with its tracking type. The item picker's `picker-options` fixture is built from
+ * this list, so an item has one id and one type on both sides of the picker.
+ */
+export const FIXTURE_ITEMS = deepFreeze(
+  FIXTURE_ITEM_KEYS.map((key) => ({
+    itemPublicId: fixtureIds.item(key),
+    name: seeded.catalog[key].name,
+    trackingType: seeded.catalog[key].type,
+  })),
+);
 
 // ── DayPlan ─────────────────────────────────────────────────────────────────────────────────────
 

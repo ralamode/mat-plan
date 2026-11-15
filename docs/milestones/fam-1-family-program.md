@@ -1,3 +1,36 @@
+---
+# The lanes that run at the same time, read by `pnpm guides:check` (plan §6; the format is
+# .claude/skills/write-spec/SKILL.md → Lanes). Each list holds only what its lane owns alone: a
+# file two lanes change is a seam, ordered in the plan's §6 table, and is in no list. Lane S (the
+# feature thread) works in shared files and declares none; the contract owner is not a lane.
+# Lane A's `seed.ts` and `writers/ownership.ts` are under `write-path.md`, which other lanes' seam
+# steps also owe; the two FILES are lane A's alone (plan §5), so they are listed.
+lane-a-schema:
+  - packages/db/scripts/verify/schema.ts
+  - packages/db/src/seed.ts
+  - packages/db/src/writers/ownership.ts
+lane-p-program-data:
+  - packages/db/src/writers/program/
+  - packages/db/src/queries/program/
+  - packages/db/scripts/verify/program.ts
+lane-e-day-data:
+  - packages/db/src/writers/day/
+  - packages/db/src/queries/day/
+  - packages/db/scripts/verify/day.ts
+lane-b-builder:
+  - apps/web/components/program-builder/
+  - apps/web/app/programs/
+  - apps/web/lib/dal/program/
+  - apps/web/e2e/program-builder.spec.ts # arrives at step 7b
+lane-c-day-page:
+  - apps/web/components/day/
+  - apps/web/lib/dal/day/
+  - apps/web/app/p/[profileId]/row-actions.ts # arrives at step 12b, with the two beside it
+  - apps/web/app/p/[profileId]/row-actions.registry.ts
+  - apps/web/app/p/[profileId]/row-actions.test.ts
+  - apps/web/e2e/day-page.spec.ts # arrives at step 12c
+---
+
 # FAM-1 — the family program
 
 > **Status: draft, 2026-11-14, not yet panelled.** A cross-PR milestone, not an implementation plan:

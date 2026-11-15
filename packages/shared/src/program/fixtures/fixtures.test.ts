@@ -14,6 +14,8 @@ import {
   everyTypeOnce,
   familyProgram,
   familyProgramAfterTakeOff,
+  FIXTURE_ITEM_KEYS,
+  FIXTURE_ITEMS,
   FIXTURE_SWITCH_DAY,
   FIXTURE_TODAY,
   fixtureIds,
@@ -123,6 +125,25 @@ describe('every fixture round-trips through its own schema', () => {
   });
 });
 
+describe('the item catalog', () => {
+  it('lists every prototype item once, in the prototype’s order', () => {
+    expect(FIXTURE_ITEMS.map((item) => item.itemPublicId)).toEqual(
+      FIXTURE_ITEM_KEYS.map((key) => fixtureIds.item(key)),
+    );
+    expect(Object.isFrozen(FIXTURE_ITEMS[0])).toBe(true);
+  });
+
+  it('gives an item the id, name and type the other fixtures give it', () => {
+    for (const item of heavyADraft.items) {
+      expect(FIXTURE_ITEMS).toContainEqual({
+        itemPublicId: item.itemPublicId,
+        name: item.itemName,
+        trackingType: item.trackingType,
+      });
+    }
+  });
+});
+
 describe('every id in every fixture is a well-formed public id', () => {
   /**
    * The data lanes compare a query's result with a fixture through a normalizer that labels only
@@ -142,6 +163,7 @@ describe('every id in every fixture is a well-formed public id', () => {
     ...WORKOUT_DRAFT_FIXTURES,
     ...PROGRAM_LIST_FIXTURES,
     ...PROGRAM_VIEW_FIXTURES,
+    'the item catalog': FIXTURE_ITEMS,
   };
 
   it.each(Object.entries(fixtures))('%s', (_name, fixture) => {
@@ -864,6 +886,14 @@ describe('family-program: one program’s page', () => {
       ['After lunch', 'Heavy B'],
       ['Evening', 'Conditioning'],
     ]);
+  });
+});
+
+describe('every ProgramView fixture says what today is', () => {
+  // The page prints "starts" or "since" by it, and the Put-on dialog offers it and the day after.
+  it.each(Object.entries(PROGRAM_VIEW_FIXTURES))('%s', (_name, view) => {
+    expect(view.today).toBe(FIXTURE_TODAY);
+    expect(programViewSchema.safeParse({ ...view, today: undefined }).success).toBe(false);
   });
 });
 

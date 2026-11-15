@@ -382,6 +382,7 @@ export function programView(world: World, programId: string): ProgramView {
     currentPrograms(world, athlete).find((a) => a.prog === programId);
   return {
     ...programRef(world, programId),
+    today: world.today,
     athletes: world.athletes.flatMap((a) => {
       const assignment = assignmentOf(a.id);
       if (!assignment) return [];
