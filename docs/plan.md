@@ -3246,6 +3246,34 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
        Needs a **UX panel**: this is a motivational surface aimed at a child, and getting it wrong costs
        retention rather than correctness.
 
+    5. **What counts, with several programs per athlete. SETTLED (maintainer, 2026-11-14).**
+       _"When you make a plan and you count things toward a streak, it is a commitment."_ Once an athlete
+       can be on several programs ([FAM-1](./milestones/fam-1-family-program.md) step 15c), "the day's
+       routine" becomes several workouts. The rule:
+       - **Every counting workout due that day must be done**, or the streak breaks unless the day is
+         excused. This keeps constraint 4's "everything due".
+       - **Every workout counts by default**, with a per-workout **"Counts toward the streak"** switch
+         the programmer can turn off. This replaces constraint 3's opt-in flag with an opt-out.
+       - **A day with no counting workout due is neutral.** Doing a non-counting workout, such as a
+         stretch, does not change that: intentional days off are neutral.
+       - **Done means every prescribed row checked.** Extra sets are allowed, never required, and a
+         lighter set counts once checked.
+       - **Practice keeps the streak only on a day with nothing counting due.** It never replaces a
+         counting workout.
+       - **Doing someone else's workout for a day counts, as a swap** for one of the athlete's own.
+       - **Excused days:** an adult excuses their own day; a parent excuses a child's; a child cannot.
+         **A reason is required. There is no cap.** An excused day is neutral, **shown in the streak
+         wherever streaks appear**, and listed with its reason. This is the excused day constraint 4
+         flagged as the cheap mitigation, now in scope.
+       - **The day's verdict records the rule it judged by** (ADR 0007 decision 5's snapshot), so
+         changing a workout's switch never rewrites past days.
+
+       **Open for MOT-1's plan:**
+       - which due workout a swap stands in for (the athlete picks?);
+       - whether the day someone is first put on a program is neutral;
+       - the excused-day writer, and its privacy row (a free-text reason about a child is personal
+         data).
+
   > **Product reframe this surfaced (Ray, 2026-09-16) — worth more than the feature.** The roadmap has
   > treated **strength programming** as the core and habits as the supporting cast. Ray's actual primary
   > use is the inverse: **daily-habit consistency is the product**, and S&C is programmed on top of it on

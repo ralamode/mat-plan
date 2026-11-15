@@ -231,8 +231,9 @@ These needs had no row before this draft. Each now has a home:
   workout's session for that day.
 - **An optional workout on a rest day**: it doesn't matter for logging, but it must be settled with
   ADR 0007's nothing-due-day rule **before MOT-1 stores a streak**. With several programs per athlete
-  (15c), MOT-1.4's "a day counts when everything due is done" needs revisiting too: one missed
-  stretch would break the day. The maintainer is weighing the options; MOT-1 is still Beta 1.
+  (15c), the rule is now settled ([MOT-1.5](../plan.md), 2026-11-14): every counting workout due must be
+  done, workouts count unless switched off, and excused days carry a reason. The per-workout switch
+  and excused days are MOT-1's, in Beta 1; nothing in this slice changes.
 - **Later, not needed here:** load on a Distance item, "each side" as structure, a day-level title, program-level reference text, and time ranges as typed targets (TGT-1).
 
 ## FAM-1 exit criteria — done when

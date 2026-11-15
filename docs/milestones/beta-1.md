@@ -563,7 +563,10 @@ The list below is kept as written; the bullets above set the order.
 
 - **Programs:** **V1-22** (edit a program — its plan sizes it at four PRs) and **SCHED-1** (which days
   a program runs; a fixed-weekday first cut is fine).
-- **MOT-1** — streaks, on top of SCHED-1 so a rest day is not a broken streak.
+- **MOT-1** — streaks, on top of SCHED-1 so a rest day is not a broken streak. **Rule settled
+  2026-11-14** ([MOT-1.5](../plan.md)): every counting workout due must be done; workouts count
+  unless switched off; nothing counting due is neutral; excused days with a reason, no cap, shown in
+  the streak.
 - **Athletes:** PROF-1 rename and archive.
 - **Household members:** a second parent, and a coach, join by invitation — Clerk Organizations or a
   hand-built link, decided in AUTH-1's plan. A hand-built link needs a ≥128-bit token stored hashed,
