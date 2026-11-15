@@ -1462,7 +1462,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      [definition of done](./definition-of-done.md) and in `review-pr`'s tests dimension.
   2. **A clean console in `ui-screenshot`.** A capture fails on any console error or warning, so
      hydration warnings on the phone-first builder can't slip through.
-  3. **`refine-idea`** (skills backlog #5): before a spec, ask one question at a time, each with a
+  3. ✅ **`refine-idea`** (skills backlog #5; [skill](../.claude/skills/refine-idea/SKILL.md), 2026-11-14): before a spec, ask one question at a time, each with a
      proposed answer; stop for an explicit yes; end with a "Not doing, and why" list. It is how product
      decisions such as the streak rule were actually settled.
   4. **`doubt-check`** (skills backlog #4): for a decision made mid-implementation, a fresh reviewer
