@@ -5,7 +5,7 @@
 > Parent: [v1-24-form-is-the-day.md](./v1-24-form-is-the-day.md) (its 2026-11-15 note). Sibling:
 > [V1-9b](./v1-9b-delete-and-restore.md) B2 (its 2026-11-15 Amendment). Milestones:
 > [CRUD-1](../milestones/crud-1-fix-it-yourself.md) track E, and
-> [FAM-1](../milestones/fam-1-family-program.md), whose steps 11a–13b wait on this. **Accepted
+> [FAM-1](../milestones/fam-1-family-program.md), whose plan schedules this as lane S (its step 12c builds on this page). **Accepted
 > prototype:** Beta 0's **v11** (v10 of #411 plus this PR's read-only older days) at [`docs/prototypes/beta-0/`](../prototypes/beta-0/index.html) (#411,
 > 2026-11-15). This is **Beta 0**.
 >
