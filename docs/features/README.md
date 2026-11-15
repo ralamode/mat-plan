@@ -41,6 +41,27 @@ packages, it earns a guide.
 Not every feature. A guide nobody reads and nobody updates is pure cost, and the gate makes that cost
 recurring. Add one when a feature's **next** change actually needs it, not speculatively.
 
+## Guides for a milestone run in lanes
+
+When a milestone splits into parallel lanes ([parallel-work.md](../parallel-work.md)), a guide that
+every lane must edit turns the lanes back into one queue. Every PR touching an owned file has to edit
+that guide, so every pair of those PRs conflicts on it. So:
+
+1. **Each lane gets its own guide**, named `<feature>-<lane>.md`, owning **the directory its new
+   files go in**, for example `packages/db/src/writers/program/`. The lane's first PR creates it,
+   because the gate refuses a guide that owns a path that does not exist yet.
+2. **New lane files never go into an existing guide's `owns:`.** The existing guide links to the lane
+   guides from a short "Where the new pieces are documented" note, edited once by the integration
+   lane.
+3. **An existing file that two lanes both change is a seam, not a guide problem.** The guide stays
+   shared, and those steps are ordered, as the milestone's serial chains already say.
+
+⚠️ **Rule 1 needs the gate to change** (DX-14 item 8). Today a broad directory entry such as
+`write-path.md`'s `packages/db/src/writers/` also claims every new subdirectory, and the gate demands
+**every** matching guide. The planned rule is **the most specific owner wins**: a file matched by a
+narrower entry in another guide owes only that guide. Until it lands, a lane guide does not relieve
+`write-path.md`.
+
 ## Format
 
 Frontmatter declares the ownership map the gate reads:

@@ -261,14 +261,37 @@ migration chain is the critical path, because each migration is observed applied
 **the milestone moves at lane A's pace plus the integration steps**: roughly 13 PR-lengths of
 calendar time instead of 23 in a row. That is an estimate, to be checked against slice 1.
 
-**What would serialize the lanes again, and the fix:**
+**What would serialize the lanes again, and the fix** (recorded 2026-11-14):
 
-- **`docs/features/programming.md` takes one PR at a time,** and 12 steps edit it. Either split it per
-  lane in d2, or let only integration PRs edit it.
-- **The migration journal and `schema.ts` belong to lane A only.** A lane that needs a column asks
-  lane A for it.
-- **A fixture that drifts from the schema.** The fixtures are parsed by the schema in a test, so drift
-  fails CI.
+- **Shared feature guides. The real hotspot is `write-path.md`, not `programming.md`.** The guide
+  gate fails a PR that touches an owned file without editing its guide. `write-path.md` owns
+  `packages/db/src/writers/`, `apps/web/lib/dal/`, `seed.ts` and `export-month.ts` as directory
+  prefixes, so steps 1, 6, 7, 11a, 11b and 14 (lanes A and D, and integration) would all edit one
+  917-line file. `programming.md` adds steps 2, 5b and 12, and `strength-logging.md` adds 11b and 13b.
+  **Fix:**
+  - **Lane guides:** `fam-1-schema.md`, `fam-1-builder.md`, `fam-1-today.md` and
+    `fam-1-writers.md`, each owning the new directory its lane creates (paths fixed by d2), each
+    created by that lane's first PR. See [the rule](../features/README.md).
+  - **The gate learns "the most specific owner wins"** (DX-14 item 8). Without it, a new file under
+    `writers/` still owes `write-path.md`.
+  - **The existing files several lanes change are seams** (`program-day.ts`, `strength-session.ts`,
+    `seed.ts`). Their steps stay ordered as in "Serial chains", and their guides stay shared.
+- **The database changes only in lane A.** **Fix:** chunk 0 lists every column the slices need, so
+  lanes B and C never ask. A need found later is a **column request**: lane A adds it, expand-only, in
+  its next migration. Meanwhile the asking lane builds against a fixture field marked _pending
+  column_, and the integration step switches it on. **Don't merge migrations together to save time:**
+  4b is the riskiest step, and the order is the safety. The other lanes run alongside it.
+- **Fixture drift, of meaning as well as shape.** A schema parse catches a wrong shape, not a wrong
+  meaning (for example, the resolver ordering workouts differently from how Today expects them).
+  **Fix:** **contract tests on both sides, against the same named fixture.** Lane C renders
+  `monday-two-programs`. Lane A seeds the database state that fixture describes, runs the resolver,
+  and asserts the result deep-equals the same fixture. A change of mind on either side fails that
+  side's own test.
+- **The day page.** Lane C builds components in **new files**. Only integration PRs edit
+  `apps/web/app/p/[profileId]/page.tsx`.
+- **A contract that turns out to be insufficient.** Slice 1, the thin end-to-end path, tests it
+  before the lanes widen. After that, a contract change goes through the integration lane, which tells
+  the lanes that read it.
 
 **For d2 to settle:**
 

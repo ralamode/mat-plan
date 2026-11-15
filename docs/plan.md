@@ -1493,6 +1493,12 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      - **Integration slices:** thin first, then widened, never a sprint at the end.
      - **A guard** with a self-test fails when two lanes' globs overlap
        ([parallel-work.md](./parallel-work.md) gate 1, made mechanical).
+       - **Guides split by lane**, and the guide gate learns that **the most specific owner wins**: a
+         file matched by a narrower `owns:` entry in another guide owes only that guide. Today a
+         broad prefix such as `write-path.md`'s `packages/db/src/writers/` claims every new
+         subdirectory too, so every writer PR in every lane edits one 917-line guide
+         ([the rule](./features/README.md)). This is a gate change, so it ships with a self-test case.
+     - **Contract tests on both sides** of each chunk-0 shape, against the same named fixture.
        FAM-1 is the first user ([lanes](./milestones/fam-1-family-program.md)).
 
   **Considered and skipped,** each with its reason, so nobody re-evaluates them:
