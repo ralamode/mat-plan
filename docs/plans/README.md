@@ -65,6 +65,9 @@ panel** before any code is written. The loop:
    iterate if a reviewer's blocking concern survives. Then implementation proceeds.
 
 The **review-response log stays in the committed plan** so the reasoning (and the pushbacks) survive.
+A decision made **during** implementation that the panel never saw gets a
+[`doubt-check`](../../.claude/skills/doubt-check/SKILL.md), recorded in the same log under
+**Mid-build checks**.
 Scale the panel to the risk: a schema/migration or auth plan gets the full panel + re-review; a small
 feature plan can run a single-pass panel.
 

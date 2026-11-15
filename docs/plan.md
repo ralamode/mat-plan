@@ -1465,7 +1465,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   3. ✅ **`refine-idea`** (skills backlog #5; [skill](../.claude/skills/refine-idea/SKILL.md), 2026-11-14): before a spec, ask one question at a time, each with a
      proposed answer; stop for an explicit yes; end with a "Not doing, and why" list. It is how product
      decisions such as the streak rule were actually settled.
-  4. **`doubt-check`** (skills backlog #4): for a decision made mid-implementation, a fresh reviewer
+  4. ✅ **`doubt-check`** (skills backlog #4; [skill](../.claude/skills/doubt-check/SKILL.md), 2026-11-14): for a decision made mid-implementation, a fresh reviewer
      gets the artifact and its contract, **never the author's reasoning**; three rounds at most. It
      reuses the existing lens agents. Panels review plans and `review-pr` reviews diffs; nothing
      reviews a call made halfway through a migration.
