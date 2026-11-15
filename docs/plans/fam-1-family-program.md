@@ -343,14 +343,12 @@ in the shapes as planned. Both are fixed in the code, with the smaller changes b
   no quantity means the prescription's (D13). A successful `RowResult` returns the `values` now stored.
 - **Program order can be built.** `DayPlan.currentPrograms` lists the athlete's current programs in
   their own order, including one that starts later; `programs` stays the programs on this day, and its
-  `order` is the index in `currentPrograms`, or `null` for a program the athlete has since come off
-  (several such sort by name). `ProgramOrder.programPublicIds` must be a permutation of
+  `order` is the index in `currentPrograms`, or `null` for a program the athlete has since come off. `ProgramOrder.programPublicIds` must be a permutation of
   `currentPrograms`, else `invalid`. `reorderPrograms` resolves `ProgramResult`, not `RowResult`.
 
 **Added**
 
-- `DayPlan.today`; per workout, `progress: { done, total }` (prescribed rows plus extra logged ones;
-  a workout with a total of 0 shows no progress, never "Done ✓").
+- `DayPlan.today`; per workout, `progress: { done, total }` (prescribed rows plus extra logged ones).
 - `ProgramView.otherPrograms` (the Copy dialog's "To" list). `RowRefusal` gains `not_found`.
 - `TRACKING_TYPE_FIELDS`: §2's table as data (per type: sets, reps, slot, unit dimensions, fixed
   unit), with `unitsForTrackingType`, `hasSetRows` and `wholeReps` (D13's rule). Use these; do not
@@ -381,6 +379,13 @@ in the shapes as planned. Both are fixed in the code, with the smaller changes b
   position within it. `group` is an opaque key and is never displayed.
 - A week refuses a workout twice on one day; there is no other cap on a day's slots.
 
+**Two rules the schemas do not state, owed by the steps named**
+
+- **12a (lane E):** programs with `order: null` sort after the current ones (the schema says so), and
+  among themselves **by name**, so a past day reads the same on every load.
+- **13 (lane C):** a workout whose `progress.total` is 0 shows no progress line, never "Done ✓" (the
+  prototype's rule would print it for a workout whose every prescription has been purged).
+
 **The scaffolding around it**
 
 - **Database proofs** (0c, #416): `packages/db/scripts/verify/harness.ts` exports the helpers;
@@ -404,8 +409,9 @@ in the shapes as planned. Both are fixed in the code, with the smaller changes b
   `foldName` (D5); a new item matches an existing one by the picker's `movementNameKey`.
 - **The owed-test lists are per lane**: `owed.test.ts` in `packages/db/src/writers/{program,day}/`
   and `apps/web/components/{program-builder,day}/`, each lane deleting its own lines as it writes the
-  tests. Lane A's four lines stay in `packages/shared/src/program/owed.test.ts` (a declared seam:
-  lane A alone edits it, and owes `program-contract.md` when it does).
+  tests. Lane A's four lines stay in `packages/shared/src/program/owed.test.ts` with the contract owner's
+  one; lane S adds its own there if it comes to owe any (a declared seam: no other lane edits it, and
+  an edit owes `program-contract.md`).
 - **Lanes are checked**: five guides (`program-contract`, `program-writers`, `day-writers`,
   `program-builder`, `day-page`) and `lane-*:` lists in the milestone's frontmatter; `pnpm
 guides:check` fails when two lanes reach one guide.
