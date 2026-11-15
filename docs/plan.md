@@ -1485,7 +1485,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        unmeasured performance claim reads "not measured";
      - in `ship-pr`: a handoff checklist when a session ends mid-task.
 
-  8. **`write-spec` learns to split a milestone into lanes.** _(maintainer, 2026-11-14.)_
+  8. ✅ **`write-spec` learns to split a milestone into lanes.** _(maintainer, 2026-11-14;
+     [plan](./plans/dx-14-8-write-spec-lanes.md), shipped 2026-11-14.)_
      - **Chunk 0 is a contract PR:** zod schemas, named fixtures, and the list of tests not yet
        written. It is real code, reviewed by the lenses.
      - **A Lanes section:** per lane, the globs it owns, the contract it reads, its fixtures and its
