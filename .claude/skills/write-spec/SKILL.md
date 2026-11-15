@@ -106,6 +106,15 @@ builds against (parsed by the schema in a test, so drift fails CI), and **the li
 written** for each consumer. It's reviewed by the lenses like any code. After it lands, a shape change
 is a seam change: it goes through its owner, and the lanes reading it wait.
 
+**Contract tests on both sides of every chunk-0 shape, against the same named fixture.** A schema
+parse catches a wrong shape, not a wrong meaning. The consuming lane renders the fixture; the
+producing lane seeds the state the fixture describes, runs its real code, and asserts the result
+deep-equals that fixture. A change of mind on either side fails that side's own test. **A column
+chunk 0 missed** is a column request to the schema lane (expand-only, in its next migration). Until
+it lands, the asking lane builds against a fixture field marked _pending column_, and an integration
+step switches it on. Both fixes, and the other three ways lanes drift back into one queue:
+[parallel-work → Once lanes run](../../../docs/parallel-work.md#once-lanes-run-what-turns-them-back-into-one-queue).
+
 ### Chunks, in order, with the constraint that fixes the order
 
 For each: what it delivers, and where the order is not arbitrary, **why it cannot move** — usually a
@@ -139,6 +148,14 @@ or reach one feature guide** ([parallel-work](../../../docs/parallel-work.md) ga
 holds the fix). Worked example:
 [FAM-1 → Lanes and the contract](../../../docs/milestones/fam-1-family-program.md#lanes-and-the-contract-proposed-2026-11-14).
 
+### Assumptions I'm making
+
+Everything the spec rests on that nobody has confirmed: a row count, how a library behaves at the
+pinned version, what users do today. One line each, with **how it would be checked** and **what
+changes if it's false**. The panel attacks this list first. A confirmed assumption moves to
+"Decisions already made" with where it was confirmed; one that can't be checked before chunk 1 says
+which chunk checks it.
+
 ### Decisions already made
 
 One line each, with where it was settled. This is what stops a later session reopening a closed
@@ -149,6 +166,24 @@ question, and it is the section the handoff test most depends on.
 Explicit out-of-scope ("deferred to X" beats silence). Each risk → its mitigation; here that usually
 means write-path data integrity, the **LLM-never-authors-loads** rule, and household scoping. Then the
 list from section 1.
+
+### Launch and rollback (a milestone spec)
+
+What reaches people first, and how it's undone. **Who sees it first** (preview, one household, a
+pilot group) and how it's turned on; **what is watched** in the first week, and the number that
+means stop; **the rollback**, step by step: an expand migration is reversible by omission, a
+destructive or backfill step needs a Neon restore branch cut first (AGENTS.md → Database / migration
+PR rules); and **what can't be rolled back**: rows people wrote while it was on, and anything already
+exported. If the honest answer to the last one is "their data", say so here, not after launch.
+
+### Changing a shipped spec: a delta, not a rewrite
+
+Once any chunk of a spec has merged, don't edit its criteria in place. A later reader can't tell
+what was built against which text. Add a dated **`## Delta <date>`** block at the top: the criteria it
+changes (by id), the new text, the criteria it leaves alone, and the chunks that must change to match.
+Mark each superseded criterion in place with `⚠️ Changed <date> — see § Delta`. Same idea as a plan
+amendment ([plans README](../../../docs/plans/README.md)), applied to a spec. A delta is panelled
+like a spec.
 
 ## 4. Panel it
 
@@ -200,5 +235,8 @@ When they conflict, closure wins — a spec that forces a question is worse than
 - Re-deciding what the ADR settled, or settling what it deferred.
 - Chunk order with no stated reason — then it is a list, and someone will reorder it.
 - Lanes in a table only, with no `lane-` frontmatter: nothing checks them, and gate 1 fails in a merge.
+- An "Assumptions" list that's empty on a spec for something nobody has built before.
+- A shipped criterion edited in place instead of a delta.
+- A milestone spec with no rollback, or one that doesn't say what can't be rolled back.
 - Restating AGENTS.md rules; they already apply.
 - A review-response log with no rejections on a spec that grew.
