@@ -3268,11 +3268,17 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
        - **The day's verdict records the rule it judged by** (ADR 0007 decision 5's snapshot), so
          changing a workout's switch never rewrites past days.
 
+       **Settled the same day:**
+       - **A swap:** the athlete picks which of their due counting workouts it replaces, when that day
+         has one.
+       - **The first day on a program:** doing the due workouts starts the streak at 1; not doing them
+         leaves no streak started, so there is nothing to break.
+
        **Open for MOT-1's plan:**
-       - which due workout a swap stands in for (the athlete picks?);
-       - whether the day someone is first put on a program is neutral;
        - the excused-day writer, and its privacy row (a free-text reason about a child is personal
-         data).
+         data, often health data);
+       - **who else can see a reason.** Recommendation for COACH-1 (Pilot): a coach with permission
+         sees that a day was excused, **never why**, unless the parent shares that one reason.
 
   > **Product reframe this surfaced (Ray, 2026-09-16) — worth more than the feature.** The roadmap has
   > treated **strength programming** as the core and habits as the supporting cast. Ray's actual primary
