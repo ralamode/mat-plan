@@ -120,6 +120,21 @@ with no rule citation is taste. Mark it P2, or drop it.
    have a `db:verify` proof. **Judge by reading: is each new branch exercised?** A coverage number
    does exist, but it measures `main` **after** merge and is not a review input (AGENTS.md → "Local
    hooks vs CI merge-gates"); no per-PR delta is computed, so don't claim a percentage for a diff.
+   **A `fix` PR proves its test fails on the parent commit** ([definition of done](../../../docs/definition-of-done.md)).
+   Look for the failing run in the description; a fix whose test was only ever seen green is P1, and
+   a fix with no test and no reason is P1. To produce or check the run, put only the test on the
+   parent:
+
+       base=$(git merge-base HEAD origin/main)
+       git worktree add .claude/worktrees/<slug>-parent "$base"
+       cd .claude/worktrees/<slug>-parent && pnpm install
+       git checkout <branch> -- <the test file, plus any helper it newly imports>
+       pnpm --filter web exec vitest run <the test file>   # must FAIL, with the bug's message
+       cd - && git worktree remove --force .claude/worktrees/<slug>-parent
+
+   Red for the wrong reason (an import of something the fix added, a missing fixture) proves
+   nothing; the message has to be the assertion that names the bug.
+
 7. **Docs that ride with the change.** A [`docs/changelog/` fragment](../../../docs/changelog/README.md) (correct links:
    it's one level deeper than status.md; nothing added to the frozen histories), the `docs/status.md` backlog row and pointer if the change moves them, the feature guide (the gate
    only checks that it was touched, not that it's right; read the diff against its invariants),

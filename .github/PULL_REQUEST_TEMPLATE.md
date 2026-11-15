@@ -32,7 +32,9 @@
 
 ## How Has This Been Tested?
 
-<!-- unit / integration / E2E. For endpoints, include the boundary cases: unauth, wrong-owner, invalid input. -->
+<!-- unit / integration / E2E. For endpoints, include the boundary cases: unauth, wrong-owner, invalid input.
+     A bug fix: paste the new test FAILING on the parent commit (command + assertion message) —
+     docs/definition-of-done.md, "A bug fix proves it". -->
 
 ## Test Configuration
 
