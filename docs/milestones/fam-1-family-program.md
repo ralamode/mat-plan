@@ -187,6 +187,44 @@ only the docs and the migration queue; 5b and 6 also need step 1, which waits on
 one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduling.md#gate-run)): 4a,
 4b, 5b, 6, 7, 8b, 10, 10b, 11b, 12, 15 and 15c.
 
+## Delivery slices (proposed 2026-11-14)
+
+**Why.** The steps above are layers: schema, then writers, then the editor, then Today. Read in
+number order, nothing runs end to end until about step 15. The two riskiest changes are 5b and 12,
+which change the busiest read and must leave legacy output byte-identical, and 11a, the per-row
+write. In that order, both prove themselves near the end. The four slices below are **the same 23
+steps, regrouped**. Each slice ends with something that runs end to end, and a check that proves it.
+The step numbers, the dependency chart and the serial chains are unchanged.
+
+| Slice                                                                      | Steps                               | Running total | Done when                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------- | ----------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 · Walking skeleton, on preview**                                       | 2, 3, 4a, 4b, 5, 5b, 6, 11a, 12, 13 | ≈ 10 code PRs | A Playwright test on the seed-only preview: a fixture athlete on a fixture program sees Monday's workouts in order on Today, and checks off, un-checks and fills in Check, Duration and Count items. A legacy athlete's Today is byte-identical |
+| **2 · A parent builds a program and puts someone on it** (no strength yet) | 1, 7, 8, 9, 10, 15                  | ≈ 16          | On a phone, a parent builds a workout and a week and puts a **test athlete** on it, and that athlete logs it on Today                                                                                                                           |
+| **3 · Strength on the program: the household switches**                    | 8b, 11b, 13b, 14                    | ≈ 20          | Heavy A, with a superset, logs per row on a phone, and the export opens in a spreadsheet. **The household moves to its real program here**, and step 16's week of use starts                                                                    |
+| **4 · Several programs, Take off, Copy to program**                        | 15c, 15b, 10b                       | ≈ 23          | An athlete on two programs sees both on one day; a copied workout edits on its own. Then step 16's findings note closes FAM-1                                                                                                                   |
+
+**Read the totals honestly.** The schema chain is serial and every slice needs it, so the skeleton
+still takes about 10 PRs. The household moves to its real program after about 20 PRs, not 23. That
+is earlier, but not by much. The bigger wins are risk-first ordering (5b, 12 and 11a are proved
+around PR 10, not PR 20) and a demo at every slice boundary. The skeleton ends on preview with
+fixture data, not at home.
+
+**Why the household can't switch at slice 2:** an athlete with an open assignment gets the template
+day page, and step 13b is what replaces the legacy strength form there. Before slice 3, switching
+would lose in-app strength logging on lifting days.
+
+**Stretching before slice 4:** until 15c lands, an athlete is on one program, so stretching lives
+inside the family program and moves into its own program at slice 4. If stretching should be
+separate from the first day at home, move 15c into slice 3 (+1 PR there).
+
+**For d2 to confirm:** the chart has step 6 waiting on step 1. In slice 1, step 6 lands **dark**:
+nothing in production calls the program writer until steps 7 and 8. So it should only need step 1
+before step 7. If d2 confirms this, slice 1 no longer waits on OPS-2's split.
+
+**For d3:** each new screen opens with a short **design contract**: the screen's job, its primary
+action, the states it must handle (empty, loading, error, done), its 360px rules, and the patterns it
+rejects ([DX-14](../plan.md)).
+
 ## What moves to Beta 1
 
 From [PROG-1](./prog-1-programs-and-scheduling.md), everything not listed above:
