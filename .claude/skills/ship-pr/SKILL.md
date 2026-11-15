@@ -178,6 +178,20 @@ worktree.
 Then **sweep the other approved PRs**: this merge probably just put them in conflict. Run
 [keep-mergeable](../keep-mergeable/SKILL.md) for every open PR with a `## shipit` comment.
 
+## Ending a session mid-task: the handoff
+
+When a session stops before the PR is done, the next one starts from what's written down, nothing
+else. Before stopping:
+
+- [ ] Work is **committed on the branch** (a `wip:` commit is fine) and pushed. Never left in the
+      shared stash stack, never uncommitted in a worktree another session may remove.
+- [ ] A **draft PR** exists, or the open one has a comment titled `## Handoff` holding:
+  - **Done**, and what's **verified** (the commands run and their results) vs **not yet**;
+  - **Next:** the next step, as the command to run;
+  - **Open decisions**, and who decides each;
+  - the **worktree path** and branch.
+- [ ] The plan's review-response log is current: no finding verdict lives only in the session.
+
 ## Red flags
 
 - A backlog item merged, but `docs/roadmap.md` still shows it as next, or in flight, or absent.
