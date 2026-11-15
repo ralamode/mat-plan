@@ -54,6 +54,12 @@ pnpm --filter web screenshot:ephemeral /p --theme dark            # the DARK hal
   side in `.screenshots/`. **Capture both themes whenever the change is visible in both** — i.e. any
   token, palette or surface change. Six files (3 widths × 2 themes); attach at least mobile + desktop
   of each.
+- 🔴 **A capture fails on any console error, warning or uncaught exception** (DX-14), at any of the
+  three widths. The PNGs are still written, and the run exits non-zero with every message tagged by
+  width (`[mobile] error: …`). A screen that renders fine but logs a hydration mismatch or a CSP
+  refusal is not evidence of a working UI. **Fix the cause.** `--allow-console` downgrades the
+  failure to a printed warning. It is only for a state that is meant to error, or a known defect
+  that already has its own row, and the PR says which.
 - **Always pass `--build`** after changing UI: the script reuses an existing `.next`, so without it
   you capture whatever was last built (often `main`'s UI).
 

@@ -1144,6 +1144,7 @@ async function runEphemeral(
   name: string,
   timeZone?: string,
   colorScheme?: 'light' | 'dark',
+  allowConsole?: boolean,
 ): Promise<void> {
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-screenshot-pg-'));
   const pgPort = await freePort();
@@ -1233,6 +1234,7 @@ async function runEphemeral(
       timeZone,
       colorScheme,
       interact: INTERACTIONS[state],
+      allowConsole,
       // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver.
       viewportOnly: state.startsWith('sheet-'),
     });
@@ -1252,7 +1254,14 @@ async function runEphemeral(
  * than a crash: it gets published into a PR as evidence of a UI that was never rendered.
  * _(maintainer, 2026-11-11)_
  */
-const KNOWN_FLAGS = new Set(['--state', '--tz', '--theme', '--build', '--use-live-db']);
+const KNOWN_FLAGS = new Set([
+  '--state',
+  '--tz',
+  '--theme',
+  '--build',
+  '--use-live-db',
+  '--allow-console',
+]);
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -1275,6 +1284,8 @@ async function main(): Promise<void> {
   }
   const state = rawState as StateName;
   const allowLive = argv.includes('--use-live-db') || process.env.SCREENSHOT_ALLOW_LIVE_DB === '1';
+  // DX-14 item 2: a console error or warning fails the capture unless this is passed.
+  const allowConsole = argv.includes('--allow-console');
 
   // `--tz <IANA>` emulates the browser's zone, so a weekday-conditional screen (V1-10's Mon/Wed/Fri
   // program card) can be captured on any host day — the app derives "today" from the DEVICE zone
@@ -1330,11 +1341,11 @@ async function main(): Promise<void> {
     console.warn(
       '⚠️  --use-live-db: capturing against the already-running server (no embedded DB).',
     );
-    await captureScreenshot({ route, baseUrl, name, timeZone, colorScheme });
+    await captureScreenshot({ route, baseUrl, name, timeZone, colorScheme, allowConsole });
     return;
   }
 
-  await runEphemeral(route, state, name, timeZone, colorScheme);
+  await runEphemeral(route, state, name, timeZone, colorScheme, allowConsole);
 }
 
 main().catch((err) => {
