@@ -143,7 +143,8 @@ lane-b-routine-ui:
 ```
 
 Entries use `owns:` syntax ([features README](../../../docs/features/README.md)): a path, or a prefix
-ending in `/`; no globs. **`pnpm guides:check` fails when two lanes of one document overlap on a path
+ending in `/`; no globs. Each entry is a line of exactly two spaces, `- `, then the path; any other
+line inside a lane's list fails the guard rather than ending the list. **`pnpm guides:check` fails when two lanes of one document overlap on a path
 or reach one feature guide** ([parallel-work](../../../docs/parallel-work.md) gate 1, which also
 holds the fix). Worked example:
 [FAM-1 → Lanes and the contract](../../../docs/milestones/fam-1-family-program.md#lanes-and-the-contract-proposed-2026-11-14).
