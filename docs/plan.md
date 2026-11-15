@@ -1462,17 +1462,22 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      [definition of done](./definition-of-done.md) and in `review-pr`'s tests dimension.
   2. **A clean console in `ui-screenshot`.** A capture fails on any console error or warning, so
      hydration warnings on the phone-first builder can't slip through.
-  3. **`refine-idea`** (skills backlog #5): before a spec, ask one question at a time, each with a
+  3. ✅ **`refine-idea`** (skills backlog #5; [skill](../.claude/skills/refine-idea/SKILL.md), 2026-11-14): before a spec, ask one question at a time, each with a
      proposed answer; stop for an explicit yes; end with a "Not doing, and why" list. It is how product
      decisions such as the streak rule were actually settled.
-  4. **`doubt-check`** (skills backlog #4): for a decision made mid-implementation, a fresh reviewer
+  4. ✅ **`doubt-check`** (skills backlog #4; [skill](../.claude/skills/doubt-check/SKILL.md), 2026-11-14): for a decision made mid-implementation, a fresh reviewer
      gets the artifact and its contract, **never the author's reasoning**; three rounds at most. It
      reuses the existing lens agents. Panels review plans and `review-pr` reviews diffs; nothing
      reviews a call made halfway through a migration.
   5. **A routing guard for skills**, with a self-test: trigger phrases mapped to the skill they
-     should start, failing on a miss or a collision ("shipit" reaches three skills today). It also
-     trims the six descriptions that are step lists of about 500 characters, and gives each skill an
-     exit checklist (8 of 12 have none).
+     should start, failing on a miss or a collision. It also trims the descriptions that are step
+     lists, and gives each skill an exit checklist.
+     - ✅ **5a** ([plan](./plans/dx-14-5-skill-routing-guard.md), 2026-11-14): `skills:check` fails
+       when one skill's quoted trigger reaches another's trigger clause, or a description is over 500
+       characters or quotes no trigger. Measured then: "shipit" / "ship it" split between
+       `keep-mergeable` and `ship-pr` (now `keep-mergeable`'s, by the maintainer's call), and four
+       descriptions over 500 characters.
+     - **5b:** an exit checklist for every skill (none of 14 has one).
   6. **`write-spec` additions:**
      - an "assumptions I'm making" block;
      - a **delta spec** for changing a shipped spec;
@@ -1485,7 +1490,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        unmeasured performance claim reads "not measured";
      - in `ship-pr`: a handoff checklist when a session ends mid-task.
 
-  8. **`write-spec` learns to split a milestone into lanes.** _(maintainer, 2026-11-14.)_
+  8. ✅ **`write-spec` learns to split a milestone into lanes.** _(maintainer, 2026-11-14;
+     [plan](./plans/dx-14-8-write-spec-lanes.md), shipped 2026-11-14.)_
      - **Chunk 0 is a contract PR:** zod schemas, named fixtures, and the list of tests not yet
        written. It is real code, reviewed by the lenses.
      - **A Lanes section:** per lane, the globs it owns, the contract it reads, its fixtures and its

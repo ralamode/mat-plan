@@ -81,4 +81,132 @@ case_ "an unowned file needs no guide edit"         "$OWNS_PLAIN"  src/free/c.ts
 # 7 · rot check #1 still fires on a path that does not exist.
 case_ "a claimed path that is missing fails"        "$OWNS_STALE"  src/owned/a.ts y 1 'does not exist'
 
+# 8 · a top-level key ends the `owns:` list: an item under the NEXT key is not owned. Pinned before
+#     DX-14 item 8 generalised the list loop, so the refactor can't move it.
+OWNS_THEN_KEY='  - src/free/
+related:
+  - src/owned/'
+case_ "a later top-level key ends the owns list"    "$OWNS_THEN_KEY" src/owned/a.ts n 0 'consistent with the diff'
+
+# 9-10 · a guide with no frontmatter is skipped, and README.md is never a guide, even with owns:.
+git -C "$tmp" checkout -q main
+printf '# Notes, no frontmatter\n' >"$tmp/docs/features/plain.md"
+printf -- '---\nfeature: Index\nowns:\n  - src/owned/\n---\n' >"$tmp/docs/features/README.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: plain + readme' >/dev/null 2>&1
+case_ "no-frontmatter and README files are not guides" "  - src/free/" src/owned/a.ts n 0 '1 guide(s) consistent'
+git -C "$tmp" checkout -q main && git -C "$tmp" rm -q docs/features/plain.md docs/features/README.md && git -C "$tmp" commit -qm 'chore: drop' >/dev/null
+
+# ── Lanes (DX-14 item 8). Whole-tree, so each case commits on main and runs with no diff. ─────────
+# lane_case <name> <dir> <frontmatter-body> <guide-owns> <want-exit> <want-text>
+lane_case() {
+  git -C "$tmp" checkout -q main
+  rm -rf "$tmp/docs/milestones" "$tmp/docs/specs" && mkdir -p "$tmp/docs/$2"
+  write_guide "$4"
+  printf -- '---\n%s\n---\n\n# Milestone\n' "$3" >"$tmp/docs/$2/m.md"
+  git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: lanes' >/dev/null 2>&1
+  out="$(cd "$tmp" && node "$guard" main 2>&1)"
+  code=$?
+  if [ "$code" -ne "$5" ] || ! grep -qF "$6" <<<"$out"; then
+    printf '✗ %s: want exit %s + "%s", got exit %s\n%s\n' "$1" "$5" "$6" "$code" "$out"
+    fails=$((fails + 1))
+  else
+    printf '✓ %s\n' "$1"
+  fi
+}
+FREE='  - src/free/'
+DISJOINT='lane-a:
+  - src/owned/a.ts
+lane-b:
+  - src/other/'
+lane_case "lanes: disjoint, in a milestone"            milestones "$DISJOINT" "$FREE" 0 '2 lane(s) in 1 document(s)'
+lane_case "lanes: disjoint, in a spec"                 specs      "$DISJOINT" "$FREE" 0 '2 lane(s) in 1 document(s)'
+lane_case "lanes: the same path in two lanes"          milestones 'lane-a:
+  - src/x.ts
+lane-b:
+  - src/x.ts' "$FREE" 1 "lane-a 'src/x.ts' and lane-b 'src/x.ts' overlap"
+lane_case "lanes: a dir prefix collides"               milestones 'lane-a:
+  - packages/db
+lane-b:
+  - packages/db/src/x.ts' "$FREE" 1 'overlap'
+lane_case "lanes: a dir prefix collides, reversed"     milestones 'lane-a:
+  - packages/db/src/x.ts
+lane-b:
+  - packages/db/' "$FREE" 1 'overlap'
+lane_case "lanes: a string prefix is not a dir prefix" milestones 'lane-a:
+  - src/a/
+lane-b:
+  - src/ab.ts' "$FREE" 0 '2 lane(s) in 1 document(s)'
+lane_case "lanes: two lanes reach one guide"           milestones 'lane-a:
+  - src/owned/a.ts
+lane-b:
+  - src/owned/b.ts' '  - src/owned/' 1 'both reach docs/features/probe.md'
+lane_case "lanes: naming a guide reaches it"           milestones 'lane-a:
+  - docs/features/probe.md
+lane-b:
+  - src/owned/b.ts' '  - src/owned/' 1 'both reach docs/features/probe.md'
+lane_case "lanes: one lane, two entries, one guide"    milestones 'lane-a:
+  - src/owned/a.ts
+  - src/owned/b.ts
+  - src/owned/b.ts
+lane-b:
+  - src/other/' '  - src/owned/' 0 '2 lane(s) in 1 document(s)'
+lane_case "lanes: a # comment does not end a list"     milestones 'lane-a:
+  - src/x.ts # trailing
+  # whole line
+  - src/y.ts
+lane-b:
+  - src/y.ts' "$FREE" 1 "lane-a 'src/y.ts' and lane-b 'src/y.ts' overlap"
+for bad in 'src/**' './src/a.ts' '/src/a.ts' 'src/../a.ts' 'src//a.ts' '"src/"'; do
+  lane_case "lanes: '$bad' is refused"                 milestones "lane-a:
+  - $bad
+lane-b:
+  - src/other/" "$FREE" 2 'is not a plain path'
+done
+lane_case "lanes: an empty lane is refused"            milestones 'lane-a:
+lane-b:
+  - src/other/' "$FREE" 2 'lane-a declares no paths'
+lane_case "lanes: a duplicate key is refused"          milestones 'lane-a:
+  - src/x.ts
+lane-a:
+  - src/y.ts' "$FREE" 2 'declared twice'
+lane_case "lanes: an unrecognised line is refused"     milestones 'lane-a:
+  - src/x.ts
+  src/y.ts
+lane-b:
+  - src/other/' "$FREE" 2 "unrecognised line 'src/y.ts'"
+lane_case "lanes: a bad lane key is refused"           milestones 'lane-a:
+  - src/x.ts
+lane B · Builder:
+  - src/other/' "$FREE" 2 'is not a lane key'
+# CRLF hides the frontmatter, which would read as "no lanes".
+git -C "$tmp" checkout -q main && rm -rf "$tmp/docs/milestones" "$tmp/docs/specs" && mkdir -p "$tmp/docs/milestones"
+printf -- '---\r\nlane-a:\r\n  - src/x.ts\r\n---\r\n' >"$tmp/docs/milestones/m.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: crlf' >/dev/null 2>&1
+out="$(cd "$tmp" && node "$guard" main 2>&1)"; code=$?
+[ "$code" -eq 2 ] && grep -qF 'CRLF' <<<"$out" && printf '✓ %s\n' "lanes: CRLF frontmatter is refused" \
+  || { printf '✗ lanes: CRLF frontmatter is refused: exit %s\n%s\n' "$code" "$out"; fails=$((fails + 1)); }
+# One home per milestone.
+git -C "$tmp" checkout -q main && rm -rf "$tmp/docs/milestones" "$tmp/docs/specs" && mkdir -p "$tmp/docs/milestones" "$tmp/docs/specs"
+printf -- '---\nlane-a:\n  - src/x.ts\n---\n' | tee "$tmp/docs/milestones/m.md" >"$tmp/docs/specs/m.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: two homes' >/dev/null 2>&1
+out="$(cd "$tmp" && node "$guard" main 2>&1)"; code=$?
+[ "$code" -eq 2 ] && grep -qF 'both declare lanes' <<<"$out" && printf '✓ %s\n' "lanes: one milestone, two homes, is refused" \
+  || { printf '✗ lanes: two homes: exit %s\n%s\n' "$code" "$out"; fails=$((fails + 1)); }
+# FAM-1's shape (fam-1-family-program.md § Lanes): as drafted, lanes A and C reach one guide; once d2
+# gives the guide's files to integration (no declared lane), it passes.
+lane_case "lanes: FAM-1 as drafted serialises"         milestones 'lane-a-schema-and-writers:
+  - packages/db/
+lane-b-builder-ui:
+  - apps/web/app/p/[profileId]/program/
+lane-c-today-ui:
+  - apps/web/app/p/[profileId]/strength-form.tsx' '  - packages/db/src/writers/strength-session.ts
+  - apps/web/app/p/[profileId]/strength-form.tsx' 1 'both reach docs/features/probe.md'
+lane_case "lanes: FAM-1 with the guide split passes"   milestones 'lane-a-schema-and-writers:
+  - packages/db/
+lane-b-builder-ui:
+  - apps/web/app/p/[profileId]/program/
+lane-c-today-ui:
+  - apps/web/app/p/[profileId]/day/' '  - packages/db/src/writers/strength-session.ts' 0 '3 lane(s) in 1 document(s)'
+git -C "$tmp" checkout -q main && rm -rf "$tmp/docs/milestones" "$tmp/docs/specs"
+
 [ "$fails" -eq 0 ] && echo 'all feature-guide guard self-tests passed' || { echo "$fails failing"; exit 1; }

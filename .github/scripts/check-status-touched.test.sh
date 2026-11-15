@@ -246,4 +246,35 @@ hist docs/status.md '## Changelog (merged PRs)' '- **2026-09-29** — legacy ent
 git -C "$tmp" commit -qam 'docs: legacy entry'
 check "a pre-DX-2 branch may still add a history entry" 0 "don't owe"
 
+# ── CI's merge ref: the base is its FIRST PARENT, never pull_request.base.sha ─────────────────────
+# GitHub builds refs/pull/<n>/merge from the PR head and main AS IT IS NOW; base.sha is main when the
+# event was created. #388 (a docs branch) failed as "a feat branch" because #387's feat landed in that
+# gap (run 43662580861). ci.yml's `base` step resolves HEAD^1; resolve-pr-base.test.sh tests that step.
+# merge_ref <branch> <branch-commit-subject> — the branch is cut from main, main then gains a feat, and
+# HEAD ends as a detached merge commit with parents (main tip, branch tip), the shape of a merge ref.
+merge_ref() {
+  git -C "$tmp" checkout -q main && git -C "$tmp" checkout -q -B "$1"
+  echo "$RANDOM" >>"$tmp/src/a.ts" && git -C "$tmp" commit -qam "$2"
+  cut_point="$(git -C "$tmp" merge-base main "$1")"
+  git -C "$tmp" checkout -q main && echo "$RANDOM" >>"$tmp/src/b.ts" && git -C "$tmp" add -A
+  git -C "$tmp" commit -qm 'feat(y): landed on main after the branch was cut'
+  git -C "$tmp" checkout -q --detach main && git -C "$tmp" merge -q --no-ff --no-edit "$1" >/dev/null
+}
+# mr_check <name> <branch> <base> <want-exit> <want-text>
+mr_check() {
+  out="$(cd "$tmp" && STATUS_BRANCH="$2" node "$guard" "$3" 2>&1)"; code=$?
+  if [ "$code" -ne "$4" ] || ! grep -qF "$5" <<<"$out"; then
+    printf '✗ %s: want exit %s + "%s", got exit %s\n%s\n' "$1" "$4" "$5" "$code" "$out"
+    fails=$((fails + 1))
+  else
+    printf '✓ %s\n' "$1"
+  fi
+}
+merge_ref docs/mr-1 'docs(x): write'
+mr_check "merge ref, base HEAD^1: main's later feat is not the branch's" docs/mr-1 'HEAD^1' 0 "don't owe"
+mr_check "merge ref, stale base: main's later feat is read as the branch's (the #388 defect)" docs/mr-1 "$cut_point" 1 'feat branch'
+merge_ref docs/mr-2 'feat(x): smuggled into a docs branch'
+mr_check "merge ref, base HEAD^1: the branch's OWN feat still owes" docs/mr-2 'HEAD^1' 1 'Status guard failed'
+git -C "$tmp" checkout -q main
+
 [ "$fails" -eq 0 ] && echo "all status-guard self-tests passed" || exit 1

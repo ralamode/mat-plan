@@ -1,6 +1,6 @@
 ---
 name: keep-mergeable
-description: Keep every mat-plan PR with a `shipit` comment mergeable until it lands: merge main into any that went CONFLICTING or behind, auto-resolve only append-style conflicts, move a pre-DX-2 changelog entry into a fragment, and stop and ask on a real one. Use right after a merge lands, when a shipit'd PR shows conflicts, or when the user says "fix the merge conflicts", "keep the PRs mergeable", "update the branches".
+description: Keep every mat-plan PR with a `shipit` comment mergeable until it lands: merge main into any that went CONFLICTING or behind, auto-resolve only append-style conflicts, move a pre-DX-2 changelog entry into a fragment, and stop and ask on a real one. Use right after a merge lands, when a shipit'd PR shows conflicts, or when the user says "shipit", "fix the merge conflicts", "keep the PRs mergeable", "update the branches".
 ---
 
 # Keep shipit'd PRs mergeable

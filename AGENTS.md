@@ -286,12 +286,12 @@ movement picker.
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it), **~40s** warm:
   `format:check` → `lint` → `typecheck` → `test` → `db:verify` → `db:mutations` → `skills:check`
-  (every path and `pnpm` script a skill cites exists) → `actions:check` (every action SHA-pinned) →
+  (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
   **This section is the one list of where each gate runs**; other docs point here rather than
-  restating it. `skills:check`, `guards:test` (all eleven guard self-tests) and `audit:check` run here
+  restating it. `skills:check`, `guards:test` (all twelve guard self-tests) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
   on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)) — **separately**, as
   `pnpm status:check $(git merge-base HEAD origin/main)`, and ⚠️ it names the fragment it wants from

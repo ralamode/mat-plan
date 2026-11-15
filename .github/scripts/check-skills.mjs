@@ -234,6 +234,99 @@ export function checkFile(file) {
   return problems;
 }
 
+// ── Routing (DX-14 item 5a; docs/plans/dx-14-5-skill-routing-guard.md) ──────────────────────────────
+// A skill starts when its description matches what the user typed, and every description loads in
+// every session. Two skills quoting the same trigger split one request between them ("shipit" vs
+// "ship it" did). Triggers are DERIVED from the descriptions (no second copy to keep in sync): the
+// double-quoted phrases in the trigger clause, which runs from the first `Use` / `Run it` to the end.
+// ⚠️ Claude Code routes SEMANTICALLY; this catches literal and near-literal collisions only.
+
+/** Longest a description may be. Every one loads in every session. */
+export const MAX_DESCRIPTION = 500;
+const TRIGGER_CLAUSE = /\b(?:Use|Run it)\b/;
+/** Placeholder tokens in a trigger ("save X", "review PR <n>"): wildcards, never compared. */
+const PLACEHOLDER = new Set(['x', 'y', 'n']);
+
+const tokens = (text) =>
+  text
+    .replace(/<[^>]*>/g, ' ')
+    .toLowerCase()
+    .match(/[a-z0-9]+/g)
+    ?.filter((t) => !PLACEHOLDER.has(t)) ?? [];
+
+/** True when `needle` occurs as a contiguous run of whole tokens in `hay`, or its tokens joined
+ *  occur in a contiguous run of `hay`'s tokens joined, so "shipit" meets "ship it" and vice versa,
+ *  but "ownership itself" never contains "shipit". */
+function reaches(needle, hay) {
+  if (needle.length === 0) return false;
+  const joined = needle.join('');
+  for (let i = 0; i < hay.length; i++) {
+    if (needle.every((t, k) => hay[i + k] === t)) return true;
+    let run = '';
+    for (let j = i; j < hay.length && run.length < joined.length; j++) {
+      run += hay[j];
+      if (run === joined) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pure: `skills` is `[{ name, description }]`; returns problem strings. Exported so a later split of
+ * the skills into a portable core (DX-15) can lift it without this file's repo layout.
+ */
+export function checkRouting(skills) {
+  const problems = [];
+  const parsed = skills.map(({ name, description }) => {
+    if (!description) {
+      problems.push(`${name}: no single-line \`description:\` in the frontmatter`);
+      return { name, clause: [], triggers: [] };
+    }
+    if (description.length > MAX_DESCRIPTION) {
+      problems.push(
+        `${name}: description is ${description.length} characters (max ${MAX_DESCRIPTION}); the steps belong in the body`,
+      );
+    }
+    const at = description.search(TRIGGER_CLAUSE);
+    if (at === -1) {
+      problems.push(`${name}: no trigger clause (a "Use when …" / "Use for …" / "Run it …")`);
+      return { name, clause: [], triggers: [] };
+    }
+    const clause = description.slice(at);
+    const triggers = [...clause.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    if (triggers.length === 0)
+      problems.push(`${name}: the trigger clause quotes no phrase anyone types`);
+    for (const t of triggers) {
+      if (tokens(t).length === 0) problems.push(`${name}: trigger "${t}" is only a placeholder`);
+    }
+    return { name, clause: tokens(clause), triggers };
+  });
+  for (const a of parsed) {
+    for (const t of a.triggers) {
+      for (const b of parsed) {
+        if (b !== a && reaches(tokens(t), b.clause)) {
+          problems.push(`collision: ${a.name}'s trigger "${t}" also reaches ${b.name}`);
+        }
+      }
+    }
+  }
+  return problems;
+}
+
+/** `{ name, description }` for each `.claude/skills/<name>/SKILL.md`. */
+function readSkills() {
+  const dir = join(ROOT, '.claude/skills');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && existsSync(join(dir, e.name, 'SKILL.md')))
+    .map((e) => {
+      const text = readFileSync(join(dir, e.name, 'SKILL.md'), 'utf8');
+      const fm = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? '';
+      const description = /^description:[ \t]*(\S.*)$/m.exec(fm)?.[1]?.trim() ?? null;
+      return { name: e.name, description };
+    });
+}
+
 function isEntryPoint() {
   try {
     return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
@@ -244,14 +337,19 @@ function isEntryPoint() {
 
 if (isEntryPoint()) {
   const files = SOURCES.flatMap((s) => markdownFiles(join(ROOT, s)));
-  const problems = files.flatMap(checkFile);
+  const skills = readSkills();
+  const problems = [...files.flatMap(checkFile), ...checkRouting(skills)];
   if (problems.length) {
-    console.error(`Skills guard FAILED — ${problems.length} stale reference(s):\n`);
+    console.error(`Skills guard FAILED — ${problems.length} problem(s):\n`);
     for (const p of problems) console.error(`  ✗ ${p}`);
-    console.error('\nFix the reference, or update the skill to match what the repo now does.');
+    console.error(
+      '\nFix the reference, or update the skill to match what the repo now does. A routing problem: ' +
+        '.claude/skills/README.md → "How to write a skill here".',
+    );
     process.exit(1);
   }
   console.log(
-    `Skills guard OK — ${files.length} file(s), every cited path and pnpm script exists.`,
+    `Skills guard OK — ${files.length} file(s), every cited path and pnpm script exists; ` +
+      `${skills.reduce((n, sk) => n + [...(sk.description ?? '').slice(Math.max(0, (sk.description ?? '').search(TRIGGER_CLAUSE))).matchAll(/"[^"]+"/g)].length, 0)} trigger(s) across ${skills.length} skill(s), no collisions.`,
   );
 }

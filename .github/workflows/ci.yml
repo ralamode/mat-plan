@@ -26,18 +26,30 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # base.sha must be diffable; the default shallow checkout has no base,
+          # The PR base must be diffable; the default shallow checkout has no base,
           # and a `git diff` with nothing to compare against would make the guard
           # below silently ALWAYS PASS — worse than no guard. `gitleaks` already
           # uses fetch-depth: 0 on an 8.7MB repo, so this is precedent, not cost.
           fetch-depth: 0
+
+      # ── The PR base, resolved once (docs/plans/ci-pr-base-merge-ref.md) ──────
+      # The merge ref's first parent: the main this checkout was built from. NOT
+      # the event payload's base SHA, which is main when the event was created and goes
+      # stale when main moves (#388 failed the status guard on #387's feat). Every
+      # step below reads steps.base.outputs.sha; empty on push. The assignment
+      # comes first so a refusal (exit 2) aborts the step under bash -e.
+      - name: Resolve PR base
+        id: base
+        run: |
+          sha="$(bash .github/scripts/resolve-pr-base.sh)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       # ── Action pins (SEC-2; .github/SECURITY.md → "Supply chain") ──────────
       # migrate.yml only runs AFTER merge, so GitHub's
       # own run-time pin setting would let a tag-pinned edit merge green and then
       # stop prod migrations. Only a pre-merge check catches that.
       #
-      # First, right after checkout, so a pin failure shows even when a later guard
+      # Right after checkout and its base, so a pin failure shows even when a later guard
       # fails. It can't check the checkout above it (itself one of the pins checked).
       # Plain node, no install. A step in `quality`, not a job, for the reason the
       # feature-guides step gives below.
@@ -48,7 +60,7 @@ jobs:
       - name: Action pins (SHA + version; resolved against GitHub when workflows change)
         env:
           GH_TOKEN: ${{ github.token }} # read-only; lifts the 60/h anonymous API limit
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           resolve=--resolve
           if [ -n "$BASE_SHA" ]; then
@@ -81,7 +93,7 @@ jobs:
       - name: Forward-only migration guard
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           MIG=packages/db/migrations
           JOURNAL="$MIG/meta/_journal.json"
@@ -202,7 +214,7 @@ jobs:
       - name: Squawk (new migrations)
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           # Piped to xargs rather than joined into a space-separated string: a
           # `tr '\n' ' '` leaves a TRAILING SPACE, which bash word-splits away but
@@ -241,7 +253,7 @@ jobs:
           github.event_name == 'pull_request' &&
           !contains(github.event.pull_request.labels.*.name, 'docs-skip-feature-map')
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: node .github/scripts/check-feature-guides.mjs "$BASE_SHA"
 
       - name: Setup pnpm
@@ -264,7 +276,7 @@ jobs:
       - name: Status guard (changelog fragment)
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
           # Step-level, never job-level: the status self-test (in "Guard
           # self-tests") never sets STATUS_BRANCH, so a job-level one would leak
           # into its detached-HEAD cases. Passed via env only, never into run:,
@@ -306,7 +318,7 @@ jobs:
       # always has to be a real verdict.
       - name: Production audit (high+, --prod)
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           deps=1
           if [ -n "$BASE_SHA" ]; then
@@ -314,10 +326,10 @@ jobs:
             # rather than reading as "no dependency changed" and silently granting
             # leniency — the trap documented for the action-pin --resolve switch.
             #
-            # THREE-dot: base.sha is main's tip at event time, not the merge base,
-            # so a two-dot diff reports files that moved on MAIN as changed by this
-            # PR. Measured: two-dot listed pnpm-lock.yaml for a branch that never
-            # touched it. The forward-only and Squawk steps already use three-dot.
+            # THREE-dot. With the resolved base (the merge ref's first parent) two-
+            # and three-dot agree; three-dot stays because it is also right for any
+            # base that is behind main. The old base.sha was: two-dot then listed
+            # pnpm-lock.yaml for a branch that never touched it.
             changed="$(git diff --name-only "$BASE_SHA...HEAD" -- \
               pnpm-lock.yaml pnpm-workspace.yaml '*package.json' .npmrc '**/.npmrc')"
             [ -z "$changed" ] && deps=

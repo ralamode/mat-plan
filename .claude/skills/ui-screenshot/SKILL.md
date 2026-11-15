@@ -1,6 +1,6 @@
 ---
 name: ui-screenshot
-description: Capture Playwright screenshot(s) of a mat-plan UI screen for a PR — boots the prod build, logs through the access gate, navigates to the route, saves PNGs at three widths to .screenshots/, and publishes them to the PR. Use on ANY PR that changes the UI (new/changed page, component, or visible state), before opening the PR.
+description: Capture Playwright screenshots of a mat-plan UI screen for a PR at three widths — the prod build on a throwaway database, saved to .screenshots/ and published to the PR. Use on ANY PR that changes the UI (a new or changed page, component or visible state), before opening the PR, or when the user says "screenshot this", "capture the screen".
 ---
 
 # UI screenshot for a PR
