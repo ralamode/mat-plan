@@ -1,34 +1,193 @@
 # ADR 0007 — The scheduling model
 
-**Status:** Proposed · **Date:** 2026-10-07 · **Scope:** Beta 1 and later ·
+**Status:** Proposed, **signed on merge with Amendments 1 and 2** (see "Signed with two amendments") ·
+**Date:** 2026-10-07, amended 2026-11-13 and 2026-11-14 · **Scope:** Beta 0's last milestone (FAM-1) and later ·
 **Continues:** [ADR 0005](./0005-programming-model.md), whose "What this does not settle" is this
 document's charter · **Relates:** [ADR 0002](./0002-calisthenics-ramp-targets.md) (the one
 materialized-plan table this repo already has)
 
-> ## Amendment 1 (2026-11-13) — decided by the maintainer, to be folded in when this ADR is signed
->
-> The [PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) (R1–R11)
-> changes four things below. This ADR is still _Proposed_ and must be signed before SCHED-1 1c; it is
-> signed **with** this amendment, not before it.
->
-> - **Decision 1, "The assignment schedules a BLOCK, not a workout… Nothing in the backlog needs it":
->   superseded.** Something now does. A program may carry a **week template**: per weekday, an
->   ordered list of 0..n workouts, each slot with an optional display label. It is owned by the
->   **block**, for the reason decision 2 gives for the anchor (athletes on one program must not drift
->   apart invisibly). Shape, for SCHED-1's revision to confirm: `block_day_workouts(block_id, weekday,
-idx, workout_id, label NULL)`, `UNIQUE (block_id, weekday, idx)`, the weekday from `WEEKDAYS`. The
->   assignment's weekday rows keep their meaning (the days this athlete is on) and filter the
->   template. Rotation (decision 2) is the other mode; a block has one or the other.
-> - **Decision 2: unchanged** for rotation. The resolver's contract becomes an **ordered list** of
->   workouts due on a date (empty on a rest day); rotation yields a list of one.
-> - **Decision 3, the `workouts` arc: re-priced, and now the path.** The cap on workouts goes (R1), so
->   workouts need real identity: `prescriptions` key on `workout_id`. Two of the five named costs
->   existed only for the export (the slug grammar and the export's `DAY_ROLES` gate) and fall away
->   under [ADR 0009](./0009-retire-the-byte-faithful-csv-contract.md). The rule that a rename must not
->   rewrite history **stays**: what a logged session shows as its workout is frozen at log time, by
->   whatever mechanism the revised plan chooses, never a live join to an editable name.
-> - **Decision 5: unchanged.** Dueness stays derived; the recorded verdict judges the day's ordered
->   list (a day is done when its workouts are, per MOT-1's own rule).
+## Signed with two amendments (FAM-1 step d1)
+
+**Read the amendments first.** Where an amendment and the body below disagree, the amendment wins.
+The body keeps its original reasoning, with a ⚠️ marker at each paragraph an amendment changes.
+
+### Amendment 1 (2026-11-13): a week template, and workouts become the path
+
+Decided by the maintainer in the
+[PROG-1 re-scope](../specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13) (R1–R11).
+
+- **Decision 1, "The assignment schedules a BLOCK, not a workout… Nothing in the backlog needs it":
+  superseded.** Something now does. A program may carry a **week template**: per weekday, an ordered
+  list of 0..n workouts, each slot with an optional display label. The **block** owns it, for the
+  reason decision 2 gives for the anchor: athletes on one program must not drift apart invisibly.
+  Shape: `block_day_workouts(block_id, weekday, idx, workout_id, label NULL)`,
+  `UNIQUE (block_id, weekday, idx)`, the weekday from `WEEKDAYS`. The assignment's weekday rows keep
+  their meaning (the days this athlete is on) and filter the template. Rotation (decision 2) is the
+  other mode, and a block has one or the other.
+- **Decision 2: unchanged** for rotation. The resolver's contract becomes an **ordered list** of the
+  workouts due on a date (empty on a rest day). Rotation yields a list of one.
+- **Decision 3, the `workouts` arc: re-priced, and now the path.** The cap on workouts goes (R1), so
+  workouts need real identity: `prescriptions` key on `workout_id`. Two of the five named costs
+  existed only for the export (the slug grammar and the export's `DAY_ROLES` gate), and they fall
+  away under [ADR 0009](./0009-retire-the-byte-faithful-csv-contract.md). **What stays** is the rule
+  that a rename must not rewrite history: what a logged session shows as its workout is frozen at log
+  time, never a live join to an editable name.
+- **Decision 5: unchanged.** Dueness stays derived, and the recorded verdict judges the day's ordered
+  list.
+
+### Amendment 2 (2026-11-14): what FAM-1 needs, authorized
+
+[FAM-1](../milestones/fam-1-family-program.md) is Beta 0's last milestone. Its decisions table is
+the maintainer's; this amendment records what those decisions do to the schema, and **authorizes the
+expand-only half** of what the body withheld. Each table or column below still lands in its own
+migration step with its own `db:verify` proofs.
+
+**0. Scope.** This ADR now gates **Beta 0**, not only Beta 1 and later. The "scope honesty" note
+below is superseded.
+
+**1. Two kinds of block. This narrows decision 4.**
+
+- `program_blocks.kind`: text, `NOT NULL DEFAULT 'legacy'`, with a CHECK pinned to a shared
+  `BLOCK_KINDS = ['legacy', 'template']` by `assertCheckCoversConst`. A constant default is a
+  metadata-only change in Postgres 11 and later, so existing rows become `legacy` without a backfill.
+- **A legacy block** is today's `day_role` block. It keeps the newest-block read, and it is **not
+  migrated**.
+- **A template block** is one a household builds in the app. It is reached **only through an open
+  assignment**, and every legacy read skips it: Today, the export, the snapshot writer and the DAL
+  modules (FAM-1 step 5b, byte-identical on legacy data).
+- **The effect on decision 4:** creating a block no longer waits for the one-block-to-N read change,
+  because template blocks never enter that read. Two blocks can't collide in `prescribedFor`, so
+  **no exported cell moves**. Open question 2 is moot for FAM-1, and ADR 0009 retired the byte
+  guarantee anyway.
+- The marker is a **kind**, not the `is_active` flag decision 4 rejected. Activeness stays the
+  assignment's date range.
+
+**2. `workouts`: authorized, additive.**
+
+- **Columns:** `id`, `public_id`, `client_id` (UUIDv7, UNIQUE, non-partial, per ADR 0008 §3.4),
+  `block_id` FK with a covering index, `name`, `description NULL`, `copied_from_workout_id NULL`
+  (a self-FK with a covering index), `copied_at date NULL`, and the shared timestamps.
+- **Only template blocks own workouts.** The writer enforces it, and `db:verify` asserts it.
+- **No slug.** Decision 3's slug existed so a workout name could become the CSV's `session_type`
+  bytes. ADR 0009 retires that, and the export quotes per RFC 4180. So these parts of decision 3 do
+  **not** apply to template workouts:
+  - `SLUG_PATTERN`;
+  - reserving the ten legacy codes;
+  - the slug's per-block UNIQUE;
+  - cost 4, the export's `DAY_ROLES` gate. Template entries export from their frozen snapshot
+    (FAM-1 step 14).
+
+  Name length is a shared const, and d2 sets it. Whether two workouts in one program may share a
+  name is the writer's call, not the database's.
+
+- **Copy to program** (step 10b) writes a new, independent workout, with `copied_from_workout_id`
+  and `copied_at` as provenance. Editing either one never changes the other. The provenance line reads
+  the source program's current name, and that is acceptable: it is a pointer, not logged history.
+- **`session_type` for a template session** (decision 3, cost 3) is d2's to settle.
+  **Recommendation:** template sessions take one fixed type, so `DAY_ROLE_TO_SESSION_TYPE` stays the
+  fallback for the ten built-ins only.
+
+**3. The week template, `block_day_workouts`: authorized** in Amendment 1's shape.
+
+- `label` is nullable text whose length is a shared const.
+- How labels order the workouts on Today, across programs, is d2's call. The prototype used a fixed
+  time-of-day order, then the athlete's program order.
+- A workout may appear in several slots, which is how it is reused on several days.
+
+**4. `prescriptions`: expand only. No backfill, and no contract step.**
+
+- **`workout_id`:** nullable, an FK with a covering index.
+- **`day_role` drops `NOT NULL`**, replaced by `CHECK (num_nonnulls(day_role, workout_id) = 1)`, so
+  every row has exactly one of the two. The `DROP NOT NULL` needs `-- squawk-ignore
+ban-drop-not-null` on the line **directly** above it (see the arc paragraph below). The guard that
+  replaces it:
+  - the XOR CHECK;
+  - the existing `day_role` CHECK, unchanged. A NULL passes it, and every non-null value still
+    matches `DAY_ROLES` exactly.
+- **A new slot key:** partial UNIQUE `(workout_id, idx) WHERE workout_id IS NOT NULL AND deleted_at IS
+NULL`. The old `(block_id, day_role, idx)` index stays. NULLs are distinct in a unique index, so it
+  never fires on template rows.
+- **Additive nullable columns:**
+  - `note`, the author's instructions, with its length bound set in d2;
+  - the **typed prescribed values** for Duration, Time per set, Distance and Count with its unit. d2
+    names them under ADR 0004 §2, where a prescription is a target and may be a range;
+  - a **superset group and order** within the workout. The log inherits it as ADR 0003's
+    `supersets` row.
+- **Legacy rows keep `day_role` indefinitely.** The six-PR destructive arc below stays
+  **unauthorized**: nothing in FAM-1 drops a column, backfills or validates a NOT NULL on live data.
+
+**5. `program_blocks.client_id`:** UUIDv7, UNIQUE non-partial, and **nullable**, because seeded and
+legacy blocks have none. The column's docblock says so, as AGENTS.md requires.
+
+**6. Sessions record their workout: the "separate column and its own decision" that decision 3 asked
+for.**
+
+- `sessions.workout_id` (nullable FK, covering index) is **identity**. MOT-1's swap and verdict need
+  it, and nothing displays through it.
+- `sessions.workout_name` (nullable text) is the **display, frozen at log time**. That keeps
+  decision 3's rule that a rename never rewrites history.
+- `sessions.day_role` stays NULL on template sessions. It is still never an FK.
+
+**7. Assignments (SCHED-1's two tables): authorized as in the body, with these changes.**
+
+- **Several open assignments per athlete**, on different blocks: for example, a family program
+  plus a stretching program. "At most one open assignment per (profile, block)" stays.
+- **`program_assignments.idx`** (smallint, NOT NULL) is the athlete's own program order. A new
+  assignment defaults to its block's place in the household's Programs list. Keeping it gap-free
+  across open assignments is the writer's job, with the shifted-band reorder from decision 2.
+- **Take off** ends a program after today: it sets `active_to` to today. An assignment that hasn't
+  started yet is soft-deleted instead. Logged days keep their frozen workout.
+- **FAM-1 writes all seven weekday rows.** Choosing an athlete's own days (a subset of the week)
+  stays ASSIGN-1, in Beta 1.
+- **Doing someone else's workout today** creates **no assignment row**. The session records the
+  `workout_id` it performed (§6).
+
+**8. Decision 5: what the maintainer settled for MOT-1 (Beta 1).** Shapes only; no table or column
+here is authorized before MOT-1.
+
+- **Open question 1 is answered:** a day with **no counting workout due is neutral**. It neither
+  breaks the streak nor extends it.
+- **The rule:** every counting workout due that day must be done.
+  - **Done** means every prescribed row is checked. Extra rows are allowed and never required.
+  - **Counting** is a switch on the workout, `workouts.counts_toward_streak boolean NOT NULL DEFAULT
+true`. It ships **with MOT-1**, not in step 4a.
+  - **Practice** keeps the streak only when nothing counting is due.
+  - **A swap:** someone else's workout replaces a due counting workout that the athlete picks.
+- **Excused days:**
+  - they are their own MOT-1 table: profile, day, a **required** reason, and who excused it;
+  - there is no cap, and an excused day is neutral;
+  - an adult excuses their own day, and a parent excuses a child's;
+  - the reason can be health information, so who else sees it is decided with COACH-1.
+- **The first day:** no streak exists until the first counting day is done.
+- **Open question 3 changes recommendation:** **the due set**, not counts. With swaps and a
+  switch per workout, "which workout was missed" is the question the verdict has to answer.
+- ⚠️ **A new proof owed:** with per-row logging, un-checking a row (V1-9b's hide) can change whether
+  a workout is done. A verdict already written stays frozen (`DO NOTHING`). The plan must show that
+  a hide on a settled day leaves its verdict byte-identical, alongside the amend proof below.
+
+**9. Still unauthorized:**
+
+- the rotation anchor and slot list, because FAM-1's programs don't rotate and the legacy program
+  keeps `resolveDayRole`;
+- the destructive `workouts` arc;
+- the verdict and excused-day tables, which come with MOT-1;
+- anything for `routine_config`.
+
+**10. Proofs owed for Amendment 2, beside the table below:**
+
+- `kind`'s CHECK is pinned to `BLOCK_KINDS`;
+- every legacy read returns byte-identical results with a template block present;
+- the XOR CHECK rejects a row with both `day_role` and `workout_id`, and a row with neither;
+- the `(workout_id, idx)` slot key rejects a duplicate, and a soft-deleted row frees its slot;
+- every `client_id` rejects a duplicate;
+- a workout on a legacy block is refused by the writer, and flagged by `db:verify`;
+- two open assignments for one athlete on different blocks are accepted, and on the same block
+  rejected.
+
+### Signature
+
+- [ ] **I sign ADR 0007 with Amendments 1 and 2.** The maintainer ticks this box in the PR, and the
+      merge is the signature. FAM-1 steps 4a, 4b and 5 wait on it.
 
 > **This is the second draft.** The first decided the same five questions and then **authorized five
 > new tables and a `DROP COLUMN` on live data** on the strength of them. A five-lens panel found that
@@ -41,6 +200,8 @@ idx, workout_id, label NULL)`, `UNIQUE (block_id, weekday, idx)`, the weekday fr
 > **The central correction: deciding a shape and authorizing a migration are different acts.** This
 > ADR now does the first for all five questions and the second for **two additive tables only.**
 
+> ⚠️ **Superseded by Amendment 2 §0:** FAM-1 brings this into Beta 0.
+>
 > **Scope honesty, because it changes how this should be read.**
 > [beta-1.md](../milestones/beta-1.md) §3b defers all of this to **after beta** — _"Deferred to a
 > scheduling ADR, after beta: RRULE recurrence, rotation as data, `day_role` becoming rows, workout
@@ -118,6 +279,8 @@ docblock to `localWeekday`, with `CHECK (weekday BETWEEN 0 AND 6)` pinned by
 `assertCheckCoversConst` the way both `day_role` CHECKs are (`packages/db/scripts/verify.ts:770`,
 called at `:2392` and `:3416`). **Not** a reference table — seven universal values are the
 "don't over-abstract" case.
+
+⚠️ **Superseded by Amendment 1:** a block may carry a week template of workouts.
 
 **The assignment schedules a BLOCK, not a workout.** A per-workout schedule would let "Day A on
 Mondays, Day B on Thursdays" be expressed with no rotation at all — a third shape that makes
@@ -211,6 +374,10 @@ smaller hat.
 
 ### 3. `day_role` splits in two: a ROW on the authored side, frozen TEXT on the logged side
 
+⚠️ **Amended:** for **template** blocks, Amendment 2 §2, §4 and §6 replace the slug and its costs
+with a block-owned `workouts` row with no slug, `prescriptions.workout_id`, and a session's frozen
+workout name. Legacy blocks keep everything below.
+
 "`day_role` becoming rows" means two different things, with different answers.
 
 **(a) A global `day_roles` reference table — rejected.** A table plus two FKs plus two covering
@@ -299,6 +466,9 @@ by naming. The seed does the same mapping the backfill needs (`seed.ts:295-313` 
 `(blockId, dayRole, idx)`), so they share one source — unlike ADR 0005 finding D3's unreachable one.
 
 ### 4. A household can create a workout. The thing that unblocks it is the ASSIGNMENT row, not a marker
+
+⚠️ **Narrowed by Amendment 2 §1:** a template block is reached only through an assignment and never
+by a legacy read, so creating one does not wait on the one-block-to-N read change.
 
 **In two steps, with different blockers.**
 
@@ -440,6 +610,8 @@ and pinned at `packages/shared/src/csv/aggregate.ts:30-52` and
 backfill"_ line (`docs/csv-export-contract.md:160`) sits in the **bodyweight** section and governs
 weigh-in gaps; ADR 0005's panel corrected a mis-cite of that exact line and it is not re-used here.
 
+⚠️ **Answered in Amendment 2 §8:** a day with no counting workout due is neutral.
+
 **One product question for the maintainer:** a day with **nothing due** — does it extend the streak, or
 is it transparent? MOT-1's constraint 1 only requires that it not **break** the run
 (`docs/plan.md:1742-1745`). Recommendation: **transparent** — neither breaks nor increments, so the
@@ -447,6 +619,10 @@ number counts training days rather than calendar days. Cheap to decide late, but
 before the first verdict row is written.
 
 ## What this ADR does not authorize
+
+⚠️ **Amendment 2 authorizes the `workouts` row's additive half and the week template** for FAM-1,
+and keeps the destructive arc and the rotation tables unauthorized. The table below is the
+original; read it with Amendment 2 §9.
 
 The first draft's Consequences read as a licence for five tables and a `DROP COLUMN`. It is not one.
 **Shape decided ≠ migration authorized**, and each table below gets its authorizing row or stays
@@ -599,12 +775,12 @@ does not assume otherwise.
 
 ## Open questions
 
-1. **Does a nothing-due day extend the streak, or is it transparent?** Recommendation: transparent. The
+1. ✅ _Answered (Amendment 2 §8): neutral._ **Does a nothing-due day extend the streak, or is it transparent?** Recommendation: transparent. The
    maintainer's call, before the first verdict row is written.
-2. **Is the one-block→N read change's export resolution "one designated assignment" or "a discriminated
+2. ✅ _Moot for FAM-1 (Amendment 2 §1)._ **Is the one-block→N read change's export resolution "one designated assignment" or "a discriminated
    match key"?** Decision 4 names the collision; the choice belongs to whoever owns the CSV seam
    (**Insight**), not to Authoring.
-3. **Does the verdict's snapshot store counts, or the due set?** Counts are two columns and answer "why
+3. _Recommendation changed to the due set (Amendment 2 §8); MOT-1 decides._ **Does the verdict's snapshot store counts, or the due set?** Counts are two columns and answer "why
    did Tuesday not count"; the due set answers more and costs a child table. Recommendation: counts,
    and they must be derived only from facts an amend cannot change (decision 5).
 
