@@ -1434,6 +1434,52 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
   Small; no plan needed.
 
+- **DX-14 — ideas adapted from an open-source agent-skills collection.** _(maintainer, 2026-11-14.)_
+  We evaluated [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (MIT) skill by
+  skill against ours. It is **not installed**: about ten of its skills duplicate stronger, repo-specific
+  ones here, and its conventions (`tasks/plan.md`, `SPEC.md`) would fork ours. These are adapted, in our
+  own words and format, as small PRs. The first two before FAM-1's code steps:
+  1. **Prove-it for fixes.** A `fix` PR includes a test shown failing on the parent commit.
+     Nothing asks for this today. It goes in the
+     [definition of done](./definition-of-done.md) and in `review-pr`'s tests dimension.
+  2. **A clean console in `ui-screenshot`.** A capture fails on any console error or warning, so
+     hydration warnings on the phone-first builder can't slip through.
+  3. **`refine-idea`** (skills backlog #5): before a spec, ask one question at a time, each with a
+     proposed answer; stop for an explicit yes; end with a "Not doing, and why" list. It is how product
+     decisions such as the streak rule were actually settled.
+  4. **`doubt-check`** (skills backlog #4): for a decision made mid-implementation, a fresh reviewer
+     gets the artifact and its contract, **never the author's reasoning**; three rounds at most. It
+     reuses the existing lens agents. Panels review plans and `review-pr` reviews diffs; nothing
+     reviews a call made halfway through a migration.
+  5. **A routing guard for skills**, with a self-test: trigger phrases mapped to the skill they
+     should start, failing on a miss or a collision ("shipit" reaches three skills today). It also
+     trims the six descriptions that are step lists of about 500 characters, and gives each skill an
+     exit checklist (8 of 12 have none).
+  6. **`write-spec` additions:**
+     - an "assumptions I'm making" block;
+     - a **delta spec** for changing a shipped spec;
+     - a **launch and rollback** section for milestone specs, which the club pilot needs.
+  7. **Small folds:**
+     - in `start-task` and `plan-with-panel`: "flag it as unverified when the pinned docs don't
+       cover it", which closes skills backlog #3;
+     - in `add-server-action`: force an error and find it in Sentry;
+     - in `review-pr`: a finding names the fix, the author's evidence gets checked, and an
+       unmeasured performance claim reads "not measured";
+     - in `ship-pr`: a handoff checklist when a session ends mid-task.
+
+  **Considered and skipped,** each with its reason, so nobody re-evaluates them:
+  - context engineering: AGENTS.md, the feature guides and the SessionStart hook cover it;
+  - frontend UI: `DESIGN.md`, the UX lens, `ui-screenshot` and the 360px rule cover it. Only the
+    "design contract" line (the screen's job, primary action, required states, patterns to reject)
+    goes into FAM-1's d3;
+  - CI, git workflow, security, API design, deprecation, ADRs and simplification are all covered by
+    stronger repo rules;
+  - performance ledgers and constraint ratchets wait until there is a number to protect.
+
+  A table of what was taken and why goes into [working-with-agents](./working-with-agents.md), with
+  credit to the source. **Built in a separate thread.** Each item is a small `chore(dx)` PR; none
+  needs a plan except 5 (a new guard).
+
 - **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
   2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
   INP < 200 ms · CLS < 0.1) is written in AGENTS.md and ADR 0001 but nothing measures it. **(a)** Land
