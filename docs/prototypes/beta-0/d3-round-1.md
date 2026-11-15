@@ -177,3 +177,8 @@ The check script now runs **51 checks, all passing**.
 - Loading, failed save and offline states on the day page.
 - Picker search with no match.
 - "Do someone else's workout today": Beta 1 per the milestone, so out of this prototype.
+
+**A fix after v12 (2026-11-15, with the contract).** Opening a state by its URL hash on a fresh
+browser (`index.html#edited`) ran the jump before the seeded rows had been stamped with their
+prescriptions, so the removed card showed without its name and numbers. `jump()` now stamps first.
+Nothing a person reaches through the "Jump to…" menu changed; the version stays v12.
