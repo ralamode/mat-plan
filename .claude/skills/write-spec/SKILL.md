@@ -1,6 +1,6 @@
 ---
 name: write-spec
-description: Write the engineering spec for work spanning several PRs (docs/specs/<id>-<slug>.md) — acceptance criteria a test can fail, the data contract that lets tracks split, and the order with the constraint that fixes it, complete enough to hand to a session with no context. For a milestone, a large feature, or any change where several PRs must agree on something the ADR and AGENTS.md do not settle. Use when the user says "spec this", "write the engineering spec", "what exactly are we building for X", or when a backlog row names work nobody has specified.
+description: Write the engineering spec for work spanning several PRs (docs/specs/<id>-<slug>.md) — acceptance criteria a test can fail, the data contract that lets tracks split, and the order with the constraint that fixes it. For a milestone, a large feature, or any change where several PRs must agree on something the ADR and AGENTS.md do not settle. Use when the user says "spec this", "write the engineering spec", "what exactly are we building for X", or when a backlog row names work nobody has specified.
 ---
 
 # Write a spec
@@ -100,11 +100,44 @@ The shapes crossing a seam, so two tracks proceed without guessing at each other
 where it lives (`packages/shared`), not the implementation. AGENTS.md gates a backend/frontend split on
 this existing.
 
+**For a milestone that runs lanes, the contract is chunk 0: a real PR, before any lane starts.** It
+holds the zod schemas in `packages/shared` with their inferred types, **named fixtures** each lane
+builds against (parsed by the schema in a test, so drift fails CI), and **the list of tests not yet
+written** for each consumer. It's reviewed by the lenses like any code. After it lands, a shape change
+is a seam change: it goes through its owner, and the lanes reading it wait.
+
 ### Chunks, in order, with the constraint that fixes the order
 
 For each: what it delivers, and where the order is not arbitrary, **why it cannot move** — usually a
 **window that closes**, a **gate**, or an **expand→contract** step AGENTS.md requires be split across
 PRs. Say which can run in parallel.
+
+**Integrate first, in slices.** The first slice is one thin real path wired end to end; each later
+slice widens it and integrates a little. Never an integration sprint at the end, which is where a wrong
+contract surfaces after every lane has built on it.
+
+### Lanes (a milestone that runs tracks in parallel)
+
+Per lane: the **paths it owns**, the **contract it reads** (a chunk-0 shape), its **fixtures**, and its
+**exit** (what "done" is for that lane). Declare only the lanes that run **concurrently**; integration
+steps run between slices, own whatever no lane owns, and are not declared. A table is for people; the
+guard reads the frontmatter:
+
+```yaml
+---
+lane-a-schema-and-writers:
+  - packages/db/
+lane-b-routine-ui:
+  - apps/web/app/p/[profileId]/routine/
+  - docs/features/programming.md # a lane that adds owned files names the guide it will edit
+---
+```
+
+Entries use `owns:` syntax ([features README](../../../docs/features/README.md)): a path, or a prefix
+ending in `/`; no globs. **`pnpm guides:check` fails when two lanes of one document overlap on a path
+or reach one feature guide** ([parallel-work](../../../docs/parallel-work.md) gate 1, which also
+holds the fix). Worked example:
+[FAM-1 → Lanes and the contract](../../../docs/milestones/fam-1-family-program.md#lanes-and-the-contract-proposed-2026-11-14).
 
 ### Decisions already made
 
@@ -166,5 +199,6 @@ When they conflict, closure wins — a spec that forces a question is worse than
 - A spec for one PR, or for PRs with nothing to agree on.
 - Re-deciding what the ADR settled, or settling what it deferred.
 - Chunk order with no stated reason — then it is a list, and someone will reorder it.
+- Lanes in a table only, with no `lane-` frontmatter: nothing checks them, and gate 1 fails in a merge.
 - Restating AGENTS.md rules; they already apply.
 - A review-response log with no rejections on a spec that grew.

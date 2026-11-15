@@ -7,13 +7,17 @@ the guards and the backlog; the skills are their own index** (below). Record a s
 ## The lifecycle they cover
 
 ```
-                     once per MILESTONE
+                     once per IDEA
+refine-idea ──►   one question at a time, each with a proposal → Decided · Not doing · Open
+      │
+      ▼              once per MILESTONE
 write-spec ──►    context → acceptance criteria → data contract → chunks → panel → commit
       │
       ▼              once per PR
 start-task ──► plan-with-panel ──► (implement) ──► ship-pr ──► review-pr ──► merged
  sync+branch    plan + eng/UX        │                │ hold-the-bar   on request: P0/P1/P2
  obligations    panels, log          │                │ ui-screenshot  (+ fix mode)
+                                     ├─ doubt-check       (one mid-build decision, fresh lens)
                                      ├─ db-migration      (schema / seed)
                                      ├─ add-server-action (any mutation)
                                      └─ data-correction   (wrong prod data; the bug gets its own PR)
@@ -38,7 +42,7 @@ CI merge-gates".
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                                                                      | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort)                                                                                                                                                    | `bash .claude/hooks/hooks.test.sh`                     |
 | [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                                                                            | Every session starts from the real state: status, open PRs, stale/off-main worktrees                                                                                                                                                    | same                                                   |
-| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`)                                                 | A skill can't cite a path or `pnpm` script that doesn't exist                                                                                                                                                                           | `bash .github/scripts/check-skills.test.sh`            |
+| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`)                                                 | A skill can't cite a path or `pnpm` script that doesn't exist, and no two skills share a trigger phrase (DX-14.5a)                                                                                                                      | `bash .github/scripts/check-skills.test.sh`            |
 | [`check-status-touched.mjs`](../../.github/scripts/check-status-touched.mjs) (`pnpm status:check`, `ship-pr` step 3; #177)                      | A feat/fix/db/perf/refactor/revert branch adds a [changelog fragment](../../docs/changelog/README.md) (`docs/status.md` before DX-2; `STATUS_SKIP` overrides), and fails any branch adding an entry to a frozen history (not skippable) | `bash .github/scripts/check-status-touched.test.sh`    |
 | [`check-action-pins.mjs`](../../.github/scripts/check-action-pins.mjs) (`pnpm actions:check` in `verify`; CI `quality` with `--resolve`; SEC-2) | Every `uses:` is pinned to a commit SHA with a bare `# vX.Y.Z`, and in CI that SHA is the tag's real commit                                                                                                                             | `bash .github/scripts/check-action-pins.test.sh`       |
 | [`check-audit.mjs`](../../.github/scripts/check-audit.mjs) (`pnpm audit:check`; SEC-5)                                                          | No high or critical advisory in the production tree, and "could not check" is never reported as a pass                                                                                                                                  | `bash .github/scripts/check-audit.test.sh`             |
@@ -67,8 +71,8 @@ Candidates came from the repo's recurring operations and from
 | 1   | ✅ **done (#185), dormant by choice**: `@claude review` workflow → **DX-1**, [plan](../../docs/plans/dx-1-claude-review.md) | mat-plan | a GitHub Action that runs `review-pr` when a writer comments `@claude review`; subscription auth (`CLAUDE_CODE_OAUTH_TOKEN`); on request only, never automatic | Ray's call 2026-09-30. **CI change → plan + panel**; the repo is public, so forks and prompt injection are the core risk |
 | 2   | baseline audit + P0 fixes                                                                                                   | mat-plan | run `review-pr` in audit mode over each area; P0s become one `fix/` PR per concern                                                                             | Ray asked for it. Seeds below                                                                                            |
 | 3   | `source-check`                                                                                                              | addy     | verify an API or pattern against the official docs for the pinned version before using it                                                                      | Next 16 / React 19.3 / zod 4 / Drizzle 0.45 are newer than most training data                                            |
-| 4   | `doubt-check`                                                                                                               | addy     | a fresh-context adversarial check on one decision mid-implementation (auth, corrections, migrations)                                                           | Panels cover plans; this covers the choices made after them                                                              |
-| 5   | `refine-idea`                                                                                                               | addy     | interview-me / idea-refine for brainstorm docs and PRDs; ends in a "Not doing (and why)" section                                                               | For `*-brainstorm.md` / ONB PRDs; scope discipline                                                                       |
+| 4   | ✅ **done**: [`doubt-check`](./doubt-check/SKILL.md) (DX-14 item 4)                                                         | addy     | a fresh-context adversarial check on one decision mid-implementation (auth, corrections, migrations)                                                           | Panels cover plans; this covers the choices made after them                                                              |
+| 5   | ✅ **done**: [`refine-idea`](./refine-idea/SKILL.md) (DX-14 item 3)                                                         | addy     | interview-me / idea-refine for brainstorm docs and PRDs; ends in a "Not doing (and why)" section                                                               | For `*-brainstorm.md` / ONB PRDs; scope discipline                                                                       |
 | 6   | ✅ **done (#179)**: session-start hook                                                                                      | addy     | print the `docs/status.md` "Where we are" pointer + open PRs at session start                                                                                  | Cheap context; configure via settings hooks, not a skill                                                                 |
 | 7   | `seed-program`                                                                                                              | mat-plan | add or update a program/roster seed with its invariants, and the LLM-never-authors-loads rule                                                                  | Only if it keeps coming up (#151, #152, #154)                                                                            |
 
@@ -84,7 +88,11 @@ The 10 doc-vs-code seeds recorded here were audited: [report](../../docs/audits/
   truth. A skill is the _order_ to apply them in, plus the traps. If a skill and a source doc
   disagree, the doc wins; fix the skill in that PR.
 - **The description is the trigger, and it loads in every session.** Say what it does, then "Use
-  when …" with the phrases people actually type. The steps belong in the body, not the description.
+  when …" with the phrases people actually type. The steps belong in the body, not the description. `pnpm skills:check` enforces the shape: at most 500
+  characters, a trigger clause starting at the first `Use …` or `Run it`, at least one
+  double-quoted phrase in it, and no quoted trigger that also reaches another skill's clause
+  (whole words; "ship it" and "shipit" count as one). ⚠️ Claude Code routes semantically, so this
+  catches literal collisions only, not every overlap.
 - **`AGENTS.md` is already in context** (via `CLAUDE.md`, for subagents too). Name the sections to
   apply; don't tell an agent to read the file, since each panel spawn would pay for it again.
 - **Include Red flags and, where useful, Common rationalizations**, seeded from real incidents (cite

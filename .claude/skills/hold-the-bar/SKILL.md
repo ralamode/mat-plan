@@ -1,6 +1,6 @@
 ---
 name: hold-the-bar
-description: Catch a mat-plan change that reached green by quietly lowering the quality bar — new @ts-ignore / eslint-disable / squawk-ignore / gitleaks:allow, skipped or .only'd tests, deleted test files, assertions pulled out of tests that stayed, stub throws, swallowed errors, or edits to the bar's own definition (AGENTS.md, the DoD, .squawk.toml, CI workflows, lint/ts/test configs). Run it whenever a red check just turned green, before every PR (ship-pr calls it), or when the user asks "did we cut any corners?".
+description: Catch a mat-plan change that reached green by quietly lowering the quality bar — a new suppression (@ts-ignore, eslint-disable, squawk-ignore, gitleaks:allow), a skipped, deleted or thinned test, a stub or swallowed error, or an edit to the bar itself (AGENTS.md, the DoD, CI workflows, lint/ts/test configs). Run it whenever a red check just turned green, before every PR (ship-pr calls it), or when the user asks "did we cut any corners?".
 ---
 
 # Hold the bar
