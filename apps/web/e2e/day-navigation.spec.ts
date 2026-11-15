@@ -45,9 +45,14 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   // would refuse what the endpoint allows — and it is exactly how Ray's 09/29 session, submitted on
   // 09/30 from a stale tab, succeeded.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
-  // A writable day shows the weigh-in as a field (or its receipt, once logged), never the read-only
-  // notice. Either state is a visible Bodyweight section.
-  await expect(bodyweightSection(page)).toBeVisible();
+  // A writable day offers the weigh-in: the field, or once logged, Change. A read-only day shows
+  // neither, so this is the assertion that can fail.
+  const section = bodyweightSection(page);
+  await expect(
+    section
+      .getByLabel('Weight', { exact: true })
+      .or(section.getByRole('button', { name: /^Change weight/ })),
+  ).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
 });
 

@@ -257,8 +257,8 @@ export type LoggedLifeActivity = {
 };
 
 /**
- * Every live entry on the day for one of `activityKeys`, oldest first. The caller chooses the keys,
- * so an activity the page no longer shows (Wake) is left out by not being asked for.
+ * Every entry on the day for one of `activityKeys`, in the DAL's order (oldest first). Which
+ * activities the page SHOWS (no Wake) is `LifeSection`'s rule, not this one's.
  */
 export function loggedLifeActivities(
   entries: readonly EntryDTO[],

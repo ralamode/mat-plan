@@ -38,7 +38,8 @@ clear a day, stays.
 
 **Criterion 48, honestly.** Its "the area you log in is the source of truth, no second list" holds:
 the list goes. Its "no entry vanishes" **does not** hold until FAM-1 is done: a check-in or strength
-session logged before 3b-page is still stored and still in the export, but no longer shown on the day
+session logged before 3b-page is still stored (strength is in the CSV export; check-ins never were,
+`apps/web/lib/dal/export.ts:198` writes that file header-only _(corrected 2026-11-15, #418)_), but no longer shown on the day
 page. That is the maintainer's "old entries are out of scope" decision, stated here so a reviewer does
 not take the gap for a bug.
 
@@ -79,7 +80,7 @@ the new page until slice 3, so nobody loses a habit _(maintainer, 2026-11-15, as
 `StrengthSection` (form, program card, receipts with Change), `LifeForm`'s Wake, the list
 (`page.tsx:378-444`) and the card (`:352-374`), with the derivations only they used.
 
-- **The removed components stay in the tree, unmounted**, until FAM-1 13 and 13b reuse or delete them
+- **The removed components stay in the tree, unmounted**, until FAM-1 12f deletes them (strength returns on the new page at 12d and 13b)
   (the PICK-1 PR 3 precedent, `docs/features/movement-picker.md`). [tech-debt.md](../tech-debt.md) gets
   one row naming them, with **FAM-1 12f as its expiry** _(corrected 2026-11-15; was 13b)_. PICK-1 PR 4, which mounts into the strength
   form, waits for FAM-1 13b's surface instead.
@@ -93,7 +94,7 @@ the new page until slice 3, so nobody loses a habit _(maintainer, 2026-11-15, as
   every day including closed ones"**: a weigh-in found wrong a week later stays as logged, or is fixed
   with a correction (`db:correct`), as before 1b.
 - **Guides:** `strength-logging.md` and `programming.md` (its Today lines) say the form and the program
-  card are off the page until FAM-1 13b. Neither owns `page.tsx`, so the PR names them rather than
+  card are off the page until FAM-1 12d and 13b. Neither owns `page.tsx`, so the PR names them rather than
   relying on `guides:check`.
 
 **D2 — Bodyweight (3b-bw).** The create form and the amend exist (V1-24 1a–1e); this matches them to
@@ -157,7 +158,7 @@ re-pointed. Each deletion is named in the PR with the coverage that remains.
 
 | Spec                                                                                                                                                                     | 3b-page                                                         | Remains                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `scaffold-submit.spec.ts` (4 tests)                                                                                                                                      | deleted                                                         | the strength writer's `db:verify` and `actions.test.ts`; FAM-1 13b brings an e2e back                                |
+| `scaffold-submit.spec.ts` (4 tests)                                                                                                                                      | deleted                                                         | the strength writer's `db:verify` and `actions.test.ts`; FAM-1 12d brings an e2e back                                |
 | `log-bodyweight.spec.ts`: the check-in, calisthenics and re-submit tests                                                                                                 | deleted                                                         | the check-in writer's `db:verify` (#385)                                                                             |
 | `a11y.spec.ts`: the five strength-form and program-card tests (`:302`, `:330`, `:472`, `:524`, `:601`) and the scaffolded block with its time-zone constant (`:656-733`) | deleted; the weigh-in test (`:395`) and the Today route stay    | axe and tap targets on today; axe and 360px on yesterday's weigh-in. A day before yesterday has no e2e (see 3b-page) |
 | `export-full-day.spec.ts`                                                                                                                                                | logs bodyweight and practice **through the page**, then exports | still the one test whose input the app produced; strength export stays in Vitest                                     |
@@ -229,7 +230,8 @@ Each PR also carries `docs/plan.md`, the milestone chart and a changelog fragmen
    bodyweight's; no day shows Wake; a POST with `activityKey=wake`, or with minutes missing, 0, 301 or
    45.5, is refused.
 5. A day before yesterday shows no ✓, Change, field or Clear, and the server refuses a log, a change or
-   a clear there.
+   a clear of bodyweight or practice there. ⚠️ Not strength: `editStrengthSetAction` keeps no day bound
+   until FAM-1 12f deletes it, and nothing on the page posts to it _(scoped 2026-11-15, #418)_.
 6. axe and the tap-target scan pass on today; axe and the 360px overflow scan pass on yesterday's
    weigh-in. The read-only day's states pass their
    component tests (no e2e reaches it; see 3b-page).
@@ -254,7 +256,7 @@ Each PR also carries `docs/plan.md`, the milestone chart and a changelog fragmen
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Prod already holds two practices on one day | 3b-0's read runs first, and again just before merge (the 1d precedent); a duplicate needs a correction                                                        |
 | A deleted e2e leaves a flow untested        | The table names what remains; `hold-the-bar` reviews the list                                                                                                 |
-| An earlier entry looks lost                 | It is stored and exported; the plan and the changelog say it is not shown until FAM-1                                                                         |
+| An earlier entry looks lost                 | It is stored (strength is also exported; check-ins are not); the plan and the changelog say it is not shown until FAM-1                                       |
 | A wrong value on a read-only day            | No in-app route; a correction (`db:correct`) fixes it. Acceptable for one household; the tech-debt row revisits it before FAM-1 slice 3 or a second household |
 | Rollback                                    | 3b-0 is forward-only (the index stays, harmless). The UI PRs revert on their own; no data changes                                                             |
 
@@ -291,7 +293,7 @@ or yesterday, and the athlete is not archived (`page.tsx:107-108`).
 | P2  | A logged practice, on every day                    | One row per practice, in a list: `Wrestling practice · 90 min`, in the bodyweight receipt's bordered row. It replaces `· logged today`, which named the wrong day on yesterday and hid the 90 minutes the one-tap button writes. 3b-life adds the ✓ and Change to this row                                                                       |
 | P3  | Life with nothing logged                           | Writable: the existing one-tap **Wrestling practice** button (3b-life replaces it). Not writable: `Nothing logged.` (v11)                                                                                                                                                                                                                        |
 | P4  | Wake                                               | The Life section never renders Wake, as a button or as a row (D1). A routine whose only life item is Wake, or with no life item (the default routine), shows no Life section. The action still accepts Wake until 3b-life (D3)                                                                                                                   |
-| P5  | The day-role label beside the date (`Strength B`)  | Removed with the program card it described (`page.tsx:227-233`). `DayNav`'s prop is optional and stays for FAM-1. The page no longer reads the program (`getProgramDay`, `householdProgramsAnything`)                                                                                                                                            |
+| P5  | The day-role label beside the date (`Strength B`)  | Removed with the program card it described (`page.tsx:227-233`). `DayNav`'s prop is optional and stays for FAM-1. The page no longer reads the program (`getProgramDay`, `householdProgramsAnything`); FAM-1 12c listed both, and the roadmap thread updated it (#418)                                                                           |
 | P6  | The empty state and `This week`                    | `No entries logged today.` goes with the list. `WeeklyAdherence` stays: it is not one of D1's removals, and it renders nothing until its schedule is seeded                                                                                                                                                                                      |
 | P7  | The read-only notice on an archived athlete's page | Not shown: "today and yesterday can be logged" is false there, and the archived notice already says why and where to restore                                                                                                                                                                                                                     |
 | P8  | Announcement and focus after logging a practice    | The section mounts the existing `SavedAnnouncer` in both states: it announces `Wrestling practice logged` and moves focus to the new row, which the unmounting button used to drop to `<body>` (round 1's UX-B2, brought forward because the list no longer shows the log)                                                                       |
@@ -342,6 +344,17 @@ of text is more risk than signal; the component test asserts the list and listit
 
 NITs: `No weight logged.` beside `Nothing logged.` is 3b-bw's to align (it rebuilds that row); the
 loading skeleton is left alone, since the body's shape changes again in 3b-bw, 3b-life and FAM-1 12.
+
+**Implementation review (four lenses, 2026-11-15, #418):** fixed in the PR — the export spec read
+its day from a form that is gone on a retry; the read-only rule moved into a pure, tested
+`dayPageFlags`; the practice label and minutes derive from the app's constants in the e2e; the
+architecture diagram, the tech-debt row's list and the "still in the export" claim (check-ins never
+were) were corrected; acceptance 5 is scoped to bodyweight and practice. **Owed by 3b-bw**, which
+takes its turn on `write-path.md`: the guide's `client_id` lifetime line and the matching comment at
+`actions.ts:491` still describe `life-form.tsx`'s old key (`${day}:${activity}:${entryId}`); it is now
+`${day}:${a.key}`, safe because a logged activity unmounts its button. **Owed by 3b-life:** two
+`SavedAnnouncer`s on one page mean another phone's practice, arriving on this phone's weigh-in
+revalidate, announces and takes focus; 3b-life announces from the practice action's own result.
 
 For 3b-bw's panel: D2 names no copy for a refused older-day amend, and `DECLARED_DAY_CLOSED_ERROR`
 says "logging" over a Change.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isWritableDay, resolveViewedDay, WRITABLE_DAY_RADIUS } from './declared-day';
+import { dayPageFlags, isWritableDay, resolveViewedDay, WRITABLE_DAY_RADIUS } from './declared-day';
 
 // ── V1-15: which day the PAGE renders ──────────────────────────────────────────────────────────
 describe('resolveViewedDay', () => {
@@ -61,5 +61,50 @@ describe('isWritableDay — the UI must mirror the server, never exceed it', () 
 
   it('uses the SAME radius the server does', () => {
     expect(WRITABLE_DAY_RADIUS).toBe(1);
+  });
+});
+
+// ── V1-24 3b-page: what the day page may offer ─────────────────────────────────────────────────
+describe('dayPageFlags', () => {
+  const TODAY = '2026-09-30';
+  const YESTERDAY = '2026-09-29';
+  const OLDER = '2026-09-28';
+
+  it('today and yesterday: log, Change, no notice', () => {
+    for (const day of [TODAY, YESTERDAY]) {
+      expect(dayPageFlags(day, TODAY, false)).toEqual({
+        closedDay: false,
+        writable: true,
+        amendable: true,
+        showClosedNotice: false,
+      });
+    }
+  });
+
+  it('a day before yesterday is read-only: no log, no Change, and the notice', () => {
+    expect(dayPageFlags(OLDER, TODAY, false)).toEqual({
+      closedDay: true,
+      writable: false,
+      amendable: false,
+      showClosedNotice: true,
+    });
+  });
+
+  it('archived on today: no log, but Change stays, and no read-only notice', () => {
+    expect(dayPageFlags(TODAY, TODAY, true)).toEqual({
+      closedDay: false,
+      writable: false,
+      amendable: true,
+      showClosedNotice: false,
+    });
+  });
+
+  it('archived on an older day: nothing, and still no read-only notice (it would be false)', () => {
+    expect(dayPageFlags(OLDER, TODAY, true)).toEqual({
+      closedDay: true,
+      writable: false,
+      amendable: false,
+      showClosedNotice: false,
+    });
   });
 });

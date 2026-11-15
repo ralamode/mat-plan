@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID } from '@/lib/constants';
+import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, FOCUS_TARGET_CLASS } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 
@@ -64,7 +64,7 @@ export function BodyweightReceipt({
       // save, because the submit button that HAD focus has just unmounted and focus would otherwise
       // drop to <body>.
       tabIndex={-1}
-      className="focus-visible:ring-ring/50 flex flex-col gap-1 rounded-lg border px-4 py-3 outline-none focus-visible:ring-3"
+      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${FOCUS_TARGET_CLASS}`}
     >
       {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value,
           deterministically — load-bearing at 360px (why: `bodyweight-amend.tsx`). Keeping the saved

@@ -5,7 +5,7 @@ import { AppShell } from '@/components/layout/app-shell';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import { localDayIso, localWeekStartIso } from '@/lib/date';
-import { isWritableDay, resolveViewedDay } from '@/lib/entries/declared-day';
+import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
@@ -74,16 +74,9 @@ export default async function TodayPage({
   // legal day and a stale URL should land somewhere usable.
   const { d } = await searchParams;
   const day = resolveViewedDay(typeof d === 'string' ? d : undefined, today, profile.firstDay);
-  // Yesterday keeps its forms: the server accepts a write within ±1 day (`resolveDeclaredDay`), and
-  // the UI must not be stricter than the endpoint it fronts.
-  // 🔴 **TWO reasons a day is read-only, and they must not be conflated.** The first version folded
-  // archive into `writable` and left the V1-15 notice gated on `!writable` — so an ARCHIVED athlete's
-  // page, on TODAY, rendered "New entries are closed for this day — it's more than a day ago" above
-  // the real reason. False, and it promised amend controls the archived page no longer offers. A UX
-  // lens caught it in the exact scenario the authority split exists for: the other adult opening the
-  // kid's page at practice.
-  const closedDay = !isWritableDay(day, today);
-  const writable = !closedDay && !profile.archived;
+  // 🔴 **TWO reasons a day is read-only, and they must not be conflated** — the day (before
+  // yesterday) and archive. `dayPageFlags` keeps them apart and is unit-tested; see its docblock.
+  const { writable, amendable, showClosedNotice } = dayPageFlags(day, today, profile.archived);
   const weekStart = localWeekStartIso(day);
   // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
   // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
@@ -163,7 +156,7 @@ export default async function TodayPage({
           reads as a bug — the finding that explains the 2026-09-28 incident.
           Not for an archived athlete (V1-24 3b-page): the sentence says today and yesterday can be
           logged, which is false there, and the archived notice below gives the real reason. */}
-      {closedDay && !profile.archived ? (
+      {showClosedNotice ? (
         <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
           {CLOSED_DAY_NOTICE}
         </p>
@@ -194,7 +187,7 @@ export default async function TodayPage({
           profileId={profile.id}
           day={day}
           writable={writable}
-          amendable={!closedDay}
+          amendable={amendable}
           logged={bodyweight}
         />
         <LifeSection
@@ -211,9 +204,9 @@ export default async function TodayPage({
       {/* 🔴 **This slot used to link the ROUTINE EDITOR; PROF-1 a-r replaces it** (acceptance
           criterion 11 / M30: nothing in the app links to `/routine` until ACT-1 replaces that editor;
           the route stays in code, unlinked, as it was before V1-23 PR 2). A routine already saved
-          keeps rendering and logging above; a profile with none keeps the neutral default.
+          still chooses the Life items above; a profile with none keeps the neutral default.
           It becomes rename — criterion 8's "rename shall be reachable from the athlete's own page".
-          BELOW the logged entries, for the reason the routine link was: parents scroll to here, kids
+          At the foot of the page, for the reason the routine link was: parents scroll to here, kids
           do not scroll past their own work, and the header is already dense. Text, not a gear icon —
           a gear would be the only icon on a page whose idiom is text arrows, and it reads as
           "settings for this screen".

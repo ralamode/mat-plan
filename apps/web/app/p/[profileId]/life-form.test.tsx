@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./actions', () => ({ logLifeActivitiesAction: vi.fn() }));
 
+import { ACTIVITY_TYPE_KEYS } from '@mat-plan/shared';
+
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 
 import { LifeForm } from './life-form';
@@ -21,7 +23,7 @@ import { LifeForm } from './life-form';
  * see: re-rendering the same tree with a different `day` must produce a form whose hidden
  * `client_id` input has changed. That is exactly the property the bug violated.
  */
-const ACTIVITY = LIFE_ACTIVITIES[1];
+const ACTIVITY = LIFE_ACTIVITIES.find((a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice)!;
 
 const clientIdOf = () =>
   document.querySelector('input[name="clientId"]')?.getAttribute('value') ?? null;

@@ -43,6 +43,27 @@ export function isWritableDay(day: string, today: string): boolean {
 }
 
 /**
+ * What the day page may offer on `day` (V1-24 3b-page). Pure, so the read-only rule is tested here
+ * rather than only in the async page, which Vitest cannot render.
+ *
+ * - `closedDay`: before yesterday. Read-only for everyone.
+ * - `writable`: a log form may render — not closed, and the athlete is not archived.
+ * - `amendable`: a logged value offers Change. Follows the DAY only: an archived athlete's weight on
+ *   today or yesterday stays correctable, as before.
+ * - `showClosedNotice`: the read-only sentence. Not for an archived athlete, where its "today and
+ *   yesterday can be logged" is false and the archived notice gives the real reason.
+ */
+export function dayPageFlags(day: string, today: string, archived: boolean) {
+  const closedDay = !isWritableDay(day, today);
+  return {
+    closedDay,
+    writable: !closedDay && !archived,
+    amendable: !closedDay,
+    showClosedNotice: closedDay && !archived,
+  };
+}
+
+/**
  * Which day the page should RENDER — today, or the validated `?d=` (V1-15).
  *
  * Deliberately beside `resolveDeclaredDay`: both are "validate an ISO day, then clamp it against the

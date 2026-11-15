@@ -6,5 +6,5 @@
   where it read "· logged today" even on yesterday, and logging one announces it and moves focus to
   the row. On a day before yesterday the page says "This day is read-only. Only today and yesterday
   can be logged or changed." and offers no Change. ⚠️ Check-ins and strength logged before this
-  change are still stored and still in the export, but no longer shown, and nobody can log either
-  in the app until FAM-1 slices 1 and 3.
+  change are still stored but no longer shown; strength is in the CSV export, check-ins never were.
+  Nobody can log either in the app until FAM-1 brings them back.

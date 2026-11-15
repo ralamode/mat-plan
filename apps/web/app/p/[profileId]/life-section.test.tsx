@@ -7,6 +7,7 @@ vi.mock('./actions', () => ({ logLifeActivitiesAction: vi.fn() }));
 
 import { LIFE_COPY, LIFE_LOGGED_ID } from '@/lib/constants';
 import type { LoggedLifeActivity } from '@/lib/entries/activity-totals';
+import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 
 import { LifeSection } from './life-section';
@@ -40,7 +41,7 @@ const section = (overrides: Partial<Props> = {}) => (
     {...overrides}
   />
 );
-const row = (value: number) => LIFE_COPY.logged(practiceLabel, `${value} min`);
+const row = (value: number) => LIFE_COPY.logged(practiceLabel, formatValueUnit(value, 'min'));
 
 describe('LifeSection — its states', () => {
   it('writable and nothing logged: the practice button, and no Wake', () => {
@@ -104,6 +105,8 @@ describe('LifeSection — its states', () => {
     const { rerender } = render(section());
     rerender(section({ logged: [practice(90)] }));
     expect(screen.getByRole('status').textContent).toBe(LIFE_COPY.announced(practiceLabel));
+    // The button that had focus unmounted; focus moves to the new row, not <body>.
+    expect(document.activeElement?.id).toBe(LIFE_LOGGED_ID);
 
     // Paging to another day that is already logged is a first render, not a log (the day key).
     rerender(section({ day: '2026-09-29', logged: [practice(60)] }));

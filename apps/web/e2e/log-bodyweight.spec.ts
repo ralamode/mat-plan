@@ -39,7 +39,7 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-7 / V1-24 3b-page: the one-tap wrestling practice, a duration metric with the default minutes.
   // The logged row shows those minutes on the page, where the removed "Logged entries" list did.
-  await logPractice(page, { label: 'Wrestling practice', shownValue: '90 min' });
+  await logPractice(page);
 });
 
 // V1-6c: the Today header shows the ACTIVE LOCAL calendar date (not UTC), and it's stable

@@ -43,12 +43,10 @@ import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   DEFAULT_TIME_ZONE,
-  LIFE_COPY,
-  LIFE_LOGGED_ID,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
-import { SEED_PROFILE_ROUTE } from '../e2e/steps';
+import { logPractice, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -620,13 +618,8 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'duplicate-kinds-differ': warnOnDuplicate(SEED_PROFILE_3_NAME, PROFILE_KIND.adult),
   'duplicate-at-cap': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
-  'practice-logged': async (page) => {
-    // The three widths share one database: only the first finds the button; the others see the row.
-    const life = page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
-    const button = life.getByRole('button', { name: 'Wrestling practice', exact: true });
-    if ((await button.count()) > 0) await button.click();
-    await life.locator(`#${LIFE_LOGGED_ID}`).waitFor();
-  },
+  // Retry-safe: the three widths share one database, and only the first finds the button.
+  'practice-logged': (page) => logPractice(page),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });

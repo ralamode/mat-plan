@@ -660,6 +660,12 @@ export const LIFE_COPY = {
   announced: (label: string) => `${label} logged`,
 } as const;
 
+/**
+ * The ring on an element focused by script after a save (`SavedAnnouncer`), never by Tab: the
+ * bodyweight receipt and the Life rows. With `tabIndex={-1}` at the use site.
+ */
+export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus-visible:ring-3';
+
 /** The logged rows' element id: the focus target after a log (`SavedAnnouncer`). */
 export const LIFE_LOGGED_ID = 'life-logged';
 

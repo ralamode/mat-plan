@@ -1,6 +1,6 @@
 import { ACTIVITY_TYPE_KEYS } from '@mat-plan/shared';
 
-import { LIFE_COPY, LIFE_LOGGED_ID } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, LIFE_COPY, LIFE_LOGGED_ID } from '@/lib/constants';
 import type { LoggedLifeActivity } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
@@ -12,7 +12,7 @@ import { SavedAnnouncer } from './saved-announcer';
  * The life activities the day page shows: the routine's, minus Wake (V1-24 3b-page). The tap time is
  * not the wake time, so Wake leaves the page; the action still accepts it until 3b-life.
  */
-export function shownLifeActivities(activityKeys: readonly string[]) {
+function shownLifeActivities(activityKeys: readonly string[]) {
   return lifeActivitiesForKeys(activityKeys).filter((a) => a.key !== ACTIVITY_TYPE_KEYS.wake);
 }
 
@@ -66,7 +66,7 @@ export function LifeSection({
           id={LIFE_LOGGED_ID}
           // Focusable by script only: the button that held focus unmounts on a log.
           tabIndex={-1}
-          className="focus-visible:ring-ring/50 flex flex-col gap-2 rounded-lg outline-none focus-visible:ring-3"
+          className={`flex flex-col gap-2 rounded-lg ${FOCUS_TARGET_CLASS}`}
         >
           {rows.map((r) => (
             <li

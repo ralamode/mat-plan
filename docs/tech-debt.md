@@ -21,8 +21,12 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   program card, receipts), the "Logged entries" list and the "Calisthenics today" card off the day
   page, and left their components in the tree: `checkin-form.tsx`, `strength-section.tsx`,
   `strength-form*.ts(x)`, `strength-session-receipt.tsx`, `program-reference.tsx`,
-  `movement-line.tsx`, and `todayRows` / `calisthenicsTotals` in `lib/entries/activity-totals.ts`.
-  Their Server Actions stay, tested. FAM-1 12f deletes them, once 12d and 13b have rebuilt what the
+  `movement-line.tsx`, `todayRows` / `calisthenicsTotals` in `lib/entries/activity-totals.ts`, and
+  the reads only those used: `getProgramDay` (`lib/dal/programming.ts`), `resolveDayRole`,
+  `checkinFieldsForKeys`, `readsHouseholdProgram`, and `DayNav`'s unused `dayRoleLabel` prop. About a
+  dozen `screenshot-ephemeral.ts` states (`strength-*`, `form-*`, `calisthenics`, `program-collapsed`,
+  `status-badges`) now target surfaces that are not on the page. Their Server Actions stay, tested;
+  `editStrengthSetAction` has no day bound, which is harmless while nothing posts to it. FAM-1 12f deletes them, once 12d and 13b have rebuilt what the
   new page needs (the PICK-1 PR 3 precedent for an unmounted component).
 - **Impact:** dead code that still type-checks and still costs review attention; PICK-1 PR 4, which
   mounts into the strength form, waits for FAM-1 13b's surface instead.

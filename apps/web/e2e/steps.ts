@@ -1,5 +1,5 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import { addDays, DEFAULT_BODYWEIGHT_UNIT } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, addDays, DEFAULT_BODYWEIGHT_UNIT } from '@mat-plan/shared';
 import { expect, type Page } from '@playwright/test';
 
 import {
@@ -11,6 +11,7 @@ import {
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
+import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITIES } from '../lib/life/life-activities';
 
 /**
  * The seeded profile's Today route. Single-sourced here (V1-12) because three callers need it — the
@@ -112,6 +113,12 @@ export async function logBodyweight(
   await expect(saved).toBeVisible(opts);
 }
 
+/** The practice button's label and its logged row's value, from the app's own sources. */
+export const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
+  (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
+)!.label;
+const PRACTICE_SHOWN = formatValueUnit(DEFAULT_PRACTICE_MINUTES, 'min');
+
 /**
  * Tap the one-tap **Wrestling practice** button and assert the Life section's logged row, with its
  * minutes (V1-24 3b-page). Retry-safe: a logged activity has no button (the row replaced it), so a
@@ -120,15 +127,12 @@ export async function logBodyweight(
  * On a fresh log it also asserts focus moved to the logged rows: the button that had focus has
  * unmounted, and `SavedAnnouncer` moves it rather than letting it drop to `<body>`.
  */
-export async function logPractice(
-  page: Page,
-  opts: { label: string; shownValue: string },
-): Promise<void> {
+export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
-  const button = life.getByRole('button', { name: opts.label, exact: true });
+  const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
   const row = life
     .getByRole('listitem')
-    .filter({ hasText: LIFE_COPY.logged(opts.label, opts.shownValue) });
+    .filter({ hasText: LIFE_COPY.logged(PRACTICE_LABEL, PRACTICE_SHOWN) });
   if ((await button.count()) > 0) {
     await button.click();
     await expect(row).toBeVisible({ timeout: 15_000 });

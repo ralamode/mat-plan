@@ -98,7 +98,14 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // The day the WRITE will carry, read from the field the forms actually submit — not recomputed
   // here. A test that derives the date itself is asserting its own arithmetic; this asserts the
   // app's. (V1-6c: the page computes the day at render and carries it in every form.)
-  const day = await page.locator('input[name="day"]').first().inputValue();
+  // ⚠️ RETRY-SAFE: since V1-24 3b-page the only forms are the empty bodyweight field and the
+  // practice button, and both are gone once a first attempt has logged. A retry then reads the day
+  // the page rendered from its URL instead; the first attempt still reads the field.
+  const dayField = page.locator('input[name="day"]').first();
+  const day =
+    (await dayField.count()) > 0
+      ? await dayField.inputValue()
+      : (new URL(page.url()).searchParams.get('d') ?? '');
   expect(day, 'the declared-day field should carry an ISO day').toMatch(/^\d{4}-\d{2}-\d{2}$/);
   // The disjointness above only holds if the page really rendered yesterday (not a clamped today).
   expect(day, 'the page should have rendered the ?d= day').toBe(isoDaysAgo(1));
@@ -113,7 +120,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // until FAM-1 13b brings an e2e back). Practice is logged here so the day holds both of the page's
   // write paths; ⚠️ practice minutes are not in the CSV (the check-ins file carries none), so the
   // bytes below prove the bodyweight path only.
-  await logPractice(page, { label: 'Wrestling practice', shownValue: '90 min' });
+  await logPractice(page);
 
   // ── 3. Export ─────────────────────────────────────────────────────────────────
   const files = await downloadExport(page);
@@ -157,11 +164,16 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // ⚠️ Scoped to a file no sibling can change. Comparing the whole archive would be a race: under
   // `fullyParallel` a sibling spec can append a bodyweight row between the two downloads, and the
   // test would fail for a reason that has nothing to do with determinism. `checkins` is header-only
-  // by construction, so it is stable and is what the assertion compares.
+  // by construction, and this spec's own bodyweight row (Athlete One's yesterday) has no other
+  // writer, so those are what the assertion compares.
   const again = await downloadExport(page);
-  for (const path of [checkinPath]) {
-    expect(again.get(path), `${path} differed between two exports of the same data`).toBe(
-      files.get(path),
-    );
-  }
+  expect(again.get(checkinPath), `${checkinPath} differed between two exports`).toBe(
+    files.get(checkinPath),
+  );
+  const ownDay = (csv: string | undefined) =>
+    (csv ?? '').split('\n').filter((l) => l.startsWith(`${day},`));
+  expect(
+    ownDay(again.get(bwPath)),
+    'this day’s bodyweight rows differed between two exports',
+  ).toEqual(ownDay(files.get(bwPath)));
 });
