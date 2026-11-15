@@ -5,12 +5,18 @@
 > Parent: [v1-24-form-is-the-day.md](./v1-24-form-is-the-day.md) (its 2026-11-15 note). Sibling:
 > [V1-9b](./v1-9b-delete-and-restore.md) B2 (its 2026-11-15 Amendment). Milestones:
 > [CRUD-1](../milestones/crud-1-fix-it-yourself.md) track E, and
-> [FAM-1](../milestones/fam-1-family-program.md), whose steps 11a–13b wait on this. **Accepted
+> [FAM-1](../milestones/fam-1-family-program.md), whose plan schedules this as lane S (its step 12c builds on this page). **Accepted
 > prototype:** Beta 0's **v11** (v10 of #411 plus this PR's read-only older days) at [`docs/prototypes/beta-0/`](../prototypes/beta-0/index.html) (#411,
 > 2026-11-15). This is **Beta 0**.
 >
 > **Branches:** 3b-0 `db/v1-24-3b-0-practice-one-per-day` · 3b-page `feat/v1-24-3b-page-old-forms-leave` ·
 > 3b-bw `feat/v1-24-3b-bw-check-to-log` · 3b-life `feat/v1-24-3b-life-practice-minutes`.
+
+> ⚠️ **Scheduling, 2026-11-15:** this plan's four PRs run as **lane S** of the
+> [FAM-1 plan](./fam-1-family-program.md) (§5 "Lane S", §6, §7). Where this plan says a PR waits on
+> nothing or that either order works, the gates and shared-file order there win: 3b-page after
+> FAM-1's 0b; 3b-0 in the one migration queue, after FAM-1's step 5; database proofs in
+> `verify/single-values.ts`; a day after today is read-only too (FAM-1 D32).
 
 ## Why this plan changed (2026-11-15)
 
@@ -48,7 +54,7 @@ lb · 7:02 AM` and **Change**. Change opens the field with **Cancel** and **Save
    `✓ Wrestling practice · 45 min` and Change. **No Wake on any day.**
 3. **Clear this day…** at the foot of the page when anything is logged (V1-9b B2).
 
-FAM-1 step 12 later adds the program's workouts between Bodyweight and Life.
+FAM-1 step 12c later adds the program's workouts **after** Life, as the prototype shows _(corrected 2026-11-15; was "between Bodyweight and Life")_.
 
 ## Staging
 
@@ -75,7 +81,7 @@ the new page until slice 3, so nobody loses a habit _(maintainer, 2026-11-15, as
 
 - **The removed components stay in the tree, unmounted**, until FAM-1 13 and 13b reuse or delete them
   (the PICK-1 PR 3 precedent, `docs/features/movement-picker.md`). [tech-debt.md](../tech-debt.md) gets
-  one row naming them, with **FAM-1 13b as its expiry**. PICK-1 PR 4, which mounts into the strength
+  one row naming them, with **FAM-1 12f as its expiry** _(corrected 2026-11-15; was 13b)_. PICK-1 PR 4, which mounts into the strength
   form, waits for FAM-1 13b's surface instead.
 - **Their Server Actions stay**, tested in Vitest, though nothing on the page posts to them. Wake is the
   exception (D3), because its section is the one this plan rebuilds.
@@ -181,7 +187,7 @@ re-pointed. Each deletion is named in the PR with the coverage that remains.
 | `apps/web/lib/constants.ts`                           | EDIT     | `CLOSED_DAY_NOTICE`.                             |
 | `apps/web/e2e/*`                                      | EDIT/DEL | The table.                                       |
 | `docs/features/strength-logging.md`, `programming.md` | EDIT     | D1.                                              |
-| `docs/tech-debt.md`                                   | EDIT     | The unmounted components, expiring at FAM-1 13b. |
+| `docs/tech-debt.md`                                   | EDIT     | The unmounted components, expiring at FAM-1 12f. |
 
 **3b-bw**
 

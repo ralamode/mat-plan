@@ -282,6 +282,12 @@ Stated here so the purge PR cannot miss them. ADR 0008 makes PRIV-3 the owner of
 
 ## Amendment (2026-11-15): B1-3 is cut; B2 clears the new day page
 
+> ⚠️ **Scheduling, 2026-11-15:** B1-2, B2-0 and B2 run as **lane S** of the
+> [FAM-1 plan](./fam-1-family-program.md) (§5 "Lane S", §6, §7). Its gates win: B2-0 in the one
+> migration queue, after 3b-0; **B1-2 after B2-0 is applied** (its day read needs `hide_reason`) and
+> after FAM-1's 0b, which shards the action registry, its test bindings and `VALID_BODY`; B2 after
+> FAM-1's 12c on `page.tsx`. A day after today is read-only (FAM-1 D32).
+
 _Form: an Amendment block (the maintainer's decisions, not line facts). Sources: the maintainer's
 2026-11-15 decisions, the first set recorded in FAM-1's "Made" table (#408), and the re-scoped
 [3b plan](./v1-24-3b-logs-in-place.md), committed with this note; checked against Beta 0's accepted
