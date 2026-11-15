@@ -113,6 +113,32 @@ export const DAY_ROLE_LABELS: Record<DayRole, string> = {
 };
 
 /**
+ * The limits of a program a household builds itself (FAM-1 plan D5; the accepted prototype's
+ * counters). App-input limits: step 0a names them so the builder, the writers and the contract shapes
+ * in `./program/` read one number each; the columns they bound arrive with steps 4a-i and 4b.
+ *
+ * `SLOT_LABEL_MAX` also bounds the two other short texts an author types beside a workout: a
+ * superset's group name and its "rest after" (FAM-1 plan §4). Sets per item reuse
+ * `MAX_SETS_PER_MOVEMENT` (`strength-session.ts`), and instructions reuse `FREE_TEXT_NOTE_MAX`.
+ */
+export const PROGRAM_NAME_MAX = 60;
+export const WORKOUT_NAME_MAX = 30;
+export const SLOT_LABEL_MAX = 30;
+export const MAX_WORKOUT_ITEMS = 30;
+
+/**
+ * What the week editor offers for a slot's label (FAM-1 plan D8). Suggestions only: a label is
+ * optional free text, shown as the slot's heading and **never sorted on**. A day's order is the
+ * author's (the athlete's program order, then the week's own order).
+ */
+export const SLOT_LABEL_SUGGESTIONS = [
+  'Morning',
+  'After school',
+  'After lunch',
+  'Evening',
+] as const;
+
+/**
  * A per-profile suggested load on a prescription — HUMAN-AUTHORED (never the LLM). `load` is verbatim and
  * lossless (`"65"`, `"BW"`, `"50ft"`), mirroring `entries.raw_load`; the profile is referenced by its
  * `public_id`. Per-kid REPS are deliberately NOT here in slice 1 — `prescription.target_reps` is the greyed

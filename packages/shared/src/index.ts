@@ -38,3 +38,6 @@ export * from './strength-session';
 export * from './routine';
 export * from './seed-ids';
 export * from './programming';
+// FAM-1 chunk 0a: the contract the program builder and the day page are built against (shapes, the
+// actions interfaces, the prescribed-text renderer). Its fixtures are the `./program/fixtures` subpath.
+export * from './program';
