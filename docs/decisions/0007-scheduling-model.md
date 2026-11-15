@@ -71,7 +71,7 @@ with its own `db:verify` proofs. Reviewed by six lenses in two rounds (PR #402).
 
 - **Columns:** `id`, `public_id`, `client_id` (UUIDv7, NOT NULL), `block_id` FK with a covering
   index, `name`, `description NULL`, `copied_from_workout_id NULL` (a self-FK, `ON DELETE SET NULL`,
-  covering index), shared timestamps, and `UNIQUE (id, block_id)` for the composite FKs in §3–4.
+  covering index), `copied_from_program_name NULL`, shared timestamps, and `UNIQUE (id, block_id)` for the composite FKs in §3–4.
 - **`client_id` is scoped, as the A4 plan chose:** `UNIQUE (block_id, client_id)` here and
   `UNIQUE (household_id, client_id)` on `program_blocks` (§5), non-partial. A global key would let
   one household probe another's ids. The reason these two tables get a `client_id` at all, unlike
@@ -86,8 +86,10 @@ with its own `db:verify` proofs. Reviewed by six lenses in two rounds (PR #402).
   the A4 plan. Name lengths are A4's `WORKOUT_NAME_MAX = 30` and `PROGRAM_NAME_MAX = 60` unless d2
   changes them.
 - **Copy to program** (step 10b) writes an independent workout. Its provenance is
-  `copied_from_workout_id` plus the copy's own `created_at`; there is no separate date column. The
-  provenance line reads the source program's current name, a pointer rather than logged history.
+  `copied_from_workout_id` (identity) plus `copied_from_program_name`, nullable text **frozen at copy
+  time**, and the copy's own `created_at`. The line "Copied from Family program · 14 Nov" reads the
+  frozen name, so renaming or purging the source never changes it, as in the prototype _(maintainer,
+  2026-11-15)_.
 - **`session_type` for a template session** is d2's to settle. Recommendation: one fixed type, so
   `DAY_ROLE_TO_SESSION_TYPE` stays the fallback for the ten built-ins.
 
@@ -99,7 +101,9 @@ shape:
 - `workout_id` is a composite FK `(workout_id, block_id) → workouts(id, block_id)`, so one block's
   week can't point at another block's workout;
 - **a workout appears at most once per weekday:** partial `UNIQUE (block_id, weekday, workout_id)`.
-  That keeps one session per workout per day (§6). Doing the same work twice in a day takes a copy.
+  That keeps one session per workout per day (§6). Doing the same work twice in a day takes a copy
+  ("Push-ups (evening)"). _(Maintainer, 2026-11-15: the prototype allowed a repeat; the week editor
+  will instead not offer a workout already on that day.)_
 
 `weekday` is pinned with `assertCheckCoversIntConst`, per SCHED-1's correction, not
 `assertCheckCoversConst`, which reads quoted tokens only. `idx` is an `integer`, 0-based, with
@@ -125,8 +129,10 @@ IS NULL`. The old `(block_id, day_role, idx)` index stays; NULLs are distinct, s
   template rows.
 - **Additive nullable columns:**
   - `notes`, the author's instructions: the name `program_blocks.notes` and spec §4 already use,
-    bounded by `FREE_TEXT_NOTE_MAX` unless d2 argues otherwise. **A rest note after a superset** is
-    the group's last prescription's `notes`;
+    bounded by `FREE_TEXT_NOTE_MAX` unless d2 argues otherwise;
+  - **`rest_after`**, nullable text, read only on a superset group's **last** prescription: the
+    prototype's "Rest after each round" ("90 s after each round"). It is separate from `notes`,
+    because the last item of a group has its own instructions too;
   - **superset grouping**, named as the log side and spec §4 name it (`superset_label`,
     `superset_order`), with the log side's pairing CHECK. The log inherits it as ADR 0003's
     `supersets` row.
@@ -187,7 +193,8 @@ prescription_group IS NOT NULL AND deleted_at IS NULL`. Entries need no arbiter,
   - Inserts, reopens and reorders all go through **one shifted-band writer**, the design in V1-22 W1
     (`docs/plans/v1-22-program-editor.md`), shared with §3's and §4's slot keys. It isn't built yet.
   - Take off frees the `idx` on the program's last day, so Today orders by `(idx, id)`.
-- **Take off** sets `active_to` to today, ending the program after today. An assignment that hasn't
+- **Take off** sets `active_to` to today, ending the program after today. `active_to` is the
+  **inclusive last day** (the prototype stores the exclusive day after; the meaning is the same). An assignment that hasn't
   started is soft-deleted instead. Logged days keep their frozen workout.
 - **FAM-1 writes all seven weekday rows.** An athlete's own days stay ASSIGN-1 (Beta 1).
 - **Doing someone else's workout today** creates no assignment row; the session records the
@@ -208,7 +215,7 @@ class AUTH-1 1b and TEN-2a already hit.
 - **`db:verify`'s erase proof** seeds a row in each new table.
 - **ADR 0008's purge:** purging a workout purges its prescriptions and week slots first, because
   those FKs are NO ACTION. Its copies and sessions keep their rows, with the pointer set to NULL
-  (`ON DELETE SET NULL`); sessions keep `workout_name`.
+  (`ON DELETE SET NULL`); sessions keep `workout_name`, and copies keep `copied_from_program_name`.
 - **Both workout pointers stay inside one household** (§2, §6). Crossing households is the club
   pilot's, with its own decision.
 - **`program_assignments` and a minor's session workout are personal data**, not household config:
