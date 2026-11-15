@@ -225,6 +225,58 @@ before step 7. If d2 confirms this, slice 1 no longer waits on OPS-2's split.
 action, the states it must handle (empty, loading, error, done), its 360px rules, and the patterns it
 rejects ([DX-14](../plan.md)).
 
+## Lanes and the contract (proposed 2026-11-14)
+
+The slices above set the **order of integration**. This section sets **who works in parallel**
+inside each slice. The gates are [parallel-work.md](../parallel-work.md)'s, chiefly gate 1
+(disjoint file globs) and gate 2 (the contract is sufficient, not merely present).
+
+**Chunk 0: the contract PR.** It lands right after d2 and before any lane starts. It is real code,
+small (≈ 200 lines), and reviewed by the panel lenses. It holds:
+
+| Shape          | What it carries                                                                                                    | Producer → consumer                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `WorkoutDraft` | a workout's items, typed prescriptions, superset groups, instructions                                              | builder (8–10b) → program writer (6)                |
+| `DayPlan`      | what Today renders: each program, its workouts in order with labels, items with what was prescribed, and supersets | day resolver (12) → Today (12's rendering, 13, 13b) |
+| `RowWrite`     | one completed row: `clientId`, slot, item, set and values, retry-safe                                              | Today (13, 13b) → log writers (11a, 11b)            |
+
+Each shape is a zod schema in `packages/shared`, with its inferred type, **named fixtures** that the
+lanes build against, and **the list of tests not yet written** for each consumer. A shape change after
+chunk 0 is a seam change: it goes through its owner, and the lanes reading it wait.
+
+**Lanes, once chunk 0 has landed:**
+
+| Lane                                | Steps                                | Builds against                        | Owns (globs fixed by d2)                           |
+| ----------------------------------- | ------------------------------------ | ------------------------------------- | -------------------------------------------------- |
+| **A · Schema and writers** (serial) | 3 → 4a → 4b → 5 → 5b → 6 → 11a → 11b | the database                          | `packages/db/**`, the writers                      |
+| **B · Builder UI**                  | 8, 8b, 9, 10, 10b                    | `WorkoutDraft` fixtures, no database  | the program and workout routes                     |
+| **C · Today UI**                    | 12's rendering, 13, 13b              | `DayPlan` fixtures, a fake `RowWrite` | the day page's components                          |
+| **D · Side work**                   | 1, 2, 14                             | none                                  | the seed, `packages/shared` day primitives, export |
+| **Integration**                     | 7, 12's resolver, 15, 15b, 15c, 16   | the real pieces                       | actions, the DAL, the page wiring                  |
+
+**Integrate first, not last.** There is no integration sprint at the end. Slice 1 _is_ the first
+integration: one thin real path (Check items only) wired end to end. After it, B and C widen against
+the contract while A extends the backbone, and each slice boundary integrates a little. Lane A's
+migration chain is the critical path, because each migration is observed applied before the next. So
+**the milestone moves at lane A's pace plus the integration steps**: roughly 13 PR-lengths of
+calendar time instead of 23 in a row. That is an estimate, to be checked against slice 1.
+
+**What would serialize the lanes again, and the fix:**
+
+- **`docs/features/programming.md` takes one PR at a time,** and 12 steps edit it. Either split it per
+  lane in d2, or let only integration PRs edit it.
+- **The migration journal and `schema.ts` belong to lane A only.** A lane that needs a column asks
+  lane A for it.
+- **A fixture that drifts from the schema.** The fixtures are parsed by the schema in a test, so drift
+  fails CI.
+
+**For d2 to settle:**
+
+- each lane's exact file globs, checked against gate 1;
+- whether lanes B and C ship behind the "no assignment yet" state (a template program with no one on
+  it is invisible), so their PRs merge dark;
+- the **named fixtures** in chunk 0.
+
 ## What moves to Beta 1
 
 From [PROG-1](./prog-1-programs-and-scheduling.md), everything not listed above:
