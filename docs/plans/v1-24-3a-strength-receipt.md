@@ -5,6 +5,10 @@
 > 16, B5). Branch (3a-i): `feat/v1-24-3a-strength-receipt`.
 > **Order:** Ray, 2026-10-02, answering the parent plan's Open question 0: 3a before 2 (check-ins).
 > 3b (demoting the separate log) still waits for 2.
+>
+> ⚠️ _2026-11-15:_ 3b no longer demotes the log or waits for 2. It takes the strength section off the
+> day page until FAM-1 step 13b ([3b plan](./v1-24-3b-logs-in-place.md)), so D6's two 3b items
+> (session-less entries, the `Strength` rename) are not built.
 
 ## Goal
 

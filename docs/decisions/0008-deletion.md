@@ -104,6 +104,8 @@ rows, and the notice's on-request _"full copy"_ includes them. `V1-9b` picks one
 
 ## Decision 2 — a hide is **restorable until it is purged**, through a visible Hidden row
 
+> ⚠️ Amended 2026-11-15 for Beta 0 — see [Amendment 1](#amendment-1-2026-11-15-beta-0s-day-page). The reasoning (no client-held undo) stands; the surface changes.
+
 Not a toast. _(maintainer, 2026-10-18)_
 
 A hidden row stays visible **as a count**: a collapsed `Hidden on this day (2) — Restore` row under
@@ -199,6 +201,26 @@ partial indexes entirely, so those _shrink_. Restore is fallible, which is new u
 surface. The Hidden row is the first read that returns deleted rows, and it is visible to anyone with
 the gate code, which is a different privacy statement than the inventory currently makes. Per-**item**
 erasure on demand still does not exist: `PRIV-3` item 1 is per athlete and per household.
+
+## Amendment 1 (2026-11-15): Beta 0's day page
+
+_The maintainer's decisions of 2026-11-15, taken against Beta 0's accepted prototype; the plans that
+carry them are [V1-24 3b](../plans/v1-24-3b-logs-in-place.md) and
+[V1-9b](../plans/v1-9b-delete-and-restore.md#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page).
+Decisions 1, 3 and 4 are unchanged._
+
+- **Single values are edit-only.** A weigh-in or a practice is entered once and then changed; saving a
+  blank clears it, which is a hide (Decision 1). It is **not offered for restore**: re-entering the value
+  is the recovery, so it needs no Hidden row.
+- **There is no per-row Delete in Beta 0**, so there is no `Hidden on this day (n)` row. The one
+  restorable hide is **Clear this day**, restored as one event by **Restore all** on a banner that is
+  derived from stored data. That keeps Decision 2's reason: the restore survives a reload and a day
+  change, because nothing about it is held in the client.
+- **A clear is recorded as one.** A hide event gains a reason (`'clear_day'`), so the banner offers only
+  clears and never a blank-cleared value (V1-9b B2-0).
+- **Earlier entries are not shown until FAM-1 is done**, so they cannot be deleted one by one. A clear
+  hides them with the rest of the day, and its dialog says so.
+- **When per-row removal returns** (FAM-1 11a and 11b: un-ticking a row), it is a hide under this ADR.
 
 ## Review-response log
 

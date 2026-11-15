@@ -7,12 +7,16 @@
 > `feat/v1-9b-2-clear-day`.
 >
 > Contract: [ADR 0008](../decisions/0008-deletion.md) (signed 2026-10-18), read in full. Prototype:
-> [`docs/prototypes/crud-1/index.html`](../prototypes/crud-1/index.html) v9 (the maintainer approved
-> v8, M32; v9 changes only target fields), screens **`day`**, **`day-slot`**, **`day-clear`**. Seams:
+> ⚠️ _Re-pointed 2026-11-15:_ the reference is now Beta 0's accepted prototype,
+> [`docs/prototypes/beta-0/index.html`](../prototypes/beta-0/index.html) v9 (§ [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page)).
+> It read: [`docs/prototypes/crud-1/index.html`](../prototypes/crud-1/index.html) v9, screens **`day`**,
+> **`day-slot`**, **`day-clear`**. Seams:
 > the spec's "Seams the plans settled (2026-10-23)" (`crud-1-fix-it-yourself.md:525-547`) and
 > [WP-1](./wp-1-shard-actions.md).
 
 ## Goal
+
+> ⚠️ Superseded in part 2026-11-15: B1-3 is cut and B2 changes; see § [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page).
 
 A person who mis-logs something can remove it from the day themselves, see that it was removed, put
 it back, and clear a whole day behind a typed confirm — without the maintainer running `db:correct`.
@@ -45,10 +49,12 @@ V1-9b PR.
 | **B0 before any write of `deleted_at`**      | Not started. B0 and AUTH-1 1b are serial by migration **number**: AUTH-1 claims `0019` (`auth-1-clerk-google.md:833`), and the last migration on main is `0018`. B0 is also **serial on `write-path.md`** with AUTH-1 1b and 1c. B0 edits that guide (invariant 6), and so do they. Under parallel-work gate 1, two tracks under one guide collide even when their code files differ (AGENTS.md → Git & branch workflow). |
 | **AUTH-1 1c observed live** (a one-way door) | Not shipped. B1-2 waits for it: its actions start from 1c's `sessionUserOrNull()` + `checkMutationLimit` (`auth-1-clerk-google.md:657-663`). B1-1 touches no file in 1c's table (`:1704-1715`), but it does edit `write-path.md`, so it **serializes after 1c** on the guide.                                                                                                                                             |
 | **PRIV-3 / `N`**                             | **Gates nothing here** (decision A). PRIV-3 has no plan yet (`plan.md:1735-1770`). This plan sets **three requirements on PRIV-3's purge PR** (see [Requirements this plan places on PRIV-3](#requirements-this-plan-places-on-priv-3)).                                                                                                                                                                                  |
-| **V1-24 3b merged**                          | **B1-3 is gated on it** _(decision D)_. 3b removes the Logged-entries list and gives each entry its section. B1-3 then puts Delete on the row in that section. 3b and B1-3 both edit `page.tsx` and `movement-line.tsx`. The milestone gets the edge `E3b → B1-3`.                                                                                                                                                        |
+| **V1-24 3b merged**                          | ⚠️ _Re-stated 2026-11-15:_ B1-3 is cut, so nothing here waits on 3b; B2 waits on B1-2 and B2-0 (§ [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page)).                                                                                                                                                                                                                                |
 | Prod already holds hidden rows               | Yes. The V1-24 1c correction soft-deleted two weigh-ins (`packages/db/scripts/corrections/registry.ts:214-217`; `docs/runbooks.md:62`). So B0's prod read is **not vacuous**, and "nothing writes `deleted_at`" is true only of shipped **app code**.                                                                                                                                                                     |
 
 ## Staging
+
+> ⚠️ Superseded in part 2026-11-15: B1-3 is cut, B1-2 shrinks, B2 splits into B2-0 and B2; see § [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page).
 
 Five PRs. B0 holds the one migration, in its own PR, and never shares a review with a UI PR.
 
@@ -66,6 +72,8 @@ split into seven (`v1-24-form-is-the-day.md:172`). The split follows the seams t
 screen (Playwright).
 
 ## Acceptance
+
+> ⚠️ Superseded in part 2026-11-15: criteria 10, 11, 12's in-place half, 13 and 15 leave Beta 0 with B1-3; see § [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page).
 
 From the backlog row (`plan.md:115`), verbatim: _"Delete a mistaken entry → gone from Today; 'Clear
 day' → type 'delete' → the day empties."_
@@ -272,6 +280,59 @@ Stated here so the purge PR cannot miss them. ADR 0008 makes PRIV-3 the owner of
 3. **The notice's "until removed" copy** (B1-3) is replaced by the dated copy in the same PR. A
    rollback of either PR writes a new notice state; it does not leave stale copy behind (privacy S5).
 
+## Amendment (2026-11-15): B1-3 is cut; B2 clears the new day page
+
+_Form: an Amendment block (the maintainer's decisions, not line facts). Sources: the maintainer's
+2026-11-15 decisions, the first set recorded in FAM-1's "Made" table (#408), and the re-scoped
+[3b plan](./v1-24-3b-logs-in-place.md), committed with this note; checked against Beta 0's accepted
+prototype, v10. B0 and B1-1 shipped and are unchanged. [ADR 0008](../decisions/0008-deletion.md) gets
+a matching Amendment in the same PR._
+
+**What changed.** The day page is the new one on every day: Bodyweight and Life, with no Check-ins or
+Strength forms. **Single values (bodyweight, practice) are edit-only:** enter once, then Change; no
+Delete, Undo or tomb; saving a blank clears the value (3b D2, D3). **Earlier entries are not shown
+until FAM-1 is done.** So nothing on the page is left for a per-row Delete.
+
+**B1-3 is cut from Beta 0.** Its Delete covered Life rows and earlier entries, and neither has a
+Delete any more. Acceptance criteria 10, 11, 12's in-place half, 13 and 15 leave Beta 0 with it; FAM-1
+11a and 11b's un-ticking (a per-row hide) is where a single row's removal comes back. The B1-3 file
+table, its 360px rows and its test plan are superseded whole.
+
+**B1-2 shrinks to what B2 needs:** the day read (`listDayWithHidden`, reporting the day's clear events
+for the banner), `restoreHiddenAction` for **Restore all**, and the life mapping already shipped in
+#387. `hideEntriesAction` for a single row has no caller and is not built: a blank amend calls the hide
+writer from the amend action (3b D2), and a clear has its own action. `HiddenOnDayDTO` drops
+`afterEntryId`, `sectionKey` and `otherDays`; `hiddenDayCounts` has no consumer.
+
+**B2 keeps, in two PRs:**
+
+- **B2-0, the event kind** _(maintainer, 2026-11-15: store it)_. A hide event is `(profile, day,
+deleted_at)` with no kind (`packages/db/src/writers/hide.ts:28-41`), so a one-entry clear and a
+  blank-amend hide are indistinguishable, and the banner cannot know which events to offer. B2-0 adds
+  a nullable `hide_reason` text column to `entries` with a CHECK of one value, `'clear_day'`, written
+  only by the clear. **Its lifecycle:** `hideEntries` writes the reason on every hide, `NULL` for any
+  hide that is not a clear; restore sets it back to `NULL`; a CHECK keeps it `NULL` on a live row
+  (`hide_reason IS NULL OR deleted_at IS NOT NULL`). After a partial Restore all, the items left hidden
+  (their slot was retaken) have their reason nulled too, so the banner does not return on reload with a
+  Restore all that can only refuse; they stay hidden, as any cleared single value does. A replayed
+  clear that finds no live rows returns the existing event, not `notFound` (`hide.ts:142-148`).
+  Expand-only; its own PR; the db-safety lens; `db:verify` proofs that a clear's rows share one
+  `deleted_at` and carry the reason, that a blank clear's does not, and that restore nulls it.
+- **B2, the clear.** What it hides: **every live entry of the day** (M43), bodyweight and practice
+  included _(maintainer, 2026-11-15)_, FAM-1's workout rows once 11a and 11b write them, and the
+  earlier entries the page no longer shows, which the dialog names. The clear's id list is computed
+  server-side at confirm, not sent by the page, so it is not bounded by the 50-id hide cap.
+
+| Superseded passage                                                                                             | By                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B2 `clear-day.tsx`: _"Focus starts on the title"_, the non-destructive variant, "Cleared this day · {n} items" | v10. Title **"Clear {date}?"**, the date without "Today · " or "Yesterday · ". Body _"This hides everything {name} logged that day: {summary}. You can restore it all at once."_, where the summary lists the workouts with their count of sets and checks, then `bodyweight`, then `wrestling practice`, then `{n} earlier entries`. Label _"Type **delete** to confirm"_. **Focus on the input.** Escape and **Cancel** close it and return focus to the trigger. A **danger** "Clear day", disabled until the input is `delete` (case and surrounding spaces ignored) |
+| The dialog's position                                                                                          | **Top-anchored** (the plan's UX lens 2 #4 stands), so the phone keyboard the focused input raises never covers Cancel or Clear day. v10 centres it: a prototype-round item                                                                                                                                                                                                                                                                                                                                                                                               |
+| The danger button's contrast                                                                                   | White on `--destructive` is about 2.8:1 in dark (`apps/web/app/globals.css`). B2 sets a dark-theme pair that clears 4.5:1, and the a11y scan runs on the dialog **after** the word is typed (axe skips a disabled button), in both themes                                                                                                                                                                                                                                                                                                                                |
+| After the clear                                                                                                | The dialog closes; a banner at the top, _"Day cleared · {n} entries hidden"_ (singular _"1 entry"_), with **Restore all**; focus on Restore all; the announcement _"Day cleared. Restore all is at the top."_ The trigger is gone, since nothing is live. Cleared entries never render as tombs. The banner is derived from the day's `'clear_day'` events, so it survives a reload or a day change (ADR 0008 Decision 2's reason for a visible row)                                                                                                                     |
+| A partial "Restore all"                                                                                        | A `role="status"` banner: _"Restored. {k} entries were logged again since, so they stay deleted."_ (singular _"1 entry was … so it stays deleted"_); the announcement _"Day restored"_. An entry whose slot is taken stays hidden with no tomb, like any single value                                                                                                                                                                                                                                                                                                    |
+| CLEAR_DAY_COPY's _"Their 'How did it feel?' note stays."_                                                      | Kept (PRIV-3 requirement 2), worded for a page that no longer shows it: _"A strength session's 'How did it feel?' note is kept, though the day page doesn't show it."_ Shown only when the day has such a note. v10 omits it: a prototype-round item                                                                                                                                                                                                                                                                                                                     |
+| B1-3's notice sentence (now `notice.md:176-192`)                                                               | Moves to B2, rewritten: per-item Delete is not in the app; **a weigh-in or a practice is removed by clearing its field**, and a whole day by **Clear this day**, which anyone signed in to the household can undo with Restore all until the purge. The stale "a child can delete a weigh-in … until they use Restore" (`notice.md:187-191`) and the export lines are corrected. The privacy lens runs on B2                                                                                                                                                             |
+
 ## File-by-file changes
 
 ### B0 — `db/v1-9b-0-client-id-arbiters`
@@ -405,6 +466,8 @@ hard-delete only, which is the same trap as `verify.ts:2655-2682`, one level up.
 
 ### B1-2 — `feat/v1-9b-1-2-entry-actions`
 
+⚠️ Superseded in part 2026-11-15 — see § [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page).
+
 | Path                                                                                                                        | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web/app/p/[profileId]/entry-actions.ts`                                                                               | NEW    | `'use server'`, holding `hideEntriesAction` and `restoreHiddenAction` over a **private** `runHide` (decision B). Each action: `Sentry.withServerActionInstrumentation`, then `sessionUserOrNull()`, `checkMutationLimit(user.userId)`, the zod parse, `getProfileByPublicId`, the DAL, and `revalidatePath`. There is **no `resolveDeclaredDay` bound**: a correction must not dead-end on the history days where mistakes are found (the amends' reasoning, `actions.ts:504-509`). Sentry gets no headers, no formData, and no user or household id (AUTH-1 § Design 3). |
@@ -439,6 +502,8 @@ keeps the docs true.
 
 ### B1-3 — `feat/v1-9b-1-3-hide-ui` (after V1-24 3b)
 
+🛑 Cut from Beta 0, 2026-11-15 — see § [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page). Kept as the record of its panel.
+
 | Path                                                                                                       | Change     | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web/app/p/[profileId]/hidden/hidden-visit.tsx`                                                       | NEW        | `'use client'`, keyed `${profileId}\|${day}` (FE-6). **It owns dispatch** (UX lenses 1 and 2, #1). On submit it adds ids to the visit set **optimistically** and marks them pending. On failure it removes them and announces the error. On success it moves focus **in an effect, once the target exists**. One membership rule: a **Delete puts a tomb in place**; a **swap's hidden holder goes to the bar**; a **clear goes to the bar** as one event. It uses the seams table's shared announcer, not a second region (reuse S3). While a restore is pending it suppresses `SavedAnnouncer`'s weigh-in message, so one restore yields one announcement (UX lens 2 #3). |
@@ -470,6 +535,8 @@ no-purge state:
 The purge PR replaces this with the dated version (requirement 3).
 
 ### B2 — `feat/v1-9b-2-clear-day`
+
+⚠️ Superseded in part 2026-11-15 — see § [Amendment (2026-11-15)](#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page).
 
 | Path                                                             | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ---------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

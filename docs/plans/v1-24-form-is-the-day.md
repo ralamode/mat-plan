@@ -4,6 +4,13 @@
 > and **V1-25 §3** (…and it looks like you're done). The two rows say to plan them together; this is
 > that plan.
 >
+> ⚠️ **Re-scoped 2026-11-15** (the maintainer, against Beta 0's accepted prototype). **PR 2 is not
+> built:** 2a (the check-in receipt) is cut, because the day page no longer has a Check-ins section,
+> and 2b (the check-in amend) became FAM-1 step 13b. **PR 3b no longer demotes the list:** it removes
+> the old forms and the list, and leaves Bodyweight and practice, each entered once and then changed
+> ([3b plan](./v1-24-3b-logs-in-place.md)). The PR 2 and PR 3 sections below record what was planned
+> before that.
+>
 > **This file is the whole V1-24 arc: one `## File-by-file` section per PR, each carrying its own
 > panel log, and each recording its own branch at its heading.** It is appended to as the arc ships.
 >
