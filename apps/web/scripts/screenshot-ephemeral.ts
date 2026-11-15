@@ -46,7 +46,7 @@ import {
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
-import { SEED_PROFILE_ROUTE } from '../e2e/steps';
+import { logPractice, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -410,6 +410,8 @@ const STATES = {
   // A closed day WITH a weight (the receipt, recovery line, no form) and one WITHOUT
   // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
   'bodyweight-closed': seedClosedDays,
+  // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
+  'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
@@ -616,6 +618,8 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'duplicate-kinds-differ': warnOnDuplicate(SEED_PROFILE_3_NAME, PROFILE_KIND.adult),
   'duplicate-at-cap': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
+  // Retry-safe: the three widths share one database, and only the first finds the button.
+  'practice-logged': (page) => logPractice(page),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });

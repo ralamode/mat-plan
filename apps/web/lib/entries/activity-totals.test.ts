@@ -15,6 +15,7 @@ import type { EntryDTO } from '@/lib/dal/entries';
 import {
   calisthenicsTotals,
   loggedBodyweight,
+  loggedLifeActivities,
   loggedMovements,
   movementNames,
   sessionMovements,
@@ -420,5 +421,28 @@ describe('loggedBodyweight (V1-24 PR 1a)', () => {
     expect(
       loggedBodyweight([weighIn({ value: null }), weighIn({ id: 'real', value: 70 })]),
     ).toEqual([{ entryId: 'real', value: 70, unit: DEFAULT_BODYWEIGHT_UNIT }]);
+  });
+});
+
+describe('loggedLifeActivities (V1-24 3b-page)', () => {
+  const PRACTICE = ACTIVITY_TYPE_KEYS.wrestling_practice;
+  const life = (id: string, activityKey: string | null, value: number | null = 90): EntryDTO =>
+    reading({ id, activityKey, value, unit: 'min', metricKey: null });
+
+  it('keeps only the asked-for keys, in the order the DAL returned them', () => {
+    const rows = [
+      life('a', PRACTICE, 90),
+      life('b', null),
+      life('c', ACTIVITY_TYPE_KEYS.wake, 412),
+      life('d', PRACTICE, 45),
+    ];
+    expect(loggedLifeActivities(rows, [PRACTICE])).toEqual([
+      { entryId: 'a', activityKey: PRACTICE, value: 90, unit: 'min' },
+      { entryId: 'd', activityKey: PRACTICE, value: 45, unit: 'min' },
+    ]);
+  });
+
+  it('returns nothing when no keys are asked for', () => {
+    expect(loggedLifeActivities([life('a', PRACTICE)], [])).toEqual([]);
   });
 });

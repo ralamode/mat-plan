@@ -39,7 +39,7 @@ const shown = (w: LoggedBodyweight) => formatValueUnit(w.value, w.unit);
 
 type Props = Parameters<typeof BodyweightSection>[0];
 const section = (overrides: Partial<Props> = {}) => (
-  <BodyweightSection profileId="p1" day={DAY} writable logged={[]} {...overrides} />
+  <BodyweightSection profileId="p1" day={DAY} writable amendable logged={[]} {...overrides} />
 );
 
 /** Every status region in the section, joined — the create announcer AND the amend's own. */
@@ -119,18 +119,26 @@ describe('BodyweightSection — its states', () => {
   });
 
   /**
-   * ⚠️ THE Decision 5 test. The amend has NO day bound — an amend never moves the entry's date — so
-   * gating the control on `writable` would be that bound wearing a client-side hat, and would hide
-   * it on exactly the history days a typo is found on. The 2026-09-28 entry that opened V1-24 was
-   * corrected two days later.
+   * V1-24 3b-page: a day before yesterday is read-only. The value shows as text, with no Change,
+   * and the section does not repeat the page's notice.
    */
-  it('a closed day still offers the amend, and does not repeat the page banner', () => {
+  it('a read-only day shows the weight with NO Change, and does not repeat the page notice', () => {
     const w = weight(84.5);
-    render(section({ logged: [w], writable: false }));
+    render(section({ logged: [w], writable: false, amendable: false }));
     expect(screen.getByText(BODYWEIGHT_COPY.saved(shown(w)))).toBeTruthy();
-    expect(screen.getByRole('button', { name: changeLabel('weight', shown(w)) })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Change/ })).toBeNull();
     expect(screen.queryByText(BODYWEIGHT_COPY.onePerDay)).toBeNull();
     expect(screen.queryByText(CLOSED_DAY_NOTICE)).toBeNull();
+  });
+
+  /**
+   * An archived athlete cannot log (`writable` is false) but their weight on today or yesterday stays
+   * correctable: `amendable` follows the day, not archive (the plan's P1).
+   */
+  it('an archived athlete keeps Change on a day that can still be changed', () => {
+    const w = weight(84.5);
+    render(section({ logged: [w], writable: false, amendable: true }));
+    expect(screen.getByRole('button', { name: changeLabel('weight', shown(w)) })).toBeTruthy();
   });
 
   it('a closed day with nothing → "No weight logged.", not a bare heading', () => {

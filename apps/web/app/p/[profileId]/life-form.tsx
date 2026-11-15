@@ -4,9 +4,6 @@ import { newId } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { SAVED_STATE_COPY } from '@/lib/constants';
-import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
-import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
 
 import { INITIAL_ACTION_STATE } from './action-state';
 import { logLifeActivitiesAction } from './actions';
@@ -15,21 +12,18 @@ import { logLifeActivitiesAction } from './actions';
  * One life-activity button (V1-7). Its OWN `<form>` so a single tap submits immediately (no batch
  * "Log" button). `client_id` is fixed per instance (`useState(newId)` — NO rotation, the
  * bodyweight-form idiom): log-once means a double-tap reuses it → `ON CONFLICT` dedupes. After a
- * successful log the parent renders this inert (the activity is in `loggedKeys`), and the detail
- * ("Wake — 6:52 AM") appears in the Logged-entries list below via `entryLabel`.
+ * successful log `LifeSection` stops rendering this and shows the logged row in its place.
  */
 function LifeButton({
   profileId,
   day,
   activityKey,
   label,
-  logged,
 }: {
   profileId: string;
   day: string;
   activityKey: string;
   label: string;
-  logged: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     logLifeActivitiesAction,
@@ -48,14 +42,6 @@ function LifeButton({
   if (state !== seenState) {
     setSeenState(state);
     if (!state.ok && state.error) setClientId(newId());
-  }
-
-  if (logged) {
-    return (
-      <p className="text-muted-foreground flex h-11 items-center px-1 text-base">
-        {SAVED_STATE_COPY.lifeLogged(label)}
-      </p>
-    );
   }
 
   return (
@@ -77,48 +63,36 @@ function LifeButton({
 }
 
 /**
- * The "Life" one-tap section (V1-7) — two explicit buttons (not a registry `.map`, since the two
- * activities are heterogeneous and few). `loggedLifeKeys` are the life activities already logged
- * today (derived on the page from the day's entries), so each button renders inert once tapped.
+ * The one-tap buttons for the life activities that are NOT yet logged on this day (V1-7). The
+ * logged rows, and which activities the day page shows at all, belong to `LifeSection`.
  */
 export function LifeForm({
   profileId,
   day,
-  loggedLifeEntryIds,
-  activityKeys,
+  activities,
 }: {
   profileId: string;
   day: string;
-  /** Life activity key → the `public_id` of the entry logging it on this day. See the page. */
-  loggedLifeEntryIds: ReadonlyMap<string, string>;
-  // V1-18: render only these life activities, in this order (a per-kid routine subset). Omitted → all of
-  // them (the default routine + every pre-V1-18 caller are unchanged).
-  activityKeys?: readonly string[];
+  activities: readonly { key: string; label: string }[];
 }) {
-  // Resolve a per-kid subset via the SHARED helper (single-sourced with the check-in path); omitted → all.
-  const activities = activityKeys ? lifeActivitiesForKeys(activityKeys) : LIFE_ACTIVITIES;
   return (
     <div className="flex flex-wrap gap-3">
-      {activities.map((a) => {
-        const loggedEntryId = loggedLifeEntryIds.get(a.key);
-        return (
-          <LifeButton
-            // 🔴 **The key carries the DAY and the row's identity, and that is a lost-write fix.**
-            // Keyed on `a.key` alone, React kept one instance — and the `client_id` in its state —
-            // across a day change, because the section around it is keyed by block index. So:
-            // tap Wrestling practice today, press ‹, tap it again, and the second submit replays
-            // TODAY's row (its `client_id` is still live) and writes NOTHING for yesterday, while
-            // the action reports success. Two taps, no delete needed, and it is exactly the
-            // "log yesterday's practice this evening" path this app is used for.
-            key={`${day}:${a.key}:${loggedEntryId ?? 'open'}`}
-            profileId={profileId}
-            day={day}
-            activityKey={a.key}
-            label={a.label}
-            logged={loggedEntryId !== undefined}
-          />
-        );
-      })}
+      {activities.map((a) => (
+        <LifeButton
+          // 🔴 **The key carries the DAY, and that is a lost-write fix.** Keyed on `a.key` alone,
+          // React kept one instance — and the `client_id` in its state — across a day change. So:
+          // tap Wrestling practice today, press ‹, tap it again, and the second submit replays
+          // TODAY's row (its `client_id` is still live) and writes NOTHING for yesterday, while
+          // the action reports success. It is exactly the "log yesterday's practice this evening"
+          // path this app is used for. A logged activity unmounts its button, so a later re-open
+          // (after a delete) mounts a new instance with a new id.
+          key={`${day}:${a.key}`}
+          profileId={profileId}
+          day={day}
+          activityKey={a.key}
+          label={a.label}
+        />
+      ))}
     </div>
   );
 }

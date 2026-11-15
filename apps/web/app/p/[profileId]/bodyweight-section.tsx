@@ -25,11 +25,18 @@ export function BodyweightSection({
   profileId,
   day,
   writable,
+  amendable,
   logged,
 }: {
   profileId: string;
   day: string;
   writable: boolean;
+  /**
+   * Whether a logged weight offers Change: today and yesterday (V1-24 3b-page). Its own flag
+   * because `writable` also folds in archive, and an archived athlete's logged weight stays
+   * correctable on those two days.
+   */
+  amendable: boolean;
   logged: readonly LoggedBodyweight[];
 }) {
   const values = formatLoggedWeights(logged);
@@ -64,18 +71,17 @@ export function BodyweightSection({
         <BodyweightReceipt
           logged={logged}
           writable={writable}
-          // ⚠️ Passed on EVERY day, closed ones included — the amend has no day bound (Decision 5).
-          // Gating it on `writable` would be that bound wearing a client-side hat, and would hide
-          // the control on exactly the history days a typo is found on.
+          // Only on a day that can still be changed (`amendable`): a day before yesterday is
+          // read-only, and shows the value as text.
           //
-          // ⚠️ ...but only when there is ONE row. The receipt renders duplicates as a single
+          // ⚠️ ...and only when there is ONE row. The receipt renders duplicates as a single
           // `2 weights logged: 84.5 lb, 845 lb` line into a row that takes ONE control, and an
           // amend addresses ONE entryId — so a lone Change there would silently edit an unstated
           // one of them, most likely the correct one, leaving two wrong values where there was one.
           // `BODYWEIGHT_COPY.duplicates` keeps saying "ask a parent" until 1c/1d remove the extra
           // row, which an amend cannot do. A per-row control is a receipt-shape change, not a slot.
           control={
-            logged.length === 1 ? (
+            amendable && logged.length === 1 ? (
               // ⚠️ Keyed on the ENTRY, like the create form is keyed on the day: paging days is a
               // client-side transition, so an unkeyed island would survive it with day A's typed
               // value while its hidden entryId/seenValue re-rendered to day B's — and Save would

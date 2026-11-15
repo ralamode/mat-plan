@@ -118,6 +118,11 @@ indexing is YDP-1, blocked on SCHED-1. The tests pin the decision, so a "fix" tu
 roles need a migration altering two `day_role` CHECKs; reusing them is what let the athletes log
 the same evening instead of on paper.
 
+⚠️ **Off the day page since V1-24 3b-page (2026-11-15):** the program card (`program-reference.tsx`)
+and the day-role label beside the date are not rendered, and the page no longer calls
+`getProgramDay` or `householdProgramsAnything`. 3d below describes the code as it stands until FAM-1 12f
+deletes it; `DayNav` keeps its optional `dayRoleLabel` prop.
+
 3d. **The day letter appears TWICE on Today, and the two are different things.** Since V1-23 the date
 line reads `Today · Fri, Sep 26 · Strength B` — that badge is **derived** page metadata, straight off
 `resolveDayRole`, and nobody asserts it. The `dayRole` **select** in `strength-form.tsx` is the

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { SEED_PROFILE_ROUTE } from './steps';
+import { SEED_PROFILE_2_ROUTE } from './steps';
 
 /**
  * The CSV export, end to end (V1-13b).
@@ -11,7 +11,11 @@ import { SEED_PROFILE_ROUTE } from './steps';
  * than a status-code check.
  */
 test('an athlete’s CSV tree downloads as a zip', async ({ page }) => {
-  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+  // ⚠️ Athlete Two, deterministically: the link renders only for an athlete with history, and the
+  // warm-up's weigh-in (`global.setup.ts`) is the one row guaranteed to exist before any spec runs.
+  // Athlete One had history here only because the check-ins warm-up wrote to them, and that warm-up
+  // left with the Check-ins form (V1-24 3b-page).
+  await page.goto(SEED_PROFILE_2_ROUTE, { waitUntil: 'networkidle' });
 
   const link = page.getByRole('link', { name: /Export CSV/i });
   await expect(link).toBeVisible();

@@ -151,6 +151,9 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
+> ⚠️ **The Check-ins form is off the day page since V1-24 3b-page (2026-11-15, #418)**;
+> `logCheckinsAction` and this write path stay, tested, until FAM-1 12f.
+
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
 `/` is the **public landing** (OSS-2): no cookie read, no DB query — and since `AUTH-1` 1c-3b
@@ -425,6 +428,11 @@ the 13 seeded are open. Only `IS NULL` takes the fallback branch. NULL means "lo
 or logged with no day role"; everything else freezes, so chunk 4's edits cannot rewrite history.
 
 ## 2d. Program read path — today's weekday → the kid's prescribed movements (V1-10)
+
+> ⚠️ **Not on the day page since V1-24 3b-page (2026-11-15, #418).** The page no longer calls
+> `resolveDayRole` or `getProgramDay`, and the program card and strength form are unmounted; the
+> export and the snapshot writer still read the program. FAM-1 12c brings a program surface back, and
+> 12f deletes the old code. The flow below is kept as the record until then.
 
 The programming tables (§4) surface on Today as a **read-only** card. The calendar date comes from the
 active-tz local day (V1-6c) and maps through a hardcoded app-config schedule — a documented stopgap,

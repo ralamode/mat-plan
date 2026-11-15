@@ -1,21 +1,17 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import {
-  addDays,
-  CATALOG_METRIC_DEFINITION_SEED_ROWS,
-  DEFAULT_BODYWEIGHT_UNIT,
-  SEED_METRIC_KEYS,
-} from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, addDays, DEFAULT_BODYWEIGHT_UNIT } from '@mat-plan/shared';
 import { expect, type Page } from '@playwright/test';
 
 import {
   BODYWEIGHT_COPY,
   BODYWEIGHT_RECEIPT_ID,
   DEFAULT_TIME_ZONE,
-  SAVED_STATE_COPY,
-  STRENGTH_COPY,
+  LIFE_COPY,
+  LIFE_LOGGED_ID,
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
+import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITIES } from '../lib/life/life-activities';
 
 /**
  * The seeded profile's Today route. Single-sourced here (V1-12) because three callers need it — the
@@ -71,45 +67,19 @@ export async function selectProfile(page: Page, name: string): Promise<void> {
 export const bodyweightSection = (page: Page) =>
   page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true });
 
-/** The strength section, by its heading (`exact`: the program card's own region name has "Strength"). */
-export const strengthSection = (page: Page) =>
-  page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
-
-/**
- * **Make the strength form usable, retry-safely (V1-24 3a-ii).** Once a day has a strength session, the
- * form starts COLLAPSED behind "Log more strength"; a spec that needs the form calls this first. It
- * clicks the toggle only while it reads collapsed (`aria-expanded="false"`, never the open state's
- * "Close"), and retries until the submit is visible, so a click that lands before hydration (no
- * handler yet) can't pass silently. Call it again after a client-side day change.
- */
-export async function openStrengthForm(page: Page): Promise<void> {
-  const section = strengthSection(page);
-  const submit = section.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
-  await expect(async () => {
-    const toggle = section.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true });
-    if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) === 'false') {
-      await toggle.click();
-    }
-    await expect(submit).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
-}
+/** The Life section, by its heading (V1-24 3b-page). */
+export const lifeSection = (page: Page) =>
+  page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
 
 /** How the app displays a weight the specs log in the default unit (`84.5` → `84.5 lb`). */
 export const shownWeight = (value: string) =>
   formatValueUnit(Number(value), DEFAULT_BODYWEIGHT_UNIT);
 
-/** The "Logged entries" line for a weigh-in (`Bodyweight — 84.5 lb`), built as `entryLabel` does. */
-const BODYWEIGHT_METRIC_LABEL = CATALOG_METRIC_DEFINITION_SEED_ROWS.find(
-  (m) => m.key === SEED_METRIC_KEYS.bodyweight,
-)!.label;
-export const bodyweightEntryLine = (value: string) =>
-  `${BODYWEIGHT_METRIC_LABEL} — ${shownWeight(value)}`;
-
 /**
  * **Log `value` as the day's bodyweight, retry-safely**, and assert the day holds exactly that value.
  *
- * On an empty day: fill + submit, then assert the receipt, the entries line, and that focus landed
- * on the receipt rather than dropping to `<body>` when the form unmounted (V1-24 PR 1a, acceptance 6).
+ * On an empty day: fill + submit, then assert the receipt and that focus landed on it rather than
+ * dropping to `<body>` when the form unmounted (V1-24 PR 1a, acceptance 6).
  *
  * On a day that already has a weight the form is gone (the receipt replaced it), so this asserts the
  * receipt shows **the value this caller logs**. That is what a Playwright retry sees — it reuses the
@@ -130,7 +100,6 @@ export async function logBodyweight(
 ): Promise<void> {
   const section = bodyweightSection(page);
   const saved = section.getByText(BODYWEIGHT_COPY.saved(shownWeight(value)), { exact: true });
-  // exact: disambiguate from the strength form's "Movement 1 set 1 weight in …" inputs.
   const input = section.getByLabel('Weight', { exact: true });
 
   if ((await input.count()) > 0) {
@@ -142,120 +111,32 @@ export async function logBodyweight(
   }
 
   await expect(saved).toBeVisible(opts);
-  await expect(page.getByText(bodyweightEntryLine(value))).toBeVisible(opts);
 }
 
+/** The practice button's label and its logged row's value, from the app's own sources. */
+export const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
+  (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
+)!.label;
+const PRACTICE_SHOWN = formatValueUnit(DEFAULT_PRACTICE_MINUTES, 'min');
+
 /**
- * Log a check-in through the Today form and wait for it to render (V1-5). Covers the
- * kind-NULL write path end-to-end: a bare habit checkbox (neither source column) and a
- * rated brush-teeth metric, in one submit.
+ * Tap the one-tap **Wrestling practice** button and assert the Life section's logged row, with its
+ * minutes (V1-24 3b-page). Retry-safe: a logged activity has no button (the row replaced it), so a
+ * Playwright retry on the reused DB skips the tap and asserts the end state.
  *
- * `exact` matters here — `Shot` vs `Shots` and `Stance` vs the section copy are live
- * substring collisions (docs/lessons.md: substring matching bit us in V0-11).
+ * On a fresh log it also asserts focus moved to the logged rows: the button that had focus has
+ * unmounted, and `SavedAnnouncer` moves it rather than letting it drop to `<body>`.
  */
-export async function logCheckins(
-  page: Page,
-  opts: { habit: string; rating: { label: string; value: string } },
-): Promise<void> {
-  const form = page.getByRole('region', { name: 'Check-ins' });
-  const submit = page.getByRole('button', { name: 'Log check-ins' });
-  const rating = form.getByRole('spinbutton', { name: new RegExp(`^${opts.rating.label}`) });
-
-  // RETRY-SAFE. Playwright retries reuse the same ephemeral DB, and an already-logged
-  // field renders readonly/aria-disabled by design — so a second attempt must assert the
-  // end state rather than re-submit into an inert control (which just times out).
-  if (await rating.isEditable()) {
-    await form.getByRole('checkbox', { name: opts.habit, exact: true }).check();
-    await rating.fill(opts.rating.value);
-    await submit.click();
-
-    // Synchronize on the submit completing. The button returning from "Logging…" is the
-    // real signal: this action does several catalog reads plus a multi-row insert and a
-    // full RSC revalidation, so it is slower than the single-row bodyweight write and
-    // outruns the default 5s expect timeout on a cold CI worker.
-    await expect(submit).toBeEnabled({ timeout: 15_000 });
-  }
-
-  // Scope assertions to the ENTRIES list, not the page. The habit's own <label> renders
-  // its name inside the form, so an unscoped getByText('Rice bucket') passes even when
-  // nothing was written — a false positive that masks a genuinely failed write.
-  const logged = page.getByRole('region', { name: 'Logged entries' });
-  await expect(logged.getByText(opts.habit, { exact: true })).toBeVisible();
-  await expect(logged.getByText(`${opts.rating.label} — ${opts.rating.value}/10`)).toBeVisible();
-}
-
-/**
- * Submit the check-ins form with a set of habit checkboxes and/or numeric fields (V1-6a).
- * Retry-safe: a habit already logged (checked + inert) is skipped rather than re-checked, so
- * a Playwright retry on the reused DB doesn't get stuck. Waits for the submit to complete.
- */
-export async function submitCheckins(
-  page: Page,
-  opts: {
-    checks?: string[];
-    numbers?: { label: string; value: string }[];
-    /** Only overridden for the COLD warm-up in global.setup.ts — see `logBodyweight`'s note. */
-    timeout?: number;
-  },
-): Promise<void> {
-  const form = page.getByRole('region', { name: 'Check-ins' });
-  const submit = page.getByRole('button', { name: 'Log check-ins' });
-  for (const name of opts.checks ?? []) {
-    const box = form.getByRole('checkbox', { name, exact: true });
-    if (!(await box.isChecked())) await box.check(); // already logged → checked + inert; skip
-  }
-  for (const n of opts.numbers ?? []) {
-    await form.getByRole('spinbutton', { name: new RegExp(`^${n.label}`) }).fill(n.value);
-  }
-  await submit.click();
-  await expect(submit).toBeEnabled({ timeout: opts.timeout ?? 15_000 }); // slow action — see logCheckins
-}
-
-/**
- * Log a calisthenics count and assert the "Calisthenics today" total (V1-6a). Covers the
- * ACCUMULATING path: the field stays editable after logging, so — unlike `logCheckins`'s
- * inert fields — retry-safety CANNOT lean on `isEditable()`. Instead we assert the END
- * STATE and only submit when the total isn't already present, so a Playwright retry (which
- * reuses the ephemeral DB) neither re-submits (double-count) nor trips the exact locator.
- */
-/**
- * Tap a one-tap "Life" activity (V1-7: Wake / Wrestling practice) and assert it logged. Covers the
- * timing/duration write path end-to-end. Retry-safe: an already-logged button renders inert (a
- * "· logged today" line, not a button), so a Playwright retry on the reused DB skips the click and
- * asserts the end state. `expectInList` is scoped to the Logged-entries region (the button's own
- * label collides with the entries text — the docs/lessons.md substring trap).
- */
-export async function logLifeActivity(
-  page: Page,
-  opts: { button: string; expectInList: RegExp },
-): Promise<void> {
-  const life = page.getByRole('region', { name: 'Life' });
-  const button = life.getByRole('button', { name: opts.button, exact: true });
+export async function logPractice(page: Page): Promise<void> {
+  const life = lifeSection(page);
+  const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
+  const row = life
+    .getByRole('listitem')
+    .filter({ hasText: LIFE_COPY.logged(PRACTICE_LABEL, PRACTICE_SHOWN) });
   if ((await button.count()) > 0) {
     await button.click();
-    // The write + full RSC revalidation flips the button to an inert "· logged today" line.
-    await expect(life.getByText(SAVED_STATE_COPY.lifeLogged(opts.button))).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(life.locator(`#${LIFE_LOGGED_ID}`)).toBeFocused();
   }
-  const logged = page.getByRole('region', { name: 'Logged entries' });
-  await expect(logged.getByText(opts.expectInList)).toBeVisible();
-}
-
-export async function logCalisthenics(
-  page: Page,
-  opts: { label: string; value: string },
-): Promise<void> {
-  const totals = page.getByRole('region', { name: 'Calisthenics today' });
-  const totalRow = totals.getByRole('listitem').filter({ hasText: opts.label });
-
-  if ((await totalRow.count()) === 0) {
-    const form = page.getByRole('region', { name: 'Check-ins' });
-    const submit = page.getByRole('button', { name: 'Log check-ins' });
-    await form.getByRole('spinbutton', { name: new RegExp(`^${opts.label}`) }).fill(opts.value);
-    await submit.click();
-    await expect(submit).toBeEnabled({ timeout: 15_000 }); // slow action — see logCheckins
-  }
-
-  await expect(totalRow).toContainText(opts.value);
+  await expect(row).toHaveCount(1);
 }

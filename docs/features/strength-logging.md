@@ -30,6 +30,13 @@ owns:
 
 **Read this before changing the log form, the set schema, or the strength writer.**
 
+> ⚠️ **Off the day page since V1-24 3b-page (2026-11-15).** `StrengthSection`, the form, the program
+> card and the session receipts are **unmounted**: nothing renders them, and nobody can log a strength
+> session in the app until FAM-1 12f deletes them (12d and 13b rebuild strength on the new page). `logStrengthSessionAction`, its
+> writer and their Vitest and `db:verify` coverage stay. The e2e that drove the form
+> (`scaffold-submit.spec.ts`, `day-nav-form-state.spec.ts`, the strength tests in `a11y.spec.ts`)
+> was deleted with it. [tech-debt.md](../tech-debt.md) holds the expiry, FAM-1 12f.
+
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
 `writeStrengthSession` reads the athlete's program **before it opens the transaction** and freezes

@@ -1,33 +1,17 @@
-import { readsHouseholdProgram, DAY_ROLE_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { AppShell } from '@/components/layout/app-shell';
 
-import { EmptyState } from '@/components/ui/empty-state';
 import { getActiveTimeZone } from '@/lib/active-timezone';
-import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { formatDayShort, localDayIso, localWeekStartIso } from '@/lib/date';
-import { isWritableDay, resolveViewedDay } from '@/lib/entries/declared-day';
+import { localDayIso, localWeekStartIso } from '@/lib/date';
+import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
-import { getProgramDay, householdProgramsAnything } from '@/lib/dal/programming';
-import { resolveDayRole } from '@/lib/programming/day-role-schedule';
-import {
-  calisthenicsTotals,
-  loggedBodyweight,
-  type SessionRow,
-  todayRows,
-} from '@/lib/entries/activity-totals';
-import {
-  buildRoutineBlocks,
-  checkinFieldsForKeys,
-  lifeActivitiesForKeys,
-} from '@/lib/routine/catalog';
-
-import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
+import { loggedBodyweight, loggedLifeActivities } from '@/lib/entries/activity-totals';
+import { buildRoutineBlocks } from '@/lib/routine/catalog';
 
 import {
   ALL_ATHLETES_LINK,
@@ -46,11 +30,7 @@ import {
   athletePath,
 } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
-import { CheckinForm } from './checkin-form';
-import { LifeForm } from './life-form';
-import { MovementLine } from './movement-line';
-import { StrengthSection } from './strength-section';
-import { sessionOrdinals, StrengthSessionReceipt } from './strength-session-receipt';
+import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
@@ -94,88 +74,28 @@ export default async function TodayPage({
   // legal day and a stale URL should land somewhere usable.
   const { d } = await searchParams;
   const day = resolveViewedDay(typeof d === 'string' ? d : undefined, today, profile.firstDay);
-  const isToday = day === today;
-  // Two booleans, deliberately: `isToday` drives COPY, `isWritable` drives FORMS. Conflating them is
-  // how yesterday would have lost its forms — the server accepts a write within ±1 day
-  // (`resolveDeclaredDay`), and the UI must not be stricter than the endpoint it fronts.
-  // 🔴 **TWO reasons a day is read-only, and they must not be conflated.** The first version folded
-  // archive into `writable` and left the V1-15 notice gated on `!writable` — so an ARCHIVED athlete's
-  // page, on TODAY, rendered "New entries are closed for this day — it's more than a day ago" above
-  // the real reason. False, and it promised amend controls the archived page no longer offers. A UX
-  // lens caught it in the exact scenario the authority split exists for: the other adult opening the
-  // kid's page at practice.
-  const closedDay = !isWritableDay(day, today);
-  const writable = !closedDay && !profile.archived;
+  // 🔴 **TWO reasons a day is read-only, and they must not be conflated** — the day (before
+  // yesterday) and archive. `dayPageFlags` keeps them apart and is unit-tested; see its docblock.
+  const { writable, amendable, showClosedNotice } = dayPageFlags(day, today, profile.archived);
   const weekStart = localWeekStartIso(day);
-  // V1-10: which day the PROGRAM says this is, from the same active-tz `day` the header renders — so
-  // the card can't claim Monday while the header says Sunday. TOTAL since the youth daily A/B rotation
-  // landed (`resolveDayRole(day): DayRole`, no rest days), so there is no "not a programmed day" branch
-  // to guard: every calendar day resolves to a role and reads its program.
-  const dayRole = resolveDayRole(day);
-  // 🔴 **PROF-1 a-g (Q15 stopgap):** only a child reads the household's program. The query enforces
-  // it (`programDayRows`' kind conjunct, proved by `db:verify`); this is the UI half, so an adult is
-  // not shown a day role and a form default that describe someone else's program. `ASSIGN-READ`
-  // deletes both halves.
-  const readsProgram = readsHouseholdProgram(profile.kind);
   // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
-  // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today;
-  // `programDay` is [] when the kid's household has no block for today's role.
-  const [entries, adherence, programDay, householdPrograms] = await Promise.all([
+  // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
+  const [entries, adherence] = await Promise.all([
     listEntriesForDay(profile.id, day),
     getWeeklyAdherence(profile.id, weekStart),
-    getProgramDay(profile.id, dayRole),
-    // ⚠️ Fires ONLY for an adult, and only to choose between two empty states — "nothing
-    // programmed here" and "programmed, but not for you". A kid never pays for it.
-    readsProgram ? Promise.resolve(false) : householdProgramsAnything(),
   ]);
-
-  // Which check-in fields are already logged today — derived from the entries we just
-  // fetched, so the form's inert state costs no extra query. A field's identity is
-  // `activityKey` (bare habit) or `activityKey:metricKey` (metric), matching the registry.
-  // Accumulating fields (calisthenics) are EXCLUDED: they log multiple bouts a day, so they
-  // must stay editable rather than go inert after the first reading.
-  const accumulatingKeys = new Set(CHECKIN_FIELDS.filter((f) => f.accumulates).map((f) => f.key));
-  const loggedFieldKeys = entries
-    .filter((e) => e.activityKey !== null)
-    .map((e) => (e.metricKey === null ? e.activityKey! : `${e.activityKey}:${e.metricKey}`))
-    .filter((k) => !accumulatingKeys.has(k));
-
-  // V1-7: which life activities (wake / wrestling practice) are already logged today, so their
-  // one-tap buttons render inert. Derived from the same fetched entries (no extra query).
-  //
-  // 🔴 **A MAP to the entry's id since `V1-9b` B1-2, not a set of keys** — because the button's
-  // React identity has to change when the row behind it does. The key `a.key` alone let one
-  // `LifeButton` instance, and the `client_id` in its state, survive a day change: tap Wrestling
-  // practice today, press ‹, tap it again, and the second tap replays TODAY's row and writes
-  // nothing for yesterday. (`<section key={`b${i}`}>` is keyed by block index, so React reconciles
-  // the same instance across days.) The id is also what makes the button's identity change after a
-  // delete, which is what `B1-3` needs.
-  //
-  // ⚠️ Deterministic when a day somehow holds two rows for one key — nothing in the schema forbids
-  // it — because `listEntriesForDay` returns `(created_at, id)` order and the FIRST wins.
-  const loggedLifeEntryIds = new Map<string, string>();
-  for (const e of entries) {
-    if (e.activityKey === null) continue;
-    if (!(LIFE_ACTIVITY_KEYS as readonly string[]).includes(e.activityKey)) continue;
-    if (!loggedLifeEntryIds.has(e.activityKey)) loggedLifeEntryIds.set(e.activityKey, e.id);
-  }
 
   // V1-24 PR 1a: every bodyweight row on the day (usually zero or one) — what makes the weigh-in
   // surface render the RECEIPT instead of an empty input. Derived from the entries already fetched
-  // above (no extra query), the `loggedFieldKeys` idiom.
+  // above (no extra query).
   const bodyweight = loggedBodyweight(entries);
 
-  // V1-6a: the calisthenics tally — today's per-metric totals, folded from the day's entries.
-  const calisTotals = calisthenicsTotals(entries);
-  // Display rows for the "Logged entries" list: calisthenics bouts grouped into one row per
-  // exercise (so repeated bouts don't read as duplicate rows), everything else individual.
-  const rows = todayRows(entries);
-  // V1-24 3a-ii: today's strength sessions feed the strength section; the list reuses the receipt.
-  const sessionRows = rows.filter((r): r is SessionRow => r.kind === 'session');
-  const ordinals = sessionOrdinals(sessionRows);
-  // Whether the strength SECTION renders: if it does, it owns Change and the list copy is read-only.
-  const routineBlocks = buildRoutineBlocks(profile.routine.order);
-  const strengthOnPage = routineBlocks.some((b) => b.kind === 'strength');
+  // V1-24 3b-page: the day page is Bodyweight and Life. The routine still chooses the life
+  // activities (`profile.routine`, resolved by the DAL); its strength and check-in keys render
+  // nothing here until FAM-1 brings the program's workouts.
+  const lifeKeys = buildRoutineBlocks(profile.routine.order).flatMap((block) =>
+    block.kind === 'life' ? block.keys : [],
+  );
 
   return (
     <AppShell athletes={await listProfiles()} current={{ athlete: profile.id }}>
@@ -211,26 +131,10 @@ export default async function TodayPage({
         <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>
           {profile.name}
         </h1>
-        {/* V1-23 D1: the day ROLE rides the date line, so "which day is it?" is answered in the band
-            that already answers "what day is it?" — before V1-23 the letter was only visible inside
-            the program card, a screenful down. This is DERIVED page metadata (what the calendar says
-            via `resolveDayRole`), NOT the human's assertion: the athlete's assertion stays the
-            `dayRole` select in `StrengthForm`, positioned after every movement card and immediately
-            before submit, which is what makes the GAP-1 P0-1 provenance contract real (position, not
-            visibility). Label via the SHARED `DAY_ROLE_LABELS` — no second map. It reads "Strength B"
-            while the program is colloquially Day B because `strength_a`/`strength_b` are a documented
-            temporary reuse of the roles (see `resolveDayRole`); not fixed here. */}
-        {/* V1-15: DayNav REPLACES this line rather than sitting beside it — the date has exactly one
-            home, and rendering it twice (once reworded, once in the nav) is how a "small" header
-            change becomes a visual bug. The day ROLE stays here, appended, because it is derived page
-            metadata about the day being viewed and travels with it. */}
-        <DayNav
-          profileId={profileId}
-          day={day}
-          today={today}
-          floor={profile.firstDay}
-          dayRoleLabel={readsProgram ? DAY_ROLE_LABELS[dayRole] : undefined}
-        />
+        {/* V1-15: DayNav REPLACES a date line rather than sitting beside one — the date has exactly
+            one home. Its day-role label left with the program card it described (V1-24 3b-page);
+            the prop stays on `DayNav` for FAM-1. */}
+        <DayNav profileId={profileId} day={day} today={today} floor={profile.firstDay} />
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
             a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
@@ -248,20 +152,11 @@ export default async function TodayPage({
         )}
       </header>
 
-      {/* V1-18: the logging surfaces render in this kid's OWN routine order (`profile.routine`, resolved by
-          the DAL). Weigh-in is pinned FIRST by construction (bodyweight is never a routine `order` key), then
-          each block — a contiguous run of check-ins/life collapses into one existing form (batch submit +
-          single island preserved). A NULL config resolves to the default routine = today's exact order.
-          Scope of "own order" (slice 1): the routine orders BLOCKS. WITHIN a check-in block, fields still
-          render in `CheckinForm`'s group order (by `groupLabel`), not the authored per-key order — true
-          per-key interleave inside check-ins is a later concern. Strength is routine-DRIVEN (the default +
-          seeds include it); a config that omits `strength` shows no strength block (the routine is the
-          selection — PR 2/V1-10 own an "always offer strength" affordance if wanted). */}
-      {/* V1-15: ONE notice, above the blocks, when the viewed day is outside the server's write
-          window. The forms below are gated on the SAME `writable`, so what the athlete can reach and
-          what `resolveDeclaredDay` accepts cannot drift. An unexplained absence reads as a bug —
-          which is the finding that explains the 2026-09-28 incident. */}
-      {closedDay ? (
+      {/* V1-15: ONE notice, above the sections, on a day before yesterday: an unexplained absence
+          reads as a bug — the finding that explains the 2026-09-28 incident.
+          Not for an archived athlete (V1-24 3b-page): the sentence says today and yesterday can be
+          logged, which is false there, and the archived notice below gives the real reason. */}
+      {showClosedNotice ? (
         <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
           {CLOSED_DAY_NOTICE}
         </p>
@@ -292,175 +187,26 @@ export default async function TodayPage({
           profileId={profile.id}
           day={day}
           writable={writable}
+          amendable={amendable}
           logged={bodyweight}
         />
-        {routineBlocks.map((block, i) => {
-          if (block.kind === 'strength') {
-            // V1-24 3a-ii: the section is the day's strength RECORD (receipts + the collapsible form).
-            return (
-              <StrengthSection
-                key={`b${i}`}
-                headingId={`str-${i}`}
-                profileId={profile.id}
-                day={day}
-                writable={writable}
-                dayRole={readsProgram ? dayRole : null}
-                programDay={programDay}
-                sessions={sessionRows}
-                // 🔴 PROF-1 a-g, from the UX panel (UX3 B1, UX1 S3). ONLY when the household programs
-                // something AND this athlete is an adult — the one case where an empty strength card
-                // needs a reason. A household that programs nothing says nothing, because there is
-                // nothing to explain.
-                programNote={
-                  householdPrograms
-                    ? `Programs are for children for now. ${profile.name} logs freely; their own program comes later.`
-                    : undefined
-                }
-              />
-            );
-          }
-          if (block.kind === 'checkins') {
-            const fields = checkinFieldsForKeys(block.keys);
-            if (fields.length === 0) return null; // an empty run renders nothing (mirrors the old guard)
-            return (
-              <section
-                key={`b${i}`}
-                aria-labelledby={`checkins-${i}`}
-                className="flex flex-col gap-3"
-              >
-                <h2 id={`checkins-${i}`} className="text-lg font-medium">
-                  Check-ins
-                </h2>
-                {writable ? (
-                  <CheckinForm
-                    profileId={profile.id}
-                    day={day}
-                    fields={fields}
-                    loggedFieldKeys={loggedFieldKeys}
-                  />
-                ) : null}
-              </section>
-            );
-          }
-          if (lifeActivitiesForKeys(block.keys).length === 0) return null; // empty run → render nothing
-          return (
-            <section key={`b${i}`} aria-labelledby={`life-${i}`} className="flex flex-col gap-3">
-              <h2 id={`life-${i}`} className="text-lg font-medium">
-                Life
-              </h2>
-              {writable ? (
-                <LifeForm
-                  profileId={profile.id}
-                  day={day}
-                  loggedLifeEntryIds={loggedLifeEntryIds}
-                  activityKeys={block.keys}
-                />
-              ) : null}
-            </section>
-          );
-        })}
+        <LifeSection
+          profileId={profile.id}
+          day={day}
+          writable={writable}
+          activityKeys={lifeKeys}
+          logged={loggedLifeActivities(entries, lifeKeys)}
+        />
       </div>
 
-      {calisTotals.length > 0 ? (
-        <section
-          aria-labelledby="calisthenics-total-heading"
-          className="flex flex-col gap-2 rounded-lg border px-4 py-3"
-        >
-          <h2 id="calisthenics-total-heading" className="text-lg font-medium">
-            {isToday ? 'Calisthenics today' : 'Calisthenics'}
-          </h2>
-          <ul className="flex flex-col gap-1">
-            {calisTotals.map((t) => (
-              <li key={t.metricKey} className="flex items-center justify-between tabular-nums">
-                <span>{t.label}</span>
-                <span className="font-medium">
-                  {t.total}
-                  {t.readings > 1 ? (
-                    <span className="text-muted-foreground ml-2 text-sm">{t.readings} sets</span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
-
-      <section aria-labelledby="entries-heading">
-        {/* Visible when the strength section ALSO shows today's sessions (V1-24 3a-ii UX review): two
-            identical unlabelled cards read as a double-log, which has no in-app undo. 3b demotes the
-            list properly. */}
-        <h2
-          id="entries-heading"
-          className={
-            strengthOnPage && sessionRows.length > 0
-              ? 'text-muted-foreground text-sm font-medium'
-              : 'sr-only'
-          }
-        >
-          Logged entries
-        </h2>
-
-        {rows.length === 0 ? (
-          <EmptyState>
-            {isToday ? 'No entries logged today.' : `Nothing logged on ${formatDayShort(day)}.`}
-          </EmptyState>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {rows.map((row) => {
-              if (row.kind === 'calisthenics') {
-                // Grouped calisthenics: ONE row per exercise, so N bouts don't read as N
-                // duplicate rows. Shows the bouts + "(N sets · total)" when there's more than one.
-                return (
-                  <li
-                    key={`c:${row.total.metricKey}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
-                  >
-                    <span className="font-medium">
-                      {row.total.label} — {row.total.values.join(', ')}
-                    </span>
-                    {row.total.readings > 1 ? (
-                      <span className="text-muted-foreground text-sm tabular-nums">
-                        {row.total.readings} sets · {row.total.total}
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              }
-              if (row.kind === 'session') {
-                // V1-8-3a: a logged strength session as ONE block, via the SAME renderer the strength
-                // section uses (V1-24 3a-ii). Read-only here while the section is on the page, so each
-                // set has exactly one Change; the list keeps Change when the routine has no strength
-                // block (it is then the only surface).
-                return (
-                  <li key={`s:${row.session.id}`}>
-                    <StrengthSessionReceipt
-                      row={row}
-                      profileId={profile.id}
-                      placement="list"
-                      ordinal={ordinals.get(row.session.id)}
-                      editable={!strengthOnPage}
-                    />
-                  </li>
-                );
-              }
-              return (
-                <li key={row.entry.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
-                  <MovementLine entry={row.entry} profileId={profile.id} />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
 
       {/* 🔴 **This slot used to link the ROUTINE EDITOR; PROF-1 a-r replaces it** (acceptance
           criterion 11 / M30: nothing in the app links to `/routine` until ACT-1 replaces that editor;
           the route stays in code, unlinked, as it was before V1-23 PR 2). A routine already saved
-          keeps rendering and logging above; a profile with none keeps the neutral default.
+          still chooses the Life items above; a profile with none keeps the neutral default.
           It becomes rename — criterion 8's "rename shall be reachable from the athlete's own page".
-          BELOW the logged entries, for the reason the routine link was: parents scroll to here, kids
+          At the foot of the page, for the reason the routine link was: parents scroll to here, kids
           do not scroll past their own work, and the header is already dense. Text, not a gear icon —
           a gear would be the only icon on a page whose idiom is text arrows, and it reads as
           "settings for this screen".

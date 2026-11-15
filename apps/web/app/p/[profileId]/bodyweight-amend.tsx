@@ -21,11 +21,11 @@ import { useOnActionSuccess } from './use-on-action-success';
 /**
  * Correct an already-logged bodyweight (V1-24 PR 1b) — the half that makes 1a's receipt honest.
  *
- * ## Rendered on EVERY day, closed ones included
+ * ## Rendered on today and yesterday only
  *
- * The amend has no day bound (plan Decision 5): an amend never moves the entry's date, so a ±1 window
- * buys no integrity and would hide the control on exactly the history days a typo is found on — which
- * is what happened to the 2026-09-28 KB-swings entry that opened V1-24.
+ * A day before yesterday is read-only since V1-24 3b-page (`dayPageFlags`), so the section does not
+ * pass this control there. The server-side bound arrives in 3b-bw; until then the action itself
+ * still accepts an older day.
  *
  * ## The editor STACKS, and that is not styling
  *
