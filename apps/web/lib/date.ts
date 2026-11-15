@@ -1,4 +1,4 @@
-import { isoDaySchema } from '@mat-plan/shared';
+import { addDays, isoDaySchema, localWeekday } from '@mat-plan/shared';
 
 /**
  * Date helpers for the "declared date" of an entry (activity_date is a plain DATE,
@@ -104,19 +104,6 @@ export function isIanaTimeZone(tz: string | null | undefined): tz is string {
 }
 
 /**
- * Whole days from `b` to `a` (both `YYYY-MM-DD`). Used to bound the day a form submits
- * against the server's active-tz today.
- *
- * WHY THIS EXISTS: check-ins (rice bucket, splits, brain rep) are EVENING activities and a
- * form can sit open across the local-midnight rollover, so a page rendered "today" could
- * submit after the server's local day changed. The page sends the day it rendered and the
- * action bounds it to ±1, so the row lands on the date the user was actually looking at.
- */
-export function isoDayDiff(a: string, b: string): number {
-  return Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
-}
-
-/**
  * The Monday that starts the ISO-week containing the calendar date `day` (`YYYY-MM-DD`).
  *
  * THE week-boundary seam (V1-6b-2): feed it a LOCAL day (`localDayIso(activeTz)`); V1-15 day-nav
@@ -125,30 +112,9 @@ export function isoDayDiff(a: string, b: string): number {
  * `…T00:00:00Z` parse (NEVER `new Date("YYYY-MM-DD")`): `day` is already a bare local calendar date,
  * so no zone is reinterpreted and DST never enters — the Monday is always correct.
  */
-export function addDays(day: string, n: number): string {
-  // The `…T00:00:00Z` anchor is the V1-6c idiom, not a stylistic choice: `new Date("2026-07-30")`
-  // parses as UTC midnight and then reports in the RUNTIME's zone, so west of UTC it is the PREVIOUS
-  // day. A bare calendar date has exactly one identity; anchoring at UTC preserves it.
-  return new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-}
-
 export function localWeekStartIso(day: string): string {
-  const dow = new Date(Date.parse(`${day}T00:00:00Z`)).getUTCDay(); // 0=Sun … 6=Sat
-  // Mon→0 … Sun→6 (back to THIS week's Monday).
-  return addDays(day, -((dow + 6) % 7));
-}
-
-/**
- * The weekday of the calendar date `day` (`YYYY-MM-DD`) as `0=Sun … 6=Sat`.
- *
- * THE V1-6c off-by-one trap: `new Date("2026-07-30").getDay()` parses the bare date as UTC midnight and
- * then reports it in the RUNTIME's zone — west of UTC that's the PREVIOUS day, so a Monday program would
- * render on Sunday. This uses the same safe `…T00:00:00Z` parse + `getUTCDay()` idiom as
- * `localWeekStartIso`: `day` is already a bare LOCAL calendar date (from `localDayIso(activeTz)`), it has
- * exactly one weekday, and no zone is reinterpreted. Feed it the local day, never a UTC-derived one.
- */
-export function localWeekday(day: string): number {
-  return new Date(Date.parse(`${day}T00:00:00Z`)).getUTCDay();
+  // `localWeekday` is 0=Sun … 6=Sat; Mon→0 … Sun→6 steps back to THIS week's Monday.
+  return addDays(day, -((localWeekday(day) + 6) % 7));
 }
 
 /**

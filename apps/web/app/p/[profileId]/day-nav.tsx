@@ -1,7 +1,8 @@
+import { addDays, isoDayDiff } from '@mat-plan/shared';
 import { athletePath } from '@/lib/constants';
 import Link from 'next/link';
 
-import { addDays, formatDayLong, formatDayShort, isoDayDiff, localWeekStartIso } from '@/lib/date';
+import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
 
 /**
  * The date line, and the controls that move it (V1-15).

@@ -19,6 +19,7 @@ import {
 } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
+  addDays,
   DEFAULT_BODYWEIGHT_UNIT,
   DEFAULT_SESSION_TYPE,
   E2E_SESSION_BYPASS_USER,
@@ -44,7 +45,7 @@ import {
   DEFAULT_TIME_ZONE,
   STRENGTH_COPY,
 } from '../lib/constants';
-import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
+import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {

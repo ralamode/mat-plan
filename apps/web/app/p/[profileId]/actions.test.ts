@@ -4,6 +4,7 @@ import {
   BLANK_SET_MESSAGE,
   BODYWEIGHT_UNITS,
   FREE_TEXT_NOTE_MAX,
+  isoDayDiff,
   LOGGABLE_DIMENSION_NOUNS,
   METRIC_KEYS,
   modeNotApplicableBlankMessage,
@@ -106,7 +107,7 @@ import {
 } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
-import { isoDayDiff, localDayIso } from '@/lib/date';
+import { localDayIso } from '@/lib/date';
 import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
 import { redirect, RedirectType } from 'next/navigation';

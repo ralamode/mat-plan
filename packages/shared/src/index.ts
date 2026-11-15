@@ -3,6 +3,9 @@
 // define a value once here, import it in the app, engine, and DB seed.
 export * from './db-environment';
 export * from './date';
+// SCHED-1 1a: the pure calendar-date arithmetic (moved from apps/web/lib/date.ts) and the weekday
+// vocabulary. No timezone, no `Intl`.
+export * from './day';
 // V1-9b — the hide/restore wire contract (ADR 0008's "delete"): the row caps, the fixed-format UTC
 // event token, and the per-item restore reasons.
 export * from './hide';

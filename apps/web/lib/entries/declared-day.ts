@@ -1,7 +1,8 @@
 import 'server-only';
 
+import { addDays, isoDayDiff, isoDaySchema } from '@mat-plan/shared';
+
 import { getActiveLocalDay } from '@/lib/active-timezone';
-import { addDays, isoDayDiff, isoDaySchema } from '@/lib/date';
 
 /** Shown when a form submits a day too far from the server's active-tz today (a stale tab). */
 export const DECLARED_DAY_CLOSED_ERROR = 'That day is no longer open for logging. Reload the page.';
