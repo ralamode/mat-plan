@@ -6,7 +6,10 @@ import type { RowAmend, RowResult, RowRetick, RowUntick, RowWrite } from './day-
 import type {
   AssignDraft,
   CopyDraft,
+  CreateProgram,
+  NewItem,
   ProgramOrder,
+  RenameProgram,
   TakeOff,
   WeekDraft,
   WorkoutDraft,
@@ -39,23 +42,24 @@ export const PROGRAM_REFUSAL = keyBySelf(PROGRAM_REFUSALS);
 export type ProgramResult<T extends object = object> =
   ({ ok: true } & T) | { ok: false; reason: ProgramRefusal };
 
+/**
+ * Each member's input has a schema in `./program-shapes` (`createProgramSchema`,
+ * `renameProgramSchema`, `saveWorkoutSchema`, `weekDraftSchema`, `copyDraftSchema`, `newItemSchema`,
+ * `assignDraftSchema`, `takeOffSchema`). A fake and a real action both parse with it and answer
+ * `invalid` when it fails, so a screen sees the same refusal on the preview route and in production.
+ */
 export interface ProgramActions {
-  /** `clientId` is one create attempt; a retry reuses it. `name` is `programNameSchema`'s. */
-  createProgram(input: {
-    clientId: string;
-    name: string;
-  }): Promise<ProgramResult<{ programPublicId: string }>>;
-  renameProgram(input: { programPublicId: string; name: string }): Promise<ProgramResult>;
+  /** A program is created by naming it. `clientId` is one create attempt; a retry reuses it. */
+  createProgram(input: CreateProgram): Promise<ProgramResult<{ programPublicId: string }>>;
+  renameProgram(input: RenameProgram): Promise<ProgramResult>;
+  /** Parsed by `saveWorkoutSchema`: the draft, with a name. */
   saveWorkout(draft: WorkoutDraft): Promise<ProgramResult<{ workoutPublicId: string }>>;
   saveWeek(draft: WeekDraft): Promise<ProgramResult>;
   copyWorkout(draft: CopyDraft): Promise<ProgramResult<{ workoutPublicId: string }>>;
   /** A name that already exists selects that item: `existed` is true and `trackingType` is its own. */
-  newItem(input: {
-    name: string;
-    trackingType: TrackingType;
-  }): Promise<
-    ProgramResult<{ itemPublicId: string; trackingType: TrackingType; existed: boolean }>
-  >;
+  newItem(
+    input: NewItem,
+  ): Promise<ProgramResult<{ itemPublicId: string; trackingType: TrackingType; existed: boolean }>>;
   putOn?(draft: AssignDraft): Promise<ProgramResult>;
   takeOff?(input: TakeOff): Promise<ProgramResult>;
 }
@@ -68,7 +72,8 @@ export interface DayActions {
   amendRow?(input: RowAmend): Promise<RowResult>;
   /**
    * Resolves a `ProgramResult`, not a `RowResult`: a reorder touches no entry, so it has no
-   * `entryPublicId` to answer with, and its refusals are the program writers'.
+   * `entryPublicId` to answer with, and its refusals are the program writers'. A list that is not a
+   * permutation of the athlete's `currentPrograms` answers `invalid`.
    */
   reorderPrograms?(input: ProgramOrder): Promise<ProgramResult>;
 }

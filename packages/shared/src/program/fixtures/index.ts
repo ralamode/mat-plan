@@ -1,4 +1,4 @@
-import type { Weekday } from '../../day';
+import { addDays, type Weekday } from '../../day';
 import type { DayPlan } from '../day-shapes';
 import type { ProgramList, ProgramView, WorkoutDraft } from '../program-shapes';
 import {
@@ -81,6 +81,30 @@ export const noProgram: DayPlan = deepFreeze(
 );
 
 /**
+ * The same day with Athlete One's programs in the other order: Stretching, then the Family program.
+ * The evening stretch comes first, ahead of the workout labelled Morning, because order is the
+ * athlete's and a label never sorts (plan D8). The prototype reaches it from "the order of their
+ * programs", by moving Stretching up.
+ */
+export const todayStretchingFirst: DayPlan = deepFreeze(
+  dayPlan(
+    edit(seeded, (world) => {
+      world.assign.a1?.reverse();
+    }),
+    'a1',
+    FIXTURE_TODAY,
+  ),
+);
+
+/**
+ * Tomorrow, the nearest future day: read-only, always (plan D32). It is a Sunday, so only the
+ * evening stretch is coming up.
+ */
+export const tomorrowReadOnly: DayPlan = deepFreeze(
+  dayPlan(seeded, 'a1', addDays(FIXTURE_TODAY, 1)),
+);
+
+/**
  * "Not on a program on this day": Athlete One on the Sunday before the Family program started.
  * No "Jump to…" entry opens it; paging back from today reaches it.
  */
@@ -119,8 +143,9 @@ export const yesterdayEditedAfterLogging: DayPlan = deepFreeze(
 
 /**
  * Heavy A was taken off Fridays after yesterday (a Friday) was logged. It still shows on that day,
- * after the scheduled workouts, with its logged rows only and `scheduled: false`. The prototype
- * renders this state but has no "Jump to…" entry for it.
+ * after the scheduled workouts, with its logged rows only and `scheduled: false`. Its second
+ * superset has no row logged, so neither its items nor its rest are here. The prototype renders
+ * this state but has no "Jump to…" entry for it.
  */
 export const workoutLeftTheWeek: DayPlan = deepFreeze(
   dayPlan(
@@ -219,9 +244,31 @@ export const programsList: ProgramList = deepFreeze(programList(seeded));
 /** "One program": the Family program's page. Also what the Put-on and Copy dialogs open with. */
 export const familyProgram: ProgramView = deepFreeze(programView(seeded, 'p1'));
 
+/**
+ * The Family program's page after "Take off" on Athlete Two, today: they stay listed until the end
+ * of today, with today as their last day.
+ */
+export const familyProgramAfterTakeOff: ProgramView = deepFreeze(
+  programView(
+    edit(seeded, (world) => {
+      const assignment = world.assign.a2?.find((a) => a.prog === 'p1');
+      if (assignment) assignment.to = addDays(world.today, 1);
+    }),
+    'p1',
+  ),
+);
+
 const emptyWeek = (): Record<Weekday, []> => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
 
-/** "Build a new program from scratch": just created, nobody on it, no workouts, an empty week. */
+/**
+ * "Build a new program from scratch", right after it was created: nobody on it, no workouts, an
+ * empty week.
+ *
+ * **A program is created by naming it** (`createProgram` takes the name), so there is no unnamed
+ * program on the server and no fixture for one. The prototype's screen before that, an untitled
+ * program with its name field open, holds nothing a query could return; this fixture is the first
+ * state that does, under the prototype's placeholder name.
+ */
 export const newProgramEmpty: ProgramView = deepFreeze(
   programView(
     edit(seeded, (world) => {
@@ -257,6 +304,8 @@ export const DAY_PLAN_FIXTURES = {
   'sunday-rest-stretch-only': sundayRestStretchOnly,
   'no-program': noProgram,
   'not-on-a-program-that-day': notOnAProgramThatDay,
+  'today-stretching-first': todayStretchingFirst,
+  'tomorrow-read-only': tomorrowReadOnly,
   'heavy-a-supersets': heavyASupersets,
   'yesterday-edited-after-logging': yesterdayEditedAfterLogging,
   'workout-left-the-week': workoutLeftTheWeek,
@@ -276,6 +325,7 @@ export const PROGRAM_LIST_FIXTURES = {
 
 export const PROGRAM_VIEW_FIXTURES = {
   'family-program': familyProgram,
+  'family-program-after-take-off': familyProgramAfterTakeOff,
   'new-program-empty': newProgramEmpty,
   'adult-program-with-copy': adultProgramWithCopy,
 } as const satisfies Record<string, ProgramView>;

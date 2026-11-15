@@ -1,9 +1,8 @@
 import { addDays, localWeekday, WEEKDAYS, weekdaySchema, type Weekday } from '../../day';
-import { TRACKING_TYPE } from '../../movements';
-import { QUANTITY_SLOT, type QuantitySlot } from '../../quantity-slots';
+import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
 import type { DayPlan } from '../day-shapes';
-import { hasSetRows, type RowValues } from '../pieces';
+import { TRACKING_TYPE_FIELDS, wholeReps, type RowValues } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import type { ProgramList, ProgramView, WorkoutDraft, WorkoutDraftItem } from '../program-shapes';
 import { fixtureIds, type FixtureItemKey } from './ids';
@@ -19,11 +18,15 @@ import type {
 /**
  * Turns the transcribed prototype (`./world`) into the contract's shapes, by the prototype's own
  * rules: `vDayProgram`, `renderWorkout`, `renderCard`, `removedCards`, `previous`, `vProgram`,
- * `openStart` and `vPrograms` in `docs/prototypes/beta-0/index.html`.
+ * `openStart`, `openCopy` and `vPrograms` in `docs/prototypes/beta-0/index.html`.
  *
  * Fixture support only. This is NOT the day resolver (step 12a) or a query (6a, 6c): those are
  * written against the database and must deep-equal what this produces, which is the test that the
  * two sides mean the same thing.
+ *
+ * Where the contract decides something the prototype does differently, the contract wins and the
+ * line says so: PREVIOUS is `null` on a day that is not writable, a closed day lists only workouts
+ * with a logged row, and a rest is carried only for a superset that has an item showing.
  */
 
 type DayWorkout = DayPlan['workouts'][number];
@@ -38,13 +41,24 @@ export type World = ProtoWorld & { stamps: Record<number, Stamp> };
 /** Monday first, as the program page lists a week. */
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const satisfies readonly Weekday[];
 
-function programOf(world: ProtoWorld, id: string): ProtoProgram {
+/** The prototype's name for each type's quantity (`it.load`, `it.sec`, …). */
+const PROTO_FIELD: Record<TrackingType, keyof ProtoValues | null> = {
+  check: null,
+  count: 'n',
+  reps: null,
+  weight_reps: 'load',
+  duration: 'min',
+  time_sets: 'sec',
+  distance: 'dist',
+};
+
+export function programOf(world: ProtoWorld, id: string): ProtoProgram {
   const program = world.programs.find((p) => p.id === id);
   if (!program) throw new Error(`fixture world: no program ${id}`);
   return program;
 }
 
-function workoutOf(program: ProtoProgram, wid: string): ProtoWorkout {
+export function workoutOf(program: ProtoProgram, wid: string): ProtoWorkout {
   const workout = program.workouts.find((w) => w.wid === wid);
   if (!workout) throw new Error(`fixture world: no workout ${wid} in ${program.id}`);
   return workout;
@@ -54,50 +68,40 @@ function weekdayOf(day: string): Weekday {
   return weekdaySchema.parse(localWeekday(day));
 }
 
+/** Today and yesterday (plan D32). */
+function isWritable(world: ProtoWorld, day: string): boolean {
+  return day === world.today || day === addDays(world.today, -1);
+}
+
 /** The unit an item logs in: fixed by its type, or the one its prescription names. */
 function unitOf(world: ProtoWorld, item: ProtoItem): Unit | null {
-  switch (world.catalog[item.iid].type) {
-    case TRACKING_TYPE.weight_reps:
-      return 'lb';
-    case TRACKING_TYPE.time_sets:
-      return 'sec';
-    case TRACKING_TYPE.duration:
-      return 'min';
-    case TRACKING_TYPE.count:
-    case TRACKING_TYPE.distance:
-      return unitSchema.parse(item.unit);
-    case TRACKING_TYPE.check:
-    case TRACKING_TYPE.reps:
-      return null;
-  }
+  const { type } = world.catalog[item.iid];
+  const fields = TRACKING_TYPE_FIELDS[type];
+  if (fields.slot === null) return null;
+  if (fields.unit !== null) return fields.unit;
+  // The prototype's weights are all in pounds; a Count and a Distance name their own unit.
+  return type === TRACKING_TYPE.weight_reps ? 'lb' : unitSchema.parse(item.unit);
 }
 
 /** A prototype value set as the contract's `RowValues`, for an item of this type and unit. */
 function rowValues(world: ProtoWorld, item: ProtoItem, v: ProtoValues): RowValues {
+  const { type } = world.catalog[item.iid];
+  const fields = TRACKING_TYPE_FIELDS[type];
   const unit = unitOf(world, item);
-  const one = (slot: QuantitySlot, value: number | undefined) =>
-    unit === null || value === undefined ? [] : [{ slot, unit, value }];
-  const reps = v.reps === undefined ? {} : { reps: v.reps };
-  switch (world.catalog[item.iid].type) {
-    case TRACKING_TYPE.check:
-      return { quantities: [] };
-    case TRACKING_TYPE.reps:
-      return { ...reps, quantities: [] };
-    case TRACKING_TYPE.weight_reps:
-      return { ...reps, quantities: one(QUANTITY_SLOT.primary, v.load) };
-    case TRACKING_TYPE.time_sets:
-      return { quantities: one(QUANTITY_SLOT.primary, v.sec) };
-    case TRACKING_TYPE.duration:
-      return { quantities: one(QUANTITY_SLOT.primary, v.min) };
-    case TRACKING_TYPE.count:
-      return { quantities: one(QUANTITY_SLOT.primary, v.n) };
-    case TRACKING_TYPE.distance:
-      return { quantities: one(QUANTITY_SLOT.distance, v.dist) };
-  }
+  const field = PROTO_FIELD[type];
+  const value = field === null ? undefined : v[field];
+  return {
+    ...(fields.reps && v.reps !== undefined ? { reps: v.reps } : {}),
+    quantities:
+      fields.slot === null || unit === null || value === undefined
+        ? []
+        : [{ slot: fields.slot, unit, value }],
+  };
 }
 
 function draftItem(world: ProtoWorld, workout: ProtoWorkout, item: ProtoItem): WorkoutDraftItem {
   const { name, type } = world.catalog[item.iid];
+  const fields = TRACKING_TYPE_FIELDS[type];
   const index = workout.items.indexOf(item);
   const group = item.ss;
   const inGroup = (other: ProtoItem) => group !== null && other.ss === group;
@@ -107,8 +111,8 @@ function draftItem(world: ProtoWorld, workout: ProtoWorkout, item: ProtoItem): W
     itemPublicId: fixtureIds.item(item.iid),
     itemName: name,
     trackingType: type,
-    sets: hasSetRows(type) ? (item.sets ?? null) : null,
-    targetReps: item.reps === undefined ? null : String(item.reps),
+    sets: fields.sets ? (item.sets ?? null) : null,
+    targetReps: fields.reps && item.reps !== undefined ? String(item.reps) : null,
     // The prescribed numbers are the item's own fields, so they convert as a logged row's do.
     quantities: rowValues(world, item, item).quantities,
     notes: item.note || null,
@@ -154,17 +158,28 @@ function onPrograms(world: World, athlete: string, day: string) {
   return (world.assign[athlete] ?? []).filter((a) => day >= a.from && (!a.to || day < a.to));
 }
 
-/** The athlete's current programs (not ended as of today), in their own order. */
+/** The athlete's current programs (on now, or starting later), in their own order. */
 function currentPrograms(world: World, athlete: string) {
   return (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
+}
+
+function programRef(world: World, programId: string) {
+  return {
+    programPublicId: fixtureIds.program(programId),
+    name: programOf(world, programId).name,
+  };
 }
 
 /**
  * PREVIOUS: the same item and set number on the most recent earlier day. When the item was logged
  * twice that day (Splits stretch is in two workouts), the row logged first is the one, as the
  * prototype's scan finds it.
+ *
+ * `null` on a day that is not writable: the contract's rule. (The prototype still fills the
+ * Previous column of a closed day's set rows; it hides "Last time" there.)
  */
 function previous(world: World, athlete: string, iid: FixtureItemKey, set: number, day: string) {
+  if (!isWritable(world, day)) return null;
   let best: ProtoEntry | null = null;
   for (const entry of world.entries) {
     if (entry.ath !== athlete || entry.iid !== iid || entry.set !== set || entry.day >= day)
@@ -200,13 +215,17 @@ function dayWorkout(
     (e) => e.ath === athlete && e.day === day && e.prog === program.id && e.wid === workout.wid,
   );
   const items: DayItem[] = [];
+  // Over the live items, whatever `items` ends up showing: the prototype's "6 of 10".
+  const progress = { done: 0, total: 0 };
 
   for (const item of workout.items) {
     const draft = draftItem(world, workout, item);
     const mine = logged.filter((e) => e.iid === item.iid);
-    const count = hasSetRows(draft.trackingType)
+    const count = TRACKING_TYPE_FIELDS[draft.trackingType].sets
       ? Math.max(item.sets ?? 1, ...mine.map((e) => e.set))
       : 1;
+    progress.total += count;
+    progress.done += mine.length;
     const rows =
       showing === 'preview'
         ? []
@@ -234,6 +253,7 @@ function dayWorkout(
       name: draft.itemName,
       trackingType: draft.trackingType,
       prescribedText: loggedAgainst ?? live,
+      target: { reps: wholeReps(draft.targetReps), quantities: draft.quantities },
       notes: draft.notes,
       unit: unitOf(world, item),
       superset: draft.superset,
@@ -242,7 +262,7 @@ function dayWorkout(
   }
 
   // Rows logged against an item that has since left the workout: built from the entry alone, with
-  // no instructions, no superset and no PREVIOUS (plan D7).
+  // no target, no instructions, no superset and no PREVIOUS (plan D7).
   const liveKeys = workout.items.map((it) => it.iid);
   const removedKeys = [...new Set(logged.map((e) => e.iid).filter((k) => !liveKeys.includes(k)))];
   for (const key of removedKeys) {
@@ -256,6 +276,7 @@ function dayWorkout(
       name: first.name,
       trackingType: world.catalog[key].type,
       prescribedText: first.text,
+      target: { reps: null, quantities: [] },
       notes: null,
       unit: first.unit,
       superset: null,
@@ -263,8 +284,10 @@ function dayWorkout(
     });
   }
 
-  // A group left with one item is dissolved, and its rest goes with it (plan D14).
+  // A group left with one item is dissolved, and its rest goes with it (plan D14). And a rest is
+  // carried only for a group that has an item showing: no rest for a superset that is not there.
   const groupSize = (group: string) => workout.items.filter((it) => it.ss === group).length;
+  const shownGroups = new Set(items.map((it) => it.superset?.group));
   return {
     programPublicId: fixtureIds.program(program.id),
     workoutPublicId: fixtureIds.workout(workout.wid),
@@ -272,17 +295,21 @@ function dayWorkout(
     name: workout.name,
     description: workout.desc || null,
     scheduled,
+    progress,
     items,
     restAfter: Object.fromEntries(
-      Object.entries(workout.rests).filter(([group]) => groupSize(group) > 1),
+      Object.entries(workout.rests).filter(
+        ([group]) => groupSize(group) > 1 && shownGroups.has(group),
+      ),
     ),
   };
 }
 
 export function dayPlan(world: World, athlete: string, day: string): DayPlan {
-  const writable = day === world.today || day === addDays(world.today, -1);
+  const writable = isWritable(world, day);
   const future = day > world.today;
   const on = onPrograms(world, athlete, day);
+  const current = currentPrograms(world, athlete);
 
   // The athlete's program order, then each program's own week order. A label never sorts.
   const slots = on.flatMap((a) => {
@@ -303,26 +330,26 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
   return {
     profilePublicId: fixtureIds.athlete(athlete),
     day,
+    today: world.today,
     writable,
     future,
     athletes: world.athletes.map((a) => ({
       profilePublicId: fixtureIds.athlete(a.id),
       name: a.name,
     })),
-    onProgram: on.length
-      ? 'yes'
-      : currentPrograms(world, athlete).length
-        ? 'not-this-day'
-        : 'never',
+    onProgram: on.length ? 'yes' : current.length ? 'not-this-day' : 'never',
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
-    programs: on.map((a, order) => ({
-      programPublicId: fixtureIds.program(a.prog),
-      name: programOf(world, a.prog).name,
-      order,
-    })),
-    workouts: slots.map((s) =>
-      dayWorkout(world, athlete, day, s.program, s.slot, s.scheduled, showing(s.scheduled)),
-    ),
+    currentPrograms: current.map((a) => programRef(world, a.prog)),
+    programs: on.map((a) => {
+      const order = current.indexOf(a);
+      return { ...programRef(world, a.prog), order: order < 0 ? null : order };
+    }),
+    workouts: slots
+      .map((s) =>
+        dayWorkout(world, athlete, day, s.program, s.slot, s.scheduled, showing(s.scheduled)),
+      )
+      // The contract's rule: on a closed day a workout nobody logged is not listed.
+      .filter((workout) => writable || future || workout.items.length > 0),
   };
 }
 
@@ -340,8 +367,7 @@ export function workoutDraft(world: World, programId: string, wid: string): Work
 
 export function programList(world: World): ProgramList {
   return world.programs.map((program) => ({
-    programPublicId: fixtureIds.program(program.id),
-    name: program.name,
+    ...programRef(world, program.id),
     athletes: world.athletes
       .filter((a) => currentPrograms(world, a.id).some((asg) => asg.prog === program.id))
       .map((a) => a.name),
@@ -355,8 +381,7 @@ export function programView(world: World, programId: string): ProgramView {
   const assignmentOf = (athlete: string) =>
     currentPrograms(world, athlete).find((a) => a.prog === programId);
   return {
-    programPublicId: fixtureIds.program(program.id),
-    name: program.name,
+    ...programRef(world, programId),
     athletes: world.athletes.flatMap((a) => {
       const assignment = assignmentOf(a.id);
       if (!assignment) return [];
@@ -390,6 +415,9 @@ export function programView(world: World, programId: string): ProgramView {
         })),
       ]),
     ) as ProgramView['week'],
+    otherPrograms: world.programs
+      .filter((other) => other.id !== programId)
+      .map((other) => programRef(world, other.id)),
   };
 }
 
@@ -417,5 +445,3 @@ export function edit(world: World, change: (draft: World) => void): World {
   change(draft);
   return draft;
 }
-
-export { programOf, workoutOf };

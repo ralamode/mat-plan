@@ -27,6 +27,8 @@ describe('WorkoutDraft: owed by its consumers', () => {
   it.todo('9: items picked together are added in the order they were picked');
   it.todo('9: a new item is made with its type; an existing name selects that item');
   it.todo('7a: saveWorkout and newItem pass the inherited action matrix');
+  it.todo('9: the picker renders picker-options (step 0b’s fixture), and its no-match state');
+  it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
 });
 
 describe('WeekDraft: owed by its consumers', () => {
@@ -45,6 +47,10 @@ describe('ProgramList and ProgramView: owed by their consumers', () => {
     '8a: the program page renders family-program, new-program-empty, adult-program-with-copy',
   );
   it.todo('10b: "Copied from" shows the frozen program name');
+  it.todo('6a: a replayed createProgram (same clientId) adds nothing; a taken name is name_taken');
+  it.todo('6a: renameProgram refuses an empty name and a name another program holds');
+  it.todo('7a: createProgram and renameProgram pass the inherited action matrix');
+  it.todo('8a: Rename shows the name counter up to PROGRAM_NAME_MAX');
 });
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
@@ -71,12 +77,17 @@ describe('DayPlan: owed by its consumers', () => {
     '12a: workouts are in the athlete’s program order, then each week’s order; labels never sort',
   );
   it.todo('12a: PREVIOUS counts only rows logged in a program');
+  it.todo('12a: PREVIOUS, when an item was logged twice on that day, is the row logged first');
+  it.todo('12a: PREVIOUS is null on a day that is not writable');
+  it.todo('12a: a closed day omits the items and the workouts with no logged row');
+  it.todo('12a: progress counts prescribed rows plus extra logged ones, not removed items’ rows');
   it.todo('12a: look-ahead goes forward only while the athlete is on a program the next day');
   it.todo('12b: the DAL sets writable, future and canGoForward');
   it.todo('13: each DayPlan fixture renders on the preview route');
   it.todo('13: typed numbers survive ticking another row');
   it.todo('13b: set rows, PREVIOUS and Add set, per set');
   it.todo('13b: heavy-a-supersets renders linked supersets with their rest');
+  it.todo('13b: superset letters are ordinal: group b reads A1, A2 when group a is gone');
   it.todo('13b: yesterday-edited-after-logging renders the kept, extra, removed and edited rows');
   it.todo('13b: future-preview renders read-only cards');
   it.todo('13d: no-program, not-on-a-program-that-day and the rest-day notices');
@@ -94,9 +105,13 @@ describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers'
   it.todo('11b: a restore after a re-✓ answers slot_taken');
   it.todo('12b: logRow, untickRow and retickRow pass the inherited action matrix');
   it.todo('12b: row writes are held to the row rate limit, not the mutation limit');
+  it.todo('12b: a crafted un-tick or re-tick on an older or a future day answers closed_day');
+  it.todo('12b: an entry that is not this athlete’s on that day answers not_found');
   it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
   it.todo('13: a ✓ that fails un-ticks, keeps what was typed, and says it could not save');
   it.todo('13: un-tick leaves no tomb; re-tick restores the row, on today and yesterday');
+  it.todo('13: an empty ✓ shows the prescription’s numbers (target) as the logged values');
+  it.todo('13: a non-number is refused by the field, which takes focus');
 });
 
 describe('RowAmend: owed by its consumers', () => {
@@ -113,11 +128,21 @@ describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo('8a, 10b: a screen hides the control of a member that is undefined');
   it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
   it.todo('15c: reorderPrograms joins DayActions, and the Program order control appears');
+  it.todo('15c: a reorder that is not a permutation of currentPrograms answers invalid');
+  it.todo('every screen step: focus stays on the control after an action');
+  it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');
+});
+
+describe('the constants: owed by their consumers', () => {
+  it.todo('3: the movements.tracking_type CHECK is pinned to TRACKING_TYPES');
+  it.todo('3: (primary, count) and a ceiling for count exist, so a Count in count is storable');
+  it.todo('4a-i, 4b: the name and label columns are bounded by the same constants');
 });
 
 describe('prescribedText: owed by its consumers', () => {
   it.todo('11b: a logged row’s prescribed_snapshot is prescribedText of its prescription');
   it.todo('12a: the day page’s prescribedText is the same renderer’s output');
   it.todo('14: the export writes template rows of each type through the renderer');
+  it.todo('14: a comma in a workout name round-trips through the export');
   it.todo('3: a distance in mi renders once mi is a unit');
 });

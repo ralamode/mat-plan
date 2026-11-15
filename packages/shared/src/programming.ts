@@ -125,6 +125,11 @@ export const PROGRAM_NAME_MAX = 60;
 export const WORKOUT_NAME_MAX = 30;
 export const SLOT_LABEL_MAX = 30;
 export const MAX_WORKOUT_ITEMS = 30;
+/**
+ * A prescription's reps, which are text (`prescriptions.target_reps`): `8`, `10 per side`. Its own
+ * limit, not the label's, so the two can move apart.
+ */
+export const TARGET_REPS_MAX = 20;
 
 /**
  * What the week editor offers for a slot's label (FAM-1 plan D8). Suggestions only: a label is

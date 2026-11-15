@@ -75,9 +75,43 @@ describe('prescribedText: the edges of each type', () => {
         }),
       ),
     ).toBe('5 × 5 @ 60 kg');
-    expect(prescribedText(parts(TRACKING_TYPE.count, { quantities: [primary(7, 'count')] }))).toBe(
-      '7 count',
+    expect(prescribedText(parts(TRACKING_TYPE.count, { quantities: [primary(12, 'kg')] }))).toBe(
+      '12 kg',
     );
+  });
+
+  it('writes a Count in the plain count unit as the bare number', () => {
+    // A rating or a tally has no unit to read: `7`, not `7 count`.
+    expect(prescribedText(parts(TRACKING_TYPE.count, { quantities: [primary(7, 'count')] }))).toBe(
+      '7',
+    );
+  });
+
+  it('writes no load for a zero load, and still writes a zero that is the whole prescription', () => {
+    // `4 × 8 @ 0 lb` is not a prescription anyone wrote: a zero load is no load.
+    expect(
+      prescribedText(
+        parts(TRACKING_TYPE.weight_reps, {
+          sets: 4,
+          targetReps: '8',
+          quantities: [primary(0, 'lb')],
+        }),
+      ),
+    ).toBe('4 × 8');
+    // Elsewhere the quantity IS the prescription, so a zero prints as the type's renderer writes it.
+    expect(prescribedText(parts(TRACKING_TYPE.count, { quantities: [primary(0, 'lb')] }))).toBe(
+      '0 lb',
+    );
+    expect(prescribedText(parts(TRACKING_TYPE.count, { quantities: [primary(0, 'count')] }))).toBe(
+      '0',
+    );
+  });
+
+  it('writes a single set of a set-based type in full, except a distance', () => {
+    expect(prescribedText(parts(TRACKING_TYPE.reps, { sets: 1, targetReps: '10' }))).toBe('1 × 10');
+    expect(
+      prescribedText(parts(TRACKING_TYPE.time_sets, { sets: 1, quantities: [primary(60, 'sec')] })),
+    ).toBe('1 × 60 s');
   });
 
   it('keeps a decimal load and drops nothing from it', () => {
@@ -148,6 +182,14 @@ describe('prescribedText: the edges of each type', () => {
 });
 
 describe('prescribedText and the export’s renderer', () => {
+  it('stays out of the root barrel, which client components import', async () => {
+    // It is the `@mat-plan/shared/program/prescribed-text` subpath, because it builds on `csv/`.
+    const barrel = await import('../index');
+    expect('prescribedText' in barrel).toBe(false);
+    expect('formatPrescribedForExport' in barrel).toBe(false);
+    expect('TRACKING_TYPE_FIELDS' in barrel).toBe(true);
+  });
+
   it('leaves the CSV’s own spelling alone', () => {
     // `3x10 @ 45` is bytes in every exported month. The new renderer builds on that function and
     // must not have changed it; `csv/prescribed.test.ts` holds the full set of pins.

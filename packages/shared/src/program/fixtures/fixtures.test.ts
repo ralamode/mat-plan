@@ -13,6 +13,7 @@ import {
   DAY_PLAN_FIXTURES,
   everyTypeOnce,
   familyProgram,
+  familyProgramAfterTakeOff,
   FIXTURE_SWITCH_DAY,
   FIXTURE_TODAY,
   fixtureIds,
@@ -27,7 +28,9 @@ import {
   PROGRAM_VIEW_FIXTURES,
   programsList,
   sundayRestStretchOnly,
+  todayStretchingFirst,
   todayTwoPrograms,
+  tomorrowReadOnly,
   WORKOUT_DRAFT_FIXTURES,
   workoutLeftTheWeek,
   yesterdayEditedAfterLogging,
@@ -84,6 +87,8 @@ describe('every fixture round-trips through its own schema', () => {
       'sunday-rest-stretch-only',
       'no-program',
       'not-on-a-program-that-day',
+      'today-stretching-first',
+      'tomorrow-read-only',
       'heavy-a-supersets',
       'yesterday-edited-after-logging',
       'workout-left-the-week',
@@ -95,6 +100,7 @@ describe('every fixture round-trips through its own schema', () => {
     expect(Object.keys(PROGRAM_LIST_FIXTURES)).toEqual(['programs-list']);
     expect(Object.keys(PROGRAM_VIEW_FIXTURES)).toEqual([
       'family-program',
+      'family-program-after-take-off',
       'new-program-empty',
       'adult-program-with-copy',
     ]);
@@ -189,6 +195,37 @@ describe('today-two-programs: Athlete One · today, on two programs', () => {
     expect(plan.programs).toEqual([
       { programPublicId: fixtureIds.program('p1'), name: 'Family program', order: 0 },
       { programPublicId: fixtureIds.program('p2'), name: 'Stretching', order: 1 },
+    ]);
+  });
+
+  it('says what today is, and lists the athlete’s current programs in their order', () => {
+    expect(plan.today).toBe(FIXTURE_TODAY);
+    expect(plan.currentPrograms).toEqual([
+      { programPublicId: fixtureIds.program('p1'), name: 'Family program' },
+      { programPublicId: fixtureIds.program('p2'), name: 'Stretching' },
+    ]);
+  });
+
+  it('carries each item’s prescribed numbers beside its text', () => {
+    const target = (workoutName: string, itemName: string) =>
+      item(plan, workoutName, itemName).target;
+    expect(target('Heavy B', 'Push press')).toEqual({ reps: 6, quantities: [lb(20)] });
+    expect(target('Heavy B', 'Inverted row')).toEqual({ reps: 8, quantities: [] });
+    expect(target('Morning habits', 'Neck bridge')).toEqual({ reps: null, quantities: [sec(30)] });
+    expect(target('Morning habits', 'Vest weight')).toEqual({ reps: null, quantities: [lb(10)] });
+    expect(target('Morning habits', 'Grip: rice bucket')).toEqual({ reps: null, quantities: [] });
+    expect(target('Conditioning', 'Sprints')).toEqual({
+      reps: null,
+      quantities: [{ slot: QUANTITY_SLOT.distance, unit: 'yd', value: 40 }],
+    });
+  });
+
+  it('counts each workout’s progress: rows logged, of rows prescribed', () => {
+    expect(plan.workouts.map((w) => [w.name, w.progress])).toEqual([
+      ['Morning habits', { done: 2, total: 10 }],
+      ['Heavy B', { done: 0, total: 14 }],
+      ['Conditioning', { done: 0, total: 10 }],
+      ['Evening stretch', { done: 0, total: 3 }],
     ]);
   });
 
@@ -331,6 +368,14 @@ describe('yesterday-half-done: Athlete One · yesterday, half done', () => {
     });
   });
 
+  it('counts Heavy A as 4 of 17, and the other two as done', () => {
+    expect(plan.workouts.map((w) => w.progress)).toEqual([
+      { done: 10, total: 10 },
+      { done: 4, total: 17 },
+      { done: 3, total: 3 },
+    ]);
+  });
+
   it('has Morning habits and the stretch fully logged', () => {
     expect(loggedSets(plan, 'Morning habits', 'Push-ups')).toEqual([1, 2, 3]);
     expect(item(plan, 'Morning habits', 'Push-ups').rows[2]?.logged?.values).toEqual({
@@ -406,6 +451,7 @@ describe('yesterday-edited-after-logging: the program changed after the day was 
       name: 'Pull-up',
       trackingType: 'reps',
       prescribedText: '4 × 5',
+      target: { reps: null, quantities: [] },
       // Its instructions ("Full hang at the bottom.") never reappear.
       notes: null,
       unit: null,
@@ -433,6 +479,12 @@ describe('yesterday-edited-after-logging: the program changed after the day was 
     });
     // After the live items.
     expect(workout(plan, 'Heavy A').items.at(-1)).toBe(pullUp);
+  });
+
+  it('counts the extra logged set, and leaves the removed item’s rows out of the count', () => {
+    // Push-ups: two prescribed, three logged, so three of three. Heavy A: 3 + 3 + 3 + 3 rows now.
+    expect(workout(plan, 'Morning habits').progress).toEqual({ done: 10, total: 10 });
+    expect(workout(plan, 'Heavy A').progress).toEqual({ done: 2, total: 12 });
   });
 
   it('dissolves the superset the removed item left behind, and its rest', () => {
@@ -468,6 +520,14 @@ describe('workout-left-the-week: logged, then taken off the day', () => {
     ]);
     expect(heavyA.items.flatMap((i) => i.rows).every((row) => row.logged !== null)).toBe(true);
   });
+
+  it('still counts the whole workout, and carries no rest for the superset that is not showing', () => {
+    const heavyA = workout(plan, 'Heavy A');
+    expect(heavyA.progress).toEqual({ done: 4, total: 17 });
+    // Goblet squat and Sprawls (group b) have no logged row, so they and their rest are absent.
+    expect(heavyA.items.map((i) => i.superset?.group)).toEqual(['a', 'a']);
+    expect(heavyA.restAfter).toEqual({ a: '90 s after each round' });
+  });
 });
 
 describe('closed-day-logged-only: Athlete One · Nov 11', () => {
@@ -492,6 +552,22 @@ describe('closed-day-logged-only: Athlete One · Nov 11', () => {
     const rows = plan.workouts.flatMap((w) => w.items.flatMap((i) => i.rows));
     expect(rows).toHaveLength(6 + 14);
     expect(rows.every((row) => row.logged !== null)).toBe(true);
+  });
+
+  it('says how much of each workout was done, though it lists only what was', () => {
+    expect(plan.workouts.map((w) => [w.name, w.progress])).toEqual([
+      ['Morning habits', { done: 6, total: 10 }],
+      ['Heavy B', { done: 14, total: 14 }],
+    ]);
+  });
+
+  it('carries no PREVIOUS: the day is not writable', () => {
+    // Neck bridge was logged two days earlier, so on a writable day these rows would have one.
+    const rows = plan.workouts.flatMap((w) => w.items.flatMap((i) => i.rows));
+    expect(rows.every((row) => row.previous === null)).toBe(true);
+    expect(item(yesterdayHalfDone, 'Morning habits', 'Neck bridge').rows[0]?.previous).toEqual({
+      quantities: [sec(30)],
+    });
   });
 });
 
@@ -521,6 +597,66 @@ describe('future-preview: Athlete One · look ahead to Monday', () => {
       '3 × 20 s',
     ]);
     expect(plan.workouts.flatMap((w) => w.items.flatMap((i) => i.rows))).toEqual([]);
+  });
+
+  it('still says what each item prescribes and how many rows the workout has', () => {
+    expect(item(plan, 'Heavy A', 'DB bench press').target).toEqual({
+      reps: 8,
+      quantities: [lb(25)],
+    });
+    expect(plan.workouts.map((w) => w.progress)).toEqual([
+      { done: 0, total: 10 },
+      { done: 0, total: 17 },
+      { done: 0, total: 3 },
+    ]);
+  });
+});
+
+describe('tomorrow-read-only: the nearest future day', () => {
+  const plan = tomorrowReadOnly;
+
+  it('is today plus one, and read-only like every future day', () => {
+    expect(plan).toMatchObject({
+      day: '2026-11-15',
+      today: FIXTURE_TODAY,
+      writable: false,
+      future: true,
+      onProgram: 'yes',
+    });
+  });
+
+  it('is a Sunday: only the stretch is coming up, with no rows', () => {
+    expect(outline(plan)).toEqual([['Evening', 'Evening stretch']]);
+    expect(plan.workouts.flatMap((w) => w.items.flatMap((i) => i.rows))).toEqual([]);
+    expect(plan.programs.map((p) => p.name)).toEqual(['Family program', 'Stretching']);
+  });
+});
+
+describe('today-stretching-first: the same day, the programs in the other order', () => {
+  const plan = todayStretchingFirst;
+
+  it('lists Stretching first in the athlete’s order', () => {
+    expect(plan.currentPrograms.map((p) => p.name)).toEqual(['Stretching', 'Family program']);
+    expect(plan.programs).toEqual([
+      { programPublicId: fixtureIds.program('p2'), name: 'Stretching', order: 0 },
+      { programPublicId: fixtureIds.program('p1'), name: 'Family program', order: 1 },
+    ]);
+  });
+
+  it('puts the evening stretch ahead of the workout labelled Morning', () => {
+    // Ordering by a label's time of day would put Morning first. Order is the athlete's.
+    expect(outline(plan)).toEqual([
+      ['Evening', 'Evening stretch'],
+      ['Morning', 'Morning habits'],
+      ['After lunch', 'Heavy B'],
+      ['Evening', 'Conditioning'],
+    ]);
+    expect(outline(plan)).not.toEqual(outline(todayTwoPrograms));
+  });
+
+  it('is otherwise the same day: the same workouts, rows and history', () => {
+    const byName = (p: DayPlan) => [...p.workouts].sort((a, b) => a.name.localeCompare(b.name));
+    expect(byName(plan)).toEqual(byName(todayTwoPrograms));
   });
 });
 
@@ -686,6 +822,13 @@ describe('family-program: one program’s page', () => {
     ]);
   });
 
+  it('offers the household’s other programs to copy a workout to', () => {
+    expect(familyProgram.otherPrograms).toEqual([
+      { programPublicId: fixtureIds.program('p2'), name: 'Stretching' },
+      { programPublicId: fixtureIds.program('p3'), name: 'Adult One’s program' },
+    ]);
+  });
+
   it('offers everyone in "Put someone on", with what each would keep', () => {
     expect(familyProgram.candidates.map((c) => [c.name, c.on, c.keeps])).toEqual([
       ['Athlete One', true, ['Family program', 'Stretching']],
@@ -724,10 +867,32 @@ describe('family-program: one program’s page', () => {
   });
 });
 
+describe('family-program-after-take-off', () => {
+  it('keeps the athlete listed through their last day, which is today', () => {
+    expect(familyProgramAfterTakeOff.athletes.map((a) => [a.name, a.since, a.lastDay])).toEqual([
+      ['Athlete One', FIXTURE_SWITCH_DAY, null],
+      ['Athlete Two', FIXTURE_SWITCH_DAY, FIXTURE_TODAY],
+    ]);
+  });
+
+  it('differs from the Family program’s page in nothing else', () => {
+    const withoutLastDay = (view: typeof familyProgram) => ({
+      ...view,
+      athletes: view.athletes.map((a) => ({ ...a, lastDay: null })),
+    });
+    expect(withoutLastDay(familyProgramAfterTakeOff)).toEqual(familyProgram);
+  });
+});
+
 describe('new-program-empty and adult-program-with-copy', () => {
   it('new-program-empty has a name and nothing else, and offers everyone', () => {
     expect(newProgramEmpty).toMatchObject({ name: 'New program', athletes: [], workouts: [] });
     expect(Object.values(newProgramEmpty.week)).toEqual([[], [], [], [], [], [], []]);
+    expect(newProgramEmpty.otherPrograms.map((p) => p.name)).toEqual([
+      'Family program',
+      'Stretching',
+      'Adult One’s program',
+    ]);
     expect(newProgramEmpty.candidates.map((c) => [c.name, c.on])).toEqual([
       ['Athlete One', false],
       ['Athlete Two', false],

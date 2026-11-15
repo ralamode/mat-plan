@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./csv": "./src/csv/index.ts",
-    "./program/fixtures": "./src/program/fixtures/index.ts"
+    "./program/fixtures": "./src/program/fixtures/index.ts",
+    "./program/prescribed-text": "./src/program/prescribed-text.ts"
   },
   "dependencies": {
     "uuid": "^14.0.3",

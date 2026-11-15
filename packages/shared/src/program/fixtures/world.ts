@@ -1,5 +1,6 @@
 import type { Weekday } from '../../day';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
+import { SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '../../seed-ids';
 import type { FixtureItemKey } from './ids';
 
 /**
@@ -381,8 +382,10 @@ export function seedWorld(): ProtoWorld {
   return {
     today: FIXTURE_TODAY,
     athletes: [
-      { id: 'a1', name: 'Athlete One' },
-      { id: 'a2', name: 'Athlete Two' },
+      // The seed's own made-up names, read from the constants that hold them. The prototype's third
+      // person is Adult One, a name no constant holds.
+      { id: 'a1', name: SEED_PROFILE_NAME },
+      { id: 'a2', name: SEED_PROFILE_2_NAME },
       { id: 'a3', name: 'Adult One' },
     ],
     catalog: baseCatalog(),
