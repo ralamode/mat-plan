@@ -5,6 +5,11 @@ Every PR must satisfy:
 - [ ] Significant PR (CI / migration / auth / new subsystem / non-trivial multi-file logic): file-by-file plan at `docs/plans/<id>-<slug>.md` exists, was reviewed before coding, and was followed
 - [ ] Typecheck (`tsc --noEmit`) + lint (ESLint) + `prettier --check` pass
 - [ ] Unit / integration test for new logic (see test pyramid below)
+- [ ] **A bug fix proves it.** A `fix` PR adds a test (or `db:verify` proof) that **fails on the parent
+      commit** and passes on the branch, and the description shows the failing run: the command and
+      the assertion's message. A test written after the fix and only ever seen green may not test the
+      bug at all. How to run it: [review-pr](../.claude/skills/review-pr/SKILL.md) → Tests. A fix with
+      nothing a test can reach (copy, a config value, a workflow) says so in one line instead
 - [ ] **UI change: a UX / interaction-design panel ran BEFORE implementation**, and its review-response
       log is in the plan (or the PR description when plan-exempt) — see AGENTS.md → "UI PR rules".
       Depth scales with the change; a small visual tweak still gets one reviewer

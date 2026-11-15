@@ -35,7 +35,20 @@ function LifeButton({
     logLifeActivitiesAction,
     INITIAL_ACTION_STATE,
   );
-  const [clientId] = useState(newId);
+  const [clientId, setClientId] = useState(newId);
+  // 🔴 **Rotate the id on a refusal, or the recovery the copy promises is a dead end.** The key
+  // above changes when the row behind the button changes — but a REFUSED submit changes nothing, so
+  // the same instance would re-submit the same dead `client_id` forever and `HIDE_COPY
+  // .loggedThenDeleted`'s "tap again to log it now" would be false. A UX panel caught it.
+  //
+  // ⚠️ Safe to mint on any `ok: false`: an envelope means the server answered and wrote nothing. A
+  // lost response throws to `error.tsx` instead, so this cannot discard an id that did write.
+  // The during-render idiom (not an effect) is the one `use-on-action-success.ts` documents.
+  const [seenState, setSeenState] = useState(state);
+  if (state !== seenState) {
+    setSeenState(state);
+    if (!state.ok && state.error) setClientId(newId());
+  }
 
   if (logged) {
     return (
@@ -71,31 +84,41 @@ function LifeButton({
 export function LifeForm({
   profileId,
   day,
-  loggedLifeKeys,
+  loggedLifeEntryIds,
   activityKeys,
 }: {
   profileId: string;
   day: string;
-  loggedLifeKeys: readonly string[];
+  /** Life activity key → the `public_id` of the entry logging it on this day. See the page. */
+  loggedLifeEntryIds: ReadonlyMap<string, string>;
   // V1-18: render only these life activities, in this order (a per-kid routine subset). Omitted → all of
   // them (the default routine + every pre-V1-18 caller are unchanged).
   activityKeys?: readonly string[];
 }) {
-  const logged = new Set(loggedLifeKeys);
   // Resolve a per-kid subset via the SHARED helper (single-sourced with the check-in path); omitted → all.
   const activities = activityKeys ? lifeActivitiesForKeys(activityKeys) : LIFE_ACTIVITIES;
   return (
     <div className="flex flex-wrap gap-3">
-      {activities.map((a) => (
-        <LifeButton
-          key={a.key}
-          profileId={profileId}
-          day={day}
-          activityKey={a.key}
-          label={a.label}
-          logged={logged.has(a.key)}
-        />
-      ))}
+      {activities.map((a) => {
+        const loggedEntryId = loggedLifeEntryIds.get(a.key);
+        return (
+          <LifeButton
+            // 🔴 **The key carries the DAY and the row's identity, and that is a lost-write fix.**
+            // Keyed on `a.key` alone, React kept one instance — and the `client_id` in its state —
+            // across a day change, because the section around it is keyed by block index. So:
+            // tap Wrestling practice today, press ‹, tap it again, and the second submit replays
+            // TODAY's row (its `client_id` is still live) and writes NOTHING for yesterday, while
+            // the action reports success. Two taps, no delete needed, and it is exactly the
+            // "log yesterday's practice this evening" path this app is used for.
+            key={`${day}:${a.key}:${loggedEntryId ?? 'open'}`}
+            profileId={profileId}
+            day={day}
+            activityKey={a.key}
+            label={a.label}
+            logged={loggedEntryId !== undefined}
+          />
+        );
+      })}
     </div>
   );
 }

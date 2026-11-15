@@ -123,7 +123,7 @@ function localDay(offsetDays = 0): string {
 
 // `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
 // `MUTATING_ACTIONS`, which is now the single source for both the action names and their refusal copy.
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -1324,7 +1324,7 @@ describe('logCheckinsAction — happy path + ownership', () => {
   // Reporting success there would mask a lost write.
   it('reports failure when every item conflicted (nothing written)', async () => {
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
-      { clientId: 'x', id: null, created: false },
+      { clientId: 'x', id: null, created: false, outcome: 'conflict' },
     ]);
     const res = await logCheckinsAction(
       initial,
@@ -1536,13 +1536,60 @@ describe('logLifeActivitiesAction — happy path', () => {
     // end state is identical (the activity is logged), so it must return ok:true — never a red
     // "already logged" alert for an operation that in fact succeeded (review finding).
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
-      { clientId: 'x', id: null, created: false },
+      { clientId: 'x', id: null, created: false, outcome: 'conflict' },
     ]);
     const res = await logLifeActivitiesAction(
       initial,
       lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
     );
     expect(res.ok).toBe(true);
+  });
+
+  /**
+   * 🔴 **V1-9b criterion 9: `own_hidden` is NEVER `ok`.** A `conflict` (another profile's row) is a
+   * replay and genuinely succeeded — the test above. `own_hidden` is this athlete's own DELETED row
+   * holding the id: nothing was written, and the old code discarded the writer's result entirely and
+   * returned `ok: true` for it.
+   */
+  it("refuses a life tap that landed on this athlete's own deleted row", async () => {
+    vi.mocked(logCheckinEntries).mockResolvedValueOnce([
+      { clientId: 'x', id: null, created: false, outcome: 'own_hidden' },
+    ]);
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe(HIDE_COPY.loggedThenDeleted);
+  });
+});
+
+describe('logCheckinsAction — own_hidden is reported per field (V1-9b B1-2)', () => {
+  /**
+   * The mixed batch is the case that matters: some rows saved and one did not, so a form-level
+   * "something failed" over ten rows tells the person nothing they can act on. `fieldErrors` already
+   * exists and is wired to `aria-describedby`, so the refusal names the row.
+   */
+  it('names the field whose id was held by a deleted row, and does not report success', async () => {
+    vi.mocked(logCheckinEntries).mockImplementationOnce(async ({ items }) =>
+      items.map((i, idx) => ({
+        clientId: i.clientId,
+        id: idx === 0 ? 'written' : null,
+        created: idx === 0,
+        outcome: idx === 0 ? ('created' as const) : ('own_hidden' as const),
+      })),
+    );
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1', [BOOL_METRIC.key]: '1' },
+      }),
+    );
+    expect(res.ok, 'a batch with a lost write is not a success').toBe(false);
+    expect(res.error).toBe(HIDE_COPY.loggedThenDeletedSome);
+    expect(res.fieldErrors?.[BOOL_METRIC.key]).toEqual([HIDE_COPY.loggedThenDeleted]);
+    expect(res.fieldErrors?.[HABIT.key], 'the row that DID save carries no error').toBeUndefined();
   });
 });
 

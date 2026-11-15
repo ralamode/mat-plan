@@ -525,6 +525,29 @@ flowchart LR
     (`docs/parallel-work.md` Gate 1 is disjoint file globs, **feature guides included**). It belongs
     here anyway: the behaviour is `resolveMovementByPublicId`'s, and this guide owns `writers/`.
 
+### A write that did not happen is never reported as `ok` (V1-9b B1-2)
+
+`writers/checkin.ts` answers **four** outcomes, and `logCheckinEntries` now carries the outcome
+through instead of collapsing it to `created`. The one that matters is **`own_hidden`** — this
+athlete's own _deleted_ row holds the submitted `client_id`, so nothing was written:
+
+| Path                      | Before                                                        | Now                                                                     |
+| ------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `logLifeActivitiesAction` | **discarded the result entirely** and returned `{ ok: true }` | `own_hidden` → `{ ok: false, error: HIDE_COPY.loggedThenDeleted }`      |
+| `logCheckinsAction`       | `created: false` on every item → "already logged"             | `own_hidden` → `fieldErrors[<field>]`, naming the row that did not save |
+
+🔴 **`conflict` and `own_hidden` are NOT the same answer.** A `conflict` is another profile's row and
+a life double-tap is a genuine replay — the end state is what the person wanted, so it stays
+`ok: true`. `own_hidden` is their own deleted row: the end state is _not_ what they wanted, and
+`ok` there is the lie B1-1 was written to remove (criterion 9).
+
+⚠️ **A `client_id` must not outlive the row it was minted for**, and the lifetime is the FORM's job,
+not the server's. `life-form.tsx` keys each button `${day}:${activity}:${loggedEntryId ?? 'open'}`
+and rotates the id on any refused submit; the server never mints one on the person's behalf, because
+it cannot tell a fresh intent from a replay — and a v1.5 sync replay that silently resurrected a row
+deleted on another device would be the worst outcome in this feature. The per-form lifetime table is
+in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.md` owns the rest.
+
 ## Traps
 
 - **A DB constraint reached by a crafted body is a 500 that discards the whole transaction.** For a
