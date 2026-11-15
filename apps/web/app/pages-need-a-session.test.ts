@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { isPublicPath } from '@/lib/public-paths';
 import {
   code,
-  exportedActionNames,
+  exportedActionSlices,
   serverActionModules,
   USE_SERVER_MENTION_RE,
   USE_SERVER_RE,
@@ -319,7 +319,16 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     // ⚠️ `app/gate/actions.ts` was the other entry until `1d` deleted it.
     // PROF-1 a-r adds the second LIVE entry — the household-level athlete module WP-1's fixed set
     // reserved. Every assertion in this describe now runs over both, which is the point of the list.
-    expect(modules.sort()).toEqual(['app/p/[profileId]/actions.ts', 'app/p/profile-actions.ts']);
+    //
+    // 🔴 **ONE ENTRY PER LINE, SORTED, each with its own trailing comment (FAM-1 step 0b).** This is
+    // the one line every new Server Action module still edits by hand, so two lanes adding a module
+    // each must not meet on it. Sorted, their paths fall into different gaps; one per line, git
+    // merges both insertions; and the comment is what stops the formatter folding the array back
+    // onto one line. Add yours where it sorts, with a comment saying whose it is.
+    expect(modules.sort()).toEqual([
+      'app/p/[profileId]/actions.ts', // the per-athlete day actions
+      'app/p/profile-actions.ts', // athlete management (PROF-1)
+    ]);
   });
 
   it('the scan is not vacuous', () => {
@@ -353,21 +362,16 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
 
   it.each(guarded)('%s — every exported action checks the boundary', (rel) => {
     const src = code(join(WEB_DIR, rel));
-    const names = exportedActionNames(join(WEB_DIR, rel));
-    expect(names.length).toBeGreaterThan(0);
+    // Each exported function from its declaration to the next one (or EOF), so a single check in
+    // ONE action cannot satisfy the whole module. (`exportedActionSlices` is this file's own
+    // slicing, hoisted to `test/source-scan.ts` unchanged when a second guard needed it.)
+    const slices = exportedActionSlices(join(WEB_DIR, rel));
+    expect(slices.length).toBeGreaterThan(0);
 
-    // Slice each exported function from its declaration to the next one (or EOF) and look inside it,
-    // so a single check in ONE action cannot satisfy the whole module.
-    const starts = names.map((n) => ({
-      name: n,
-      at: src.search(new RegExp(`^export\\s+async\\s+function\\s+${n}\\b`, 'm')),
-    }));
     // Each of the three must appear INSIDE the action's own slice. Reported separately so a failure
     // names which conjunct went missing rather than just "the boundary".
     const report = (re: RegExp) =>
-      starts
-        .filter(({ at }, i) => !re.test(src.slice(at, starts[i + 1]?.at ?? src.length)))
-        .map(({ name }) => name);
+      slices.filter(({ body }) => !re.test(body)).map(({ name }) => name);
 
     expect(report(ENTRY_CALL), 'actions missing the awaited enterMutation() call').toEqual([]);
     expect(report(ENTRY_REFUSAL), 'actions that call enterMutation but drop its refusal').toEqual(

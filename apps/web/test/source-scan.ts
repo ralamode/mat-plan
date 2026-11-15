@@ -47,9 +47,10 @@ export const USE_SERVER_MENTION_RE = /['"]use server['"]/;
 /**
  * Every first-party TypeScript source file under `apps/web`, tests excluded.
  *
- * **Glob-based on purpose.** `use-server-exports.test.ts` has a hand-rolled `readdirSync` recursion
- * and it is the only copy, while the guards this supports use `globSync` — promoting the recursion
- * would add a third enumeration idiom to the repo rather than remove one.
+ * **Glob-based on purpose.** `use-server-exports.test.ts` had a hand-rolled `readdirSync` recursion,
+ * the only copy, while the guards this supports use `globSync` — promoting the recursion would have
+ * added a third enumeration idiom to the repo rather than remove one. ✅ That file reads
+ * `serverActionModules()` since FAM-1 step 0b, so this is the one enumeration.
  *
  * ⚠️ **Rooted at `apps/web`, not `apps/web/app`.** A `'use server'` module under `components/` or
  * `lib/` is a real Server Action and a real public endpoint, and the pre-existing guards rooted at
@@ -86,4 +87,27 @@ export function exportedActionNames(file: string): string[] {
   return [...code(file).matchAll(/^export\s+async\s+function\s+([A-Za-z0-9_$]+)/gm)].map(
     (m) => m[1]!,
   );
+}
+
+/**
+ * Each exported action with its own source: from its declaration to the next exported action's (or
+ * EOF), comments stripped. A guard that looks inside one action's slice cannot be satisfied by a
+ * call that sits in another action.
+ *
+ * Hoisted from `pages-need-a-session.test.ts` at FAM-1 step 0b, when the row-policy pin in
+ * `mutating-actions.test.ts` became the second guard that needs it.
+ * ⚠️ The LAST action's slice runs to the end of the file, so it includes any private helper declared
+ * after it. That over-matches for a presence guard and for a "who names this" pin alike, which is
+ * the safe direction for both.
+ */
+export function exportedActionSlices(file: string): { name: string; body: string }[] {
+  const src = code(file);
+  const starts = exportedActionNames(file).map((name) => ({
+    name,
+    at: src.search(new RegExp(`^export\\s+async\\s+function\\s+${name}\\b`, 'm')),
+  }));
+  return starts.map(({ name, at }, i) => ({
+    name,
+    body: src.slice(at, starts[i + 1]?.at ?? src.length),
+  }));
 }

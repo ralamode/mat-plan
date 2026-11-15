@@ -1,4 +1,5 @@
-import { globSync } from 'node:fs';
+import { globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,7 +10,8 @@ import { code } from '@/test/source-scan';
 /**
  * **TEN-1 1d — the DAL-side structural guard.** It catches the common forms; `db:verify` is the proof.
  *
- * Two claims about `apps/web/lib/dal/`, each as its own assertion with its own exception list:
+ * Two claims about `apps/web/lib/dal/` **and every directory beneath it**, each as its own assertion
+ * with its own exception list:
  *
  * 1. **nothing reaches the database without resolving or being handed a household scope** — exception:
  *    `ALLOWED_UNSCOPED` below, **two** `catalog.ts` entries, both global reference reads (TEN-2b
@@ -68,9 +70,26 @@ import { code } from '@/test/source-scan';
 
 const DAL_DIR = dirname(fileURLToPath(import.meta.url));
 
-const dalFiles = globSync('*.ts', { cwd: DAL_DIR })
-  .filter((f) => !f.endsWith('.test.ts'))
-  .sort();
+/**
+ * Every non-test source file under a directory, **at any depth**, as a path relative to it.
+ *
+ * 🔴 **A recursive glob, not `*.ts` (FAM-1 step 0b).** The top-level glob was right while `lib/dal` was
+ * flat. (The pattern is not quoted here: it holds the two characters that end a block comment.)
+ * FAM-1 gives two lanes a directory each (`lib/dal/program/`, `lib/dal/day/`), and a file placed in
+ * one would have been outside both assertions below while this suite stayed green: the count floors
+ * only say the scan found *something*, never that it found *everything*. The self-check at the end of
+ * this file plants a nested leak and watches both detectors see it, because neither directory holds
+ * a query yet and a widened glob that matched nothing new would look exactly like this one.
+ *
+ * A declaration's id is its relative path plus its name (`program/workouts.ts#saveWorkout`), so the
+ * two exception lists keep working unchanged and a nested entry names its directory.
+ */
+const sourceFilesUnder = (dir: string): string[] =>
+  globSync('**/*.ts', { cwd: dir })
+    .filter((f) => !f.endsWith('.test.ts'))
+    .sort();
+
+const dalFiles = sourceFilesUnder(DAL_DIR);
 
 /**
  * Where a top-level declaration begins. Everything up to the next one is its body, which is all the
@@ -81,14 +100,20 @@ const DECL_RE =
 
 type Decl = { id: string; body: string };
 
-function declarationsOf(file: string): Decl[] {
-  const src = code(join(DAL_DIR, file));
+function declarationsIn(dir: string, file: string): Decl[] {
+  const src = code(join(dir, file));
   const starts = [...src.matchAll(DECL_RE)].map((m) => ({ at: m.index, name: m[1]! }));
   return starts.map((s, i) => ({
     id: `${file}#${s.name}`,
     body: src.slice(s.at, starts[i + 1]?.at ?? src.length),
   }));
 }
+
+/**
+ * The declarations of one `lib/dal` file. One parameter on purpose: it is passed straight to
+ * `flatMap`, which would hand an optional second parameter the element's index.
+ */
+const declarationsOf = (file: string): Decl[] => declarationsIn(DAL_DIR, file);
 
 /**
  * Does this declaration hand the Drizzle client to the database?
@@ -142,7 +167,7 @@ describe('every lib/dal path to the database carries a household scope (TEN-1 1d
   const unscoped = reachingDb.filter((d) => !CARRIES_SCOPE.test(d.body));
 
   it('finds the source (an empty glob would pass everything below)', () => {
-    expect(dalFiles.length, 'apps/web/lib/dal/*.ts').toBeGreaterThan(5);
+    expect(dalFiles.length, 'apps/web/lib/dal/**/*.ts').toBeGreaterThan(5);
     expect(declarations.length, 'top-level declarations parsed').toBeGreaterThan(30);
     expect(reachingDb.length, 'declarations that reach `db`').toBeGreaterThan(10);
   });
@@ -174,16 +199,19 @@ describe('every lib/dal path to the database carries a household scope (TEN-1 1d
   });
 });
 
-describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', () => {
-  /**
-   * The predicate is `packages/db/src/writers/ownership.ts` → `isLiveProfile(publicId, scope)` /
-   * `inHousehold(scope)`. It had **eleven** hand-typed copies before V1-24; TEN-1 1c took the count
-   * to zero. A security predicate is the last thing that should drift between call sites, and the
-   * compiler cannot see a twelfth copy — it type-checks perfectly, it is just scoped weaker.
-   */
-  const OWNERSHIP_COLUMN =
-    /\b(?:eq|isNull|inArray)\(\s*schema\.profiles\.(?:publicId|householdId|deletedAt)\b/;
+/**
+ * The predicate is `packages/db/src/writers/ownership.ts` → `isLiveProfile(publicId, scope)` /
+ * `inHousehold(scope)`. It had **eleven** hand-typed copies before V1-24; TEN-1 1c took the count
+ * to zero. A security predicate is the last thing that should drift between call sites, and the
+ * compiler cannot see a twelfth copy — it type-checks perfectly, it is just scoped weaker.
+ *
+ * At module scope since FAM-1 step 0b, so the sub-directory self-check at the end of this file runs
+ * this detector and not a copy of it.
+ */
+const OWNERSHIP_COLUMN =
+  /\b(?:eq|isNull|inArray)\(\s*schema\.profiles\.(?:publicId|householdId|deletedAt)\b/;
 
+describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', () => {
   /**
    * **Exception list 2 — one declaration.** `household.ts#reportScopeMiss`, ADR 0006 obligation 3's
    * existence-only probe: deliberately unscoped, because telling `cross_household` from
@@ -222,5 +250,72 @@ describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', ()
       `${file} builds an ownership predicate by hand — use isLiveProfile(publicId, scope) or ` +
         'inHousehold(scope) from packages/db/src/writers/ownership.ts, never a copy',
     ).toEqual([]);
+  });
+});
+
+/**
+ * 🔴 **The scan reaches sub-directories, shown on a planted leak (FAM-1 step 0b).**
+ *
+ * `lib/dal/program/` and `lib/dal/day/` are scanned from the PR that creates them, before either
+ * holds a query. So the real tree cannot show that a nested file is seen, and the widened glob would
+ * pass every assertion above whether or not it matched one. This plants the two shapes the guard
+ * exists for, below the top level of a throwaway directory, and runs the **same** file listing,
+ * declaration parser and detectors over it.
+ *
+ * ⚠️ It writes to the OS temp directory, never into `lib/dal`: a fixture leak inside the scanned tree
+ * would be a real finding in the two suites above for as long as the test ran.
+ */
+describe('the scan covers sub-directories (FAM-1 step 0b)', () => {
+  /** Runs `check` against a directory holding one top-level file and two nested ones. */
+  function withPlantedTree(check: (dir: string) => void): void {
+    const dir = mkdtempSync(join(tmpdir(), 'mat-plan-dal-scan-'));
+    try {
+      mkdirSync(join(dir, 'program'));
+      mkdirSync(join(dir, 'day', 'rows'), { recursive: true });
+      writeFileSync(
+        join(dir, 'top.ts'),
+        'export async function scopedRead() {\n  const scope = await getHouseholdScope();\n  return db.select();\n}\n',
+      );
+      writeFileSync(
+        join(dir, 'program', 'leak.ts'),
+        'export async function unscopedRead() {\n  return db.select();\n}\n',
+      );
+      writeFileSync(
+        join(dir, 'day', 'rows', 'predicate.ts'),
+        'export async function handRolled(scope: HouseholdScope) {\n' +
+          '  return db.select().where(\n    eq(\n      schema.profiles.publicId, id));\n}\n',
+      );
+      writeFileSync(join(dir, 'program', 'leak.test.ts'), 'export const ignored = db.select();\n');
+      check(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('lists a nested file by its relative path, at any depth, and still skips tests', () => {
+    withPlantedTree((dir) => {
+      expect(sourceFilesUnder(dir)).toEqual(['day/rows/predicate.ts', 'program/leak.ts', 'top.ts']);
+    });
+  });
+
+  it('sees an unscoped reach in a sub-directory, and names the directory in its id', () => {
+    withPlantedTree((dir) => {
+      const unscoped = sourceFilesUnder(dir)
+        .flatMap((f) => declarationsIn(dir, f))
+        .filter((d) => REACHES_DB.test(d.body) && !CARRIES_SCOPE.test(d.body))
+        .map((d) => d.id);
+      // `top.ts#scopedRead` reaches `db` too and is absent: the detector separates the two.
+      expect(unscoped).toEqual(['program/leak.ts#unscopedRead']);
+    });
+  });
+
+  it('sees a hand-written ownership predicate two directories down', () => {
+    withPlantedTree((dir) => {
+      const handWritten = sourceFilesUnder(dir)
+        .flatMap((f) => declarationsIn(dir, f))
+        .filter((d) => OWNERSHIP_COLUMN.test(d.body))
+        .map((d) => d.id);
+      expect(handWritten).toEqual(['day/rows/predicate.ts#handRolled']);
+    });
   });
 });

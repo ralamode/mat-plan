@@ -22,8 +22,14 @@ export function toggle(order: readonly RoutineItem[], item: RoutineItem): Routin
     : [...order, item];
 }
 
-/** Move the item at `index` one step earlier. No-op (returns a copy) at the top or out of range. */
-export function moveUp(order: readonly RoutineItem[], index: number): RoutineItem[] {
+/**
+ * Move the item at `index` one step earlier. No-op (returns a copy) at the top or out of range.
+ *
+ * Generic over the element (FAM-1 step 0b), with `moveDown`: a reorder is an adjacent swap whatever
+ * the list holds, so the program builder imports these two for its workout items rather than writing
+ * a second pair. The routine editor's calls infer `T = RoutineItem` and are unchanged.
+ */
+export function moveUp<T>(order: readonly T[], index: number): T[] {
   const next = [...order];
   if (index <= 0 || index >= next.length) return next;
   [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
@@ -31,7 +37,7 @@ export function moveUp(order: readonly RoutineItem[], index: number): RoutineIte
 }
 
 /** Move the item at `index` one step later. No-op (returns a copy) at the bottom or out of range. */
-export function moveDown(order: readonly RoutineItem[], index: number): RoutineItem[] {
+export function moveDown<T>(order: readonly T[], index: number): T[] {
   const next = [...order];
   if (index < 0 || index >= next.length - 1) return next;
   [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
