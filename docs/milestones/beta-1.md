@@ -490,7 +490,7 @@ median **368** insertions, p25 **174**, p75 **906**. So S ≈ ≤200, M ≈ ~400
 
 **≈ 10–11 PRs plus two manual steps**, of which **5–6 are the `V1-9b` arc** and four are ops/privacy.
 
-⚠️ _Added 2026-11-14:_ **13 · [`FAM-1`](./fam-1-family-program.md)** follows, ≈ 3–4 docs PRs + 18 code PRs
+⚠️ _Added 2026-11-14:_ **13 · [`FAM-1`](./fam-1-family-program.md)** follows, ≈ 3–4 docs PRs + 23 code PRs
 and a week of real use (its first program write waits on 7, and its logging and Today steps on 3–5). It owns
 removing `PROGRAM_SEED` from production, which this table's item 7 (`OPS-2`) leaves open as its Q3.
 
@@ -544,8 +544,8 @@ improves before anyone is invited, and the invited family gets per-athlete days 
 
 1. **Logging:** `FEED-0` · (`V1-24` 2b folded into `FAM-1` step 13b, 2026-11-14) · `PICK-1` PR 4 ·
    `MOV-1` · structured worn load (GAP-3 PR 4b).
-2. **Scheduling:** `SCHED-1` 1b, 1d, 1e → `ASSIGN-READ` → `ASSIGN-1` (per-athlete days, several
-   programs, Move, Change days, Undo) · rotation for created programs (R3) · **the nothing-due-day
+2. **Scheduling:** `SCHED-1` 1b, 1d, 1e → `ASSIGN-READ` → `ASSIGN-1` (per-athlete days, Move,
+   Change days, Undo; several programs and Take off moved into `FAM-1`, 2026-11-14) · rotation for created programs (R3) · **the nothing-due-day
    rule**, including optional workouts → `MOT-1`.
 3. **Before the first invite:** `ONB-2`, re-scoped 2026-11-14 (proposed): a new household browses 2–3
    curated starters and tries one as an editable copy, or builds its own. **No default program ships** (maintainer, 2026-11-14) ·

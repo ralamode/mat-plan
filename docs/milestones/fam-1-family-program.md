@@ -24,8 +24,8 @@ there. A parent can:
    closed menu (R6), its prescribed values, and the author's **instructions** (R8, first half).
    Check-off-only items sit alongside counted, timed, distance and weight × reps ones, and a "write
    it" number is a Count item placed after the work it describes (R7);
-4. put the household's athletes on it **from a chosen date**, and see each day's workouts, in order,
-   on Today;
+4. put the household's athletes on it **from a chosen date**, alongside any other programs they are
+   on, and see each day's workouts from all of them, in order, on Today;
 5. let each athlete **check items off and fill them in** on a phone, and edit the program later
    without rewriting what an earlier day says was prescribed.
 
@@ -38,10 +38,10 @@ Friday) has to fit too.
 
 ## What the slice leaves out, and why that is safe
 
-Every athlete in the household runs the same program on the same days, and the program prescribes
-no per-athlete loads. So the slice needs **no** per-athlete weekday sets, several programs per
-athlete, rotation for created programs, Move / Change days / Take off / Undo, copy, archive,
-history, typed per-athlete targets, supersets in the program, or the athlete's note. They all stay in
+Every athlete on a program runs it on the same days, and the program prescribes no per-athlete
+loads. So the slice needs **no** per-athlete weekday sets, rotation for created programs, Move /
+Change days / Undo, copying or archiving a whole program, history, typed per-athlete targets, or the
+athlete's note. They all stay in
 [PROG-1](./prog-1-programs-and-scheduling.md), in Beta 1. Existing programs keep the legacy
 `day_role` read and are **not migrated**: the slice is the expand half of ADR 0007 decision 3's
 `workouts` arc, with no backfill and no contract step.
@@ -54,29 +54,32 @@ a description until it has its own row.
 
 **Made** _(maintainer)_:
 
-| Decision                                                                                                                                                                                                                                               | Where                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Beta 0 is the maintainer's household only; this milestone ends it                                                                                                                                                                                      | 2026-11-14, [beta-1 → Beta 0](./beta-1.md#beta-0--one-invited-family)       |
-| No workout cap; a week template on the block; the resolver returns an ordered list                                                                                                                                                                     | R1, R2, R5; [ADR 0007](../decisions/0007-scheduling-model.md) Amendment 1   |
-| Seven tracking types; every item can be checked off; "write it" numbers are Count items                                                                                                                                                                | R6, R7; [plan.md → ITEM-1](../plan.md#item-1)                               |
-| Instructions per item, always shown; the athlete's note is the author's switch, default off                                                                                                                                                            | R8                                                                          |
-| No timers in the first version: intervals are logged, not timed                                                                                                                                                                                        | re-scope, "Out of this re-scope"                                            |
-| The builder edits in place on one screen; on a phone, adding opens a full-screen, multi-select picker                                                                                                                                                  | R10                                                                         |
-| The byte-faithful CSV no longer constrains any of this; an export stays                                                                                                                                                                                | R11, [ADR 0009](../decisions/0009-retire-the-byte-faithful-csv-contract.md) |
-| Today picks the program through an **assignment** ("Start using this program"), never the newest block                                                                                                                                                 | 2026-11-14                                                                  |
-| **Supersets are in the slice**: the program groups items, and the log inherits the grouping (SUPERSET-1's first half). Changing a superset mid-workout and saving it back stays Beta 1                                                                 | 2026-11-14, reversing the draft's "No"                                      |
-| **"Row completed = logged" for every kind, strength sets included.** No Log button anywhere; a set row writes when it is completed, and later sets append to the same workout's session that day                                                       | 2026-11-14, reversing the draft's "new kinds only"                          |
-| The athlete's note stays out of the slice                                                                                                                                                                                                              | 2026-11-14                                                                  |
-| A worn load (vest, ankle or wrist weights) is a Count item with a unit; the structured form is Beta 1                                                                                                                                                  | 2026-11-14                                                                  |
-| `PROGRAM_SEED` leaves production in step 1, right after OPS-2's split                                                                                                                                                                                  | 2026-11-14; answers [OPS-2](../plan.md) Q3                                  |
-| V1-22 chunks 4 and 5 are dropped; chunk 3 goes to Beta 1 with HIST-1                                                                                                                                                                                   | 2026-11-14                                                                  |
-| One FAM-1 plan that cites the PROG-1 plans, rather than five revisions                                                                                                                                                                                 | 2026-11-14                                                                  |
-| The phone run-through and `PRIV-1`'s sign-off move after this milestone                                                                                                                                                                                | 2026-11-14                                                                  |
-| A superset shows as **linked cards** (each item keeps its card and sets; a bar and letters join them) and can link **any number** of adjacent items (A1, A2, A3…)                                                                                      | 2026-11-14, after the prototype                                             |
-| **V1-24 2b folds into step 13b**: changing a number on a completed row is the amend                                                                                                                                                                    | 2026-11-14, after the prototype                                             |
-| The workout editor has one Save; the week saves each change                                                                                                                                                                                            | 2026-11-14, after the prototype                                             |
-| **Look ahead**: on a program, the day page pages forward into future days as a read-only preview of that weekday's workouts (step 12)                                                                                                                  | 2026-11-14, after the prototype                                             |
-| **No hidden "current athlete"**: Home tiles show each athlete's program; **Programs** is a list showing who is on each; a program page says who its changes apply to; the day page links to its program and has an athlete switcher. No "Your program" | 2026-11-14, after UX research (11 rounds) and the prototype                 |
+| Decision                                                                                                                                                                                                                                                                                                                         | Where                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Beta 0 is the maintainer's household only; this milestone ends it                                                                                                                                                                                                                                                                | 2026-11-14, [beta-1 → Beta 0](./beta-1.md#beta-0--one-invited-family)       |
+| No workout cap; a week template on the block; the resolver returns an ordered list                                                                                                                                                                                                                                               | R1, R2, R5; [ADR 0007](../decisions/0007-scheduling-model.md) Amendment 1   |
+| Seven tracking types; every item can be checked off; "write it" numbers are Count items                                                                                                                                                                                                                                          | R6, R7; [plan.md → ITEM-1](../plan.md#item-1)                               |
+| Instructions per item, always shown; the athlete's note is the author's switch, default off                                                                                                                                                                                                                                      | R8                                                                          |
+| No timers in the first version: intervals are logged, not timed                                                                                                                                                                                                                                                                  | re-scope, "Out of this re-scope"                                            |
+| The builder edits in place on one screen; on a phone, adding opens a full-screen, multi-select picker                                                                                                                                                                                                                            | R10                                                                         |
+| The byte-faithful CSV no longer constrains any of this; an export stays                                                                                                                                                                                                                                                          | R11, [ADR 0009](../decisions/0009-retire-the-byte-faithful-csv-contract.md) |
+| Today picks the program through an **assignment** ("Start using this program"), never the newest block                                                                                                                                                                                                                           | 2026-11-14                                                                  |
+| **Supersets are in the slice**: the program groups items, and the log inherits the grouping (SUPERSET-1's first half). Changing a superset mid-workout and saving it back stays Beta 1                                                                                                                                           | 2026-11-14, reversing the draft's "No"                                      |
+| **"Row completed = logged" for every kind, strength sets included.** No Log button anywhere; a set row writes when it is completed, and later sets append to the same workout's session that day                                                                                                                                 | 2026-11-14, reversing the draft's "new kinds only"                          |
+| The athlete's note stays out of the slice                                                                                                                                                                                                                                                                                        | 2026-11-14                                                                  |
+| A worn load (vest, ankle or wrist weights) is a Count item with a unit; the structured form is Beta 1                                                                                                                                                                                                                            | 2026-11-14                                                                  |
+| `PROGRAM_SEED` leaves production in step 1, right after OPS-2's split                                                                                                                                                                                                                                                            | 2026-11-14; answers [OPS-2](../plan.md) Q3                                  |
+| V1-22 chunks 4 and 5 are dropped; chunk 3 goes to Beta 1 with HIST-1                                                                                                                                                                                                                                                             | 2026-11-14                                                                  |
+| One FAM-1 plan that cites the PROG-1 plans, rather than five revisions                                                                                                                                                                                                                                                           | 2026-11-14                                                                  |
+| The phone run-through and `PRIV-1`'s sign-off move after this milestone                                                                                                                                                                                                                                                          | 2026-11-14                                                                  |
+| A superset shows as **linked cards** (each item keeps its card and sets; a bar and letters join them) and can link **any number** of adjacent items (A1, A2, A3…)                                                                                                                                                                | 2026-11-14, after the prototype                                             |
+| **V1-24 2b folds into step 13b**: changing a number on a completed row is the amend                                                                                                                                                                                                                                              | 2026-11-14, after the prototype                                             |
+| The workout editor has one Save; the week saves each change                                                                                                                                                                                                                                                                      | 2026-11-14, after the prototype                                             |
+| **Look ahead**: on a program, the day page pages forward into future days as a read-only preview of that weekday's workouts (step 12)                                                                                                                                                                                            | 2026-11-14, after the prototype                                             |
+| **No hidden "current athlete"**: Home tiles show each athlete's program; **Programs** is a list showing who is on each; a program page says who its changes apply to; the day page links to its program and has an athlete switcher. No "Your program"                                                                           | 2026-11-14, after UX research (11 rounds) and the prototype                 |
+| **Several programs per athlete are in the slice** (for example a family program and a stretching program). The day page lists workouts by time-of-day label, then in **each athlete's own program order**; a newly added program defaults to its place in the household's Programs list. **Take off** ends a program after today | 2026-11-14, moved from ASSIGN-1                                             |
+| **Copy to program…**: a workout is copied, independently, into another program (or the same one) with optional weekdays and a label, and shows where it came from ("Copied from Family program · 14 Nov"). Editing either never changes the other                                                                                | 2026-11-14, from CLONE-1's first half                                       |
+| **No linked workouts.** To get every change someone makes, an athlete goes **on that program**; a workout shared by two groups becomes its own small program. Following a program across households is the club pilot's                                                                                                          | 2026-11-14                                                                  |
 
 **To decide** (recommendations are this draft's, for the maintainer):
 
@@ -119,8 +122,15 @@ flowchart LR
   T12 --> L13b
   T12 --> L13
   L11 --> E14[14 · export]
-  T12 --> ST15[15 · start using this program]
+  T12 --> ST15[15 · put someone on a program]
   U10 --> ST15
+  U10 --> CP10b[10b · copy to program]
+  ST15 --> TO15b[15b · take off]
+  ST15 --> MP15c[15c · several programs each]
+  T12 --> MP15c
+  CP10b --> AC16
+  TO15b --> AC16
+  MP15c --> AC16
   SS8b --> ST15
   L13 --> AC16[16 · a week of real use]
   L13b --> AC16
@@ -154,34 +164,39 @@ Step 4a also takes over A4-1's source-scan check for `program_blocks`.
 | **8b**  | **Supersets in the editor**: group adjacent items into a superset, ungroup, and a rest note after the group. 2026-11-14 decision                                                                                                                                                                                                                                                                                                                                                          | in d2 + d3                                                          | 8                                          | 1 · ~300                 |
 | **9**   | **Multi-add and "new item"** in the picker (PICK-1 PR 3's component)                                                                                                                                                                                                                                                                                                                                                                                                                      | in d2 + d3                                                          | 8                                          | 1 · ~350                 |
 | **10**  | **The week editor**: per weekday, ordered slots with labels                                                                                                                                                                                                                                                                                                                                                                                                                               | in d2 + d3                                                          | 9                                          | 1 · ~300                 |
+| **10b** | **Copy to program…**: copy a workout, independently, into any program with optional weekdays and a label; it records where it came from. Reuses step 6's writer                                                                                                                                                                                                                                                                                                                           |
 | **11a** | **Log writer for the new kinds**: it writes per row and is idempotent. Un-checking hides the row (V1-9b's tombstone). It writes the prescribed snapshot and the workout at log time. It may carry the entries migration d2 finds owed                                                                                                                                                                                                                                                     | in d2                                                               | 4b applied · V1-9b B1-3/B2 · V1-24 3b      | 1 (+1 migration?) · ~350 |
 | **11b** | **The strength writer learns workouts**: for set-based items in a template program, the snapshot comes from the workout's prescription and the session records its workout. **Per-row writes** (2026-11-14): completing a set row writes it, later sets that day **append** to the same workout's session, un-completing hides the set (V1-9b's tombstone), and a prescribed superset carries into `superset_id` (ADR 0003)                                                               | in d2                                                               | 4b applied · V1-9b B1-3 · V1-24 3b         | 1 · ~500                 |
 | **12**  | **Today reads the week**: an athlete with an open assignment gets that program's workouts due today, in order, with labels, descriptions, instructions and superset grouping, and **future days as a read-only preview**. Any other athlete gets the legacy read. READ-2a's gates are moot here: no legacy block is edited, unassigned athletes keep the legacy read, and the export bytes do not move                                                                                    | in d2 (a thin cut of ASSIGN-READ)                                   | 2, 5, 11b · V1-24 3b and V1-9b B1-3 merged | 1 · ~400                 |
 | **13**  | **Log rows on Today** for Check, Duration and Count, with a done state                                                                                                                                                                                                                                                                                                                                                                                                                    | in d2 + d3                                                          | 11a, 12                                    | 1 · ~400                 |
 | **13b** | **Strength sets log per row on Today**: a ✓ per set, the PREVIOUS value, green done rows, **no Log button**; superset cards linked. Replaces V1-24 3b's strength form for athletes on a template program                                                                                                                                                                                                                                                                                  | in d2 + d3                                                          | 11b, 12                                    | 1 · ~450                 |
 | **14**  | **Export** carries the new kinds and the workout, with RFC 4180 quoting (ADR 0009 §3). May fold into 11a                                                                                                                                                                                                                                                                                                                                                                                  | in d2                                                               | 11a                                        | 0–1 · ~200               |
-| **15**  | **"Start using this program"**: puts the chosen athletes on the program from a date, on every weekday. No Move, Change days or Undo                                                                                                                                                                                                                                                                                                                                                       | in d2 (a thin cut of ASSIGN-1 1b-w)                                 | 12 (read before write) · 10                | 1 · ~300                 |
+| **15**  | **"Put someone on this program"**: adds the program to the chosen athletes from a date, on every weekday, keeping their other programs. No Move, Change days or Undo                                                                                                                                                                                                                                                                                                                      |
+| **15b** | **Take off**: ends an athlete's program after today; logged days keep what they had                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **15c** | **Several programs per athlete**: Today merges every open assignment's workouts, by label then the athlete's own program order; the athlete reorders; a new program defaults to the household order. Each workout names its program                                                                                                                                                                                                                                                       |
 | **16**  | **Acceptance**: the household enters its program, runs it for a week and writes a findings note                                                                                                                                                                                                                                                                                                                                                                                           | —                                                                   | everything above                           | manual                   |
 
-**≈ 3–4 docs PRs + 20 code PRs** (4–5 of them migrations), ≈ 7,000 lines of source and tests. The
+**≈ 3–4 docs PRs + 23 code PRs** (4–5 of them migrations), ≈ 8,000 lines of source and tests
+(steps 10b, 15b and 15c added ≈ 3 PRs and ≈ 1,000 lines on 2026-11-14). The
 docs steps can start now, in the order d1 → d3 → d2, alongside Beta 0's ops work. Steps 2–10 need
 only the docs and the migration queue; 5b and 6 also need step 1, which waits on OPS-2. Steps
 11a–13b wait on the V1-24 3b / V1-9b B1-3 strength surfaces.
 
 **Serial chains.** Migrations take the next number at merge: 3 → 4a → 4b → 5. `programming.md` takes
 one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduling.md#gate-run)): 4a,
-4b, 5b, 6, 7, 8b, 10, 11b, 12 and 15.
+4b, 5b, 6, 7, 8b, 10, 10b, 11b, 12, 15 and 15c.
 
 ## What moves to Beta 1
 
 From [PROG-1](./prog-1-programs-and-scheduling.md), everything not listed above:
 
 - SCHED-1 1b, 1d and 1e;
-- ASSIGN-READ and ASSIGN-1 in full: per-athlete days, several programs, Move, Change days, Take off
-  and Undo;
+- ASSIGN-READ and ASSIGN-1's remainder: per-athlete days, Move, Change days and Undo (several
+  programs and Take off moved into this slice, 2026-11-14);
 - rotation for created programs (R3);
 - V1-22 A4-3c and A4-4, with ONB-2;
-- CLONE-1, RETIRE-1 and HIST-1;
+- CLONE-1's remainder (copying a whole program, moving athletes to the copy), RETIRE-1 and HIST-1;
+- "Do someone else's workout today", a one-day snapshot into the log;
 - TGT-1, except the instructions column that step 4b takes;
 - changing a superset during a workout and saving it back (SUPERSET-1's add-on), and the athlete's note;
 - structured worn load (GAP-3 PR 4b and movement-declared load slots);
@@ -214,9 +229,10 @@ These needs had no row before this draft. Each now has a home:
   append to an earlier entry. Since 2026-11-14 the slice appends: step 11b writes per row into the
   workout's session for that day.
 - **An optional workout on a rest day**: it doesn't matter for logging, but it must be settled with
-  ADR 0007's nothing-due-day rule **before MOT-1 stores a streak**.
-- **Later, not needed here:** load on a Distance item, "each side" as structure, a day-level title,
-  duplicating a workout, program-level reference text, and time ranges as typed targets (TGT-1).
+  ADR 0007's nothing-due-day rule **before MOT-1 stores a streak**. With several programs per athlete
+  (15c), MOT-1.4's "a day counts when everything due is done" needs revisiting too: one missed
+  stretch would break the day. The maintainer is weighing the options; MOT-1 is still Beta 1.
+- **Later, not needed here:** load on a Distance item, "each side" as structure, a day-level title, program-level reference text, and time ranges as typed targets (TGT-1).
 
 ## FAM-1 exit criteria — done when
 
@@ -234,8 +250,12 @@ These needs had no row before this draft. Each now has a home:
 - [ ] A strength set logs when its row is completed, with no Log button, and a set done after school
       joins the morning's session for that workout (steps 11b, 13b).
 - [ ] A program can be built **before** anyone is on it. Saving it changes nothing for any athlete,
-      and the export does not move. "Start using this program" switches the chosen athletes from a
-      date (steps 5, 5b, 12, 15).
+      and the export does not move. "Put someone on this program" adds it for the chosen athletes from
+      a date (steps 5, 5b, 12, 15).
+- [ ] An athlete on two programs sees both programs' workouts on one day, in time-of-day order and
+      then their own program order, each naming its program; Take off ends one after today (15b, 15c).
+- [ ] A workout copied to another program edits independently of the original, and shows where it
+      came from (step 10b).
 - [ ] Editing a workout after a day is logged leaves that day's prescribed snapshot unchanged, for
       set-based items and the new kinds alike (steps 6, 11a, 11b).
 - [ ] No push re-writes a program: `PROGRAM_SEED` no longer reaches production (step 1).
