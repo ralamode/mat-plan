@@ -35,10 +35,12 @@ its files, its diagram and its invariants here.
 
 ## Files
 
-| File                                     | What it is for                                                              |
-| ---------------------------------------- | --------------------------------------------------------------------------- |
-| `apps/web/components/day/day-screen.tsx` | `DayScreen({ plan, actions })`. A section of the day page. A stub until 13. |
-| `apps/web/lib/dal/day/index.ts`          | A placeholder so the directory exists.                                      |
+| File                                          | What it is for                                                                                                       |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/day/day-screen.tsx`      | `DayScreen({ plan, actions })`. A section of the day page. A stub until 13.                                          |
+| `apps/web/components/day/day-screen.test.tsx` | The stub's own output. Step 13 replaces it with the screen's tests.                                                  |
+| `apps/web/components/day/owed.test.ts`        | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test. |
+| `apps/web/lib/dal/day/index.ts`               | A placeholder so the directory exists.                                                                               |
 
 ## Invariants
 

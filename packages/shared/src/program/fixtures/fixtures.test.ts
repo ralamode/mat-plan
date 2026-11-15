@@ -889,6 +889,14 @@ describe('family-program: one program’s page', () => {
   });
 });
 
+describe('every ProgramView fixture says what today is', () => {
+  // The page prints "starts" or "since" by it, and the Put-on dialog offers it and the day after.
+  it.each(Object.entries(PROGRAM_VIEW_FIXTURES))('%s', (_name, view) => {
+    expect(view.today).toBe(FIXTURE_TODAY);
+    expect(programViewSchema.safeParse({ ...view, today: undefined }).success).toBe(false);
+  });
+});
+
 describe('family-program-after-take-off', () => {
   it('keeps the athlete listed through their last day, which is today', () => {
     expect(familyProgramAfterTakeOff.athletes.map((a) => [a.name, a.since, a.lastDay])).toEqual([

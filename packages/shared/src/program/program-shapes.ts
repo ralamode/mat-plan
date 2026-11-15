@@ -134,6 +134,12 @@ export const programViewSchema = z
     programPublicId: uuidSchema,
     name: programNameSchema,
     /**
+     * The household's today, set by the DAL, as `DayPlan.today` is. The page reads it to say
+     * "starts" or "since" beside an athlete (`since` after today is a start still to come), and
+     * the Put-on dialog to offer today or tomorrow as `AssignDraft.from`.
+     */
+    today: isoDaySchema,
+    /**
      * Who's on it. `since` is the day they start, which may be after today. `lastDay` is set once
      * they were taken off: the last day they are on it. `alsoOn` names their other programs.
      */

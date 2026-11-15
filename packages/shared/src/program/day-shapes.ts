@@ -197,7 +197,19 @@ export const rowRetickSchema = z.object({
 });
 export type RowRetick = z.infer<typeof rowRetickSchema>;
 
-/** Change a logged row's numbers in place. The writable window is taken from the entry's own day. */
+/**
+ * Change a logged row's numbers in place. The writable window is taken from the entry's own day.
+ *
+ * **`values` holds every number the row's tracking type has** (`TRACKING_TYPE_FIELDS`): the reps
+ * where the type has reps, and the one quantity in the type's slot, in the unit the item logs in.
+ * Unlike `RowWrite`, nothing is filled in from the prescription: a field left out is a blank, and a
+ * blank answers `bad_value` and keeps the number that is there (plan §8, "Change keeps the old
+ * number if the new one is blank or not a number").
+ *
+ * ⚠️ **The writer enforces this, not the schema.** Which fields are required depends on the item's
+ * tracking type, and this input names an entry, not an item: only the writer, which reads the
+ * entry, knows the type. The schema checks that each number given is a number in range.
+ */
 export const rowAmendSchema = z.object({
   profilePublicId: uuidSchema,
   entryPublicId: uuidSchema,

@@ -16,6 +16,9 @@
   [program-writers](../features/program-writers.md), [day-writers](../features/day-writers.md),
   [program-builder](../features/program-builder.md), [day-page](../features/day-page.md)) own the
   lanes' directories, which now exist, and the [milestone](../milestones/fam-1-family-program.md)
-  declares five lanes that `guides:check` reads: no two overlap or reach one guide. No schema
-  change, no migration, no new dependency; nothing in production links to the route or imports a
-  fake.
+  declares five lanes that `guides:check` reads: no two overlap or reach one guide. One contract
+  change rides along: `ProgramView` gains `today`, as `DayPlan` has, for the page's "starts" or
+  "since" and the Put-on dialog's dates. The list of tests each consumer still owes is now one file
+  per lane, in that lane's own directory, so no lane's step edits a file the contract owns. No
+  schema change, no migration, no new dependency; nothing in production links to the route or
+  imports a fake.

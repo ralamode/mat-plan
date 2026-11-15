@@ -31,11 +31,12 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## Files
 
-| File                                               | What it is for                                                                                                  |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/program/seed-fixtures.ts` | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c. |
-| `packages/db/src/queries/program/index.ts`         | A placeholder so the directory exists. The first real module may replace it.                                    |
-| `packages/db/scripts/verify/program.ts`            | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.   |
+| File                                               | What it is for                                                                                                            |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/program/seed-fixtures.ts` | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.           |
+| `packages/db/src/writers/program/owed.test.ts`     | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test. |
+| `packages/db/src/queries/program/index.ts`         | A placeholder so the directory exists. The first real module may replace it.                                              |
+| `packages/db/scripts/verify/program.ts`            | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.             |
 
 ## Invariants
 

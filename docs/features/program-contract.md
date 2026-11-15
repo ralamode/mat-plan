@@ -42,21 +42,21 @@ flowchart LR
 
 ## Files
 
-| File                                              | What it is for                                                                                                          |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/program/pieces.ts`           | `RowValues`, `Superset`, the bounded texts, `TRACKING_TYPE_FIELDS` (which fields each tracking type has).               |
-| `packages/shared/src/program/program-shapes.ts`   | The builder's shapes and action inputs: `WorkoutDraft`, `WeekDraft`, `ProgramList`, `ProgramView`, the dialog drafts.   |
-| `packages/shared/src/program/day-shapes.ts`       | `DayPlan`, the row writes, `RowResult` and its refusals.                                                                |
-| `packages/shared/src/program/actions.ts`          | `ProgramActions` and `DayActions`: the only way a screen writes.                                                        |
-| `packages/shared/src/program/prescribed-text.ts`  | One renderer of a prescription as text, for all seven types. Its own subpath, not the root barrel.                      |
-| `packages/shared/src/program/fixtures/`           | The named fixtures (`@mat-plan/shared/program/fixtures`): the prototype's data, transcribed in `world.ts`.              |
-| `packages/shared/src/program/owed.test.ts`        | The `it.todo` list of tests each consumer still owes, by step. A lane deletes its lines as it writes them.              |
-| `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. |
-| `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture. Here because its shape is the web's `MovementOptionDTO`.                                  |
-| `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                   |
-| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props.          |
-| `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.        |
-| `apps/web/e2e/program-preview-a11y.spec.ts`       | Walks every state of the registry: axe, 44px targets, no sideways scroll at 360px.                                      |
+| File                                              | What it is for                                                                                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/shared/src/program/pieces.ts`           | `RowValues`, `Superset`, the bounded texts, `TRACKING_TYPE_FIELDS` (which fields each tracking type has).                                                                |
+| `packages/shared/src/program/program-shapes.ts`   | The builder's shapes and action inputs: `WorkoutDraft`, `WeekDraft`, `ProgramList`, `ProgramView`, the dialog drafts.                                                    |
+| `packages/shared/src/program/day-shapes.ts`       | `DayPlan`, the row writes, `RowResult` and its refusals.                                                                                                                 |
+| `packages/shared/src/program/actions.ts`          | `ProgramActions` and `DayActions`: the only way a screen writes.                                                                                                         |
+| `packages/shared/src/program/prescribed-text.ts`  | One renderer of a prescription as text, for all seven types. Its own subpath, not the root barrel.                                                                       |
+| `packages/shared/src/program/fixtures/`           | The named fixtures (`@mat-plan/shared/program/fixtures`): the prototype's data, transcribed in `world.ts`.                                                               |
+| `packages/shared/src/program/owed.test.ts`        | The `it.todo` tests still owed by lane A and the contract owner. Each lane with a guide keeps its own list in its own directory (invariant 9).                           |
+| `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. The program fake's clock is `ProgramView.today`. |
+| `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture. Here because its shape is the web's `MovementOptionDTO`.                                                                                   |
+| `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                                                                    |
+| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props.                                                           |
+| `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.                                                         |
+| `apps/web/e2e/program-preview-a11y.spec.ts`       | Walks every state of the registry: axe, 44px targets, no sideways scroll at 360px.                                                                                       |
 
 **The preview route's URLs:** `/design/program` lists every state.
 `/design/program?screen=<programs-list|program|workout-editor|day>&fixture=<name>` mounts one, and
@@ -93,6 +93,15 @@ flowchart LR
 8. **One list of states, three readers.** The index, the route's parser and the a11y spec all read
    `preview-registry.ts`, which reads the contract's fixture lists. A new fixture is on the route
    and in the scan with no further edit.
+9. 🔴 **No lane's step edits a file this guide owns.** If one had to, every lane would owe this
+   guide and they would be one queue again. Two things keep it so. The harness test
+   (`preview-harness.test.tsx`) mocks the four screens and asserts only what the harness hands
+   them, so filling a stub in changes no file here; a screen's own output is tested beside the
+   screen. And each lane's list of owed tests is a file in its own directory:
+   `packages/db/src/writers/program/owed.test.ts` (P), `packages/db/src/writers/day/owed.test.ts`
+   (E), `apps/web/components/program-builder/owed.test.ts` (B) and
+   `apps/web/components/day/owed.test.ts` (C). Lanes A and S have no guide, so their lines stay in
+   `packages/shared/src/program/owed.test.ts` and are edited under the seam rule, one PR at a time.
 
 ## Traps
 

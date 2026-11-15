@@ -37,6 +37,9 @@ test.use({ viewport: NARROW_VIEWPORT });
 
 const entries = previewEntries();
 
+/** How long a server-rendered state may take to show its frame and its heading. */
+const RENDERED = { timeout: 2_000 };
+
 /** What one state may take in the walk below: a page load, an axe run and two measurements. */
 const STATE_BUDGET_MS = 3_000;
 
@@ -85,8 +88,10 @@ test('every program preview state renders and meets the a11y bar at 360px', asyn
       try {
         await page.goto(previewHref(entry));
         // An unknown name falls back to the index, which has no such line.
-        await expect(page.getByText(`Preview: ${label}`, { exact: true })).toBeVisible();
-        await expect(page.getByRole('heading', { level: 1 })).toHaveText(/\S/);
+        // Both short: a screen that throws fails here, under its state's name, and the walk goes
+        // on, where the default wait would spend the whole walk's budget on one state.
+        await expect(page.getByText(`Preview: ${label}`, { exact: true })).toBeVisible(RENDERED);
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText(/\S/, RENDERED);
         await expect(page.getByRole('main')).toHaveCount(1);
         await expectNoAxeViolations(page, label);
         // A stub has no controls yet; a filled-in screen's are measured from the day it has them.

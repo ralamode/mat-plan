@@ -32,11 +32,12 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## Files
 
-| File                                   | What it is for                                                                                                |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/day/index.ts` | A placeholder so the directory exists. The first real module may replace it.                                  |
-| `packages/db/src/queries/day/index.ts` | The same, for the reads.                                                                                      |
-| `packages/db/scripts/verify/day.ts`    | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture. |
+| File                                       | What it is for                                                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/day/index.ts`     | A placeholder so the directory exists. The first real module may replace it.                                                          |
+| `packages/db/src/writers/day/owed.test.ts` | The lane's `it.todo` list: the tests steps 11b, 12a, 11c and 14 still owe the contract. Delete a line in the PR that writes its test. |
+| `packages/db/src/queries/day/index.ts`     | The same, for the reads.                                                                                                              |
+| `packages/db/scripts/verify/day.ts`        | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                         |
 
 ## Invariants
 

@@ -35,13 +35,15 @@ below adds its files, its diagram and its invariants here.
 
 ## Files
 
-| File                                                            | What it is for                                                    |
-| --------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`. A stub until 8a.     |
-| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`. A stub until 8a.           |
-| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, items, actions })`. A stub until 8. |
-| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.               |
-| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                            |
+| File                                                            | What it is for                                                                                                        |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`. A stub until 8a.                                                         |
+| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`. A stub until 8a.                                                               |
+| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions })`; `picker` is the picker's own `MovementPickerData`. A stub until 8. |
+| `apps/web/components/program-builder/*-screen.test.tsx`         | Each stub's own output. The step that fills a stub in replaces its test.                                              |
+| `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.  |
+| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                   |
+| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                                                                                |
 
 ## Invariants
 

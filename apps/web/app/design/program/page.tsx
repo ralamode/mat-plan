@@ -38,7 +38,7 @@ import {
  * builds, because a Vercel preview is one. **It reads no data**: there is no DAL call beyond the
  * session check, every value shown is a fixture of synthetic people, and the actions are in-memory
  * fakes that write nothing. **Nothing links here**: it is reached by typing the path, and
- * `preview-route.test.ts` keeps it out of the app's navigation.
+ * `preview-registry.test.ts` keeps it out of the app's navigation.
  *
  * ## Its lifetime
  *

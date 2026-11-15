@@ -469,7 +469,6 @@ describe('the fake DayActions: the switch and the program order', () => {
 
 function builder(seed: Partial<FakeProgramState> = {}) {
   const start: FakeProgramState = {
-    today: FIXTURE_TODAY,
     programs: [...programsList],
     program: familyProgram,
     items: [...pickerOptions],
@@ -697,7 +696,10 @@ describe('the fake ProgramActions: items and athletes', () => {
     expect(state().items.at(-1)).toMatchObject({ name: 'Bear crawl', owner: 'household' });
 
     const pushUps = pickerOptions.find((o) => o.name === 'Push-ups')!;
-    expect(await actions.newItem({ name: 'push ups', trackingType: TRACKING_TYPE.check })).toEqual({
+    // Folded, as every name is compared: case and spacing do not make a second item.
+    expect(
+      await actions.newItem({ name: '  PUSH-UPS ', trackingType: TRACKING_TYPE.check }),
+    ).toEqual({
       ok: true,
       itemPublicId: pushUps.publicId,
       trackingType: pushUps.trackingType,
@@ -781,6 +783,28 @@ describe('the fake ProgramActions: items and athletes', () => {
 });
 
 describe('the fakes: rules found in review', () => {
+  it('a name is taken whatever its case or spacing: "heavy a" beside "Heavy A"', async () => {
+    const { actions } = builder();
+    const { programPublicId } = familyProgram;
+    // A workout, in its program.
+    expect(await actions.saveWorkout({ ...newWorkoutEmpty, name: 'heavy a' })).toEqual(
+      refusal('name_taken'),
+    );
+    expect(await actions.saveWorkout({ ...newWorkoutEmpty, name: 'Héavy  A' })).toEqual(
+      refusal('name_taken'),
+    );
+    // Saving Heavy A under its own name, re-cased, is not a clash with itself.
+    expect((await actions.saveWorkout({ ...heavyADraft, name: 'HEAVY A' })).ok).toBe(true);
+    // A program, in the household: created and renamed.
+    expect(
+      await actions.createProgram({ clientId: newId(), name: familyProgram.name.toUpperCase() }),
+    ).toEqual(refusal('name_taken'));
+    const other = programsList.find((p) => p.programPublicId !== programPublicId)!;
+    expect(
+      await actions.renameProgram({ programPublicId, name: other.name.toLowerCase() }),
+    ).toEqual(refusal('name_taken'));
+  });
+
   it('"+ Add set" past the next set adds each set before it, and only a set type has a second row', async () => {
     const { actions, plan } = day(heavyASupersets);
     const before = itemOf(heavyASupersets, 'DB bench press');
@@ -941,10 +965,37 @@ describe('the fakes stay on the preview route', () => {
     expect(outside.length).toBeGreaterThan(100);
   });
 
+  /**
+   * A path that ends in the fakes, the picker fixture or the contract's fixtures, however it is
+   * spelled: by the alias, by the package subpath, or relatively. A sibling under `app/design/`
+   * reaches the fakes as `./program/fakes`, with no `design/` in the path at all.
+   */
+  const IMPORTS_PREVIEW_DATA = /(^|\/)program\/(fakes|picker-options|fixtures)\b/;
+
+  it('the matcher sees every spelling of the import', () => {
+    for (const source of [
+      `import { createFakeDayActions } from '@/app/design/program/fakes';`,
+      `import { createFakeDayActions } from './program/fakes';`,
+      `import { createFakeDayActions } from '../program/fakes';`,
+      `import { pickerOptions } from '../design/program/picker-options';`,
+      `import { familyProgram } from '@mat-plan/shared/program/fixtures';`,
+      `import { familyProgram } from '../../packages/shared/src/program/fixtures/index';`,
+      `const fakes = await import('./program/fakes');`,
+    ]) {
+      expect(IMPORTS_PREVIEW_DATA.test(source), source).toBe(true);
+    }
+    for (const source of [
+      `import { DayScreen } from '@/components/day/day-screen';`,
+      `import type { DayPlan } from '@mat-plan/shared';`,
+      `import { listPrograms } from '@/lib/dal/program/programs';`,
+      `import { previewHref } from './program/preview-registry';`,
+    ]) {
+      expect(IMPORTS_PREVIEW_DATA.test(source), source).toBe(false);
+    }
+  });
+
   it('nothing outside app/design/program imports the fakes or the fixtures', () => {
-    const importers = outside.filter((file) =>
-      /design\/program\/(fakes|picker-options)|shared\/program\/fixtures/.test(code(file)),
-    );
+    const importers = outside.filter((file) => IMPORTS_PREVIEW_DATA.test(code(file)));
     expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
   });
 });

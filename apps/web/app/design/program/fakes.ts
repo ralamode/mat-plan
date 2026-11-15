@@ -3,7 +3,7 @@ import {
   assignDraftSchema,
   copyDraftSchema,
   createProgramSchema,
-  movementNameKey,
+  foldName,
   newId,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -308,11 +308,12 @@ export function createFakeDayActions(
 
 /** What the program builder's screens read, held by the fake between calls. */
 export type FakeProgramState = {
-  /** The household's today: the day a copy is stamped with, and the first day a program can start. */
-  today: string;
   /** The Programs list. */
   programs: ProgramList;
-  /** The one program whose page or editor is on screen, or `null` on the Programs list. */
+  /**
+   * The one program whose page or editor is on screen, or `null` on the Programs list. Its `today`
+   * is the fake's clock: the day a copy is stamped with, and the first day a program can start.
+   */
   program: ProgramView | null;
   /** The item picker's options. */
   items: MovementOptionDTO[];
@@ -323,6 +324,12 @@ export type FakePrograms = {
   actions: Required<ProgramActions>;
   failNext(): void;
 };
+
+/**
+ * Two names a person would read as the same one (plan D5): compared by `foldName`, as the writers
+ * compare them, never by `===`. "heavy a" is "Heavy A".
+ */
+const sameName = (a: string, b: string) => foldName(a) === foldName(b);
 
 /** A copy made inside one program is renamed, and the name still fits `WORKOUT_NAME_MAX`. */
 const COPY_SUFFIX = ' (copy)';
@@ -347,12 +354,14 @@ function repeatsAWorkout(draft: WeekDraft): boolean {
  * - Every input is parsed by the contract's own schema; a failure is `invalid` (an empty name, no
  *   athlete picked, a start day that is not today or tomorrow).
  * - A program's name is its own in the household, and a workout's in its program: `name_taken`.
+ *   Names are compared folded (`foldName`), so a change of case or spacing is still the same name.
  * - A replayed create, save or copy (the same client id) answers as the first call did and adds
  *   nothing.
  * - A week names a workout at most once a day: `once_per_day`.
  * - A copy made inside one program is renamed `… (copy)` within the name's limit; where it came
  *   from is the program's name on the day of the copy, frozen.
- * - A new item whose name matches an existing one selects that item, with its own type.
+ * - A new item whose name matches an existing one (folded, likewise) selects that item, with its
+ *   own type.
  * - Put on starts today or tomorrow and skips whoever is already on it. Take off ends after today;
  *   someone who had not started yet simply leaves.
  */
@@ -385,7 +394,9 @@ export function createFakeProgramActions(
         const { clientId, name } = parsed.data;
         const replayed = minted.get(clientId);
         if (replayed) return { ok: true, programPublicId: replayed };
-        if (state.programs.some((p) => p.name === name)) return refuse(PROGRAM_REFUSAL.name_taken);
+        if (state.programs.some((p) => sameName(p.name, name))) {
+          return refuse(PROGRAM_REFUSAL.name_taken);
+        }
 
         const programPublicId = newId();
         minted.set(clientId, programPublicId);
@@ -401,7 +412,7 @@ export function createFakeProgramActions(
         const { programPublicId, name } = parsed.data;
         const entry = listed(programPublicId);
         if (!entry) return refuse(PROGRAM_REFUSAL.not_found);
-        if (state.programs.some((p) => p !== entry && p.name === name)) {
+        if (state.programs.some((p) => p !== entry && sameName(p.name, name))) {
           return refuse(PROGRAM_REFUSAL.name_taken);
         }
 
@@ -427,7 +438,7 @@ export function createFakeProgramActions(
         const known = saved.workoutPublicId ?? minted.get(saved.workoutClientId) ?? null;
         const existing = view?.workouts.find((w) => w.workoutPublicId === known);
         if (view && saved.workoutPublicId && !existing) return refuse(PROGRAM_REFUSAL.not_found);
-        if (view?.workouts.some((w) => w !== existing && w.name === saved.name)) {
+        if (view?.workouts.some((w) => w !== existing && sameName(w.name, saved.name))) {
           return refuse(PROGRAM_REFUSAL.name_taken);
         }
 
@@ -478,7 +489,9 @@ export function createFakeProgramActions(
         // A copy into another program lands on that program's page, which is not on screen.
         if (copy.toProgramPublicId === view.programPublicId) {
           const name = copyName(source.name);
-          if (view.workouts.some((w) => w.name === name)) return refuse(PROGRAM_REFUSAL.name_taken);
+          if (view.workouts.some((w) => sameName(w.name, name))) {
+            return refuse(PROGRAM_REFUSAL.name_taken);
+          }
           minted.set(copy.clientId, workoutPublicId);
           for (const k of copy.weekdays) view.week[k].push({ workoutPublicId, label: copy.label });
           view.workouts.push({
@@ -486,7 +499,7 @@ export function createFakeProgramActions(
             name,
             itemCount: source.itemCount,
             usedOn: usedOn(view, workoutPublicId),
-            copiedFrom: { programName: view.name, on: state.today },
+            copiedFrom: { programName: view.name, on: view.today },
           });
         } else {
           minted.set(copy.clientId, workoutPublicId);
@@ -500,8 +513,7 @@ export function createFakeProgramActions(
         const parsed = newItemSchema.safeParse(input);
         if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
         const { name, trackingType } = parsed.data;
-        const key = movementNameKey(name);
-        const existing = state.items.find((item) => movementNameKey(item.name) === key);
+        const existing = state.items.find((item) => sameName(item.name, name));
         if (existing) {
           const { publicId: itemPublicId, trackingType: itsType } = existing;
           return { ok: true, itemPublicId, trackingType: itsType, existed: true };
@@ -525,14 +537,15 @@ export function createFakeProgramActions(
         const parsed = assignDraftSchema.safeParse(draft);
         if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
         const { programPublicId, profilePublicIds, from } = parsed.data;
-        if (from !== state.today && from !== addDays(state.today, 1)) {
+        const view = shown(programPublicId);
+        if (!view) return refuse(PROGRAM_REFUSAL.not_found);
+        if (from !== view.today && from !== addDays(view.today, 1)) {
           return refuse(PROGRAM_REFUSAL.invalid);
         }
-        const view = shown(programPublicId);
         const picked = profilePublicIds.map((id) =>
-          view?.candidates.find((c) => c.profilePublicId === id),
+          view.candidates.find((c) => c.profilePublicId === id),
         );
-        if (!view || picked.some((c) => !c)) return refuse(PROGRAM_REFUSAL.not_found);
+        if (picked.some((c) => !c)) return refuse(PROGRAM_REFUSAL.not_found);
 
         // The new program takes its place in the household's order among the ones they keep.
         const rank = (name: string) => state.programs.findIndex((p) => p.name === name);
@@ -566,7 +579,7 @@ export function createFakeProgramActions(
         const athlete = view?.athletes.find((a) => a.profilePublicId === profilePublicId);
         if (!view || !athlete) return refuse(PROGRAM_REFUSAL.not_found);
 
-        if (athlete.since > state.today) {
+        if (athlete.since > view.today) {
           // Not started yet: they leave, and nothing says they were ever on it.
           view.athletes = view.athletes.filter((a) => a !== athlete);
           const candidate = view.candidates.find((c) => c.profilePublicId === profilePublicId);
@@ -578,7 +591,7 @@ export function createFakeProgramActions(
           if (entry) entry.athletes = entry.athletes.filter((name) => name !== athlete.name);
         } else {
           // They stay listed until the end of today, with today as their last day.
-          athlete.lastDay = state.today;
+          athlete.lastDay = view.today;
         }
         changed();
         return { ok: true };

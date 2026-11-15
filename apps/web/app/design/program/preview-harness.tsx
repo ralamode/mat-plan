@@ -3,7 +3,6 @@
 import type { ProgramList, ProgramView } from '@mat-plan/shared';
 import {
   DAY_PLAN_FIXTURES,
-  FIXTURE_TODAY,
   PROGRAM_LIST_FIXTURES,
   PROGRAM_VIEW_FIXTURES,
   programsList,
@@ -70,7 +69,7 @@ export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) 
           {(state, actions) => (
             <WorkoutEditorScreen
               draft={named(WORKOUT_DRAFT_FIXTURES, fixture)}
-              items={state.items}
+              picker={{ options: state.items }}
               actions={actions}
             />
           )}
@@ -88,9 +87,8 @@ function named<T>(fixtures: Record<string, T>, name: string): T {
   return fixture;
 }
 
-/** What every builder screen's fake starts from: the prototype's today, its list and its catalog. */
+/** What every builder screen's fake starts from: the prototype's Programs list and its catalog. */
 const BUILDER: FakeProgramState = {
-  today: FIXTURE_TODAY,
   programs: [...programsList],
   program: null,
   items: [...pickerOptions],
