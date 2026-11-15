@@ -1593,6 +1593,10 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      - **a second opinion:** `doubt-check` hands a fresh reviewer only the contract and the prototype
        and asks it to build slice 1 (gate 2's handoff test);
      - **after the freeze,** a shape change goes through integration and is counted.
+     - **a prototype-fidelity check** in every review round of the release: plans, specs, ADRs,
+       contract PRs and UI PRs, against the release's accepted prototype
+       ([prototypes README](./prototypes/README.md#the-accepted-prototype-for-each-release)). A
+       fidelity reviewer joins `plan-with-panel` and `review-pr` for UI and schema work.
        Lands in `write-spec` (and `plan-release` under DX-15) with a dry run. **First user:** FAM-1, d3 then
        d2, with Beta 0's release-level pass once every Beta 0 row is planned. **Measured:** shape changes
        after the freeze, and where each flaw was caught. Needs a small plan (a skill change plus a check).

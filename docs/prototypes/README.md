@@ -16,6 +16,25 @@ variants the spec's open decisions ask about.
 **Lifecycle.** A prototype is frozen once its spec is signed off; the implementation PRs copy decisions
 from the spec, not markup from here. Delete the folder when its milestone closes.
 
-| Prototype                        | Spec                                                    |
-| -------------------------------- | ------------------------------------------------------- |
-| [`crud-1/`](./crud-1/index.html) | [CRUD-1 and PROG-1](../specs/crud-1-fix-it-yourself.md) |
+| Prototype                        | Spec                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| [`crud-1/`](./crud-1/index.html) | [CRUD-1 and PROG-1](../specs/crud-1-fix-it-yourself.md)                             |
+| [`beta-0/`](./beta-0/index.html) | [FAM-1](../milestones/fam-1-family-program.md), and every Beta 0 plan with a screen |
+
+## The accepted prototype for each release
+
+A release's prototype, once the maintainer signs it off at the end of the release-planning loop, is
+**the reference every plan, spec, ADR, contract PR and UI PR in that release is checked against**
+_(maintainer, 2026-11-15)_. A mismatch is fixed, or recorded as the maintainer's decision. A case
+the prototype never shows goes on a list for its next round. It stays here until the release
+closes, not only until its spec is signed.
+
+| Release | Accepted prototype               | Version        | Notes                                                                                     |
+| ------- | -------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
+| Beta 0  | [`beta-0/`](./beta-0/index.html) | v9, 2026-11-14 | FAM-1 d3 (the builder) extends it; the extended version becomes the reference once signed |
+| Beta 1  | not yet                          | —              | named here when Beta 1's prototype is signed off                                          |
+
+**Why it exists:** ADR 0007 Amendment 2 went through six review lenses in three rounds, checked
+against the code and the rules. None of them checked it against what the maintainer had approved.
+That check, run afterwards, found three mismatches: rest between superset rounds, the same workout
+twice in a day, and whether a copy's label is frozen.
