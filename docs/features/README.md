@@ -41,9 +41,9 @@ packages, it earns a guide.
 Not every feature. A guide nobody reads and nobody updates is pure cost, and the gate makes that cost
 recurring. Add one when a feature's **next** change actually needs it, not speculatively.
 
-## Guides for a milestone run in lanes
+## Guides for work run in lanes
 
-When a milestone splits into parallel lanes ([parallel-work.md](../parallel-work.md)), a guide that
+When a milestone or spec splits into parallel lanes ([parallel-work.md](../parallel-work.md)), a guide that
 every lane must edit turns the lanes back into one queue. Every PR touching an owned file has to edit
 that guide, so every pair of those PRs conflicts on it. So:
 
@@ -54,13 +54,13 @@ that guide, so every pair of those PRs conflicts on it. So:
    guides from a short "Where the new pieces are documented" note, edited once by the integration
    lane.
 3. **An existing file that two lanes both change is a seam, not a guide problem.** The guide stays
-   shared, and those steps are ordered, as the milestone's serial chains already say.
+   shared, and those steps are ordered in the plan.
 
-⚠️ **Rule 1 needs the gate to change** (DX-14 item 8). Today a broad directory entry such as
+⚠️ **Rule 1 needs the gate to change** (DX-14 item 9). Today a broad directory entry such as
 `write-path.md`'s `packages/db/src/writers/` also claims every new subdirectory, and the gate demands
 **every** matching guide. The planned rule is **the most specific owner wins**: a file matched by a
 narrower entry in another guide owes only that guide. Until it lands, a lane guide does not relieve
-`write-path.md`.
+the broad guide above it.
 
 ## Format
 

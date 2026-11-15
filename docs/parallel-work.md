@@ -180,6 +180,35 @@ with work that is disjoint from it and from every seam it moves.** Two further h
 Planning in parallel early is still right, for a different reason than the old rule gave: its output
 is what lets a lane start at all. A pillar with no plan is not a lane yet; it is a planning task.
 
+## Once lanes run: what turns them back into one queue
+
+The gates above decide whether lanes may start. These five are how lanes that started cleanly drift
+back into a single queue, each with the fix. Recorded 2026-11-14 while splitting FAM-1; the
+[FAM-1 milestone](./milestones/fam-1-family-program.md#lanes-and-the-contract-proposed-2026-11-14)
+is the worked example.
+
+1. **A feature guide that every lane must edit.** The guide gate makes each PR that touches an owned
+   file edit its guide, and an owned directory prefix also claims every **new** file under it. So one
+   broad guide makes every lane's PRs conflict on one file, even when their code is disjoint.
+   **Fix:** a guide per lane, owning the directory that lane's new files go in, created by its first
+   PR ([features README → lanes](./features/README.md#guides-for-work-run-in-lanes)). Existing files
+   two lanes both change are seams: their guide stays shared and those steps stay ordered.
+2. **The schema has one owner, and other lanes need columns.** **Fix:** the contract PR lists every
+   column the first slices need. A need found later is a **column request** to the schema lane, which
+   adds it expand-only in its next migration. Meanwhile the asking lane builds against a fixture field
+   marked _pending column_, and an integration step switches it on. Never batch migrations to catch
+   up: their order is the safety.
+3. **Fixtures that drift in meaning, not just shape.** A schema parse catches a wrong shape. It
+   misses a wrong meaning, such as the server ordering items differently from how the UI expects.
+   **Fix:** **contract tests on both sides, against the same named fixture.** The UI lane renders the
+   fixture. The data lane seeds the state the fixture describes, runs its query, and asserts the
+   result deep-equals the fixture. A change of mind on either side fails that side's own test.
+4. **One composing file that every UI lane wants**, usually the page the pieces land on. **Fix:**
+   lanes build in **new files**; only integration steps edit the composing file.
+5. **A contract that turns out to be insufficient.** **Fix:** the first slice is a thin path wired
+   end to end, and it tests the contract before the lanes widen. After that, a contract change goes
+   through integration, which tells every lane that reads it.
+
 ## When a gate fails
 
 **Do not parallelize.** Pick an order, write down why, and put it where the next session will see it —
