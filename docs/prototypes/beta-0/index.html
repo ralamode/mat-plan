@@ -4268,6 +4268,9 @@
       S.signedIn = true;
     }
     function jump(v) {
+      // Stamp seeded rows before any state changes the program (a URL like #edited jumps before the
+      // first render, and "edited" rewrites the program the stamps are taken from).
+      ensureState();
       S.editing = null;
       S.refusal = null;
       S.flash = null;
