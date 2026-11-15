@@ -367,6 +367,10 @@ These needs had no row before this draft. Each now has a home:
 
 ## FAM-1 exit criteria — done when
 
+> The step numbers in parentheses are this document's original ones. [The plan's §5](../plans/fam-1-family-program.md)
+> splits some of them: 4a → 4a-i, 4a-ii · 6 → 6a–6d · 11a, 11b → 11b (one row writer) and 11c · 12 →
+> 12a–12f · 15b → 6d and 15.
+
 - [ ] A parent creates a program with more workouts than the old cap of three, each with a
       description, and uses one workout on several weekdays (steps 4a, 6–10).
 - [ ] A weekday shows **0, 1 or many** workouts in the order arranged, with their slot labels, and a

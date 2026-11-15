@@ -274,10 +274,12 @@ prescription_id IS NOT NULL AND deleted_at IS NULL`. A second device's ✓ on th
 **Also authorized (d2 gap review, 2026-11-15):**
 
 - **`uq_entries_superset_order` is recreated** as `UNIQUE (superset_id, superset_order) WHERE deleted_at
-IS NULL AND prescription_id IS NULL`. Today it allows one live entry per place in a superset
+IS NULL AND prescription_set IS NULL`. Today it allows one live entry per place in a superset
   (`schema.ts:354`); with one entry per ✓ row, every set of a superset member holds the same place, so a
   second set would fail. A linked row is kept unique by the row arbiter above; unlinked rows keep
-  today's rule.
+  today's rule. The predicate is on `prescription_set`, which a purge never clears; on
+  `prescription_id` it would fail the purge, because `SET NULL` would drop two logged sets of one
+  member into the index together.
 - **`prescriptions.client_id`**: nullable UUIDv7 (legacy and seeded rows have none; a template row
   always has one, writer plus `db:verify`), with `UNIQUE (workout_id, client_id)`, non-partial like
   every `client_id`. The builder's save names each item by it, so a save matches rows whatever their
@@ -299,8 +301,8 @@ IS NULL AND prescription_id IS NULL`. Today it allows one live entry per place i
   `apps/web/lib/privacy/notice-model.ts:46`). **§2's `RESERVED_PROGRAM_SLUGS`** was never built and is
   not needed: a template block's slug takes a `-2`, `-3`… suffix on a household collision (d2, D9).
 - **§10, proofs:** the arbiter rejects a twin ✓ and frees a hidden row's place; a linked row without
-  a set or a session is refused; two sets of one superset member commit; a `client_id` is unique in its
-  workout and a replayed save adds nothing;
+  a set or a session is refused; two sets of one superset member commit, and purging their prescription commits; a `client_id` is
+  unique in its workout and a replayed save adds nothing;
   a cross-household prescription is flagged; purging a prescription that has a logged entry commits,
   with the pointer set to NULL and the snapshot kept, against the real CHECKs.
 
