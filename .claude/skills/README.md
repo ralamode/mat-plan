@@ -96,10 +96,11 @@ The 10 doc-vs-code seeds recorded here were audited: [report](../../docs/audits/
 - **`AGENTS.md` is already in context** (via `CLAUDE.md`, for subagents too). Name the sections to
   apply; don't tell an agent to read the file, since each panel spawn would pay for it again.
 - **A rule that must hold goes under `## Red flags`, and each one ends with what earned it**, as
-  its last parenthetical: `(#NNN)` for the PR whose failure taught it, `(lessons: "phrase")`,
-  `(maintainer, YYYY-MM-DD)` for a ruling, ``(enforced by `path`)`` for a rule a guard holds, or
-  `(hypothesis)` when nothing has gone wrong yet. Cite the failure, not the PR that wrote the
-  sentence. `pnpm skills:check` checks the form; the right incident is review's job (DX-15).
+  its last parenthetical: the PR whose failure taught it (not the PR that wrote the sentence), a
+  lessons entry, a dated ruling, the guard that enforces it, or `(hypothesis)` when nothing has gone
+  wrong yet. The exact forms live once, in `CITATION_FORMS` in
+  [`check-skills.mjs`](../../.github/scripts/check-skills.mjs), which `pnpm skills:check` enforces;
+  the right incident is review's job (DX-15).
 - **End with `## Done when`**: checkboxes for the end state, each something you can check (a file
   exists, a command printed OK, a comment was posted), not a restatement of the steps. `pnpm
 skills:check` refuses a skill without one (DX-14 item 5b).

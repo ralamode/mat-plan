@@ -314,49 +314,94 @@ export function checkRouting(skills) {
 }
 
 /**
+ * The lines of a `## <heading>` section, up to the next `## ` heading OUTSIDE a code fence, or null
+ * when the section is missing. Shared by checkDoneWhen and checkCitations so a fenced `## Example`
+ * can't end a section early in one check and not the other.
+ */
+export function sectionLines(body, heading) {
+  const lines = body.split('\n');
+  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
+  if (start === -1) return null;
+  const out = [];
+  let fenced = false;
+  for (const l of lines.slice(start + 1)) {
+    if (/^\s*(```|~~~)/.test(l)) fenced = !fenced;
+    if (!fenced && /^## /.test(l)) break;
+    out.push(l);
+  }
+  return out;
+}
+
+/**
  * Every skill ends with an exit checklist (DX-14 item 5b): a `## Done when` section holding at least
  * one `- [ ]` box, so an agent can tell "I followed the steps" from "the result is right". Pure, like
  * checkRouting: `skills` is `[{ name, body }]`.
  */
 export function checkDoneWhen(skills) {
   return skills.flatMap(({ name, body }) => {
-    const at = body.search(/^## Done when\s*$/m);
-    if (at === -1) return [`${name}: no \`## Done when\` exit checklist`];
-    const rest = body.slice(at).split('\n').slice(1);
-    const end = rest.findIndex((l) => /^## /.test(l));
-    const section = (end === -1 ? rest : rest.slice(0, end)).join('\n');
-    return /^- \[ \] \S/m.test(section) ? [] : [`${name}: \`## Done when\` has no \`- [ ]\` item`];
+    const section = sectionLines(body, 'Done when');
+    if (section === null) return [`${name}: no \`## Done when\` exit checklist`];
+    return section.some((l) => /^- \[ \] \S/.test(l))
+      ? []
+      : [`${name}: \`## Done when\` has no \`- [ ]\` item`];
   });
 }
 
+/** Open PRs (and the one under review) sit above the latest MERGED number by up to this much. */
+export const PR_MARGIN = 50;
+
 /**
- * Every Red flags item ends with what earned it (DX-15; docs/plans/dx-15-rules-cite-incidents.md),
- * as its LAST parenthetical, so a `#3` or a `lessons.md` mention elsewhere in the text can't pass:
- *   `(#NNN)` or `(#NNN, #MMM)`   a PR whose failure earned it; 1 ≤ N ≤ `maxPr`
- *   `(lessons: "phrase")`        an entry in docs/lessons.md; the phrase must occur in `lessons`
- *   `(maintainer, YYYY-MM-DD)`   a dated ruling, where the rule is a decision rather than a scar
- *   `(enforced by \`path\`)`     a rule a guard already enforces (checkFile verifies the path)
- *   `(hypothesis)`               no incident yet: an honest label
- * It checks the FORM, and the PR bound; whether the incident is the right one is review's question.
- * Every skill has a Red flags section with at least one item. Pure: `skills` is `[{ name, body }]`.
+ * The ONE definition of a red flag's citation (DX-15; docs/plans/dx-15-rules-cite-incidents.md). The
+ * skills README states the rule and points here. Each form's `check` returns null when valid, else
+ * the problem. `cites: false` marks the honest no-incident label.
+ */
+export const CITATION_FORMS = [
+  {
+    label: '(#NNN) or (#NNN, #MMM): a PR whose failure earned it',
+    match: /^#\d+(?:, #\d+)*$/,
+    check: (c, { maxPr }) => {
+      const bad = c
+        .match(/\d+/g)
+        .map(Number)
+        .filter((n) => n < 1 || n > maxPr);
+      return bad.length
+        ? `cites #${bad.join(', #')}, past the bound #${maxPr} (latest merged + ${PR_MARGIN})`
+        : null;
+    },
+  },
+  {
+    label: '(lessons: "phrase"): an entry in docs/lessons.md containing the phrase',
+    match: /^lessons: "[^"]+"$/,
+    check: (c, { lessons }) => {
+      const phrase = /"([^"]+)"/.exec(c)[1];
+      return lessons.includes(phrase)
+        ? null
+        : `cites lessons "${phrase}", which docs/lessons.md doesn't contain`;
+    },
+  },
+  { label: '(maintainer, YYYY-MM-DD): a dated ruling', match: /^maintainer, \d{4}-\d{2}-\d{2}$/ },
+  { label: '(enforced by `path`): a rule a guard already holds', match: /^enforced by `[^`]+`$/ },
+  { label: '(hypothesis): no incident yet', match: /^hypothesis$/, cites: false },
+];
+
+/**
+ * Every Red flags item ends with what earned it, as its LAST parenthetical (optionally `_…_`, the
+ * house spelling of a ruling), so a `#3` or a `lessons.md` mention elsewhere in the text can't pass.
+ * Per item, wrapped and nested lines joined. It checks the FORM, the PR bound and the lessons phrase;
+ * whether the incident is the right one is review's question. Every skill has a Red flags section
+ * with at least one item. Pure: `skills` is `[{ name, body }]`.
  */
 export function checkCitations(skills, { maxPr = Infinity, lessons = '' } = {}) {
   const problems = [];
   let cited = 0;
   let hypotheses = 0;
+  const forms = CITATION_FORMS.map((f) => f.label).join(' · ');
   for (const { name, body } of skills) {
-    const lines = body.split('\n');
-    const start = lines.findIndex((l) => /^## Red flags\s*$/.test(l));
-    if (start === -1) {
+    const section = sectionLines(body, 'Red flags');
+    if (section === null) {
       problems.push(`${name}: no \`## Red flags\` section`);
       continue;
     }
-    const section = [];
-    for (const l of lines.slice(start + 1)) {
-      if (/^## /.test(l)) break;
-      section.push(l);
-    }
-    // An item is a `- ` line at column 0 plus every indented line after it (wrapped text, nested).
     const items = [];
     for (const l of section) {
       if (/^- /.test(l)) items.push(l.slice(2));
@@ -365,43 +410,26 @@ export function checkCitations(skills, { maxPr = Infinity, lessons = '' } = {}) 
     if (items.length === 0) problems.push(`${name}: \`## Red flags\` has no items`);
     for (const item of items) {
       const short = item.length > 60 ? `${item.slice(0, 57)}…` : item;
-      const m = /\(([^()]*)\)\s*$/.exec(item);
-      const c = m?.[1].trim() ?? '';
-      if (c === 'hypothesis') {
-        hypotheses++;
+      const c = /_?\(([^()]*)\)_?\s*$/.exec(item)?.[1].trim() ?? '';
+      const form = CITATION_FORMS.find((f) => f.match.test(c));
+      if (!form) {
+        problems.push(`${name}: "${short}" ends with no citation. Forms: ${forms}`);
         continue;
       }
-      if (/^#\d+(?:, #\d+)*$/.test(c)) {
-        const bad = c
-          .match(/\d+/g)
-          .map(Number)
-          .filter((n) => n < 1 || n > maxPr);
-        if (bad.length)
-          problems.push(
-            `${name}: "${short}" cites #${bad.join(', #')}, past the latest PR (#${maxPr})`,
-          );
-        else cited++;
-        continue;
-      }
-      const lesson = /^lessons: "([^"]+)"$/.exec(c);
-      if (lesson) {
-        if (lessons.includes(lesson[1])) cited++;
-        else
-          problems.push(
-            `${name}: "${short}" cites lessons "${lesson[1]}", which docs/lessons.md doesn't contain`,
-          );
-        continue;
-      }
-      if (/^maintainer, \d{4}-\d{2}-\d{2}$/.test(c) || /^enforced by `[^`]+`$/.test(c)) {
-        cited++;
-        continue;
-      }
-      problems.push(
-        `${name}: "${short}" ends with no citation: (#NNN), (lessons: "…"), (maintainer, YYYY-MM-DD), (enforced by \`path\`) or (hypothesis)`,
-      );
+      const problem = form.check?.(c, { maxPr, lessons }) ?? null;
+      if (problem) problems.push(`${name}: "${short}" ${problem}`);
+      else if (form.cites === false) hypotheses++;
+      else cited++;
     }
   }
   return { problems, cited, hypotheses };
+}
+
+/** The highest `(#N)` squash-merge number in commit subjects, or null when there is none to read
+ *  (a fixture, a shallow clone): then the PR bound can't be checked, and the caller says so. */
+export function latestMergedPr(subjects) {
+  const ns = [...subjects.matchAll(/\(#(\d+)\)$/gm)].map((m) => Number(m[1]));
+  return ns.length ? Math.max(...ns) : null;
 }
 
 /** `{ name, description, body }` for each `.claude/skills/<name>/SKILL.md`. */
@@ -429,20 +457,22 @@ function isEntryPoint() {
 if (isEntryPoint()) {
   const files = SOURCES.flatMap((s) => markdownFiles(join(ROOT, s)));
   const skills = readSkills();
-  const latestPr = (() => {
-    try {
-      const subjects = execFileSync('git', ['-C', ROOT, 'log', '--format=%s'], {
-        encoding: 'utf8',
-      });
-      return Math.max(0, ...[...subjects.matchAll(/\(#(\d+)\)$/gm)].map((m) => Number(m[1])));
-    } catch {
-      return Infinity; // not a git repo (a fixture): the PR bound can't be checked, the form still is
-    }
-  })();
+  let subjects = '';
+  try {
+    subjects = execFileSync('git', ['-C', ROOT, 'log', '--format=%s'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    // not a git repo: no subjects, so latestMergedPr returns null below
+  }
+  const latest = latestMergedPr(subjects);
+  if (latest === null)
+    console.warn('Skills guard: no merged PR numbers in history; the PR bound is not checked.');
   const lessonsPath = join(ROOT, 'docs/lessons.md');
   const citations = checkCitations(skills, {
-    // Open PRs and the PR being reviewed sit above the latest MERGED number; allow a margin.
-    maxPr: latestPr + 50,
+    maxPr: latest === null ? Infinity : latest + PR_MARGIN,
     lessons: existsSync(lessonsPath) ? readFileSync(lessonsPath, 'utf8') : '',
   });
   const problems = [
