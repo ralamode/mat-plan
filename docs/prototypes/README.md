@@ -29,10 +29,10 @@ _(maintainer, 2026-11-15)_. A mismatch is fixed, or recorded as the maintainer's
 the prototype never shows goes on a list for its next round. It stays here until the release
 closes, not only until its spec is signed.
 
-| Release | Accepted prototype               | Version        | Notes                                                                                     |
-| ------- | -------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
-| Beta 0  | [`beta-0/`](./beta-0/index.html) | v9, 2026-11-14 | FAM-1 d3 (the builder) extends it; the extended version becomes the reference once signed |
-| Beta 1  | not yet                          | —              | named here when Beta 1's prototype is signed off                                          |
+| Release | Accepted prototype               | Version         | Notes                                                                                       |
+| ------- | -------------------------------- | --------------- | ------------------------------------------------------------------------------------------- |
+| Beta 0  | [`beta-0/`](./beta-0/index.html) | v10, 2026-11-15 | Signed after FAM-1 d3 and its UX panel ([round notes](./beta-0/d3-round-1.md)); replaces v9 |
+| Beta 1  | not yet                          | —               | named here when Beta 1's prototype is signed off                                            |
 
 **Why it exists:** ADR 0007 Amendment 2 went through six review lenses in three rounds, checked
 against the code and the rules. None of them checked it against what the maintainer had approved.
