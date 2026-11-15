@@ -241,6 +241,105 @@ only the docs and the migration queue; 5b and 6 also need step 1, which waits on
 one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduling.md#gate-run)): 4a,
 4b, 5b, 6, 7, 8b, 10, 10b, 11b, 12, 15 and 15c.
 
+## The schedule: in a row, and in lanes
+
+The same 45 PRs drawn twice: one after another, and in the lanes of
+[the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
+PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
+Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
+
+```mermaid
+gantt
+  title FAM-1 — one PR after another, and the same PRs in lanes (1 unit = one PR-length)
+  dateFormat X
+  axisFormat %s
+  todayMarker off
+
+  section In a row
+  The contract, 5 PRs          :done, r0, 0, 5
+  Lane A's 7 PRs               :r1, 5, 12
+  Lane P's 4 PRs               :r2, 12, 16
+  Lane E's 5 PRs               :r3, 16, 21
+  Lane B's 9 PRs               :r4, 21, 30
+  Lane C's 8 PRs               :r5, 30, 38
+  Lane S's 7 PRs               :r6, 38, 45
+  All 45 PRs merged            :milestone, rm, 45, 45
+
+  section Contract
+  2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
+
+  section A · schema
+  3 tracking types             :crit, a1, 1, 2
+  4a-i, 1                      :crit, a2, 2, 3
+  4a-ii, 5b                    :crit, a3, 3, 4
+  4b                           :crit, a4, 4, 5
+  5                            :crit, a5, 5, 6
+
+  section P · program data
+  6a                           :p1, 5, 6
+  6b                           :p2, 6, 7
+  6c                           :p3, 7, 8
+  6d                           :p4, 8, 9
+
+  section E · day data
+  11a                          :e1, 4, 5
+  11b row writer               :crit, e2, 5, 7
+  12a the day's read           :crit, e3, 7, 8
+  14, 11c                      :e4, 8, 9
+
+  section B · builder
+  8a lists and program page    :b1, 1, 2
+  8 workout editor             :b2, 2, 3
+  8b supersets                 :b3, 3, 4
+  9 picker                     :b4, 4, 5
+  10 week editor               :b5, 5, 6
+  10b dialogs                  :b6, 6, 7
+  7a actions                   :b7, 7, 8
+  7b pages                     :b8, 8, 9
+  15 put on, take off          :crit, b9, 10, 11
+
+  section C · day page
+  13 rows and ✓                :c1, 1, 2
+  13b Change, supersets        :c2, 2, 3
+  13d look ahead, closed days  :c3, 3, 4
+  12b first real ✓             :crit, c4, 8, 9
+  12c on the day page          :crit, c5, 9, 10
+  12d Change                   :crit, c6, 10, 11
+  15c, 12f                     :c7, 11, 12
+
+  section S · single values
+  3b-page (merged)             :done, s1, 1, 2
+  3b-bw                        :s2, 2, 3
+  3b-0                         :s3, 6, 7
+  3b-life, B2-0                :s4, 7, 8
+  B1-2                         :s5, 8, 9
+  B2                           :s6, 10, 11
+
+  section Slices
+  1 · walking skeleton on preview (after 12c) :milestone, m1, 10, 10
+  2 · the family can switch (after 15, 12d)   :milestone, m2, 11, 11
+  3 · order, Clear this day, clean-up         :milestone, m3, 12, 12
+```
+
+**What it shows**
+
+- **In a row, 45 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
+  because the screens (lanes B and C) are built against fixtures on the preview page while the
+  database is still being migrated, which is what the contract is for.
+- **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
+  real ✓, the day page, and the two steps the switch waits on (12d and 15). Nothing shortens it:
+  only one migration may be unapplied at a time, and each must be seen applied before the next
+  merges. A delay on a red bar moves the end; a delay on a blue bar usually does not.
+- **Lane B has slack** (waves 7 to 9), and lanes B, C and S do their first six waves before any
+  program data exists.
+- **Grey is merged.** The contract's five PRs and the plan update were opened and merged on
+  2026-11-15, partly in parallel themselves; lane S's 3b-page merged the same day (#418).
+
+**What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
+(every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
+run-through. Actual bars are added under each lane as slices land; the difference between the two is
+the measured result.
+
 ## Delivery slices (proposed 2026-11-14)
 
 > ⚠️ **Superseded 2026-11-15 — see [the FAM-1 plan](../plans/fam-1-family-program.md) §5–§7** for the
