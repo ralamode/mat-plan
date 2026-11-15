@@ -1467,6 +1467,16 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        unmeasured performance claim reads "not measured";
      - in `ship-pr`: a handoff checklist when a session ends mid-task.
 
+  8. **`write-spec` learns to split a milestone into lanes.** _(maintainer, 2026-11-14.)_
+     - **Chunk 0 is a contract PR:** zod schemas, named fixtures, and the list of tests not yet
+       written. It is real code, reviewed by the lenses.
+     - **A Lanes section:** per lane, the globs it owns, the contract it reads, its fixtures and its
+       exit.
+     - **Integration slices:** thin first, then widened, never a sprint at the end.
+     - **A guard** with a self-test fails when two lanes' globs overlap
+       ([parallel-work.md](./parallel-work.md) gate 1, made mechanical).
+       FAM-1 is the first user ([lanes](./milestones/fam-1-family-program.md)).
+
   **Considered and skipped,** each with its reason, so nobody re-evaluates them:
   - context engineering: AGENTS.md, the feature guides and the SessionStart hook cover it;
   - frontend UI: `DESIGN.md`, the UX lens, `ui-screenshot` and the 360px rule cover it. Only the
@@ -1479,6 +1489,38 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   A table of what was taken and why goes into [working-with-agents](./working-with-agents.md), with
   credit to the source. **Built in a separate thread.** Each item is a small `chore(dx)` PR; none
   needs a plan except 5 (a new guard).
+
+- **DX-15 — the workflow, distilled: a portable skill pack.** _(maintainer, 2026-11-14.)_ The
+  skills here encode how this repo plans and ships, but most of them assume its paths and commands.
+  Another repo could adopt the method if the generic part were separate from the mat-plan part. Do
+  that, **in this repo first**, as two layers:
+  1. **A core of repo-agnostic skills**, one per stage of the loop:
+     - `plan-release`: plan, prototype, feedback, sign-off, one release at a time;
+     - `refine-idea` (DX-14.3);
+     - `write-spec` with its contract PR, lanes and integration slices (DX-14.8);
+     - `plan-with-panel`;
+     - `doubt-check` (DX-14.4);
+     - `ship-pr`;
+     - `review-pr`, with the lens agents and their reporting contract;
+     - `hold-the-bar`.
+       Each core skill reads a small per-repo **config**: paths, gate commands, where plans and specs
+       live. It must not hard-code them.
+  2. **An adapter layer** that stays here: `db-migration`, `add-server-action`, `data-correction`,
+     `ui-screenshot` and the config itself.
+
+  **The rules that make it "battle-tested", each one checkable:**
+  - **Every rule cites the incident that earned it,** as the skills already do by PR number. A rule
+    with no incident is marked a hypothesis.
+  - **The routing guard (DX-14.5)** and a **dry run per skill** are its tests.
+  - **The method is written once, in [working-with-agents](./working-with-agents.md):**
+    - the cheapest place to catch each kind of flaw: shape in a contract PR, behaviour in a
+      prototype, mid-build decisions in `doubt-check`, implementation in review;
+    - integrate first;
+    - lanes split by contract.
+
+  **Order:** after DX-14's items land, and only once FAM-1's slice 1 has exercised the contract PR
+  and the lanes. A method is packaged after it has worked once, not before. Packaging it as a Claude
+  Code plugin, or in its own repo, is the last step.
 
 - **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
   2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
