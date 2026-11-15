@@ -41,6 +41,57 @@ engineer.**
   the main checkout and prints the worktree command to run instead. It is a best-effort guard against
   the common forms, not a security boundary, and AGENTS.md says so.
 
+## How we ship: catch each flaw where it is cheapest
+
+Every kind of flaw has a stage where it costs least to find, and the process is built so each one
+meets its stage before code exists that would have to be undone. Rows marked **not yet run** are the
+method's hypotheses: they're written down, and no milestone has tested them yet.
+
+| The flaw                                 | Caught at                                                                | Where it lives                                                             | Status                          |
+| ---------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------- |
+| Two tracks disagree about a shared shape | **Chunk 0, a contract PR**: zod schemas, named fixtures, tests to write  | [write-spec](../.claude/skills/write-spec/SKILL.md) → Lanes (DX-14 item 8) | **not yet run**: FAM-1 is first |
+| Two tracks edit the same files or guide  | Before either starts: lanes declared with disjoint paths                 | [parallel-work](./parallel-work.md) gate 1                                 | used; mechanical from DX-14.8   |
+| The screen is the wrong thing to build   | A prototype and the UX panel, before implementation                      | AGENTS.md → "UI PR rules"                                                  | used                            |
+| The plan is wrong                        | An adversarial panel on the plan, before code                            | [plan-with-panel](../.claude/skills/plan-with-panel/SKILL.md)              | used                            |
+| A call made halfway through a build      | A fresh reviewer who gets the artifact, never the reasoning              | `doubt-check` (DX-14 item 4)                                               | **not built**                   |
+| A fix that doesn't fix                   | A test shown failing on the parent commit                                | [definition of done](./definition-of-done.md) (DX-14 item 1)               | used since 2026-11-14           |
+| The implementation is wrong              | The gates, then [review-pr](../.claude/skills/review-pr/SKILL.md)        | AGENTS.md → "Local hooks vs CI merge-gates"                                | used                            |
+| A gate went green by lowering the bar    | [hold-the-bar](../.claude/skills/hold-the-bar/SKILL.md), before every PR | `ship-pr` calls it                                                         | used                            |
+
+Two rules sit across the table:
+
+- **Integrate first, not last.** A milestone's first slice is one thin real path wired end to end,
+  and every later slice integrates a little. There is no integration sprint at the end, because that
+  is where a wrong contract surfaces after every lane has built on it.
+  [FAM-1](./milestones/fam-1-family-program.md#lanes-and-the-contract-proposed-2026-11-14) is the
+  first milestone planned this way.
+- **Lanes split by contract, not by theme.** A lane owns paths, reads a contract and builds against
+  its fixtures. Two lanes that would touch one file, or one feature guide, are one lane.
+
+## What we took from an open collection, and why
+
+In November 2026 we compared [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
+(MIT) with ours, idea by idea. We didn't install it: about ten of its skills cover ground where ours
+are stronger and repo-specific, and its file conventions would fork ours. What we adapted, in our own
+words and format ([DX-14](./plan.md)):
+
+| The idea                                                                  | Where it lands here                                                                   | What we changed                                                                    |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| A bug fix proves itself with a test that fails first                      | Definition of done; `review-pr` → Tests (item 1, #389)                                | "Fails on the **parent commit**", shown in the PR, and red for the right reason    |
+| The browser console is part of the evidence                               | `ui-screenshot` fails on any console error or warning (item 2, #390)                  | Fails after the PNGs are written, with an explicit `--allow-console` escape        |
+| Refine an idea one question at a time before writing a spec               | `refine-idea` (item 3)                                                                | Each question carries a proposed answer; ends with "Not doing, and why"            |
+| Get a second opinion on a decision mid-task                               | `doubt-check` (item 4)                                                                | The reviewer never sees the author's reasoning; it reuses the existing lens agents |
+| Skills should be found by what the user says                              | A routing guard with a self-test (item 5)                                             | Fails on a phrase that reaches no skill, or several                                |
+| Specs state assumptions, handle change and plan the launch                | `write-spec` (item 6)                                                                 | A delta spec for a shipped spec; launch and rollback for milestone specs           |
+| Split work so agents can run in parallel                                  | `write-spec` → Lanes, and `lanes:check` (item 8, in review)                           | Lanes are disjoint paths **and** disjoint feature guides, checked by a guard       |
+| Smaller habits: unverified claims, error drills, review wording, handoffs | `start-task`, `plan-with-panel`, `add-server-action`, `review-pr`, `ship-pr` (item 7) | Folded into existing skills, not new ones                                          |
+
+**Considered and not taken**, so nobody evaluates them again: context engineering (AGENTS.md, the
+feature guides and the SessionStart hook cover it); frontend UI guidance (the design doc, the UX lens,
+`ui-screenshot` and the 360px rule cover it); CI, git workflow, security, API design, deprecation,
+ADRs and simplification (stronger repo rules exist); performance ledgers and constraint ratchets
+(they wait until there's a number to protect).
+
 ## Five cases from the record
 
 **1. A reviewer agent found that my safety arguments were citing gates that didn't exist.**
