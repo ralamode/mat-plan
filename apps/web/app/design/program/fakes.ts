@@ -4,6 +4,7 @@ import {
   copyDraftSchema,
   createProgramSchema,
   foldName,
+  movementNameKey,
   newId,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -513,7 +514,10 @@ export function createFakeProgramActions(
         const parsed = newItemSchema.safeParse(input);
         if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
         const { name, trackingType } = parsed.data;
-        const existing = state.items.find((item) => sameName(item.name, name));
+        // An item is "the same movement" by the picker's rule (`movement-picker.md` invariant 1), which
+        // is looser than a name's fold: "push ups" is Push-ups.
+        const key = movementNameKey(name);
+        const existing = state.items.find((item) => movementNameKey(item.name) === key);
         if (existing) {
           const { publicId: itemPublicId, trackingType: itsType } = existing;
           return { ok: true, itemPublicId, trackingType: itsType, existed: true };

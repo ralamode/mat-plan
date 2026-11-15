@@ -24,10 +24,11 @@ lane-b-builder:
   - apps/web/e2e/program-builder.spec.ts # arrives at step 7b
 lane-c-day-page:
   - apps/web/components/day/
-  - apps/web/lib/dal/day/  - apps/web/app/p/[profileId]/row-actions.ts # arrives at step 12b, with the two beside it
+  - apps/web/lib/dal/day/
+  - apps/web/app/p/[profileId]/row-actions.ts # arrives at step 12b, with the two beside it
   - apps/web/app/p/[profileId]/row-actions.registry.ts
   - apps/web/app/p/[profileId]/row-actions.test.ts
-- apps/web/e2e/day-page.spec.ts # arrives at step 12c
+  - apps/web/e2e/day-page.spec.ts # arrives at step 12c
 ---
 
 # FAM-1 — the family program

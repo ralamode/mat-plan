@@ -696,9 +696,9 @@ describe('the fake ProgramActions: items and athletes', () => {
     expect(state().items.at(-1)).toMatchObject({ name: 'Bear crawl', owner: 'household' });
 
     const pushUps = pickerOptions.find((o) => o.name === 'Push-ups')!;
-    // Folded, as every name is compared: case and spacing do not make a second item.
+    // The picker's "same movement" rule, not a name's fold: "push ups" is Push-ups.
     expect(
-      await actions.newItem({ name: '  PUSH-UPS ', trackingType: TRACKING_TYPE.check }),
+      await actions.newItem({ name: ' push ups ', trackingType: TRACKING_TYPE.check }),
     ).toEqual({
       ok: true,
       itemPublicId: pushUps.publicId,
