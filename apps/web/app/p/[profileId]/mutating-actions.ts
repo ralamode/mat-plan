@@ -1,23 +1,45 @@
 import { keyBySelf } from '@mat-plan/shared';
 
-import { NO_ATHLETE_ADD, NO_ATHLETE_SAVE, NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
-
 /**
- * **The one source for "which Server Actions does this app expose, and what does each refuse with".**
+ * **The contract for "which Server Actions does this app expose, and what does each refuse with":
+ * the entry types, and the rule for where the entries live.**
  *
- * Two tests consume it and neither may re-type the list (AUTH-1 1b-bis; generalized at WP-1):
+ * 🔴 **The entries are NOT in this file any more (FAM-1 step 0b). Each Server Action module carries
+ * its own, in a sibling.** Until then one literal here (`MUTATING_ACTIONS`) and two in
+ * `actions.test.ts` (`ACTION_BINDINGS`, `VALID_BODY`) were extended by every new action, so two
+ * lanes adding actions edited the same three literals, and this file is owned by
+ * `docs/features/write-path.md`, so each of those PRs also owed that guide. Now:
  *
- * - `actions.test.ts` builds its refusal tuples from these keys, so a new action cannot be added
- *   without the boundary suites covering it, **and** compares them against the actions it finds on
- *   disk across **every** Server Action module. ⚠️ Before WP-1 that comparison read `actions.ts`
- *   alone, so a second module's actions entered no matrix at all.
- * - `pages-need-a-session.test.ts` pins the set of **modules** and proves each exported action makes
- *   the boundary call. **The non-vacuity floor is `Object.keys(MUTATING_ACTIONS).length`, never a
- *   re-typed `7`** — a count written twice is the same defect one level up.
+ * ## Adding a Server Action module: three files, side by side
  *
- * It lives OUTSIDE `actions.ts` on purpose, on the `action-state.ts` precedent: a `'use server'`
- * module may only export async functions, and `use-server-exports.test.ts` exists to fail a non-async
- * export there. A plain const therefore belongs in a sibling.
+ * For a module `x-actions.ts` (any directory under `apps/web`):
+ *
+ * 1. **`x-actions.ts`** — the `'use server'` module. Only `export async function`s; each opens with
+ *    `await enterMutation(refusal)` and returns its refusal.
+ * 2. **`x-actions.registry.ts`** — `export const ACTION_REGISTRY = { … } as const satisfies
+ *    ActionRegistry`, one entry per exported action. Not in the module itself, on the
+ *    `action-state.ts` precedent: a `'use server'` module may only export async functions, and
+ *    `use-server-exports.test.ts` fails a non-async export there.
+ * 3. **`x-actions.test.ts`** — the module's own test. It declares the `vi.mock`s, a binding and a
+ *    valid body per action, and calls `describeActionMatrices` (`@/test/action-matrix`), which runs
+ *    every refusal matrix over this module's registry. The per-action behaviour goes in the same
+ *    file.
+ *
+ * Nothing shared composes these by hand. `@/test/action-registry` finds each module's registry by
+ * its name and merges them into `MUTATING_ACTIONS`, and three guards make a missing piece red:
+ *
+ * - a module with no registry beside it, or no test beside it that calls `describeActionMatrices`,
+ *   fails `actions.test.ts` → "the registry matches every Server Action module on disk";
+ * - an exported action missing from its module's registry fails that module's own matrix, and the
+ *   same describe;
+ * - a registry entry without a binding or a valid body is a **type** error at the
+ *   `describeActionMatrices` call (`ActionBindings`, pinned in `test/action-matrix.test.ts`).
+ *
+ * ⚠️ **Two pinned lines are still edited by hand, on purpose**, because each exists to be read by a
+ * person: the list of Server Action modules in `app/pages-need-a-session.test.ts`, and, for a
+ * household-addressed action, the list in `mutating-actions.test.ts`.
+ *
+ * Two existing modules follow this: `./actions.ts` and `app/p/profile-actions.ts`.
  */
 
 /**
@@ -80,77 +102,33 @@ export type ExcludedEntry = {
   readonly refusal?: never;
 };
 
-export const MUTATING_ACTIONS = {
-  logBodyweightAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
-  logCheckinsAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
-  logStrengthSessionAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
-  logLifeActivitiesAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
-  editStrengthSetAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
-  editBodyweightAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
-  editRoutineAction: { refusal: NO_PROFILE_SAVE, scope: ACTION_SCOPE.profile },
-  /**
-   * PROF-1 a-r, and **the first entry whose function lives in a different module**
-   * (`app/p/profile-actions.ts`). That is the whole reason a-r was gated on WP-1: before it, the
-   * on-disk cross-check read `[profileId]/actions.ts` alone, so this key would have failed the
-   * equality with 8 registry names against 7 exports — and, worse, a module added without a key here
-   * would have faced no boundary suite at all.
-   *
-   * `scope: 'profile'` because the body carries a `profileId`, so the wrong-household matrix can hand
-   * it a foreign one. (a-1's `addAthleteAction` is the first `household` entry; it has no profile id
-   * to make foreign.)
-   */
-  renameAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
-
-  /**
-   * PROF-1 b. `scope: 'profile'` for the same reason rename is: the body carries a `profileId`, so
-   * the wrong-household matrix can hand it a foreign one and assert the answer is byte-identical to
-   * the unauth refusal.
-   *
-   * 🔴 **`refusal: NO_ATHLETE_SAVE`, NOT `OWNER_ONLY_ATHLETE`.** The matrices drive the
-   * **cross-household** and **unauth** cases, and both of those must answer `NO_ATHLETE_SAVE` —
-   * `OWNER_ONLY_ATHLETE` is reachable only for an id **inside** the caller's own household, which no
-   * matrix row constructs (ADR 0006:348 permits the distinction precisely because the caller can
-   * already see that athlete). Putting the owner-only string here would make the byte-identical
-   * suite assert the wrong answer and quietly widen what a foreign id reveals.
-   */
-  archiveAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
-  /** Restore, same addressing. Any member may call it, so it has no owner-only answer at all. */
-  restoreAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
-
-  /**
-   * 🔴 **The first HOUSEHOLD-addressed action** (PROF-1 a-1w), and the entry
-   * `mutating-actions.test.ts`'s tripwire was waiting for.
-   *
-   * `scope: 'household'` because the body carries **no `profileId`** — there is nothing for the
-   * wrong-household matrix to make foreign. What replaces that proof is twofold: `db:verify` drives
-   * `createProfile`'s two scoped reads against a real two-household database (with mutation patch
-   * `20` showing the proof can fail), and at this tier the household matrix drives a **scope miss**
-   * instead, asserting the refusal is byte-identical to the unauthenticated one.
-   *
-   * `refusal: NO_ATHLETE_ADD`, not `NO_ATHLETE_SAVE` — nothing was being saved; a row was being
-   * created, and "No athlete found to save." would be false.
-   */
-  addAthleteAction: { refusal: NO_ATHLETE_ADD, scope: ACTION_SCOPE.household },
-} as const satisfies Record<string, MatrixEntry | ExcludedEntry>;
-
-/** Every action this app exposes, in or out of the matrices. */
-export type MutatingActionName = keyof typeof MUTATING_ACTIONS;
+/**
+ * One Server Action module's entries, keyed by the bare export name. Every `*.registry.ts` declares
+ * its `ACTION_REGISTRY` with `as const satisfies ActionRegistry`: `as const` keeps each entry's
+ * `scope` a literal, which is what lets `BindingFor` require `scopeMiss` of a household action.
+ *
+ * It is also the type of the merged registry (`MUTATING_ACTIONS` in `@/test/action-registry`), which
+ * is every module's entries in one object.
+ */
+export type ActionRegistry = Readonly<Record<string, MatrixEntry | ExcludedEntry>>;
 
 /**
- * The actions the matrices drive — `MutatingActionName` minus the excluded ones, as a mapped-type
- * filter. `ACTION_BINDINGS` is keyed by this, so an excluded action cannot be given a binding and a
- * matrix action cannot be left without one.
+ * The actions of a registry that the matrices drive: its keys minus the excluded ones, as a
+ * mapped-type filter. A module's bindings and valid bodies are keyed by this, so an excluded action
+ * cannot be given a binding and a matrix action cannot be left without one.
  */
-export type MatrixActionName = {
-  [K in MutatingActionName]: (typeof MUTATING_ACTIONS)[K] extends ExcludedEntry ? never : K;
-}[MutatingActionName];
+export type MatrixActionName<R extends ActionRegistry> = {
+  [K in keyof R & string]: R[K] extends ExcludedEntry ? never : K;
+}[keyof R & string];
 
 /** The entry for a matrix action, narrowed past the union. */
-export const matrixEntry = (name: MatrixActionName): MatrixEntry =>
-  MUTATING_ACTIONS[name] as MatrixEntry;
+export const matrixEntry = <R extends ActionRegistry>(
+  registry: R,
+  name: MatrixActionName<R>,
+): MatrixEntry => registry[name] as MatrixEntry;
 
 /** Action names outside the matrices — pinned empty; see `ExcludedEntry`. */
-export const excludedActionNames = (): string[] =>
-  Object.entries(MUTATING_ACTIONS)
+export const excludedActionNames = (registry: ActionRegistry): string[] =>
+  Object.entries(registry)
     .filter(([, v]) => 'excluded' in v)
     .map(([k]) => k);

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+// ⚠️ `MUTATING_ACTIONS` is no longer a literal in `./mutating-actions` (FAM-1 step 0b): it is the
+// merge of every Server Action module's own `*.registry.ts`, composed in test support. The runtime
+// pins below therefore read every module's entries, as they did when there was one literal.
+import { MUTATING_ACTIONS } from '@/test/action-registry';
+
 import {
   ACTION_SCOPE,
-  MUTATING_ACTIONS,
   excludedActionNames,
   type ExcludedEntry,
   type MatrixEntry,
@@ -53,6 +57,15 @@ const _acceptedShapes = {
 void _acceptedShapes;
 
 describe('the action registry is one kind of entry or the other', () => {
+  /**
+   * The merged registry is built by discovery, so "it found nothing" has to be ruled out before the
+   * three `toEqual([])` pins below mean anything: over an empty object each of them passes.
+   */
+  it('reads a registry that has entries (an empty merge would pass every pin below)', () => {
+    expect(Object.keys(MUTATING_ACTIONS)).toContain('logBodyweightAction');
+    expect(Object.keys(MUTATING_ACTIONS)).toContain('addAthleteAction');
+  });
+
   it('no entry carries both a scope and an exclusion', () => {
     const both = Object.entries(MUTATING_ACTIONS)
       .filter(([, v]) => 'scope' in v && 'excluded' in v)
@@ -72,7 +85,7 @@ describe('the action registry is one kind of entry or the other', () => {
    * which `AUTH-1` 1d deleted. Every future entry is an edit to this line, read by a human.
    */
   it('nothing is excluded from the matrices today', () => {
-    expect(excludedActionNames()).toEqual([]);
+    expect(excludedActionNames(MUTATING_ACTIONS)).toEqual([]);
   });
 
   /**
@@ -84,10 +97,10 @@ describe('the action registry is one kind of entry or the other', () => {
    */
   it('every household-addressed action is one the household matrix drives', () => {
     const household = Object.entries(MUTATING_ACTIONS)
-      // ⚠️ `as string` is load-bearing, not laziness. Every entry is `profile` today, so TS narrows
-      // `v.scope` to `'profile'` and flags the comparison as impossible (TS2367) — a COMPILE error in
-      // a test file, which is a confusing way to learn that a household action was added. Widening
-      // keeps the failure a readable runtime assertion with the reason attached.
+      // ⚠️ `as string` was load-bearing while the registry was one `as const` literal whose every
+      // entry was `profile`: TS narrowed `v.scope` and flagged the comparison as impossible
+      // (TS2367). The merged registry is typed by its entry union, so it is only belt and braces
+      // now, and it stays so the line does not start failing to compile if that ever narrows again.
       .filter(([, v]) => 'scope' in v && (v.scope as string) === ACTION_SCOPE.household)
       .map(([k]) => k);
     // 🔴 **Edited at PROF-1 a-1w, not deleted.** The matrix this was waiting for now exists

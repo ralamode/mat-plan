@@ -1,8 +1,8 @@
 import {
-  PROFILE_KIND,
   ACTIVITY_TYPE_KEYS,
   BLANK_SET_MESSAGE,
   BODYWEIGHT_UNITS,
+  E2E_SESSION_BYPASS_USER,
   FREE_TEXT_NOTE_MAX,
   isoDayDiff,
   LOGGABLE_DIMENSION_NOUNS,
@@ -12,6 +12,10 @@ import {
   newId,
   ROUTINE_VERSION,
 } from '@mat-plan/shared';
+import { existsSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // INTEGRATION TIER (see docs/definition-of-done.md → Test pyramid). These exercise
@@ -56,12 +60,16 @@ vi.mock('@/lib/dal/entries', () => ({
 // AUTH-1 1c-3b, and from 1d the ONLY boundary mock. Passes by default; the unauth suite flips it
 // per action. ⚠️ The `@/lib/dal/gate` mock beside this was deleted with the module at 1d.
 vi.mock('@/lib/dal/session', () => ({
-  sessionUserOrNull: vi.fn(async () => ({ userId: 'user_000000000000000000000000e2e' })),
+  sessionUserOrNull: vi.fn(async () => ({ userId: PRINCIPAL })),
 }));
 // 🔴 The limiter is mocked so a REFUSAL is reachable. In the real module it fails open, and with no
 // Upstash configured under vitest it answers `unconfigured` to everything — so without this mock the
 // refusal branch in all seven actions would be dead code that no test could enter.
-vi.mock('@/lib/rate-limit', () => ({
+// ⚠️ A PARTIAL mock since FAM-1 step 0b: `enterMutation` reads `MUTATION_RATE_LIMIT` for its default
+// policy and the matrix compares the limiter call against that const, so the real module supplies
+// the policies and only the check is replaced.
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   checkMutationLimit: vi.fn(async () => ({ allowed: true, reason: 'ok' })),
 }));
 vi.mock('@/lib/dal/profiles', () => ({
@@ -74,16 +82,9 @@ vi.mock('@/lib/dal/profiles', () => ({
   })),
   // Default: the routine was persisted. The not-found test overrides to null.
   updateProfileRoutine: vi.fn(async () => ({ id: PROFILE_ID })),
-  // PROF-1 a-r. Default: the rename matched a live profile in this household.
-  renameAthlete: vi.fn(async () => ({ ok: true, publicId: PROFILE_ID })),
-  // PROF-1 b. ⚠️ **The DISCRIMINATED result, not `{ id }`** — these two own the refusal ORDER, so
-  // their shape is `{ ok: true, id } | { ok: false, reason }`. A mock returning the old shape would
-  // make the action read `result.ok` as `undefined` and refuse every call, which is a test that
-  // passes for the wrong reason on the unauth rows and fails confusingly on the happy ones.
-  archiveAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
-  // PROF-1 a-1w — the household-addressed writer.
-  createAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
-  restoreAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
+  // ⚠️ The four athlete-management writers were mocked here while this file drove every module's
+  // matrix. They went to `app/p/profile-actions.test.ts` with that module's matrix (FAM-1 step 0b):
+  // `actions.ts` imports none of them, and a mock that does not define one refuses the first touch.
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
@@ -95,22 +96,12 @@ import {
   logStrengthSession,
   ownedBodyweightValue,
 } from '@/lib/dal/entries';
-import { sessionUserOrNull } from '@/lib/dal/session';
-import { checkMutationLimit } from '@/lib/rate-limit';
-import {
-  archiveAthlete,
-  createAthlete,
-  getProfileByPublicId,
-  renameAthlete,
-  restoreAthlete,
-  updateProfileRoutine,
-} from '@/lib/dal/profiles';
+import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
-import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
+import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE } from '@/lib/constants';
 import { localDayIso } from '@/lib/date';
 import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
-import { redirect, RedirectType } from 'next/navigation';
 
 /** The day the harness declares by default — the active-tz today under the pinned default tz,
  *  so the ±1 bound accepts it. `offsetDays` builds a stale/near day for the bound tests. */
@@ -123,7 +114,8 @@ function localDay(offsetDays = 0): string {
 }
 
 // `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
-// `MUTATING_ACTIONS`, which is now the single source for both the action names and their refusal copy.
+// the registry (`./actions.registry.ts`), which is the single source for both the action names and
+// their refusal copy.
 import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
@@ -135,29 +127,31 @@ import {
   logLifeActivitiesAction,
   logStrengthSessionAction,
 } from './actions';
-// 🔴 PROF-1 a-r — the first action imported here from a DIFFERENT module. Every matrix below is keyed
-// by the registry, not by this file's directory, so `renameAthleteAction` enters the unauth,
-// rate-limit, wrong-household and byte-identical-refusal suites exactly like the seven above. Its
-// own per-action behaviour lives beside it, in `app/p/profile-actions.test.ts` (WP-1's convention).
+// ⚠️ `app/p/profile-actions.ts`'s four actions were imported here from PROF-1 a-r until FAM-1 step
+// 0b, because this file's matrices ran over every module. Each module's own test runs them now, so
+// this file imports only the module it sits beside. The cross-module checks at the end read the
+// merged registry and the source on disk, never another module's functions.
+import { ACTION_REGISTRY } from './actions.registry';
+import { excludedActionNames } from './mutating-actions';
+import { describeActionMatrices } from '@/test/action-matrix';
+import { MUTATING_ACTIONS, REGISTRY_SHARDS, registryFilesOnDisk } from '@/test/action-registry';
 import {
-  addAthleteAction,
-  archiveAthleteAction,
-  renameAthleteAction,
-  restoreAthleteAction,
-} from '@/app/p/profile-actions';
-import {
-  ACTION_SCOPE,
-  MUTATING_ACTIONS,
-  excludedActionNames,
-  matrixEntry,
-  type ActionScope,
-  type MatrixActionName,
-} from './mutating-actions';
-import { code, exportedActionNames, serverActionModules, USE_SERVER_RE } from '@/test/source-scan';
+  code,
+  exportedActionNames,
+  serverActionModules,
+  USE_SERVER_RE,
+  WEB_DIR,
+} from '@/test/source-scan';
 
 // A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;
 // the action must thread it through to both the ownership check and revalidate path.
 const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
+
+/** The principal the session mock answers with; the limiter row asserts the check is keyed on it. */
+const PRINCIPAL = E2E_SESSION_BYPASS_USER;
+
+/** A real call of the shared matrices, as a module's sibling test must make. */
+const MATRIX_CALL = /\bdescribeActionMatrices\s*\(\s*\{/;
 
 const initial: ActionState = { ok: false, error: null };
 
@@ -173,233 +167,54 @@ function form(fields: Record<string, string>): FormData {
 
 beforeEach(() => vi.clearAllMocks());
 
-// MANDATORY unauth → reject (AGENTS.md → Backend / API PR rules; SEC-1). A Server Action is a public
-// POST and the proxy is not the auth boundary: SEC-1's scar was a matcher that let prefetch-flagged
-// requests skip the check entirely. Each action must refuse a caller with no session BEFORE anything
-// else runs, with the same copy as not-found (so the refusal says nothing about the profile).
 /**
- * ALL SEVEN ACTIONS and the refusal each returns, enumerated once and shared by the unauth suite and
- * TEN-1's wrong-household suite below.
+ * 🔴 **The boundary matrices for THIS module's seven actions** — unauth, rate-limited, wrong
+ * household, and the byte-identical refusals (AGENTS.md → Backend / API PR rules).
  *
- * The copy comes from `@/lib/constants` rather than a re-typed literal (it was typed out seven times
- * here before TEN-1 1b, and the wrong-household suite would have made it fourteen). That matters
- * beyond tidiness: the security argument for 404-never-403 is that the refusal is **byte-identical**
- * across no-session, unknown, soft-deleted and foreign-household — so a crafted cross-household id
- * learns nothing a stale id wouldn't. Asserting through the const makes that identity structural;
- * asserting through two copies of a string only makes it likely.
- */
-type ActionFn = (s: ActionState, f: FormData) => Promise<ActionState>;
-
-/**
- * AUTH-1 1b-bis: the NAMES and the refusal copy come from `MUTATING_ACTIONS`, so this list cannot
- * silently fall behind the modules on disk. Because it is keyed by `MatrixActionName`, **forgetting
- * an entry is a TYPE error**, not a quietly thinner suite — and an action marked `excluded` in the
- * registry cannot be given one. The filesystem cross-check below closes the remaining direction.
+ * The suites themselves are `describeActionMatrices` in `@/test/action-matrix` since FAM-1 step 0b.
+ * They used to be written out in this file over one table that held every module's actions, so each
+ * new action in any module edited this file. Now every Server Action module's own test calls the
+ * same suites over its own registry (`./actions.registry.ts` here), and
+ * `app/p/profile-actions.test.ts` runs the athlete-management four that this table used to carry.
  *
- * 🔴 **ONE table per action, not three (WP-1).** `ACTION_FNS`, the hand-written `ALL_WRITERS` array
- * and the `VALID_BODY` map were three structures keyed by the same names, so a new action had three
- * places to be forgotten and `updateProfileRoutine` was asserted by hand beside the array it was
- * missing from. `writers` is a **non-empty tuple at the type level**, so a binding cannot claim an
- * action writes nothing.
- */
-/**
- * ⚠️ `Writer` is deliberately loose, not `Mock`. These are the REAL DAL imports — `vi.mock` replaces
- * them at runtime but their static types stay the originals, so annotating `Mock` does not compile.
- * `(...a: never[]) => unknown` accepts any of them contravariantly while keeping the part that
- * matters: a **non-empty tuple**, so a binding cannot claim an action writes nothing.
- */
-type Writer = (...a: never[]) => unknown;
-
-/**
- * What a matrix row needs to drive one action.
+ * What stays here is what only this module's author knows: which mocked writer each action reaches,
+ * and a body that gets each one as far as its ownership check.
  *
- * 🔴 **`scopeMiss` is required for a HOUSEHOLD-addressed action and meaningless for a
- * profile-addressed one** — which is why this is a discriminated union rather than two optional
- * fields. A profile action is made to miss by mocking `getProfileByPublicId` to `null`, the one lever
- * that works for every one of them. A household action has **no `profileId` to make foreign**, so the
- * suite has to reach into its DAL function instead, and only the action's own author knows which one.
- *
- * WP-1's plan accepted both this and `succeeded` (R1, R7) and shipped neither, saying so: *"the suite
- * is still owed, by `PROF-1` a-1."* Until now the only matrix rows reaching a household action would
- * have been unauth and rate-limit — no wrong-owner proof at all, which AGENTS.md calls mandatory.
+ * Because `bindings` is keyed by the registry's names, **forgetting an entry is a TYPE error**, not a
+ * quietly thinner suite; so is a missing body.
  */
-type BindingBase = {
-  readonly fn: ActionFn;
-  readonly writers: readonly [Writer, ...Writer[]];
-  /**
-   * Assert what a SUCCESSFUL call did, beyond `result.ok`. Optional; when absent the suite asserts
-   * `ok` itself (see the happy row) —
-   * `addAthleteAction` needs it because its success is a `redirect`, which throws and therefore
-   * returns no envelope to inspect.
-   */
-  readonly succeeded?: (result: ActionState) => void;
-};
-
-/**
- * 🔴 **Keyed on the ACTION'S OWN SCOPE, so the compiler enforces what the guide claims.** The first
- * version was a plain union (`{ scopeMiss?: never } | { scopeMiss: () => void }`), which TypeScript
- * satisfies with the first arm for **any** entry — so a household action could omit `scopeMiss`
- * while `write-path.md` invariant 13 said it was required. A review lens caught the gap between the
- * type and the sentence. `MUTATING_ACTIONS` is `as const`, so each name's `scope` is known at the
- * type level and the requirement can actually be expressed.
- */
-type BindingFor<N extends MatrixActionName> = (typeof MUTATING_ACTIONS)[N] extends {
-  scope: typeof ACTION_SCOPE.household;
-}
-  ? BindingBase & { readonly scopeMiss: () => void }
-  : BindingBase & { readonly scopeMiss?: never };
-
-const ACTION_BINDINGS: { [N in MatrixActionName]: BindingFor<N> } = {
-  logBodyweightAction: { fn: logBodyweightAction, writers: [logBodyweight] },
-  logCheckinsAction: { fn: logCheckinsAction, writers: [logCheckinEntries] },
-  logStrengthSessionAction: { fn: logStrengthSessionAction, writers: [logStrengthSession] },
-  // Shares `logCheckinEntries` with check-ins — the writer is the entry batch, not the screen.
-  logLifeActivitiesAction: { fn: logLifeActivitiesAction, writers: [logCheckinEntries] },
-  editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
-  editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
-  editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
-  renameAthleteAction: { fn: renameAthleteAction, writers: [renameAthlete] },
-  // PROF-1 b. The DAL functions, not the `packages/db` writers: `archiveAthlete` owns the refusal
-  // ORDER (resolve → narrow → write), which is the thing a wrong-household row must not reach past.
-  archiveAthleteAction: { fn: archiveAthleteAction, writers: [archiveAthlete] },
-  restoreAthleteAction: { fn: restoreAthleteAction, writers: [restoreAthlete] },
-  addAthleteAction: {
-    fn: addAthleteAction,
-    writers: [createAthlete],
-    // The household equivalent of "make the id foreign": the DAL reports that no household resolved.
-    scopeMiss: () =>
-      vi.mocked(createAthlete).mockResolvedValueOnce({ ok: false, reason: 'no_scope' }),
-    // ⚠️ Success THROWS here (`redirect`), so there is no envelope. The thrown sentinel is the
-    // assertion — see the household suite for why the mock must throw rather than return undefined.
-    succeeded: () => {
-      expect(vi.mocked(redirect)).toHaveBeenCalledWith(
-        athletePath(PROFILE_ID),
-        RedirectType.replace,
-      );
-    },
+describeActionMatrices({
+  testFile: import.meta.url,
+  registry: ACTION_REGISTRY,
+  profileId: PROFILE_ID,
+  principal: PRINCIPAL,
+  bindings: {
+    logBodyweightAction: { fn: logBodyweightAction, writers: [logBodyweight] },
+    logCheckinsAction: { fn: logCheckinsAction, writers: [logCheckinEntries] },
+    logStrengthSessionAction: { fn: logStrengthSessionAction, writers: [logStrengthSession] },
+    // Shares `logCheckinEntries` with check-ins — the writer is the entry batch, not the screen.
+    logLifeActivitiesAction: { fn: logLifeActivitiesAction, writers: [logCheckinEntries] },
+    editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
+    editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
+    editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
   },
-};
-
-/**
- * 🔴 **One assertion ties each registration to the function it names (WP-1).** Shorthand properties
- * hide a copy-paste: `fooAction: { fn: logBodyweightAction, … }` would pass every matrix below while
- * the real `fooAction` was never called. Viable because every action is a plain
- * `export async function` with the Sentry wrapper inside its body, so `.name` survives the build.
- */
-describe('the bindings name the functions they claim', () => {
-  it.each(Object.keys(ACTION_BINDINGS) as MatrixActionName[])('%s binds its own function', (n) => {
-    expect(ACTION_BINDINGS[n].fn.name).toBe(n);
-  });
-});
-
-const MATRIX_NAMES = Object.keys(ACTION_BINDINGS) as MatrixActionName[];
-
-const ALL_ACTIONS: [string, ActionFn, string][] = MATRIX_NAMES.map((name) => [
-  name,
-  ACTION_BINDINGS[name].fn,
-  matrixEntry(name).refusal,
-]);
-
-/** Matrix rows for one addressing mode — `profile` today; `household` fills at PROF-1 a-1. */
-const actionsScoped = (scope: ActionScope): [string, ActionFn, string][] =>
-  MATRIX_NAMES.filter((n) => matrixEntry(n).scope === scope).map((name) => [
-    name,
-    ACTION_BINDINGS[name].fn,
-    matrixEntry(name).refusal,
-  ]);
-
-const PROFILE_ACTIONS = actionsScoped(ACTION_SCOPE.profile);
-const HOUSEHOLD_ACTIONS = actionsScoped(ACTION_SCOPE.household);
-
-const NEW_CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
-
-/**
- * A body that reaches each action's ownership check, keyed by name.
- *
- * ⚠️ **Hoisted to module scope at a-1w**, because the HOUSEHOLD matrix needs the same thing the
- * wrong-household one does and a second copy would be two lists to keep in step.
- */
-const VALID_BODY: Record<string, () => FormData> = {
-  logBodyweightAction: () =>
-    form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
-  logCheckinsAction: () => checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
-  logStrengthSessionAction: () =>
-    strengthForm({
-      profileId: PROFILE_ID,
-      movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-    }),
-  logLifeActivitiesAction: () =>
-    lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: localDay() }),
-  editStrengthSetAction: () =>
-    editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
-  editBodyweightAction: () => amendForm(),
-  editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
-  renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
-  archiveAthleteAction: () => form({ profileId: PROFILE_ID }),
-  restoreAthleteAction: () => form({ profileId: PROFILE_ID }),
-};
-
-VALID_BODY.addAthleteAction = () =>
-  form({ name: 'Added Athlete', kind: PROFILE_KIND.kid, clientId: NEW_CLIENT_ID });
-
-/**
- * Every writer any binding declares — **derived, never hand-listed**. The old array omitted
- * `updateProfileRoutine`, which is why each refusal case carried a separate
- * `expect(updateProfileRoutine).not.toHaveBeenCalled()`; a writer no binding declares is now
- * asserted by construction.
- */
-const ALL_WRITERS = [...new Set(MATRIX_NAMES.flatMap((n) => ACTION_BINDINGS[n].writers))];
-
-/**
- * 🔴 **The MANDATORY unauth suite (AGENTS.md → Backend / API PR rules), and at `1d` it is the only
- * one.** `1c-3b` added the session BESIDE the gate, so there were two suites — one flipping each
- * conjunct — and either going green alone would have meant the AND had quietly become an OR.
- *
- * ⚠️ **`1d` deleted the gate suite rather than keeping both, and that is not a narrowing of
- * coverage.** With one conjunct left, a second suite would have been the SAME test with a different
- * mock name: duplicate, and duplicate in the way that rots, because the next author updates one.
- * 🔴 What must never happen here is widening to an alternation — asserting that a caller is refused
- * when EITHER check fails would pass a build where the surviving check does nothing.
- */
-describe('every Server Action — unauth → reject before any DAL call (SEC-1, AUTH-1 1c-3b)', () => {
-  it.each(ALL_ACTIONS)('%s refuses a caller with no session', async (_name, action, notFound) => {
-    vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
-    const res = await action(initial, form({ profileId: PROFILE_ID }));
-    // 🔴 The SAME bytes as every other refusal, deliberately: a caller must not be able to tell
-    // "no session" from "another household" from "no such profile". ADR 0006's 404-never-403.
-    expect(res).toEqual({ ok: false, error: notFound });
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
-    expect(updateProfileRoutine).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
-  });
-});
-
-/**
- * AUTH-1 1c-3b — the mutation limiter, which is otherwise untestable.
- *
- * It fails OPEN and is `unconfigured` under vitest, so a call placed after the write, or one whose
- * result is ignored, would be invisible to every other test in this file. These are the only cases
- * that can distinguish "the limiter is wired" from "the limiter is imported".
- */
-describe('every Server Action — rate limited → reject before any DAL call (AUTH-1 1c-3b)', () => {
-  it.each(ALL_ACTIONS)('%s refuses when the limiter says so', async (_name, action) => {
-    vi.mocked(checkMutationLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });
-    const res = await action(initial, form({ profileId: PROFILE_ID }));
-    // ⚠️ NOT the not-found copy. A rate limit is the one refusal with something to do about it, and
-    // borrowing `NO_PROFILE_*` would both lie to the user and blur the 404-never-403 argument above.
-    expect(res).toEqual({ ok: false, error: RATE_LIMITED });
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
-    expect(updateProfileRoutine).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
-  });
-
-  it.each(ALL_ACTIONS)('%s keys the limiter on the principal', async (_name, action) => {
-    await action(initial, form({ profileId: PROFILE_ID }));
-    // The id comes from `auth()`, never from the request — so it cannot be forged or enumerated.
-    expect(checkMutationLimit).toHaveBeenCalledWith('user_000000000000000000000000e2e');
-  });
+  // ⚠️ Thunks, so each may use a form helper declared further down this file.
+  validBody: {
+    logBodyweightAction: () =>
+      form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
+    logCheckinsAction: () => checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
+    logStrengthSessionAction: () =>
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    logLifeActivitiesAction: () =>
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: localDay() }),
+    editStrengthSetAction: () =>
+      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
+    editBodyweightAction: () => amendForm(),
+    editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
+  },
 });
 
 describe('logBodyweightAction — boundary (bad body → zod-reject)', () => {
@@ -1886,94 +1701,14 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
 });
 
 /**
- * MANDATORY wrong-owner → forbid (AGENTS.md → Backend / API PR rules) — **satisfiable for the first
- * time in this repo.** Until TEN-1 1b there was no notion of whose request this was, and `actions.ts`
- * said so in as many words: *"any known profile id writes to that profile."*
+ * AUTH-1 1b-bis. The bindings being keyed by the registry's names means a module's matrix cannot
+ * SKIP an action in its registry — that is a type error. This closes the other direction: an action
+ * added to a Server Action module and never added to a registry would be invisible to every
+ * boundary suite, which is exactly the hole `docs/features/write-path.md` invariant 1 admitted in
+ * writing ("only if you add it to that suite: do").
  *
- * ⚠️ **What this suite proves, stated precisely, because the panel caught the first draft
- * over-claiming it (A2 · S1 · C7).** `getProfileByPublicId` is mocked wholesale here, so a
- * foreign-household id and an unknown id are byte-identical AT THIS BOUNDARY — and that is the point:
- * this proves the **action layer's** half, that a `null` resolution refuses with the shared copy,
- * calls no writer and revalidates nothing, for all seven actions. It would stay green with the
- * household conjunct deleted, which is exactly why **the scoping itself is proved in `db:verify`'s
- * two-household matrix**, in both directions, against a real database. Two vehicles, each honest
- * about its own half.
- *
- * The `null` also covers the **no-scope** path: a zero-household database resolves no scope, so
- * `getProfileByPublicId` returns `null` and every action takes this same route — dark, not leaky.
- *
- * ⚠️ Each case needs a body that would otherwise SUCCEED. An action that zod-rejects first never
- * reaches the ownership check, and a suite built on `form({ profileId })` would have proved nothing
- * while looking identical in the report.
- */
-describe('every Server Action — wrong household → the same refusal as not-found (TEN-1)', () => {
-  it('every action has a body that reaches the ownership check (no vacuous case)', async () => {
-    // The guard on the guard: with the default mocks every one of these must SUCCEED, so a case that
-    // refuses below is refusing for the reason this suite is about.
-    // 🔴 PROFILE-ADDRESSED ONLY (WP-1). These three sites make a `profileId` foreign; an action
-    // with no `profileId` in its body cannot be driven that way, so a `household` entry is
-    // excluded here by scope rather than by being forgotten. ⚠️ The unauth and rate-limit
-    // suites above stay over ALL entries on purpose — a household action must still be
-    // rate-limited, and `addAthleteAction` is the one that grows a table without bound.
-    for (const [name, action] of PROFILE_ACTIONS.map(([n, a]) => [n, a] as const)) {
-      vi.clearAllMocks();
-      const res = await action(initial, VALID_BODY[name]!());
-      expect(
-        res.ok,
-        `${name}: the valid body must succeed, or its refusal case proves nothing`,
-      ).toBe(true);
-    }
-  });
-
-  it.each(PROFILE_ACTIONS)(
-    '%s refuses a profile outside the request’s household',
-    async (name, action, notFound) => {
-      vi.mocked(getProfileByPublicId).mockResolvedValue(null);
-      const res = await action(initial, VALID_BODY[name]!());
-      expect(res).toEqual({ ok: false, error: notFound });
-      // The session passed and the profile WAS looked up — the authZ refusal, not the authN one.
-      // ⚠️ Switched from `hasGateAccess` at 1d: the point is that the EARLIER conjunct ran and
-      // passed, so this must track whichever check is first, not be dropped.
-      expect(sessionUserOrNull).toHaveBeenCalled();
-      expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
-      for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
-      expect(updateProfileRoutine).not.toHaveBeenCalled();
-      // No revalidate: a refusal must not even confirm which path exists.
-      expect(revalidatePath).not.toHaveBeenCalled();
-      vi.mocked(getProfileByPublicId).mockReset();
-    },
-  );
-
-  it('the refusal is byte-identical to the no-session one, for every action', async () => {
-    // The whole 404-never-403 argument (ADR 0006). If these two ever diverge the envelope becomes an
-    // oracle for "that profile exists, just not for you".
-    for (const [name, action, notFound] of PROFILE_ACTIONS) {
-      vi.clearAllMocks();
-      vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
-      const unauthed = await action(initial, VALID_BODY[name]!());
-
-      vi.clearAllMocks();
-      vi.mocked(getProfileByPublicId).mockResolvedValue(null);
-      const foreign = await action(initial, VALID_BODY[name]!());
-      vi.mocked(getProfileByPublicId).mockReset();
-
-      expect(foreign, `${name}: foreign-household and unauthed must be indistinguishable`).toEqual(
-        unauthed,
-      );
-      expect(foreign.error).toBe(notFound);
-    }
-  });
-});
-
-/**
- * AUTH-1 1b-bis. `ACTION_FNS` being a `Record<MutatingActionName, ActionFn>` means the suite cannot
- * SKIP an action in `MUTATING_ACTIONS` — that is a type error. This closes the other direction: an
- * action added to `actions.ts` and never added to `MUTATING_ACTIONS` would be invisible to every
- * boundary suite in this file, which is exactly the hole `docs/features/write-path.md` invariant 1
- * admitted in writing ("only if you add it to that suite: do").
- *
- * It reads the module's SOURCE rather than its exports because `actions.ts` is mocked to the eyeballs
- * in this file — importing it for reflection would return the mocks, not the real surface.
+ * It reads each module's SOURCE rather than its exports because `actions.ts` is mocked to the
+ * eyeballs in this file — importing it for reflection would return the mocks, not the real surface.
  */
 /**
  * 🔴 **The registry matches EVERY Server Action module on disk, not just this one (WP-1).**
@@ -1987,12 +1722,25 @@ describe('every Server Action — wrong household → the same refusal as not-fo
  * before the DAL, so that was the only thing covering it.
  *
  * Reading the scan instead closes it, and does so in the direction that matters: an exported action
- * missing from the registry fails here, and once it is in the registry
- * `Record<MatrixActionName, Binding>` forces a binding, and every matrix runs it. **Detecting an
- * unlisted module would NOT have been enough** — that is bookkeeping, and the action would still be
- * untested. This is why PROF-1 a-r is gated on WP-1: it registers `renameAthleteAction` while that
- * function lives in `app/p/profile-actions.ts`, which would have made the old assertion fail with 8
- * keys against 7 exports.
+ * missing from the registry fails here, and once it is in the registry `ActionBindings` forces a
+ * binding, and every matrix runs it. **Detecting an unlisted module would NOT have been enough** —
+ * that is bookkeeping, and the action would still be untested. This is why PROF-1 a-r was gated on
+ * WP-1: it registered `renameAthleteAction` while that function lives in `app/p/profile-actions.ts`,
+ * which would have made the old assertion fail with 8 keys against 7 exports.
+ *
+ * 🔴 **FAM-1 step 0b: the registry is COMPOSED now, and the chain above has one more link.**
+ * `MUTATING_ACTIONS` is the merge of each module's own `*.registry.ts`
+ * (`@/test/action-registry`), and the matrices run in each module's own test rather than in this
+ * file. So "once it is in the registry, every matrix runs it" holds only if the module's test really
+ * calls the matrices over that registry. Three things carry that, and the last `it`s below are the
+ * part that is new:
+ *
+ * 1. the equality here — every exported action is in the merged registry;
+ * 2. the type at each `describeActionMatrices` call — every registry entry has a binding and a body;
+ * 3. **every module has its registry beside it and a test beside it that calls
+ *    `describeActionMatrices`** — a source guard, because one test file cannot observe that another
+ *    ran. The call takes the module from the test's own path and checks the registry it is handed
+ *    is the sibling file's object, so the presence of the call is all this needs to establish.
  */
 describe('the registry matches every Server Action module on disk (WP-1)', () => {
   const modules = serverActionModules();
@@ -2021,7 +1769,7 @@ describe('the registry matches every Server Action module on disk (WP-1)', () =>
    * an edit to this line, read by a human.
    */
   it('no action is excluded from the matrices', () => {
-    expect(excludedActionNames()).toEqual([]);
+    expect(excludedActionNames(MUTATING_ACTIONS)).toEqual([]);
   });
 
   /**
@@ -2032,79 +1780,73 @@ describe('the registry matches every Server Action module on disk (WP-1)', () =>
     const names = modules.flatMap((m) => exportedActionNames(m));
     expect(names.length).toBe(new Set(names).size);
   });
-});
 
-/**
- * 🔴 **The HOUSEHOLD matrix (PROF-1 a-1w) — the proof a household-addressed action has no other way
- * to get.**
- *
- * Every other mutating action carries a `profileId`, and the wrong-household suite makes it foreign.
- * `addAthleteAction` carries none: there is nothing to point at another household. So the isolation
- * question lives in `createProfile`'s two scoped reads and is proved in `db:verify` against a real
- * two-household database (mutation patch `20` shows that proof can fail). What belongs HERE is the
- * tier above it: when the DAL reports that **no household resolved**, the action must answer exactly
- * as it does to a stranger, write nothing, and navigate nowhere.
- *
- * WP-1's plan accepted this suite and the two binding fields it needs (R1, R7) and shipped neither —
- * so until this file, the only matrix rows that could reach a household action were unauth and
- * rate-limit, with **no wrong-owner row at all**.
- */
-describe('every HOUSEHOLD-addressed Server Action — a scope miss answers like a stranger', () => {
   /**
-   * ⚠️ **The floor, first.** `it.each([])` passes silently in vitest, so a suite whose rows come from
-   * a filtered registry can go green by matching nothing — which is precisely how this suite would
-   * have reported success on the day `addAthleteAction` was registered with the wrong scope.
+   * The same hazard on the registry side, new with the merge: `MUTATING_ACTIONS` is a plain
+   * `Object.assign` of the modules' registries, so a name two registries both carry would collapse
+   * to one entry, the later one's refusal and scope winning without a word.
    */
-  it('drives at least one action (an empty matrix passes everything below)', () => {
-    expect(HOUSEHOLD_ACTIONS.length).toBeGreaterThan(0);
+  it('no action name is registered by two modules', () => {
+    const counted = REGISTRY_SHARDS.reduce((n, s) => n + Object.keys(s.registry ?? {}).length, 0);
+    expect(counted).toBe(Object.keys(MUTATING_ACTIONS).length);
   });
 
-  it.each(HOUSEHOLD_ACTIONS)(
-    '%s succeeds on the happy path, or its refusal case proves nothing',
-    async (name, action) => {
-      vi.clearAllMocks();
-      const res = await action(initial, VALID_BODY[name]!()).catch((e: Error) => e);
-      // ⚠️ **The default is real, not documentation.** `succeeded?.(…)` alone meant a binding without
-      // one asserted NOTHING here — and `.catch` has already swallowed any throw, so the row would
-      // pass for an action that failed outright. Today's single entry defines `succeeded`; the next
-      // one that does not must still be held to `ok`.
-      const binding = ACTION_BINDINGS[name as MatrixActionName];
-      if (binding.succeeded) binding.succeeded(res as ActionState);
-      else expect(res, `${name}: a valid body must succeed`).toMatchObject({ ok: true });
-    },
-  );
+  describe('each module carries its own registry and runs the matrices over it (FAM-1 step 0b)', () => {
+    it('the shards are the scanned modules, one for one', () => {
+      expect(REGISTRY_SHARDS.map((s) => join(WEB_DIR, s.module)).sort()).toEqual(
+        [...modules].sort(),
+      );
+      expect(REGISTRY_SHARDS.length).toBeGreaterThan(1);
+    });
 
-  it.each(HOUSEHOLD_ACTIONS)(
-    '%s refuses a scope miss with the not-found bytes, and writes nothing',
-    async (name, action, refusal) => {
-      vi.clearAllMocks();
-      ACTION_BINDINGS[name as MatrixActionName].scopeMiss?.();
-      const res = await action(initial, VALID_BODY[name]!());
-
-      expect(res).toEqual({ ok: false, error: refusal });
-      // 🔴 Nothing navigated and nothing was revalidated — a refusal that redirected would put the
-      // caller on a page they have no business seeing, and one that revalidated would churn caches
-      // for a write that never happened.
-      expect(redirect).not.toHaveBeenCalled();
-      expect(revalidatePath).not.toHaveBeenCalled();
-    },
-  );
-
-  it('the scope-miss refusal is byte-identical to the no-session one, for every action', async () => {
-    for (const [name, action, refusal] of HOUSEHOLD_ACTIONS) {
-      vi.clearAllMocks();
-      ACTION_BINDINGS[name as MatrixActionName].scopeMiss?.();
-      const missed = await action(initial, VALID_BODY[name]!());
-
-      vi.clearAllMocks();
-      vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
-      const unauthed = await action(initial, VALID_BODY[name]!());
-
+    it('every module has its registry file beside it, exporting ACTION_REGISTRY', () => {
       expect(
-        missed,
-        `${name}: a signed-in caller with no household and an unauthenticated one must be indistinguishable`,
-      ).toEqual(unauthed);
-      expect(unauthed).toEqual({ ok: false, error: refusal });
-    }
+        REGISTRY_SHARDS.filter((s) => s.registry === null).map((s) => s.registryFile),
+        'a Server Action module with no registry: add this file beside it, exporting ' +
+          '`ACTION_REGISTRY` (the rule is in app/p/[profileId]/mutating-actions.ts)',
+      ).toEqual([]);
+    });
+
+    it('no registry file is left without a module (it would register nothing, silently)', () => {
+      const expected = new Set(REGISTRY_SHARDS.map((s) => s.registryFile));
+      expect(registryFilesOnDisk().length).toBeGreaterThan(1);
+      expect(registryFilesOnDisk().filter((f) => !expected.has(f))).toEqual([]);
+    });
+
+    /**
+     * 🔴 The link the merge added. An action in a registry is driven only if its module's test
+     * calls the matrices, and no assertion in this file can see another file's tests run. So each
+     * module's sibling test is read: it must exist, call `describeActionMatrices`, and hand it the
+     * registry imported from the sibling file. Comments are stripped, so a call in a docblock
+     * (this file has one) satisfies nothing.
+     */
+    it.each(REGISTRY_SHARDS.map((s) => [s.module, s] as const))(
+      '%s — the test beside it runs the matrices over its registry',
+      (_module, shard) => {
+        const testFile = join(WEB_DIR, shard.testFile);
+        expect(existsSync(testFile), `${shard.testFile} must exist`).toBe(true);
+        const src = code(testFile);
+        expect(src, `${shard.testFile} must call describeActionMatrices`).toMatch(MATRIX_CALL);
+        expect(
+          src,
+          `${shard.testFile} must pass its own path, so the module is not a choice`,
+        ).toMatch(/\btestFile:\s*import\.meta\.url\b/);
+        const registryModule = `./${basename(shard.registryFile).replace(/\.ts$/, '')}`;
+        expect(
+          src.includes(`import { ACTION_REGISTRY } from '${registryModule}'`),
+          `${shard.testFile} must import ACTION_REGISTRY from '${registryModule}'`,
+        ).toBe(true);
+        expect(src, `${shard.testFile} must drive that registry`).toMatch(
+          /\bregistry:\s*ACTION_REGISTRY\b/,
+        );
+      },
+    );
+
+    it('the call detector is not vacuous: it sees this file’s call, and an import is not a call', () => {
+      expect(code(fileURLToPath(import.meta.url))).toMatch(MATRIX_CALL);
+      expect("import { describeActionMatrices } from '@/test/action-matrix';").not.toMatch(
+        MATRIX_CALL,
+      );
+    });
   });
 });

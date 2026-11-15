@@ -86,3 +86,36 @@ describe('moveUp / moveDown — adjacent swap, conditional preserved', () => {
     expect(moveDown(moveUp(order, 1), 0)).toEqual(order);
   });
 });
+
+/**
+ * FAM-1 step 0b made the two reorders generic so the program builder can import them for a list that
+ * is not a routine. The element type is the caller's, and it comes back unchanged: the assignments
+ * below are the compile-time half (held by `pnpm typecheck`), the assertions the runtime half.
+ */
+describe('moveUp / moveDown — generic over the element', () => {
+  type WorkoutRow = { id: number; label: string };
+  const rows: readonly WorkoutRow[] = [
+    { id: 1, label: 'Squat' },
+    { id: 2, label: 'Plank' },
+    { id: 3, label: 'Run' },
+  ];
+
+  it('reorders a list of another element type, returning that type', () => {
+    const up: WorkoutRow[] = moveUp(rows, 2);
+    const down: WorkoutRow[] = moveDown(rows, 0);
+    expect(up.map((r) => r.id)).toEqual([1, 3, 2]);
+    expect(down.map((r) => r.id)).toEqual([2, 1, 3]);
+  });
+
+  it('moves the same object, not a copy of it', () => {
+    expect(moveUp(rows, 1)[0]).toBe(rows[1]);
+    expect(moveDown(rows, 1)[2]).toBe(rows[1]);
+  });
+
+  it('reorders primitives, and is a no-op at either bound', () => {
+    const names: string[] = moveDown(['a', 'b', 'c'], 1);
+    expect(names).toEqual(['a', 'c', 'b']);
+    expect(moveUp(['a', 'b'], 0)).toEqual(['a', 'b']);
+    expect(moveDown(['a', 'b'], 1)).toEqual(['a', 'b']);
+  });
+});

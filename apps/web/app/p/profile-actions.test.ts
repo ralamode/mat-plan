@@ -11,12 +11,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * INTEGRATION TIER — `renameAthleteAction` as a plain async function, with its boundaries mocked
  * (AGENTS.md: Server Actions aren't HTTP routes). PROF-1 a-r.
  *
- * 🔴 **This file is NOT where the boundary matrices live, and that is the WP-1 convention.** The
- * mandatory unauth / rate-limit / wrong-household / byte-identical-refusal suites run over the
- * REGISTRY, in `app/p/[profileId]/actions.test.ts`, so they cover every module at once and a new
- * action cannot be added without entering them. What belongs here is the per-action behaviour those
- * matrices cannot express: which bodies zod refuses, what a success returns, and which paths are
- * revalidated.
+ * 🔴 **This file IS where this module's boundary matrices run, since FAM-1 step 0b.** Under WP-1 the
+ * mandatory unauth / rate-limit / wrong-household / byte-identical-refusal suites ran over one
+ * merged table in `app/p/[profileId]/actions.test.ts`, and this file said it was not their home.
+ * They are one shared function now (`describeActionMatrices`, `@/test/action-matrix`) that each
+ * Server Action module's own test calls over its own registry, so the four actions here are driven
+ * from here, by the mocks this file already declared. A new action still cannot be added without
+ * entering them: `actions.test.ts` fails a module whose test does not make the call.
+ *
+ * The rest of the file is the per-action behaviour those matrices cannot express: which bodies zod
+ * refuses, what a success returns, and which paths are revalidated.
  */
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 // Throws like Next's, so a redirect misplaced inside a try cannot pass silently.
@@ -30,7 +34,11 @@ vi.mock('@/lib/dal/session', () => ({
   sessionUserOrNull: vi.fn(async () => ({ userId: PRINCIPAL })),
 }));
 // The limiter fails open and is `null` under vitest, so a refusal is only reachable through a mock.
-vi.mock('@/lib/rate-limit', () => ({
+// ⚠️ A PARTIAL mock since FAM-1 step 0b: `enterMutation` reads `MUTATION_RATE_LIMIT` for its default
+// policy and the matrix compares the limiter call against that const, so the real module supplies
+// the policies and only the check is replaced.
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   checkMutationLimit: vi.fn(async () => ({ allowed: true, reason: 'ok' })),
 }));
 vi.mock('@/lib/dal/profiles', () => ({
@@ -72,6 +80,7 @@ import {
   restoreAthlete,
 } from '@/lib/dal/profiles';
 import { checkMutationLimit } from '@/lib/rate-limit';
+import { describeActionMatrices } from '@/test/action-matrix';
 
 import type { ActionState } from './[profileId]/action-state';
 import {
@@ -80,6 +89,7 @@ import {
   renameAthleteAction,
   restoreAthleteAction,
 } from './profile-actions';
+import { ACTION_REGISTRY } from './profile-actions.registry';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
 const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
@@ -92,6 +102,54 @@ function form(fields: Record<string, string>): FormData {
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+/** `addAthleteAction`'s idempotency key in the matrix body. Any UUIDv7: the writer is mocked. */
+const NEW_CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
+
+/**
+ * 🔴 **The boundary matrices for this module's four actions** (AGENTS.md → Backend / API PR rules):
+ * unauth, rate-limited, wrong household for the three that carry a `profileId`, and the household
+ * scope miss for `addAthleteAction`, which carries none.
+ *
+ * These four bindings and bodies are the ones `app/p/[profileId]/actions.test.ts` held until FAM-1
+ * step 0b, moved without change (the bodies lose a `day` field that file's `form()` added and none
+ * of these actions reads).
+ */
+describeActionMatrices({
+  testFile: import.meta.url,
+  registry: ACTION_REGISTRY,
+  profileId: PROFILE_ID,
+  principal: PRINCIPAL,
+  bindings: {
+    renameAthleteAction: { fn: renameAthleteAction, writers: [renameAthlete] },
+    // PROF-1 b. The DAL functions, not the `packages/db` writers: `archiveAthlete` owns the refusal
+    // ORDER (resolve → narrow → write), which is the thing a wrong-household row must not reach past.
+    archiveAthleteAction: { fn: archiveAthleteAction, writers: [archiveAthlete] },
+    restoreAthleteAction: { fn: restoreAthleteAction, writers: [restoreAthlete] },
+    addAthleteAction: {
+      fn: addAthleteAction,
+      writers: [createAthlete],
+      // The household equivalent of "make the id foreign": the DAL reports that no household resolved.
+      scopeMiss: () =>
+        vi.mocked(createAthlete).mockResolvedValueOnce({ ok: false, reason: 'no_scope' }),
+      // ⚠️ Success THROWS here (`redirect`), so there is no envelope. The thrown sentinel is the
+      // assertion — the `next/navigation` mock above must throw rather than return undefined.
+      succeeded: () => {
+        expect(vi.mocked(redirect)).toHaveBeenCalledWith(
+          athletePath(PROFILE_ID),
+          RedirectType.replace,
+        );
+      },
+    },
+  },
+  validBody: {
+    renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
+    archiveAthleteAction: () => form({ profileId: PROFILE_ID }),
+    restoreAthleteAction: () => form({ profileId: PROFILE_ID }),
+    addAthleteAction: () =>
+      form({ name: 'Added Athlete', kind: PROFILE_KIND.kid, clientId: NEW_CLIENT_ID }),
+  },
+});
 
 describe('renameAthleteAction — boundary (bad body → zod-reject, nothing written)', () => {
   it.each([
