@@ -23,8 +23,14 @@ echo '#!/bin/sh' >"$tmp/.claude/skills/demo/check.sh"
 skill="$tmp/.claude/skills/demo/SKILL.md"
 
 # expect <name> <exit> <text-or-empty> ; skill body on stdin
+# A valid frontmatter goes on every fixture skill, so the routing pass (DX-14 item 5a) sees a real
+# skill and these cases keep testing what they name.
+FRONTMATTER='---
+name: demo
+description: Demo skill. Use when the user says "run the demo".
+---'
 expect() {
-  cat >"$skill"
+  { printf '%s\n' "$FRONTMATTER"; cat; } >"$skill"
   out="$(node "$guard" "$tmp" 2>&1)"
   code=$?
   if [ "$code" -ne "$2" ] || { [ -n "$3" ] && ! grep -qF "$3" <<<"$out"; }; then
@@ -117,11 +123,45 @@ EOF
 # Entry point: runs through a symlink and from a path containing a space.
 ln -s "$guard" "$tmp/link.mjs"
 mkdir -p "$tmp/dir with space" && cp "$guard" "$tmp/dir with space/check.mjs"
-echo 'See `docs/gone.md`.' >"$skill"
+printf '%s\nSee `docs/gone.md`.\n' "$FRONTMATTER" >"$skill"
 for g in "$tmp/link.mjs" "$tmp/dir with space/check.mjs"; do
   out="$(node "$g" "$tmp" 2>&1)"
   if [ $? -eq 1 ] && grep -qF "docs/gone.md" <<<"$out"; then printf '✓ runs via %s\n' "${g#"$tmp"/}"
   else printf '✗ did not run via %s\n%s\n' "$g" "$out"; fails=$((fails + 1)); fi
 done
+
+# ── Routing (DX-14 item 5a): checkRouting is pure, so these call it directly. ─────────────────────
+# route <name> <want: ok | substring of a problem> <json-array-of-{name,description}>
+route() {
+  out="$(node --input-type=module -e "
+    import { checkRouting } from '$guard';
+    const p = checkRouting(JSON.parse(process.argv[1]));
+    console.log(p.length ? p.join('\n') : 'ok');" "$3" 2>&1)"
+  if { [ "$2" = ok ] && [ "$out" = ok ]; } || { [ "$2" != ok ] && grep -qF "$2" <<<"$out"; }; then
+    printf '✓ %s\n' "$1"
+  else printf '✗ %s: want "%s", got\n%s\n' "$1" "$2" "$out"; fails=$((fails + 1)); fi
+}
+d() { printf '{"name":"%s","description":"%s"}' "$1" "$2"; }
+route "routing: distinct triggers pass" ok \
+  "[$(d a 'Do A. Use when the user says \"open the PR\".'),$(d b 'Do B. Use when the user says \"fix the merge conflicts\".')]"
+route "routing: the same phrase in two skills collides" "collision: a's trigger \"spec this\" also reaches b" \
+  "[$(d a 'A. Use when the user says \"spec this\".'),$(d b 'B. Use when the user says \"spec this\" or \"other\".')]"
+route "routing: shipit meets ship it" "collision: a's trigger \"shipit\" also reaches b" \
+  "[$(d a 'A. Use when the user says \"shipit\".'),$(d b 'B. Use when the user says \"ship it\".')]"
+route "routing: whole tokens only (ownership itself, new format)" ok \
+  "[$(d a 'A. Use when the user says \"shipit\", \"new form\".'),$(d b 'B. Use when ownership itself or a new format changes, \"go\".')]"
+route "routing: a mention before the trigger clause is not a trigger" ok \
+  "[$(d a 'A. Use when the user says \"migration\".'),$(d b 'B checks a migration step. Use when \"doubt this\".')]"
+route "routing: placeholders are wildcards" "collision: a's trigger \"save X\" also reaches b" \
+  "[$(d a 'A. Use when the user says \"save X\".'),$(d b 'B. Use when the user says \"save\".')]"
+route "routing: an all-placeholder trigger is refused" 'trigger "X" is only a placeholder' \
+  "[$(d a 'A. Use when the user says \"X\".')]"
+route "routing: no trigger clause is refused" "a: no trigger clause" "[$(d a 'Does A, quoting \"a thing\".')]"
+route "routing: a clause that quotes nothing is refused" "quotes no phrase" "[$(d a 'A. Use on any PR.')]"
+long="$(printf 'x%.0s' $(seq 1 482)) Use when \\\"go now\\\"."
+route "routing: a description over 500 characters is refused" "(max 500)" "[$(d a "$long")]"
+exact="$(printf 'x%.0s' $(seq 1 481)) Use when \\\"go now\\\"."
+route "routing: exactly 500 characters passes" ok "[$(d a "$exact")]"
+route "routing: a missing description is refused" "no single-line" '[{"name":"a","description":null}]'
 
 [ "$fails" -eq 0 ] && echo "all skills-guard self-tests passed" || exit 1

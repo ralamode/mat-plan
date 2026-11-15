@@ -1,6 +1,6 @@
 ---
 name: write-spec
-description: Write the engineering spec for work spanning several PRs (docs/specs/<id>-<slug>.md) — acceptance criteria a test can fail, the data contract that lets tracks split, and the order with the constraint that fixes it, complete enough to hand to a session with no context. For a milestone, a large feature, or any change where several PRs must agree on something the ADR and AGENTS.md do not settle. Use when the user says "spec this", "write the engineering spec", "what exactly are we building for X", or when a backlog row names work nobody has specified.
+description: Write the engineering spec for work spanning several PRs (docs/specs/<id>-<slug>.md) — acceptance criteria a test can fail, the data contract that lets tracks split, and the order with the constraint that fixes it. For a milestone, a large feature, or any change where several PRs must agree on something the ADR and AGENTS.md do not settle. Use when the user says "spec this", "write the engineering spec", "what exactly are we building for X", or when a backlog row names work nobody has specified.
 ---
 
 # Write a spec

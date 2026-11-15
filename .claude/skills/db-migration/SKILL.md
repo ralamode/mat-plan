@@ -1,6 +1,6 @@
 ---
 name: db-migration
-description: Make a mat-plan schema change safely — edit packages/db/src/schema.ts, drizzle-kit generate, hand-harden the generated SQL (timeouts, statement-breakpoints, nullable→backfill→NOT NULL, squawk-ignore placement, expand→contract), seed from packages/shared consts idempotently, add a db:verify proof, and pass the forward-only / Squawk / drift gates. Use for ANY change to the Drizzle schema, a migration, a reference table, or a seed — "add a column", "new table", "migration", "change the schema", "seed X".
+description: Make a mat-plan schema change safely — edit packages/db/src/schema.ts, drizzle-kit generate, hand-harden the SQL (timeouts, breakpoints, NOT NULL via backfill, expand→contract), seed idempotently from packages/shared, add a db:verify proof, and pass the forward-only / Squawk / drift gates. Use for ANY change to the Drizzle schema, a migration, a reference table, or a seed — "add a column", "new table", "migration", "change the schema", "seed X".
 ---
 
 # DB migration
