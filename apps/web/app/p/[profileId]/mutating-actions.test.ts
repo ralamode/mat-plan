@@ -1,8 +1,15 @@
+import { relative } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
+// ⚠️ `MUTATING_ACTIONS` is no longer a literal in `./mutating-actions` (FAM-1 step 0b): it is the
+// merge of every Server Action module's own `*.registry.ts`, composed in test support. The runtime
+// pins below therefore read every module's entries, as they did when there was one literal.
+import { MUTATING_ACTIONS } from '@/test/action-registry';
+import { code, exportedActionSlices, serverActionModules, WEB_DIR } from '@/test/source-scan';
 
 import {
   ACTION_SCOPE,
-  MUTATING_ACTIONS,
   excludedActionNames,
   type ExcludedEntry,
   type MatrixEntry,
@@ -53,6 +60,15 @@ const _acceptedShapes = {
 void _acceptedShapes;
 
 describe('the action registry is one kind of entry or the other', () => {
+  /**
+   * The merged registry is built by discovery, so "it found nothing" has to be ruled out before the
+   * three `toEqual([])` pins below mean anything: over an empty object each of them passes.
+   */
+  it('reads a registry that has entries (an empty merge would pass every pin below)', () => {
+    expect(Object.keys(MUTATING_ACTIONS)).toContain('logBodyweightAction');
+    expect(Object.keys(MUTATING_ACTIONS)).toContain('addAthleteAction');
+  });
+
   it('no entry carries both a scope and an exclusion', () => {
     const both = Object.entries(MUTATING_ACTIONS)
       .filter(([, v]) => 'scope' in v && 'excluded' in v)
@@ -72,7 +88,7 @@ describe('the action registry is one kind of entry or the other', () => {
    * which `AUTH-1` 1d deleted. Every future entry is an edit to this line, read by a human.
    */
   it('nothing is excluded from the matrices today', () => {
-    expect(excludedActionNames()).toEqual([]);
+    expect(excludedActionNames(MUTATING_ACTIONS)).toEqual([]);
   });
 
   /**
@@ -84,16 +100,81 @@ describe('the action registry is one kind of entry or the other', () => {
    */
   it('every household-addressed action is one the household matrix drives', () => {
     const household = Object.entries(MUTATING_ACTIONS)
-      // ⚠️ `as string` is load-bearing, not laziness. Every entry is `profile` today, so TS narrows
-      // `v.scope` to `'profile'` and flags the comparison as impossible (TS2367) — a COMPILE error in
-      // a test file, which is a confusing way to learn that a household action was added. Widening
-      // keeps the failure a readable runtime assertion with the reason attached.
+      // ⚠️ `as string` was load-bearing while the registry was one `as const` literal whose every
+      // entry was `profile`: TS narrowed `v.scope` and flagged the comparison as impossible
+      // (TS2367). The merged registry is typed by its entry union, so it is only belt and braces
+      // now, and it stays so the line does not start failing to compile if that ever narrows again.
       .filter(([, v]) => 'scope' in v && (v.scope as string) === ACTION_SCOPE.household)
       .map(([k]) => k);
     // 🔴 **Edited at PROF-1 a-1w, not deleted.** The matrix this was waiting for now exists
-    // (`actions.test.ts` → "every HOUSEHOLD-addressed Server Action"), so the assertion flips from
-    // "there are none" to "these are the ones, and they are driven". A second household action must
-    // still edit this line, and whoever does reads why it is here.
-    expect(household).toEqual(['addAthleteAction']);
+    // (`test/action-matrix.ts` → "every HOUSEHOLD-addressed Server Action"), so the assertion flips
+    // from "there are none" to "these are the ones, and they are driven". A second household action
+    // must still edit this list, and whoever does reads why it is here.
+    // ⚠️ One entry per line, SORTED, each with a trailing comment (FAM-1 step 0b): two PRs adding
+    // one each then insert on different lines, and the comment keeps the formatter from folding
+    // the array onto one. Both sides are sorted, so the order modules are scanned in is not pinned.
+    expect(household.sort()).toEqual([
+      'addAthleteAction', // PROF-1 a-1w, `app/p/profile-actions.ts`
+    ]);
+  });
+});
+
+/**
+ * 🔴 **Which actions get the 5× rate-limit budget is a list a person reads** (FAM-1 step 0b, D23).
+ *
+ * `enterMutation(refusal, policy)` lets an action name `ROW_WRITE_RATE_LIMIT` (600 per 5 minutes)
+ * in place of the default 120. Each module's matrix already holds an action to the policy its own
+ * binding declares, but that is a declaration and its check written by one author in one file. This
+ * pin is the other half: the source of every Server Action module is read, and the actions that
+ * hand `enterMutation` a second argument must equal the list below. Giving an action the looser
+ * budget is therefore an edit here, next to the reason, whatever its module's test says.
+ *
+ * ⚠️ **It matches ANY second argument, not the const's name.** `enterMutation(x, policy)` through a
+ * local alias would slip a scan for the identifier; "named a policy at all" cannot be aliased away.
+ * A source scan still has limits, stated plainly: it reads each action's own slice, so a helper
+ * that calls `enterMutation` on the action's behalf is not seen here (the boundary guard in
+ * `pages-need-a-session.test.ts` already requires the call in the action's own body), and the
+ * second assertion below catches a module that names the const anywhere else.
+ */
+describe('the actions that enter with the row-write rate limit are pinned (FAM-1 D23)', () => {
+  /** An `enterMutation(…)` call with a second argument, across line breaks. */
+  const NAMES_A_POLICY = /\benterMutation\s*\(\s*[^,()]+,\s*[^\s)]/;
+  const ROW_POLICY = /\bROW_WRITE_RATE_LIMIT\b/;
+
+  const modules = serverActionModules();
+  const namingAPolicy = modules.flatMap((file) =>
+    exportedActionSlices(file)
+      .filter(({ body }) => NAMES_A_POLICY.test(body))
+      .map(({ name }) => ({ name, module: relative(WEB_DIR, file) })),
+  );
+
+  it('reads real actions (an empty scan would pin an empty list for ever)', () => {
+    expect(modules.length).toBeGreaterThan(1);
+    expect(modules.flatMap((f) => exportedActionSlices(f)).length).toBe(
+      Object.keys(MUTATING_ACTIONS).length,
+    );
+  });
+
+  it('the detector sees a second argument, on one line or several, and not a lone refusal', () => {
+    expect('await enterMutation(NO_PROFILE_LOG, ROW_WRITE_RATE_LIMIT);').toMatch(NAMES_A_POLICY);
+    expect('await enterMutation(\n  NO_PROFILE_LOG,\n  policy,\n);').toMatch(NAMES_A_POLICY);
+    expect('await enterMutation(NO_PROFILE_LOG);').not.toMatch(NAMES_A_POLICY);
+    // A trailing comma after the only argument is how a formatter breaks a long call. Not a policy.
+    expect('await enterMutation(\n  NO_PROFILE_LOG,\n);').not.toMatch(NAMES_A_POLICY);
+  });
+
+  /**
+   * ⚠️ EMPTY today: no action is a row write until FAM-1 step 12b. One entry per line, sorted, with
+   * a trailing comment naming the module and why the action is a row write.
+   */
+  it('exactly these actions name a policy other than the default', () => {
+    expect(namingAPolicy.map((a) => a.name).sort()).toEqual([]);
+  });
+
+  it('no Server Action module mentions the row policy except through a pinned action', () => {
+    const mentioning = modules
+      .filter((f) => ROW_POLICY.test(code(f)))
+      .map((f) => relative(WEB_DIR, f));
+    expect(mentioning.sort()).toEqual([...new Set(namingAPolicy.map((a) => a.module))].sort());
   });
 });

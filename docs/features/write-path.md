@@ -11,6 +11,14 @@ owns:
   # ONE pinned alias (`@/app/p/mutation-entry`) — see invariant 1.
   - apps/web/app/p/mutation-entry.ts
   - apps/web/app/p/[profileId]/mutating-actions.ts
+  # FAM-1 step 0b: the registry is one file per Server Action module, and the refusal matrices are
+  # one shared suite each module's own test calls. These four are the pieces this guide's own two
+  # modules carry, plus the shared suite. A NEW module's `*.registry.ts` sits in its own directory
+  # and belongs to that directory's guide, never to this list (invariant 1).
+  - apps/web/app/p/[profileId]/actions.registry.ts
+  - apps/web/app/p/profile-actions.registry.ts
+  - apps/web/test/action-matrix.ts
+  - apps/web/test/action-registry.ts
   # PROF-1 a-r: the household-level athlete actions, and the FIRST second Server Action module in the
   # app. WP-1 made the boundary suites scan every `'use server'` module rather than `actions.ts`
   # alone, which is what makes this module covered the moment it appears — see invariant 1.
@@ -83,6 +91,9 @@ flowchart LR
 | `app/p/profile-actions.ts`                   | The **athlete-management** Server Actions (PROF-1): `renameAthleteAction`, `archiveAthleteAction`, `restoreAthleteAction`, and **`addAthleteAction` — the first HOUSEHOLD-scoped action** (a-1w): no `profileId` in its body, so see invariant 13 for what proves its isolation. 🔴 **The two id-only actions share one local helper, and the ONE thing it does not absorb is `enterMutation`** — each action opens with its own, because `app/pages-need-a-session.test.ts` scans each exported action's own body and a boundary check hidden one call deep is one a reader of the action cannot see. **Share the plumbing; never share the boundary.** A separate module because these manage athletes rather than log against one, and a-1's `addAthleteAction` carries no `profileId` at all — so it cannot live under a segment named by one. ⚠️ Its refusal is `NO_ATHLETE_SAVE`, deliberately a different string from `NO_PROFILE_*` (PUX-8: "athlete" is the human noun, "profile" the schema's).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `packages/db/src/writers/profile.ts`         | `renameProfile` — one guarded `UPDATE profiles SET name`. 🔴 **It is in `packages/db` while `updateProfileRoutine` is not, and the reason is specific:** acceptance criterion 4 is a **row count** ("write nothing"), which only a real database can report — so `db:verify` runs this function against two households, in both directions. Read its docblock before adding a second writer here.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `action-state.ts`                            | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `mutating-actions.ts`, `*.registry.ts`       | **The action registry: one file per Server Action module** (FAM-1 step 0b). `mutating-actions.ts` holds the entry types (`MatrixEntry`, `ExcludedEntry`, `ActionRegistry`) and, in its docblock, the three files a new module adds. The entries are in `actions.registry.ts` and `profile-actions.registry.ts`, each beside its module, each `as const satisfies ActionRegistry`. 🔴 **There is no hand-written merge**: see invariant 1.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apps/web/test/action-matrix.ts`             | **`describeActionMatrices`: the refusal matrices, as one function** each module's own test calls over its own registry (unauth, rate-limited, wrong household, household scope miss, byte-identical refusals). It also holds the binding types that make a missing binding a compile error; `test/action-matrix.test.ts` pins them. ⚠️ The calling test must `vi.mock` five boundaries, listed in its docblock, and the suite's first case names any that is not mocked.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `apps/web/test/action-registry.ts`           | TEST SUPPORT: finds each module's `*.registry.ts` by name and merges them into `MUTATING_ACTIONS`. ⚠️ It starts from the modules, not from a glob of registries, so a module with no registry is a named `null` that `actions.test.ts` fails on, rather than an absence nothing notices.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `lib/dal/`                                   | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `lib/dal/profiles.ts`                        | ⚠️ **Holds `updateProfileRoutine`, the one writer still DAL-local.** 🔴 **That is a BOUND, not a principle:** it stays here until ACT-1 retires the routine editor, because moving a shipped writer is a diff with no behavioural question in it and that editor is on its way out. Do **not** read it as _"a writer is shared iff its refusal was phrased as an acceptance criterion"_ — that is how `renameProfile`'s placement happened to be argued, and the next author (`createProfile`, archive/restore, V1-9b) cannot apply it from the code. **The usable rule is the `writers/` row's: a write whose REFUSAL is itself the behaviour under test belongs there, because a row count needs a real database.** Also the one READ that resolves untrusted JSONB: `getProfileByPublicId` maps `routine_config` through `resolveProfileRoutine`, which pairs the membership set (the whole catalog) with the neutral first-run fallback — see [programming](./programming.md) invariant 5. Never pass those two lists by hand.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `lib/dal/household.ts`                       | **`getHouseholdScope()`** — the ONE place in the repo that derives a household from a request, plus `reportScopeMiss` (ADR 0006's miss-path event). AUTH-1 replaces only this body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -96,7 +107,8 @@ flowchart LR
 | `…/writers/bodyweight.ts` → `bodyweightSlot` | The day-slot predicate — the natural key of `BODYWEIGHT_DAY_UNIQUE_INDEX` as a reusable conjunct. Extracted at `V1-9b` B1-1b when `restoreHidden`'s holder lookup became its second caller: branch (b) asks "is this day's slot taken?" and the restore asks "who is holding it?", and two hand-written copies are two answers free to drift from the index they mirror. ⚠️ It does **not** carry `deleted_at IS NULL`; callers add it, because only a LIVE row holds a slot while a hidden one is what is being restored into it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `…/writers/checkin.ts`                       | **The check-in / life insert** (V1-5), moved out of `lib/dal/entries.ts` at `V1-9b` B1-1. 🔴 **Its reason to be here is the `writers/` row's rule applied exactly:** the behaviour under test is a REFUSAL, and a refusal needs a real database. In the DAL its only coverage was an emitted-SQL assertion — the shape of the statement, never what it does to rows — and `verify.ts` imports only `../src/*`, so no mutation patch could redden anything about it. ⚠️ It returns **four** outcomes (`created`, `replay`, `own_hidden`, `conflict`) where the DAL returned one boolean, because after B0 a hidden row **holds** its `client_id` rather than sharing it, so "did not insert" stopped having one meaning. `B1-2` maps them to copy; the DAL collapses them back to `{ created, id }` until then, so nothing above it changed in that PR. Its re-select is deliberately NOT `deleted_at`-guarded — the opposite of `reselectLiveByClientId` — because a hidden holder is the answer it exists to report.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `…/writers/movement-catalog.ts`              | **Every way a movement is resolved, and the whole of it.** `findOrCreateMovement` — household-scoped since `TEN-2b`, resolving **GLOBAL-FIRST**: the curated namespace (`household_id IS NULL`), then this household's own, then an insert into this household's own. `resolveMovementByPublicId` + `resolveSessionMovements` + `MovementNotAvailableError` — `PICK-1` PR 2's id path, ids before inserts. 🔴 **Read its docblocks before touching it** — they hold why the order is not household-first, why the two phases are ordered, and why a refusal interpolates nothing. ⚠️ The `23505` fallback this row used to describe is **gone since `TEN-2d`**; what survives it is DATA (a cross-household `entries.movement_id` that blocks household deletion), measured at zero and asserted in `db:verify`. Status: [data-inventory.md](../privacy/data-inventory.md) §4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `apps/web/lib/dal/scoped.test.ts`            | TEN-1 1d's structural guard: nothing in `lib/dal` reaches `db` unscoped, and nothing builds its own ownership predicate. Two exception lists, both enumerated with a reason, both final. Not to be confused with `packages/db/src/scope.test.ts`, which guards the scope **type**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `…/writers/program/seed-fixtures.ts`         | **`seedProgramFixtures(db, scope)`: a no-op, on purpose** (FAM-1 step 0c). It fixes the name, file and signature so two steps do not wait for each other: lane P's step 6c fills it in with the real program writers, and lane A's step 1 makes the TEST seed call it from `seed.ts`. Nothing calls it yet, and production never will. ⚠️ The caller resolves the household and passes the scope; this module must not mint one. `writers/program/` moves to lane P's own guide when step 0b creates it ([plan](../plans/fam-1-family-program.md) §6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `apps/web/lib/dal/scoped.test.ts`            | TEN-1 1d's structural guard: nothing in `lib/dal` reaches `db` unscoped, and nothing builds its own ownership predicate. Two exception lists, both enumerated with a reason, both final. Not to be confused with `packages/db/src/scope.test.ts`, which guards the scope **type**. 🔴 **It scans every directory under `lib/dal`, not only the top level** (FAM-1 step 0b): `lib/dal/program/` and `lib/dal/day/` are covered from the PR that creates them. Because neither holds a query yet, the suite plants a nested leak in a temp directory and runs the same listing and detectors over it; a declaration's id carries its relative path (`program/x.ts#name`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `packages/db/src/client.ts`                  | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Invariants
@@ -133,6 +145,28 @@ flowchart LR
    if (!entry.ok) return entry;
    ```
 
+   🔴 **The caller may pick the limiter's POLICY, never its key (FAM-1 step 0b, D23).**
+   `enterMutation(refusal, policy = MUTATION_RATE_LIMIT)` hands the policy to
+   `checkMutationLimit(user.userId, policy)`. `lib/rate-limit.ts` holds two: `MUTATION_RATE_LIMIT`
+   (120 per 5 minutes, the default) and `ROW_WRITE_RATE_LIMIT` (600 per 5 minutes), for the day
+   page's row writes, where a ✓ is one write and a parent logging two athletes' days passes 120
+   ([plan](../plans/fam-1-family-program.md) D23). **No action passes the second one yet**; the
+   first is FAM-1 step 12b.
+   - **A policy is one of the named consts, not a pair of numbers** (`MutationLimitPolicy`), and the
+     limiter is chosen by identity with the default as the fallback. So an action cannot write
+     itself a budget, and a look-alike object is counted against the tighter limit.
+   - **Each policy has its own limiter instance and its own key prefix** (`mat-plan:mutate`,
+     `mat-plan:row-write`), because Upstash fixes the window when an instance is built. They are
+     separate budgets for one person: `rate-limit.test.ts` drains each to its own number.
+   - ⚠️ **The parameter does not move the call.** The session still comes first, the limiter second,
+     both before the caller's zod parse, and the order guard below is unchanged.
+   - **Which policy an action uses is asserted twice.** The matrix's limiter row expects the
+     default unless the action's binding declares `limit`, compared **by identity**, so an action
+     that passes the looser policy without saying so in its test is red, and so is one that passes a
+     look-alike object. And `mutating-actions.test.ts` pins the list of actions that hand
+     `enterMutation` a second argument at all, read from source, so the 5× budget is granted in a
+     list a person reads and not only in a module's own test.
+
    🔴 **The in-process call is MORE load-bearing after `1d`, not less.** The proxy's gate bounce used
    to be a second, independent thing standing between a stranger and an action; it is gone, so these
    calls are the only thing there. The proxy was never the boundary anyway — CVE-2025-29927, and
@@ -147,7 +181,9 @@ flowchart LR
    household's CSV served to another. The Route-Handler guard in `pages-need-a-session.test.ts` narrowed
    with each step and must stay a single named helper, never an alternation.
 
-   📌 **`lib/rate-limit.ts`'s MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
+   📌 **`lib/rate-limit.ts` holds TWO limiters since FAM-1 step 0b** (the policy note above); the
+   second, for row writes, is built and reached by nothing until step 12b, and its docblock says so.
+   **Its MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
    V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since
    V1-14a. Both carried "ships dark" / "nothing imports this module yet" contracts for two chunks
@@ -174,19 +210,57 @@ flowchart LR
      every `'use server'` module **under `apps/web`** (not just `app/`) and asserts the call appears
      **inside each exported function**, sliced per function so one check cannot cover the module. It is
      a **source-text** guard: it proves the call is present, not that it runs before the DAL.
-   - `app/p/[profileId]/actions.test.ts` proves the ordering — `getProfileByPublicId` is not called
-     when the action refuses — and cross-checks its own list against the module on disk.
+   - The refusal matrices (`apps/web/test/action-matrix.ts`, run by each module's own test) prove
+     the ordering — `getProfileByPublicId` is not called when the action refuses — and
+     `app/p/[profileId]/actions.test.ts` cross-checks the registry against the modules on disk.
 
-   The action list has one source, `app/p/[profileId]/mutating-actions.ts`. Adding an action to
-   **any** Server Action module without adding it there turns the cross-check red; adding it there
-   without binding a function is a **type** error.
+   🔴 **The action list is one file PER MODULE since FAM-1 step 0b, and nothing composes them by
+   hand.** It was one literal (`MUTATING_ACTIONS` in `mutating-actions.ts`) with two more in
+   `actions.test.ts` (`ACTION_BINDINGS`, `VALID_BODY`), which every new action extended. Two lanes
+   adding actions edited the same three literals, and the first is owned by this guide, so each of
+   those PRs owed it. **A Server Action module now adds three files, side by side, and edits none:**
+
+   | File                    | What it holds                                                                                                                                                                |
+   | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `x-actions.ts`          | the `'use server'` module                                                                                                                                                    |
+   | `x-actions.registry.ts` | `ACTION_REGISTRY`: one `{ refusal, scope }` entry per exported action                                                                                                        |
+   | `x-actions.test.ts`     | its `vi.mock`s, a binding and a valid body per action, and the call to `describeActionMatrices` (`@/test/action-matrix`), which runs every refusal matrix over that registry |
+
+   `MUTATING_ACTIONS` still exists, as the merge of every module's registry, found by file name
+   (`apps/web/test/action-registry.ts`). `mutating-actions.ts` keeps the entry types and states this
+   rule in its docblock, which is the file to open first.
+   **What makes a missing piece red** (each was run as a probe on the PR that made the change):
+   - an exported action missing from its module's registry: the module's own matrix, and the
+     on-disk equality in `actions.test.ts`;
+   - a module with no registry beside it, or no test beside it that calls `describeActionMatrices`
+     over that registry: `actions.test.ts` → "each module carries its own registry and runs the
+     matrices over it". ⚠️ This one is a **source guard**, because one test file cannot observe that
+     another ran. The call takes the module from the test's own path and checks the registry it is
+     handed is the sibling file's object, so the presence of the call is all the guard has to show;
+   - a registry entry without a binding or a valid body: a **type** error at the call
+     (`ActionBindings`, `ValidBodies`), pinned with `@ts-expect-error` in
+     `test/action-matrix.test.ts` and so held by `pnpm typecheck`, not by `vitest run`.
+
+   ⚠️ **Three pinned lists are still edited by hand, on purpose.** A new module is added to the
+   module list in `pages-need-a-session.test.ts`; a household-addressed action to the household list
+   in `mutating-actions.test.ts`; and an action that enters with `ROW_WRITE_RATE_LIMIT` to the
+   row-policy list in the same file, which a source scan of every module is compared against (empty
+   today). Each exists so a person reads the change, each is one entry per line and sorted so two
+   PRs adding one each merge cleanly, and neither file is owned by a guide.
+   ⚠️ **Each module's matrix asserts its OWN writers.** A refusal asserts that no writer this module's
+   bindings declare ran; over the merged table it was every writer any module declared. The half
+   that went was unreachable: an action can only call what its module imports, and a writer the
+   module's test does not mock throws on first touch.
+   ⚠️ **Why per module and not one composed table:** `vi.mock` is per test file, and a module's
+   bindings name the mocked DAL functions its actions call. One composed table meant one file
+   holding every module's mocks, which is the shared literal again.
    🔴 **The cross-check reads EVERY module since WP-1, not just `actions.ts`.** It used to hard-code
    that one file, which made the whole refusal apparatus single-module: a new `app/p/*-actions.ts`
    could pass the pinned module list and the source-text guard and face **no** unauth, rate-limit,
    wrong-household or byte-identical test. Reading the scan forces every exported action into the
-   registry, where `Record<MatrixActionName, Binding>` then forces a binding and every matrix runs
-   it. ⚠️ Detecting an _unlisted module_ would not be equivalent — that is bookkeeping, and the
-   action would still be untested.
+   registry, where `ActionBindings` then forces a binding and every matrix runs it. ⚠️ Detecting an
+   _unlisted module_ would not be equivalent — that is bookkeeping, and the action would still be
+   untested.
    **Each registry entry is `{ refusal, scope }` or `{ excluded: { reason, provenBy } }`** — one
    discriminated union, not a list beside a list. `scope` is **addressing**, never `HouseholdScope`:
    `profile` means the body carries a `profileId` the wrong-household matrix can make foreign;
@@ -195,7 +269,7 @@ flowchart LR
    other; WP-1 claimed exclusivity without them and it was not true, since TypeScript's
    excess-property check on a non-discriminated union only needs each property to exist in SOME
    member** — **"a household-addressed action may never be excluded" is a type error rather than a
-   rule in prose**, and `excludedActionNames()` is pinned empty so every future
+   rule in prose**, and `excludedActionNames(MUTATING_ACTIONS)` is pinned empty so every future
    exclusion is an edit a human reads.
    **New actions go in a per-feature `*-actions.ts` module under `app/p/`**, never appended to
    `actions.ts`. The settled list of module names lives in the CRUD-1 spec's seams table — it calls
@@ -467,13 +541,26 @@ flowchart LR
 13. 🔴 **A HOUSEHOLD-addressed action has no `profileId` to make foreign, so its matrix drives a
     SCOPE MISS instead** (PROF-1 a-1w). Every mutating action before `addAthleteAction` carries an id
     the wrong-household suite can point at another household. This one carries none. The household
-    matrix in `app/p/[profileId]/actions.test.ts` therefore makes the DAL answer `no_scope` and
+    matrix (`apps/web/test/action-matrix.ts`, run for this action by `app/p/profile-actions.test.ts`)
+    therefore makes the DAL answer `no_scope` and
     asserts the refusal is **byte-identical** to the unauthenticated one, that nothing was
     revalidated, and that nothing navigated.
     ⚠️ **Its binding is a discriminated union for a reason:** `scopeMiss` is required for a household
     entry and meaningless for a profile one, because only the action's own author knows which DAL
-    function to make miss. And the suite opens with a **non-vacuity floor** — `it.each([])` passes
-    silently, so a registry filter that matches nothing would report success.
+    function to make miss. And the suite has a **non-vacuity floor** — `it.each([])` passes
+    silently, so a registry filter that matches nothing would report success. ⚠️ The floor changed
+    form at FAM-1 step 0b, when the matrices became per module: "the household matrix drives at
+    least one action" is false for a module that has none, so each module's suite asserts that every
+    action lands in exactly one addressing matrix and that the actions carrying a `scopeMiss` are
+    exactly the household rows; that the app has a household-addressed action, and which, stays
+    pinned in `mutating-actions.test.ts`.
+    🔴 **A household-addressed action that CARRIES AN ID is not covered by this matrix alone**
+    (review of FAM-1 step 0b, for step 7a). The matrix gives a household action one lever, its
+    `scopeMiss` thunk, which drives "no household resolved". `addAthleteAction` carries no id, so
+    that is its whole question. "Rename this program" or "save this workout", addressed by a program
+    id, is also `scope: 'household'`, and would pass every row while its DAL accepted another
+    household's id. Such an action owes its own foreign-id row in its module's test (the same
+    refusal bytes, no write) and a `db:verify` proof of the writer's refusal against two households.
 
 14. 🔴 **A MOVEMENT is resolved in `packages/db`, ids before inserts, and re-checked inside the
     transaction** (`PICK-1` PR 2, `writers/movement-catalog.ts`). Three parts, each load-bearing:
@@ -859,6 +946,20 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   And `verify.ts` mints **exactly two** scopes, `A_SCOPE` and
   `B_SCOPE`: a scope minted at a call site makes an assertion pass for the wrong reason, invisibly.
 
+- **⚠️ FAM-1's new `db:verify` proofs do not go in `verify.ts` (step 0c).** That file was the one
+  place every data lane would append to, so each lane has a proof module beside it:
+  `packages/db/scripts/verify/{schema,program,day,single-values}.ts` (lanes A, P, E and S; each
+  header names its owner and steps). `verify.ts` calls each once, **last**, so a lane's rows cannot
+  change what an older whole-table assertion counts, and a lane's proof cannot become the first
+  failure under an existing mutation patch. The database, `expectRejectedBy`,
+  `assertCheckCoversConst` and the catalog readers moved, bodies unchanged, to `verify/harness.ts`;
+  its `VerifyContext` docblock says what a module can rely on when it runs (**the database is not
+  pristine by then**). A read that must deep-equal a contract fixture goes through
+  `verify/normalize-fixture.ts` on both sides (public ids become labels, named timestamp fields a
+  placeholder, days untouched). A module that needs its own household mints its scope as a named
+  `const`; `src/scope.test.ts` fails an inline mint there, as it does in `verify.ts`.
+  [Plan](../plans/fam-1-family-program.md) §4 and §6.
+
 ## When the app cannot fix the data
 
 Some shapes are **deliberately not editable** (a bodyweight set, a labelled set, a non-`done` set) and
@@ -900,12 +1001,13 @@ its own PR.**
 
 ## Changing it
 
-| If you are…                  | Start here                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------- |
-| adding a mutation            | a writer in `packages/db/src/writers/` first, so `db:verify` can prove it       |
-| adding a read                | `lib/dal/` — and decide DTO shape before the query, not after                   |
-| changing a request/response  | the shared zod schema in `packages/shared` in the SAME PR (types via `z.infer`) |
-| adding a batch/external read | a Route Handler, not a Server Action — actions dispatch sequentially            |
+| If you are…                   | Start here                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| adding a mutation             | a writer in `packages/db/src/writers/` first, so `db:verify` can prove it       |
+| adding a Server Action module | `app/p/[profileId]/mutating-actions.ts`: its docblock lists the three files     |
+| adding a read                 | `lib/dal/` — and decide DTO shape before the query, not after                   |
+| changing a request/response   | the shared zod schema in `packages/shared` in the SAME PR (types via `z.infer`) |
+| adding a batch/external read  | a Route Handler, not a Server Action — actions dispatch sequentially            |
 
 Mandatory boundary tests in the same PR: **unauth → reject · wrong-owner → forbid · bad body →
 zod-reject**, plus replay → one effect. Then `pnpm verify` and `pnpm e2e:local`.

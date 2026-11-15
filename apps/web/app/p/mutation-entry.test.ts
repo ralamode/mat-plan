@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NO_PROFILE_LOG, NO_PROFILE_SAVE, RATE_LIMITED } from '@/lib/constants';
+import { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 
 import { enterMutation } from './mutation-entry';
 
@@ -13,7 +14,13 @@ const addBreadcrumb = vi.hoisted(() => vi.fn());
 vi.mock('@sentry/nextjs', () => ({ addBreadcrumb }));
 
 vi.mock('@/lib/dal/session', () => ({ sessionUserOrNull }));
-vi.mock('@/lib/rate-limit', () => ({ checkMutationLimit }));
+// 🔴 A PARTIAL mock since FAM-1 step 0b: only the check is replaced. `enterMutation` now reads
+// `MUTATION_RATE_LIMIT` for its default policy, and the cases below compare against the real consts,
+// so re-typing them into a factory here would be a second copy of the numbers under test.
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  checkMutationLimit,
+}));
 
 const USER_ID = 'user_wellShapedButNotTheFixture00';
 
@@ -63,7 +70,45 @@ describe('enterMutation — the branches the action suites cannot reach', () => 
 
   it('the limiter is keyed on the PRINCIPAL, never on anything the caller supplied', async () => {
     await enterMutation(NO_PROFILE_LOG);
-    expect(checkMutationLimit).toHaveBeenCalledWith(USER_ID);
+    // ⚠️ The second argument is new at FAM-1 step 0b, and asserting it makes this case stricter than
+    // it was: a caller that names no policy is counted against the DEFAULT one, by identity.
+    expect(checkMutationLimit).toHaveBeenCalledTimes(1);
+    expect(checkMutationLimit).toHaveBeenCalledWith(USER_ID, MUTATION_RATE_LIMIT);
+    expect(checkMutationLimit.mock.calls[0]![1]).toBe(MUTATION_RATE_LIMIT);
+  });
+
+  it('a caller that names the row-write policy is counted against it, not the default', async () => {
+    // The forwarding half of FAM-1 D23. That the two policies are separate budgets, each enforced
+    // at its own number, is proved against the real limiter in `lib/rate-limit.test.ts`; what only
+    // this file can show is that `enterMutation` hands on the policy it was given, still keyed on
+    // the principal, and does not ask the default limiter as well.
+    expect(await enterMutation(NO_PROFILE_LOG, ROW_WRITE_RATE_LIMIT)).toEqual({
+      ok: true,
+      userId: USER_ID,
+    });
+    expect(checkMutationLimit).toHaveBeenCalledTimes(1);
+    expect(checkMutationLimit).toHaveBeenCalledWith(USER_ID, ROW_WRITE_RATE_LIMIT);
+    expect(checkMutationLimit.mock.calls[0]![1]).toBe(ROW_WRITE_RATE_LIMIT);
+    expect(ROW_WRITE_RATE_LIMIT).not.toBe(MUTATION_RATE_LIMIT);
+  });
+
+  it('a policy does not move the session check: no session, no limiter call, whichever policy', async () => {
+    // The order claim again, for the new parameter: naming a looser budget must not buy an
+    // unauthenticated caller a Redis round trip.
+    sessionUserOrNull.mockResolvedValue(null);
+    expect(await enterMutation(NO_PROFILE_LOG, ROW_WRITE_RATE_LIMIT)).toEqual({
+      ok: false,
+      error: NO_PROFILE_LOG,
+    });
+    expect(checkMutationLimit).not.toHaveBeenCalled();
+  });
+
+  it('a row write over ITS limit is refused with the rate-limit copy, like any other', async () => {
+    checkMutationLimit.mockResolvedValue({ allowed: false, reason: 'limited' });
+    expect(await enterMutation(NO_PROFILE_LOG, ROW_WRITE_RATE_LIMIT)).toEqual({
+      ok: false,
+      error: RATE_LIMITED,
+    });
   });
 
   it('refuses before asking the limiter anything when there is no session', async () => {

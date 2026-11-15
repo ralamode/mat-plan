@@ -52,6 +52,15 @@ enums and units. Never re-type an allowed value.
 
 ## 3. The action (`apps/web/app/p/[profileId]/actions.ts`)
 
+**A new Server Action MODULE is three files side by side, and edits no shared table** (FAM-1 step
+0b): the `'use server'` module, its `<module>.registry.ts` (`ACTION_REGISTRY`, one
+`{ refusal, scope }` entry per exported action) and its `<module>.test.ts`, which calls
+`describeActionMatrices` from `apps/web/test/action-matrix.ts` over that registry. The rule is in the
+docblock of `apps/web/app/p/[profileId]/mutating-actions.ts`; `apps/web/app/p/profile-actions.ts` and
+the two files beside it are the shortest example. An action added to an EXISTING module gets an entry
+in that module's registry and a binding and a valid body in that module's test. Either way the
+compiler and `actions.test.ts` say what is missing.
+
 Copy the shape of `logBodyweightAction` (plain form) or `editRoutineAction` (JSON payload):
 
 1. `export async function xAction(prev: ActionState, formData: FormData)`. Only async function
@@ -88,10 +97,13 @@ A display-only field must drop its `name` (`readOnly`/`aria-disabled` fields sti
 duplicate rows; see lessons.md). The UI must never be stricter than the endpoint. UI work owes a UX
 panel (`plan-with-panel`).
 
-## 5. Tests (same PR, colocated in `actions.test.ts`)
+## 5. Tests (same PR, colocated in the module's own test)
 
-Mock `next/cache`, `next/headers` and the DAL modules with `vi.mock`, as the file already does, and
-use its `form(fields)` helper. Required describes:
+That is `actions.test.ts` for `actions.ts`, and `<module>.test.ts` for any other module. Mock
+`next/cache`, `next/headers` and the DAL modules with `vi.mock`, as the file already does, and use
+its `form(fields)` helper. **The unauth, rate-limit, wrong-household and byte-identical refusal
+rows are not written by hand**: add the action's binding and valid body to the file's
+`describeActionMatrices` call and they run. Required describes, beyond those:
 
 - `'<action> — boundary (bad body → zod-reject)'`: each invalid field returns `fieldErrors` with no DAL call.
 - `'<action> — happy path + ownership'`:
@@ -115,7 +127,8 @@ verified**, never "instrumented".
 - [ ] The input schema lives in `packages/shared`, and the action validates with it before anything else.
 - [ ] The action re-checks the session and ownership itself, is wrapped in `withServerActionInstrumentation`, and returns the `ActionState` envelope.
 - [ ] Every write carries the client's `client_id`; a replay returns success with one effect.
-- [ ] `actions.test.ts` covers bad body, unknown profile, wrong owner or stale id, replay, and the happy path with `toMatchObject`.
+- [ ] The action is in its module's registry, with a binding and a valid body in that module's `describeActionMatrices` call.
+- [ ] The module's test covers bad body, unknown profile, wrong owner or stale id, replay, and the happy path with `toMatchObject`.
 - [ ] Sentry was checked with one forced, uncommitted error, or the PR says "Sentry: not verified".
 
 ## Red flags

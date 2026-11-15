@@ -169,12 +169,18 @@ describe('MUTATION_RATE_LIMIT — sized for a kid logging, not for a brute-force
     // 🔴 **The `prefix` is asserted, not incidental.** It is the limiter's keyspace, and `1d` deleted
     // the sibling that owned `'mat-plan'` — so an edit that drops the `:mutate` suffix would silently
     // move every mutation counter into a namespace a future policy may claim.
-    // ⚠️ `toEqual` on the whole array, so a SECOND `new Ratelimit(...)` is a failure too: this is the
+    // ⚠️ `toEqual` on the whole array, so an EXTRA `new Ratelimit(...)` is a failure too: this is the
     // assertion that notices a limiter nobody meant to build.
-    const { MUTATION_RATE_LIMIT } = await loadWith({
+    // 🔴 **Edited at FAM-1 step 0b, which is this assertion doing its job.** It held one entry from
+    // `1d`; the row-write limiter is the second, meant, and named here with its own const and its
+    // own prefix. A third instance, or either one built from the other's policy, is still red.
+    const { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({
       env: { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' },
     });
-    expect(built).toEqual([{ ...MUTATION_RATE_LIMIT, prefix: 'mat-plan:mutate' }]);
+    expect(built).toEqual([
+      { ...MUTATION_RATE_LIMIT, prefix: 'mat-plan:mutate' },
+      { ...ROW_WRITE_RATE_LIMIT, prefix: 'mat-plan:row-write' },
+    ]);
   });
 
   it('owns its key shape, so no call site builds an identifier by hand', async () => {
@@ -209,5 +215,155 @@ describe('MUTATION_RATE_LIMIT — sized for a kid logging, not for a brute-force
       allowed: true,
       reason: 'limiter-error',
     });
+  });
+});
+
+/**
+ * FAM-1 step 0b (D23): the second policy. On the day page a ✓ is one write, so a parent logging two
+ * athletes' days is about 100 writes in a few minutes, and the default 120 would refuse them
+ * mid-logging. Row writes therefore count against their own budget.
+ *
+ * ⚠️ **No action passes this policy yet** (the first is step 12b), so these cases are the only thing
+ * that exercises the second limiter at all. They restore the shape `1d` had to narrow when it left
+ * one limiter: "drain one and the other is untouched" is what proves two INSTANCES rather than two
+ * consts over one instance.
+ */
+describe('ROW_WRITE_RATE_LIMIT — row writes have their own budget (FAM-1 D23)', () => {
+  const CONFIGURED = { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' };
+
+  it('is the plan’s number, over the same window as the default, and looser than it', async () => {
+    const { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({ env: {} });
+    // The contract pin: the literal belongs on the assertion side exactly once (AGENTS.md).
+    expect(ROW_WRITE_RATE_LIMIT).toEqual({ attempts: 600, window: '5 m' });
+    expect(ROW_WRITE_RATE_LIMIT.window).toBe(MUTATION_RATE_LIMIT.window);
+    expect(ROW_WRITE_RATE_LIMIT.attempts).toBeGreaterThan(MUTATION_RATE_LIMIT.attempts);
+  });
+
+  it('🔴 a caller passing the row policy is limited at ITS number, not the default’s', async () => {
+    const { checkMutationLimit, MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({
+      env: CONFIGURED,
+    });
+
+    // Past the default's limit and still allowed: this is the request the default would refuse.
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts + 1; n += 1) {
+      expect((await checkMutationLimit('user_abc', ROW_WRITE_RATE_LIMIT)).allowed).toBe(true);
+    }
+    // …and refused at exactly its own number, so it is a limit and not an exemption.
+    for (let n = MUTATION_RATE_LIMIT.attempts + 1; n < ROW_WRITE_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkMutationLimit('user_abc', ROW_WRITE_RATE_LIMIT)).allowed).toBe(true);
+    }
+    expect(await checkMutationLimit('user_abc', ROW_WRITE_RATE_LIMIT)).toEqual({
+      allowed: false,
+      reason: 'limited',
+    });
+  });
+
+  it('🔴 the two budgets are separate: draining either leaves the other untouched', async () => {
+    const { checkMutationLimit, MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({
+      env: CONFIGURED,
+    });
+
+    for (let n = 0; n < ROW_WRITE_RATE_LIMIT.attempts; n += 1) {
+      await checkMutationLimit('user_abc', ROW_WRITE_RATE_LIMIT);
+    }
+    expect((await checkMutationLimit('user_abc', ROW_WRITE_RATE_LIMIT)).allowed).toBe(false);
+    // A drained row budget has spent nothing of the default one: all 120 are still there…
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkMutationLimit('user_abc')).allowed).toBe(true);
+    }
+    // …and the default still refuses at its own number, with the row budget already exhausted.
+    expect((await checkMutationLimit('user_abc')).allowed).toBe(false);
+  });
+
+  it('the default is what a call without a policy gets, and what the default const names', async () => {
+    const seen: string[] = [];
+    const { checkMutationLimit, MUTATION_RATE_LIMIT } = await loadWith({ env: CONFIGURED });
+    // Both forms drain the SAME budget: 60 of one and 60 of the other reach the default's limit.
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts / 2; n += 1) {
+      seen.push((await checkMutationLimit('user_abc')).reason);
+      seen.push((await checkMutationLimit('user_abc', MUTATION_RATE_LIMIT)).reason);
+    }
+    expect(new Set(seen)).toEqual(new Set(['ok']));
+    expect((await checkMutationLimit('user_abc')).allowed).toBe(false);
+  });
+
+  it('🔴 a look-alike policy object buys nothing: it is counted against the default', async () => {
+    // Selection is by identity. An object with the row policy's numbers that is not the exported
+    // const (built at a call site, pushed past the type) falls to the tighter limiter.
+    const { checkMutationLimit, MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({
+      env: CONFIGURED,
+    });
+    const lookAlike = { ...ROW_WRITE_RATE_LIMIT };
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkMutationLimit('user_abc', lookAlike)).allowed).toBe(true);
+    }
+    expect((await checkMutationLimit('user_abc', lookAlike)).allowed).toBe(false);
+  });
+
+  it('keys the row limiter on the bare user id too, in its own keyspace', async () => {
+    const seen: string[] = [];
+    const { checkMutationLimit, ROW_WRITE_RATE_LIMIT } = await loadWith({
+      env: CONFIGURED,
+      limit: async (id: string) => {
+        seen.push(id);
+        return { success: true };
+      },
+    });
+    await checkMutationLimit('user_abc', ROW_WRITE_RATE_LIMIT);
+    // The keyspace is the instance's prefix (pinned above as `mat-plan:row-write`); the identifier
+    // is the principal and nothing else, exactly as for the default.
+    expect(seen).toEqual(['user_abc']);
+  });
+
+  it('fails OPEN like the default: unconfigured, or a limiter that throws', async () => {
+    const off = await loadWith({ env: {} });
+    expect(await off.checkMutationLimit('user_abc', off.ROW_WRITE_RATE_LIMIT)).toEqual({
+      allowed: true,
+      reason: 'unconfigured',
+    });
+
+    const broken = await loadWith({
+      env: CONFIGURED,
+      limit: async () => {
+        throw new Error('redis is down');
+      },
+    });
+    expect(await broken.checkMutationLimit('user_abc', broken.ROW_WRITE_RATE_LIMIT)).toEqual({
+      allowed: true,
+      reason: 'limiter-error',
+    });
+  });
+
+  /**
+   * The same claim one layer up, through the real `enterMutation` and the real limiter module (only
+   * Upstash, the env and the session are replaced). `app/p/mutation-entry.test.ts` mocks the check,
+   * so it can show the policy is forwarded but not that forwarding it changes who gets refused.
+   */
+  it('🔴 through enterMutation: the row policy admits the request the default refuses', async () => {
+    const { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({ env: CONFIGURED });
+    vi.doMock('@sentry/nextjs', () => ({ addBreadcrumb: vi.fn() }));
+    vi.doMock('@/lib/dal/session', () => ({
+      sessionUserOrNull: async () => ({ userId: 'user_abc' }),
+    }));
+    const { enterMutation } = await import('@/app/p/mutation-entry');
+    const { RATE_LIMITED } = await import('@/lib/constants');
+    const entered = { ok: true, userId: 'user_abc' };
+    const limited = { ok: false, error: RATE_LIMITED };
+
+    try {
+      // A default caller is refused on request 121…
+      for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) {
+        expect(await enterMutation('refused')).toEqual(entered);
+      }
+      expect(await enterMutation('refused')).toEqual(limited);
+      // …while a row-write caller, for the same person, is not, until its own 601st.
+      for (let n = 0; n < ROW_WRITE_RATE_LIMIT.attempts; n += 1) {
+        expect(await enterMutation('refused', ROW_WRITE_RATE_LIMIT)).toEqual(entered);
+      }
+      expect(await enterMutation('refused', ROW_WRITE_RATE_LIMIT)).toEqual(limited);
+    } finally {
+      vi.doUnmock('@sentry/nextjs');
+      vi.doUnmock('@/lib/dal/session');
+    }
   });
 });

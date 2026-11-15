@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { keyBySelf } from './enums';
 import { hasALetter, hasCommaOrLineBreak } from './text';
 
 /**
@@ -24,6 +25,46 @@ export const MOVEMENT_PATTERNS = [
 export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number];
 
 export const movementPatternSchema = z.enum(MOVEMENT_PATTERNS);
+
+/**
+ * How an item is tracked: which fields its prescription has and what one logged row holds
+ * ([FAM-1 plan](../../../docs/plans/fam-1-family-program.md) D1, and §2 for each type's fields).
+ *
+ * On the ITEM (`movements.tracking_type`), never on the prescription, so an item's history means one
+ * thing: the same item cannot log as reps in one workout and as seconds in another.
+ *
+ * ⚠️ **No column or CHECK exists yet.** FAM-1 step 0a adds the vocabulary so the lanes can build
+ * against it; step 3 adds `movements.tracking_type` and pins its CHECK to this array with
+ * `assertCheckCoversConst`. Until then nothing stores a type, so changing a member here is free. After
+ * step 3 it is a migration.
+ */
+export const TRACKING_TYPES = [
+  'check',
+  'count',
+  'reps',
+  'weight_reps',
+  'duration',
+  'time_sets',
+  'distance',
+] as const;
+
+export type TrackingType = (typeof TRACKING_TYPES)[number];
+
+export const trackingTypeSchema = z.enum(TRACKING_TYPES);
+
+/** Branch on a NAMED member (`TRACKING_TYPE.check`), never a bare string (constants convention). */
+export const TRACKING_TYPE = keyBySelf(TRACKING_TYPES);
+
+/** What the item picker and the workout editor call each type (FAM-1 plan §2, the accepted prototype). */
+export const TRACKING_TYPE_LABELS: Record<TrackingType, string> = {
+  check: 'Check',
+  count: 'Count',
+  reps: 'Reps',
+  weight_reps: 'Weight × reps',
+  duration: 'Duration',
+  time_sets: 'Time per set',
+  distance: 'Distance',
+};
 
 /**
  * Derive a `movements.slug` from a free-text movement name — the v0→v1 bridge

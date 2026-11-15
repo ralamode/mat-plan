@@ -4,7 +4,11 @@ import * as Sentry from '@sentry/nextjs';
 
 import { RATE_LIMITED } from '@/lib/constants';
 import { sessionUserOrNull } from '@/lib/dal/session';
-import { checkMutationLimit } from '@/lib/rate-limit';
+import {
+  checkMutationLimit,
+  MUTATION_RATE_LIMIT,
+  type MutationLimitPolicy,
+} from '@/lib/rate-limit';
 
 // ⚠️ `action-state.ts` did NOT move with this file (WP-1): it is imported by the route's form
 // components as well as by actions, so it stays beside them. The alias avoids spelling the dynamic
@@ -40,6 +44,13 @@ export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
  *  2. the **LIMITER**, keyed on the principal — so it comes after the session, and callers run this
  *     BEFORE their zod parse and `getProfileByPublicId`. An unauthenticated flood then does zero
  *     Redis and zero DB work, and the key is never caller-supplied.
+ *     **The caller picks the POLICY, never the key** (FAM-1 step 0b, D23): `policy` defaults to
+ *     `MUTATION_RATE_LIMIT`, and a row write on the day page will pass `ROW_WRITE_RATE_LIMIT`. It is
+ *     one of the named consts in `lib/rate-limit.ts`, not a pair of numbers, so an action cannot
+ *     write itself a budget. ⚠️ The parameter changes WHICH budget is counted against; it does not
+ *     move the call, so the order above and its source guard are exactly as they were. No action
+ *     passes one yet, and the action matrix (`test/action-matrix.ts`) pins that: every action's
+ *     limiter call carries the default unless its binding declares otherwise.
  *
  * ⚠️ **Why this is ONE function and not seven copies.** It was seven, byte-identical but for the
  * refusal string — the shape V1-24 had already collapsed once in this folder for the Sentry wrapper.
@@ -60,12 +71,17 @@ export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
  * and order — not the whole claim.
  *
  * @param refusal the copy for "no session" — never distinguishable from any other refusal to a caller.
+ * @param policy the rate-limit budget this mutation counts against; the default for everything
+ *   that is not a day-page row write.
  */
-export async function enterMutation(refusal: string): Promise<MutationEntry> {
+export async function enterMutation(
+  refusal: string,
+  policy: MutationLimitPolicy = MUTATION_RATE_LIMIT,
+): Promise<MutationEntry> {
   const user = await sessionUserOrNull();
   if (!user) return { ok: false, error: refusal };
 
-  const limit = await checkMutationLimit(user.userId);
+  const limit = await checkMutationLimit(user.userId, policy);
   if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
   if (limit.reason === 'limiter-error') {
     // A permanently-dead fail-open limiter is otherwise completely silent.
