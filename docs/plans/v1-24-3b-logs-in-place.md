@@ -12,6 +12,12 @@
 > **Branches:** 3b-0 `db/v1-24-3b-0-practice-one-per-day` · 3b-page `feat/v1-24-3b-page-old-forms-leave` ·
 > 3b-bw `feat/v1-24-3b-bw-check-to-log` · 3b-life `feat/v1-24-3b-life-practice-minutes`.
 
+> ⚠️ **Scheduling, 2026-11-15:** this plan's four PRs run as **lane S** of the
+> [FAM-1 plan](./fam-1-family-program.md) (§5 "Lane S", §6, §7). Where this plan says a PR waits on
+> nothing or that either order works, the gates and shared-file order there win: 3b-page after
+> FAM-1's 0b; 3b-0 in the one migration queue, after FAM-1's step 5; database proofs in
+> `verify/single-values.ts`; a day after today is read-only too (FAM-1 D32).
+
 ## Why this plan changed (2026-11-15)
 
 The first version (2026-11-13, panelled, never merged) kept the old Check-ins and Strength forms and
@@ -48,7 +54,7 @@ lb · 7:02 AM` and **Change**. Change opens the field with **Cancel** and **Save
    `✓ Wrestling practice · 45 min` and Change. **No Wake on any day.**
 3. **Clear this day…** at the foot of the page when anything is logged (V1-9b B2).
 
-FAM-1 step 12 later adds the program's workouts between Bodyweight and Life.
+FAM-1 step 12c later adds the program's workouts **after** Life, as the prototype shows _(corrected 2026-11-15; was "between Bodyweight and Life")_.
 
 ## Staging
 
@@ -75,7 +81,7 @@ the new page until slice 3, so nobody loses a habit _(maintainer, 2026-11-15, as
 
 - **The removed components stay in the tree, unmounted**, until FAM-1 13 and 13b reuse or delete them
   (the PICK-1 PR 3 precedent, `docs/features/movement-picker.md`). [tech-debt.md](../tech-debt.md) gets
-  one row naming them, with **FAM-1 13b as its expiry**. PICK-1 PR 4, which mounts into the strength
+  one row naming them, with **FAM-1 12f as its expiry** _(corrected 2026-11-15; was 13b)_. PICK-1 PR 4, which mounts into the strength
   form, waits for FAM-1 13b's surface instead.
 - **Their Server Actions stay**, tested in Vitest, though nothing on the page posts to them. Wake is the
   exception (D3), because its section is the one this plan rebuilds.
@@ -181,7 +187,7 @@ re-pointed. Each deletion is named in the PR with the coverage that remains.
 | `apps/web/lib/constants.ts`                           | EDIT     | `CLOSED_DAY_NOTICE`.                             |
 | `apps/web/e2e/*`                                      | EDIT/DEL | The table.                                       |
 | `docs/features/strength-logging.md`, `programming.md` | EDIT     | D1.                                              |
-| `docs/tech-debt.md`                                   | EDIT     | The unmounted components, expiring at FAM-1 13b. |
+| `docs/tech-debt.md`                                   | EDIT     | The unmounted components, expiring at FAM-1 12f. |
 
 **3b-bw**
 
