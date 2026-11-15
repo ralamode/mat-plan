@@ -39,6 +39,8 @@ async function main(): Promise<void> {
     route,
     baseUrl,
     colorScheme,
+    // DX-14 item 2, threaded here for the same one-path reason as `--theme`.
+    allowConsole: argv.includes('--allow-console'),
     ...(colorScheme === 'dark' ? { name: `${routeSlug(route)}-dark` } : {}),
   });
 }

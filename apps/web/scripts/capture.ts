@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 
-import { chromium, type Page } from '@playwright/test';
+import { chromium, type ConsoleMessage, type Page } from '@playwright/test';
 
 import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
@@ -30,6 +30,34 @@ const VIEWPORTS = [
   { suffix: 'tablet', width: 820, height: 1180, touch: true }, // ~iPad Air portrait
   { suffix: 'desktop', width: 1280, height: 900, touch: false },
 ] as const;
+
+/**
+ * The console levels that fail a capture (DX-14 item 2). A hydration mismatch, a CSP refusal and a
+ * React key warning all surface here and nowhere else: the PNG looks fine, so a reviewer approving
+ * from it cannot see them. `pageerror` (an uncaught exception) is collected alongside.
+ */
+const FAILING_CONSOLE_TYPES: ReadonlySet<ReturnType<ConsoleMessage['type']>> = new Set([
+  'error',
+  'warning',
+]);
+
+/** One console problem, tagged with the viewport it fired at. */
+export type ConsoleProblem = { viewport: string; type: string; text: string };
+
+/**
+ * The failure message for a capture whose console was not clean, or `null` when it was. Pure, so
+ * the wording is tested without a browser.
+ */
+export function consoleFailure(route: string, problems: readonly ConsoleProblem[]): string | null {
+  if (problems.length === 0) return null;
+  const lines = problems.map((p) => `  [${p.viewport}] ${p.type}: ${p.text}`);
+  return (
+    `capture of ${route} logged ${problems.length} console error(s)/warning(s):\n` +
+    `${lines.join('\n')}\n` +
+    'The PNGs were written, but a screen that warns is not evidence. Fix the cause; pass ' +
+    '--allow-console only for a state that is meant to error, and say so in the PR.'
+  );
+}
 
 /** Slugify a route into a stable screenshot filename (matches the pre-refactor script). */
 export function routeSlug(route: string): string {
@@ -77,12 +105,18 @@ export async function captureScreenshot(opts: {
    * this existed there was no way to produce the dark half of that evidence at all.
    */
   colorScheme?: 'light' | 'dark';
+  /**
+   * Don't fail on console errors/warnings; print them instead. For a state that is MEANT to error
+   * (an `error.tsx` boundary). Default: any error or warning fails the run, after the shots are written.
+   */
+  allowConsole?: boolean;
 }): Promise<string[]> {
   const name = opts.name ?? routeSlug(opts.route);
   await mkdir('.screenshots', { recursive: true });
 
   const browser = await chromium.launch();
   const paths: string[] = [];
+  const problems: ConsoleProblem[] = [];
   try {
     for (const vp of VIEWPORTS) {
       const context = await browser.newContext({
@@ -115,6 +149,21 @@ export async function captureScreenshot(opts: {
         ]);
       }
       const page = await context.newPage();
+      // Listen BEFORE navigating: a hydration warning fires during the first load.
+      page.on('console', (msg) => {
+        if (FAILING_CONSOLE_TYPES.has(msg.type())) {
+          // `location().url` is the only place a 404 names WHAT failed to load.
+          const at = msg.location().url;
+          problems.push({
+            viewport: vp.suffix,
+            type: msg.type(),
+            text: at ? `${msg.text()} (at ${at})` : msg.text(),
+          });
+        }
+      });
+      page.on('pageerror', (err) => {
+        problems.push({ viewport: vp.suffix, type: 'pageerror', text: err.message });
+      });
       // ⚠️ No per-route branch any more. The plan said to swap `isUngatedPath` for `isPublicPath`,
       // but once `gateLogin` goes the conditional has no body: there is nothing to do differently
       // for a public route, because nothing logs in. Every route is navigated the same way, and
@@ -127,6 +176,9 @@ export async function captureScreenshot(opts: {
       console.log(`✓ ${vp.suffix} (${vp.width}px): ${path}`);
       await context.close();
     }
+    const failure = consoleFailure(opts.route, problems);
+    if (failure && opts.allowConsole) console.warn(`⚠️  --allow-console: ${failure}`);
+    else if (failure) throw new Error(failure);
     return paths;
   } finally {
     await browser.close();
