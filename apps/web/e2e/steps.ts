@@ -1,5 +1,6 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
 import {
+  addDays,
   CATALOG_METRIC_DEFINITION_SEED_ROWS,
   DEFAULT_BODYWEIGHT_UNIT,
   SEED_METRIC_KEYS,
@@ -13,7 +14,7 @@ import {
   SAVED_STATE_COPY,
   STRENGTH_COPY,
 } from '../lib/constants';
-import { addDays, localDayIso } from '../lib/date';
+import { localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
 
 /**
