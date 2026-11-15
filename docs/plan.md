@@ -1478,7 +1478,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        `keep-mergeable` and `ship-pr` (now `keep-mergeable`'s, by the maintainer's call), and four
        descriptions over 500 characters.
      - **5b:** an exit checklist for every skill (none of 14 has one).
-  6. **`write-spec` additions:**
+  6. ✅ **`write-spec` additions** ([skill](../.claude/skills/write-spec/SKILL.md), 2026-11-14):
      - an "assumptions I'm making" block;
      - a **delta spec** for changing a shipped spec;
      - a **launch and rollback** section for milestone specs, which the club pilot needs.
@@ -1507,7 +1507,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        `write-path.md`'s `packages/db/src/writers/` claims every new subdirectory too, so a guide per
        lane ([the rule](./features/README.md#guides-for-work-run-in-lanes)) relieves nothing. A gate
        change, so it ships with a self-test case.
-     - **`write-spec`** asks for contract tests on both sides of each chunk-0 shape, against the same
+     - ✅ **`write-spec`** (2026-11-14) asks for contract tests on both sides of each chunk-0 shape, against the same
        named fixture, and for a pending-column field when a lane needs a column chunk 0 missed.
 
   **Considered and skipped,** each with its reason, so nobody re-evaluates them:
