@@ -60,14 +60,12 @@ flowchart LR
   P1a --> P1b[2 · PROF-1 b archive + settings]
   P1b --> P1c[2b · PROF-1 a-1 add · a-1d duplicate warning]
   B0[3 · V1-9b-0 freed client_id] --> B1
-  AU --> B1[4 · V1-9b-1 delete + restore]
+  AU --> B1[4 · V1-9b-1 restore · B1-3 cut]
   E1e --> B1
-  E3b -->|B1-3, the in-place delete| B1
-  B1 --> B2[5 · V1-9b-2 clear a day]
+  B1 --> B2[5 · V1-9b-2 clear a day: B2-0 event kind, B2]
   E1d[V1-24 1d · index ✅] --> E1e[V1-24 1e · arbiter ✅]
-  E1e --> E2[V1-24 2 · check-ins]
-  E2 --> E3a[V1-24 3a · strength receipt ✅]
-  E3a --> E3b[V1-24 3b · list removed]
+  E1e --> E3a[V1-24 3a · strength receipt ✅]
+  E3a --> E3b[V1-24 3b · new day page: bodyweight + practice]
   V22[PROG-1 · V1-22 chunk 2 ✅] --> K1
   U0[6a · U0 sheet ✅] --> K1[6b · PICK-1 picker]
   K1 --> M1[7 · MOV-1 rename]
@@ -79,6 +77,12 @@ flowchart LR
   E3b --> X
   M1 --> X
 ```
+
+**Re-scoped 2026-11-15** (the maintainer, against Beta 0's accepted prototype): V1-24 **2 is not built**
+(2a cut, 2b is FAM-1 13b), and **3b** becomes the new day page, Bodyweight and practice entered once and
+then changed ([3b plan](../plans/v1-24-3b-logs-in-place.md)). V1-9b **B1-3 is cut** and **B2** gains a
+migration for the event kind ([V1-9b Amendment](../plans/v1-9b-delete-and-restore.md#amendment-2026-11-15-b1-3-is-cut-b2-clears-the-new-day-page)).
+Where the text below names V1-24 2 or B1-3, this note supersedes it.
 
 **This is the canonical chart.** Every PR in this milestone embeds it with its own step marked
 (AGENTS.md → "Milestone PRs also embed a progress chart"). If a PR's position disagrees with it, the
