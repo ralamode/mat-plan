@@ -96,6 +96,53 @@ git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: plain + readme' >/dev/n
 case_ "no-frontmatter and README files are not guides" "  - src/free/" src/owned/a.ts n 0 '1 guide(s) consistent'
 git -C "$tmp" checkout -q main && git -C "$tmp" rm -q docs/features/plain.md docs/features/README.md && git -C "$tmp" commit -qm 'chore: drop' >/dev/null
 
+# ── Most specific owner (DX-14 item 9): two guides, so a case can tell the new rule from the old ──
+# g2_case <name> <broad-owns> <narrow-owns> <setup-on-branch> <edit: broad|narrow|none> <exit> <text> [absent-text]
+g2_case() {
+  git -C "$tmp" checkout -q main
+  rm -f "$tmp/docs/features/"*.md && mkdir -p "$tmp/src/lane" "$tmp/src/other"
+  echo l >"$tmp/src/lane/a.ts"; echo x >"$tmp/src/x.ts"; echo o >"$tmp/src/old.ts"; echo z >"$tmp/src/other/b.ts"
+  { printf -- '---\nfeature: Broad\nowns:\n%s\n---\n' "$2"; } >"$tmp/docs/features/broad.md"
+  { printf -- '---\nfeature: Narrow\nowns:\n%s\n---\n' "$3"; } >"$tmp/docs/features/narrow.md"
+  git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: two guides' >/dev/null 2>&1
+  git -C "$tmp" checkout -q -B "probe/$RANDOM"
+  (cd "$tmp" && eval "$4")
+  [ "$5" != none ] && printf '\nedited\n' >>"$tmp/docs/features/$5.md"
+  git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: change' >/dev/null 2>&1
+  out="$(cd "$tmp" && node "$guard" main 2>&1)"; code=$?
+  if [ "$code" -ne "$6" ] || ! grep -qF "$7" <<<"$out" || { [ -n "${8:-}" ] && grep -qF "$8" <<<"$out"; }; then
+    printf '✗ %s: want exit %s + "%s"%s, got exit %s\n%s\n' "$1" "$6" "$7" "${8:+, without \"$8\"}" "$code" "$out"
+    fails=$((fails + 1))
+  else printf '✓ %s\n' "$1"; fi
+}
+g2_case "owner: a narrower directory relieves the broader one" '  - src/' '  - src/lane/' \
+  'echo 1 >>src/lane/a.ts' narrow 0 'consistent with the diff'
+g2_case "owner: the narrower guide is still owed"               '  - src/' '  - src/lane/' \
+  'echo 1 >>src/lane/a.ts' none 1 'docs/features/narrow.md (Narrow) was not updated' 'docs/features/broad.md (Broad) was not updated'
+g2_case "owner: an exact entry adds, never displaces"            '  - src/' '  - src/x.ts' \
+  'echo 1 >>src/x.ts' narrow 1 'docs/features/broad.md (Broad) was not updated'
+g2_case "owner: the same directory in two guides owes both"      '  - src/' '  - src/' \
+  'echo 1 >>src/x.ts' broad 1 'docs/features/narrow.md (Narrow) was not updated'
+g2_case "owner: a rename into the narrow dir still owes the broad" '  - src/' '  - src/lane/' \
+  'git mv src/old.ts src/lane/old.ts' narrow 1 'docs/features/broad.md (Broad) was not updated'
+g2_case "owner: a directory without its / is refused"             '  - src/' '  - src/lane' \
+  'echo 1 >>src/x.ts' broad 1 "lists the directory 'src/lane' without a trailing '/'"
+# Lanes use the same rule: under one broad guide two lanes collide; each under its own lane guide, not.
+git -C "$tmp" checkout -q main && rm -f "$tmp/docs/features/"*.md && mkdir -p "$tmp/docs/milestones"
+printf -- '---\nfeature: Broad\nowns:\n  - src/\n---\n' >"$tmp/docs/features/broad.md"
+printf -- '---\nlane-a:\n  - src/lane/\nlane-b:\n  - src/other/\n---\n' >"$tmp/docs/milestones/m.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: lanes, broad only' >/dev/null 2>&1
+out="$(cd "$tmp" && node "$guard" main 2>&1)"; code=$?
+[ "$code" -eq 1 ] && grep -qF 'both reach docs/features/broad.md' <<<"$out" && printf '✓ %s\n' "owner: lanes under one broad guide collide" \
+  || { printf '✗ owner: lanes under one broad guide collide: exit %s\n%s\n' "$code" "$out"; fails=$((fails + 1)); }
+printf -- '---\nfeature: A\nowns:\n  - src/lane/\n---\n' >"$tmp/docs/features/lane-a.md"
+printf -- '---\nfeature: B\nowns:\n  - src/other/\n---\n' >"$tmp/docs/features/lane-b.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: lane guides' >/dev/null 2>&1
+out="$(cd "$tmp" && node "$guard" main 2>&1)"; code=$?
+[ "$code" -eq 0 ] && grep -qF '2 lane(s) in 1 document(s)' <<<"$out" && printf '✓ %s\n' "owner: each lane under its own guide passes" \
+  || { printf '✗ owner: each lane under its own guide passes: exit %s\n%s\n' "$code" "$out"; fails=$((fails + 1)); }
+git -C "$tmp" checkout -q main && rm -rf "$tmp/docs/milestones" "$tmp/docs/features/broad.md" "$tmp/docs/features/narrow.md" "$tmp/docs/features/lane-a.md" "$tmp/docs/features/lane-b.md" && git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: reset' >/dev/null 2>&1
+
 # ── Lanes (DX-14 item 8). Whole-tree, so each case commits on main and runs with no diff. ─────────
 # lane_case <name> <dir> <frontmatter-body> <guide-owns> <want-exit> <want-text>
 lane_case() {
