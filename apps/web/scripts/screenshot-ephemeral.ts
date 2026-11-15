@@ -43,6 +43,8 @@ import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   DEFAULT_TIME_ZONE,
+  LIFE_COPY,
+  LIFE_LOGGED_ID,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
@@ -410,6 +412,8 @@ const STATES = {
   // A closed day WITH a weight (the receipt, recovery line, no form) and one WITHOUT
   // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
   'bodyweight-closed': seedClosedDays,
+  // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
+  'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
@@ -616,6 +620,13 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'duplicate-kinds-differ': warnOnDuplicate(SEED_PROFILE_3_NAME, PROFILE_KIND.adult),
   'duplicate-at-cap': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
+  'practice-logged': async (page) => {
+    // The three widths share one database: only the first finds the button; the others see the row.
+    const life = page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
+    const button = life.getByRole('button', { name: 'Wrestling practice', exact: true });
+    if ((await button.count()) > 0) await button.click();
+    await life.locator(`#${LIFE_LOGGED_ID}`).waitFor();
+  },
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });
