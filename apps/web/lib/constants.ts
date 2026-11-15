@@ -550,6 +550,16 @@ export const ADD_ATHLETE_COPY = {
 export const ALL_ATHLETES_LINK = '← All athletes';
 
 /**
+ * UI-6 — the app's own 404 (`app/not-found.tsx`). One message for an unknown URL AND for an athlete
+ * id the household can't see, so the page never confirms that another household's athlete exists.
+ * No "check the address": every URL past `/p` is a UUIDv7, which nobody types.
+ */
+export const NOT_FOUND_COPY = {
+  heading: 'Page not found',
+  body: 'This page doesn’t exist, or you don’t have access to it.',
+} as const;
+
+/**
  * The page shell every routed screen's `<main>` wears (PROF-1 a-1u).
  *
  * 🔴 **Extracted at the NINTH copy, which is the trigger, not a tidy-up.** It was written out

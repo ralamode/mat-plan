@@ -92,6 +92,12 @@ const ROUTES = [
   // irreversible choice in the app, which is the worst place for a label a screen reader cannot
   // associate with its control.
   { name: 'add athlete', path: ADD_ATHLETE_PATH },
+  // UI-6. The app's own 404 replaced Next's built-in one, which the CSP left unstyled. It is the page
+  // a stale link or a mistyped id lands on, and it carries the footer, so its landmark count is
+  // checked with the rest.
+  // Its one control is a LINK, which the tap-target scan excludes (SC 2.5.8's inline exception), so
+  // it opts out of the no-controls guard; `log-bodyweight.spec.ts` measures that CTA directly.
+  { name: 'not found', path: `${APP_HOME_PATH}/does-not-exist`, expectControls: false },
   // UI-4: the token-set preview. It is in the scan because it is where the four CANDIDATE palettes
   // get their contrast audit — a bad candidate reddens CI before a human spends a review on it. It
   // leaves with the harness when UI-3 picks a set.
@@ -212,7 +218,9 @@ for (const route of ROUTES) {
     // Every route now has at least one real control: UI-4 put the theme switch on the picker, which
     // used to be the one page with only link-cards. Keeping the opt-out would have left the
     // "selector matched nothing" guard switched off on a page that can now trip it.
-    await expectTapTargets(page, route.name);
+    await expectTapTargets(page, route.name, {
+      expectControls: 'expectControls' in route ? route.expectControls : undefined,
+    });
   });
 }
 
@@ -1186,7 +1194,15 @@ test.describe('UI-5 · the app shell at 1280px', () => {
    * landmarks or none.
    */
   test('the public routes render no rail, and exactly one footer', async ({ page }) => {
-    for (const path of ['/', PRIVACY_PATH, SIGN_IN_PATH]) {
+    // UI-6: the 404, both as an unmatched URL and as `notFound()` from inside `/p`, renders outside
+    // `AppShell` with its own footer.
+    for (const path of [
+      '/',
+      PRIVACY_PATH,
+      SIGN_IN_PATH,
+      '/does-not-exist',
+      `${APP_HOME_PATH}/does-not-exist`,
+    ]) {
       await page.goto(path, { waitUntil: 'networkidle' });
       await expect(rail(page), `${path} has no nav rail`).toHaveCount(0);
       await expect(page.getByRole('main'), `${path} has one main`).toHaveCount(1);

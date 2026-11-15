@@ -580,6 +580,16 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Next.js 16
 
+- **A CSP "Applying inline style violates … style-src" on a page that looks fine, intermittent, and
+  matching nothing in our bundle, is Next's built-in 404 fallback.** → Its `HTTPAccessErrorFallback`
+  styles itself with an un-nonced `<style>` (hash **`sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY=`**)
+  and inline `style` attributes, which `style-src 'self' 'nonce-…'` refuses. It can surface on a
+  page that never 404s, by way of a client-side fetch of a route that does. Found 2026-11-14/15 after
+  38 instrumented captures turned up nothing; the hash matched on the first e2e of a real 404.
+  **Fix:** `app/not-found.tsx` (UI-6), Tailwind classes only. **Diagnose:** grep the console for
+  that hash first. A capture probe that wraps DOM methods (`appendChild`) can manufacture CSP errors
+  of its own: re-run without it before believing what it found.
+
 - **The access gate was bypassable by any request that carried a prefetch header.** → The proxy
   matcher's `missing: [prefetch headers]` decides whether the proxy RUNS AT ALL, and the header is
   client-controlled. A local probe saw a 400 from Next and called it safe; a Vercel preview served the

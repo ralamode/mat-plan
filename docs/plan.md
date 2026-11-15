@@ -895,7 +895,8 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   - **Still open, and now `PICK-1` PR 4's to land:** the **context rail** — the third grid track,
     with the movement picker as its first real consumer.
 
-- **UI-6 — a 404 page that renders under the production CSP.** _(maintainer, 2026-11-15.)_ The app
+- ✅ **UI-6 — a 404 page that renders under the production CSP.** _(maintainer, 2026-11-15; shipped
+  2026-11-15.)_ The app
   has no `app/not-found.tsx`, so every unknown URL gets Next's built-in fallback
   (`HTTPAccessErrorFallback` in `next/dist/client/components/http-access-fallback/`). It is styled
   with inline `style` attributes and an un-nonced `<style>` element, and production's

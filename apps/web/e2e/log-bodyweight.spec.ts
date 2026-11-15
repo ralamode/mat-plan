@@ -1,7 +1,14 @@
 import { SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
 import { expect, test } from '@playwright/test';
 
-import { APP_HOME_PATH, BODYWEIGHT_COPY, DEFAULT_TIME_ZONE } from '../lib/constants';
+import {
+  ALL_ATHLETES_LINK,
+  APP_HOME_PATH,
+  BODYWEIGHT_COPY,
+  DEFAULT_TIME_ZONE,
+  MIN_TAP_TARGET_PX,
+  NOT_FOUND_COPY,
+} from '../lib/constants';
 import { formatDayLong, localDayIso } from '../lib/date';
 
 import { pickerHeading } from './contexts';
@@ -106,10 +113,25 @@ test('the Today header shows the active local calendar date, stable across reloa
 // before notFound() throws — so assert the rendered not-found content, not the
 // HTTP status.
 test('an unknown profile id renders not-found', async ({ page }) => {
+  // UI-6: the 404 must render under the production CSP. Next's built-in fallback styled itself with
+  // inline `style` attributes and an un-nonced `<style>`, which `style-src 'nonce-…'` refuses, so
+  // the page rendered without its layout and logged violations.
+  const cspErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text());
+  });
   await page.goto('/p/does-not-exist');
-  await expect(page.getByText(/this page could not be found/i)).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: NOT_FOUND_COPY.heading, exact: true }),
+  ).toBeVisible();
   // never leaks a scoped Today for a bogus id
   await expect(
     page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
   ).toHaveCount(0);
+  expect(cspErrors, 'the not-found page renders without a CSP violation').toEqual([]);
+  // The page's one way out, measured here because the a11y scan excludes links.
+  const cta = await page.getByRole('link', { name: ALL_ATHLETES_LINK, exact: true }).boundingBox();
+  expect(cta?.height ?? 0, 'the way back clears the tap bar').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
 });
