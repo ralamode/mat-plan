@@ -15,7 +15,7 @@
  *   node .github/scripts/check-feature-guides.mjs [baseRef]   # default: origin/main
  */
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const GUIDE_DIR = 'docs/features';
@@ -65,9 +65,36 @@ function parseGuide(path) {
   return { path, feature: feature ?? path, owns };
 }
 
-/** A path is owned by an exact match, or by a prefix entry ending in `/`. No globs — `[profileId]` in
- *  this repo's route paths makes glob escaping a footgun, and prefixes cover every real case. */
-const ownsFile = (entry, file) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry);
+/**
+ * Entries are an exact path, or a directory prefix ending in `/`. No globs: `[profileId]` in this
+ * repo's route paths makes glob escaping a footgun, and prefixes cover every real case.
+ *
+ * The guides a changed file owes (DX-14 item 9; docs/plans/dx-14-9-most-specific-owner.md): every
+ * guide with an EXACT entry for it, plus the guide(s) whose matching DIRECTORY entry is the longest.
+ * A narrower directory displaces a broader one, so a lane guide owning `writers/program/` relieves
+ * `write-path.md`'s `writers/` for the files under it. An exact entry only ever adds a guide: a file
+ * listed in two guides owes both, as `writers/hide.ts` does. A tie (one directory in two guides) owes
+ * both. _(The directory-only form is the maintainer's call, 2026-11-14.)_
+ */
+function owingGuides(file, guides) {
+  const exact = new Set();
+  let longest = -1;
+  let byDir = new Set();
+  for (const g of guides) {
+    for (const e of g.owns) {
+      if (!e.endsWith('/')) {
+        if (file === e) exact.add(g);
+      } else if (file.startsWith(e)) {
+        if (e.length > longest) {
+          longest = e.length;
+          byDir = new Set();
+        }
+        if (e.length === longest) byDir.add(g);
+      }
+    }
+  }
+  return new Set([...exact, ...byDir]);
+}
 
 // ── Lanes (DX-14 item 8; .claude/skills/write-spec/SKILL.md → Lanes) ────────────────────────────────
 // A milestone or spec declares the lanes that run CONCURRENTLY as flat `lane-<name>:` frontmatter
@@ -150,10 +177,33 @@ function readLanes(path) {
 
 /** The guides a lane entry reaches: it collides with one of the guide's `owns:` entries, or it IS
  *  the guide (how a lane that will ADD files names the guide it will edit). */
-const guidesReached = (entry, guides) =>
-  guides.filter(
-    (g) => entry === g.path || g.owns.some((o) => segmentsCollide(entry, o.replace(/\/$/, ''))),
-  );
+function guidesReached(entry, guides) {
+  // The same rule as owingGuides, for a lane entry (a file or a directory, trailing `/` dropped):
+  // a guide named by path; an exact entry at or under it; a directory entry inside it; and, of the
+  // directory entries COVERING it, only the longest. So a lane under its own lane guide no longer
+  // reaches the broad guide above both.
+  const reached = new Set(guides.filter((g) => g.path === entry));
+  let longest = -1;
+  let covering = new Set();
+  for (const g of guides) {
+    for (const o of g.owns) {
+      const e = o.replace(/\/$/, '');
+      const under = e === entry || e.startsWith(`${entry}/`);
+      if (!o.endsWith('/')) {
+        if (under) reached.add(g);
+      } else if (e !== entry && e.startsWith(`${entry}/`)) {
+        reached.add(g);
+      } else if (e === entry || entry.startsWith(`${e}/`)) {
+        if (e.length > longest) {
+          longest = e.length;
+          covering = new Set();
+        }
+        if (e.length === longest) covering.add(g);
+      }
+    }
+  }
+  return [...new Set([...reached, ...covering])];
+}
 
 function checkLanes(guides) {
   const docs = LANE_DOC_DIRS.filter((d) => existsSync(d))
@@ -239,8 +289,8 @@ try {
 // want the answer. CI has everything committed, so the extra sources are empty there.
 const changed = [
   ...new Set([
-    ...git('diff', '--name-only', `${mergeBase}...HEAD`).split('\n'),
-    ...git('diff', '--name-only', 'HEAD').split('\n'),
+    ...git('diff', '--name-only', '--no-renames', `${mergeBase}...HEAD`).split('\n'),
+    ...git('diff', '--name-only', '--no-renames', 'HEAD').split('\n'),
     ...git('ls-files', '--others', '--exclude-standard').split('\n'),
   ]),
 ].filter(Boolean);
@@ -257,6 +307,12 @@ for (const guide of guides) {
   // leaves an entry pointing nowhere, and the guard would then silently stop covering that file.
   for (const entry of guide.owns) {
     const target = entry.endsWith('/') ? entry.slice(0, -1) : entry;
+    if (!entry.endsWith('/') && existsSync(target) && statSync(target).isDirectory()) {
+      // A directory written without its `/` is read as an exact FILE entry, so it owns nothing.
+      problems.push(
+        `${guide.path} lists the directory '${entry}' without a trailing '/', so it owns nothing. Write '${entry}/'.`,
+      );
+    }
     if (!existsSync(target)) {
       problems.push(
         `${guide.path} claims to own '${entry}', which does not exist.\n` +
@@ -266,7 +322,8 @@ for (const guide of guides) {
   }
 
   // Rot check #2: touching owned code without touching the guide.
-  const touched = changed.filter((f) => guide.owns.some((e) => ownsFile(e, f)));
+  // Owed by the most specific owner (owingGuides), not by every guide whose prefix matches.
+  const touched = changed.filter((f) => owingGuides(f, guides).has(guide));
   if (touched.length > 0 && !changed.includes(guide.path)) {
     problems.push(
       `${guide.path} (${guide.feature}) was not updated, but this PR changes files it documents:\n` +

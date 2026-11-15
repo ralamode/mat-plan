@@ -11,7 +11,7 @@ you would want to have been told before you started: _where the seams are, and w
 
 **A guide is updated in the same PR as the code it documents.** This is enforced by
 [`.github/scripts/check-feature-guides.mjs`](../../.github/scripts/check-feature-guides.mjs), which
-runs in CI's `quality` job (a required check) and fails when a PR touches an owned file without
+runs in CI's `quality` job (not a required check: AGENTS.md → CI checks) and fails when a PR touches an owned file without
 touching its guide. It also fails when a guide claims to own a file that no longer exists, so a
 rename cannot quietly drop coverage.
 
@@ -48,19 +48,23 @@ every lane must edit turns the lanes back into one queue. Every PR touching an o
 that guide, so every pair of those PRs conflicts on it. So:
 
 1. **Each lane gets its own guide**, named `<feature>-<lane>.md`, owning **the directory its new
-   files go in**, for example `packages/db/src/writers/program/`. The lane's first PR creates it,
-   because the gate refuses a guide that owns a path that does not exist yet.
+   files go in**, for example `packages/db/src/writers/program/`. **The PR that declares the lanes
+   (chunk 0) creates every lane's directory and guide**, because the gate refuses a guide that owns a
+   path that doesn't exist, and the lanes check reads the guides that exist: a lane declared before
+   its guide still reaches the broad guide above it, and collides there. A lane guide **links up to
+   the broad guide's invariants** that still apply to its files, since the gate no longer sends those
+   PRs there.
 2. **New lane files never go into an existing guide's `owns:`.** The existing guide links to the lane
    guides from a short "Where the new pieces are documented" note, edited once by the integration
    lane.
 3. **An existing file that two lanes both change is a seam, not a guide problem.** The guide stays
    shared, and those steps are ordered in the plan.
 
-⚠️ **Rule 1 needs the gate to change** (DX-14 item 9). Today a broad directory entry such as
-`write-path.md`'s `packages/db/src/writers/` also claims every new subdirectory, and the gate demands
-**every** matching guide. The planned rule is **the most specific owner wins**: a file matched by a
-narrower entry in another guide owes only that guide. Until it lands, a lane guide does not relieve
-the broad guide above it.
+**How the gate decides who is owed** (DX-14 item 9, [plan](../plans/dx-14-9-most-specific-owner.md)):
+a changed file owes every guide with an **exact** entry for it, plus the guide(s) whose matching
+**directory** entry is the longest. So a lane guide owning `writers/program/` relieves
+`write-path.md`'s `writers/` for the files under it, and a file listed exactly in a second guide still
+owes both. A rename counts its old path too.
 
 ## Format
 
@@ -71,7 +75,7 @@ Frontmatter declares the ownership map the gate reads:
 feature: Strength logging
 owns:
   - apps/web/app/p/[profileId]/strength-form.tsx
-  - packages/db/src/writers/ # a trailing slash owns everything beneath
+  - packages/db/src/writers/ # a trailing slash owns everything beneath, unless a narrower directory in another guide owns it
 ---
 ```
 

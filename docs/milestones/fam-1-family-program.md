@@ -268,8 +268,11 @@ Here they mean:
 - **Guides:** the hotspot is `write-path.md`, not `programming.md`. It owns `packages/db/src/writers/`,
   `apps/web/lib/dal/`, `seed.ts` and `export-month.ts`, so steps 1, 6, 7, 11a, 11b and 14 would all
   edit it. Lane guides `fam-1-schema.md`, `fam-1-builder.md`, `fam-1-today.md` and `fam-1-writers.md`
-  (paths fixed by d2) relieve it once the gate change lands (DX-14 item 9). Seams that stay ordered:
-  `program-day.ts`, `strength-session.ts`, `seed.ts`.
+  (paths fixed by d2, created by chunk 0) relieve it **only for new files in new directories**
+  (DX-14 item 9): step 6, and 11a if its writers go in a new subdirectory. `seed.ts` (1),
+  `export-month.ts` (14), the DAL and `actions.ts` (7) and `strength-session.ts` (11b) are exact or
+  flat entries and still owe `write-path.md`: they are seams, and their steps stay ordered, with
+  `program-day.ts`. If step 14 folds into 11a, lanes A and D meet on `write-path.md` there.
 - **Columns:** lane A owns the schema; chunk 0 lists every column slices 1–4 need. Step 4b is the
   riskiest migration, so its order stays.
 - **Fixtures:** both sides test against named fixtures, for example `monday-two-programs`.

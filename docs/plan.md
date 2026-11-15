@@ -1502,11 +1502,12 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        FAM-1 is the first user ([lanes](./milestones/fam-1-family-program.md)).
   9. **Lanes stay parallel once they run.** _(maintainer, 2026-11-14;
      [the five risks](./parallel-work.md#once-lanes-run-what-turns-them-back-into-one-queue).)_
-     - **The guide gate learns that the most specific owner wins:** a file matched by a narrower
-       `owns:` entry in another guide owes only that guide. Today a broad prefix such as
-       `write-path.md`'s `packages/db/src/writers/` claims every new subdirectory too, so a guide per
-       lane ([the rule](./features/README.md#guides-for-work-run-in-lanes)) relieves nothing. A gate
-       change, so it ships with a self-test case.
+     - ✅ **The guide gate learns that the most specific owner wins** ([plan](./plans/dx-14-9-most-specific-owner.md),
+       2026-11-14). **Narrowed by the maintainer, 2026-11-14:** a narrower **directory** entry
+       displaces a broader one, and an exact-file entry still adds, so `writers/hide.ts` and
+       `writers/strength-session.ts` keep owing `write-path.md`. Before, a broad prefix such as
+       `write-path.md`'s `packages/db/src/writers/` claimed every new subdirectory, so a guide per lane
+       ([the rule](./features/README.md#guides-for-work-run-in-lanes)) relieved nothing.
      - ✅ **`write-spec`** (2026-11-14) asks for contract tests on both sides of each chunk-0 shape, against the same
        named fixture, and for a pending-column field when a lane needs a column chunk 0 missed.
 
