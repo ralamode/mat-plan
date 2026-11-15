@@ -642,11 +642,26 @@ export const INPUT_CLASS =
  * and this module is deliberately dependency-free so a `'use client'` component can import it.
  */
 export const SAVED_STATE_COPY = {
-  /** A one-tap Life activity once it is logged (`life-form.tsx`, V1-7). */
-  lifeLogged: (label: string) => `${label} · logged today`,
   /** A log-once check-in field once it is logged (`checkin-form.tsx`). */
   checkinLogged: 'Already logged today',
 } as const;
+
+/**
+ * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day: the
+ * one-tap button writes minutes nobody typed, so the row is where a person first sees them.
+ */
+export const LIFE_COPY = {
+  heading: 'Life',
+  /** `Wrestling practice · 90 min`; the label alone when the entry carries no value. */
+  logged: (label: string, value: string | null) => (value === null ? label : `${label} · ${value}`),
+  /** A read-only day with nothing logged; otherwise the section is a bare heading. */
+  noneOnClosedDay: 'Nothing logged.',
+  /** What the status region announces after a log. */
+  announced: (label: string) => `${label} logged`,
+} as const;
+
+/** The logged rows' element id: the focus target after a log (`SavedAnnouncer`). */
+export const LIFE_LOGGED_ID = 'life-logged';
 
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
@@ -839,12 +854,11 @@ export const strengthReceiptId = (sessionPublicId: string) =>
 export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
 
 /**
- * The notice on a day outside the write window (V1-15). Since V1-24 PR 1b a logged weight CAN be
- * corrected there, so "you can still see what was logged" alone read as view-only directly above a
- * working Change button. It now says what is closed (new entries) and what is still allowed.
+ * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
+ * on it can be logged or changed, so the sentence says that and names the two days that can.
  */
 export const CLOSED_DAY_NOTICE =
-  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a weigh-in or a strength set.';
+  'This day is read-only. Only today and yesterday can be logged or changed.';
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';

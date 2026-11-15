@@ -247,6 +247,31 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   return rows;
 }
 
+/** One logged life activity, as the Life section's row reads it (V1-24 3b-page). */
+export type LoggedLifeActivity = {
+  entryId: string;
+  activityKey: string;
+  /** `null` only for a row that carries no value; the row then shows the label alone. */
+  value: number | null;
+  unit: EntryDTO['unit'];
+};
+
+/**
+ * Every live entry on the day for one of `activityKeys`, oldest first. The caller chooses the keys,
+ * so an activity the page no longer shows (Wake) is left out by not being asked for.
+ */
+export function loggedLifeActivities(
+  entries: readonly EntryDTO[],
+  activityKeys: readonly string[],
+): LoggedLifeActivity[] {
+  const logged: LoggedLifeActivity[] = [];
+  for (const e of entries) {
+    if (e.activityKey === null || !activityKeys.includes(e.activityKey)) continue;
+    logged.push({ entryId: e.id, activityKey: e.activityKey, value: e.value, unit: e.unit });
+  }
+  return logged;
+}
+
 /** One logged bodyweight, as the receipt reads it (V1-24 PR 1a). */
 export type LoggedBodyweight = {
   /** `entries.public_id` — the id PR 1b's amend will address. Carried now so the receipt and the

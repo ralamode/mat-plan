@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { CLOSED_DAY_NOTICE } from '../lib/constants';
 
-import { isoDaysAgo, SEED_PROFILE_ROUTE, strengthSection } from './steps';
+import { bodyweightSection, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * Day navigation (V1-15).
@@ -45,7 +45,9 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   // would refuse what the endpoint allows — and it is exactly how Ray's 09/29 session, submitted on
   // 09/30 from a stale tab, succeeded.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
-  await expect(strengthSection(page)).toBeVisible();
+  // A writable day shows the weigh-in as a field (or its receipt, once logged), never the read-only
+  // notice. Either state is a visible Bodyweight section.
+  await expect(bodyweightSection(page)).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
 });
 

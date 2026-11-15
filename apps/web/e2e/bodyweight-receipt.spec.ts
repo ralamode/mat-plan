@@ -1,13 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { AMEND_COPY, BODYWEIGHT_COPY, changeLabel } from '../lib/constants';
-import {
-  bodyweightEntryLine,
-  bodyweightSection,
-  SEED_PROFILE_2_ROUTE,
-  shownWeight,
-  WARMUP_BODYWEIGHT,
-} from './steps';
+import { bodyweightSection, SEED_PROFILE_2_ROUTE, shownWeight, WARMUP_BODYWEIGHT } from './steps';
 
 /**
  * **V1-24 PR 1a — the day's weight is the day's state.**
@@ -101,6 +95,10 @@ test('a logged day shows its weight and the one-per-day reason — and no create
   ).toHaveCount(1);
   expect(await page.evaluate(() => document.activeElement?.tagName.toLowerCase())).not.toBe('body');
 
-  // And the day's entries list agrees — the amend reached the ROW, not just the receipt.
-  await expect(page.getByText(bodyweightEntryLine(after))).toBeVisible();
+  // And a fresh server render agrees — the amend reached the ROW, not just the client's receipt.
+  // (This read the "Logged entries" list until V1-24 3b-page removed it.)
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(
+    section.getByText(BODYWEIGHT_COPY.saved(shownWeight(after)), { exact: true }),
+  ).toBeVisible();
 });

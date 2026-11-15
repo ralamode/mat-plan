@@ -15,6 +15,23 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The old log forms are unmounted, not deleted, and older days have no in-app fix (added 2026-11-15)
+
+- **What & why it's debt:** V1-24 3b-page took the Check-ins form, the Strength section (form,
+  program card, receipts), the "Logged entries" list and the "Calisthenics today" card off the day
+  page, and left their components in the tree: `checkin-form.tsx`, `strength-section.tsx`,
+  `strength-form*.ts(x)`, `strength-session-receipt.tsx`, `program-reference.tsx`,
+  `movement-line.tsx`, and `todayRows` / `calisthenicsTotals` in `lib/entries/activity-totals.ts`.
+  Their Server Actions stay, tested. FAM-1 12f deletes them, once 12d and 13b have rebuilt what the
+  new page needs (the PICK-1 PR 3 precedent for an unmounted component).
+- **Impact:** dead code that still type-checks and still costs review attention; PICK-1 PR 4, which
+  mounts into the strength form, waits for FAM-1 13b's surface instead.
+- **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
+  there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
+- **Fix:** FAM-1 12f deletes each file and the actions nothing calls. Revisit the older-day recovery path before FAM-1
+  slice 3 opens the new page to the household, or before a second household. **Expiry: FAM-1 12f.**
+- **Severity:** low.
+
 ### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
 
 - **What & why it's debt:** `--muted-foreground` is oklch L 0.556 and `--accent` is L 0.97, which

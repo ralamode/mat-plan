@@ -31,8 +31,7 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  * - **None, on a closed day:** `No weight logged.` — a bare heading reads as broken. (None on a
  *   WRITABLE day is the form, not this.)
  *
- * On a closed day there is no second line: the page's closed-day notice already says why there is
- * no form, and that a logged weight can still be corrected.
+ * On a closed day there is no second line: the page's notice already says the day is read-only.
  *
  * ## ⚠️ A SERVER component, and that is load-bearing
  *
@@ -40,10 +39,8 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  *    V1-15 ±1 window). Rendering the value inside it would hide the day's state on exactly the
  *    history days V1-15 shipped — the screen this row was reported from.
  * 2. **Zero client JS.** The announcement and focus live in the sibling `SavedAnnouncer` island;
- *    this renders the `id` + `tabIndex={-1}` it focuses. PR 1b passes a `'use client'` Change
- *    control into `control` on EVERY day, closed ones included: the amend has no day bound (plan
- *    Decision 5 — an amend never moves the entry's date, so a bound buys no integrity and would
- *    render a dead control on exactly the history days a typo is found on).
+ *    this renders the `id` + `tabIndex={-1}` it focuses. The section passes a `'use client'` Change
+ *    control into `control` on today and yesterday; a day before that is read-only (V1-24 3b-page).
  */
 export function BodyweightReceipt({
   logged,
@@ -52,7 +49,7 @@ export function BodyweightReceipt({
 }: {
   logged: readonly LoggedBodyweight[];
   writable: boolean;
-  /** The amend affordance (PR 1b, on every day — no day bound), beside the value. */
+  /** The amend affordance (PR 1b), beside the value. Absent on a read-only day. */
   control?: ReactNode;
 }) {
   if (logged.length === 0) {

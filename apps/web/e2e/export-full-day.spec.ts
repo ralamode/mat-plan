@@ -9,20 +9,10 @@ import {
   bodyweightPath,
   CHECKINS_HEADER,
   checkinsPath,
-  STRENGTH_LOG_HEADER,
-  strengthLogPath,
 } from '@mat-plan/shared/csv';
 import { expect, type Page, test } from '@playwright/test';
 
-import { STRENGTH_COPY } from '../lib/constants';
-
-import {
-  bodyweightEntryLine,
-  isoDaysAgo,
-  logBodyweight,
-  openStrengthForm,
-  SEED_PROFILE_ROUTE,
-} from './steps';
+import { isoDaysAgo, logBodyweight, logPractice, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * **V1-14b — the full-day round trip.** Log a day through the real UI, download the real export,
@@ -52,24 +42,10 @@ import {
  * `fullyParallel` is on and every spec shares one ephemeral database and one seeded profile, so the
  * bodyweight file legitimately carries other specs' rows. Asserting the whole file would make this
  * test fail whenever a sibling spec logged first — flake that teaches people to rerun rather than
- * read. So: the probe movement's name is unique to this spec, and every assertion is "this exact row
- * is present", except the two that are genuinely global (the header, and the header-only check-ins
+ * read. So: this spec owns Athlete One's yesterday, and every assertion is "this exact row is
+ * present", except the two that are genuinely global (the header, and the header-only check-ins
  * file, which no spec can write to).
  */
-
-/** Unique to this spec, so the strength row is unambiguously ours under `fullyParallel`. */
-const PROBE_MOVEMENT = 'Export Probe Squat';
-
-/**
- * ⚠️ The whole point of the `movement` column, in one constant.
- *
- * `movementSlug('Export Probe Squat')` is `export_probe_squat` — **underscores** — and the legacy
- * corpus the downstream workflow groups by is **kebab**. `csvMovement` normalises, and if it ever
- * stops, every movement forks into two series while both files still look well-formed. That bug is
- * invisible to a fixture test whose fixture is already kebab; it is visible here because the slug is
- * derived by the app from a name a human typed.
- */
-const PROBE_CSV_MOVEMENT = 'export-probe-squat';
 
 /**
  * A DECIMAL on purpose — `formatNumeric` must keep `84.5` a string end to end. Distinct from every
@@ -77,13 +53,6 @@ const PROBE_CSV_MOVEMENT = 'export-probe-squat';
  * YESTERDAY outright (see the test), so the value in the CSV is the one it typed.
  */
 const PROBE_BODYWEIGHT = '84.5';
-
-/** Non-uniform on purpose: `collapse()` must emit a slash-list here, and a scalar for the load. */
-const PROBE_SETS = [
-  { reps: '10', weight: '95' },
-  { reps: '8', weight: '95' },
-  { reps: '6', weight: '95' },
-];
 
 type Csv = { header: string; lines: string[]; raw: string };
 
@@ -136,36 +105,15 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   const month = day.slice(0, 7);
 
   // ── 1. Bodyweight ─────────────────────────────────────────────────────────────
-  // Via the shared helper, not an inline copy: it asserts the receipt, focus, and the entries line.
+  // Via the shared helper, not an inline copy: it asserts the receipt and focus.
   await logBodyweight(page, PROBE_BODYWEIGHT, { timeout: 15_000 });
-  await expect(page.getByText(bodyweightEntryLine(PROBE_BODYWEIGHT))).toBeVisible();
 
-  // ── 2. Strength ───────────────────────────────────────────────────────────────
-  // The blank movement card, NOT the program scaffold: the scaffold's movements come from
-  // `resolveDayRole`, which alternates on date parity, so a scaffold-driven assertion would depend
-  // on which day CI happened to run. Typing the movement makes the expected bytes deterministic —
-  // and exercises `ensureMovement`'s slug derivation, which is the column this test is really about.
-  // `exact` matters: `Movement 1 skipped`, `Unit for movement 1` and `What movement 1 measures`
-  // are all live substring collisions on this card (docs/lessons.md: substring matching bit us in V0-11).
-  await openStrengthForm(page); // collapsed on a retry, once the first attempt's session exists
-  await page.getByLabel('Movement', { exact: true }).fill(PROBE_MOVEMENT);
-
-  for (const [i, set] of PROBE_SETS.entries()) {
-    if (i > 0) await page.getByRole('button', { name: 'Add set' }).first().click();
-    await page.getByLabel(`Movement 1 set ${i + 1} reps`).fill(set.reps);
-    await page.getByLabel(new RegExp(`^Movement 1 set ${i + 1} weight`)).fill(set.weight);
-  }
-
-  const logStrength = page.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
-  await logStrength.click();
-  // V1-24 3a-ii: a save FOLDS the form behind "Log more strength" (the submit is hidden), so the
-  // signal the save landed is the folded toggle, then the record below.
-  await expect(
-    page.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true }),
-  ).toHaveAttribute('aria-expanded', 'false', { timeout: 15_000 });
-  await expect(
-    page.getByRole('region', { name: 'Logged entries' }).getByText(PROBE_MOVEMENT),
-  ).toBeVisible({ timeout: 15_000 });
+  // ── 2. Practice ───────────────────────────────────────────────────────────────
+  // V1-24 3b-page: the strength form left the page (its export is proved in Vitest and `db:verify`
+  // until FAM-1 13b brings an e2e back). Practice is logged here so the day holds both of the page's
+  // write paths; ⚠️ practice minutes are not in the CSV (the check-ins file carries none), so the
+  // bytes below prove the bodyweight path only.
+  await logPractice(page, { label: 'Wrestling practice', shownValue: '90 min' });
 
   // ── 3. Export ─────────────────────────────────────────────────────────────────
   const files = await downloadExport(page);
@@ -173,9 +121,8 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // Paths are `data/<type>/<public_id>/<YYYY-MM>.csv` — `public_id`, never a name or a slug, so the
   // directory survives a rename (Ray, 2026-09-24).
   const bwPath = bodyweightPath(SEED_PROFILE_PUBLIC_ID, month);
-  const strengthPath = strengthLogPath(SEED_PROFILE_PUBLIC_ID, month);
   const checkinPath = checkinsPath(SEED_PROFILE_PUBLIC_ID, month);
-  expect([...files.keys()]).toEqual(expect.arrayContaining([bwPath, checkinPath, strengthPath]));
+  expect([...files.keys()]).toEqual(expect.arrayContaining([bwPath, checkinPath]));
   // Containment plus a SHAPE check, not set equality: `loggedMonths` returns a month per month with
   // data, so a sibling spec writing across a month boundary — or a future seed with historical rows —
   // would legitimately add entries here. What must hold is that every path is one of the three types,
@@ -197,35 +144,6 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // trailing empty fields are WRITTEN, per the contract.
   expect(bw.lines).toContain(`${day},${PROBE_BODYWEIGHT},,`);
 
-  // ── 5. Strength bytes ─────────────────────────────────────────────────────────
-  const strength = parse(files, strengthPath);
-  expect(strength.header).toBe(STRENGTH_LOG_HEADER.join(','));
-
-  const row = strength.lines.find((l) => l.includes(PROBE_CSV_MOVEMENT));
-  expect(
-    row,
-    `no row for '${PROBE_CSV_MOVEMENT}'. If a row exists for 'export_probe_squat', csvMovement ` +
-      `stopped normalising and every movement has just forked into two series.`,
-  ).toBeDefined();
-
-  const [rDate, rSessionType, rMovement, rSets, rReps, rLoad, rPrescribed, rNotes] =
-    row!.split(',');
-  expect(rDate).toBe(day);
-  expect(rMovement).toBe(PROBE_CSV_MOVEMENT);
-  // `sets` is a COUNT of set rows, and it must equal the length of the slash-lists beside it.
-  expect(rSets).toBe(String(PROBE_SETS.length));
-  // Non-uniform reps collapse to a slash-list; a uniform load collapses to a scalar. Both in one row
-  // — that pairing is the aggregator's whole contract and no fixture exercises it from the form.
-  expect(rReps).toBe(PROBE_SETS.map((s) => s.reps).join('/'));
-  expect(rLoad).toBe(PROBE_SETS[0].weight);
-  // `session_type` comes from `day_role` — hyphenated, or empty when the movement was logged outside
-  // a session. What it must NEVER be is an underscore form.
-  expect(rSessionType).not.toContain('_');
-  // A movement the form invented has no prescription to match back to, and the column's purpose is
-  // being un-reconciled with actuals — so an invented plan here would be worse than none.
-  expect(rPrescribed).toBe('');
-  expect(rNotes).toBe('');
-
   // ── 6. Check-ins is header-only, ALWAYS ───────────────────────────────────────
   // Surprising enough to pin: the real files have never carried a row, and a MISSING file and an
   // EMPTY file are different inputs to the workflow. This one CAN be asserted whole — no spec can
@@ -236,13 +154,12 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // `buildZip` zeroes the DOS date/time fields specifically so this holds; a re-introduced `mtime`
   // would break the workflow's ability to diff two exports, and would break it invisibly.
   //
-  // ⚠️ Scoped to the entries this spec OWNS. Comparing the whole archive would be a race: under
+  // ⚠️ Scoped to a file no sibling can change. Comparing the whole archive would be a race: under
   // `fullyParallel` a sibling spec can append a bodyweight row between the two downloads, and the
-  // test would fail for a reason that has nothing to do with determinism. `strength-log` is
-  // exclusively ours (no other spec submits the strength form) and `checkins` is header-only by
-  // construction, so those two are stable and are what the assertion compares.
+  // test would fail for a reason that has nothing to do with determinism. `checkins` is header-only
+  // by construction, so it is stable and is what the assertion compares.
   const again = await downloadExport(page);
-  for (const path of [strengthPath, checkinPath]) {
+  for (const path of [checkinPath]) {
     expect(again.get(path), `${path} differed between two exports of the same data`).toBe(
       files.get(path),
     );
