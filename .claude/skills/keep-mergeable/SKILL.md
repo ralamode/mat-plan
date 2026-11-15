@@ -130,8 +130,8 @@ remove the worktree and start again from step 2.
 
 ## Red flags
 
-- A force-push to a PR branch, or checking out a branch another worktree holds.
-- "Resolved" by taking one side of a real conflict.
-- A `shipit` left standing on a PR that is CONFLICTING, behind `main`, or red.
+- A force-push to a PR branch, or checking out a branch another worktree holds. (hypothesis)
+- "Resolved" by taking one side of a real conflict. (#181)
+- A `shipit` left standing on a PR that is CONFLICTING, behind `main`, or red. (#181)
 - A merge that shows files from `main` in `git diff origin/main HEAD --stat`, meaning something of
-  main's was reverted.
+  main's was reverted. (lessons: "--stat")

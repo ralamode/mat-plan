@@ -1544,14 +1544,19 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
      `ui-screenshot` and the config itself.
 
   **The rules that make it "battle-tested", each one checkable:**
-  - **Every rule cites the incident that earned it,** as the skills already do by PR number. A rule
-    with no incident is marked a hypothesis.
+  - ✅ **Every rule cites the incident that earned it,** as the skills already do by PR number. A rule
+    with no incident is marked a hypothesis. **Shipped 2026-11-14** for each skill's Red flags, the
+    scope the maintainer chose ([plan](./plans/dx-15-rules-cite-incidents.md)): 76 rules, 24 cited,
+    52 `(hypothesis)`, and `skills:check` refuses an uncited one.
   - **The routing guard (DX-14.5)** and a **dry run per skill** are its tests.
   - **The method is written once, in [working-with-agents](./working-with-agents.md):**
     - the cheapest place to catch each kind of flaw: shape in a contract PR, behaviour in a
       prototype, mid-build decisions in `doubt-check`, implementation in review;
     - integrate first;
     - lanes split by contract.
+
+  **Order exception** _(maintainer, 2026-11-14)_: the method doc and the incident audit are done now;
+  the per-repo config and the core/adapter split still wait for the order below.
 
   **Order:** after DX-14's items land, and only once FAM-1's slice 1 has exercised the contract PR
   and the lanes. A method is packaged after it has worked once, not before. Packaging it as a Claude

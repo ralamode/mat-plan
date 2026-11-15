@@ -329,6 +329,81 @@ export function checkDoneWhen(skills) {
   });
 }
 
+/**
+ * Every Red flags item ends with what earned it (DX-15; docs/plans/dx-15-rules-cite-incidents.md),
+ * as its LAST parenthetical, so a `#3` or a `lessons.md` mention elsewhere in the text can't pass:
+ *   `(#NNN)` or `(#NNN, #MMM)`   a PR whose failure earned it; 1 ≤ N ≤ `maxPr`
+ *   `(lessons: "phrase")`        an entry in docs/lessons.md; the phrase must occur in `lessons`
+ *   `(maintainer, YYYY-MM-DD)`   a dated ruling, where the rule is a decision rather than a scar
+ *   `(enforced by \`path\`)`     a rule a guard already enforces (checkFile verifies the path)
+ *   `(hypothesis)`               no incident yet: an honest label
+ * It checks the FORM, and the PR bound; whether the incident is the right one is review's question.
+ * Every skill has a Red flags section with at least one item. Pure: `skills` is `[{ name, body }]`.
+ */
+export function checkCitations(skills, { maxPr = Infinity, lessons = '' } = {}) {
+  const problems = [];
+  let cited = 0;
+  let hypotheses = 0;
+  for (const { name, body } of skills) {
+    const lines = body.split('\n');
+    const start = lines.findIndex((l) => /^## Red flags\s*$/.test(l));
+    if (start === -1) {
+      problems.push(`${name}: no \`## Red flags\` section`);
+      continue;
+    }
+    const section = [];
+    for (const l of lines.slice(start + 1)) {
+      if (/^## /.test(l)) break;
+      section.push(l);
+    }
+    // An item is a `- ` line at column 0 plus every indented line after it (wrapped text, nested).
+    const items = [];
+    for (const l of section) {
+      if (/^- /.test(l)) items.push(l.slice(2));
+      else if (/^\s+\S/.test(l) && items.length) items[items.length - 1] += ` ${l.trim()}`;
+    }
+    if (items.length === 0) problems.push(`${name}: \`## Red flags\` has no items`);
+    for (const item of items) {
+      const short = item.length > 60 ? `${item.slice(0, 57)}…` : item;
+      const m = /\(([^()]*)\)\s*$/.exec(item);
+      const c = m?.[1].trim() ?? '';
+      if (c === 'hypothesis') {
+        hypotheses++;
+        continue;
+      }
+      if (/^#\d+(?:, #\d+)*$/.test(c)) {
+        const bad = c
+          .match(/\d+/g)
+          .map(Number)
+          .filter((n) => n < 1 || n > maxPr);
+        if (bad.length)
+          problems.push(
+            `${name}: "${short}" cites #${bad.join(', #')}, past the latest PR (#${maxPr})`,
+          );
+        else cited++;
+        continue;
+      }
+      const lesson = /^lessons: "([^"]+)"$/.exec(c);
+      if (lesson) {
+        if (lessons.includes(lesson[1])) cited++;
+        else
+          problems.push(
+            `${name}: "${short}" cites lessons "${lesson[1]}", which docs/lessons.md doesn't contain`,
+          );
+        continue;
+      }
+      if (/^maintainer, \d{4}-\d{2}-\d{2}$/.test(c) || /^enforced by `[^`]+`$/.test(c)) {
+        cited++;
+        continue;
+      }
+      problems.push(
+        `${name}: "${short}" ends with no citation: (#NNN), (lessons: "…"), (maintainer, YYYY-MM-DD), (enforced by \`path\`) or (hypothesis)`,
+      );
+    }
+  }
+  return { problems, cited, hypotheses };
+}
+
 /** `{ name, description, body }` for each `.claude/skills/<name>/SKILL.md`. */
 function readSkills() {
   const dir = join(ROOT, '.claude/skills');
@@ -354,7 +429,28 @@ function isEntryPoint() {
 if (isEntryPoint()) {
   const files = SOURCES.flatMap((s) => markdownFiles(join(ROOT, s)));
   const skills = readSkills();
-  const problems = [...files.flatMap(checkFile), ...checkRouting(skills), ...checkDoneWhen(skills)];
+  const latestPr = (() => {
+    try {
+      const subjects = execFileSync('git', ['-C', ROOT, 'log', '--format=%s'], {
+        encoding: 'utf8',
+      });
+      return Math.max(0, ...[...subjects.matchAll(/\(#(\d+)\)$/gm)].map((m) => Number(m[1])));
+    } catch {
+      return Infinity; // not a git repo (a fixture): the PR bound can't be checked, the form still is
+    }
+  })();
+  const lessonsPath = join(ROOT, 'docs/lessons.md');
+  const citations = checkCitations(skills, {
+    // Open PRs and the PR being reviewed sit above the latest MERGED number; allow a margin.
+    maxPr: latestPr + 50,
+    lessons: existsSync(lessonsPath) ? readFileSync(lessonsPath, 'utf8') : '',
+  });
+  const problems = [
+    ...files.flatMap(checkFile),
+    ...checkRouting(skills),
+    ...checkDoneWhen(skills),
+    ...citations.problems,
+  ];
   if (problems.length) {
     console.error(`Skills guard FAILED — ${problems.length} problem(s):\n`);
     for (const p of problems) console.error(`  ✗ ${p}`);
@@ -366,6 +462,7 @@ if (isEntryPoint()) {
   }
   console.log(
     `Skills guard OK — ${files.length} file(s), every cited path and pnpm script exists; ` +
-      `${skills.reduce((n, sk) => n + [...(sk.description ?? '').slice(Math.max(0, (sk.description ?? '').search(TRIGGER_CLAUSE))).matchAll(/"[^"]+"/g)].length, 0)} trigger(s) across ${skills.length} skill(s), no collisions.`,
+      `${skills.reduce((n, sk) => n + [...(sk.description ?? '').slice(Math.max(0, (sk.description ?? '').search(TRIGGER_CLAUSE))).matchAll(/"[^"]+"/g)].length, 0)} trigger(s) across ${skills.length} skill(s), no collisions; ` +
+      `red flags: ${citations.cited} cited, ${citations.hypotheses} hypothesis.`,
   );
 }

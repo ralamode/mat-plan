@@ -29,7 +29,7 @@ FRONTMATTER='---
 name: demo
 description: Demo skill. Use when the user says "run the demo".
 ---'
-DONE=$'\n## Done when\n\n- [ ] demo'
+DONE=$'\n## Red flags\n\n- a demo trap (hypothesis)\n\n## Done when\n\n- [ ] demo'
 expect() {
   { printf '%s\n' "$FRONTMATTER"; cat; printf '%s\n' "$DONE"; } >"$skill"
   out="$(node "$guard" "$tmp" 2>&1)"
@@ -178,5 +178,35 @@ done_() {
 done_ "done-when: a checklist passes" ok $'# S\n\n## Done when\n\n- [ ] it works\n\n## Red flags\n'
 done_ "done-when: a missing section is refused" 'no `## Done when`' $'# S\n\n## Red flags\n'
 done_ "done-when: a section without a box is refused" 'has no `- [ ]` item' $'# S\n\n## Done when\n\nprose only\n\n## Red flags\n- [ ] not here\n'
+
+# ── Citations (DX-15): checkCitations is pure; maxPr 400, one lessons phrase. ─────────────────────
+cite() {
+  out="$(node --input-type=module -e "
+    import { checkCitations } from '$guard';
+    const r = checkCitations([{ name: 'a', body: process.argv[1] }], { maxPr: 400, lessons: 'the 42P10 trap' });
+    console.log(r.problems.length ? r.problems.join('\n') : 'ok ' + r.cited + '/' + r.hypotheses);" "$3" 2>&1)"
+  if { [ "${2#ok}" != "$2" ] && [ "$out" = "$2" ]; } || { [ "${2#ok}" = "$2" ] && grep -qF "$2" <<<"$out"; }; then
+    printf '✓ %s\n' "$1"
+  else printf '✗ %s: want "%s", got\n%s\n' "$1" "$2" "$out"; fails=$((fails + 1)); fi
+}
+rf() { printf '# S\n\n## Red flags\n\n%s\n\n## Done when\n\n- [ ] x\n' "$1"; }
+cite "citations: every accepted form passes, and the counts are right" "ok 4/1" "$(rf '- one (#12)
+- two (#12, #399)
+- three (lessons: "42P10")
+- four (maintainer, 2026-11-14)
+- five (hypothesis)')"
+cite "citations: enforced by a guard counts as cited" "ok 1/0" "$(rf '- six (enforced by `.github/scripts/check-skills.mjs`)')"
+cite "citations: a bare item is refused" 'ends with no citation' "$(rf '- bare')"
+cite "citations: a # mid-text is not a citation" 'ends with no citation' "$(rf '- step #3 of the checklist, see backlog #4')"
+cite "citations: one cited item does not cover a bare sibling" '"bare sibling" ends with no citation' "$(rf '- cited (#12)
+- bare sibling')"
+cite "citations: a wrapped item is cited on its last line" "ok 1/0" "$(rf '- a long rule that wraps
+  onto a second line (#12)')"
+cite "citations: a PR past the latest is refused" 'past the latest PR' "$(rf '- x (#9999)')"
+cite "citations: a lessons phrase not in lessons.md is refused" "which docs/lessons.md doesn't contain" "$(rf '- x (lessons: "never written")')"
+cite "citations: an undated ruling is refused" 'ends with no citation' "$(rf '- x (maintainer)')"
+cite "citations: a capitalised Hypothesis is refused" 'ends with no citation' "$(rf '- x (Hypothesis)')"
+cite "citations: a missing section is refused" 'no `## Red flags` section' $'# S\n\n## Done when\n\n- [ ] x\n'
+cite "citations: an empty section is refused" '`## Red flags` has no items' $'# S\n\n## Red flags\n\nprose\n\n## Done when\n'
 
 [ "$fails" -eq 0 ] && echo "all skills-guard self-tests passed" || exit 1

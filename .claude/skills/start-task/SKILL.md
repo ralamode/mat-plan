@@ -96,9 +96,9 @@ propose the split (1a/1b/1c, as in `gap1-p1-*`, `v1-18-*`) before starting, not 
 
 ## Red flags
 
-- About to edit code on `main`, or on a branch cut before the latest merge.
-- Starting work with no backlog id and no conversation about whether it needs one.
-- "It's small, it doesn't need the UX panel." Every UI change needs one; only the depth scales.
-- Reading the whole codebase when a feature guide exists for the area.
+- About to edit code on `main`, or on a branch cut before the latest merge. (hypothesis)
+- Starting work with no backlog id and no conversation about whether it needs one. (hypothesis)
+- "It's small, it doesn't need the UX panel." Every UI change needs one; only the depth scales. (maintainer, 2026-08-12)
+- Reading the whole codebase when a feature guide exists for the area. (hypothesis)
 - Starting alongside another worktree without intersecting the file lists — _and_ their guides, since
-  `guides:check` makes two tracks under one guide collide even when the code files differ.
+  `guides:check` makes two tracks under one guide collide even when the code files differ. (#228)

@@ -286,7 +286,7 @@ movement picker.
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it), **~40s** warm:
   `format:check` → `lint` → `typecheck` → `test` → `db:verify` → `db:mutations` → `skills:check`
-  (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist) → `actions:check` (every action SHA-pinned) →
+  (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist; each red flag cites its incident) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.

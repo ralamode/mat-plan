@@ -237,14 +237,14 @@ When they conflict, closure wins — a spec that forces a question is worse than
 
 ## Red flags
 
-- Writing before opening the feature guides.
-- An acceptance criterion no test could fail.
-- A spec for one PR, or for PRs with nothing to agree on.
-- Re-deciding what the ADR settled, or settling what it deferred.
-- Chunk order with no stated reason — then it is a list, and someone will reorder it.
-- Lanes in a table only, with no `lane-` frontmatter: nothing checks them, and gate 1 fails in a merge.
-- An "Assumptions" list that's empty on a spec for something nobody has built before.
-- A shipped criterion edited in place instead of a delta.
-- A milestone spec with no rollback, or one that doesn't say what can't be rolled back.
-- Restating AGENTS.md rules; they already apply.
-- A review-response log with no rejections on a spec that grew.
+- Writing before opening the feature guides. (#223)
+- An acceptance criterion no test could fail. (hypothesis)
+- A spec for one PR, or for PRs with nothing to agree on. (hypothesis)
+- Re-deciding what the ADR settled, or settling what it deferred. (#223)
+- Chunk order with no stated reason — then it is a list, and someone will reorder it. (hypothesis)
+- Lanes in a table only, with no `lane-` frontmatter: nothing checks them, and gate 1 fails in a merge. (#228)
+- An "Assumptions" list that's empty on a spec for something nobody has built before. (hypothesis)
+- A shipped criterion edited in place instead of a delta. (maintainer, 2026-11-11)
+- A milestone spec with no rollback, or one that doesn't say what can't be rolled back. (hypothesis)
+- Restating AGENTS.md rules; they already apply. (#321)
+- A review-response log with no rejections on a spec that grew. (hypothesis)

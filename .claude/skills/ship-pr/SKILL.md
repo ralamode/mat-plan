@@ -202,12 +202,12 @@ else. Before stopping:
 
 ## Red flags
 
-- A backlog item merged, but `docs/roadmap.md` still shows it as next, or in flight, or absent.
+- A backlog item merged, but `docs/roadmap.md` still shows it as next, or in flight, or absent. (hypothesis)
 - A backlog item merged, but its `docs/status.md` row or "Where we are" pointer unchanged. The guard
-  only checks the fragment.
+  only checks the fragment. (#156)
 - The PR claims a CI gate that isn't in `.github/workflows/`. AGENTS.md carries an explicit warning
-  about exactly this.
+  about exactly this. (#132)
 - A `ci-skip-e2e`, `docs-skip-feature-map` or `docs-skip-changelog` label applied with no one-line
-  reason in the PR.
+  reason in the PR. (hypothesis)
 - Pushing to fix CI one round at a time when `pnpm verify` / `pnpm e2e:local` would have caught it
-  locally.
+  locally. (hypothesis)

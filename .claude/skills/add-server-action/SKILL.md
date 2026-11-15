@@ -120,8 +120,8 @@ verified**, never "instrumented".
 
 ## Red flags
 
-- `db`, `process.env` or a Drizzle import in the action file.
-- An action that trusts `profileId` without resolving it, or accepts an internal id.
-- A new ON CONFLICT without the `deletedAt` predicate.
-- A test using `objectContaining` for the DAL args.
-- The PR claiming auth, household scoping or rate limiting that the table above says isn't wired.
+- `db`, `process.env` or a Drizzle import in the action file. (#324)
+- An action that trusts `profileId` without resolving it, or accepts an internal id. (hypothesis)
+- A new ON CONFLICT without the `deletedAt` predicate. (lessons: "42P10")
+- A test using `objectContaining` for the DAL args. (lessons: "objectContaining")
+- The PR claiming auth, household scoping or rate limiting that the table above says isn't wired. (#324)

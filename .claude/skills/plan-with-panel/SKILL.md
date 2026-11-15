@@ -136,7 +136,7 @@ authority check and leaves them unanswered has skipped a repo rule, not a nicety
 
 ## Red flags
 
-- A critique that cites no file or plan section.
-- A review-response log with no rejections on a plan that grew in size.
-- A UX panel with no 360px width math.
-- Implementation files staged before the user has approved the plan.
+- A critique that cites no file or plan section. (hypothesis)
+- A review-response log with no rejections on a plan that grew in size. (hypothesis)
+- A UX panel with no 360px width math. (#108)
+- Implementation files staged before the user has approved the plan. (hypothesis)
