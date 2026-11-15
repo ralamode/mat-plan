@@ -426,6 +426,51 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
       'a scope minted in verify.ts needs an entry in MINTED_SCOPES saying what it is FOR',
     ).toEqual(Object.keys(MINTED_SCOPES).sort());
   });
+
+  it('a db:verify proof module never mints a scope at a call site either (FAM-1 step 0c)', () => {
+    // Step 0c gave each data lane its own proof module under `scripts/verify/`, which the check
+    // above does not read. The modules are handed `verify.ts`'s three scopes (`VerifyContext`), but
+    // a proof that must deep-equal a contract fixture needs a household of its own, so a mint there
+    // is legitimate. The half of the rule that needs no shared list holds for it all the same:
+    // every mint is a named `const`, never an argument. (No `MINTED_SCOPES` entry is asked for: a
+    // list here that every lane must edit would undo the split.)
+    //
+    // Recursive, so a sub-directory a lane adds is read too. And the four modules are asserted BY
+    // NAME: a count would still pass if one were renamed out from under its lane.
+    const modules = sources('packages/db/scripts/verify/**/*.ts');
+    for (const name of ['schema', 'program', 'day', 'single-values']) {
+      expect(modules, `the ${name} proof module was found`).toContain(
+        `packages/db/scripts/verify/${name}.ts`,
+      );
+    }
+
+    // An ALIASED import (`householdScopeForScript as mint`) would make every later mint invisible
+    // to the count below, so the alias itself is the offence.
+    const aliased = modules.filter((f) =>
+      /\bhouseholdScopeForScript\s+as\b/.test(code(join(REPO, f))),
+    );
+    expect(
+      aliased,
+      'scripts/verify/** imports householdScopeForScript under its own name — an alias hides the mint',
+    ).toEqual([]);
+
+    const inline = modules.filter((f) => {
+      // Imports out first, so what is left is USES. Then EVERY mention of the name — a call, a
+      // reference passed as a value (`ids.map(householdScopeForScript)`), an optional call — must be
+      // the right-hand side of a named const. Counting only `name(` would miss the other shapes.
+      const src = code(join(REPO, f)).replace(
+        /^[ \t]*import\b[\s\S]*?\bfrom\s*['"][^'"]*['"];?/gm,
+        '',
+      );
+      const uses = src.match(/\bhouseholdScopeForScript\b/g) ?? [];
+      const declared = src.match(/const\s+[A-Za-z_$][\w$]*\s*=\s*householdScopeForScript\(/g) ?? [];
+      return uses.length !== declared.length;
+    });
+    expect(
+      inline,
+      'every householdScopeForScript in scripts/verify/** must be `const NAME = householdScopeForScript(…)` — never inline at a call site, never passed as a value',
+    ).toEqual([]);
+  });
 });
 
 describe('the scope constructors refuse an unresolved id', () => {
