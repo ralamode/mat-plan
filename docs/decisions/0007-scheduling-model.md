@@ -264,7 +264,12 @@ offline replay) and un-ticking one set would hide the whole item. Draft 1's fix,
 - **The row arbiter:** partial `UNIQUE (session_id, prescription_id, prescription_set) WHERE
 prescription_id IS NOT NULL AND deleted_at IS NULL`. A second device's ✓ on the same row returns the
   first; a hidden row frees its place.
-- `CHECK (num_nonnulls(prescription_id, prescription_set) <> 1)`: both or neither.
+- `CHECK (prescription_id IS NULL OR prescription_set IS NOT NULL)`: a linked row names its set. It is
+  one-way on purpose: a purge's `ON DELETE SET NULL` clears only `prescription_id`, and a
+  both-or-neither CHECK would roll the purge back (d2 re-review). A leftover set number is harmless,
+  because the arbiter is partial on `prescription_id IS NOT NULL`.
+- `CHECK (prescription_id IS NULL OR session_id IS NOT NULL)`: a linked row has a session, so the
+  arbiter always applies (NULLs are distinct in a unique index).
 
 **What this changes in Amendment 2:**
 
@@ -278,7 +283,8 @@ prescription_id IS NOT NULL AND deleted_at IS NULL`. A second device's ✓ on th
   runbook's pre-flight also checks for another household's entry pointing at this household's
   prescriptions.
 - **§10, proofs:** the arbiter rejects a twin ✓ and frees a hidden row's place; both-or-neither holds;
-  a cross-household prescription is flagged; a purge sets the pointer to NULL and keeps the snapshot.
+  a cross-household prescription is flagged; purging a prescription that has a logged entry commits,
+  with the pointer set to NULL and the snapshot kept, against the real CHECKs.
 
 **Where it lands:** FAM-1 step 4a-ii, with the log side's other columns. The lock and route follow
 §4b's small-table route (`entries` is small); the header says so.
