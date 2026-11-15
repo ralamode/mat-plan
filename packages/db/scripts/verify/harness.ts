@@ -199,6 +199,18 @@ export async function assertCheckCoversConst(
  * Mint its scope ONCE, as a named const (`const X_SCOPE = householdScopeForScript(row.id)`), never
  * inline at a call site: `src/scope.test.ts` fails the build on an inline mint here, as it does in
  * `verify.ts`.
+ *
+ * ## ⚠️ Two allowlists name `verify.ts` only, so two things go red in a proof module BY DESIGN
+ *
+ * A proof moved or copied from `verify.ts` can trip these. Neither is a bug in the proof module, and
+ * neither is this lane's to widen: ask the contract owner.
+ *
+ * - **An `as OwnerScope` cast** (or `<OwnerScope>`): `src/scope.test.ts` → `ALLOWED_CAST` permits it
+ *   in `scope.ts` and in `verify.ts`'s one named forgery. In a proof module, call `ownerScope()` and
+ *   branch on `null`.
+ * - **Naming `households.synthetic`**: `apps/web/lib/household-synthetic-is-dark.test.ts` → `ALLOWED`
+ *   permits the word only in `schema.ts` and `verify.ts`. The column ships dark, and a proof module
+ *   that reads it fails that test.
  */
 export interface VerifyContext {
   /** Household A (the seed's household), as its OWNER. */

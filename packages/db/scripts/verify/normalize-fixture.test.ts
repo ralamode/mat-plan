@@ -109,6 +109,11 @@ const reverseKeys = (node: unknown): unknown => {
 };
 
 describe('normalizeFixture: the same state compares equal', () => {
+  // Owed by the first PR that can import them: step 0a's fixtures were not on `main` when this file
+  // was written (see the note at the top). Lanes P and E compare against them in `db:verify`; this
+  // is the cheap, database-free half, and it is where a fixture id that is not a valid UUID shows.
+  it.todo('round-trips each 0a named fixture');
+
   it('a DayPlan-shaped result with freshly minted ids deep-equals the fixture', () => {
     const fixture = dayPlanSample();
     const queried = dayPlanSample(reminted());
@@ -217,8 +222,8 @@ describe('normalizeFixture: timestamps, only in the fields the caller names', ()
   };
   const options = { timestampFields: ['hiddenAt'] };
 
-  it('a string and a Date both become the placeholder', () => {
-    const queried = { ok: true, entryPublicId: newId(), hiddenAt: new Date(1_800_000_000_000) };
+  it('two different instants in the contract format both become the placeholder', () => {
+    const queried = { ok: true, entryPublicId: newId(), hiddenAt: '2027-01-15T08:00:00.000001Z' };
 
     expect(normalizeFixture(queried, options)).toEqual({
       ok: true,
@@ -226,6 +231,25 @@ describe('normalizeFixture: timestamps, only in the fields the caller names', ()
       hiddenAt: TIMESTAMP_PLACEHOLDER,
     });
     assert.deepEqual(normalizeFixture(queried, options), normalizeFixture(fixture, options));
+  });
+
+  it('🔴 a Date is refused: it would deep-equal a fixture whose contract type is text', () => {
+    const queried = { ok: true, entryPublicId: newId(), hiddenAt: new Date(1_800_000_000_000) };
+
+    expect(() => normalizeFixture(queried, options)).toThrow(/'hiddenAt' holds a Date/);
+  });
+
+  it.each([
+    ['milliseconds only', '2026-11-16T15:04:05.123Z'],
+    ['no fraction', '2026-11-16T15:04:05Z'],
+    ['an offset instead of Z', '2026-11-16T15:04:05.123456+00:00'],
+    ['seven fractional digits', '2026-11-16T15:04:05.1234567Z'],
+    ['not a timestamp at all', 'yesterday'],
+  ])('a string in another format is left alone, so it still differs: %s', (_why, hiddenAt) => {
+    const queried = { ...fixture, hiddenAt };
+
+    expect(normalizeFixture(queried, options)).toMatchObject({ hiddenAt });
+    assert.notDeepEqual(normalizeFixture(queried, options), normalizeFixture(fixture, options));
   });
 
   it('a field that is not named keeps its value, so two timestamps still differ', () => {

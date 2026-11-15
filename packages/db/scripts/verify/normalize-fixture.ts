@@ -1,4 +1,4 @@
-import { uuidSchema } from '@mat-plan/shared';
+import { hiddenAtSchema, uuidSchema } from '@mat-plan/shared';
 
 /**
  * The fixture normalizer for the both-sides fixture tests (FAM-1 step 0c;
@@ -13,11 +13,18 @@ import { uuidSchema } from '@mat-plan/shared';
  * - **Every public id becomes a stable label**, `<id:1>`, `<id:2>`, …, numbered by first appearance.
  *   One id gets one label wherever it appears, so identity survives: a row that points at the wrong
  *   prescription gets a different label and the comparison fails. "Is a public id" is the shared
- *   `uuidSchema`, the same definition the input schemas use.
- * - **Every field named in `timestampFields` becomes `<timestamp>`** when it holds a string or a
- *   `Date`. `null` and a missing field stay as they are, because "has a timestamp or not" is meaning.
- *   There is no default list and no guessing from the value: a timestamp is erased only where the
- *   caller named the field.
+ *   `uuidSchema`, the same definition the input schemas use. ⚠️ An id is labelled ONLY if it passes
+ *   that schema (zod's `z.uuid()`: version nibble 1 to 8, variant 8, 9, a or b), so a contract
+ *   fixture must use valid UUIDs. A made-up id such as `00000000-0000-0000-0000-000000000001` is
+ *   left as written and will never equal what the database minted.
+ * - **Every field named in `timestampFields` becomes `<timestamp>`, but only when it holds the
+ *   contract's timestamp text**: UTC with exactly six fractional digits, the shared `hiddenAtSchema`
+ *   (`2026-11-16T15:04:05.123456Z`). The FORMAT is part of the contract, so it is checked, not
+ *   erased: a string in any other format is left as it is and the comparison fails, and a `Date`
+ *   throws, because a timestamp that passed through a `Date` has lost its microseconds
+ *   (`docs/features/delete-and-restore.md`, invariant 2). `null` and a missing field stay as they
+ *   are, because "has a timestamp or not" is meaning. There is no default list and no guessing from
+ *   the value: a timestamp is erased only where the caller named the field.
  * - **Calendar days are left alone.** A proof seeds the fixture's own days, so a wrong day is a real
  *   difference.
  *
@@ -69,7 +76,16 @@ export function normalizeFixture(value: unknown, options: NormalizeFixtureOption
 
   const timestamp = (field: string, held: unknown): unknown => {
     if (held === null || held === undefined) return held;
-    if (typeof held === 'string' || held instanceof Date) return TIMESTAMP_PLACEHOLDER;
+    // Only the contract's own format is erased. Any other string stays, so the two sides differ.
+    if (typeof held === 'string') {
+      return hiddenAtSchema.safeParse(held).success ? TIMESTAMP_PLACEHOLDER : held;
+    }
+    if (held instanceof Date) {
+      throw new TypeError(
+        `normalizeFixture: '${field}' holds a Date. The contract's timestamps are UTC text with six ` +
+          'fractional digits; a Date has already rounded the value to milliseconds',
+      );
+    }
     throw new TypeError(
       `normalizeFixture: '${field}' is listed as a timestamp field but holds ${describe(held)}`,
     );
