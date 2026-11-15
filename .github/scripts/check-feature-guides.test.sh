@@ -81,4 +81,19 @@ case_ "an unowned file needs no guide edit"         "$OWNS_PLAIN"  src/free/c.ts
 # 7 · rot check #1 still fires on a path that does not exist.
 case_ "a claimed path that is missing fails"        "$OWNS_STALE"  src/owned/a.ts y 1 'does not exist'
 
+# 8 · a top-level key ends the `owns:` list: an item under the NEXT key is not owned. Pinned before
+#     DX-14 item 8 generalised the list loop, so the refactor can't move it.
+OWNS_THEN_KEY='  - src/free/
+related:
+  - src/owned/'
+case_ "a later top-level key ends the owns list"    "$OWNS_THEN_KEY" src/owned/a.ts n 0 'consistent with the diff'
+
+# 9-10 · a guide with no frontmatter is skipped, and README.md is never a guide, even with owns:.
+git -C "$tmp" checkout -q main
+printf '# Notes, no frontmatter\n' >"$tmp/docs/features/plain.md"
+printf -- '---\nfeature: Index\nowns:\n  - src/owned/\n---\n' >"$tmp/docs/features/README.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: plain + readme' >/dev/null 2>&1
+case_ "no-frontmatter and README files are not guides" "  - src/free/" src/owned/a.ts n 0 '1 guide(s) consistent'
+git -C "$tmp" checkout -q main && git -C "$tmp" rm -q docs/features/plain.md docs/features/README.md && git -C "$tmp" commit -qm 'chore: drop' >/dev/null
+
 [ "$fails" -eq 0 ] && echo 'all feature-guide guard self-tests passed' || { echo "$fails failing"; exit 1; }
