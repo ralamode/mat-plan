@@ -301,7 +301,7 @@ another lane's directory.
 ## Out of scope / deferred
 
 The milestone's "What moves to Beta 1", plus: old entries and history (ask the maintainer when FAM-1
-is done); **viewing past workouts, which moves to the feed** (FEED-0); ranges; a program default for
+is done); **viewing past workouts, which moves to the feed** (FEED-0); **ordering one athlete's workouts across programs** (ASSIGN-1's per-athlete days, Beta 1; maintainer, 2026-11-15: within one program any order already works, and two programs interleave by splitting one); ranges; a program default for
 Life; a second weigh-in; loading, failed-save and offline states beyond a plain refusal (each step's
 UX reviewer checks them).
 
