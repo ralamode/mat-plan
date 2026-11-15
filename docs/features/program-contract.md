@@ -1,0 +1,112 @@
+---
+feature: The program contract (FAM-1's shapes, fixtures, fakes and preview route)
+owns:
+  - packages/shared/src/program/
+  - apps/web/app/design/program/
+  # The scan of every state on the preview route. It reads the route's own list, so a lane never
+  # edits it; a change to how the states are scanned is a contract change.
+  - apps/web/e2e/program-preview-a11y.spec.ts
+---
+
+# The program contract
+
+**Read this before changing a shape, a fixture, a fake or the preview route.** Everything here is
+what two FAM-1 lanes agree on, so a change is felt by every lane that reads it.
+
+## What this is
+
+The program builder and the day page are built by several lanes at once
+([FAM-1 plan](../plans/fam-1-family-program.md) §5 to §7). The contract is what lets them: the
+shapes that pass between a screen and its data, named fixtures of each shape, in-memory fakes of the
+two actions objects, and a route that mounts any screen with any fixture. A screen is built and
+checked on a phone before its tables exist; a query is checked against the same fixture the screen
+renders.
+
+**Owner: the contract owner** (plan §5), not a lane. After step 0 it only makes contract changes.
+
+## The map
+
+```mermaid
+flowchart LR
+  PROTO[Accepted prototype v12] -->|transcribed, held by a test| FIX[program/fixtures]
+  SHAPES[program shapes + ProgramActions, DayActions] --> FIX
+  FIX --> REG[preview-registry.ts: screen × fixture]
+  FIX --> FAKES[fakes.ts]
+  SHAPES --> FAKES
+  REG --> ROUTE["/design/program"]
+  FAKES --> ROUTE
+  ROUTE -->|mounts, with data + actions| SCREENS[lane B and C screens]
+  REG --> SCAN[e2e/program-preview-a11y.spec.ts]
+  FIX -->|deep-equal, through the normalizer| DATA[lane P and E queries]
+```
+
+## Files
+
+| File                                              | What it is for                                                                                                          |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/program/pieces.ts`           | `RowValues`, `Superset`, the bounded texts, `TRACKING_TYPE_FIELDS` (which fields each tracking type has).               |
+| `packages/shared/src/program/program-shapes.ts`   | The builder's shapes and action inputs: `WorkoutDraft`, `WeekDraft`, `ProgramList`, `ProgramView`, the dialog drafts.   |
+| `packages/shared/src/program/day-shapes.ts`       | `DayPlan`, the row writes, `RowResult` and its refusals.                                                                |
+| `packages/shared/src/program/actions.ts`          | `ProgramActions` and `DayActions`: the only way a screen writes.                                                        |
+| `packages/shared/src/program/prescribed-text.ts`  | One renderer of a prescription as text, for all seven types. Its own subpath, not the root barrel.                      |
+| `packages/shared/src/program/fixtures/`           | The named fixtures (`@mat-plan/shared/program/fixtures`): the prototype's data, transcribed in `world.ts`.              |
+| `packages/shared/src/program/owed.test.ts`        | The `it.todo` list of tests each consumer still owes, by step. A lane deletes its lines as it writes them.              |
+| `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. |
+| `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture. Here because its shape is the web's `MovementOptionDTO`.                                  |
+| `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                   |
+| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props.          |
+| `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.        |
+| `apps/web/e2e/program-preview-a11y.spec.ts`       | Walks every state of the registry: axe, 44px targets, no sideways scroll at 360px.                                      |
+
+**The preview route's URLs:** `/design/program` lists every state.
+`/design/program?screen=<programs-list|program|workout-editor|day>&fixture=<name>` mounts one, and
+`&fail=next` makes the fake's next write answer `retry` (the "✓ that fails" state).
+
+**The screens it mounts** are the lanes' own: `apps/web/components/program-builder/`
+([program-builder.md](./program-builder.md)) and `apps/web/components/day/`
+([day-page.md](./day-page.md)). The data lanes are [program-writers.md](./program-writers.md) and
+[day-writers.md](./day-writers.md).
+
+## Invariants
+
+1. 🔴 **A shape change goes through the contract owner, and the lanes reading it wait** (plan §4).
+   A lane that finds the contract wrong or short stops and says what it needs
+   ([parallel-work](../parallel-work.md) → "Once lanes run", 5). It does not widen a shape in its
+   own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
+2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
+   `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
+   transcription to equal them. A fixture is changed by changing the prototype first.
+3. **A fixture is tested from both sides.** The screen renders it; the data lane seeds the state it
+   describes and asserts its query deep-equals it, through `packages/db/scripts/verify/normalize-fixture.ts`.
+4. 🔴 **Fakes on the preview route, real actions in production, never a mix** (plan §6). Nothing
+   outside `apps/web/app/design/program/` imports the fakes, `picker-options` or the fixtures
+   subpath, and nothing outside it names the route: `fakes.test.ts` and `preview-registry.test.ts`
+   scan for both.
+5. **A fake follows the prototype's rules and each rule has a test** (`fakes.test.ts`; plan §8,
+   "Behaviour"). A fake and a real action parse an input with the same schema, so a screen sees the
+   same refusal on the preview route and in production.
+6. **An optional action that is not supplied is `undefined`, and the screen hides its control.** The
+   fakes supply every member.
+7. **The preview route reads no data.** Its only DAL call is the session check. It renders inside
+   `AppShell` with `nav={false}`, so a screen gets production's measure and its one `<main>`, and
+   the rail's real athletes are not shown beside fixture ones.
+8. **One list of states, three readers.** The index, the route's parser and the a11y spec all read
+   `preview-registry.ts`, which reads the contract's fixture lists. A new fixture is on the route
+   and in the scan with no further edit.
+
+## Traps
+
+- **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are
+  the `/program/fixtures` and `/program/prescribed-text` subpaths, because `'use client'`
+  components import the barrel.
+- **`packages/shared` has no typecheck project of its own** ([AGENTS.md](../../AGENTS.md) → "Local
+  hooks vs CI merge-gates"). Its files are checked through what `apps/web` and `packages/db` import.
+- **The fixtures are deep-frozen.** Clone one before changing it (`structuredClone`); the fakes do.
+
+## Changing it
+
+- **A new state:** add the fixture to `fixtures/index.ts` and to the list of its shape
+  (`DAY_PLAN_FIXTURES` and the like). The route, its index and the scan pick it up.
+- **A new screen:** add it to `PREVIEW_SCREENS` and a `case` to `preview-harness.tsx`.
+- **A new rule in a fake:** write its test in `fakes.test.ts` first, against a named fixture.
+- Re-run: `pnpm test`, and `pnpm e2e:local e2e/program-preview-a11y.spec.ts` for the route.

@@ -92,7 +92,6 @@ describe('DayPlan: owed by its consumers', () => {
   it.todo('13b: future-preview renders read-only cards');
   it.todo('13d: no-program, not-on-a-program-that-day and the rest-day notices');
   it.todo('12c: an older day and a future day are read-only (e2e)');
-  it.todo('0b: the preview route renders each fixture; the a11y scan iterates the fixture list');
   it.todo('0c: the normalizer round-trips a fixture');
 });
 
@@ -123,7 +122,6 @@ describe('RowAmend: owed by its consumers', () => {
 });
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
-  it.todo('0b: the in-memory fakes satisfy both interfaces and follow the prototype’s rules');
   it.todo('7a: no formData or headers reach a captured event');
   it.todo('8a, 10b: a screen hides the control of a member that is undefined');
   it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
