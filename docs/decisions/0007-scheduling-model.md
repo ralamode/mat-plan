@@ -76,7 +76,8 @@ with its own `db:verify` proofs. Reviewed by six lenses in two rounds (PR #402).
   `UNIQUE (household_id, client_id)` on `program_blocks` (§5), non-partial. A global key would let
   one household probe another's ids. The reason these two tables get a `client_id` at all, unlike
   the assignment and weekday tables: they have no natural key.
-- **Only template blocks own workouts** (writer, plus `db:verify`).
+- **Only template blocks own workouts** (writer, plus `db:verify`). A copy's
+  `copied_from_workout_id` names a workout in the **same household** (writer, plus `db:verify`).
 - **No workout slug.** Decision 3's slug existed to become the CSV's `session_type` bytes, which
   ADR 0009 retires; step 14 makes the export quote per RFC 4180 (today `csv/row.ts` still throws on a
   comma outside `notes` and `prescribed`). So `SLUG_PATTERN`, the reserved legacy codes, the per-block
@@ -169,9 +170,11 @@ NOT NULL AND deleted_at IS NULL`. Step 11b appends later sets to the workout's s
   this arbiter**: today's insert targets only `client_id` (`writers/strength-session.ts`), so 11b
   uses a bare `ON CONFLICT DO NOTHING` and re-selects by (profile, day, workout), the bodyweight
   writer's pattern, repeating the predicate where a target is named (`docs/lessons.md`).
-- **An inherited superset row** gets the same treatment: its natural key is the session plus the
-  prescription's superset group, so it gets a partial UNIQUE on that pair. Entries need none, because
-  each row write carries its own `client_id`.
+- **An inherited superset row** gets the same treatment. `supersets` has only `session_id`, a
+  free-text `label` and `client_id` today, so this authorizes a nullable `supersets.prescription_group`
+  (the prescription's `superset_label`) with partial `UNIQUE (session_id, prescription_group) WHERE
+prescription_group IS NOT NULL AND deleted_at IS NULL`. Entries need no arbiter, because each row
+  write carries its own `client_id`.
 
 **7. Assignments (SCHED-1's two tables): authorized as in the body, with these changes.**
 
@@ -194,12 +197,17 @@ NOT NULL AND deleted_at IS NULL`. Step 11b appends later sets to the workout's s
 **in the step that creates it**, or a household delete fails on `23503` and rolls back: the defect
 class AUTH-1 1b and TEN-2a already hit.
 
-- **The runbook's household delete order** (`docs/runbooks.md`): `workouts` and `block_day_workouts`
-  after `prescriptions` and `sessions`, before `program_blocks`; the assignment and weekday tables
-  before `profiles`.
-- **Per-athlete erasure** (PRIV-3 PR 3) covers `program_assignments`.
+- **The runbook's household delete order** (`docs/runbooks.md`): after `prescriptions` and before
+  `program_blocks`, in this order: weekday rows, `program_assignments`, `block_day_workouts`,
+  `workouts`. Assignments reference both the block and the profile, and the runbook deletes blocks
+  before profiles, so they go before blocks. The week references workouts through its composite FK, so
+  it goes before them. The step-3 pre-flight also checks for another household's session or copy
+  pointing at this household's workouts, because `SET NULL` would otherwise rewrite that row
+  silently.
+- **Deleting one athlete** (PROF-1c) removes their weekday rows, then their `program_assignments`.
 - **`db:verify`'s erase proof** seeds a row in each new table.
-- **ADR 0008's purge:** a purged workout leaves its copies and sessions with the pointer set to NULL
+- **ADR 0008's purge:** purging a workout purges its prescriptions and week slots first, because
+  those FKs are NO ACTION. Its copies and sessions keep their rows, with the pointer set to NULL
   (`ON DELETE SET NULL`); sessions keep `workout_name`.
 - **Both workout pointers stay inside one household** (§2, §6). Crossing households is the club
   pilot's, with its own decision.
@@ -666,7 +674,7 @@ table and column below ships with MOT-1 (Beta 1), and adding them then is cheap.
   else's workout replaces a due counting workout the athlete picks.
 - **Excused days:** their own table; a reason is required; no cap; neutral; an adult excuses their
   own day and a parent a child's. **The reason can be health information about a child**, so the
-  default is that anyone else (a coach, a club, a public profile) sees **that** a day was excused,
+  **recommended** default is that anyone else (a coach, a club, a public profile) sees **that** a day was excused,
   never **why** (`docs/plan.md`, MOT-1.5). MOT-1 owes its inventory row, its place in the delete
   order, its place in the export, and a rule that it is never logged. Consider a fixed reason
   category with optional free text.
