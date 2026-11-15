@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils';
  * PRIV-2 — the app's one `<footer>`, so the privacy notice is reachable from every screen rather
  * than only by typing the URL, and so a family inside the app can find it too.
  *
- * ⚠️ **It left the root layout at `UI-5`** and is now rendered by four callers: `AppShell` (every
- * app screen), `app/page.tsx`, `app/privacy/page.tsx` and `app/error.tsx`. PRIV-2 chose the layout
+ * ⚠️ **It left the root layout at `UI-5`** and is now rendered by five callers: `AppShell` (every
+ * app screen), `app/page.tsx`, `app/privacy/page.tsx`, `app/error.tsx` and `app/not-found.tsx` (UI-6). PRIV-2 chose the layout
  * explicitly to avoid "three use sites that drift" — that paragraph is marked superseded in its own
  * plan, with the reason: a layout cannot read the pathname, so once `/sign-in` needed the footer
  * absent, "one definition" meant a client component on every route or two `contentinfo` landmarks
