@@ -1,7 +1,7 @@
 # FAM-1 d3, round 1: the Beta 0 prototype v10 (2026-11-15)
 
-Every name is a fixture. **Signed by the maintainer on 2026-11-15**: v10 is the accepted Beta 0
-prototype.
+Every name is a fixture. **v10 was signed by the maintainer on 2026-11-15; v11 came with the V1-24 3b plan (#412); v12
+(below) is signed by merging the FAM-1 plan's PR (#413).**
 
 **Goal of d3** (FAM-1 milestone): the builder and log-row prototype, plus its UX panel, before the
 d2 spec. v9 already had the builder (program page, workout editor, picker, week, copy, order). This
@@ -133,6 +133,30 @@ forms are gone (step 12's legacy read).
 edit-only and past entries deferred, **nothing is left of B1-3 on the new page** (workout rows
 un-tick; Clear this day is B2). V1-24 3b shrinks to **Life and Bodyweight, edit-only**, with no
 past-entry rows. The FAM-1 gates that waited on them loosen again.
+
+## v11 and v12 (2026-11-15)
+
+**v11** (#412, with the V1-24 3b plan): days before yesterday are read-only (what was logged shows as
+text, with no ✓, Change or Clear), the clear dialog is anchored at the top so the keyboard never covers
+its buttons, and the dialog says a strength session's note is kept.
+
+**v12** brings the prototype in line with the FAM-1 plan.
+
+The plan (d2) and its reviews changed six things after v10 was accepted. v12 shows them, so the plan
+and the prototype agree and every lane can check its work against the prototype (plan §8).
+
+| #   | Change                                                                                                                                                                                                                                                                                                                                                                                                                                           | From                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| 1   | **Order is yours.** A day lists workouts by the athlete's program order, then each program's own week order. v10 sorted by a time-of-day label first. The Program order dialog says so                                                                                                                                                                                                                                                           | plan D8                       |
+| 2   | **Labels are optional** headings: the week's Add starts with an empty label, and a slot with none shows just the workout                                                                                                                                                                                                                                                                                                                         | plan D8                       |
+| 3   | **A logged row keeps what it was logged against; nothing else is frozen.** After an edit, un-logged rows show the new prescription, logged rows say "Logged rows were against 4 × 8 @ 25 lb", an item removed since keeps its logged rows ("No longer in this workout") without its instructions, and a set beyond a reduced count still shows. v10 froze the whole workout at the first ✓. New state: "yesterday, after the program was edited" | plan D7, ADR 0007 Amendment 3 |
+| 4   | **A ✓ that fails** un-ticks, keeps what was typed and says "Couldn't save. Try again." New state                                                                                                                                                                                                                                                                                                                                                 | plan D24                      |
+| 5   | **Units come from a list** for Count and Distance. v10 had a free-text box. (The prototype shows lb for a weight; the app's list also offers kg)                                                                                                                                                                                                                                                                                                 | plan D27                      |
+| 6   | **"Up on time" is not built in** for Beta 0                                                                                                                                                                                                                                                                                                                                                                                                      | plan D26                      |
+| 7   | The picker says when nothing matches. New state                                                                                                                                                                                                                                                                                                                                                                                                  | plan step 9                   |
+| 8   | Bodyweight is checked against 20–500 lb, the app's shared bound (v10 checked 40–400)                                                                                                                                                                                                                                                                                                                                                             | V1-24 3b D2                   |
+
+The check script now runs **51 checks, all passing**.
 
 ## For the maintainer to decide (round 2, now answered or moot)
 

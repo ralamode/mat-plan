@@ -988,7 +988,10 @@
     <strong>Beta 0 prototype</strong>
     <select id="ver" class="ver" aria-label="Prototype version">
       <option value="">
-        v11 · Nov 15 · days before yesterday are read-only; clear dialog at the top (current)
+        v12 · Nov 15 · matches the FAM-1 plan: your order, per-row history, a failed ✓ (current)
+      </option>
+      <option value="history/v11-2026-11-15-read-only-older-days.html">
+        v11 · Nov 15 · days before yesterday are read-only; clear dialog at the top (#412)
       </option>
       <option value="history/v10-2026-11-15-one-day-page.html">
         v10 · Nov 15 · one day page for every day; bodyweight edit-only (FAM-1 d3)
@@ -1027,12 +1030,15 @@
           Athlete One · Sunday: family rest day, stretching still on (pretend Nov 15)
         </option>
         <option value="order">Athlete One · the order of their programs</option>
+        <option value="edited">Athlete One · yesterday, after the program was edited</option>
+        <option value="failed">Athlete One · a ✓ that fails</option>
       </optgroup>
       <optgroup label="Building the program">
         <option value="programs">Programs: the list, with who’s on each</option>
         <option value="program">One program: workouts, week, who’s on it</option>
         <option value="workout">Edit a workout: Heavy A, with supersets</option>
         <option value="picker2">Add items: the full-screen picker</option>
+        <option value="nomatch">Add items: no item matches</option>
         <option value="scratch">Build a new program from scratch</option>
         <option value="start">Put someone on this program</option>
         <option value="copy">Copy a workout to another program</option>
@@ -1151,7 +1157,6 @@
     var SET_TYPES = { reps: 1, weight: 1, timeset: 1, distance: 1 };
     function baseCatalog() {
       return {
-        uptime: { name: 'Up on time', type: 'check' },
         grip: { name: 'Grip: rice bucket', type: 'check' },
         film: { name: 'Watch one technique clip', type: 'check' },
         stance: { name: 'Stance-motion drill', type: 'check' },
@@ -1520,7 +1525,7 @@
         flash: null,
       };
     }
-    var KEY = 'matplan-beta0-proto-v11';
+    var KEY = 'matplan-beta0-proto-v12';
     var S;
     try {
       S = JSON.parse(localStorage.getItem(KEY)) || seed();
@@ -1613,13 +1618,13 @@
 
     function bwOk(raw) {
       var v = +raw;
-      if (raw === '' || isNaN(v) || v < 40 || v > 400) {
+      if (raw === '' || isNaN(v) || v < 20 || v > 500) {
         S.err = {
           at: 'bw',
           msg:
             raw === ''
               ? 'Enter your bodyweight, then ✓.'
-              : 'Enter a bodyweight between 40 and 400 lb.',
+              : 'Enter a bodyweight between 20 and 500 lb.',
         };
         return null;
       }
@@ -2304,15 +2309,19 @@
       }
       if (!wr && !shown) return '';
       var all = done && done >= (setBased ? Math.max(n, it.sets || 1) : 1);
+      var was = rowsOf(day, slot, it.iid).filter(function (x) {
+        return !x.hidden && x.pt && x.pt !== presc(it);
+      })[0];
       var head =
         '<div class="card-h">' +
         (letter ? '<span class="letter">' + letter + '</span>' : '') +
         '<b>' +
         esc(name) +
         '</b><span class="hint">' +
-        esc(presc(it)) +
+        esc(!wr && was ? was.pt : presc(it)) +
         '</span></div>' +
-        (it.note ? '<p class="hint inst">' + esc(it.note) + '</p>' : '');
+        (it.note ? '<p class="hint inst">' + esc(it.note) + '</p>' : '') +
+        (wr && was ? '<p class="hint inst">Logged rows were against ' + esc(was.pt) + '.</p>' : '');
       var colHd =
         setBased && rows
           ? '<div class="sg" style="grid-template-columns:' +
@@ -2337,37 +2346,98 @@
         '<div class="card' + (all ? ' all-done' : '') + '">' + head + colHd + rows + add + '</div>'
       );
     }
-    // Logged days keep their frozen workout (ADR 0007 A2 §6–7): the first ✓ of a workout on a day
-    // snapshots it, and that day draws from the snapshot from then on, whatever the program becomes.
-    function snapKey(aid, day, slot) {
-      return aid + '|' + day + '|' + slot;
-    }
-    function freeze(aid, day, slot) {
-      var pid = slot.split('_')[0],
-        wid = slot.slice(pid.length + 1),
+    // A logged row keeps its own prescription; nothing else is frozen (FAM-1 plan D7, ADR 0007
+    // Amendment 3). Each row entry carries what it was logged against: the prescription's text, the
+    // item's name, and the workout's name and label.
+    function stamp(e) {
+      var pid = e.slot.split('_')[0],
         p = prog(pid),
-        k = snapKey(aid, day, slot);
-      if (S.snap[k] || !p || !wk(p, wid)) return;
-      var c = JSON.parse(JSON.stringify(wk(p, wid))),
-        hit = (p.week[dow(day)] || []).filter(function (x) {
-          return x.wid === wid;
-        })[0];
-      c.label = hit ? hit.label : 'Workout';
-      c.pid = pid;
-      S.snap[k] = c;
+        w = p && wk(p, e.wid),
+        it =
+          w &&
+          w.items.filter(function (x) {
+            return x.iid === e.iid;
+          })[0],
+        hit =
+          p &&
+          (p.week[dow(e.day)] || []).filter(function (x) {
+            return x.wid === e.wid;
+          })[0];
+      if (e.pt == null) e.pt = it ? presc(it) : '';
+      if (e.nm == null) e.nm = it ? itemName(it) : e.iid;
+      if (e.wn == null) e.wn = w ? w.name : 'A workout';
+      if (e.lb == null) e.lb = hit ? hit.label : '';
     }
     function ensureState() {
-      if (!S.snap) S.snap = {};
       if (!S.pending) S.pending = {};
       S.entries.forEach(function (e) {
-        if (e.cat === 'row') freeze(e.ath, e.day, e.slot);
+        if (e.cat === 'row' && e.pt == null) stamp(e);
       });
     }
-    function wkFor(day, slot, p, wid) {
-      return S.snap[snapKey(S.ath, day, slot)] || wk(p, wid);
+    // Rows logged against an item that has since left the workout: shown from the entry alone, with
+    // no instructions (a removed instruction never reappears).
+    function removedCards(day, slot, w, wr) {
+      var liveIds = w
+          ? w.items.map(function (x) {
+              return x.iid;
+            })
+          : [],
+        byItem = {},
+        order = [];
+      S.entries.forEach(function (e) {
+        if (e.cat !== 'row' || e.ath !== S.ath || e.day !== day || e.slot !== slot) return;
+        if ((e.hidden && (e.event || !wr)) || liveIds.indexOf(e.iid) >= 0) return;
+        if (!byItem[e.iid]) {
+          byItem[e.iid] = [];
+          order.push(e.iid);
+        }
+        byItem[e.iid].push(e);
+      });
+      return order
+        .map(function (iid) {
+          var es = byItem[iid].sort(function (a, b) {
+            return a.set - b.set;
+          });
+          var rows = es
+            .map(function (e) {
+              var vals = Object.keys(e.v)
+                .map(function (k) {
+                  return e.v[k];
+                })
+                .join(' × ');
+              return (
+                '<div class="one"><span class="grow">' +
+                (es.length > 1 ? 'Set ' + e.set + (vals ? ' · ' : '') : '') +
+                esc(vals || 'Done') +
+                '</span>' +
+                // Days before yesterday are read-only (maintainer, 2026-11-15, #412).
+                (wr
+                  ? '<button class="ck" data-act="row-old" data-id="' +
+                    e.id +
+                    '" aria-pressed="' +
+                    (e.hidden ? 'false' : 'true') +
+                    '" aria-label="' +
+                    esc((e.hidden ? 'Log ' : 'Logged: ') + e.nm + ' set ' + e.set) +
+                    '">✓</button>'
+                  : '<span class="tick" aria-label="Logged">✓</span>') +
+                '</div>'
+              );
+            })
+            .join('');
+          return (
+            '<div class="card"><div class="card-h"><b>' +
+            esc(es[0].nm) +
+            '</b><span class="hint">' +
+            esc(es[0].pt) +
+            '</span></div><p class="hint inst">No longer in this workout. What was logged stays.</p>' +
+            rows +
+            '</div>'
+          );
+        })
+        .join('');
     }
     function renderWorkout(day, slot, sl, p, wr, many) {
-      var w = wkFor(day, slot, p, sl.wid);
+      var w = wk(p, sl.wid);
       if (!w) return '';
       var L = letters(w.items),
         body = '',
@@ -2398,12 +2468,13 @@
             '</div>';
         } else body += cards;
       });
+      body += removedCards(day, slot, w, wr);
       if (!body) body = '<p class="hint">Nothing logged.</p>';
       return (
         '<section class="wk" aria-labelledby="wk-' +
         slot +
         '"><div class="row between" style="flex-wrap:nowrap"><span class="slotlbl">' +
-        esc(sl.label) +
+        esc(sl.label || '') +
         '</span>' +
         (many
           ? '<button class="txt from" data-act="open-prog" data-pid="' +
@@ -2431,8 +2502,8 @@
         '</section>'
       );
     }
-    var RANK = { Morning: 0, 'After lunch': 1, Afternoon: 2, 'After school': 2, Evening: 3 };
-    // The day's workouts from all of a person's programs: by time of day, then in the person's program order.
+    // The day's workouts from all of a person's programs: in the person's program order, then each
+    // program's own week order (maintainer, 2026-11-15). A label is a heading; it never sorts.
     function daySlots(list, day) {
       var out = [];
       list.forEach(function (asg, pi) {
@@ -2444,12 +2515,11 @@
             key: p.id + '_' + sl.wid,
             pi: pi,
             i: i,
-            r: sl.label in RANK ? RANK[sl.label] : 1.5,
           });
         });
       });
       return out.sort(function (a, b) {
-        return a.r - b.r || a.pi - b.pi || a.i - b.i;
+        return a.pi - b.pi || a.i - b.i;
       });
     }
     function vDayProgram(list) {
@@ -2585,27 +2655,18 @@
           '</section>';
       }
       var slots = daySlots(list, day);
-      // A workout logged on this day but since removed from the week (or the program) still shows, frozen.
+      // A workout logged on this day but no longer on the week still shows, with its logged rows only.
+      var offWeek = {};
       if (!fut) {
         var have = slots.map(function (x) {
           return x.key;
         });
-        Object.keys(S.snap).forEach(function (k) {
-          var parts = k.split('|');
-          if (parts[0] !== A.id || parts[1] !== day || have.indexOf(parts[2]) >= 0) return;
-          var sn = S.snap[k],
-            p0 = prog(sn.pid) || { id: sn.pid, name: 'A removed program' };
-          slots.push({
-            p: p0,
-            sl: { label: sn.label, wid: sn.wid },
-            key: parts[2],
-            pi: 99,
-            i: 0,
-            r: sn.label in RANK ? RANK[sn.label] : 1.5,
-          });
-        });
-        slots.sort(function (a, b) {
-          return a.r - b.r || a.pi - b.pi || a.i - b.i;
+        all.forEach(function (e) {
+          if (e.cat !== 'row' || (e.hidden && e.event) || have.indexOf(e.slot) >= 0) return;
+          if (offWeek[e.slot]) return;
+          offWeek[e.slot] = 1;
+          var p0 = prog(e.slot.split('_')[0]);
+          if (p0) slots.push({ p: p0, sl: { label: e.lb, wid: e.wid }, key: e.slot, pi: 99, i: 0 });
         });
       }
       if (!slots.length && !none)
@@ -2632,7 +2693,7 @@
             '</p>';
       }
       slots.forEach(function (x) {
-        html += renderWorkout(day, x.key, x.sl, x.p, wr, many);
+        html += renderWorkout(day, x.key, x.sl, x.p, wr && !offWeek[x.key], many);
       });
       if (liveN && wr) html += '<button class="back" data-act="clear">Clear this day…</button>';
       return html;
@@ -2770,9 +2831,8 @@
         slots.forEach(function (sl, i) {
           var w = wk(p, sl.wid);
           html +=
-            '<div class="slotline"><span class="ttl"><span class="slotlbl">' +
-            esc(sl.label) +
-            '</span> · ' +
+            '<div class="slotline"><span class="ttl">' +
+            (sl.label ? '<span class="slotlbl">' + esc(sl.label) + '</span> · ' : '') +
             esc(w ? w.name : '?') +
             '</span><span class="row" style="flex-wrap:nowrap;gap:0">' +
             '<button class="txt" data-act="wmove" data-day="' +
@@ -2815,7 +2875,7 @@
                   return '<option value="' + w.wid + '">' + esc(w.name) + '</option>';
                 })
                 .join('') +
-              '</select><input type="text" id="wa-label" list="labels" maxlength="30" placeholder="Label" aria-label="Label, for example Morning" value="Morning"></div>' +
+              '</select><input type="text" id="wa-label" list="labels" maxlength="30" placeholder="Label (optional)" aria-label="Label, optional, for example Morning"></div>' +
               '<fieldset class="stack" style="gap:6px;border:0;padding:0;margin:0"><legend class="hint" style="padding:0;margin-bottom:6px">On</legend><div class="row" style="gap:6px">' +
               WEEK_ORDER.map(function (d2) {
                 return (
@@ -2867,6 +2927,21 @@
         '></label>'
       );
     }
+    var UNITS_ANY = ['lb', 'kg', 'count', 'min', 'sec', 'in', 'cm', 'ft', 'm', 'yd', 'mi'],
+      UNITS_LENGTH = ['m', 'yd', 'mi', 'ft'];
+    function edUnit(i, it, list) {
+      return (
+        '<label>Unit<select class="field" data-d="' +
+        i +
+        '.unit">' +
+        list
+          .map(function (u) {
+            return '<option' + (it.unit === u ? ' selected' : '') + '>' + u + '</option>';
+          })
+          .join('') +
+        '</select></label>'
+      );
+    }
     function edFields(i, it) {
       var t = itemType(it);
       if (t === 'weight')
@@ -2881,10 +2956,10 @@
         return (
           edField(i, it, 'sets', 'Sets') +
           edField(i, it, 'dist', 'Distance') +
-          edField(i, it, 'unit', 'Unit')
+          edUnit(i, it, UNITS_LENGTH)
         );
       if (t === 'duration') return edField(i, it, 'min', 'Minutes');
-      if (t === 'count') return edField(i, it, 'n', 'Target') + edField(i, it, 'unit', 'Unit');
+      if (t === 'count') return edField(i, it, 'n', 'Target') + edUnit(i, it, UNITS_ANY);
       return '';
     }
     function vWorkout() {
@@ -3062,7 +3137,7 @@
         nw +
         '<div class="stack" id="pk-list" style="gap:8px">' +
         list +
-        '</div></div>' +
+        '</div><p class="hint" id="pk-none" hidden>No item matches. Make it with “+ New item”.</p></div>' +
         '<div class="ov-f"><button class="btn wide" data-act="pick-add"' +
         (n ? '' : ' disabled') +
         '>' +
@@ -3150,7 +3225,7 @@
           })[0];
           if (hit) return hit.label;
         }
-        return 'Morning';
+        return '';
       })();
       var opts = others
         .concat([src])
@@ -3235,7 +3310,7 @@
         '’s programs ' +
         chip('FAM-1 15c') +
         '</h2>' +
-        '<p class="hint">The day page lists workouts by time of day (Morning first), then in this order. A program added later goes where it sits in the Programs list.</p>' +
+        '<p class="hint">The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week. A program added later goes where it sits in the Programs list.</p>' +
         '<div class="stack" style="gap:6px">' +
         rows +
         '</div>' +
@@ -3629,7 +3704,7 @@
           // The name stays within 30 characters; the provenance is always the program's name, frozen.
           if (tp2.id === sp.id) cw.name = sw.name.slice(0, 23) + ' (copy)';
           tp2.workouts.push(cw);
-          var lb = val('cp-label') || 'Workout',
+          var lb = val('cp-label'),
             ds = [];
           Array.prototype.forEach.call(
             document.querySelectorAll('input[name=cp-day]:checked'),
@@ -3740,7 +3815,7 @@
               return w.wid === dr.wid ? dr : w;
             });
           S.draft = null;
-          say('Workout saved. Days already logged keep what was prescribed then.');
+          say('Workout saved. Rows already logged keep what they were logged against.');
           return go('program');
         }
         case 'it-move': {
@@ -3855,7 +3930,7 @@
                 })
               ) {
                 (pp.week[dk] = pp.week[dk] || []).push({
-                  label: val('wa-label') || 'Workout',
+                  label: val('wa-label'),
                   wid: wid3,
                 });
                 added.push(DAYS[dk].slice(0, 3));
@@ -3898,7 +3973,7 @@
           var slot = t.dataset.slot,
             pid2 = slot.split('_')[0],
             P2 = prog(pid2),
-            W = wkFor(S.day, slot, P2, slot.slice(pid2.length + 1));
+            W = wk(P2, slot.slice(pid2.length + 1));
           var it2 = W.items.filter(function (x) {
               return x.iid === t.dataset.iid;
             })[0],
@@ -3925,28 +4000,44 @@
             S.err = { at: rid, msg: bad ? 'Numbers only.' : 'Enter a number, then ✓.' };
             break;
           }
+          if (S.failNext) {
+            // A ✓ that fails (plan D24): the row un-ticks, keeps what was typed, and says so.
+            S.failNext = false;
+            fieldsOf(it2).forEach(function (f) {
+              S.pending[rid + '-' + f.f] = String(v[f.f]);
+            });
+            S.err = { at: rid, msg: 'Couldn’t save. Try again.' };
+            break;
+          }
           fieldsOf(it2).forEach(function (f) {
             delete S.pending[rid + '-' + f.f];
           });
-          freeze(S.ath, S.day, slot);
           if (ex) {
             ex.hidden = false;
             ex.v = v;
           } else
-            add({
-              ath: S.ath,
-              day: S.day,
-              cat: 'row',
-              slot: slot,
-              wid: W.wid,
-              iid: it2.iid,
-              set: set,
-              v: v,
-              at: nowTime(),
-            });
+            stamp(
+              add({
+                ath: S.ath,
+                day: S.day,
+                cat: 'row',
+                slot: slot,
+                wid: W.wid,
+                iid: it2.iid,
+                set: set,
+                v: v,
+                at: nowTime(),
+              }),
+            );
           say(lbl2 + ' logged');
           break;
         }
+        case 'row-old':
+          // A row whose item has left the workout: it can be un-ticked and ticked back, nothing more.
+          e.hidden = !e.hidden;
+          e.event = null;
+          say(e.nm + (e.hidden ? ' un-checked' : ' logged'));
+          break;
         case 'modal-close':
           closeModal();
           return;
@@ -4016,7 +4107,7 @@
       es.forEach(function (e) {
         if (e.cat === 'row') {
           sets++;
-          wks[(S.snap[snapKey(aid, day, e.slot)] || { name: 'a workout' }).name] = 1;
+          wks[e.wn || 'a workout'] = 1;
         } else if (e.cat === 'bw') parts.push('bodyweight');
         else if (e.cat === 'life') parts.push(FIELDS[e.key].label.toLowerCase());
         else other++;
@@ -4135,9 +4226,13 @@
     });
     function filterPicker() {
       var q = ((S.picker && S.picker.q) || '').toLowerCase();
+      var shown = 0;
       Array.prototype.forEach.call(document.querySelectorAll('#pk-list .pick'), function (b) {
         b.hidden = q && b.dataset.name.indexOf(q) < 0;
+        if (!b.hidden) shown++;
       });
+      var none = document.getElementById('pk-none');
+      if (none) none.hidden = shown > 0;
     }
 
     // --- review bar ---
@@ -4203,7 +4298,36 @@
         TODAY = S.today = '2026-11-15';
         dayOf('a1', TODAY);
       } else if (v === 'clear') dayOf('a1', addDays(TODAY, -1));
-      else if (v === 'noprog') {
+      else if (v === 'edited') {
+        // The program is edited AFTER yesterday was logged: fewer sets and a heavier bench, pull-ups
+        // removed from Heavy A, push-ups cut to two sets. Logged rows keep what they were logged against.
+        var hw = wk(prog('p1'), 'w2'),
+          mh = wk(prog('p1'), 'w1');
+        hw.items = hw.items.filter(function (x) {
+          return x.iid !== 'pullup';
+        });
+        normalize(hw.items);
+        hw.items.forEach(function (x) {
+          if (x.iid === 'dbbench') {
+            x.sets = 3;
+            x.load = 30;
+          }
+        });
+        mh.items.forEach(function (x) {
+          if (x.iid === 'pushups') x.sets = 2;
+        });
+        dayOf('a1', addDays(TODAY, -1));
+      } else if (v === 'failed') {
+        dayOf('a1', TODAY);
+        S.failNext = true;
+        S.pending['r-p1_w1-neck-1-sec'] = '30';
+        S.err = { at: 'r-p1_w1-neck-1', msg: 'Couldn’t save. Try again.' };
+      } else if (v === 'nomatch') {
+        S.prog = 'p1';
+        S.draft = JSON.parse(JSON.stringify(wk(prog('p1'), 'w2')));
+        S.screen = 'workout';
+        S.picker = { sel: {}, newOpen: false, q: 'kettlebell snatch' };
+      } else if (v === 'noprog') {
         useNewFamily();
         S.athletes.push({
           id: 'a9',

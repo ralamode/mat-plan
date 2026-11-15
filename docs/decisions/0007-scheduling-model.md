@@ -1,12 +1,12 @@
 # ADR 0007 — The scheduling model
 
-**Status:** **Accepted** with Amendments 1 and 2, signed by the maintainer by merging PR #402 (2026-11-14) ·
+**Status:** **Accepted** with Amendments 1 and 2, signed by the maintainer by merging PR #402 (2026-11-14); **Amendment 3** proposed by the FAM-1 plan (d2) and signed by merging it ·
 **Date:** 2026-10-07, amended 2026-11-13 and 2026-11-14 · **Scope:** Beta 0's last milestone (FAM-1) and later ·
 **Continues:** [ADR 0005](./0005-programming-model.md), whose "What this does not settle" is this
 document's charter · **Relates:** [ADR 0002](./0002-calisthenics-ramp-targets.md) (the one
 materialized-plan table this repo already has)
 
-## Signed with two amendments (FAM-1 step d1)
+## Signed with amendments (FAM-1 steps d1 and d2)
 
 **Read the amendments first.** Where an amendment and the body below disagree, the amendment wins.
 The body keeps its original reasoning, with a ⚠️ marker at each paragraph an amendment changes.
@@ -244,6 +244,70 @@ destructive `workouts` arc; the MOT-1 tables (see decision 5's ⚠️ note); any
 - **assignments:** two open programs on different blocks are accepted, on one block rejected; two
   open at one `idx` rejected;
 - **erasure:** the household delete and the per-athlete erasure commit with a row in every new table.
+
+### Amendment 3 (2026-11-15): a logged row names its prescription
+
+Found by the [FAM-1 plan](../plans/fam-1-family-program.md)'s panel (d2, round 1): four of six
+lenses showed that a row logged from a template workout cannot be tied back to what it was logged
+against. `entries` has no prescription column, an item may appear twice in a workout (warm-up and
+working), and Today logs **one row per ✓**, so set-by-set writes had no arbiter (twin rows on an
+offline replay) and un-ticking one set would hide the whole item. Draft 1's fix, reading a workout
+"as of" its session's start by never updating prescriptions in place, failed on the server's clock
+(an offline ✓ synced after an edit vanished from its own day) and on ADR 0008's purge.
+
+**Authorized, additive, on `entries`:**
+
+- `prescription_id`: nullable, an FK to `prescriptions` **`ON DELETE SET NULL`** with a covering
+  index. Set only on rows logged from a template workout. It must name a prescription **in the entry
+  profile's household at write time** (writer, plus a `db:verify` audit in the style of §6's).
+- `prescription_set`: nullable `integer`, `CHECK (prescription_set >= 1)`, the 1-based set row.
+- **The row arbiter:** partial `UNIQUE (session_id, prescription_id, prescription_set) WHERE
+prescription_id IS NOT NULL AND deleted_at IS NULL`. A second device's ✓ on the same row returns the
+  first; a hidden row frees its place.
+- `CHECK (prescription_id IS NULL OR prescription_set IS NOT NULL)`: a linked row names its set. It is
+  one-way on purpose: a purge's `ON DELETE SET NULL` clears only `prescription_id`, and a
+  both-or-neither CHECK would roll the purge back (d2 re-review). A leftover set number is harmless,
+  because the arbiter is partial on `prescription_id IS NOT NULL`.
+- `CHECK (prescription_id IS NULL OR session_id IS NOT NULL)`: a linked row has a session, so the
+  arbiter always applies (NULLs are distinct in a unique index).
+
+**Also authorized (d2 gap review, 2026-11-15):**
+
+- **`uq_entries_superset_order` is recreated** as `UNIQUE (superset_id, superset_order) WHERE deleted_at
+IS NULL AND prescription_set IS NULL`. Today it allows one live entry per place in a superset
+  (`schema.ts:354`); with one entry per ✓ row, every set of a superset member holds the same place, so a
+  second set would fail. A linked row is kept unique by the row arbiter above; unlinked rows keep
+  today's rule. The predicate is on `prescription_set`, which a purge never clears; on
+  `prescription_id` it would fail the purge, because `SET NULL` would drop two logged sets of one
+  member into the index together.
+- **`prescriptions.client_id`**: nullable UUIDv7 (legacy and seeded rows have none; a template row
+  always has one, writer plus `db:verify`), with `UNIQUE (workout_id, client_id)`, non-partial like
+  every `client_id`. The builder's save names each item by it, so a save matches rows whatever their
+  order, a reorder never detaches a logged row from its prescription, and a replayed save adds nothing.
+  This revises the body's "config → no `client_id`" for template prescriptions only.
+
+**What this changes in Amendment 2:**
+
+- **§6's "entries need no arbiter, because each row write carries its own `client_id`"** is
+  superseded: a `client_id` stops a replay, not a second device. The row arbiter above does.
+- **"Logged days keep their frozen workout" (§7)** is met per row: each entry keeps its
+  `prescribed_snapshot` (ADR 0005 decision 5) and its prescription; the session keeps `workout_name`.
+  The program writer edits prescriptions **in place**; nothing is versioned. A purged prescription
+  leaves its entries with the snapshot and `prescription_id` NULL.
+- **§8, erasure:** entries are deleted before `prescriptions` already, so the order is unchanged; the
+  runbook's pre-flight also checks for another household's entry pointing at this household's
+  prescriptions.
+- **§1's `BLOCK_KINDS`** is named `PROGRAM_BLOCK_KINDS` in code (the short name is taken,
+  `apps/web/lib/privacy/notice-model.ts:46`). **§2's `RESERVED_PROGRAM_SLUGS`** was never built and is
+  not needed: a template block's slug takes a `-2`, `-3`… suffix on a household collision (d2, D9).
+- **§10, proofs:** the arbiter rejects a twin ✓ and frees a hidden row's place; a linked row without
+  a set or a session is refused; two sets of one superset member commit, and purging their prescription commits; a `client_id` is
+  unique in its workout and a replayed save adds nothing;
+  a cross-household prescription is flagged; purging a prescription that has a logged entry commits,
+  with the pointer set to NULL and the snapshot kept, against the real CHECKs.
+
+**Where it lands:** FAM-1 step 4a-ii, with the log side's other columns. The lock and route follow
+§4b's small-table route (`entries` is small); the header says so.
 
 ### Signature
 
