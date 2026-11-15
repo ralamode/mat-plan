@@ -61,11 +61,11 @@ below adds its files, its diagram and its invariants here.
    redraw; a counter outside its label, linked by `aria-describedby`; week days as headings; 44px
    targets; the layout at 360px.
 6. **The DAL resolves the household scope itself.** Every function under `lib/dal/program/` calls
-   `getHouseholdScope()` and returns a contract shape. The tenancy scan (`lib/dal/scoped.test.ts`,
-   which step 0b's refactor PR widens to sub-directories) holds this directory to that. [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions
+   `getHouseholdScope()` and returns a contract shape. The tenancy scan (`lib/dal/scoped.test.ts`)
+   reaches sub-directories, so it holds this directory to that. [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
-   shared table (step 0b's refactor PR; [write-path.md](./write-path.md) holds the rule).
+   shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
 
 ## Changing it
 

@@ -65,12 +65,12 @@ its files, its diagram and its invariants here.
    redraw, so typed values survive ticking another row; set rows as a list or a table with headers;
    the day label as a heading; one persistent live region; 44px targets; the layout at 360px.
 8. **The DAL resolves the household scope itself**, and sets `writable`, `future` and
-   `canGoForward`. The tenancy scan (`lib/dal/scoped.test.ts`, which step 0b's refactor PR widens
-   to sub-directories) holds `lib/dal/day/` to that.
+   `canGoForward`. The tenancy scan (`lib/dal/scoped.test.ts`) reaches sub-directories, so it
+   holds `lib/dal/day/` to that.
    [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions and the DAL,
    though the guide gate no longer sends a PR there.
 9. **A new Server Action module brings its own registry and test files**, so the lane edits no
-   shared table (step 0b's refactor PR; [write-path.md](./write-path.md) holds the rule).
+   shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
 
 ## Changing it
 
