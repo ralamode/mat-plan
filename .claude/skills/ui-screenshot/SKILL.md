@@ -143,6 +143,13 @@ the Playwright MCP directly (load via ToolSearch: `browser_navigate`, `browser_s
 - Prefer the **prod build** over `next dev` so the screenshot reflects real CSP/styling.
 - Optional: capture light **and** dark (the app is theme-aware) when the change is visual/design-heavy.
 
+## Red flags
+
+- Capturing before the review round on a PR deep enough to have one: a reviewed label or heading invalidates every image (maintainer, 2026-11-07)
+- "Not capturable" in a PR body for a state that only exists after a tap, instead of adding an `INTERACTIONS` entry (#171)
+- Publishing a capture whose console logged an error or warning without saying so, or passing `--allow-console` with no reason in the PR (#390)
+- A capture after a UI change without `--build`, which shoots whatever `.next` last held (hypothesis)
+
 ## Done when
 
 - [ ] Captured after the review round, from a fresh `--build`.

@@ -84,9 +84,9 @@ what ran; the `Correction` type has no applied flag. Ship it with `ship-pr` (`fe
 
 ## Red flags
 
-- `--apply` before the user has seen the dry run.
-- A guard that doesn't include the wrong value, so a re-run would change rows again.
-- `DELETE`, or an update that misses `updated_at`.
-- No backlog row for the cause ("we'll fix the app later" with nothing filed).
+- `--apply` before the user has seen the dry run. (hypothesis)
+- A guard that doesn't include the wrong value, so a re-run would change rows again. (hypothesis)
+- `DELETE`, or an update that misses `updated_at`. (hypothesis)
+- No backlog row for the cause ("we'll fix the app later" with nothing filed). (hypothesis)
 - There are no automated tests for corrections. The dry run and the 0-change re-run are the only
-  proof, so don't skip either.
+  proof, so don't skip either. (hypothesis)

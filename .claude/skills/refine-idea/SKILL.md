@@ -73,10 +73,10 @@ Then hand off: `write-spec` if several PRs must agree, otherwise `start-task`.
 
 ## Red flags
 
-- Two questions in one message, or a list of questions "to save time".
-- A question without a proposed answer.
-- Treating silence, "ok", or a change of subject as a yes.
-- Re-asking something a spec, ADR or plan row already decided.
-- Drifting into engineering (tables, endpoints, migrations) before the behaviour is settled.
-- Writing the spec during the interview.
-- An empty "Not doing" list. Nothing was weighed, or nothing was written down.
+- Two questions in one message, or a list of questions "to save time". (hypothesis)
+- A question without a proposed answer. (hypothesis)
+- Treating silence, "ok", or a change of subject as a yes. (hypothesis)
+- Re-asking something a spec, ADR or plan row already decided. (hypothesis)
+- Drifting into engineering (tables, endpoints, migrations) before the behaviour is settled. (hypothesis)
+- Writing the spec during the interview. (hypothesis)
+- An empty "Not doing" list. Nothing was weighed, or nothing was written down. (hypothesis)

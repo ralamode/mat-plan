@@ -56,6 +56,6 @@ can't tell a good reason from a bad one, but the PR reviewer can.
 
 ## Red flags
 
-- A red check went green in the same commit that touched its config.
-- "Pre-existing failure, so I skipped it." Name it in the PR and file it; don't hide it.
-- `--no-verify` anywhere in the session.
+- A red check went green in the same commit that touched its config. (#247)
+- "Pre-existing failure, so I skipped it." Name it in the PR and file it; don't hide it. (hypothesis)
+- `--no-verify` anywhere in the session. (hypothesis)

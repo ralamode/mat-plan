@@ -96,6 +96,6 @@ If a check or convention could have prevented it, propose that too: the durable 
 
 ## Red flags
 
-- A third push in a row that says "fix CI".
-- A fix that changes a test's expectations, not the code.
-- A lessons entry that describes what was done but not how to recognise the symptom.
+- A third push in a row that says "fix CI". (hypothesis)
+- A fix that changes a test's expectations, not the code. (hypothesis)
+- A lessons entry that describes what was done but not how to recognise the symptom. (hypothesis)

@@ -121,8 +121,8 @@ Neon-branch apply** yet (tech-debt.md), so don't cite one.
 
 ## Red flags
 
-- A modified file under `packages/db/migrations/` that already exists on `main`.
-- Generated SQL committed unedited, with no header, timeouts or breakpoints.
-- A `DROP`/`RENAME` in the same PR as the code that stops using it.
-- A new constraint with no `db:verify` rejection proof.
-- `drizzle-kit push` anywhere.
+- A modified file under `packages/db/migrations/` that already exists on `main`. (#132)
+- Generated SQL committed unedited, with no header, timeouts or breakpoints. (lessons: "cannot insert multiple commands")
+- A `DROP`/`RENAME` in the same PR as the code that stops using it. (hypothesis)
+- A new constraint with no `db:verify` rejection proof. (hypothesis)
+- `drizzle-kit push` anywhere. (hypothesis)

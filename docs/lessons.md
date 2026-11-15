@@ -833,6 +833,15 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- **Squashing a branch with `git reset --soft origin/main` reverts whatever landed on `main` since
+  the branch was cut.** → `--soft` moves HEAD and keeps the tree, so the tree still holds the
+  branch's OLD base. If `origin/main` has moved, the next commit undoes those newer changes, and the
+  diff looks like your own work plus "unrelated deletions". Caught on 2026-11-14 only because the
+  commit hook rejected the subject. #403 would otherwise have been reverted inside an unrelated PR.
+  **Fix:** squash onto the branch's own base, `git reset --soft $(git merge-base HEAD origin/main)`,
+  then merge the new `main` in. **Check:** before committing, `git diff --cached --stat
+$(git merge-base HEAD origin/main)` should list only your files.
+
 - 🔴 **A commit made while `pnpm db:mutations` was running committed a MUTATION PATCH into the
   branch, and every gate stayed green.** → The mutation runner applies a patch to the working tree,
   runs `db:verify`, asserts RED, then reverts. A `git commit` during that window runs lint-staged,

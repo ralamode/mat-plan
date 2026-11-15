@@ -80,11 +80,11 @@ probe, or escalated). A check nobody can find didn't happen.
 
 ## Red flags
 
-- The brief explains why ("I went with X because…").
-- Using `fork`, or resuming an agent that has seen the plan's debate.
-- Asking a yes/no question.
-- Choosing the lens least likely to object.
-- A fourth round.
+- The brief explains why ("I went with X because…"). (hypothesis)
+- Using `fork`, or resuming an agent that has seen the plan's debate. (hypothesis)
+- Asking a yes/no question. (hypothesis)
+- Choosing the lens least likely to object. (hypothesis)
+- A fourth round. (hypothesis)
 - "Too small to doubt-check" on a migration, correction or auth change: the size of the diff isn't
-  the size of the risk.
-- Treating a clean doubt-check as a substitute for the panel or for review-pr.
+  the size of the risk. (hypothesis)
+- Treating a clean doubt-check as a substitute for the panel or for review-pr. (hypothesis)
