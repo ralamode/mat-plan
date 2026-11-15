@@ -69,6 +69,162 @@ function parseGuide(path) {
  *  this repo's route paths makes glob escaping a footgun, and prefixes cover every real case. */
 const ownsFile = (entry, file) => (entry.endsWith('/') ? file.startsWith(entry) : file === entry);
 
+// ── Lanes (DX-14 item 8; .claude/skills/write-spec/SKILL.md → Lanes) ────────────────────────────────
+// A milestone or spec declares the lanes that run CONCURRENTLY as flat `lane-<name>:` frontmatter
+// lists, in the same entry syntax as `owns:`. Two lanes of one document must not collide on a path,
+// nor reach one feature guide: guides:check forces a PR touching an owned file to edit its guide, so
+// two lanes under one guide still serialise. That is parallel-work.md gate 1, made mechanical.
+// Whole-tree, not diff-based, so it runs before the "no changed files" exit below.
+const LANE_DOC_DIRS = ['docs/milestones', 'docs/specs'];
+const LANE_KEY = /^(lane-[a-z0-9-]+):\s*(.*)$/;
+
+/** A lane entry, trailing `/` dropped, or null when it is not the plain path syntax `owns:` uses. A
+ *  glob, `./`, a leading `/`, `..`, `//`, quotes or a backslash would make the collision rule
+ *  inexact, so they are refused (exit 2) rather than silently compared as strings. */
+function normalizeLaneEntry(entry) {
+  if (/[*?"'`\\]/.test(entry) || entry.startsWith('./') || entry.startsWith('/')) return null;
+  if (entry.includes('//') || entry.split('/').includes('..')) return null;
+  return entry.replace(/\/$/, '');
+}
+
+/** Two normalised paths collide when equal or when one is a path-SEGMENT prefix of the other:
+ *  `src/a` and `src/a/b.ts` collide, `src/a` and `src/ab.ts` don't. */
+const segmentsCollide = (a, b) => a === b || b.startsWith(`${a}/`) || a.startsWith(`${b}/`);
+
+/** The declared lanes of one document, or null when it declares none. Strict where `owns:` is
+ *  lenient: inside a lane's list an unrecognised line is an error, never the end of the list —
+ *  the silent truncation `parseGuide`'s comment above records cannot recur here. */
+function readLanes(path) {
+  const text = readFileSync(path, 'utf8');
+  const errors = [];
+  if (/^\uFEFF/.test(text) || text.includes('\r')) {
+    // A BOM or CRLF hides the frontmatter from the regex below, which would read as "no lanes".
+    return /^lane-/m.test(text)
+      ? {
+          path,
+          lanes: new Map(),
+          errors: [`${path}: BOM or CRLF line endings; lanes cannot be read`],
+        }
+      : null;
+  }
+  const m = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!m) return null;
+  const lanes = new Map();
+  let current = null;
+  for (const line of m[1].split('\n')) {
+    if (/^\S/.test(line)) {
+      // Column 0: a new top-level key, which is the only thing that ends a lane's list.
+      const key = LANE_KEY.exec(line);
+      current = null;
+      if (!key) {
+        if (/^lane/.test(line))
+          errors.push(`${path}: '${line}' is not a lane key (lane-<a-z0-9->:)`);
+        continue;
+      }
+      if (key[2].replace(/#.*$/, '').trim())
+        errors.push(`${path}: ${key[1]} must be a list, not an inline value`);
+      if (lanes.has(key[1])) errors.push(`${path}: ${key[1]} is declared twice`);
+      current = key[1];
+      lanes.set(current, []);
+      continue;
+    }
+    if (current === null) continue;
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const item = /^\s+-\s+(.+?)\s*$/.exec(line);
+    if (!item) {
+      errors.push(`${path}: ${current}: unrecognised line '${trimmed}'`);
+      continue;
+    }
+    const raw = item[1].replace(/\s+#.*$/, '').trim();
+    const entry = normalizeLaneEntry(raw);
+    if (entry === null)
+      errors.push(`${path}: ${current}: '${raw}' is not a plain path or dir/ prefix`);
+    else lanes.get(current).push(entry);
+  }
+  for (const [name, entries] of lanes) {
+    if (entries.length === 0) errors.push(`${path}: ${name} declares no paths`);
+  }
+  return lanes.size === 0 && errors.length === 0 ? null : { path, lanes, errors };
+}
+
+/** The guides a lane entry reaches: it collides with one of the guide's `owns:` entries, or it IS
+ *  the guide (how a lane that will ADD files names the guide it will edit). */
+const guidesReached = (entry, guides) =>
+  guides.filter(
+    (g) => entry === g.path || g.owns.some((o) => segmentsCollide(entry, o.replace(/\/$/, ''))),
+  );
+
+function checkLanes(guides) {
+  const docs = LANE_DOC_DIRS.filter((d) => existsSync(d))
+    .flatMap((d) =>
+      readdirSync(d)
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => join(d, f)),
+    )
+    .map(readLanes)
+    .filter(Boolean);
+  const errors = docs.flatMap((d) => d.errors);
+  // One home per milestone: a milestone and a spec of the same name can't both declare lanes.
+  const byName = new Map();
+  for (const d of docs) {
+    const name = d.path.split('/').pop();
+    if (byName.has(name))
+      errors.push(`${byName.get(name)} and ${d.path} both declare lanes; keep one`);
+    else byName.set(name, d.path);
+  }
+  if (errors.length > 0) {
+    console.error('\nLanes guard: malformed lanes (exit 2):\n');
+    for (const e of errors) console.error(`  • ${e}`);
+    console.error('\nFormat: .claude/skills/write-spec/SKILL.md → Lanes.\n');
+    process.exit(2);
+  }
+  const collisions = [];
+  for (const { path, lanes } of docs) {
+    const list = [...lanes];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const [an, ae] = list[i];
+        const [bn, be] = list[j];
+        for (const a of ae) {
+          for (const b of be) {
+            if (segmentsCollide(a, b))
+              collisions.push(`${path}: ${an} '${a}' and ${bn} '${b}' overlap`);
+          }
+        }
+        const reachedBy = (entries) =>
+          new Map(entries.flatMap((e) => guidesReached(e, guides).map((g) => [g.path, e])));
+        const ag = reachedBy(ae);
+        for (const [guide, b] of reachedBy(be)) {
+          if (ag.has(guide)) {
+            collisions.push(
+              `${path}: ${an} '${ag.get(guide)}' and ${bn} '${b}' both reach ${guide}`,
+            );
+          }
+        }
+      }
+    }
+  }
+  if (collisions.length > 0) {
+    console.error('\nLanes guard failed: two lanes of one document would serialise.\n');
+    for (const c of collisions) console.error(`  • ${c}`);
+    console.error(
+      '\nSplit the path or the guide, or give it to integration (which is not a declared lane):\n' +
+        'docs/parallel-work.md → Gate 1.\n',
+    );
+    process.exit(1);
+  }
+  const lanes = docs.reduce((n, d) => n + d.lanes.size, 0);
+  console.log(`Lanes OK — ${lanes} lane(s) in ${docs.length} document(s).`);
+}
+
+const guides = readdirSync(GUIDE_DIR)
+  .filter((f) => f.endsWith('.md') && f !== 'README.md')
+  .map((f) => parseGuide(join(GUIDE_DIR, f)))
+  .filter(Boolean);
+
+checkLanes(guides);
+
 const base = process.argv[2] ?? 'origin/main';
 let mergeBase;
 try {
@@ -93,11 +249,6 @@ if (changed.length === 0) {
   console.log('Feature-guide guard OK — no changed files.');
   process.exit(0);
 }
-
-const guides = readdirSync(GUIDE_DIR)
-  .filter((f) => f.endsWith('.md') && f !== 'README.md')
-  .map((f) => parseGuide(join(GUIDE_DIR, f)))
-  .filter(Boolean);
 
 const problems = [];
 
