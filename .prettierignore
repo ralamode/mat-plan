@@ -12,3 +12,7 @@ packages/db/migrations
 # Generated from docs/privacy/notice.md (reviewed as markdown; regenerated verbatim).
 # A formatter rewrite here fails the byte-exact drift test on a fix nobody made.
 apps/web/lib/privacy/notice-content.ts
+
+# Beta 0's accepted prototype (#405): a frozen artifact each release is checked against, kept
+# byte-exact as accepted, like the generated files above. Formatting it would rewrite ~5,500 lines.
+docs/prototypes/beta-0/index.html
