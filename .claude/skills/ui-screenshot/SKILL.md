@@ -142,3 +142,10 @@ the Playwright MCP directly (load via ToolSearch: `browser_navigate`, `browser_s
   changed screen, a before/after pair is ideal.
 - Prefer the **prod build** over `next dev` so the screenshot reflects real CSP/styling.
 - Optional: capture light **and** dark (the app is theme-aware) when the change is visual/design-heavy.
+
+## Done when
+
+- [ ] Captured after the review round, from a fresh `--build`.
+- [ ] Three widths; both themes when the change shows in both; every changed state, interaction states included.
+- [ ] The console was clean, or `--allow-console` is named in the PR with the reason.
+- [ ] Published with `screenshots:publish` (`--note` from the second round on), and nothing committed.

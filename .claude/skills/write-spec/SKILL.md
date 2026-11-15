@@ -227,6 +227,14 @@ A spec longer than the ADR plus the first two plans has stopped helping.
 Length is not the same as closure: the handoff test can require _more_ detail while these cut prose.
 When they conflict, closure wins — a spec that forces a question is worse than one that is long.
 
+## Done when
+
+- [ ] Every acceptance criterion is one a test can fail.
+- [ ] The data contract is named; a milestone with lanes has chunk 0, `lane-` frontmatter and two-sided contract tests.
+- [ ] The chunks are ordered, each with the constraint that fixes its place.
+- [ ] Assumptions, decisions, out of scope and risks are written; a milestone also has launch and rollback.
+- [ ] It was panelled and reconciled, and passes the handoff test.
+
 ## Red flags
 
 - Writing before opening the feature guides.

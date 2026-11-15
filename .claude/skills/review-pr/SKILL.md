@@ -295,6 +295,13 @@ The comment lists what changed since the review, and the merge order if other ap
 and the PR goes CONFLICTING or behind `main`, fix it without being asked:
 [keep-mergeable](../keep-mergeable/SKILL.md).
 
+## Done when
+
+- [ ] The mechanical checks ran first (CI, `hold-the-bar`, guides), and their results are in the report.
+- [ ] Every finding was verified in the code and carries `path:line`, its rule and its fix.
+- [ ] At least one piece of the author's evidence was re-run.
+- [ ] The report follows the template, ranked by severity, with pre-existing problems under their own heading.
+
 ## Red flags
 
 - Starting the rubric before checking that the diff matches the description.

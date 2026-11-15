@@ -64,6 +64,13 @@ Show the three lists and ask for a yes on the whole before writing them to a tra
 text is public: product reasoning only, no personal names (AGENTS.md → Git & branch workflow).
 Then hand off: `write-spec` if several PRs must agree, otherwise `start-task`.
 
+## Done when
+
+- [ ] The three-line frame got a yes before the first question.
+- [ ] Every decision came from an explicit answer, one question at a time.
+- [ ] Decided, Not doing and why, and Open are written down, confirmed, and attributed by role and date.
+- [ ] It was handed off to `write-spec` or `start-task`.
+
 ## Red flags
 
 - Two questions in one message, or a list of questions "to save time".

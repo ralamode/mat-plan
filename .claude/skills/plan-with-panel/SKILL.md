@@ -126,6 +126,14 @@ authority check and leaves them unanswered has skipped a repo rule, not a nicety
 | "I know what's on the roadmap; I don't need to look."           | `PROF-1` declared "no backlog row exists for this" about a question `ID-1` had owned for two weeks, and three lenses let it through. Grep for the capability. |
 | "It's a refresh, not a plan — the checks were done in round 1." | A refresh is where the roadmap has moved MOST since the last read. It is the case that was missed, not the exception.                                         |
 
+## Done when
+
+- [ ] The plan is at `docs/plans/<id>-<slug>.md`, linked from its `docs/plan.md` row, with its roadmap-alignment line.
+- [ ] Every required lens ran, in parallel, and every UI change got its UX panel before implementation.
+- [ ] Every material critique has a verdict in the review-response log, and the rejections stay.
+- [ ] Each fix the log claims is in the plan's text.
+- [ ] No implementation code was committed before the panel was reconciled.
+
 ## Red flags
 
 - A critique that cites no file or plan section.

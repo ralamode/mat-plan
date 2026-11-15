@@ -29,8 +29,9 @@ FRONTMATTER='---
 name: demo
 description: Demo skill. Use when the user says "run the demo".
 ---'
+DONE=$'\n## Done when\n\n- [ ] demo'
 expect() {
-  { printf '%s\n' "$FRONTMATTER"; cat; } >"$skill"
+  { printf '%s\n' "$FRONTMATTER"; cat; printf '%s\n' "$DONE"; } >"$skill"
   out="$(node "$guard" "$tmp" 2>&1)"
   code=$?
   if [ "$code" -ne "$2" ] || { [ -n "$3" ] && ! grep -qF "$3" <<<"$out"; }; then
@@ -123,7 +124,7 @@ EOF
 # Entry point: runs through a symlink and from a path containing a space.
 ln -s "$guard" "$tmp/link.mjs"
 mkdir -p "$tmp/dir with space" && cp "$guard" "$tmp/dir with space/check.mjs"
-printf '%s\nSee `docs/gone.md`.\n' "$FRONTMATTER" >"$skill"
+printf '%s\nSee `docs/gone.md`.\n%s\n' "$FRONTMATTER" "$DONE" >"$skill"
 for g in "$tmp/link.mjs" "$tmp/dir with space/check.mjs"; do
   out="$(node "$g" "$tmp" 2>&1)"
   if [ $? -eq 1 ] && grep -qF "docs/gone.md" <<<"$out"; then printf '✓ runs via %s\n' "${g#"$tmp"/}"
@@ -163,5 +164,19 @@ route "routing: a description over 500 characters is refused" "(max 500)" "[$(d 
 exact="$(printf 'x%.0s' $(seq 1 481)) Use when \\\"go now\\\"."
 route "routing: exactly 500 characters passes" ok "[$(d a "$exact")]"
 route "routing: a missing description is refused" "no single-line" '[{"name":"a","description":null}]'
+
+# ── Exit checklists (DX-14 item 5b): checkDoneWhen is pure too. ──────────────────────────────────
+done_() {
+  out="$(node --input-type=module -e "
+    import { checkDoneWhen } from '$guard';
+    const p = checkDoneWhen([{ name: 'a', body: process.argv[1] }]);
+    console.log(p.length ? p.join('\n') : 'ok');" "$3" 2>&1)"
+  if { [ "$2" = ok ] && [ "$out" = ok ]; } || { [ "$2" != ok ] && grep -qF "$2" <<<"$out"; }; then
+    printf '✓ %s\n' "$1"
+  else printf '✗ %s: want "%s", got\n%s\n' "$1" "$2" "$out"; fails=$((fails + 1)); fi
+}
+done_ "done-when: a checklist passes" ok $'# S\n\n## Done when\n\n- [ ] it works\n\n## Red flags\n'
+done_ "done-when: a missing section is refused" 'no `## Done when`' $'# S\n\n## Red flags\n'
+done_ "done-when: a section without a box is refused" 'has no `- [ ]` item' $'# S\n\n## Done when\n\nprose only\n\n## Red flags\n- [ ] not here\n'
 
 [ "$fails" -eq 0 ] && echo "all skills-guard self-tests passed" || exit 1

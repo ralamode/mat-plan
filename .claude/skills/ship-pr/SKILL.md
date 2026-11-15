@@ -192,6 +192,14 @@ else. Before stopping:
   - the **worktree path** and branch.
 - [ ] The plan's review-response log is current: no finding verdict lives only in the session.
 
+## Done when
+
+- [ ] The branch contains `main`; `pnpm verify` is green, and `pnpm e2e:local` too if the smoke covers the flow.
+- [ ] `hold-the-bar` is clean, and `guides:check` and `status:check` pass.
+- [ ] The changelog fragment is in, and status, plan and roadmap moved in this PR if the change moves them.
+- [ ] The commit subject was re-read as a stranger would read it, and the PR body follows the template.
+- [ ] After the merge, the change was confirmed on `main` with `git grep`, not by the PR's label.
+
 ## Red flags
 
 - A backlog item merged, but `docs/roadmap.md` still shows it as next, or in flight, or absent.

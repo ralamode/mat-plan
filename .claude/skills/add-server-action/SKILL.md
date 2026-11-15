@@ -110,6 +110,14 @@ form and confirm the event arrives under the action's name, then revert. Never c
 `hold-the-bar` flags a stub throw, rightly. With no DSN reachable, the PR says **Sentry: not
 verified**, never "instrumented".
 
+## Done when
+
+- [ ] The input schema lives in `packages/shared`, and the action validates with it before anything else.
+- [ ] The action re-checks the session and ownership itself, is wrapped in `withServerActionInstrumentation`, and returns the `ActionState` envelope.
+- [ ] Every write carries the client's `client_id`; a replay returns success with one effect.
+- [ ] `actions.test.ts` covers bad body, unknown profile, wrong owner or stale id, replay, and the happy path with `toMatchObject`.
+- [ ] Sentry was checked with one forced, uncommitted error, or the PR says "Sentry: not verified".
+
 ## Red flags
 
 - `db`, `process.env` or a Drizzle import in the action file.

@@ -121,6 +121,13 @@ remove the worktree and start again from step 2.
 - `git worktree remove .claude/worktrees/km-<n>`, run from the main checkout. No `--force`: the
   worktree is clean after the push, and the main-checkout guard denies a forced remove.
 
+## Done when
+
+- [ ] Every PR with a standing `shipit` is MERGEABLE and contains `main`.
+- [ ] Only append-style conflicts were resolved; any real conflict was left for a person, with a comment.
+- [ ] Each push was fast-forward only, after the gates passed, and CI is green on the new head.
+- [ ] Each touched PR has its one-line comment, and the temporary worktrees are removed.
+
 ## Red flags
 
 - A force-push to a PR branch, or checking out a branch another worktree holds.

@@ -47,6 +47,13 @@ can't tell a good reason from a bad one, but the PR reviewer can.
   `audit:check` are the checks an agent can't talk its way past. Keep them in the loop; don't route
   around them.
 
+## Done when
+
+- [ ] `bash .claude/skills/hold-the-bar/check.sh` ran against the right base, and its output was read.
+- [ ] Each finding is fixed, or justified where the table says it must be (the line above, the PR).
+- [ ] A loosened bar has a line in the PR saying why.
+- [ ] The rules the script can't check were checked by reading the diff.
+
 ## Red flags
 
 - A red check went green in the same commit that touched its config.
