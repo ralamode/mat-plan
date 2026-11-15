@@ -895,6 +895,20 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   - **Still open, and now `PICK-1` PR 4's to land:** the **context rail** — the third grid track,
     with the movement picker as its first real consumer.
 
+- **UI-6 — a 404 page that renders under the production CSP.** _(maintainer, 2026-11-15.)_ The app
+  has no `app/not-found.tsx`, so every unknown URL gets Next's built-in fallback
+  (`HTTPAccessErrorFallback` in `next/dist/client/components/http-access-fallback/`). It is styled
+  with inline `style` attributes and an un-nonced `<style>` element, and production's
+  `style-src 'self' 'nonce-…'` (`proxy.ts` → `buildCsp`) blocks both, so a 404 renders without its
+  layout styles and logs CSP errors. Found 2026-11-14 while chasing a CSP report: a capture that hit a
+  wrong route logged the attribute violations.
+  - **Fix:** an `app/not-found.tsx` built from the app's own components and Tailwind classes, saying
+    the page doesn't exist and linking home, plus an e2e check that a 404 logs no CSP error. Not
+    `'unsafe-hashes'` or a relaxed `style-src`: the nonce policy stays as it is.
+  - **Owes** a small UX panel (one lens) and screenshots at three widths; no plan (one new file).
+  - **Not** `/design/tokens`, which also uses inline style attributes but is a dev-only demo that
+    UI-3 deletes.
+
 - **UI-1 — the form is the day: the program card becomes the rendered form.** _(maintainer,
   2026-10-06.)_ Today shows a read-only program card listing the day's movements, then a button that
   scaffolds those same movements into the form below — **the same list twice**, and `PROGRAM_SEED` is
