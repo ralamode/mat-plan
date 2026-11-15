@@ -18,6 +18,12 @@ pass without noticing. Check it first and mechanically:
    without touching its guide (AGENTS.md → "Feature guides"), so two tracks editing different code
    under one guide **still collide on the guide**. This is the non-obvious half.
 
+**For a milestone's lanes this is mechanical:** lanes declared as `lane-<name>:` frontmatter
+([write-spec](../.claude/skills/write-spec/SKILL.md) → Lanes) are checked by `pnpm guides:check`,
+which fails on an overlapping path or a shared guide. **The fix for a shared guide** is one of: split
+the guide so each lane owns its own, or give its files to integration (an undeclared step between
+slices), so no lane reaches it.
+
 **Evidence, live right now:** Authoring chunk 2 threads a prescription public id through the log
 form, and [v1-30b](./plans/v1-30b-form-stops-inviting.md)'s file table edits
 `apps/web/app/p/[profileId]/strength-form.tsx` and `set-fields.tsx`. Both are owned by
