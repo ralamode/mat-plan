@@ -752,6 +752,7 @@ describe('the item picker (FAM-1 9)', () => {
       creating.focus();
       fireEvent.click(creating);
       expect(newItem).toHaveBeenCalledTimes(1);
+      expect(creating.getAttribute('aria-disabled')).toBe('true');
       // Nothing is missing while it creates: focus stays put.
       expect(document.activeElement).toBe(creating);
     });
@@ -769,6 +770,64 @@ describe('the item picker (FAM-1 9)', () => {
       expect(
         within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks).getAttribute('aria-invalid'),
       ).toBe('true');
+    });
+
+    it('after a failure, Cancel leaves no failure message on the list', async () => {
+      editor({ newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+      const shown = () =>
+        within(sheet())
+          .queryAllByText(ITEM_PICKER_COPY.failed)
+          .filter((node) => !node.closest('.sr-only'))
+          .map((node) => node.textContent);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(shown().length).toBe(1));
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(within(sheet()).queryByLabelText(ITEM_PICKER_COPY.name)).toBeNull();
+      expect(shown()).toEqual([]);
+    });
+    it('a retry in flight no longer shows the last failure', async () => {
+      const newItem = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry })
+        .mockReturnValue(new Promise(() => {}));
+      editor({ newItem: newItem as never });
+      const shown = () =>
+        within(sheet())
+          .queryAllByText(ITEM_PICKER_COPY.failed)
+          .filter((node) => !node.closest('.sr-only'))
+          .map((node) => node.textContent);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(shown().length).toBe(1));
+      pressCreate();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(newItem).toHaveBeenCalledTimes(2);
+      expect(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.creating })).toBeTruthy();
+      expect(shown()).toEqual([]);
+    });
+    it('after a failure, a name already listed does not keep the failure above Select', async () => {
+      editor({ newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+      const shown = () =>
+        within(sheet())
+          .queryAllByText(ITEM_PICKER_COPY.failed)
+          .filter((node) => !node.closest('.sr-only'))
+          .map((node) => node.textContent);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(shown().length).toBe(1));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'pull up' },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(
+        within(sheet()).getByRole('button', { name: selectExistingText('Pull-up') }),
+      ).toBeTruthy();
+      expect(shown()).toEqual([]);
     });
   });
 });

@@ -208,7 +208,11 @@ export function ItemPicker({
    */
   const closeForm = (focusId?: string) => {
     // Cancel: an answer still in flight no longer belongs to the screen.
-    if (!focusId) cancel();
+    // Cancel: an answer still in flight no longer belongs to the screen, nor does its message.
+    if (!focusId) {
+      cancel();
+      setNoticeNow('');
+    }
     // The frame's time is on the same clock as a tap's `event.timeStamp`.
     requestAnimationFrame((time) => {
       formClosedAt.current = time;
@@ -249,6 +253,7 @@ export function ItemPicker({
     const trackingType = form.type as TrackingType;
     const mine = begin();
     setForm({ ...form, pending: true, error: null });
+    setNoticeNow('');
     const result = await newItem({ name: cleaned, trackingType });
     const known = result.ok ? byId.get(result.itemPublicId) : undefined;
     const made = (answer: Extract<typeof result, { ok: true }>): MovementOptionDTO => ({
@@ -316,7 +321,10 @@ export function ItemPicker({
                 autoCapitalize="words"
                 enterKeyHint="next"
                 error={form.error ?? (form.tried ? nameIssue : null)}
-                onChange={(name) => setForm({ ...form, name, error: null })}
+                onChange={(name) => {
+                  setForm({ ...form, name, error: null });
+                  setNoticeNow('');
+                }}
               />
               {/* Not a refusal: the name is fine, and Create becomes "Select …". A polite status,
                   mounted empty, so a screen reader hears it when it appears. */}
@@ -337,9 +345,10 @@ export function ItemPicker({
                   ref={typeRef}
                   id={TYPE_ID}
                   value={form.type}
-                  onChange={(event) =>
-                    setForm({ ...form, type: event.target.value as TrackingType | '' })
-                  }
+                  onChange={(event) => {
+                    setForm({ ...form, type: event.target.value as TrackingType | '' });
+                    setNoticeNow('');
+                  }}
                   aria-describedby={TYPE_HINT_ID}
                   aria-invalid={(form.tried && !form.type) || undefined}
                   className={`${INPUT_CLASS} w-full`}

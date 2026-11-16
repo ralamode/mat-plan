@@ -181,7 +181,7 @@ flowchart LR
       ancestors, so a form in the sheet would also submit the workout.
     - **Focus and messages**: after Create or "Select …", focus is on that item's row, scrolled into
       view; after Cancel, on the create button; an inactive Create moves to what is missing. A
-      message (created, selected, the cap) is seen in the footer and heard in the sheet's status,
+      message (created, selected, the cap) is seen in the footer and heard in the sheet's status, a failure to reach the server is seen above Create in the form with focus left on Create, an empty name says why once Create is pressed, and a made item is listed once per id;
       and the next search clears it. Closing the sheet drops the form; the ticks and items made
       stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
       `DOUBLE_TAP_MS` of the form closing is ignored (Create sat in the same place). A name the
