@@ -434,8 +434,9 @@ Squawk escape hatch: a JUSTIFIED exception uses `-- squawk-ignore <rule>` on the
   that, so the justification lands next to the SQL it excuses.
 Rollback: fix-forward by default (expand-contract is reversible-by-omission); cut a Neon RESTORE
   branch pre-migration before any destructive/backfill step.
-GOTCHA: CREATE INDEX CONCURRENTLY cannot run in a transaction, but drizzle-kit migrate wraps each file
-  in one → isolate concurrent-index statements in their own file + a runner that strips the transaction.
+GOTCHA: drizzle's migrate() runs ALL pending files in ONE transaction (drizzle-orm 0.45.4,
+  pg-core/dialect.js), not one per file. So CREATE INDEX CONCURRENTLY cannot run through it at all,
+  and the one-unapplied-migration-at-a-time queue is what keeps a NOT VALID and its VALIDATE apart.
 Deploy order: expand/additive migrations run BEFORE the new app deploys; destructive contract AFTER.
 ```
 

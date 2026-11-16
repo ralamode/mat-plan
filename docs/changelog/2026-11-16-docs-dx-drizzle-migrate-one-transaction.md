@@ -1,0 +1,3 @@
+# The docs now say drizzle runs all pending migrations in one transaction
+
+AGENTS.md, `.squawk.toml` and the db-migration skill said drizzle's migrator wraps each migration file in its own transaction. It doesn't: drizzle-orm 0.45.4's `migrate()` (`pg-core/dialect.js`) opens one transaction and runs every pending file inside it. Native Scaling found this while building SCALE-3, and the board confirmed it from the source. Two consequences are now written down. `CREATE INDEX CONCURRENTLY` can't run through the migrator at all. And keeping a `NOT VALID` and its `VALIDATE` apart depends on the one-unapplied-migration-at-a-time queue, not on putting them in separate files. Nothing applied so far is affected: production has always had at most one pending migration per run.
