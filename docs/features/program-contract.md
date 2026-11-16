@@ -3,7 +3,7 @@ feature: The program contract (FAM-1's shapes, fixtures, fakes and preview route
 owns:
   - packages/shared/src/program/
   - apps/web/app/design/program/
-  # The scan of every state on the preview route. It reads the route's own list, so a lane never
+  # The scan of every state a fixture can load on the preview route. It reads the route's own list, so a lane never
   # edits it; a change to how the states are scanned is a contract change.
   - apps/web/e2e/program-preview-a11y.spec.ts
   # The two spellings `quantityText` is built from (`formatNumeric`, and seconds as `s`). Outside

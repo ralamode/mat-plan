@@ -721,7 +721,7 @@ with its "Jump to…" select, the taps, PNGs into `.screenshots/`. It is run wit
 published with `screenshots:publish`, and **deleted, never committed**. A capture must not wait for
 `networkidle`: until 7b the builder's links point at pages that do not exist, and their prefetches
 never settle. The standing 360px guarantee is the preview a11y walk
-(`apps/web/e2e/program-preview-a11y.spec.ts`), which runs every state at that width.
+(`apps/web/e2e/program-preview-a11y.spec.ts`), which runs every state a fixture can load at that width; a state reached only by typing or tapping is checked by the step that builds it.
 
 | Screen and state                          | Prototype "Jump to…"        | Fixture                               | Step                             |
 | ----------------------------------------- | --------------------------- | ------------------------------------- | -------------------------------- |
