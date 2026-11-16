@@ -225,6 +225,32 @@ describe('readAmend (Change, 13b-ii)', () => {
     expect(readAmend(bench, { quantity: '30', reps: '8' }, extra).send).toBeNull();
   });
 
+  it('empty load and reps, reps not whole: asks for the reps, which the prescription cannot fill', () => {
+    const ranged: DayItem = { ...bench, target: { ...bench.target, reps: null } };
+    expect(readTyped(ranged, { quantity: '', reps: '' })).toEqual({
+      ok: false,
+      problem: 'missing',
+      field: 'reps',
+    });
+  });
+
+  it('a blank field the prescription cannot fill is named before a bad number after it', () => {
+    const noLoad: DayItem = { ...bench, target: { reps: 8, quantities: [] } };
+    expect(readTyped(noLoad, { quantity: '', reps: 'x' })).toEqual({
+      ok: false,
+      problem: 'missing',
+      field: 'quantity',
+    });
+  });
+
+  it('a row missing a number its type has, or over the ceiling, is not changed in place', () => {
+    expect(canChangeValues(bench, { quantities: logged.quantities })).toBe(false); // no reps
+    const over = quantityCeiling('lb')! + 1;
+    expect(
+      canChangeValues(bench, { quantities: [{ slot: primary, unit: 'lb', value: over }], reps: 8 }),
+    ).toBe(false);
+  });
+
   it('a load over the unit’s ceiling is kept, not sent', () => {
     const over = String(quantityCeiling('lb')! + 1);
     expect(readAmend(bench, { quantity: over, reps: '8' }, logged)).toEqual({

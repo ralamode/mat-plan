@@ -88,7 +88,13 @@ export function readTyped(
   const fields = fieldsOf(item);
   for (const field of fields) {
     const typed = text[field].trim();
-    if (typed === '') continue;
+    if (typed === '') {
+      // Named here, in field order, so the field marked is the one the prescription cannot fill
+      // (a load of 25 lb with a range of reps asks for the reps, not the load).
+      const fillable = field === 'reps' ? item.target.reps !== null : targetQuantity(item) !== null;
+      if (!fillable) return { ok: false, problem: 'missing', field };
+      continue;
+    }
     const read = readNumber(item, field, typed);
     if (!read.ok) return { ok: false, problem: read.problem, field };
     if (field === 'reps') {
@@ -103,12 +109,10 @@ export function readTyped(
     return { ok: false, problem: 'out_of_range', field: first };
   }
   // What the ✓ will store, by the writer's own rule (contract C10's `fillRowValues`): the typed
-  // numbers, and the prescription's where a field was left empty. Refused, the rule does not say
-  // which field: an empty one the prescription cannot fill, else the first.
+  // numbers, and the prescription's where a field was left empty. A refusal past the checks above
+  // (a target in another unit than the item's) names the first field.
   const shown = fillRowValues(item, values, item.target);
-  const blank = fields.find((field) => text[field].trim() === '');
-  if (!shown)
-    return { ok: false, problem: blank ? 'missing' : 'out_of_range', field: blank ?? first };
+  if (!shown) return { ok: false, problem: 'out_of_range', field: first };
   return { ok: true, values, shown, empty: fields.every((field) => text[field].trim() === '') };
 }
 
@@ -221,7 +225,8 @@ function readNumber(
 export function canChangeValues(item: DayItem, logged: RowValues): boolean {
   // The amend writer's own rule (`fillRowValues` with no target, C10): the row holds exactly the
   // numbers the item's type has, in its unit and under its ceiling. A row logged in another unit, as
-  // another type, or without a number the type now has, stays text.
+  // another type, without a number the type now has, or over a ceiling lowered since, stays text:
+  // stricter than the writer, which judges only what is sent; un-tick then a new ✓ changes it.
   return fieldsOf(item).length > 0 && fillRowValues(item, logged, null) !== null;
 }
 
