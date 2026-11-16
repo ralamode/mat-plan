@@ -4,3 +4,9 @@
   the Programs list's entry for the draft's own program, so the back link names the program and the
   "Used by …" line shows, as they will on the real page from step 7b. The harness test holds the
   entry to the draft's `programPublicId`. Nothing in production changes.
+  **Also, from lane C's review of step 13b:** the day fake no longer keeps an un-ticked added set as
+  a row, and no longer makes rows for sets nobody logged (it filled every set up to the one written,
+  counting from the row count, which duplicated a set number once a row was missing). The rule is
+  now written on `rowWriteSchema`: a set is prescribed, or at most one past the highest set shown.
+  And `isWholeNumber` joins `isPlainDecimal` in `@mat-plan/shared` (`units.ts`), the reps pattern
+  three files each had.

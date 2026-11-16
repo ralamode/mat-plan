@@ -11,6 +11,7 @@ import { sessionMovementSchema } from './strength-session';
 import {
   isLoggableUnit,
   isPlainDecimal,
+  isWholeNumber,
   LOGGABLE_DIMENSION_NOUNS,
   LOGGABLE_DIMENSIONS,
   LOGGABLE_UNITS,
@@ -274,4 +275,16 @@ describe('PLAIN_DECIMAL / isPlainDecimal: a quantity as a person types it', () =
     expect(barrel.PLAIN_DECIMAL).toBe(PLAIN_DECIMAL);
     expect(barrel.isPlainDecimal).toBe(isPlainDecimal);
   });
+});
+
+describe('isWholeNumber: reps as a person types them', () => {
+  it.each(['8', '12', '007', '0', '1000'])('accepts %s', (text) => {
+    expect(isWholeNumber(text)).toBe(true);
+  });
+  it.each(['', ' ', '8.0', '8.', '.8', '-8', '+8', '1e2', '0x10', '8 reps', ' 8', '8 ', '٨'])(
+    'refuses %j',
+    (text) => {
+      expect(isWholeNumber(text)).toBe(false);
+    },
+  );
 });

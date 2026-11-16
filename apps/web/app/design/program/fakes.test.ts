@@ -827,28 +827,123 @@ describe('the fakes: rules found in review', () => {
     ).toEqual(refusal('name_taken'));
   });
 
-  it('"+ Add set" past the next set adds each set before it, and only a set type has a second row', async () => {
+  it('"+ Add set" is the next set only, and only a set type has a second row', async () => {
     const { actions, plan } = day(heavyASupersets);
     const before = itemOf(heavyASupersets, 'DB bench press');
     const sets = before.item.rows.length;
-    succeeded(await actions.logRow({ ...tick(heavyASupersets, 'DB bench press'), set: sets + 2 }));
-    const after = itemOf(plan(), 'DB bench press');
-    expect(after.item.rows.map((r) => r.set)).toEqual(
-      Array.from({ length: sets + 2 }, (_, i) => i + 1),
-    );
-    expect(after.workout.progress).toEqual({
-      done: before.workout.progress.done + 1,
-      total: before.workout.progress.total + 2,
-    });
-    expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
+    const bad = { ok: false, reason: ROW_REFUSAL.bad_value };
+
+    // Two past the last would need a row nobody logged, which the contract never lists.
+    expect(
+      await actions.logRow({ ...tick(heavyASupersets, 'DB bench press'), set: sets + 2 }),
+    ).toEqual(bad);
+    expect(itemOf(plan(), 'DB bench press').item.rows).toHaveLength(sets);
 
     const check = heavyASupersets.workouts
       .flatMap((w) => w.items)
       .find((i) => i.trackingType === TRACKING_TYPE.check)!;
-    expect(await actions.logRow({ ...tick(heavyASupersets, check.name), set: 2 })).toEqual({
-      ok: false,
-      reason: ROW_REFUSAL.bad_value,
+    expect(await actions.logRow({ ...tick(heavyASupersets, check.name), set: 2 })).toEqual(bad);
+  });
+
+  it('an added set is a row only while it is logged: un-tick removes it, re-tick returns it', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const before = itemOf(heavyASupersets, 'DB bench press');
+    const sets = before.item.rows.length;
+    const add = (set: number) =>
+      actions.logRow({ ...tick(heavyASupersets, 'DB bench press'), clientId: newId(), set });
+
+    const fourth = succeeded(await add(sets + 1));
+    const fifth = succeeded(await add(sets + 2));
+    expect(itemOf(plan(), 'DB bench press').item.rows.map((r) => r.set)).toEqual(
+      Array.from({ length: sets + 2 }, (_, i) => i + 1),
+    );
+
+    // Un-tick the first added set: the row goes, leaving a gap, and the total follows it.
+    const hidden = succeeded(
+      await actions.untickRow({
+        profilePublicId: heavyASupersets.profilePublicId,
+        day: heavyASupersets.day,
+        entryPublicId: fourth.entryPublicId,
+      }),
+    );
+    const gapped = itemOf(plan(), 'DB bench press');
+    expect(gapped.item.rows.map((r) => r.set)).toEqual([
+      ...Array.from({ length: sets }, (_, i) => i + 1),
+      sets + 2,
+    ]);
+    expect(gapped.workout.progress).toEqual({
+      done: before.workout.progress.done + 1,
+      total: before.workout.progress.total + 1,
     });
+    expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
+
+    // The row count plus one names the set that is still there; the next NEW set is one past the
+    // highest set shown.
+    expect(await add(sets + 2)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+    succeeded(await add(sets + 3));
+
+    // Re-tick puts the row back where its number belongs.
+    const retick = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+      entryPublicId: fourth.entryPublicId,
+      hiddenAt: hidden.hiddenAt!,
+    };
+    succeeded(await actions.retickRow(retick));
+    const back = itemOf(plan(), 'DB bench press');
+    expect(back.item.rows.map((r) => r.set)).toEqual(
+      Array.from({ length: sets + 3 }, (_, i) => i + 1),
+    );
+    expect(back.item.rows.every((r) => r.set <= sets || r.logged)).toBe(true);
+    expect(fifth.entryPublicId).not.toBe(fourth.entryPublicId);
+  });
+
+  it('a gap an un-ticked added set left can be logged again, and then the old entry cannot return', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const sets = itemOf(heavyASupersets, 'DB bench press').item.rows.length;
+    const add = (set: number) =>
+      actions.logRow({ ...tick(heavyASupersets, 'DB bench press'), clientId: newId(), set });
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+
+    const fourth = succeeded(await add(sets + 1));
+    succeeded(await add(sets + 2));
+    const hidden = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: fourth.entryPublicId }),
+    );
+
+    // A changed number on the un-ticked set is a new ✓ for the same set number.
+    const again = succeeded(await add(sets + 1));
+    expect(again.entryPublicId).not.toBe(fourth.entryPublicId);
+    expect(itemOf(plan(), 'DB bench press').item.rows.map((r) => r.set)).toEqual(
+      Array.from({ length: sets + 2 }, (_, i) => i + 1),
+    );
+    expect(
+      await actions.retickRow({
+        ...address,
+        entryPublicId: fourth.entryPublicId,
+        hiddenAt: hidden.hiddenAt!,
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+    expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
+  });
+
+  it('a prescribed set stays a row when it is un-ticked', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const before = itemOf(heavyASupersets, 'DB bench press');
+    const first = succeeded(await actions.logRow(tick(heavyASupersets, 'DB bench press')));
+    succeeded(
+      await actions.untickRow({
+        profilePublicId: heavyASupersets.profilePublicId,
+        day: heavyASupersets.day,
+        entryPublicId: first.entryPublicId,
+      }),
+    );
+    const after = itemOf(plan(), 'DB bench press');
+    expect(after.item.rows).toHaveLength(before.item.rows.length);
+    expect(after.workout.progress).toEqual(before.workout.progress);
   });
 
   it('a number the type has no field for is bad_value, never dropped', async () => {

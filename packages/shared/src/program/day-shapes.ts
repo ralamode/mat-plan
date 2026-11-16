@@ -85,8 +85,10 @@ const dayItemSchema = z.object({
   unit: unitSchema.nullable(),
   superset: supersetSchema,
   /**
-   * The rows the page shows. A writable day: every prescribed set, plus any logged beyond them. A
-   * closed day, or a workout that left the week: the logged rows only. A future day: none.
+   * The rows the page shows, in set order. A writable day: every prescribed set, plus any logged
+   * beyond them. A closed day, or a workout that left the week: the logged rows only. A future day:
+   * none. **An added set is a row only while it is logged**: un-ticked, it is gone from the next
+   * read, so the set numbers may have a gap.
    */
   rows: z.array(dayRowSchema).max(MAX_SETS_PER_MOVEMENT),
 });
@@ -173,6 +175,12 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * prescription's"** (plan D13): the writer fills it from the row's prescription, and answers
  * `bad_value` where the prescription has no number to give. So an empty ✓ on a prescribed row sends
  * `{ quantities: [] }`, and the result's `values` says what was written.
+ *
+ * **`set` is a prescribed set, or an added one: at most ONE past the highest set the item shows.** A
+ * set further on would need a row nobody logged, and the read lists an added set only while it is
+ * logged (`dayItemSchema.rows`), so the writer answers it `bad_value`. An un-ticked added set leaves
+ * a gap in the numbers; that number may be logged again. Only a type with set rows
+ * (`hasSetRows`) has a set past 1.
  */
 export const rowWriteSchema = z.object({
   clientId: uuidSchema,

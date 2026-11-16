@@ -200,7 +200,7 @@ all derived from the one unit, so none can disagree with it:
 - **One precision for every unit.** `QUANTITY_DECIMALS = 3` in `packages/shared/src/units.ts` feeds
   both the field's `step` and the server's format-check regex, so the browser refuses exactly where
   the server would. It replaced a `step="0.5"` sized for barbell plates that blocked `6.25 ft`,
-  `1.25 min` and `61.25 kg`. **`PLAIN_DECIMAL` / `isPlainDecimal`** (same file, FAM-1 contract
+  `1.25 min` and `61.25 kg`. **`WHOLE_NUMBER` / `isWholeNumber`** (same file) is the same kind of shape check for reps as typed. **`PLAIN_DECIMAL` / `isPlainDecimal`** (same file, FAM-1 contract
   change C2) are built from it too: the shape of a quantity typed into a TEXT field (`5`, `5.5`,
   `.5`; not `-5`, `1e3`, `5.`), for the FAM-1 day page and workout editor. ⚠️ Not this form's
   check: `strength.ts` keeps its own pattern, which refuses `.5`. Do not merge the two without
