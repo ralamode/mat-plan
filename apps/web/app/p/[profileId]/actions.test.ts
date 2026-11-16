@@ -53,7 +53,7 @@ vi.mock('@/lib/dal/entries', () => ({
   editBodyweight: vi.fn(async () => ({ entryId: 'bw-pub-id' })),
   ownedBodyweightValue: vi.fn(async () => null),
   // V1-24 3b-bw. Default: the row is today's and live, and a clear hides it.
-  bodyweightRowDay: vi.fn(async () => ({ day: localDayIso(DEFAULT_TIME_ZONE), hidden: false })),
+  bodyweightRowDay: vi.fn(async () => ({ day: localDayIso(DEFAULT_TIME_ZONE) })),
   clearBodyweightEntry: vi.fn(async () => ({ cleared: true })),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
@@ -122,7 +122,6 @@ function localDay(offsetDays = 0): string {
 // the registry (`./actions.registry.ts`), which is the single source for both the action names and
 // their refusal copy.
 import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY } from '@/lib/constants';
-import { DECLARED_DAY_CHANGE_CLOSED_ERROR } from '@/lib/entries/declared-day';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -1748,9 +1747,8 @@ describe('editBodyweightAction — a blank clears, bounded by the row’s own da
     expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound('weight') });
   });
 
-  it('a replayed clear succeeds once more, whatever the pre-read says about the row', async () => {
-    vi.mocked(bodyweightRowDay).mockResolvedValueOnce({ day: localDay(), hidden: true });
-    vi.mocked(ownedBodyweightValue).mockResolvedValueOnce({ value: 99, unit: 'lb' });
+  it('a replayed clear succeeds again: the writer answers it, never the amend’s re-read', async () => {
+    vi.mocked(clearBodyweightEntry).mockResolvedValueOnce({ cleared: true });
     const res = await editBodyweightAction(initial, amendForm({ value: '' }));
     expect(res).toEqual({ ok: true, error: null });
     expect(ownedBodyweightValue).not.toHaveBeenCalled();
@@ -1764,11 +1762,11 @@ describe('editBodyweightAction — a blank clears, bounded by the row’s own da
     ['a change', '85.2'],
     ['a clear', ''],
   ])('%s of a row two days back is refused, even with a forged day', async (_name, value) => {
-    vi.mocked(bodyweightRowDay).mockResolvedValueOnce({ day: localDay(-2), hidden: false });
+    vi.mocked(bodyweightRowDay).mockResolvedValueOnce({ day: localDay(-2) });
     const fd = amendForm({ value });
     fd.set('day', localDay());
     const res = await editBodyweightAction(initial, fd);
-    expect(res).toEqual({ ok: false, error: DECLARED_DAY_CHANGE_CLOSED_ERROR });
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.dayReadOnly('weight') });
     expect(editBodyweight).not.toHaveBeenCalled();
     expect(clearBodyweightEntry).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect, useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
 
 import { type Report, SingleValueLive, useSingleValueLive } from './single-value-live';
 
@@ -31,7 +33,9 @@ const tree = (withTarget: boolean, day = 'd1') => (
   </SingleValueLive>
 );
 const report = (r: Partial<Report> = {}) =>
-  act(() => reportFn({ message: 'Bodyweight logged', tone: 'sr', focus: ['change'], ...r }));
+  act(() =>
+    reportFn({ message: BODYWEIGHT_COPY.announcedLogged, tone: 'sr', focus: ['change'], ...r }),
+  );
 
 describe('SingleValueLive', () => {
   it('a repeated message is a NEW text node, so it is read again', () => {
@@ -40,7 +44,7 @@ describe('SingleValueLive', () => {
     const first = screen.getByRole('status').firstChild;
     report();
     const second = screen.getByRole('status').firstChild;
-    expect(second?.textContent).toBe('Bodyweight logged');
+    expect(second?.textContent).toBe(BODYWEIGHT_COPY.announcedLogged);
     expect(second).not.toBe(first);
   });
 
@@ -74,6 +78,45 @@ describe('SingleValueLive', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Other' }));
     rerender(tree(true));
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a result after the person moved on does not pull focus back', () => {
+    render(
+      <>
+        <input aria-label="elsewhere" />
+        {tree(true)}
+      </>,
+    );
+    screen.getByLabelText('elsewhere').focus();
+    report();
+    expect(document.activeElement).toBe(screen.getByLabelText('elsewhere'));
+  });
+
+  it('dismiss drops a shown refusal', () => {
+    let dismiss = () => {};
+    function Dismisser() {
+      const live = useSingleValueLive();
+      useEffect(() => {
+        dismiss = live.dismiss;
+      });
+      return null;
+    }
+    render(
+      <SingleValueLive>
+        <Harness withTarget />
+        <Dismisser />
+      </SingleValueLive>,
+    );
+    report({ tone: 'alert', message: AMEND_ERROR_COPY.staleWrite });
+    expect(screen.getByRole('alert')).toBeTruthy();
+    act(() => dismiss());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('throws outside its provider, so a row cannot lose its announcements silently', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => render(<Harness withTarget />)).toThrow(/SingleValueLive/);
+    spy.mockRestore();
   });
 
   it('a day change drops a waiting claim', () => {
@@ -117,7 +160,7 @@ describe('SingleValueLive', () => {
 
   it('a status is shown as well as spoken; a spoken-only one is sr-only', () => {
     render(tree(true));
-    report({ tone: 'status', message: 'Bodyweight cleared. It was 84.5 lb.' });
+    report({ tone: 'status', message: BODYWEIGHT_COPY.announcedCleared('84.5 lb') });
     expect(screen.getByRole('status').className).not.toContain('sr-only');
     report({ tone: 'sr' });
     expect(screen.getByRole('status').className).toContain('sr-only');
@@ -125,12 +168,14 @@ describe('SingleValueLive', () => {
 
   it('an alert is its own role="alert" element, and does not erase a shown status', () => {
     render(tree(true));
-    report({ tone: 'status', message: 'Bodyweight cleared. It was 84.5 lb.' });
+    report({ tone: 'status', message: BODYWEIGHT_COPY.announcedCleared('84.5 lb') });
     report({
       tone: 'alert',
-      message: 'That was changed on another device — the latest is showing now.',
+      message: AMEND_ERROR_COPY.staleWrite,
     });
-    expect(screen.getByRole('alert').textContent).toContain('another device');
-    expect(screen.getByRole('status').textContent).toBe('Bodyweight cleared. It was 84.5 lb.');
+    expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.staleWrite);
+    expect(screen.getByRole('status').textContent).toBe(
+      BODYWEIGHT_COPY.announcedCleared('84.5 lb'),
+    );
   });
 });

@@ -57,24 +57,25 @@ function ownedSingleValue(
 }
 
 /**
- * The row an amend or a clear names: its day, and whether it is already hidden. `null` for a row that
- * is not this profile's, not in this household, or not a numeric `done` weigh-in.
+ * The DAY of the row an amend or a clear names. `null` for a row that is not this profile's, not in
+ * this household, or not a numeric `done` weigh-in.
  *
- * ⚠️ **A tombstone-returning read** (it does not filter `deleted_at`), listed as such in
- * `delete-and-restore.md`'s reader audit. It returns no value, only the day and the flag, so it cannot
- * leak a hidden weight; the action uses it to bound the write by the ROW's day, never a posted one.
+ * ⚠️ **It sees a hidden row** (no `deleted_at` filter), so a replayed clear reaches `clearBodyweight`
+ * (which answers it) and is still bounded by the row's own day. It returns ONLY the day: nothing of a
+ * hidden row's value, or even that it is hidden, crosses it. Listed in `delete-and-restore.md`'s
+ * reader audit.
  */
 export async function bodyweightRowForAmend(
   exec: Executor,
   args: { profilePublicId: string; scope: HouseholdScope; entryId: string },
-): Promise<{ day: string; hidden: boolean } | null> {
+): Promise<{ day: string } | null> {
   const [row] = await exec
-    .select({ day: schema.entries.activityDate, deletedAt: schema.entries.deletedAt })
+    .select({ day: schema.entries.activityDate })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
     .where(ownedSingleValue(BODYWEIGHT, args.profilePublicId, args.scope, args.entryId))
     .limit(1);
-  return row ? { day: row.day, hidden: row.deletedAt !== null } : null;
+  return row ? { day: row.day } : null;
 }
 
 export type ClearSingleValueResult = { cleared: true } | { stale: true } | { notFound: true };
@@ -138,6 +139,8 @@ async function clearSingleValue(
     if (row.deletedAt !== null) {
       // Already hidden. A replay of this clear, unless the day's slot is held again: then another
       // phone cleared and re-entered, and this form's view of the day is out of date.
+      // ⚠️ `metric.slot` is the DEFAULT slot (bodyweight's coalesce to 'morning'). Inert while no
+      // writer sets `context`; when V1-32 writes real slots, key this on the row's own context.
       const [holder] = await tx
         .select({ id: schema.entries.id })
         .from(schema.entries)

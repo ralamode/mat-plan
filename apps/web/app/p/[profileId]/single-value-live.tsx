@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
@@ -37,16 +38,23 @@ type Live = {
   claimFocus: (targets: readonly FocusTarget[]) => void;
   /** A ref callback that registers an element as `target`, and takes a pending claim for it. */
   focusRef: (target: FocusTarget) => (node: HTMLElement | null) => (() => void) | void;
+  /** Drop a shown refusal: the editor reopened or was cancelled, so it no longer describes the screen. */
+  dismiss: () => void;
+  /** The status line's id, for a field to list in `aria-describedby` (read when focus arrives). */
+  statusId: string;
 };
 
 const LiveContext = createContext<Live | null>(null);
 
-/** The island's API. Outside a `SingleValueLive` it is a no-op, so a component test can render a row alone. */
+/**
+ * The island's API. ⚠️ It THROWS outside a `SingleValueLive`: a row mounted without one would lose
+ * its announcement and focus hand-off silently, which no test would notice.
+ */
 export function useSingleValueLive(): Live {
-  return useContext(LiveContext) ?? NOOP;
+  const live = useContext(LiveContext);
+  if (!live) throw new Error('useSingleValueLive: render the row inside <SingleValueLive>');
+  return live;
 }
-
-const NOOP: Live = { report: () => {}, claimFocus: () => {}, focusRef: () => () => {} };
 
 /**
  * The live region and the focus hand-off for ONE single-value section (bodyweight; practice from
@@ -80,6 +88,9 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
     n: 0,
   });
   const [alert, setAlert] = useState<{ text: string; n: number } | null>(null);
+  const statusId = useId();
+  /** The island's own subtree (`display: contents`, so it adds no box to the section's layout). */
+  const root = useRef<HTMLDivElement>(null);
   const claim = useRef<readonly FocusTarget[] | null>(null);
   /**
    * The node a claim was last handed to. If it unmounts while it still has focus (the result was
@@ -100,6 +111,10 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
     (targets: readonly FocusTarget[]) => {
       claim.current = null;
       handoff.current = null;
+      // A result that arrives after the person has moved on (tapped a Life button, a nav link) must
+      // not pull them back: only take focus if it is nowhere, or still inside this island.
+      const active = document.activeElement;
+      if (active && active !== document.body && !root.current?.contains(active)) return;
       for (const t of targets) {
         const node = mounted.current.get(t);
         if (node) return focusNode(node, targets);
@@ -158,21 +173,28 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const live: Live = { report, claimFocus: take, focusRef };
+  const dismiss = useCallback(() => setAlert(null), []);
+  const live: Live = { report, claimFocus: take, focusRef, dismiss, statusId };
 
   return (
     <LiveContext.Provider value={live}>
-      {children}
-      <Announcer
-        message={status.text}
-        messageKey={status.n}
-        className={status.visible ? 'text-muted-foreground text-sm' : 'sr-only'}
-      />
-      {alert ? (
-        <p key={alert.n} role="alert" className="text-destructive text-sm">
-          {alert.text}
-        </p>
-      ) : null}
+      <div ref={root} className="contents">
+        {children}
+        <Announcer
+          id={statusId}
+          message={status.text}
+          messageKey={status.n}
+          className={status.visible ? 'text-muted-foreground text-sm' : 'sr-only'}
+        />
+        {/* Keyed, so a repeated refusal is a new element and is read again. Rendered only while there
+            is one: an `alert` is read when it is inserted, and an empty second alert region would
+            sit beside the form's own field-error alert. */}
+        {alert ? (
+          <p key={alert.n} role="alert" className="text-destructive text-sm">
+            {alert.text}
+          </p>
+        ) : null}
+      </div>
     </LiveContext.Provider>
   );
 }

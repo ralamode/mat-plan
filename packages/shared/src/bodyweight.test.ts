@@ -142,7 +142,7 @@ describe('editBodyweightSchema (V1-24 PR 1b)', () => {
   });
 
   it('refuses text that is not a weight, with the bound’s own copy', () => {
-    for (const bad of ['84..5', 'abc', '1e2', '0x50', '-85']) {
+    for (const bad of ['84..5', 'abc', '1e2', '0x50', '-85', '84.5555']) {
       const r = editBodyweightSchema.safeParse({ ...valid, value: bad });
       expect(r.success, bad).toBe(false);
       expect(r.error!.flatten().fieldErrors.value, bad).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);

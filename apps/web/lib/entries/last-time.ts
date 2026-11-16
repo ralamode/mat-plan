@@ -1,5 +1,7 @@
 import { isoDayDiff } from '@mat-plan/shared';
 
+import { APP_LOCALE } from '@/lib/i18n/locale';
+
 /** How far back "Last time" stops naming the weekday and names the date instead. */
 const WEEKDAY_RANGE = 6;
 
@@ -16,6 +18,6 @@ export function lastTimeWhen(viewedDay: string, lastDay: string): string | null 
   if (back <= 1) return null;
   const date = new Date(`${lastDay}T00:00:00Z`);
   return back <= WEEKDAY_RANGE
-    ? date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
-    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    ? date.toLocaleDateString(APP_LOCALE, { weekday: 'short', timeZone: 'UTC' })
+    : date.toLocaleDateString(APP_LOCALE, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }

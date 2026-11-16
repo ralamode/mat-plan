@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { uuidSchema } from './id';
 import { freeTextNoteSchema } from './text';
-import type { Unit } from './units';
+import { PLAIN_DECIMAL, type Unit } from './units';
 
 /** Bodyweight is logged in lb or kg — a drift-checked subset of Unit. */
 export const BODYWEIGHT_UNITS = ['lb', 'kg'] as const satisfies readonly Unit[];
@@ -62,8 +62,6 @@ export const IMPLAUSIBLE_BODYWEIGHT_MESSAGE =
  * So: keep the base plain, extend it per path, and apply the bound **last** via the one shared
  * refiner below. Both paths then enforce an identical rule from a single definition.
  */
-/** Digits with an optional decimal part. Nothing else is a weight: not `1e2`, `0x50`, `-5` or `84..5`. */
-const DECIMAL_WEIGHT = /^\d+(\.\d+)?$/;
 
 /**
  * Whether a typed weight is empty (V1-24 3b-bw, plan W5/W7). **One predicate for both sides**: the
@@ -76,23 +74,29 @@ export function isBlankWeight(value: unknown): boolean {
 }
 
 /**
- * A typed weight, as the field submits it: text (V1-24 3b-bw, plan W3).
+ * A typed weight, as the field submits it: text (V1-24 3b-bw, plan W3). `null` when it is not one.
  *
  * The fields are `type="text" inputMode="decimal"`, so the browser no longer validates a number and
- * this does. One `,` becomes `.` (a phone set to a comma-decimal region types `84,5`). Anything that is
- * not plain digits is refused with the bound's own copy, never zod's `Invalid input`, which would
- * otherwise reach the screen.
+ * this does. One `,` becomes `.` (a phone set to a comma-decimal region types `84,5`), then the shared
+ * `PLAIN_DECIMAL`, which caps the places at `QUANTITY_DECIMALS`: `numeric(8,3)` would round
+ * `84.5555`, and the stored value would then fail the amend's replay compare. Anything else is refused
+ * with the bound's own copy, never zod's `Invalid input`, which would otherwise reach the screen.
+ *
+ * ⚠️ The day page's FAM-1 rows read `84,5` as not-a-number; bodyweight takes the comma because the
+ * plan decided it (W3). The two should agree; that is the contract's question, not this file's.
  */
-const weightText = z
-  .string({ error: IMPLAUSIBLE_BODYWEIGHT_MESSAGE })
-  .trim()
-  .transform((s, ctx) => {
-    const decimal = s.replace(',', '.');
-    if (DECIMAL_WEIGHT.test(decimal)) return Number(decimal);
-    // One issue, and `z.NEVER` so nothing downstream (the bound) runs on a value that is not a number.
-    ctx.issues.push({ code: 'custom', message: IMPLAUSIBLE_BODYWEIGHT_MESSAGE, input: s });
-    return z.NEVER;
-  });
+export function parseTypedWeight(text: string): number | null {
+  const decimal = text.trim().replace(',', '.');
+  return PLAIN_DECIMAL.test(decimal) ? Number(decimal) : null;
+}
+
+const weightText = z.string({ error: IMPLAUSIBLE_BODYWEIGHT_MESSAGE }).transform((s, ctx) => {
+  const weight = parseTypedWeight(s);
+  if (weight !== null) return weight;
+  // One issue, and `z.NEVER` so nothing downstream (the bound) runs on a value that is not a number.
+  ctx.issues.push({ code: 'custom', message: IMPLAUSIBLE_BODYWEIGHT_MESSAGE, input: s });
+  return z.NEVER;
+});
 
 const bodyweightValueShape = z.object({
   // The profile to log against — the tile-supplied public id (UUIDv7). Re-validated server-side by

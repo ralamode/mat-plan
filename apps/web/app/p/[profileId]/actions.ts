@@ -51,7 +51,7 @@ import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
 import { enterMutation } from '@/app/p/mutation-entry';
-import { DECLARED_DAY_CHANGE_CLOSED_ERROR, resolveDeclaredDay } from '@/lib/entries/declared-day';
+import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 // The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
@@ -556,8 +556,10 @@ export async function editStrengthSetAction(
  *
  * zod → profile → **the row's own day** (`bodyweightRowDay`) → `resolveDeclaredDay(row.day)` → a blank
  * clears, a number amends. 3b-page made a day before yesterday read-only, and this is the server half:
- * the bound is read from the ROW, never a posted `day`, so a crafted POST naming an older weigh-in is
- * refused however it labels itself. This supersedes 1b's "no day bound on an amend".
+ * the bound is read from the ROW, never a posted `day`, so a POST naming an older weigh-in is refused
+ * however it labels itself. This supersedes 1b's "no day bound on an amend". ⚠️ It is the same ±1 of
+ * the request's active time zone as every write (`resolveDeclaredDay`), and that zone comes from a
+ * cookie, so it is a product rule for the household's own data, not a tenancy boundary.
  *
  * ## Zero rows has four causes and they are NOT interchangeable
  *
@@ -573,8 +575,9 @@ export async function editStrengthSetAction(
  * the live-only `ownedBodyweightValue`, AFTER the UPDATE: the pre-read's day is not a value, and a
  * value read before the UPDATE would turn a retry's race into "changed on another device".
  *
- * **Every refusal revalidates**, so the page shows what is true; the day page's live region carries
- * the message after the form that sent it has unmounted.
+ * **Every refusal past the profile check revalidates** (the archived blank refuses before anything
+ * is read, so there is nothing new to show), so the page shows what is true; the day page's live
+ * region carries the message after the form that sent it has unmounted.
  */
 export async function editBodyweightAction(
   _prev: ActionState,
@@ -614,7 +617,7 @@ export async function editBodyweightAction(
     // wouldn't.
     if (!row) return refuse(AMEND_ERROR_COPY.notFound('weight'));
     const day = await resolveDeclaredDay(row.day);
-    if (!day.ok) return refuse(DECLARED_DAY_CHANGE_CLOSED_ERROR);
+    if (!day.ok) return refuse(AMEND_ERROR_COPY.dayReadOnly('weight'));
 
     const { value } = parsed.data;
     if (value === null) {

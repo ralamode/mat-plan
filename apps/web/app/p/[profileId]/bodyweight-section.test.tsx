@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { DEFAULT_BODYWEIGHT_UNIT } from '@mat-plan/shared';
+import { DEFAULT_BODYWEIGHT_UNIT, IMPLAUSIBLE_BODYWEIGHT_MESSAGE } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +16,7 @@ import {
   BODYWEIGHT_COPY,
   changeLabel,
   CLOSED_DAY_NOTICE,
+  LAST_TIME_PREFIX,
 } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
@@ -79,7 +80,7 @@ describe('BodyweightSection — its states', () => {
     expect(field().inputMode).toBe('decimal');
     expect(field().required).toBe(false);
     expect(logButton().getAttribute('data-variant')).toBe('outline');
-    expect(screen.queryByText(/^Last time/)).toBeNull();
+    expect(screen.queryByText(new RegExp(`^${LAST_TIME_PREFIX}`))).toBeNull();
   });
 
   it('"Last time" is its own muted line, never a placeholder, and describes the field', () => {
@@ -260,6 +261,10 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(screen.queryByText(BODYWEIGHT_COPY.clearHint)).toBeNull();
     fireEvent.change(amendInput()!, { target: { value: '' } });
     const save = screen.getByRole('button', { name: AMEND_COPY.save });
+    // Move focus OFF the field first: the editor focused it on open, so asserting it after the tap
+    // would pass with the refusal's own focus call deleted (docs/lessons.md, focus assertions).
+    save.focus();
+    expect(document.activeElement).toBe(save);
     await act(async () => {
       fireEvent.click(save);
     });
@@ -299,6 +304,22 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
       fireEvent.click(logButton());
     });
     expect(statusText()).toBe(BODYWEIGHT_COPY.announcedCleared(shown(W)));
+    fireEvent.change(field(), { target: { value: '85' } });
+    await act(async () => {
+      fireEvent.click(logButton());
+    });
+    expect(statusText()).toBe(BODYWEIGHT_COPY.announcedLogged);
+  });
+
+  it('the field after a clear is described by the cleared line, so arriving focus reads it', async () => {
+    const { rerender } = render(section({ logged: [W] }));
+    open();
+    fireEvent.change(amendInput()!, { target: { value: '' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }));
+    });
+    rerender(section({ logged: [] }));
+    expect(field().getAttribute('aria-describedby')).toContain(screen.getByRole('status').id);
   });
 
   it('a day change drops an open editor and its typed value', () => {
@@ -328,7 +349,7 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(document.activeElement).toBe(changeButton());
   });
 
-  it('a stale refusal is an alert, never announced as saved, and a reopened editor drops it', async () => {
+  it('a stale refusal is an alert, never announced as saved, and Cancel or a reopen drops it', async () => {
     vi.mocked(editBodyweightAction).mockResolvedValueOnce({
       ok: false,
       error: AMEND_ERROR_COPY.staleWrite,
@@ -336,11 +357,53 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     render(section({ logged: [W] }));
     open();
     fireEvent.change(amendInput()!, { target: { value: '85' } });
+    const save = screen.getByRole('button', { name: AMEND_COPY.save });
+    save.focus(); // off the field, so the refusal's focus hand-off is what puts it back
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+      fireEvent.click(save);
     });
     expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.staleWrite);
     expect(statusText()).toBe('');
     expect(document.activeElement).toBe(amendInput());
+    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  /** A field error from one open must not reappear under a freshly re-seeded, correct value. */
+  it('a reopened editor does not show the last open’s field error', async () => {
+    vi.mocked(editBodyweightAction).mockResolvedValueOnce({
+      ok: false,
+      error: 'Please fix the errors below.',
+      fieldErrors: { value: [IMPLAUSIBLE_BODYWEIGHT_MESSAGE] },
+    });
+    render(section({ logged: [W] }));
+    open();
+    fireEvent.change(amendInput()!, { target: { value: '845' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+    });
+    expect(screen.getByRole('alert').textContent).toBe(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
+    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    open();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+// The one place the duplicates copy is typed out: a CONTRACT test pinning the const's branches (the
+// AGENTS.md exception), because "twice" vs "N times" and "extra" vs "extras" is logic, not a literal.
+describe('BODYWEIGHT_COPY.duplicates — its wording per case', () => {
+  it('the same value repeated: "twice"/"N times", the extra(s) can’t be removed in the app yet', () => {
+    expect(BODYWEIGHT_COPY.duplicates(['84.5 lb', '84.5 lb'])).toBe(
+      'Logged twice — the extra can’t be removed in the app yet; ask a parent.',
+    );
+    expect(BODYWEIGHT_COPY.duplicates(['84.5 lb', '84.5 lb', '84.5 lb'])).toBe(
+      'Logged 3 times — the extras can’t be removed in the app yet; ask a parent.',
+    );
+  });
+  it('different values: asks which is right, never "remove the extra"', () => {
+    const differ =
+      'The weights differ — ask a parent which is right; it can’t be fixed in the app yet.';
+    expect(BODYWEIGHT_COPY.duplicates(['84.5 lb', '845 lb'])).toBe(differ);
+    expect(BODYWEIGHT_COPY.duplicates(['84.5 lb', '84.5 lb', '845 lb'])).toBe(differ);
   });
 });

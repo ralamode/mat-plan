@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { BODYWEIGHT_COPY } from '@/lib/constants';
+import { BODYWEIGHT_COPY, LOGGED_ROW_CLASS } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 
@@ -48,9 +48,10 @@ export function BodyweightReceipt({
 
   const values = formatLoggedWeights(logged);
   return (
-    // The done tint marks ONE logged weight. Duplicates are a problem to resolve, not a done row.
+    // The done tint marks ONE logged weight (and drops while the editor is open: LOGGED_ROW_CLASS).
+    // Duplicates are a problem to resolve, not a done row.
     <div
-      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${values.length === 1 ? 'border-done bg-done-surface text-card-foreground' : ''}`}
+      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${values.length === 1 ? LOGGED_ROW_CLASS : ''}`}
     >
       {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value,
           deterministically — load-bearing at 360px (why: `bodyweight-amend.tsx`). Keeping the saved

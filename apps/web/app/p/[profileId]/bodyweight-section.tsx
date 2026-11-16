@@ -1,6 +1,5 @@
-import type { BodyweightUnit } from '@mat-plan/shared';
-
 import { BODYWEIGHT_COPY } from '@/lib/constants';
+import type { LastBodyweightDTO } from '@/lib/dal/entries';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { lastTimeWhen } from '@/lib/entries/last-time';
@@ -9,9 +8,6 @@ import { BodyweightAmend } from './bodyweight-amend';
 import { BodyweightForm } from './bodyweight-form';
 import { BodyweightReceipt } from './bodyweight-receipt';
 import { SingleValueLive } from './single-value-live';
-
-/** The latest live weigh-in before the viewed day, as `lastBodyweight` (the DAL) returns it. */
-export type LastBodyweight = { value: number; unit: BodyweightUnit; day: string };
 
 /**
  * The weigh-in section of the day page (V1-24 PR 1a; the prototype's row since 3b-bw): the ✓ row on a
@@ -46,7 +42,7 @@ export function BodyweightSection({
   amendable: boolean;
   logged: readonly LoggedBodyweight[];
   /** The "Last time" weigh-in. The page reads it only when the ✓ row renders. */
-  last: LastBodyweight | null;
+  last: LastBodyweightDTO | null;
 }) {
   const lastTime = last
     ? BODYWEIGHT_COPY.lastTime(formatValueUnit(last.value, last.unit), lastTimeWhen(day, last.day))

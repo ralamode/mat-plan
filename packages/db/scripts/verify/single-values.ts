@@ -4,10 +4,11 @@ import {
   ENTRY_KIND,
   ENTRY_STATUS,
   newId,
+  PROFILE_KIND,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
@@ -55,13 +56,13 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
         {
           publicId: ATHLETE_PUBLIC_ID,
           name: 'Verify 3b-bw Athlete',
-          kind: 'kid',
+          kind: PROFILE_KIND.kid,
           householdId: hh.id,
         },
         {
           publicId: SIBLING_PUBLIC_ID,
           name: 'Verify 3b-bw Sibling',
-          kind: 'kid',
+          kind: PROFILE_KIND.kid,
           householdId: hh.id,
         },
       ])
@@ -103,6 +104,14 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       });
       return publicId;
     };
+    // The tombstone as TEXT, to the microsecond: a `Date` would round it (hide.ts's token rule).
+    const deletedAtText = async (publicId: string) =>
+      (
+        await tx
+          .select({ t: sql<string | null>`${schema.entries.deletedAt}::text` })
+          .from(schema.entries)
+          .where(eq(schema.entries.publicId, publicId))
+      )[0]?.t ?? null;
     const deletedAt = async (publicId: string) =>
       (
         await tx
@@ -123,6 +132,12 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       unit: otherMetric.unit,
     });
     const siblingBw = await weighInRow(sibling.id, DAY, 60);
+    // A weigh-in of the WRONG SHAPE holding the value the form would post: non-`done`. Without the
+    // status pin it would be found and cleared. (A text-valued weigh-in cannot be inserted at all:
+    // the entries CHECKs refuse it, so the `value_text IS NULL` pin is unproven here and harmless.)
+    const skippedBw = await weighInRow(athlete.id, '2026-10-11', 84.5, {
+      status: ENTRY_STATUS.skipped,
+    });
     const clear = (entryId: string, over: Partial<{ unit: string; seenValue: number }> = {}) =>
       clearBodyweight(exec, { ...asAthlete, entryId, unit: 'lb', seenValue: 84.5, ...over });
 
@@ -131,6 +146,13 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       { notFound: true },
       "3b-bw: clearBodyweight refuses another metric's entry — the metric is pinned, not posted",
     );
+    for (const [id, why] of [[skippedBw, 'a non-done weigh-in']] as const) {
+      assert.deepEqual(
+        await clear(id),
+        { notFound: true },
+        `3b-bw: clearBodyweight refuses ${why} — the shape is pinned`,
+      );
+    }
     assert.deepEqual(
       await clear(bw, { seenValue: 85 }),
       { stale: true },
@@ -186,15 +208,27 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
         "3b-bw: a clear hides exactly one row — the day's other entries, and the sibling's, stay live",
       );
     }
-    const token = await deletedAt(bw);
+    // 🔴 Pin the tombstone to a hand-written instant first. Every clear here runs in ONE outer
+    // transaction, so `now()` is frozen and a replay that re-stamped `deleted_at` would write the same
+    // instant: a sampled token could not catch it (docs/lessons.md, "pin the value").
+    const PINNED = '2026-10-10 12:00:00.123456+00';
+    await tx
+      .update(schema.entries)
+      .set({ deletedAt: sql`${PINNED}::timestamptz` })
+      .where(eq(schema.entries.publicId, bw));
+    const token = await deletedAtText(bw);
     assert.deepEqual(await clear(bw), { cleared: true }, '3b-bw: a replayed clear succeeds');
-    assert.deepEqual(await deletedAt(bw), token, '3b-bw: …and changes nothing (same tombstone)');
+    assert.equal(
+      await deletedAtText(bw),
+      token,
+      '3b-bw: …and changes nothing (the pinned tombstone is untouched)',
+    );
 
-    // The pre-read sees the hidden row: its day and the flag, nothing else.
+    // The pre-read sees the hidden row, and returns its day and nothing else.
     assert.deepEqual(
       await bodyweightRowForAmend(exec, { ...asAthlete, entryId: bw }),
-      { day: DAY, hidden: true },
-      '3b-bw: bodyweightRowForAmend reports a hidden row as hidden, with its own day',
+      { day: DAY },
+      '3b-bw: bodyweightRowForAmend returns a hidden row’s own day, and nothing else',
     );
 
     // A new weigh-in on the cleared day inserts: the day index is live-only.
@@ -223,13 +257,14 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
     // ── bodyweightRowForAmend ──────────────────────────────────────────────────────────────────────
     assert.deepEqual(
       await bodyweightRowForAmend(exec, { ...asAthlete, entryId: relog.id }),
-      { day: DAY, hidden: false },
-      '3b-bw: bodyweightRowForAmend reports a live row with its own day',
+      { day: DAY },
+      '3b-bw: bodyweightRowForAmend returns a live row’s own day',
     );
     for (const [entryId, scope, why] of [
       [siblingBw, S_SCOPE, "a sibling's weigh-in"],
       [relog.id, B_SCOPE, 'another household'],
       [other, S_SCOPE, 'another metric'],
+      [skippedBw, S_SCOPE, 'a non-done weigh-in'],
     ] as const) {
       assert.equal(
         await bodyweightRowForAmend(exec, { profilePublicId: ATHLETE_PUBLIC_ID, scope, entryId }),
@@ -249,7 +284,7 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
     assert.deepEqual(
       await lastBodyweightBefore(exec, { ...asAthlete, day: D }),
       { value: 70, unit: 'lb', day: '2026-10-15' },
-      '3b-bw: "Last time" is the latest LIVE done weigh-in strictly before the day — a cleared one, a skipped one, the day itself and a later day are all skipped',
+      '3b-bw: "Last time" is the latest LIVE done weigh-in strictly before the day — a cleared one, a non-done one, the day itself and a later day are all skipped',
     );
     assert.equal(
       await lastBodyweightBefore(exec, {
@@ -259,6 +294,17 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       }),
       null,
       '3b-bw: "Last time" is null for a profile with nothing before the day',
+    );
+    // The sibling's own answer, at the SAME day: the athlete has later weigh-ins, so a missing profile
+    // pin would return one of theirs.
+    assert.deepEqual(
+      await lastBodyweightBefore(exec, {
+        profilePublicId: SIBLING_PUBLIC_ID,
+        scope: S_SCOPE,
+        day: D,
+      }),
+      { value: 60, unit: 'lb', day: DAY },
+      '3b-bw: "Last time" is the profile’s own, never a sibling’s',
     );
     assert.equal(
       await lastBodyweightBefore(exec, {
@@ -271,12 +317,14 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
     );
 
     // The tiebreak: two live weigh-ins on one day can exist (a second slot), and the newer wins.
+    // ⚠️ The LATER created_at is inserted FIRST, so it has the LOWER id: `id desc` alone would answer
+    // 50, and only the `created_at` key answers 51.
     const TIE = '2026-09-10';
-    await weighInRow(sibling.id, TIE, 50, { createdAt: new Date('2026-09-10T07:00:00Z') });
     await weighInRow(sibling.id, TIE, 51, {
       context: 'evening',
       createdAt: new Date('2026-09-10T19:00:00Z'),
     });
+    await weighInRow(sibling.id, TIE, 50, { createdAt: new Date('2026-09-10T07:00:00Z') });
     assert.deepEqual(
       await lastBodyweightBefore(exec, {
         profilePublicId: SIBLING_PUBLIC_ID,
@@ -288,7 +336,7 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
     );
 
     console.log(
-      '✓ V1-24 3b-bw: clearBodyweight hides exactly one owned weigh-in (metric, unit, seenValue, profile and household pinned; a replay is a replay unless the day was re-entered); the pre-read sees a hidden row; "Last time" skips cleared, non-done, same-day and later rows',
+      '✓ V1-24 3b-bw: clearBodyweight hides exactly one owned weigh-in (metric, unit, seenValue, profile and household pinned; a replay is a replay unless the day was re-entered); the pre-read sees a hidden row and returns only its day; "Last time" skips cleared, non-done, same-day and later rows',
     );
   });
 }

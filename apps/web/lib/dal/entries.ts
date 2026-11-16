@@ -566,15 +566,15 @@ export async function ownedBodyweightValue(args: {
 }
 
 /**
- * The row an amend or a clear names: its own day, and whether it is hidden (V1-24 3b-bw, plan W7).
+ * The day of the row an amend or a clear names (V1-24 3b-bw, plan W7).
  * The action bounds the write by THIS day, never one the form posts. Thin over the single-sourced
- * `bodyweightRowForAmend`, a tombstone-returning read that returns no value
- * (`delete-and-restore.md`'s reader audit).
+ * `bodyweightRowForAmend`, which sees a hidden row (so a replayed clear reaches the clear) and returns
+ * only its day (`delete-and-restore.md`'s reader audit).
  */
 export async function bodyweightRowDay(args: {
   profilePublicId: string;
   entryId: string;
-}): Promise<{ day: string; hidden: boolean } | null> {
+}): Promise<{ day: string } | null> {
   const scope = await getHouseholdScope();
   if (!scope) return null;
 
@@ -603,10 +603,12 @@ export async function clearBodyweightEntry(args: {
  * live weigh-in strictly before `day`. Not a new reader of the data: the athlete's own page shows the
  * same weight on its own day.
  */
+export type LastBodyweightDTO = { value: number; unit: BodyweightUnit; day: string };
+
 export async function lastBodyweight(
   profilePublicId: string,
   day: string,
-): Promise<{ value: number; unit: BodyweightUnit; day: string } | null> {
+): Promise<LastBodyweightDTO | null> {
   const scope = await getHouseholdScope();
   if (!scope) return null;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { isBlankWeight } from '@mat-plan/shared';
+import { isBlankWeight, parseTypedWeight } from '@mat-plan/shared';
 import { useActionState, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -78,7 +78,7 @@ export function BodyweightAmend({
           setEditing(false);
           live.report({
             message: BODYWEIGHT_COPY.announcedChanged(
-              formatValueUnit(Number(String(submitted).replace(',', '.')), logged.unit),
+              formatValueUnit(parseTypedWeight(String(submitted)) ?? logged.value, logged.unit),
             ),
             tone: 'sr',
             focus: ['change'],
@@ -151,6 +151,8 @@ export function BodyweightAmend({
           setValue(String(logged.value));
           setStateAtOpen(state);
           setBlankRefused(false);
+          // A refusal from an earlier try is about a value this editor no longer shows.
+          live.dismiss();
           setEditing(true);
         }}
         aria-label={changeLabel('weight', shown)}
@@ -208,9 +210,8 @@ export function BodyweightAmend({
       </div>
 
       {canClear ? (
-        // Secondary text on the logged row's done tint: `muted-foreground` is 4.27:1 there, under AA
-        // (docs/design.md → done tokens), so the tint's own muted token.
-        <p id={ids.hint} className="text-done-muted-foreground text-sm">
+        // On a plain surface: the row drops its tint while this editor is open (LOGGED_ROW_CLASS).
+        <p id={ids.hint} className="text-muted-foreground text-sm">
           {BODYWEIGHT_COPY.clearHint}
         </p>
       ) : null}
@@ -231,6 +232,7 @@ export function BodyweightAmend({
           className="flex-1"
           onClick={() => {
             setEditing(false);
+            live.dismiss();
             // Cancel is about to unmount; hand focus back to the Change that opened the editor.
             live.claimFocus(['change']);
           }}
@@ -243,14 +245,15 @@ export function BodyweightAmend({
           variant={clears ? 'destructive' : 'default'}
           disabled={pending}
           aria-label={clears && !pending ? BODYWEIGHT_COPY.clearLabel : undefined}
-          // The destructive variant's fill is translucent, and over the logged row's done tint its
-          // red text drops under AA (a11y.spec.ts scans this state). A solid surface underneath
-          // keeps it on the contrast it was designed for.
-          className={
-            clears ? 'bg-background hover:bg-destructive/10 dark:bg-background flex-1' : 'flex-1'
-          }
+          className="flex-1"
         >
-          {pending ? SAVING_LABEL : clears ? BODYWEIGHT_COPY.clear : AMEND_COPY.save}
+          {pending
+            ? clears
+              ? BODYWEIGHT_COPY.clearing
+              : SAVING_LABEL
+            : clears
+              ? BODYWEIGHT_COPY.clear
+              : AMEND_COPY.save}
         </Button>
       </div>
     </form>

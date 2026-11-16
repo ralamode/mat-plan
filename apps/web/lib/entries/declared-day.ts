@@ -7,15 +7,6 @@ import { getActiveLocalDay } from '@/lib/active-timezone';
 /** Shown when a form submits a day too far from the server's active-tz today (a stale tab). */
 export const DECLARED_DAY_CLOSED_ERROR = 'That day is no longer open for logging. Reload the page.';
 
-/**
- * Shown when a Change or a Clear names a weigh-in on a day the page no longer offers (V1-24 3b-bw,
- * plan W8). A sibling of the logging copy, because "no longer open for logging. Reload the page." is
- * wrong twice there: nothing was being logged, and the action has already revalidated the page, whose
- * read-only notice gives the reason.
- */
-export const DECLARED_DAY_CHANGE_CLOSED_ERROR =
-  "That day is read-only now, so the weight wasn't changed.";
-
 export type DeclaredDayResult = { ok: true; day: string } | { ok: false; error: string };
 
 /**
