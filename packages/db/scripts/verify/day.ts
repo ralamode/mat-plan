@@ -51,7 +51,7 @@ import {
  * - step 11a: none of its own (the existing strength proofs in `verify.ts` must pass unchanged);
  * - **step 11b (below)**: the row writer, its un-tick and its re-tick, proof by proof as
  *   `docs/plans/fam-1-11b-row-writer.md` → § Test plan numbers them, each with the mutation patch
- *   that turns it red (`scripts/mutations/README.md`, 110–129 and 170–181);
+ *   that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–181; 120 is unused, see there);
  * - step 12a: seeds the state each `DayPlan` fixture describes and deep-equals it, with
  *   hand-written timestamps;
  * - step 11c: amend each type; a non-number is refused; an older day is refused;
@@ -1209,8 +1209,9 @@ async function verifyRowWriter(): Promise<void> {
       reps: 8,
       quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25 }],
     };
-    // A HIDDEN set row under the entry, carrying a LIVE 99 lb quantity: `readRowValues` reads the
-    // quantities of live sets only, so a read by entry (rather than by live set id) shows 99 lb.
+    // A HIDDEN set row under the entry, carrying a LIVE 99 lb quantity. A read that keeps the hidden
+    // set sees two live sets and throws (that is what reddens 172); the 99 lb would surface only if
+    // that throw were removed as well.
     const [hiddenSet] = await tx
       .insert(schema.entrySets)
       .values({
