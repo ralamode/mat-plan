@@ -1,11 +1,12 @@
 diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
 --- a/packages/db/src/writers/ownership.ts
 +++ b/packages/db/src/writers/ownership.ts
-@@ -654,7 +654,6 @@ export async function insertWorkoutOwnedBy(
-       .where(
-         and(
-           eq(schema.workouts.id, row.copiedFrom.workoutId),
--          eq(schema.programBlocks.householdId, scope.householdId),
-         ),
-       );
+@@ -689,7 +689,7 @@ export async function insertWorkoutOwnedBy(
+       .select({ id: schema.workouts.id })
+       .from(schema.workouts)
+       .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
+-      .where(and(eq(schema.workouts.id, row.copiedFrom.workoutId), programBlockInHousehold(scope)));
++      .where(eq(schema.workouts.id, row.copiedFrom.workoutId));
      if (!source) return null;
+   }
+ 

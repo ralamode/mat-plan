@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -604,7 +604,7 @@ export async function programBlockByClientId(
+       deletedAt: schema.programBlocks.deletedAt,
+     })
+     .from(schema.programBlocks)
+-    .where(and(programBlockInHousehold(scope), eq(schema.programBlocks.clientId, clientId)))
++    .where(eq(schema.programBlocks.clientId, clientId))
+     .limit(1);
+   return row
+     ? { id: row.id, publicId: row.publicId, kind: row.kind, deleted: row.deletedAt !== null }
