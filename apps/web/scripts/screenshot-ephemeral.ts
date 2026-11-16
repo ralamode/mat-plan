@@ -745,8 +745,10 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByLabel('Weight', { exact: true }).waitFor();
   },
   'bodyweight-empty-tick': async (page) => {
-    await page.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
-    await page.getByRole('alert').waitFor();
+    // Scoped to the section: Next's route announcer is a page-level `role="alert"` too.
+    const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
+    await section.getByRole('alert').waitFor();
   },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();
