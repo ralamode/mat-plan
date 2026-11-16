@@ -151,6 +151,14 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
 
 ## GitHub / PRs
 
+- **Merge-conflict markers shipped in a markdown table, and every gate stayed green.** → A merge of
+  `main` conflicted in several files; only the last lines of `git merge`'s output were read (one
+  `CONFLICT`), and `git add -A` committed the rest with their markers. Prettier then reflowed
+  `<<<<<<<` / `=======` / `>>>>>>>` inside a table into `| <<<<<<< HEAD |` rows and a `> > > > > > >`
+  blockquote, so `format:check`, `guides:check` and CI all passed; a reviewer found it (FAM-1 4a-i,
+  #437). → After any merge, read the WHOLE output and run `git diff --name-only --diff-filter=U`
+  before committing; `git grep -nE '^(<{7}|={7}|>{7})( |$)|> > > > > > >'` must print nothing.
+
 - **A skip label was added, the job was re-run, and the label was ignored.** → A re-run **replays the
   original event payload**, so `github.event.pull_request.labels` is frozen at the moment the run was
   triggered. PR #67: `ci-skip-e2e` added at 08:16:17Z, re-run attempt 3 at 08:16:41Z still ran the
