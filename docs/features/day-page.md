@@ -19,8 +19,9 @@ What an athlete sees and ticks on a day: the workouts of every program they are 
 order, each item with its rows. The lane builds the screen against fixtures and fakes on the
 preview route first, then wires the first real ✓.
 
-🚧 **Written at step 0b, before the lane's first step.** The screen is a stub. Each step below adds
-its files, its diagram and its invariants here.
+🚧 **Built up step by step.** Step 13 built the workout cards and the single rows (Check, Duration,
+Count) with their ✓. An item logged set by set shows its heading only until 13b. Each later step
+adds its files and invariants here.
 
 ## The map
 
@@ -35,12 +36,18 @@ its files, its diagram and its invariants here.
 
 ## Files
 
-| File                                          | What it is for                                                                                                       |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/day/day-screen.tsx`      | `DayScreen({ plan, actions })`. A section of the day page. A stub until 13.                                          |
-| `apps/web/components/day/day-screen.test.tsx` | The stub's own output. Step 13 replaces it with the screen's tests.                                                  |
-| `apps/web/components/day/owed.test.ts`        | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test. |
-| `apps/web/lib/dal/day/index.ts`               | A placeholder so the directory exists.                                                                               |
+| File                                       | What it is for                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/components/day/day-screen.tsx`   | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`. |
+| `apps/web/components/day/day-context.tsx`  | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                       |
+| `apps/web/components/day/workout-card.tsx` | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                             |
+| `apps/web/components/day/item-card.tsx`    | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading only until 13b.        |
+| `apps/web/components/day/use-row.ts`       | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b's set rows reuse it per set.                         |
+| `apps/web/components/day/row-values.ts`    | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                           |
+| `apps/web/components/day/day-copy.ts`      | Every sentence the screen says, and each refusal's copy.                                                                                         |
+| `apps/web/components/day/*.test.ts(x)`     | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                          |
+| `apps/web/components/day/owed.test.ts`     | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                             |
+| `apps/web/lib/dal/day/index.ts`            | A placeholder so the directory exists.                                                                                                           |
 
 ## Invariants
 
@@ -71,8 +78,29 @@ its files, its diagram and its invariants here.
    holds `lib/dal/day/` to that.
    [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions and the DAL,
    though the guide gate no longer sends a PR there.
-9. **A new Server Action module brings its own registry and test files**, so the lane edits no
-   shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
+9. 🔴 **A row's state is keyed by athlete and day.** `DayScreen` keys its body on
+   `profilePublicId/day`: the page moves between days on one mount and a workout has the same ids
+   every week, so typed text, a failure or an un-tick token would otherwise carry into another day.
+10. 🔴 **A rejected action is a `retry`.** The contract's actions never throw for a refusal, but a
+    dropped connection rejects; `use-row.ts` turns that into "Couldn't save. Try again." so no row
+    stays ticked over a save that never happened.
+11. **Re-tick only when nothing new was typed.** After an un-tick the field keeps the old number; ✓
+    with it unchanged calls `retickRow` (the same entry back), a changed or emptied field is a new
+    `logRow`, because a re-tick restores the old numbers. A retry with different numbers mints a
+    new `clientId`, or the server would answer with the first attempt's.
+12. **Read-only is `!writable`, a workout that left the week, or a `closed_day` already seen.** Such
+    rows show what was logged as text, with no ✓, field or "Last time" (D33).
+13. **A new Server Action module brings its own registry and test files**, so the lane edits no
+    shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
+
+## Recorded differences from the prototype (v12)
+
+Decided with the maintainer at step 13 (2026-11-15): a logged row is neutral (a `border-primary` card, a filled
+primary ✓), not green, until a "done" colour token exists; "N not saved" beside a workout's progress
+while a save has failed; a Reload button on a refusal that means the page is out of date. Also: the
+program name is plain text (the program page is not wired), shown only on a day with two programs as
+v12 does; a logged number shows as text until Change arrives at 12d; an empty ✓ that fails leaves
+the field empty rather than filling in the target.
 
 ## Changing it
 
