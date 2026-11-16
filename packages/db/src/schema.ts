@@ -1480,16 +1480,19 @@ export const prescriptionTargets = pgTable(
  * **Keys.** `public_id` is the row's address (ASSIGN-1's version guard names it; `(profile, block)` is
  * ambiguous once closed rows exist). NO `client_id`: put-on carries none (`assignDraftSchema`); the
  * natural key is `(profile, block, active_from)`. ⚠️ **A hit on it is a replay ONLY if the row it hit is
- * still open.** 🔴 **Off and on again the same day is a trap whatever day the program started on**, and
- * the keys catch only one case of it. A put-on `from = today` after a take-off today must look for the
- * closed row by `(profile, block, active_to = today)` and decide:
- * - **started today too:** the put-on hits the start key on the CLOSED row; a blind `ON CONFLICT DO
- *   NOTHING` would answer ok and leave the athlete off from tomorrow;
- * - **started earlier (the usual case):** NO key refuses it (another start; the old row is not open), so
- *   it inserts a second row and the program is due twice today.
- * Plan D15 rejected reopening the old row, so 6c starts the new row tomorrow or refuses; `db:verify`
- * proves both cases and `assignmentsOverlapping` flags the second. A second OPEN row for one (profile,
- * block) is refused by the open key; any later row must start after the earlier one's `active_to`.
+ * still open.** 🔴 **Off and on again the same day: the keys do not decide it, ADR 0007 Amendment 4
+ * does** _(maintainer, 2026-11-16)_. Take off removes a start dated today when the athlete has logged
+ * nothing live in it today (a hide, which frees all three keys); otherwise it closes the row through
+ * today. A put-on that finds this athlete's row of this program with `active_to = today` **reopens it**
+ * (clears `active_to` on the same row, one stretch with no gap) and retakes a place through the band,
+ * since take off freed the old one. 6c must therefore look for that row FIRST, whatever day it started:
+ * - a blind insert `from = today` after a take-off of a program that started today hits the start key
+ *   on the closed row, and a blind `ON CONFLICT DO NOTHING` would answer ok and leave the athlete off;
+ * - one that started earlier (the usual case) is refused by NO key: it inserts a second row and the
+ *   program is due twice today.
+ * `db:verify` proves both shapes at the schema level and `assignmentsOverlapping` flags the second, so
+ * a writer that skips the reopen is caught. A second OPEN row for one (profile, block) is refused by
+ * the open key; any other later row must start after the earlier one's `active_to`.
  *
  * ⚠️ **WRITER-ENFORCED, not schema-enforced** (a choice: a carried `household_id` and composite FKs would
  * enforce the first two, at the cost of `UNIQUE (id, household_id)` on `profiles` and `program_blocks`;
@@ -1502,7 +1505,8 @@ export const prescriptionTargets = pgTable(
  * PERSONAL DATA (A2 §8): which child is on which program, from and to which day. Both FKs are NO
  * ACTION: the household delete and the per-athlete erasure delete these rows first (`runbooks.md`
  * steps 9c, 9d; "Erase one athlete"). Take off is NOT a soft delete (the closed row stays as history); a
- * program that has not started is soft-deleted instead.
+ * program that has not started, or started today with nothing logged in it (Amendment 4), is
+ * soft-deleted instead.
  */
 export const programAssignments = pgTable(
   'program_assignments',

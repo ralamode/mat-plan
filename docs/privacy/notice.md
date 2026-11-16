@@ -43,7 +43,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   remove them; deleting the household does.
   **Who is on which program**: which athlete is on it, from which day and through which day, and on
   which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
-  an athlete off a program keeps the record that they were on it.
+  an athlete off a program keeps the record that they were on it, unless the program only started
+  that day and nothing was logged in it.
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.

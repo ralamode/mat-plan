@@ -286,7 +286,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": which athlete is on it, from which day and through which day, and on\nwhich days of the week. That belongs to the athlete, and goes with them if they are removed. Taking\nan athlete off a program keeps the record that they were on it.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
+              "text": ": which athlete is on it, from which day and through which day, and on\nwhich days of the week. That belongs to the athlete, and goes with them if they are removed. Taking\nan athlete off a program keeps the record that they were on it, unless the program only started\nthat day and nothing was logged in it.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
             },
             {
               "k": "em",
