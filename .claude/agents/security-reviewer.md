@@ -2,7 +2,7 @@
 name: security-reviewer
 description: Adversarial security and supply-chain reviewer for mat-plan (a public repo with existence-only ownership). Use as the security lens for auth, secrets, GitHub Actions/workflows, anything exposed to unauthenticated callers, or any third-party action or package.
 tools: Read, Grep, Glob, Bash
-model: fable
+model: opus
 effort: high
 ---
 
