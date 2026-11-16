@@ -210,4 +210,14 @@ pure "latestMergedPr: none to read is null, not 0" "ok null" 'console.log("ok " 
 cite "citations: a missing section is refused" 'no `## Red flags` section' $'# S\n\n## Done when\n\n- [ ] x\n'
 cite "citations: an empty section is refused" '`## Red flags` has no items' $'# S\n\n## Red flags\n\nprose\n\n## Done when\n'
 
+# ── Agent models (DX-11 follow-up): a reviewer pinned to fable is refused; opus/haiku/inherit pass. ──
+agent() { pure "$1" "$2" "const p = G.checkAgentModels(JSON.parse(A)); $show" "$3"; }
+a() { printf '{"file":".claude/agents/%s.md","text":"---\\nname: %s\\nmodel: %s\\neffort: high\\n---\\nbody"}' "$1" "$1" "$2"; }
+agent "agent models: opus, haiku and inherit pass" ok "[$(a x opus),$(a y haiku),$(a z inherit)]"
+agent "agent models: a fable pin is refused" 'frontmatter pins `model: fable`' "[$(a x-reviewer fable)]"
+agent "agent models: a full fable id is refused too" 'pins `model: claude-fable-5-2`' "[$(a x-reviewer claude-fable-5-2)]"
+agent "agent models: a QUOTED fable pin is refused" 'pins `model: fable`' '[{"file":".claude/agents/q.md","text":"---\nmodel: \"fable\"\n---\nb"},{"file":".claude/agents/s.md","text":"---\nmodel: '"'"'fable'"'"'\n---\nb"}]'
+agent "agent models: CRLF frontmatter is read" 'pins `model: fable`' '[{"file":".claude/agents/c.md","text":"---\r\nmodel: fable\r\n---\r\nb"}]'
+agent "agent models: the word fable in the BODY is not a pin" ok '[{"file":".claude/agents/x.md","text":"---\nmodel: opus\n---\nmodel: fable is for plans"}]'
+
 [ "$fails" -eq 0 ] && echo "all skills-guard self-tests passed" || exit 1
