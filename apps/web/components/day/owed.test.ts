@@ -25,11 +25,6 @@ describe('DayPlan: owed by its consumers', () => {
     '12c: the switcher, program line and not-on-a-program notice at 360px beside v12, and in the a11y scan, once the preview mounts them',
   );
   it.todo('12b: the DAL sets writable, future and canGoForward');
-  it.todo('13b: set rows, PREVIOUS and Add set, per set');
-  it.todo('13b: heavy-a-supersets renders linked supersets with their rest');
-  it.todo('13b: superset letters are ordinal: group b reads A1, A2 when group a is gone');
-  it.todo('13b: yesterday-edited-after-logging renders the kept, extra, removed and edited rows');
-  it.todo('13b: future-preview renders read-only cards');
   it.todo('12c: an older day and a future day are read-only (e2e)');
 });
 
@@ -44,7 +39,7 @@ describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers'
 describe('RowAmend: owed by its consumers', () => {
   it.todo('12d: amendRow passes the inherited action matrix');
   it.todo('12d: a weight × reps set and a superset on real data; change a number (e2e)');
-  it.todo('13b: Change keeps the old number if the new one is blank or not a number');
+  it.todo('13b-ii: Change keeps the old number if the new one is blank or not a number');
 });
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {

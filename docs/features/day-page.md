@@ -20,8 +20,9 @@ order, each item with its rows. The lane builds the screen against fixtures and 
 preview route first, then wires the first real ✓.
 
 🚧 **Built up step by step.** Step 13 built the workout cards and the single rows (Check, Duration,
-Count) with their ✓. An item logged set by set shows its heading and "N logged" until 13b. Each later step
-adds its files and invariants here.
+Count) with their ✓; 13d the program line, Program order, the athlete switcher and the notices; 13b
+the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b-ii) and the wiring
+(12b on) come next; each step adds its files and invariants here.
 
 ## The map
 
@@ -41,9 +42,9 @@ adds its files and invariants here.
 | `apps/web/components/day/day-screen.tsx`           | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`.                                                                                                                 |
 | `apps/web/components/day/day-context.tsx`          | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                                                                                                       |
 | `apps/web/components/day/workout-card.tsx`         | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                                                                                                             |
-| `apps/web/components/day/item-card.tsx`            | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading and "N logged" until 13b.                                                                                                              |
-| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b reuses its write state machine per set; the single-number reader moves out then.                                                                                     |
-| `apps/web/components/day/row-values.ts`            | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                                                                                                                                           |
+| `apps/web/components/day/item-card.tsx`            | One item: its heading (with its superset label, and what logged rows were against), and either its single row (field, "Last time", ✓) or its set table (Set, Previous, a column per field, ✓; "+ Add set").                                                      |     |
+| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick, for a single row or one set: optimistic display, `clientId` per attempt, refusals. Its text is a row's fields (`RowText`).                                                                                                     |     |
+| `apps/web/components/day/row-values.ts`            | Pure: a row's fields (`fieldsOf`: a load and/or reps), reading what was typed (D13's empty ✓, whole reps), comparing and formatting a row's values in the contract's spelling (`quantityText`).                                                                  |     |
 | `apps/web/components/day/athlete-switcher.tsx`     | The household's athletes as first-name pills under the `<h1>`; a switch opens that athlete's today. Server-safe (no state).                                                                                                                                      |
 | `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                     |     |
 | `apps/web/components/day/program-order-dialog.tsx` | `ProgramOrderButton` and the dialog (client code): ↑ ↓ per program; each tap saves the whole order; taps during a save are sent together, and the page's older order cannot undo them; a failure restores the last saved order; focus stays on the arrow tapped. |     |
@@ -127,9 +128,13 @@ adds its files and invariants here.
   on a day with two programs.
 - A logged number shows as text until Change arrives at 12d.
 - An empty ✓ that fails leaves the field empty rather than filling in the target.
-- Until 13b, a set-type item shows "N logged" under its heading, so a closed day does not look
-  empty. It looks done (edge and tint) only when every set shown is
-  logged, as v12's card does.
+- A set-type card looks done (edge and tint) only when every set shown is logged, as v12's does.
+
+**Decided for 13b (maintainer, 2026-11-16):** "+ Add set" adds one row at a time, kept until it is
+ticked and gone on reload (v12 kept it); a look-ahead workout says its size ("6 items"), as v12.
+For 13b-ii: Change edits a logged number in place, with select-all on focus, Escape to revert and a
+visible "Changed 30 → 35 · Undo"; a changeable logged number is a green-edged field (v12's has no
+border).
 
 **Decided for 13d (maintainer, 2026-11-16):** the switcher shows first names in their own row (not
 v12's initials beside the name); a switch opens the athlete's today, as v12 does; Program order
@@ -139,10 +144,8 @@ yesterday and look-ahead days, since on an older day an empty program means skip
 explainer sentence about where a program added later goes is left out until the writer is checked
 against it.
 
-**Known gap, owed by the contract:** a logged value is spelled by `formatValueUnit` (`30 sec`,
-`40 yards`), while the prescription beside it is spelled by `prescribed-text.ts` (`30 s`, `40 yd`).
-The latter's unit spelling is private, and its subpath pulls `csv/` into a client bundle, so one
-client-safe renderer has to come from the contract owner.
+A logged value and a prescription are spelled the same way (`30 s`, `40 yd`): both use the
+contract's `quantityText` (C1, #436).
 
 ## Changing it
 

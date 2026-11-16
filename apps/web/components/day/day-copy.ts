@@ -2,7 +2,7 @@ import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-p
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
 import { CLOSED_DAY_NOTICE, VALUE_JOINER } from '@/lib/constants';
-import { formatList } from '@/lib/i18n/plural';
+import { formatList, plural } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
 
@@ -21,8 +21,20 @@ export const DAY_COPY = {
   lastTime: 'Last time',
   logged: 'Logged',
   reload: 'Reload',
-  /** A set-type item before 13b gives it rows: how many of its sets are logged. */
-  setsLogged: (count: number) => `${count} logged`,
+  /** The set table (13b): its column headers, and what an empty Previous says to a screen reader. */
+  set: 'Set',
+  previous: 'Previous',
+  reps: 'Reps',
+  noPrevious: 'none',
+  addSet: '+ Add set',
+  setAdded: (name: string) => `${name}: set added`,
+  setLabel: (name: string, set: number) => `${name} set ${set}`,
+  /** A row logged against a prescription the program has since changed (D7; v12's wording). */
+  loggedAgainst: (text: string) => `Logged rows were against ${text}.`,
+  superset: (letter: string) => `Superset ${letter}`,
+  rest: (text: string) => `Rest ${text}`,
+  /** Look-ahead: the size of a workout, where the progress line would be (v12). */
+  items: (count: number) => plural(count, { one: '1 item', other: `${count} items` }),
   /** A row whose prescription left the workout after it was logged (v12, `index.html:2432`). */
   removed: 'No longer in this workout. What was logged stays.',
   /** The whole screen turns read-only after the first `closed_day`. */

@@ -3,6 +3,9 @@
 import {
   newId,
   ROW_REFUSAL,
+  type DayItem,
+  type DayRow,
+  type DayWorkout,
   type RowRefusal,
   type RowResult,
   type RowValues,
@@ -12,13 +15,13 @@ import { useEffect, useState } from 'react';
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import {
-  hasQuantityField,
+  EMPTY_TEXT,
+  fieldsOf,
   readTyped,
   sameValues,
   textOf,
-  type DayItem,
-  type DayRow,
-  type DayWorkout,
+  type RowField,
+  type RowText,
   type RowWriteKind,
 } from './row-values';
 
@@ -54,7 +57,14 @@ type Override =
  * - `invalid`: the number is the problem, so the field is marked and takes focus; never for
  *   "Couldn't save".
  */
-type RowError = { message: string; reload: boolean; counts: boolean; invalid: boolean };
+type RowError = {
+  message: string;
+  reload: boolean;
+  counts: boolean;
+  invalid: boolean;
+  /** The field a refused number is in, so that field is the one marked and focused. */
+  field?: RowField;
+};
 
 const RETRY: RowResult = { ok: false, reason: ROW_REFUSAL.retry };
 
@@ -93,7 +103,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   const day = useDay();
   const rowKey = rowKeyOf(workoutKey, item, row);
 
-  const [text, setTextState] = useState('');
+  const [text, setTextState] = useState<RowText>(EMPTY_TEXT);
   const [error, setError] = useState<RowError | null>(null);
   const [pending, setPending] = useState<
     { write: 'tick'; shown: RowValues } | { write: 'untick' } | null
@@ -134,7 +144,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   const canWrite = !day.readOnly && workout.scheduled;
   /** A new entry needs both ids; a row whose prescription was removed can only be ticked back. */
   const canLog = canWrite && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
-  const hasField = canLog && hasQuantityField(item);
+  const hasField = canLog && fieldsOf(item).length > 0;
   /** A read-only day shows no message: there is nothing left to retry. */
   const shownError = canWrite ? error : null;
   const notSaved = shownError?.counts === true;
@@ -149,8 +159,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   }, [notSaved, rowKey, setRowFailed]);
 
   /** Typing over a refused number clears the refusal: the field is being fixed. */
-  function setText(next: string) {
-    setTextState(next);
+  function setText(field: RowField, next: string) {
+    setTextState((was) => ({ ...was, [field]: next }));
     if (error?.invalid) setError(null);
   }
 
@@ -203,7 +213,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setPending(null);
     if (result.ok) {
       setAttempt(null);
-      setTextState('');
+      setTextState(EMPTY_TEXT);
       succeed(loggedFrom(result), DAY_COPY.announce.logged(item.name));
       return;
     }
@@ -224,7 +234,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     );
     setPending(null);
     if (result.ok) {
-      setTextState('');
+      setTextState(EMPTY_TEXT);
       succeed(loggedFrom(result), DAY_COPY.announce.logged(item.name));
       return;
     }
@@ -270,7 +280,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     if (unticked?.hiddenAt) {
       // Re-tick when nothing new was typed: no field (a Check, a removed prescription), the field
       // untouched since the un-tick, or the same number typed again in the same unit.
-      const untouched = !hasField || text === textOf(item, unticked.values);
+      const kept = textOf(item, unticked.values);
+      const untouched = !hasField || (text.quantity === kept.quantity && text.reps === kept.reps);
       const read = hasField ? readTyped(item, text) : null;
       const same = read?.ok && !read.empty && sameValues(read.values, unticked.values);
       if (untouched || same) return retick(unticked, unticked.hiddenAt);
@@ -283,6 +294,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
         reload: false,
         counts: false,
         invalid: true,
+        field: read.field,
       });
       return;
     }
