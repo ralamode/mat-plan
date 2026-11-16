@@ -172,7 +172,9 @@ flowchart LR
       numbers**, and the unit the type fixes, else the item's own declared unit when the type allows
       it, else none. Focus goes to the first new card's heading; the status line says how many, from
       the sheet's `onReturned` (the bar is hidden from a screen reader while the sheet is open), once
-      per Add: a plain Close says nothing.
+      per Add: a plain Close says nothing. ⚠️ The once-per-Add is unit-tested; the ORDER (after the
+      sheet is gone, not before) is not: jsdom closes the sheet before the next frame either way, so
+      only a browser can show it (owed to 7b's e2e, `owed.test.ts`).
     - **The new-item form takes over the sheet**, and **what it tracks has no default**: Create is
       inactive until a type is chosen, with a line explaining the chosen type, and the warning that
       the item can't be deleted or renamed and its type can't change.
