@@ -208,7 +208,9 @@ export function BodyweightAmend({
       </div>
 
       {canClear ? (
-        <p id={ids.hint} className="text-muted-foreground text-sm">
+        // Secondary text on the logged row's done tint: `muted-foreground` is 4.27:1 there, under AA
+        // (docs/design.md → done tokens), so the tint's own muted token.
+        <p id={ids.hint} className="text-done-muted-foreground text-sm">
           {BODYWEIGHT_COPY.clearHint}
         </p>
       ) : null}
