@@ -142,6 +142,13 @@ a description until it has its own row.
 > step ids, gates, lanes and delivery slices. The plan split and re-homed several steps (4a, 6, 11,
 > 12), added the ones this table lacks, and redid the slices. What follows is kept as the record of
 > the reasoning.
+>
+> 🔴 **Do not copy a step's label from this chart or table.** Several ids mean something else in the
+> plan: here 11a is "log writer, new kinds" and 11b is "strength writer on workouts"; in the plan
+> 11a is a refactor that extracts the session helpers, **11b is the one row writer for every type**,
+> and 11c is Change. A PR
+> title, a branch name or a step note takes its id and its wording from the plan's §5 _(a lane copied
+> the old labels by mistake, 2026-11-16)_.
 
 ```mermaid
 flowchart LR

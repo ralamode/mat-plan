@@ -1,6 +1,21 @@
-import { PROGRAM_REFUSAL, WEEKDAYS, type ProgramRefusal, type ProgramView } from '@mat-plan/shared';
+import {
+  collapseWhitespace,
+  FREE_TEXT_NOTE_MAX,
+  LOGGABLE_DIMENSION_LABELS,
+  MAX_SETS_PER_MOVEMENT,
+  PROGRAM_REFUSAL,
+  TRACKING_TYPE_FIELDS,
+  UNIT_LABELS,
+  WEEKDAYS,
+  type ProgramRefusal,
+  type ProgramView,
+  type TrackingType,
+  type Unit,
+  type UnitDimension,
+} from '@mat-plan/shared';
 
 import { formatDayShort } from '@/lib/date';
+import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural } from '@/lib/i18n/plural';
 
@@ -36,7 +51,18 @@ export const BUILDER_COPY = {
   week: 'Week',
   weekIntro: 'Each day runs its workouts in this order. A day with none is a rest day.',
   restDay: 'Rest day',
+  optional: '(optional)',
 } as const;
+
+/** What a refused write says when trying again is the only advice. */
+export const SAVE_FAILED = 'Couldn’t save. Try again.';
+
+/**
+ * Text typed the way the schemas store it: runs of whitespace (a pasted tab or line break
+ * included) become one space, and the ends are trimmed. The contract refuses a control character
+ * and a line break, so a pasted tab would otherwise come back `invalid` under text that looks fine.
+ */
+export const cleanName = (raw: string) => collapseWhitespace(raw).trim();
 
 /**
  * A pending button: `aria-disabled` (a disabled one drops focus to <body>), which `Button` does
@@ -54,7 +80,7 @@ export function nameRefusal(reason: ProgramRefusal): string {
     case PROGRAM_REFUSAL.not_found:
       return 'This program no longer exists.';
     default:
-      return 'Couldn’t save. Try again.';
+      return SAVE_FAILED;
   }
 }
 
@@ -136,4 +162,140 @@ export function workoutSummary(itemCount: number, usedOn: readonly number[]): st
 /** Where a copied workout came from: the program's name as it was on the day of the copy. */
 export function copiedFromText(from: { programName: string; on: string }): string {
   return `Copied from ${from.programName} · ${formatDayShort(from.on)}`;
+}
+
+/** The workout editor's words (FAM-1 step 8; the prototype's `vWorkout`). */
+export const EDITOR_COPY = {
+  backToProgram: '← Program',
+  editWorkout: 'Edit workout',
+  newWorkout: 'New workout',
+  workoutName: 'Name',
+  workoutNamePlaceholder: 'e.g. Heavy A',
+  description: 'Description',
+  items: 'Items',
+  noItems: 'No items yet.',
+  checkHint: 'Checked off in one tap.',
+  sets: 'Sets',
+  reps: 'Reps',
+  unit: 'Unit',
+  chooseUnit: 'Choose…',
+  instructions: 'Instructions',
+  instructionsHint: 'Shown with the item, every time.',
+  rest: 'Then rest:',
+  up: 'Up',
+  down: 'Down',
+  remove: 'Remove',
+  save: 'Save workout',
+  discardQuestion: 'Discard your changes to this workout?',
+  discard: 'Discard',
+  keepEditing: 'Keep editing',
+  alreadyFirst: 'Already first.',
+  alreadyLast: 'Already last.',
+  nameTaken: 'A workout with this name is already in this program.',
+} as const;
+
+export type MoveDirection = 'up' | 'down';
+
+/** A field's refusal, under it. Each names its field, so two on one card can be told apart. */
+export const EDITOR_ERRORS = {
+  name: 'Give the workout a name, then Save.',
+  sets: `Sets: a whole number from 1 to ${MAX_SETS_PER_MOVEMENT}.`,
+  reps: 'Reps: a whole number, or leave it blank.',
+  value: (label: string) => `${label}: a number like 22.5, or leave it blank.`,
+  ceiling: (label: string, ceiling: number, unit: Unit) =>
+    `${label}: at most ${formatValueUnit(ceiling, unit)}.`,
+  unit: (label: string) => `${label}: choose a unit.`,
+  tooLong: `At most ${FREE_TEXT_NOTE_MAX} characters.`,
+} as const;
+
+/** The words a type's quantity field is called by, where the type does not fix its unit. */
+const QUANTITY_WORDS: Partial<Record<TrackingType, string>> = {
+  weight_reps: 'Weight',
+  distance: 'Distance',
+  count: 'Target',
+};
+
+/**
+ * What a card's quantity field is called, or `null` for a type with no quantity
+ * (`TRACKING_TYPE_FIELDS[type].slot`). A fixed unit names its own field: "Minutes", "Seconds".
+ */
+export function quantityLabel(type: TrackingType): string | null {
+  const { slot, unit } = TRACKING_TYPE_FIELDS[type];
+  if (!slot) return null;
+  return unit ? UNIT_LABELS[unit] : (QUANTITY_WORDS[type] ?? null);
+}
+
+/** The unit select's group names: the shared ones, plus a count. */
+export const UNIT_GROUP_LABELS: Partial<Record<UnitDimension, string>> = {
+  ...LOGGABLE_DIMENSION_LABELS,
+  count: 'Count',
+};
+
+/** Names that tell a card's buttons apart; the visible word comes first (WCAG 2.5.3). */
+export const moveLabel = (direction: MoveDirection, item: string) =>
+  `${EDITOR_COPY[direction]}: ${item}`;
+export const removeLabel = (item: string) => `${EDITOR_COPY.remove} ${item}`;
+
+/** A superset's letter, read out: "A1" is "Superset A, item 1". */
+export function supersetSpoken(label: string): string {
+  return `Superset ${label[0]}, item ${label.slice(1)}`;
+}
+
+/** What a move or a remove did to the supersets, for the status line. */
+export type SupersetChange = { ended: number; left: readonly string[]; droppedRests: number };
+
+function supersetChangeText({ ended, left, droppedRests }: SupersetChange): string {
+  const parts: string[] = [];
+  if (ended) {
+    parts.push(plural(ended, { one: 'A superset ended.', other: `${ended} supersets ended.` }));
+  }
+  if (left.length) {
+    parts.push(`${formatList(left)} left ${left.length === 1 ? 'its' : 'their'} superset.`);
+  }
+  if (droppedRests) {
+    parts.push(
+      plural(droppedRests, { one: 'Its rest is gone.', other: `${droppedRests} rests are gone.` }),
+    );
+  }
+  return parts.join(' ');
+}
+
+export function movedText(item: string, direction: MoveDirection, change: SupersetChange): string {
+  return [`${item} moved ${direction}.`, supersetChangeText(change)].filter(Boolean).join(' ');
+}
+
+export function removedText(item: string, change: SupersetChange): string {
+  return [`${item} removed. Cancel undoes all changes.`, supersetChangeText(change)]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** A unit changed under a typed number: say what the number now means. */
+export function unitChangedText(item: string, value: number, from: Unit, to: Unit): string {
+  return `${item}: now ${quantityText(value, to)} (was ${quantityText(value, from)}).`;
+}
+
+/** A number in its unit, as a sentence says it: a count is a bare number. */
+const quantityText = (value: number, unit: Unit) =>
+  unit === 'count' ? String(value) : formatValueUnit(value, unit);
+
+/** The save bar after a refused Save. No count, so it stays true as fields are fixed. */
+export function fieldsToFixText(count: number): string {
+  return count === 1
+    ? 'One field needs fixing before saving.'
+    : 'Some fields need fixing before saving.';
+}
+
+/** What a refused Save says in the save bar. `name_taken` is said under the name as well. */
+export function saveRefusal(reason: ProgramRefusal): string {
+  switch (reason) {
+    case PROGRAM_REFUSAL.name_taken:
+      return EDITOR_COPY.nameTaken;
+    case PROGRAM_REFUSAL.invalid:
+      return 'Couldn’t save: part of this workout wasn’t accepted. Check it and try again.';
+    case PROGRAM_REFUSAL.not_found:
+      return 'This workout no longer exists.';
+    default:
+      return SAVE_FAILED;
+  }
 }

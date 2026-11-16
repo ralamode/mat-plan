@@ -157,7 +157,12 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
    (E), `apps/web/components/program-builder/owed.test.ts` (B) and
    `apps/web/components/day/owed.test.ts` (C). Lanes A and S have no guide, so their lines stay in
    `packages/shared/src/program/owed.test.ts` and are edited under the seam rule, one PR at a time.
-10. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
+10. **Every text a person types is refused if it holds a control character** (a NUL reaches Postgres,
+    which refuses it, and the action then throws instead of answering `invalid`).
+    `control-chars.test.ts` sweeps every typed field of the write schemas; a field added to one
+    joins that table. `freeTextNoteSchema` and `movementNameSchema` refuse only a line break (and a
+    comma), so the contract adds the rule where it builds on them.
+11. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
     `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
     `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
     has no nav rail) and no `programsHref` until the Programs page exists (7b). The switcher's links
