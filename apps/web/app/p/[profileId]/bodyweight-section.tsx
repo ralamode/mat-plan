@@ -1,25 +1,31 @@
-import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, VALUE_JOINER } from '@/lib/constants';
+import type { BodyweightUnit } from '@mat-plan/shared';
+
+import { BODYWEIGHT_COPY } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
+import { formatValueUnit } from '@/lib/entries/format-value-unit';
+import { lastTimeWhen } from '@/lib/entries/last-time';
 
 import { BodyweightAmend } from './bodyweight-amend';
 import { BodyweightForm } from './bodyweight-form';
-import { BodyweightReceipt, formatLoggedWeights } from './bodyweight-receipt';
-import { SavedAnnouncer } from './saved-announcer';
+import { BodyweightReceipt } from './bodyweight-receipt';
+import { SingleValueLive } from './single-value-live';
+
+/** The latest live weigh-in before the viewed day, as `lastBodyweight` (the DAL) returns it. */
+export type LastBodyweight = { value: number; unit: BodyweightUnit; day: string };
 
 /**
- * The weigh-in section of Today (V1-24 PR 1a): the form on a writable day with nothing logged, the
- * receipt otherwise. Extracted from `page.tsx` so the state switch — and the two day keys that
- * make it safe across a day change — are unit-testable (`bodyweight-section.test.tsx`).
+ * The weigh-in section of the day page (V1-24 PR 1a; the prototype's row since 3b-bw): the ✓ row on a
+ * writable day with nothing logged, the logged row otherwise. Extracted from `page.tsx` so the state
+ * switch, and the day keys that make it safe across a day change, are unit-testable
+ * (`bodyweight-section.test.tsx`).
  *
- * ⚠️ **The receipt renders OUTSIDE the `writable` gate, deliberately.** A closed day can still be
- * READ, and the day's truth must show on every day.
+ * ⚠️ **The logged row renders OUTSIDE the `writable` gate, deliberately.** A read-only day can still
+ * be READ, and the day's truth must show on every day.
  *
  * ⚠️ **And when a weight IS logged the form is not rendered at all.** An empty input over an existing
- * record is what invited the duplicate row (`logBodyweight` dedupes only on `client_id`, and the form
- * used to rotate that key on every success). This removes the second-submit path; since PR 1d the
- * database forbids a second live weigh-in per (profile, day, slot) too — a two-phone race gets the
- * typed "already logged" envelope. The receipt still lists every row: a pre-1d row on an old day,
- * and V1-32's slots (two legitimate weigh-ins on one day), both render as more than one.
+ * record is what invited the duplicate row. Since PR 1d the database forbids a second live weigh-in
+ * per (profile, day, slot) too; a two-phone race gets the typed "already logged" envelope. The row
+ * still lists every row: a pre-1d day and V1-32's slots both render as more than one.
  */
 export function BodyweightSection({
   profileId,
@@ -27,6 +33,7 @@ export function BodyweightSection({
   writable,
   amendable,
   logged,
+  last,
 }: {
   profileId: string;
   day: string;
@@ -34,67 +41,61 @@ export function BodyweightSection({
   /**
    * Whether a logged weight offers Change: today and yesterday (V1-24 3b-page). Its own flag
    * because `writable` also folds in archive, and an archived athlete's logged weight stays
-   * correctable on those two days.
+   * correctable on those two days (but not clearable, `canClear` below).
    */
   amendable: boolean;
   logged: readonly LoggedBodyweight[];
+  /** The "Last time" weigh-in. The page reads it only when the ✓ row renders. */
+  last: LastBodyweight | null;
 }) {
-  const values = formatLoggedWeights(logged);
-  const announcement =
-    values.length > 0 ? BODYWEIGHT_COPY.announced(values.join(VALUE_JOINER)) : null;
+  const lastTime = last
+    ? BODYWEIGHT_COPY.lastTime(formatValueUnit(last.value, last.unit), lastTimeWhen(day, last.day))
+    : null;
 
   return (
     <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
       <h2 id="log-bw-heading" className="text-lg font-medium">
         {BODYWEIGHT_COPY.heading}
       </h2>
-      {/* Rendered in BOTH states and at a stable position, so its `role="status"` exists before the
-          save it announces. Keyed on the day: paging to a day that already has a weight is a first
-          render, not a none→value transition, and must not announce a save nobody made.
-          ⚠️ The two keys are PREFIXED because they are siblings: a bare `key={day}` on both is a
-          duplicate key, and React then keeps a stale announcer beside the new one (caught by
-          `bodyweight-section.test.tsx`). */}
-      <SavedAnnouncer
-        key={`announcer-${day}`}
-        saved={announcement}
-        focusId={BODYWEIGHT_RECEIPT_ID}
-      />
-      {logged.length === 0 && writable ? (
-        // ⚠️ The day key is load-bearing. Day navigation (and a stale tab re-rendering after
-        // midnight) is a client-side RSC transition, so without it this form survives a day change
-        // with its `useState(newId)` client id. A key already sent for one day is then replayed for
-        // another — an `ON CONFLICT DO NOTHING` no-op that reports success and saves nothing. One
-        // mount per day makes "one key per day" structural, and drops the other day's typed value
-        // and error with it.
-        <BodyweightForm key={`form-${day}`} profileId={profileId} day={day} />
-      ) : (
-        <BodyweightReceipt
-          logged={logged}
-          writable={writable}
-          // Only on a day that can still be changed (`amendable`): a day before yesterday is
-          // read-only, and shows the value as text.
-          //
-          // ⚠️ ...and only when there is ONE row. The receipt renders duplicates as a single
-          // `2 weights logged: 84.5 lb, 845 lb` line into a row that takes ONE control, and an
-          // amend addresses ONE entryId — so a lone Change there would silently edit an unstated
-          // one of them, most likely the correct one, leaving two wrong values where there was one.
-          // `BODYWEIGHT_COPY.duplicates` keeps saying "ask a parent" until 1c/1d remove the extra
-          // row, which an amend cannot do. A per-row control is a receipt-shape change, not a slot.
-          control={
-            amendable && logged.length === 1 ? (
-              // ⚠️ Keyed on the ENTRY, like the create form is keyed on the day: paging days is a
-              // client-side transition, so an unkeyed island would survive it with day A's typed
-              // value while its hidden entryId/seenValue re-rendered to day B's — and Save would
-              // amend B. A row replaced under the same day remounts it too.
-              <BodyweightAmend
-                key={`amend-${logged[0]!.entryId}`}
-                profileId={profileId}
-                logged={logged[0]!}
-              />
-            ) : undefined
-          }
-        />
-      )}
+      {/* The live region and the focus hand-off, mounted in BOTH states, so it outlives the form or
+          row that reports to it. Keyed on the day: a message or a focus claim never crosses to
+          another day, and paging to a day that already has a weight announces nothing.
+          ⚠️ The keys below are PREFIXED: siblings sharing a bare `key={day}` keep a stale node. */}
+      <SingleValueLive key={`live-${day}`}>
+        {logged.length === 0 && writable ? (
+          // ⚠️ The day key is load-bearing. Day navigation is a client-side RSC transition, so
+          // without it this form survives a day change with its `useState(newId)` client id, and a
+          // key already sent for one day is replayed for another: an `ON CONFLICT DO NOTHING` no-op
+          // that reports success and saves nothing. It also unmounts while a value shows, so
+          // re-entering after a clear mounts a fresh key.
+          <BodyweightForm
+            key={`form-${day}`}
+            profileId={profileId}
+            day={day}
+            lastTime={lastTime}
+            initialUnit={last?.unit}
+          />
+        ) : (
+          <BodyweightReceipt
+            logged={logged}
+            // Only on a day that can still be changed (`amendable`), and only for ONE row: duplicates
+            // render as a single line, and an amend addresses ONE entryId, so a lone Change there
+            // would edit an unstated one of them.
+            control={
+              amendable && logged.length === 1 ? (
+                // ⚠️ Keyed on the ENTRY: an unkeyed island would survive a day change with day A's
+                // typed value while its hidden entryId/seenValue re-rendered to day B's.
+                <BodyweightAmend
+                  key={`amend-${logged[0]!.entryId}`}
+                  profileId={profileId}
+                  logged={logged[0]!}
+                  canClear={writable}
+                />
+              ) : undefined
+            }
+          />
+        )}
+      </SingleValueLive>
     </section>
   );
 }

@@ -52,6 +52,9 @@ vi.mock('@/lib/dal/entries', () => ({
   // three-way branch through `ownedBodyweightValue`.
   editBodyweight: vi.fn(async () => ({ entryId: 'bw-pub-id' })),
   ownedBodyweightValue: vi.fn(async () => null),
+  // V1-24 3b-bw. Default: the row is today's and live, and a clear hides it.
+  bodyweightRowDay: vi.fn(async () => ({ day: localDayIso(DEFAULT_TIME_ZONE), hidden: false })),
+  clearBodyweightEntry: vi.fn(async () => ({ cleared: true })),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
@@ -89,6 +92,8 @@ vi.mock('@/lib/dal/profiles', () => ({
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
 import {
+  bodyweightRowDay,
+  clearBodyweightEntry,
   editBodyweight,
   editStrengthSet,
   logBodyweight,
@@ -117,6 +122,7 @@ function localDay(offsetDays = 0): string {
 // the registry (`./actions.registry.ts`), which is the single source for both the action names and
 // their refusal copy.
 import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY } from '@/lib/constants';
+import { DECLARED_DAY_CHANGE_CLOSED_ERROR } from '@/lib/entries/declared-day';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -195,7 +201,10 @@ describeActionMatrices({
     // Shares `logCheckinEntries` with check-ins — the writer is the entry batch, not the screen.
     logLifeActivitiesAction: { fn: logLifeActivitiesAction, writers: [logCheckinEntries] },
     editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
-    editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
+    editBodyweightAction: {
+      fn: editBodyweightAction,
+      writers: [editBodyweight, clearBodyweightEntry],
+    },
     editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
   },
   // ⚠️ Thunks, so each may use a form helper declared further down this file.
@@ -1697,6 +1706,90 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe(AMEND_ERROR_COPY.staleWrite);
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+});
+
+describe('editBodyweightAction — a blank clears, bounded by the row’s own day (V1-24 3b-bw)', () => {
+  it('a blank value clears through the pinned writer, never the amend', async () => {
+    for (const blank of ['', '   ']) {
+      vi.mocked(clearBodyweightEntry).mockClear();
+      const res = await editBodyweightAction(initial, amendForm({ value: blank }));
+      expect(res).toEqual({ ok: true, error: null });
+      expect(clearBodyweightEntry).toHaveBeenCalledWith({
+        profilePublicId: PROFILE_ID,
+        entryId: ENTRY_ID,
+        unit: 'lb',
+        seenValue: 84.5,
+      });
+      expect(editBodyweight).not.toHaveBeenCalled();
+    }
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+
+  it('an ABSENT value calls neither writer — a clear is never a missing field', async () => {
+    const fd = amendForm();
+    fd.delete('value');
+    const res = await editBodyweightAction(initial, fd);
+    expect(res.ok).toBe(false);
+    expect(clearBodyweightEntry).not.toHaveBeenCalled();
+    expect(editBodyweight).not.toHaveBeenCalled();
+  });
+
+  it('a stale clear (another phone changed it) → the stale message, revalidated', async () => {
+    vi.mocked(clearBodyweightEntry).mockResolvedValueOnce({ stale: true });
+    const res = await editBodyweightAction(initial, amendForm({ value: '' }));
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.staleWrite });
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+
+  it('a clear of a row that is not theirs → the one not-found message', async () => {
+    vi.mocked(clearBodyweightEntry).mockResolvedValueOnce({ notFound: true });
+    const res = await editBodyweightAction(initial, amendForm({ value: '' }));
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound('weight') });
+  });
+
+  it('a replayed clear succeeds once more, whatever the pre-read says about the row', async () => {
+    vi.mocked(bodyweightRowDay).mockResolvedValueOnce({ day: localDay(), hidden: true });
+    vi.mocked(ownedBodyweightValue).mockResolvedValueOnce({ value: 99, unit: 'lb' });
+    const res = await editBodyweightAction(initial, amendForm({ value: '' }));
+    expect(res).toEqual({ ok: true, error: null });
+    expect(ownedBodyweightValue).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Acceptance 5, the server half: a weigh-in on a day before yesterday is read-only. The bound is
+   * the ROW's day, so a POST that also forges `day=<today>` changes nothing.
+   */
+  it.each([
+    ['a change', '85.2'],
+    ['a clear', ''],
+  ])('%s of a row two days back is refused, even with a forged day', async (_name, value) => {
+    vi.mocked(bodyweightRowDay).mockResolvedValueOnce({ day: localDay(-2), hidden: false });
+    const fd = amendForm({ value });
+    fd.set('day', localDay());
+    const res = await editBodyweightAction(initial, fd);
+    expect(res).toEqual({ ok: false, error: DECLARED_DAY_CHANGE_CLOSED_ERROR });
+    expect(editBodyweight).not.toHaveBeenCalled();
+    expect(clearBodyweightEntry).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+
+  it('a row the pre-read cannot see → not found, and no writer runs', async () => {
+    vi.mocked(bodyweightRowDay).mockResolvedValueOnce(null);
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound('weight') });
+    expect(editBodyweight).not.toHaveBeenCalled();
+  });
+
+  it('an archived athlete’s blank is refused: there is no empty field to re-enter into', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({
+      ...(await vi.mocked(getProfileByPublicId)(PROFILE_ID))!,
+      archived: true,
+    });
+    const res = await editBodyweightAction(initial, amendForm({ value: '' }));
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.value).toEqual([BODYWEIGHT_COPY.blankSave]);
+    expect(clearBodyweightEntry).not.toHaveBeenCalled();
   });
 });
 

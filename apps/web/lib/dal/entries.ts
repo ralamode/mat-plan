@@ -1,8 +1,12 @@
 import 'server-only';
 
 import {
+  bodyweightRowForAmend,
+  clearBodyweight,
+  type ClearSingleValueResult,
   findAmendableBodyweight,
   insertBodyweightEntry,
+  lastBodyweightBefore,
   isLiveProfile,
   resolveSessionMovements,
   schema,
@@ -19,6 +23,7 @@ import {
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
   type BodyweightUnit,
+  isBodyweightUnit,
   type DayRole,
   type EntryKind,
   type EntryStatus,
@@ -558,6 +563,56 @@ export async function ownedBodyweightValue(args: {
   if (!scope) return null;
 
   return findAmendableBodyweight(db, { ...args, scope });
+}
+
+/**
+ * The row an amend or a clear names: its own day, and whether it is hidden (V1-24 3b-bw, plan W7).
+ * The action bounds the write by THIS day, never one the form posts. Thin over the single-sourced
+ * `bodyweightRowForAmend`, a tombstone-returning read that returns no value
+ * (`delete-and-restore.md`'s reader audit).
+ */
+export async function bodyweightRowDay(args: {
+  profilePublicId: string;
+  entryId: string;
+}): Promise<{ day: string; hidden: boolean } | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+
+  return bodyweightRowForAmend(db, { ...args, scope });
+}
+
+/**
+ * Clear ONE logged bodyweight: a blank Save on the day page (V1-24 3b-bw, plan W9). Thin over the
+ * single-sourced `clearBodyweight`, which locks the row, compares `seenValue` and hides it through
+ * `hideEntries`.
+ */
+export async function clearBodyweightEntry(args: {
+  profilePublicId: string;
+  entryId: string;
+  unit: string;
+  seenValue: number;
+}): Promise<ClearSingleValueResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) return { notFound: true };
+
+  return clearBodyweight(db, { ...args, scope });
+}
+
+/**
+ * The "Last time 72.5 lb" hint over the unlogged bodyweight row (V1-24 3b-bw, plan W10): the latest
+ * live weigh-in strictly before `day`. Not a new reader of the data: the athlete's own page shows the
+ * same weight on its own day.
+ */
+export async function lastBodyweight(
+  profilePublicId: string,
+  day: string,
+): Promise<{ value: number; unit: BodyweightUnit; day: string } | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+
+  const last = await lastBodyweightBefore(db, { profilePublicId, scope, day });
+  if (!last || !isBodyweightUnit(last.unit)) return null;
+  return { ...last, unit: last.unit };
 }
 
 /**

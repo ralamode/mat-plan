@@ -42,6 +42,8 @@ import {
   type CheckinItemInput,
   editBodyweight,
   ownedBodyweightValue,
+  bodyweightRowDay,
+  clearBodyweightEntry,
 } from '@/lib/dal/entries';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
@@ -49,7 +51,7 @@ import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
 import { enterMutation } from '@/app/p/mutation-entry';
-import { resolveDeclaredDay } from '@/lib/entries/declared-day';
+import { DECLARED_DAY_CHANGE_CLOSED_ERROR, resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 // The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
@@ -544,13 +546,17 @@ export async function editStrengthSetAction(
 }
 
 /**
- * Server Action: amend an already-logged bodyweight (V1-24 PR 1b).
+ * Server Action: amend an already-logged bodyweight (V1-24 PR 1b), or clear it (3b-bw).
  *
  * The public-POST discipline of every writer here: zod-validate, re-resolve the profile by
- * `public_id`, and let the DAL's guarded UPDATE prove ownership. **No `resolveDeclaredDay`** — an
- * amend never moves the entry's date, so a ±1 day bound buys no integrity and would render a dead
- * control on exactly the history days a typo is found on (plan Decision 5, the same reasoning
- * `editStrengthSetAction` states for itself).
+ * `public_id`, and let the DAL's guarded UPDATE prove ownership.
+ *
+ * ## The order (V1-24 3b-bw, plan W7)
+ *
+ * zod → profile → **the row's own day** (`bodyweightRowDay`) → `resolveDeclaredDay(row.day)` → a blank
+ * clears, a number amends. 3b-page made a day before yesterday read-only, and this is the server half:
+ * the bound is read from the ROW, never a posted `day`, so a crafted POST naming an older weigh-in is
+ * refused however it labels itself. This supersedes 1b's "no day bound on an amend".
  *
  * ## Zero rows has four causes and they are NOT interchangeable
  *
@@ -562,7 +568,12 @@ export async function editStrengthSetAction(
  * ⚠️ **Branch (b) is the replay case, and it is mandatory** (AGENTS.md: replay → one effect,
  * identical response). A parent taps Save on gym wifi, the write lands, the response is lost, the
  * POST retries. The row has already moved, so a naive guard would answer *"someone else changed
- * this"* — about nobody, over a value that is already exactly what they asked for.
+ * this"* — about nobody, over a value that is already exactly what they asked for. The re-read is
+ * the live-only `ownedBodyweightValue`, AFTER the UPDATE: the pre-read's day is not a value, and a
+ * value read before the UPDATE would turn a retry's race into "changed on another device".
+ *
+ * **Every refusal revalidates**, so the page shows what is true; the day page's live region carries
+ * the message after the form that sent it has unmounted.
  */
 export async function editBodyweightAction(
   _prev: ActionState,
@@ -589,11 +600,51 @@ export async function editBodyweightAction(
 
     const profile = await getProfileByPublicId(parsed.data.profileId);
     if (!profile) return { ok: false, error: NO_PROFILE_LOG };
+    const refuse = (error: string): ActionState => {
+      revalidatePath(athletePath(profile.id));
+      return { ok: false, error };
+    };
+
+    const row = await bodyweightRowDay({
+      profilePublicId: profile.id,
+      entryId: parsed.data.entryId,
+    });
+    // Not theirs, not a weigh-in, or gone: one message, so a crafted id learns nothing a stale one
+    // wouldn't.
+    if (!row) return refuse(AMEND_ERROR_COPY.notFound('weight'));
+    const day = await resolveDeclaredDay(row.day);
+    if (!day.ok) return refuse(DECLARED_DAY_CHANGE_CLOSED_ERROR);
+
+    const { value } = parsed.data;
+    if (value === null) {
+      // An archived athlete has no empty field to re-enter a cleared weight into, so the clear the
+      // recovery relies on is refused (plan W5). The editor never offers it; this is the POST's half.
+      if (profile.archived) {
+        return {
+          ok: false,
+          error: BODYWEIGHT_COPY.blankSave,
+          fieldErrors: { value: [BODYWEIGHT_COPY.blankSave] },
+        };
+      }
+      const cleared = await clearBodyweightEntry({
+        profilePublicId: profile.id,
+        entryId: parsed.data.entryId,
+        unit: parsed.data.unit,
+        seenValue: parsed.data.seenValue,
+      });
+      if ('cleared' in cleared) {
+        revalidatePath(athletePath(profile.id));
+        return { ok: true, error: null };
+      }
+      return refuse(
+        'stale' in cleared ? AMEND_ERROR_COPY.staleWrite : AMEND_ERROR_COPY.notFound('weight'),
+      );
+    }
 
     const updated = await editBodyweight({
       profilePublicId: profile.id,
       entryId: parsed.data.entryId,
-      value: parsed.data.value,
+      value,
       unit: parsed.data.unit,
       seenValue: parsed.data.seenValue,
     });
@@ -606,21 +657,15 @@ export async function editBodyweightAction(
       profilePublicId: profile.id,
       entryId: parsed.data.entryId,
     });
-    // (a) The row is gone, was never theirs, or is not an amendable bodyweight — one message, so a
-    // crafted cross-profile id learns nothing a stale id wouldn't.
-    // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
-    if (!current) {
-      revalidatePath(athletePath(profile.id));
-      return { ok: false, error: AMEND_ERROR_COPY.notFound('weight') };
-    }
+    // (a) The row is gone, was never theirs, or is not an amendable bodyweight.
+    if (!current) return refuse(AMEND_ERROR_COPY.notFound('weight'));
     // (b) REPLAY: the row already holds exactly what was asked for. One effect, success.
-    if (current.value === parsed.data.value && current.unit === parsed.data.unit) {
+    if (current.value === value && current.unit === parsed.data.unit) {
       revalidatePath(athletePath(profile.id));
       return { ok: true, error: null };
     }
     // (c) Someone else got there first. Revalidate so the receipt shows the value that won.
-    revalidatePath(athletePath(profile.id));
-    return { ok: false, error: AMEND_ERROR_COPY.staleWrite };
+    return refuse(AMEND_ERROR_COPY.staleWrite);
   });
 }
 

@@ -42,6 +42,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
+  BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
   STRENGTH_COPY,
 } from '../lib/constants';
@@ -625,7 +626,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     const section = page.getByRole('region', { name: 'Bodyweight' });
     await section.getByLabel('Unit').selectOption('kg');
     await section.getByLabel('Weight', { exact: true }).fill('845');
-    await section.getByRole('button', { name: 'Log weight' }).click();
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
     await section.getByRole('alert').waitFor();
   },
   // V1-19 — the whole point of the reviewed design is what the form looks like AFTER the tap:

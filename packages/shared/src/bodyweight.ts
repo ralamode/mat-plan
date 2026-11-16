@@ -10,6 +10,11 @@ export type BodyweightUnit = (typeof BODYWEIGHT_UNITS)[number];
 
 export const DEFAULT_BODYWEIGHT_UNIT: BodyweightUnit = 'lb';
 
+/** Narrow a stored unit (`entries.unit` is any `Unit`) to the two a weigh-in uses. */
+export function isBodyweightUnit(unit: string): unit is BodyweightUnit {
+  return (BODYWEIGHT_UNITS as readonly string[]).includes(unit);
+}
+
 /**
  * The time-of-day SLOT a weigh-in belongs to, stored in `entries.context` (V1-24 PR 1d, slot-ready for
  * V1-32's several-a-day). One slot today; every legacy row is a morning weigh-in.
@@ -57,11 +62,43 @@ export const IMPLAUSIBLE_BODYWEIGHT_MESSAGE =
  * So: keep the base plain, extend it per path, and apply the bound **last** via the one shared
  * refiner below. Both paths then enforce an identical rule from a single definition.
  */
+/** Digits with an optional decimal part. Nothing else is a weight: not `1e2`, `0x50`, `-5` or `84..5`. */
+const DECIMAL_WEIGHT = /^\d+(\.\d+)?$/;
+
+/**
+ * Whether a typed weight is empty (V1-24 3b-bw, plan W5/W7). **One predicate for both sides**: the
+ * Change editor reads `Clear` while it holds, the amend's wrapper reports a clear, and the edit schema
+ * turns it into `null`. Three copies of "empty" would let the label say Clear while the server
+ * refuses, or the reverse.
+ */
+export function isBlankWeight(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() === '';
+}
+
+/**
+ * A typed weight, as the field submits it: text (V1-24 3b-bw, plan W3).
+ *
+ * The fields are `type="text" inputMode="decimal"`, so the browser no longer validates a number and
+ * this does. One `,` becomes `.` (a phone set to a comma-decimal region types `84,5`). Anything that is
+ * not plain digits is refused with the bound's own copy, never zod's `Invalid input`, which would
+ * otherwise reach the screen.
+ */
+const weightText = z
+  .string({ error: IMPLAUSIBLE_BODYWEIGHT_MESSAGE })
+  .trim()
+  .transform((s, ctx) => {
+    const decimal = s.replace(',', '.');
+    if (DECIMAL_WEIGHT.test(decimal)) return Number(decimal);
+    // One issue, and `z.NEVER` so nothing downstream (the bound) runs on a value that is not a number.
+    ctx.issues.push({ code: 'custom', message: IMPLAUSIBLE_BODYWEIGHT_MESSAGE, input: s });
+    return z.NEVER;
+  });
+
 const bodyweightValueShape = z.object({
   // The profile to log against — the tile-supplied public id (UUIDv7). Re-validated server-side by
   // the DAL (V1-3 ownership seam); never trusted from the form alone.
   profileId: uuidSchema,
-  value: z.coerce.number(),
+  value: weightText,
   unit: z.enum(BODYWEIGHT_UNITS),
 });
 
@@ -76,9 +113,11 @@ const bodyweightValueShape = z.object({
  * stop — and the plan accepted a no-amend 1a precisely because the bound was there.
  */
 function checkBodyweightBound(
-  d: { value: number; unit: BodyweightUnit },
+  d: { value: number | null; unit: BodyweightUnit },
   ctx: z.RefinementCtx,
 ): void {
+  // `null` is the amend's CLEAR (below): there is no weight to bound.
+  if (d.value === null) return;
   const { min, max } = BODYWEIGHT_BOUNDS[d.unit];
   if (d.value < min || d.value > max) {
     ctx.addIssue({
@@ -130,6 +169,24 @@ export type LogBodyweightInput = z.infer<typeof logBodyweightSchema>;
  */
 export const editBodyweightSchema = bodyweightValueShape
   .extend({
+    /**
+     * ## A blank is a CLEAR (V1-24 3b-bw, plan W7)
+     *
+     * Saving an empty field hides the weigh-in, so `value` is `null` exactly when `isBlankWeight`
+     * holds. ⚠️ **Only a STRING that is empty after trim.** An ABSENT field, `null` or a `File` is
+     * refused: a crafted POST that drops `value` must not clear a weigh-in by omission, and the first
+     * draft's `.nullable()` would have done exactly that. The create schema keeps refusing a blank.
+     */
+    value: z.union(
+      [
+        z
+          .string()
+          .refine(isBlankWeight)
+          .transform(() => null),
+        weightText,
+      ],
+      { error: IMPLAUSIBLE_BODYWEIGHT_MESSAGE },
+    ),
     /** `entries.public_id` of the row being amended — never an internal id. */
     entryId: uuidSchema,
     seenValue: z.coerce.number(),
