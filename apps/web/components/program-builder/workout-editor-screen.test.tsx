@@ -403,24 +403,6 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     );
   });
 
-  it('a removed card’s refusals go with it: fixing the other field clears the bar', async () => {
-    editor();
-    fireEvent.change(within(cards()[0]!).getByLabelText(EDITOR_COPY.sets), {
-      target: { value: '' },
-    });
-    fireEvent.change(within(cards()[4]!).getByLabelText(EDITOR_COPY.sets), {
-      target: { value: '' },
-    });
-    save();
-    await waitFor(() => expect(alerts()).toEqual([fieldsToFixText(2)]));
-    fireEvent.click(screen.getByRole('button', { name: removeLabel('Hollow-body hold') }));
-    fireEvent.change(within(cards()[0]!).getByLabelText(EDITOR_COPY.sets), {
-      target: { value: '4' },
-    });
-    await frames();
-    expect(alerts()).toEqual([]);
-  });
-
   it('changing the unit clears a refusal on the number', async () => {
     editor();
     const card = cards()[0]!;

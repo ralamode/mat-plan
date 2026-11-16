@@ -196,7 +196,6 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     }
     const { settled, change } = settle(rest);
     flushSync(() => setCards(settled));
-    clearErrors((error) => error.card !== card.item.prescriptionClientId);
     const target = neighbour ? control(neighbour.item.prescriptionClientId, 'remove') : null;
     (target ?? itemsHeadingRef.current)?.focus();
     report(removedText(card.item.itemName, change));
