@@ -34,8 +34,6 @@ import {
 } from '@mat-plan/shared';
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-
 import { schema } from '../../src/client';
 import { assignmentDueOn, assignmentOnDay } from '../../src/queries/program-assignments';
 import { householdHasProgram, programDayRows } from '../../src/queries/program-day';
@@ -64,6 +62,7 @@ import {
   programBlockInHousehold,
 } from '../../src/writers/ownership';
 import {
+  asDb,
   asTx,
   assertCheckCoversConst,
   columnCatalogShape,
@@ -972,7 +971,7 @@ async function verifyStep1(): Promise<void> {
       'FAM-1 1: the seed household holds no program before the seed runs',
     );
 
-    const seedDb = tx as unknown as NodePgDatabase<typeof schema>;
+    const seedDb = asDb(tx);
     await seed(seedDb, { fixtures: false });
     assert.deepEqual(
       await program(),
@@ -997,7 +996,7 @@ async function verifyStep1(): Promise<void> {
 async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const pg = tx as unknown as NodePgDatabase<typeof schema>;
+    const pg = asDb(tx);
 
     // A day role A's legacy block programs WITH a rendered target (sets set), so a snapshot is
     // non-empty, and a kid of that household to read it for.
@@ -1110,7 +1109,7 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
   // householdHasProgram counts LEGACY blocks only, in a household of its own.
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const pg = tx as unknown as NodePgDatabase<typeof schema>;
+    const pg = asDb(tx);
     const [hh] = await tx
       .insert(schema.households)
       .values({ publicId: newId(), name: 'FAM-1 5b probe' })
@@ -2566,7 +2565,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   // ── (c) due on a day: the origin against literals, and every boundary ──────────────────────────────
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const pg = tx as unknown as NodePgDatabase<typeof schema>;
+    const pg = asDb(tx);
     const blockId = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-due');
     const [{ householdId }] = await tx
       .select({ householdId: schema.programBlocks.householdId })
