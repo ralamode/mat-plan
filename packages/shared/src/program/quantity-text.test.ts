@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve, sep } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -156,6 +157,19 @@ const code = (file: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 
+/**
+ * Every module specifier `file` names: `import … from`, a bare `import '…'`, `export … from`,
+ * `import()` and `require()`, type-only ones included. Relative AND bare: a package name
+ * (`node:fs`, `server-only`, `@mat-plan/shared/csv`) is as much a way out of client-safe code as a
+ * relative path into `csv/`.
+ */
+const specifiersOf = (file: string) =>
+  [...code(file).matchAll(/\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g)].map(
+    ([, specifier]) => specifier,
+  );
+
+const isRelative = (specifier: string) => specifier.startsWith('.');
+
 /** The source file a relative specifier names. Throws on one it cannot find, so no import is skipped. */
 function sourceOf(from: string, specifier: string): string {
   const base = resolve(dirname(from), specifier);
@@ -165,47 +179,126 @@ function sourceOf(from: string, specifier: string): string {
 }
 
 /**
- * Every first-party module `entry` reaches, itself included: each relative `import`, `export … from`
- * and `import()`, followed to the end. Type-only imports count too, which over-reports, the safe
- * direction for a "never reaches" check.
+ * What `entry` reaches, followed to the end: `files`, every first-party module (itself included),
+ * and `packages`, every bare specifier any of them names, sorted. Type-only imports count too,
+ * which over-reports, the safe direction for a "never reaches" check.
  */
-function reachedFrom(entry: string): string[] {
-  const seen = new Set<string>();
+function reachedFrom(entry: string): { files: string[]; packages: string[] } {
+  const files = new Set<string>();
+  const packages = new Set<string>();
   const visit = (file: string) => {
-    if (seen.has(file)) return;
-    seen.add(file);
-    for (const [, specifier] of code(file).matchAll(
-      /\b(?:from|import)\s*\(?\s*['"](\.[^'"]*)['"]/g,
-    )) {
-      visit(sourceOf(file, specifier));
+    if (files.has(file)) return;
+    files.add(file);
+    for (const specifier of specifiersOf(file)) {
+      if (isRelative(specifier)) visit(sourceOf(file, specifier));
+      else packages.add(specifier);
     }
   };
   visit(entry);
-  return [...seen];
+  return { files: [...files], packages: [...packages].sort() };
 }
 
 const inCsv = (file: string) => file.startsWith(CSV_DIR);
 
+/**
+ * 🔴 **The packages client-safe contract code may name, in full.** `zod` is all `quantityText`
+ * reaches (through `units.ts`); the root barrel adds `uuid`. Both run in a browser. A new name here
+ * is a decision: a `node:` builtin, `server-only` or this package's own `/csv` subpath must never
+ * be added to make a test pass.
+ */
+const QUANTITY_TEXT_PACKAGES = ['zod'];
+const ROOT_BARREL_PACKAGES = ['uuid', 'zod'];
+
 describe('quantityText is client-safe', () => {
   it('reaches nothing under csv/, through anything it imports', () => {
-    const reached = reachedFrom(resolve(SRC, 'program/quantity-text.ts'));
-    expect(reached.filter(inCsv)).toEqual([]);
+    const { files } = reachedFrom(resolve(SRC, 'program/quantity-text.ts'));
+    expect(files.filter(inCsv)).toEqual([]);
     // Not a vacuous pass: the scan did follow its imports.
-    expect(reached).toContain(resolve(SRC, 'quantity-spelling.ts'));
-    expect(reached).toContain(resolve(SRC, 'units.ts'));
+    expect(files).toContain(resolve(SRC, 'quantity-spelling.ts'));
+    expect(files).toContain(resolve(SRC, 'units.ts'));
+  });
+
+  it('names no package but zod, through anything it imports', () => {
+    // A bare specifier is the route a relative-path scan cannot see: `@mat-plan/shared/csv` is
+    // `csv/` by another name, and `node:fs` or `server-only` breaks a client bundle outright.
+    const { packages } = reachedFrom(resolve(SRC, 'program/quantity-text.ts'));
+    expect(packages).toEqual(QUANTITY_TEXT_PACKAGES);
+  });
+
+  it('builds on a module that imports nothing at all', () => {
+    // `quantity-spelling.ts` is read by the CSV and by client code: no relative import, no package.
+    expect(specifiersOf(resolve(SRC, 'quantity-spelling.ts'))).toEqual([]);
+    expect(specifiersOf(resolve(SRC, 'program/quantity-text.ts')).sort()).toEqual([
+      '../quantity-spelling',
+      '../units',
+    ]);
   });
 
   it('is scanned by something that does see a csv/ import', () => {
     // The control: `prescribedText` builds on the CSV's renderer, and the same scan says so.
-    const reached = reachedFrom(resolve(SRC, 'program/prescribed-text.ts'));
-    expect(reached).toContain(resolve(SRC, 'csv/prescribed.ts'));
+    const { files } = reachedFrom(resolve(SRC, 'program/prescribed-text.ts'));
+    expect(files).toContain(resolve(SRC, 'csv/prescribed.ts'));
+  });
+
+  it('is scanned by something that does see a planted package, however it is imported', () => {
+    // The control for bare specifiers: a module two steps from the entry names a Node builtin, this
+    // package's own csv subpath, and a marker package, in each form an import can take. The scan
+    // must report every one, and the allowlist must refuse every one.
+    const dir = mkdtempSync(join(tmpdir(), 'quantity-text-scan-'));
+    try {
+      writeFileSync(join(dir, 'entry.ts'), `export * from './middle';\n`);
+      writeFileSync(
+        join(dir, 'middle.ts'),
+        [
+          `import type { Unit } from 'zod';`,
+          `import {`,
+          `  leaf,`,
+          `} from './leaf';`,
+          `export const middle = (u: Unit) => leaf(u);`,
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(dir, 'leaf.ts'),
+        [
+          `import 'server-only';`,
+          `import { readFileSync } from 'node:fs';`,
+          `export { formatQuantity } from '@mat-plan/shared/csv';`,
+          `const lazy = () => import('node:path');`,
+          `const old = require("node:os");`,
+          `// import { never } from 'a-comment-is-not-an-import';`,
+          `export const leaf = (u: unknown) => [u, readFileSync, lazy, old];`,
+        ].join('\n'),
+      );
+      const { files, packages } = reachedFrom(join(dir, 'entry.ts'));
+      expect(files).toHaveLength(3);
+      expect(packages).toEqual([
+        '@mat-plan/shared/csv',
+        'node:fs',
+        'node:os',
+        'node:path',
+        'server-only',
+        'zod',
+      ]);
+      expect(packages.filter((name) => !QUANTITY_TEXT_PACKAGES.includes(name))).toEqual([
+        '@mat-plan/shared/csv',
+        'node:fs',
+        'node:os',
+        'node:path',
+        'server-only',
+      ]);
+      expect(packages).not.toEqual(QUANTITY_TEXT_PACKAGES);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('is exported from the root barrel, whose whole graph stays out of csv/', async () => {
     const barrel = await import('../index');
     expect(barrel.quantityText).toBe(quantityText);
     expect('prescribedText' in barrel).toBe(false);
-    expect(reachedFrom(resolve(SRC, 'index.ts')).filter(inCsv)).toEqual([]);
+    const { files, packages } = reachedFrom(resolve(SRC, 'index.ts'));
+    expect(files.filter(inCsv)).toEqual([]);
+    expect(packages).toEqual(ROOT_BARREL_PACKAGES);
   });
 
   it('leaves the CSV its own primitives, unchanged', async () => {

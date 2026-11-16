@@ -12,8 +12,12 @@ import type { Unit } from '../units';
  * The rule: the number as `formatNumeric` writes it, a space, then the unit's code; except seconds,
  * which is `s`, and the plain `count`, which is the bare number.
  *
+ * **For stored quantities**: 0 to `MAX_STORABLE_QUANTITY` (99999.999), at most `QUANTITY_DECIMALS`
+ * (3) decimals, which is what every contract shape holds. Outside that range `formatNumeric` is
+ * not defined (a very large or very small number prints in exponent form).
+ *
  * 🔴 **Client-safe: in the root barrel, and nothing it imports may reach `csv/`**
- * (`quantity-text.test.ts` scans its imports). `prescribedText` stays a server-only subpath because
+ * (`quantity-text.test.ts` scans its imports, relative and by package name). `prescribedText` stays a server-only subpath because
  * it also builds on the CSV's renderer; this does not.
  *
  * ⚠️ **These are the bytes a logged row is frozen against** (through `prescribedText`). A "tidier"

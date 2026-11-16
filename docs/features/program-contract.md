@@ -6,6 +6,10 @@ owns:
   # The scan of every state on the preview route. It reads the route's own list, so a lane never
   # edits it; a change to how the states are scanned is a contract change.
   - apps/web/e2e/program-preview-a11y.spec.ts
+  # The two spellings `quantityText` is built from (`formatNumeric`, and seconds as `s`). Outside
+  # `program/` because the CSV reads them too, and owned here so a change to either is a contract
+  # change: they are the bytes frozen on every logged row.
+  - packages/shared/src/quantity-spelling.ts
 ---
 
 # The program contract
@@ -86,8 +90,14 @@ wrote some of these, which is why they are here). All of them are in the root ba
 `quantityText` is client-safe because it reads its two primitives (`formatNumeric`, and seconds
 spelled `s`) from `packages/shared/src/quantity-spelling.ts`, which imports nothing; `csv/value.ts`
 re-exports `formatNumeric` from there and reads the same `s` into `CSV_UNIT_SUFFIX`, so the CSV's
-bytes did not change. `quantity-text.test.ts` scans every module `quantityText` reaches, and the
-root barrel's whole graph, for `csv/`.
+bytes did not change. **This guide owns `quantity-spelling.ts`**: a change to `SECONDS_SUFFIX` or
+`formatNumeric` changes the text frozen on every later logged row and every exported month, so it
+is a contract change. `quantity-text.test.ts` scans every module `quantityText` reaches, and the
+root barrel's whole graph, for `csv/` and for any package outside a short allowlist (`zod`; the
+barrel adds `uuid`), so a `node:` builtin, `server-only` or `@mat-plan/shared/csv` fails it.
+
+`quantityText` is for stored quantities: 0 to `MAX_STORABLE_QUANTITY` (99999.999), at most
+`QUANTITY_DECIMALS` (3) decimals. Outside that range `formatNumeric` is not defined.
 
 ## Invariants
 
