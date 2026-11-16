@@ -247,14 +247,17 @@ athlete is kept in full until you restore them, or until you ask us to delete th
 
 **Ask, and one athlete is erased.** Their profile, every session and set they logged, their weigh-ins,
 readiness, the targets set for them, and which programs they were on and when are **permanently removed
-from the database**. The household owner asks, or an adult athlete may ask about their own profile (the
-owner is told first). The same confirmation, 7-day pause and restore point as a household deletion apply,
-and "What remains afterwards" below applies too. What stays is the household's: the programs it wrote
-(if a program was written for that athlete alone, we will ask whether you want it removed too), any name
-typed into a program, workout or movement, including copies of that text kept on other athletes' logs,
-and every sign-in account. For an athlete, the record of the deletion holds the athlete's internal
-identifier and no login ids. An athlete added through the app can be erased today; the three athletes
-the app started with cannot yet, because setup would put them back.
+from the database**. The household owner asks; or an adult athlete may ask about their own profile, in
+which case the owner is told first but **cannot cancel it**: only the adult can, because it is their
+data. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is
+confirmed on their own invitation channel, and their full copy goes to them), and "What remains
+afterwards" below applies too. What stays is the household's: the programs it wrote (if a program was
+written for that athlete alone, we will ask whether you want it removed too), any name typed into a
+program, workout or movement, including copies of that text kept on other athletes' logs, and every
+sign-in account; an adult athlete can ask for their own account to be deleted as well. For an athlete,
+the record of the deletion holds the athlete's internal identifier and no login ids unless their
+account went too. An athlete added through the app can be erased today; the three athletes the app
+started with cannot yet, because setup would put them back.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
@@ -278,7 +281,8 @@ Because this cannot be undone, both of the steps below stay in place:
   household, your login ids, and how we confirmed the request — **no names** — it is kept outside the
   source code and the database, and it is deleted once the restore windows above have passed.
 - **Server logs** at Vercel, and **error reports** at Sentry, for their retention periods. Neither
-  should contain your data, but logs record that requests happened.
+  should contain your data, but logs record that requests happened, and Vercel's request logs keep the
+  address of an athlete's page (it carries their internal identifier, not a name) for 24 hours.
 - **Movement names.** If someone in your household types a movement that isn't already in the app's
   catalogue, whatever they typed is stored as a movement **belonging to your household**, and it **is
   removed** when you delete your household. Two things to know while the catalogue is still being

@@ -35,7 +35,11 @@ import {
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
-import { assignmentDueOn, assignmentOnDay } from '../../src/queries/program-assignments';
+import {
+  assignmentCurrentAsOf,
+  assignmentDueOn,
+  assignmentOnDay,
+} from '../../src/queries/program-assignments';
 import { householdHasProgram, programDayRows } from '../../src/queries/program-day';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { prescribedSnapshotsFor } from '../../src/writers/prescribed-snapshot';
@@ -71,6 +75,7 @@ import {
   expectRejectedBy,
   idsOf,
   rolledBack,
+  rowsOf,
   type VerifyContext,
   type VerifyTx,
 } from './harness';
@@ -2132,7 +2137,10 @@ async function assignmentsOnLegacyBlocks(tx: VerifyTx): Promise<number[]> {
   );
 }
 
-/** Assignments whose athlete and program are in different households. Also the runbook's pre-flight (h). */
+/**
+ * Assignments whose athlete and program are in different households. The same join as the runbook's
+ * household pre-flight (h), unscoped: (h) adds "either side in H". No `deleted_at` filter.
+ */
 async function assignmentsAcrossHouseholds(tx: VerifyTx): Promise<number[]> {
   return idsOf(
     await tx.execute(sql`
@@ -2145,9 +2153,11 @@ async function assignmentsAcrossHouseholds(tx: VerifyTx): Promise<number[]> {
 }
 
 /**
- * The LATER of two live assignments of one athlete to one program whose inclusive ranges share a day.
- * The open key cannot see a closed row, so this is how a second row starting on (or before) the first's
- * last day is caught: the program would be due twice that day.
+ * The LATER of two live assignments of one athlete to one program whose inclusive ranges share a day:
+ * the program would be due twice that day. The keys cannot see this (the open key ignores closed rows),
+ * and off-and-on-again on one day makes it in the usual case (`schema.ts` → `programAssignments`).
+ * Hidden rows are excluded on purpose: a program taken off before it started is hidden, and putting it
+ * on again from the same day is the normal path, not an overlap.
  */
 async function assignmentsOverlapping(tx: VerifyTx): Promise<number[]> {
   return idsOf(
@@ -2175,85 +2185,100 @@ async function assignmentsWithoutWeekdays(tx: VerifyTx): Promise<number[]> {
   );
 }
 
-/** The tables holding rows that point at a profile, by FK, read from the catalog. */
-async function tablesReferencingProfiles(): Promise<string[]> {
-  const res = await db.execute(sql`
-    SELECT DISTINCT conrelid::regclass::text AS t FROM pg_constraint
-     WHERE contype = 'f' AND confrelid = 'profiles'::regclass ORDER BY 1`);
-  return (res as unknown as { rows: { t: string }[] }).rows.map((r) => r.t);
+/**
+ * Every table reachable from `profiles` through FKs, at any depth (a grandchild such as `entry_sets`
+ * included). The per-athlete erasure must name every one: a new table one hop down is as much the
+ * athlete's as one with an FK to `profiles`.
+ */
+async function tablesReachableFromProfiles(): Promise<string[]> {
+  return rowsOf<{ t: string }>(
+    await db.execute(sql`
+      WITH RECURSIVE reach(t) AS (
+        SELECT 'profiles'::text
+        UNION
+        SELECT c.conrelid::regclass::text FROM pg_constraint c
+          JOIN reach r ON c.confrelid::regclass::text = r.t
+         WHERE c.contype = 'f'
+      )
+      SELECT t FROM reach ORDER BY t`),
+  ).map((r) => r.t);
 }
 
 /**
- * 🔴 **"Erase one athlete", exactly as `docs/runbooks.md` writes it** (FAM-1 step 5; ADR 0007 A2 §8,
- * §10). Child before parent; no `deleted_at` filter anywhere, because a hidden row is still a row the
- * erasure removes. Edit the runbook and this together: the proof below is what keeps the runbook's
- * order and scope honest.
+ * 🔴 **"Erase one athlete" as ONE ordered list** (FAM-1 step 5; ADR 0007 A2 §8, §10): child before
+ * parent, each table with its scope. `eraseAthlete` and `athleteCounts` are generated from it, and
+ * `db:verify` reads the runbook's step-4 table and step-3 count block and requires both to be exactly
+ * this list, in this order (`runbookEraseAthleteLists`). No `deleted_at` filter anywhere: a hidden row
+ * is still a row the erasure removes.
  */
-const ERASE_ATHLETE_TABLES = [
-  'entry_set_quantities',
-  'entry_sets',
-  'entries',
-  'supersets',
-  'sessions',
-  'day_readiness',
-  'ramp_targets',
-  'prescription_targets',
-  'program_assignment_weekdays',
-  'program_assignments',
-  'profiles',
+const P_ENTRIES = (p: number) => sql`(SELECT id FROM entries WHERE profile_id = ${p})`;
+const P_SESSIONS = (p: number) => sql`(SELECT id FROM sessions WHERE profile_id = ${p})`;
+const P_ASSIGNMENTS = (p: number) =>
+  sql`(SELECT id FROM program_assignments WHERE profile_id = ${p})`;
+const ERASE_ATHLETE = [
+  {
+    table: 'entry_set_quantities',
+    scope: (p: number) =>
+      sql`entry_set_id IN (SELECT id FROM entry_sets WHERE entry_id IN ${P_ENTRIES(p)})`,
+  },
+  { table: 'entry_sets', scope: (p: number) => sql`entry_id IN ${P_ENTRIES(p)}` },
+  { table: 'entries', scope: (p: number) => sql`profile_id = ${p}` },
+  { table: 'supersets', scope: (p: number) => sql`session_id IN ${P_SESSIONS(p)}` },
+  { table: 'sessions', scope: (p: number) => sql`profile_id = ${p}` },
+  { table: 'day_readiness', scope: (p: number) => sql`profile_id = ${p}` },
+  { table: 'ramp_targets', scope: (p: number) => sql`profile_id = ${p}` },
+  { table: 'prescription_targets', scope: (p: number) => sql`profile_id = ${p}` },
+  {
+    table: 'program_assignment_weekdays',
+    scope: (p: number) => sql`assignment_id IN ${P_ASSIGNMENTS(p)}`,
+  },
+  { table: 'program_assignments', scope: (p: number) => sql`profile_id = ${p}` },
+  { table: 'profiles', scope: (p: number) => sql`id = ${p}` },
 ] as const;
+const ERASE_ATHLETE_TABLES = ERASE_ATHLETE.map((r) => r.table);
 
 async function eraseAthlete(tx: VerifyTx, p: number): Promise<void> {
-  await tx.execute(sql`DELETE FROM entry_set_quantities WHERE entry_set_id IN
-    (SELECT id FROM entry_sets WHERE entry_id IN (SELECT id FROM entries WHERE profile_id = ${p}))`);
-  await tx.execute(sql`DELETE FROM entry_sets WHERE entry_id IN
-    (SELECT id FROM entries WHERE profile_id = ${p})`);
-  await tx.execute(sql`DELETE FROM entries WHERE profile_id = ${p}`);
-  await tx.execute(sql`DELETE FROM supersets WHERE session_id IN
-    (SELECT id FROM sessions WHERE profile_id = ${p})`);
-  await tx.execute(sql`DELETE FROM sessions WHERE profile_id = ${p}`);
-  await tx.execute(sql`DELETE FROM day_readiness WHERE profile_id = ${p}`);
-  await tx.execute(sql`DELETE FROM ramp_targets WHERE profile_id = ${p}`);
-  await tx.execute(sql`DELETE FROM prescription_targets WHERE profile_id = ${p}`);
-  await tx.execute(sql`DELETE FROM program_assignment_weekdays WHERE assignment_id IN
-    (SELECT id FROM program_assignments WHERE profile_id = ${p})`);
-  await tx.execute(sql`DELETE FROM program_assignments WHERE profile_id = ${p}`);
-  await tx.execute(sql`DELETE FROM profiles WHERE id = ${p}`);
+  for (const { table, scope } of ERASE_ATHLETE) {
+    await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE ${scope(p)}`);
+  }
 }
 
 /** One athlete's row count in each table the erasure names (no `deleted_at` filter). */
 async function athleteCounts(tx: VerifyTx, p: number): Promise<Record<string, number>> {
-  const res = await tx.execute(sql`
-    SELECT 'entry_set_quantities' AS t, count(*)::int AS n FROM entry_set_quantities
-      WHERE entry_set_id IN (SELECT id FROM entry_sets WHERE entry_id IN
-        (SELECT id FROM entries WHERE profile_id = ${p}))
-    UNION ALL SELECT 'entry_sets', count(*)::int FROM entry_sets
-      WHERE entry_id IN (SELECT id FROM entries WHERE profile_id = ${p})
-    UNION ALL SELECT 'entries', count(*)::int FROM entries WHERE profile_id = ${p}
-    UNION ALL SELECT 'supersets', count(*)::int FROM supersets
-      WHERE session_id IN (SELECT id FROM sessions WHERE profile_id = ${p})
-    UNION ALL SELECT 'sessions', count(*)::int FROM sessions WHERE profile_id = ${p}
-    UNION ALL SELECT 'day_readiness', count(*)::int FROM day_readiness WHERE profile_id = ${p}
-    UNION ALL SELECT 'ramp_targets', count(*)::int FROM ramp_targets WHERE profile_id = ${p}
-    UNION ALL SELECT 'prescription_targets', count(*)::int FROM prescription_targets WHERE profile_id = ${p}
-    UNION ALL SELECT 'program_assignment_weekdays', count(*)::int FROM program_assignment_weekdays
-      WHERE assignment_id IN (SELECT id FROM program_assignments WHERE profile_id = ${p})
-    UNION ALL SELECT 'program_assignments', count(*)::int FROM program_assignments WHERE profile_id = ${p}
-    UNION ALL SELECT 'profiles', count(*)::int FROM profiles WHERE id = ${p}`);
-  return Object.fromEntries(
-    (res as unknown as { rows: { t: string; n: number }[] }).rows.map((r) => [r.t, Number(r.n)]),
-  );
+  const counts: Record<string, number> = {};
+  for (const { table, scope } of ERASE_ATHLETE) {
+    const [row] = rowsOf<{ n: number }>(
+      await tx.execute(
+        sql`SELECT count(*)::int AS n FROM ${sql.identifier(table)} WHERE ${scope(p)}`,
+      ),
+    );
+    counts[table] = Number(row.n);
+  }
+  return counts;
+}
+
+/** The runbook's "Erase one athlete": its step-4 table, and the labels of its step-3 count block. */
+function runbookEraseAthleteLists(): { order: string[]; counted: string[] } {
+  const file = readFileSync(new URL('../../../../docs/runbooks.md', import.meta.url), 'utf8');
+  const start = file.indexOf('## Erase one athlete');
+  assert.ok(start >= 0, 'FAM-1 5: the runbook has an "Erase one athlete" section');
+  const section = file.slice(start, file.indexOf('\n---', start));
+  const order = [...section.matchAll(/^\| \d+ +\| `([a-z_]+)` +\|/gm)].map((m) => m[1]);
+  const countBlock = section.slice(section.indexOf('```sql'), section.indexOf('-- PRE-FLIGHT'));
+  const counted = [...countBlock.matchAll(/SELECT '([a-z_]+)'/g)].map((m) => m[1]);
+  return { order, counted };
 }
 
 /**
- * The runbook's "written for this athlete alone" report: template blocks every one of whose assignment
- * rows (open, closed or hidden) is this athlete's. The household is asked keep-or-remove for each.
+ * The runbook's report: TEMPLATE blocks of P's household every one of whose assignment rows (open,
+ * closed or hidden) is P's. The household is asked keep-or-remove for each. Scoped to the household,
+ * so a stray assignment to another family's block never offers that family's program for removal.
  */
-async function blocksOnlyThisAthleteWasOn(tx: VerifyTx, p: number): Promise<number[]> {
+async function blocksOnlyThisAthleteWasOn(tx: VerifyTx, p: number, h: number): Promise<number[]> {
   return idsOf(
     await tx.execute(sql`
       SELECT b.id FROM program_blocks b
-       WHERE b.kind = ${PROGRAM_BLOCK_KIND.template}
+       WHERE b.kind = ${PROGRAM_BLOCK_KIND.template} AND b.household_id = ${h}
          AND EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id)
          AND NOT EXISTS (SELECT 1 FROM program_assignments a
                           WHERE a.block_id = b.id AND a.profile_id <> ${p})
@@ -2261,7 +2286,7 @@ async function blocksOnlyThisAthleteWasOn(tx: VerifyTx, p: number): Promise<numb
   );
 }
 
-/** Pre-flight: another athlete's entry in this athlete's session or superset aborts the erasure 23503. */
+/** Pre-flight: another athlete's entry in this athlete's session OR superset (the delete would abort). */
 async function strayEntriesInAthletesSessions(tx: VerifyTx, p: number): Promise<number[]> {
   return idsOf(
     await tx.execute(sql`
@@ -2275,8 +2300,93 @@ async function strayEntriesInAthletesSessions(tx: VerifyTx, p: number): Promise<
   );
 }
 
+/**
+ * Pre-flight: P's rows that point at ANOTHER household's program (a target on its prescription, an
+ * assignment to its block). Deleting by `profile_id = P` would remove a row tied to that family's data;
+ * no writer makes one, and the household delete's (a) and (h) stop on the same shape. Must be 0.
+ */
+async function athleteRowsOnAnotherHouseholdsProgram(tx: VerifyTx, p: number): Promise<number[]> {
+  return idsOf(
+    await tx.execute(sql`
+      SELECT t.id FROM prescription_targets t
+        JOIN prescriptions x ON x.id = t.prescription_id
+        JOIN program_blocks b ON b.id = x.block_id
+        JOIN profiles pr ON pr.id = t.profile_id
+       WHERE t.profile_id = ${p} AND b.household_id <> pr.household_id
+      UNION ALL
+      SELECT a.id FROM program_assignments a
+        JOIN program_blocks b ON b.id = a.block_id
+        JOIN profiles pr ON pr.id = a.profile_id
+       WHERE a.profile_id = ${p} AND b.household_id <> pr.household_id
+       ORDER BY 1`),
+  );
+}
+
+/**
+ * Pre-flight for the optional "remove a program only P was on": another athlete's rows that point at
+ * those blocks without an assignment (A2 §7: doing someone else's workout creates none). The block's
+ * delete would SET NULL a sibling's `sessions.workout_id` and `entries.prescription_id` silently, or
+ * abort on their target or a copy in another program. Must be 0, or the household is told first.
+ */
+async function othersOnTheseBlocks(tx: VerifyTx, p: number, blocks: number[]): Promise<number[]> {
+  if (blocks.length === 0) return [];
+  const ids = sql.join(
+    blocks.map((b) => sql`${b}`),
+    sql`, `,
+  );
+  return idsOf(
+    await tx.execute(sql`
+      SELECT s.id FROM sessions s JOIN workouts w ON w.id = s.workout_id
+       WHERE w.block_id IN (${ids}) AND s.profile_id <> ${p}
+      UNION ALL
+      SELECT e.id FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+       WHERE x.block_id IN (${ids}) AND e.profile_id <> ${p}
+      UNION ALL
+      SELECT t.id FROM prescription_targets t JOIN prescriptions x ON x.id = t.prescription_id
+       WHERE x.block_id IN (${ids}) AND t.profile_id <> ${p}
+      UNION ALL
+      SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
+       WHERE src.block_id IN (${ids}) AND c.block_id NOT IN (${ids})
+       ORDER BY 1`),
+  );
+}
+
+/** A household of a template block just made (verify reads the household through the block). */
+async function householdOfBlock(tx: VerifyTx, blockId: number): Promise<number> {
+  const [{ householdId }] = await tx
+    .select({ householdId: schema.programBlocks.householdId })
+    .from(schema.programBlocks)
+    .where(eq(schema.programBlocks.id, blockId));
+  return householdId!;
+}
+
+/** An app-created kid in `householdId` (not a seeded one: the seed would re-create a seeded profile). */
+async function mkKid(tx: VerifyTx, householdId: number, name: string): Promise<number> {
+  const [row] = await tx
+    .insert(schema.profiles)
+    .values({ publicId: newId(), householdId, name, kind: PROFILE_KIND.kid })
+    .returning({ id: schema.profiles.id });
+  return row.id;
+}
+
+type AssignmentInsert = typeof schema.programAssignments.$inferInsert;
+async function mkAssignment(
+  tx: VerifyTx,
+  row: Pick<AssignmentInsert, 'blockId' | 'profileId'> & Partial<AssignmentInsert>,
+  weekdays: readonly number[] = [],
+): Promise<number> {
+  const [a] = await tx
+    .insert(schema.programAssignments)
+    .values({ publicId: newId(), idx: 0, activeFrom: '2026-11-02', ...row })
+    .returning({ id: schema.programAssignments.id });
+  for (const weekday of weekdays) {
+    await tx.insert(schema.programAssignmentWeekdays).values({ assignmentId: a.id, weekday });
+  }
+  return a.id;
+}
+
 async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
-  // ── (a) shapes, the weekday CHECK pinned to WEEKDAYS, and the origin pinned against literals ─────
+  // ── (a) shapes, the weekday CHECK pinned to WEEKDAYS, the catalog and the runbook ─────────────────
   assert.deepEqual(
     await columnCatalogShape('program_assignments', 'active_from'),
     { data_type: 'date', is_nullable: 'NO', column_default: null },
@@ -2297,35 +2407,35 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   // the weekday in SQL has the same origin (DOW, not ISODOW, whose Sunday is 7).
   for (let i = 0; i < 7; i += 1) {
     const day = `2026-10-${String(11 + i).padStart(2, '0')}`;
-    const res = await db.execute(sql`SELECT extract(dow from ${day}::date)::int AS d`);
+    const [{ d }] = rowsOf<{ d: number }>(
+      await db.execute(sql`SELECT extract(dow from ${day}::date)::int AS d`),
+    );
     assert.equal(
-      Number((res as unknown as { rows: { d: number }[] }).rows[0].d),
+      Number(d),
       localWeekday(day),
       `FAM-1 5: Postgres's DOW and localWeekday agree on ${day}`,
     );
   }
-  // Every table with an FK to profiles is one the per-athlete erasure names: a new one fails here
-  // until the runbook (and eraseAthlete) names it.
-  const referencing = await tablesReferencingProfiles();
+  // Every table reachable from profiles by FK, at any depth, is one the erasure deletes.
   assert.deepEqual(
-    referencing,
-    ERASE_ATHLETE_TABLES.filter((t) => referencing.includes(t)).sort(),
-    'FAM-1 5: every table that references profiles is in the per-athlete erasure',
+    await tablesReachableFromProfiles(),
+    [...ERASE_ATHLETE_TABLES].sort(),
+    'FAM-1 5: every table reachable from profiles is in the per-athlete erasure, and nothing else is',
+  );
+  // The runbook IS the code: its step-4 order and its step-3 count block are exactly this list.
+  const runbook = runbookEraseAthleteLists();
+  assert.deepEqual(
+    runbook.order,
+    ERASE_ATHLETE_TABLES,
+    "FAM-1 5: the runbook's erasure order is eraseAthlete's, table for table",
   );
   assert.deepEqual(
-    referencing,
-    [
-      'day_readiness',
-      'entries',
-      'prescription_targets',
-      'program_assignments',
-      'ramp_targets',
-      'sessions',
-    ],
-    'FAM-1 5: the tables that reference profiles are exactly the six the erasure deletes by profile',
+    runbook.counted,
+    ERASE_ATHLETE_TABLES,
+    "FAM-1 5: the runbook's step-3 counts cover eraseAthlete's tables, in its order",
   );
   console.log(
-    "✓ FAM-1 5: shapes; the weekday CHECK is WEEKDAYS; Postgres's weekday is localWeekday's; every table referencing profiles is in the per-athlete erasure",
+    "✓ FAM-1 5: shapes; the weekday CHECK is WEEKDAYS; Postgres's weekday is localWeekday's; every table reachable from profiles is in the erasure, and the runbook's order and counts are the code's",
   );
 
   // ── (b) the keys, one column at a time; take off, back on, and the order ───────────────────────────
@@ -2333,32 +2443,19 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const exec = asTx(tx);
     const blockA = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-a');
     const blockA2 = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-a2');
-    const [{ householdId }] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.id, blockA));
-    const mkAthlete = async (name: string) => {
-      const [row] = await tx
-        .insert(schema.profiles)
-        .values({ publicId: newId(), householdId, name, kind: PROFILE_KIND.kid })
-        .returning({ id: schema.profiles.id });
-      return row.id;
-    };
-    const P = await mkAthlete('Assignment probe');
-    type AssignmentInsert = typeof schema.programAssignments.$inferInsert;
-    const assign = async (over: Partial<AssignmentInsert> = {}) => {
-      const [row] = await tx
-        .insert(schema.programAssignments)
-        .values({
-          publicId: newId(),
-          blockId: blockA,
-          profileId: P,
-          idx: 0,
-          activeFrom: '2026-11-02',
-          ...over,
-        })
-        .returning({ id: schema.programAssignments.id });
-      return row.id;
+    const P = await mkKid(tx, await householdOfBlock(tx, blockA), 'Assignment probe');
+    const assign = (over: Partial<AssignmentInsert> = {}) =>
+      mkAssignment(tx, { blockId: blockA, profileId: P, ...over });
+    // An insert the keys must ACCEPT, as an assertion, so a mutation that breaks it fails by name.
+    const accepted = async (message: string, over: Partial<AssignmentInsert>) => {
+      let id = 0;
+      await assert.doesNotReject(
+        tx.transaction(async () => {
+          id = await assign(over);
+        }),
+        message,
+      );
+      return id;
     };
     const close = (id: number, activeTo: string) =>
       tx
@@ -2370,6 +2467,14 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
         .update(schema.programAssignments)
         .set({ deletedAt: new Date() })
         .where(eq(schema.programAssignments.id, id));
+    const onDay = async (day: string) =>
+      (
+        await tx
+          .select({ id: schema.programAssignments.id })
+          .from(schema.programAssignments)
+          .where(and(eq(schema.programAssignments.profileId, P), assignmentOnDay(day)))
+          .orderBy(schema.programAssignments.idx, schema.programAssignments.id)
+      ).map((r) => r.id);
 
     // CHECKs and FKs.
     await expectRejectedBy('program_assignments_idx_check', () => assign({ idx: -1 }), tx);
@@ -2396,19 +2501,12 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
           .values({ assignmentId: 2_000_000_000, weekday: 1 }),
       tx,
     );
-
-    // A one-day program is legal (the last day is inclusive).
-    await assert.doesNotReject(
-      tx.transaction(async () => {
-        await assign({
-          blockId: await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-one-day'),
-          idx: 9, // its own place: no other proof's key should be able to refuse it
-          activeFrom: '2026-10-01',
-          activeTo: '2026-10-01',
-        });
-      }),
-      'FAM-1 5: a one-day program is legal (the last day is inclusive)',
-    );
+    await accepted('FAM-1 5: a one-day program is legal (the last day is inclusive)', {
+      blockId: await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-one-day'),
+      idx: 9, // its own place: no other proof's key should be able to refuse it
+      activeFrom: '2026-10-01',
+      activeTo: '2026-10-01',
+    });
 
     // The start key: a duplicate (profile, block, from) is refused; the open key: a second OPEN row for
     // one program with another start is refused; the order key: two open programs at one place.
@@ -2428,26 +2526,13 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       () => assign({ blockId: blockA2, idx: 0, activeFrom: '2026-11-09' }),
       tx,
     );
-    // An insert the keys must ACCEPT, as an assertion, so a mutation that breaks it fails by name.
-    const accepted = async (message: string, over: Partial<AssignmentInsert>) => {
-      let id = 0;
-      await assert.doesNotReject(
-        tx.transaction(async () => {
-          id = await assign(over);
-        }),
-        message,
-      );
-      return id;
-    };
-    // Several programs: an open one on ANOTHER block at another place is accepted.
     await accepted('FAM-1 5: an open program on another block at another place is accepted', {
       blockId: blockA2,
       idx: 1,
       activeFrom: '2026-11-09',
     });
 
-    // Off and on again THE SAME DAY: the closed row holds the start key, so a blind replay arbiter
-    // would answer ok and leave the athlete off (the docblock's rule; 6c decides reopen or refuse).
+    // Off and on again THE SAME DAY, case 1 (it started today too): the closed row holds the start key.
     await close(first, '2026-11-02');
     await expectRejectedBy(ASSIGNMENT_START_UNIQUE_INDEX, () => assign({ idx: 2 }), tx);
     // Back on from the NEXT day: a new row, the closed one kept as history (D15).
@@ -2462,23 +2547,64 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       activeFrom: '2026-11-02',
     });
     // On the take-off day the closed row and the open one at its old place are BOTH on, ordered (idx, id).
-    const onTakeOffDay = await tx
-      .select({ id: schema.programAssignments.id, idx: schema.programAssignments.idx })
-      .from(schema.programAssignments)
-      .where(and(eq(schema.programAssignments.profileId, P), assignmentOnDay('2026-11-02')))
-      .orderBy(schema.programAssignments.idx, schema.programAssignments.id);
     assert.deepEqual(
-      onTakeOffDay.filter((r) => r.id === first || r.id === atZero).map((r) => r.id),
+      (await onDay('2026-11-02')).filter((id) => id === first || id === atZero),
       [first, atZero],
       'FAM-1 5: on its last day a closed program is still on, beside the one that took its place',
     );
-    const nextDay = await tx
-      .select({ id: schema.programAssignments.id })
-      .from(schema.programAssignments)
-      .where(and(eq(schema.programAssignments.profileId, P), assignmentOnDay('2026-11-03')));
+    const nextDay = await onDay('2026-11-03');
     assert.ok(
-      !nextDay.some((r) => r.id === first) && nextDay.some((r) => r.id === backOn),
+      !nextDay.includes(first) && nextDay.includes(backOn),
       'FAM-1 5: the day after, only the new row is on',
+    );
+    // "Current" is per program: taken off today and back on tomorrow, BOTH rows are current today, and
+    // only the new one tomorrow; a reader lists the program once (assignmentCurrentAsOf's docblock).
+    const current = async (today: string) =>
+      (
+        await tx
+          .select({ id: schema.programAssignments.id })
+          .from(schema.programAssignments)
+          .where(
+            and(
+              eq(schema.programAssignments.profileId, P),
+              eq(schema.programAssignments.blockId, blockA),
+              assignmentCurrentAsOf(today),
+            ),
+          )
+          .orderBy(schema.programAssignments.id)
+      ).map((r) => r.id);
+    assert.deepEqual(
+      await current('2026-11-02'),
+      [first, backOn],
+      'FAM-1 5: on its last day a closed row is still current, beside the row starting tomorrow',
+    );
+    assert.deepEqual(
+      await current('2026-11-03'),
+      [backOn],
+      'FAM-1 5: the day after its last day, a closed row is no longer current',
+    );
+
+    // Off and on again THE SAME DAY, case 2 (the usual one: it started earlier). NO key refuses the
+    // second row, and the program is on twice that day; only the overlap audit sees it.
+    const blockLong = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-long');
+    const longOn = await assign({ blockId: blockLong, idx: 3, activeFrom: '2026-10-01' });
+    await close(longOn, '2026-11-10');
+    const again = await accepted(
+      'FAM-1 5: off and on the same day after weeks is accepted by every key',
+      {
+        blockId: blockLong,
+        idx: 4,
+        activeFrom: '2026-11-10',
+      },
+    );
+    const takeOffDay = await onDay('2026-11-10');
+    assert.ok(
+      takeOffDay.includes(longOn) && takeOffDay.includes(again),
+      'FAM-1 5: both rows of that program are on its take-off day',
+    );
+    assert.ok(
+      (await assignmentsOverlapping(tx)).includes(again),
+      'FAM-1 5: the overlap audit flags the second row of a same-day off-and-on',
     );
 
     // A program taken off before it started is HIDDEN, and hiding frees all three keys: the same
@@ -2494,12 +2620,11 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
         ),
       );
     await hide(openA2);
-    await assert.doesNotReject(
-      tx.transaction(async () => {
-        await assign({ blockId: blockA2, idx: 1, activeFrom: '2026-11-09' });
-      }),
-      'FAM-1 5: a hidden assignment frees its start, its open slot and its place',
-    );
+    await accepted('FAM-1 5: a hidden assignment frees its start, its open slot and its place', {
+      blockId: blockA2,
+      idx: 1,
+      activeFrom: '2026-11-09',
+    });
 
     // The inference a writer relies on: ON CONFLICT naming the start key's columns and predicate is
     // inferred (no 42P10), and a replay of the same open row adds nothing.
@@ -2559,47 +2684,35 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     );
   });
   console.log(
-    '✓ FAM-1 5: the CHECKs and FKs; one live row per start, one open row per program, one open program per place; off and on the same day is refused by the start key, the next day is a new row; a closed program is still on its last day; a hidden one frees all three keys; ON CONFLICT on the start key is inferred',
+    '✓ FAM-1 5: the CHECKs and FKs; one live row per start, one open row per program, one open program per place; off and on the same day is refused only when it also started that day, and otherwise accepted and flagged; a closed program is on and current on its last day; a hidden one frees all three keys; ON CONFLICT on the start key is inferred',
   );
 
   // ── (c) due on a day: the origin against literals, and every boundary ──────────────────────────────
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const pg = asDb(tx);
     const blockId = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-due');
-    const [{ householdId }] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.id, blockId));
-    const [{ id: P }] = await tx
-      .insert(schema.profiles)
-      .values({ publicId: newId(), householdId, name: 'Due probe', kind: PROFILE_KIND.kid })
-      .returning({ id: schema.profiles.id });
+    const P = await mkKid(tx, await householdOfBlock(tx, blockId), 'Due probe');
     let place = 0;
     const mk = async (
       activeFrom: string,
       activeTo: string | null,
-      weekdays: number[],
+      weekdays: readonly number[],
       slug: string,
     ) => {
       place += 1;
       const b = slug === 'same' ? blockId : await mkTemplateBlock(exec, A_SCOPE, slug);
-      const [a] = await tx
-        .insert(schema.programAssignments)
-        .values({ publicId: newId(), blockId: b, profileId: P, idx: place, activeFrom, activeTo })
-        .returning({ id: schema.programAssignments.id });
-      for (const w of weekdays)
-        await tx
-          .insert(schema.programAssignmentWeekdays)
-          .values({ assignmentId: a.id, weekday: w });
-      return a.id;
+      return mkAssignment(
+        tx,
+        { blockId: b, profileId: P, idx: place, activeFrom, activeTo },
+        weekdays,
+      );
     };
     const dueOn = async (id: number, day: string) =>
       (
         await tx
           .select({ id: schema.programAssignments.id })
           .from(schema.programAssignments)
-          .where(and(eq(schema.programAssignments.id, id), assignmentDueOn(pg, day)))
+          .where(and(eq(schema.programAssignments.id, id), assignmentDueOn(day)))
       ).length === 1;
     // The origin, literals on the assertion side: a stored 1 is Monday 2026-10-12; a stored 0 is Sunday.
     const mondays = await mk('2026-10-01', null, [1], 'same');
@@ -2625,8 +2738,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 5: a stored 0 is due on Sunday 2026-10-11',
     );
     // The range, inclusive at both ends.
-    const every = [0, 1, 2, 3, 4, 5, 6];
-    const ranged = await mk('2026-10-05', '2026-10-09', every, 'fam-1-5-range');
+    const ranged = await mk('2026-10-05', '2026-10-09', WEEKDAYS, 'fam-1-5-range');
     assert.equal(await dueOn(ranged, '2026-10-04'), false, 'FAM-1 5: not due before its first day');
     assert.equal(await dueOn(ranged, '2026-10-05'), true, 'FAM-1 5: due on its first day');
     assert.equal(
@@ -2640,7 +2752,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 5: not due the day after its last',
     );
     // A hidden assignment is never due, whatever weekday rows it keeps; a hidden weekday row is not a day.
-    const hidden = await mk('2026-10-01', null, every, 'fam-1-5-hidden');
+    const hidden = await mk('2026-10-01', null, WEEKDAYS, 'fam-1-5-hidden');
     await tx
       .update(schema.programAssignments)
       .set({ deletedAt: new Date() })
@@ -2665,7 +2777,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     '✓ FAM-1 5: due on a day is a weekday lookup with 0 = Sunday (literals), inclusive at both ends of the range, never through a hidden assignment or a hidden weekday row',
   );
 
-  // ── (d) the audits, each with its controls ─────────────────────────────────────────────────────────
+  // ── (d) the audits, each with positive and negative controls ───────────────────────────────────────
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
     for (const [name, audit] of [
@@ -2682,52 +2794,55 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     }
     const blockId = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-audit');
     const bBlock = await mkTemplateBlock(exec, B_SCOPE, 'fam-1-5-audit-b');
-    const [{ householdId }] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.id, blockId));
+    const householdId = await householdOfBlock(tx, blockId);
     const [legacy] = await tx
       .select({ id: schema.programBlocks.id })
       .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy))
+      .where(
+        and(
+          eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy),
+          eq(schema.programBlocks.householdId, householdId),
+        ),
+      )
+      .orderBy(schema.programBlocks.id)
       .limit(1);
-    const [{ id: P }] = await tx
-      .insert(schema.profiles)
-      .values({ publicId: newId(), householdId, name: 'Audit probe', kind: PROFILE_KIND.kid })
-      .returning({ id: schema.profiles.id });
-    const assign = async (
-      over: Partial<typeof schema.programAssignments.$inferInsert>,
-      weekdays = true,
-    ) => {
-      const [a] = await tx
-        .insert(schema.programAssignments)
-        .values({
-          publicId: newId(),
-          blockId,
-          profileId: P,
-          idx: 0,
-          activeFrom: '2026-11-02',
-          ...over,
-        })
-        .returning({ id: schema.programAssignments.id });
-      if (weekdays)
-        await tx
-          .insert(schema.programAssignmentWeekdays)
-          .values({ assignmentId: a.id, weekday: 1 });
-      return a.id;
-    };
-    // Negative controls: a closed row and one starting the day after its last day; an open program elsewhere.
+    const P = await mkKid(tx, householdId, 'Audit probe');
+    let place = 10;
+    const assign = (over: Partial<AssignmentInsert>, weekdays: readonly number[] = [1]) =>
+      mkAssignment(tx, { blockId, profileId: P, idx: (place += 1), ...over }, weekdays);
+    // Negative controls: a closed row and one starting the day after its last day.
     await assign({ activeTo: '2026-11-08' });
-    await assign({ idx: 1, activeFrom: '2026-11-09' });
+    await assign({ activeFrom: '2026-11-09' });
+    // A later-ID row with EARLIER dates, the day before the other's first: the audit's second arm.
+    const reversedBlock = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-reversed');
+    await assign({ blockId: reversedBlock, activeFrom: '2026-12-01' });
+    await assign({ blockId: reversedBlock, activeFrom: '2026-11-01', activeTo: '2026-11-30' });
+    // A hidden row and a live one with the same start (taken off before it started, put on again).
+    const hiddenBlock = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-hidden-again');
+    const hiddenFirst = await assign({ blockId: hiddenBlock, activeFrom: '2026-12-05' });
+    await tx
+      .update(schema.programAssignments)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.programAssignments.id, hiddenFirst));
+    await assign({ blockId: hiddenBlock, activeFrom: '2026-12-05' });
+    // A hidden assignment with no weekday row is not flagged by the weekday audit.
+    const hiddenNoDays = await assign(
+      { blockId: await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-hidden-nodays') },
+      [],
+    );
+    await tx
+      .update(schema.programAssignments)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.programAssignments.id, hiddenNoDays));
     // Positive controls, one per audit (the overlap one starts ON another row's last day).
-    const onLegacy = await assign({ blockId: legacy.id, idx: 2 });
-    const across = await assign({ blockId: bBlock, idx: 3 });
+    const onLegacy = await assign({ blockId: legacy.id });
+    const across = await assign({ blockId: bBlock });
     const overlapBase = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-overlap');
-    await assign({ blockId: overlapBase, idx: 4, activeTo: '2026-11-10' });
-    const overlap = await assign({ blockId: overlapBase, idx: 5, activeFrom: '2026-11-10' });
+    await assign({ blockId: overlapBase, activeTo: '2026-11-10' });
+    const overlap = await assign({ blockId: overlapBase, activeFrom: '2026-11-10' });
     const noDays = await assign(
-      { blockId: await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-nodays'), idx: 6 },
-      false,
+      { blockId: await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-nodays') },
+      [],
     );
     assert.deepEqual(
       await assignmentsOnLegacyBlocks(tx),
@@ -2749,12 +2864,19 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       [noDays],
       'FAM-1 5: a live assignment with no weekday row is flagged',
     );
-    // Hidden rows are still flagged by the cross-household audit (no deleted_at filter: the runbook
-    // pre-flight must see a hidden stray, because the delete removes hidden rows too).
-    await tx
-      .update(schema.programAssignments)
-      .set({ deletedAt: new Date() })
-      .where(eq(schema.programAssignments.id, across));
+    // Hidden rows: still flagged by the legacy and cross-household audits (the runbook deletes hidden
+    // rows too); excluded from the overlap and weekday audits, which the controls above prove.
+    for (const id of [onLegacy, across]) {
+      await tx
+        .update(schema.programAssignments)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.programAssignments.id, id));
+    }
+    assert.deepEqual(
+      await assignmentsOnLegacyBlocks(tx),
+      [onLegacy],
+      'FAM-1 5: a hidden legacy-block assignment is still flagged',
+    );
     assert.deepEqual(
       await assignmentsAcrossHouseholds(tx),
       [across],
@@ -2762,21 +2884,14 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     );
   });
   console.log(
-    '✓ FAM-1 5: an assignment to a legacy block, across households, overlapping another of its program, or with no weekday row is each flagged; the controls are not',
+    '✓ FAM-1 5: an assignment to a legacy block, across households, overlapping another of its program, or with no weekday row is each flagged; the controls (closed then next day, reversed ids, hidden then again, hidden with no days) are not',
   );
 
   // ── (e) the household delete: out of order is refused by name; in order commits ───────────────────
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
     const blockId = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-erase');
-    const [{ householdId }] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.id, blockId));
-    const [{ id: P }] = await tx
-      .insert(schema.profiles)
-      .values({ publicId: newId(), householdId, name: 'Erase order probe', kind: PROFILE_KIND.kid })
-      .returning({ id: schema.profiles.id });
+    const P = await mkKid(tx, await householdOfBlock(tx, blockId), 'Erase order probe');
     const [a] = await tx
       .insert(schema.programAssignments)
       .values({
@@ -2823,10 +2938,8 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const exec = asTx(tx);
     const sharedBlock = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-family');
     const onlyP = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-only-p');
-    const [{ householdId }] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.id, sharedBlock));
+    const otherFamily = await mkTemplateBlock(exec, B_SCOPE, 'fam-1-5-other-family');
+    const householdId = await householdOfBlock(tx, sharedBlock);
     const entryBase = await probeEntryBase(tx, sharedBlock, 'FAM-1 5');
     const [{ prescriptionId }] = await tx
       .select({ prescriptionId: schema.prescriptions.id })
@@ -2836,14 +2949,10 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const [{ metricKey }] = await tx
       .select({ metricKey: schema.metricDefinitions.key })
       .from(schema.metricDefinitions)
+      .orderBy(schema.metricDefinitions.key)
       .limit(1);
-    // App-created athletes, not seeded ones: a seeded profile is re-inserted by the next seed run, so
-    // the runbook refuses to erase one (its precondition), and the proof erases the case that holds.
     const athlete = async (name: string, onBlocks: number[]) => {
-      const [{ id }] = await tx
-        .insert(schema.profiles)
-        .values({ publicId: newId(), householdId, name, kind: PROFILE_KIND.kid })
-        .returning({ id: schema.profiles.id });
+      const id = await mkKid(tx, householdId, name);
       const [s] = await tx
         .insert(schema.sessions)
         .values({
@@ -2904,76 +3013,119 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
         .insert(schema.prescriptionTargets)
         .values({ publicId: newId(), prescriptionId, profileId: id, load: '45' });
       for (const [i, blockId] of onBlocks.entries()) {
-        const [a] = await tx
-          .insert(schema.programAssignments)
-          .values({ publicId: newId(), blockId, profileId: id, idx: i, activeFrom: '2026-11-02' })
-          .returning({ id: schema.programAssignments.id });
-        for (const w of WEEKDAYS)
-          await tx
-            .insert(schema.programAssignmentWeekdays)
-            .values({ assignmentId: a.id, weekday: w });
+        await mkAssignment(tx, { blockId, profileId: id, idx: i }, WEEKDAYS);
       }
       // A closed and a hidden assignment too: history and a program taken off before it started.
-      const [closed] = await tx
-        .insert(schema.programAssignments)
-        .values({
-          publicId: newId(),
+      await mkAssignment(
+        tx,
+        {
           blockId: sharedBlock,
           profileId: id,
           idx: 5,
           activeFrom: '2026-10-01',
           activeTo: '2026-10-31',
-        })
-        .returning({ id: schema.programAssignments.id });
-      await tx
-        .insert(schema.programAssignmentWeekdays)
-        .values({ assignmentId: closed.id, weekday: 2 });
-      await tx.insert(schema.programAssignments).values({
-        publicId: newId(),
+        },
+        [2],
+      );
+      await mkAssignment(tx, {
         blockId: sharedBlock,
         profileId: id,
         idx: 6,
         activeFrom: '2026-12-01',
         deletedAt: new Date(),
       });
-      return id;
+      return { id, sessionId: s.id, supersetId: ss.id };
     };
     const P = await athlete('Erase probe', [sharedBlock, onlyP]);
     const S = await athlete('Sibling probe', [sharedBlock]);
-    const before = await athleteCounts(tx, P);
+    const before = await athleteCounts(tx, P.id);
     for (const t of ERASE_ATHLETE_TABLES) {
       assert.ok(
         before[t]! > 0,
         `FAM-1 5: the erased athlete holds a row in ${t} before the erasure`,
       );
     }
-    const siblingBefore = await athleteCounts(tx, S);
+    const siblingBefore = await athleteCounts(tx, S.id);
     const blocksBefore = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(schema.programBlocks);
 
-    // The runbook's pre-flight and its report.
+    // The runbook's pre-flights and its report.
     assert.deepEqual(
-      await strayEntriesInAthletesSessions(tx, P),
+      await strayEntriesInAthletesSessions(tx, P.id),
       [],
       "FAM-1 5: no other athlete's entry is in P's sessions",
     );
     assert.deepEqual(
-      await blocksOnlyThisAthleteWasOn(tx, P),
+      await athleteRowsOnAnotherHouseholdsProgram(tx, P.id),
+      [],
+      "FAM-1 5: none of P's rows points at another household's program",
+    );
+    assert.deepEqual(
+      await blocksOnlyThisAthleteWasOn(tx, P.id, householdId),
       [onlyP],
       'FAM-1 5: the report lists the program only P was ever on, not one a sibling was on',
     );
-
-    await eraseAthlete(tx, P);
     assert.deepEqual(
-      await athleteCounts(tx, P),
+      await othersOnTheseBlocks(tx, P.id, [onlyP]),
+      [],
+      'FAM-1 5: nobody else logged against the program only P was on',
+    );
+    // A stray assignment of P to ANOTHER household's block: the pre-flight stops, and the report never
+    // offers that family's program for removal.
+    const stray = await mkAssignment(tx, { blockId: otherFamily, profileId: P.id, idx: 7 }, [1]);
+    assert.deepEqual(
+      await athleteRowsOnAnotherHouseholdsProgram(tx, P.id),
+      [stray],
+      "FAM-1 5: P's assignment to another household's block stops the erasure",
+    );
+    assert.deepEqual(
+      await blocksOnlyThisAthleteWasOn(tx, P.id, householdId),
+      [onlyP],
+      "FAM-1 5: the report never lists another household's program",
+    );
+    await tx
+      .delete(schema.programAssignmentWeekdays)
+      .where(eq(schema.programAssignmentWeekdays.assignmentId, stray));
+    await tx.delete(schema.programAssignments).where(eq(schema.programAssignments.id, stray));
+    const afterStrayRemoved = await athleteCounts(tx, P.id);
+
+    await eraseAthlete(tx, P.id);
+    assert.deepEqual(
+      await athleteCounts(tx, P.id),
       Object.fromEntries(ERASE_ATHLETE_TABLES.map((t) => [t, 0])),
       'FAM-1 5: after the erasure the athlete has no row in any table',
     );
+    void afterStrayRemoved;
     assert.deepEqual(
-      await athleteCounts(tx, S),
+      await athleteCounts(tx, S.id),
       siblingBefore,
       "FAM-1 5: the sibling's rows are exactly as they were",
+    );
+    // Step 4b's pre-flight, positive control: a sibling who did a workout of that program (no assignment)
+    // is caught, because removing the block would SET NULL their session's workout silently.
+    const w = (await insertWorkoutOwnedBy(exec, A_SCOPE, {
+      blockId: onlyP,
+      clientId: newId(),
+      name: 'Only P day',
+      description: null,
+    }))!;
+    const [borrowed] = await tx
+      .insert(schema.sessions)
+      .values({
+        publicId: newId(),
+        clientId: newId(),
+        profileId: S.id,
+        activityDate: '2026-11-12',
+        sessionType: SESSION_TYPE.workout,
+        workoutId: w.id,
+        workoutName: 'Only P day',
+      })
+      .returning({ id: schema.sessions.id });
+    assert.deepEqual(
+      await othersOnTheseBlocks(tx, P.id, [onlyP]),
+      [borrowed.id],
+      "FAM-1 5: a sibling's session on a workout of a program only P was on is caught before its removal",
     );
     assert.deepEqual(
       await tx.select({ n: sql<number>`count(*)::int` }).from(schema.programBlocks),
@@ -2981,55 +3133,66 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       "FAM-1 5: the household's programs are untouched (program text belongs to the household)",
     );
   });
-  // The pre-flight's positive control, alone: a sibling's entry in P's session makes the erasure abort.
+
+  // The pre-flight's positive controls: a sibling's entry in P's session, and one in P's superset from
+  // the sibling's own session. Each is caught, and each makes the erasure abort on its FK.
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
     const blockId = await mkTemplateBlock(exec, A_SCOPE, 'fam-1-5-stray');
-    const [{ householdId }] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.id, blockId));
+    const householdId = await householdOfBlock(tx, blockId);
     const entryBase = await probeEntryBase(tx, blockId, 'FAM-1 5');
-    const mk = async (name: string) =>
+    const P = await mkKid(tx, householdId, 'Stray probe');
+    const S = await mkKid(tx, householdId, 'Stray sibling');
+    const session = async (profileId: number, day: string) =>
       (
         await tx
-          .insert(schema.profiles)
-          .values({ publicId: newId(), householdId, name, kind: PROFILE_KIND.kid })
-          .returning({ id: schema.profiles.id })
+          .insert(schema.sessions)
+          .values({
+            publicId: newId(),
+            clientId: newId(),
+            profileId,
+            activityDate: day,
+            sessionType: SESSION_TYPES[0],
+          })
+          .returning({ id: schema.sessions.id })
       )[0].id;
-    const P = await mk('Stray probe');
-    const S = await mk('Stray sibling');
-    const [s] = await tx
-      .insert(schema.sessions)
-      .values({
-        publicId: newId(),
-        clientId: newId(),
-        profileId: P,
-        activityDate: '2026-11-10',
-        sessionType: SESSION_TYPES[0],
-      })
-      .returning({ id: schema.sessions.id });
-    const [stray] = await tx
-      .insert(schema.entries)
-      .values({
-        ...entryBase,
-        publicId: newId(),
-        clientId: newId(),
-        profileId: S,
-        sessionId: s.id,
-        supersetId: null,
-        supersetOrder: null,
-        prescriptionId: null,
-        prescriptionSet: null,
-      })
-      .returning({ id: schema.entries.id });
+    const pSession = await session(P, '2026-11-10');
+    const sSession = await session(S, '2026-11-11');
+    const [pSuperset] = await tx
+      .insert(schema.supersets)
+      .values({ publicId: newId(), clientId: newId(), sessionId: pSession })
+      .returning({ id: schema.supersets.id });
+    const siblingEntry = async (over: Partial<typeof schema.entries.$inferInsert>) =>
+      (
+        await tx
+          .insert(schema.entries)
+          .values({
+            ...entryBase,
+            publicId: newId(),
+            clientId: newId(),
+            profileId: S,
+            supersetId: null,
+            supersetOrder: null,
+            prescriptionId: null,
+            prescriptionSet: null,
+            ...over,
+          })
+          .returning({ id: schema.entries.id })
+      )[0].id;
+    const inSession = await siblingEntry({ sessionId: pSession });
+    const inSuperset = await siblingEntry({
+      sessionId: sSession,
+      supersetId: pSuperset.id,
+      supersetOrder: 1,
+    });
     assert.deepEqual(
       await strayEntriesInAthletesSessions(tx, P),
-      [stray.id],
-      "FAM-1 5: a sibling's entry in P's session is caught by the pre-flight",
+      [inSession, inSuperset].sort((a, b) => a - b),
+      "FAM-1 5: a sibling's entry in P's session, and one in P's superset, are both caught by the pre-flight",
     );
+    await expectRejectedBy('entries_superset_id_supersets_id_fk', () => eraseAthlete(tx, P), tx);
   });
   console.log(
-    "✓ FAM-1 5: erasing one athlete removes their row in every table (hidden ones too) and leaves a sibling and the household's programs exactly as they were; the pre-flight catches a sibling's entry in their session, and the report lists a program only they were on",
+    "✓ FAM-1 5: erasing one athlete removes their row in every table (hidden ones too) and leaves a sibling and the household's programs exactly as they were; the pre-flights catch a sibling's entry in their session or superset (which aborts the erasure) and a row on another household's program; the report lists only this household's program only they were on",
   );
 }

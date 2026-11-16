@@ -33,15 +33,15 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## Files
 
-| File                                                | What it is for                                                                                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/program/create-program.ts` | `createProgram`: a program is a TEMPLATE block, created by naming it. Replay first, then the name, then a free slug.                         |
-| `packages/db/src/writers/program/rename-program.ts` | `renameProgram`: `not_found` (any block that is not this household's live template), then `name_taken`, then the name and a new slug.        |
-| `packages/db/src/writers/program/program-name.ts`   | What both share: `programNameTaken` (folded, live templates only), `freeProgramSlug` (`-2`, `-3`… past every live block) and `lostSlugRace`. |
-| `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                              |
-| `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                    |
-| `packages/db/src/queries/program/index.ts`          | A placeholder so the directory exists. The first real module may replace it.                                                                 |
-| `packages/db/scripts/verify/program.ts`             | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                |
+| File                                                | What it is for                                                                                                                                                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/program/create-program.ts` | `createProgram`: a program is a TEMPLATE block, created by naming it. Replay first, then the name, then a free slug.                                                                                                                      |
+| `packages/db/src/writers/program/rename-program.ts` | `renameProgram`: `not_found` (any block that is not this household's live template), then `name_taken`, then the name and a new slug.                                                                                                     |
+| `packages/db/src/writers/program/program-name.ts`   | What both share: `programNameTaken` (folded, live templates only), `freeProgramSlug` (`-2`, `-3`… past every live block) and `lostSlugRace`, which recognises the race by `schema.ts`'s `PROGRAM_BLOCK_SLUG_UNIQUE_INDEX` (FAM-1 step 5). |
+| `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                           |
+| `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                 |
+| `packages/db/src/queries/program/index.ts`          | A placeholder so the directory exists. The first real module may replace it.                                                                                                                                                              |
+| `packages/db/scripts/verify/program.ts`             | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                             |
 
 ## Invariants
 

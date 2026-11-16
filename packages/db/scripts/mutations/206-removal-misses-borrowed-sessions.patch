@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -2337,7 +2337,7 @@
+   return idsOf(
+     await tx.execute(sql`
+       SELECT s.id FROM sessions s JOIN workouts w ON w.id = s.workout_id
+-       WHERE w.block_id IN (${ids}) AND s.profile_id <> ${p}
++       WHERE w.block_id IN (${ids}) AND false
+       UNION ALL
+       SELECT e.id FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+        WHERE x.block_id IN (${ids}) AND e.profile_id <> ${p}

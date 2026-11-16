@@ -3,6 +3,7 @@ import { and, isNull, ne } from 'drizzle-orm';
 import { foldName, movementSlug } from '@mat-plan/shared';
 
 import { schema } from '../../client';
+import { PROGRAM_BLOCK_SLUG_UNIQUE_INDEX } from '../../schema';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { liveTemplateBlockIn, programBlockInHousehold } from '../ownership';
@@ -107,15 +108,8 @@ export async function freeProgramSlug(
 }
 
 /**
- * The index a slug race violates (`schema.ts`, `programBlocks`). ⚠️ A literal until lane A exports it
- * from `schema.ts` as a `*_UNIQUE_INDEX` const (requested 2026-11-16); then import that one. The
- * forced collision in `verify/program.ts` fails if the two ever differ.
- */
-export const PROGRAM_SLUG_UNIQUE_INDEX = 'uq_program_blocks_household_slug';
-
-/**
  * Run `write` in a savepoint and report whether it lost a slug race: `true` when it failed on
- * {@link PROGRAM_SLUG_UNIQUE_INDEX}, which rolls back only the savepoint, so the caller's transaction
+ * {@link PROGRAM_BLOCK_SLUG_UNIQUE_INDEX} (`schema.ts`; FAM-1 step 5 exported it), which rolls back only the savepoint, so the caller's transaction
  * survives to answer. Any other error is thrown unchanged.
  *
  * The race: two writes pick one free slug at the same moment (two devices naming programs alike, or
@@ -136,7 +130,7 @@ export async function lostSlugRace(
     // `hide.ts`'s `isBodyweightSlotConflict` shape: drizzle wraps the driver error in `cause`.
     const cause = (e as { cause?: unknown })?.cause ?? e;
     const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
-    if (code === '23505' && constraint === PROGRAM_SLUG_UNIQUE_INDEX) return true;
+    if (code === '23505' && constraint === PROGRAM_BLOCK_SLUG_UNIQUE_INDEX) return true;
     throw e;
   }
 }

@@ -1946,7 +1946,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ". The household owner asks, or an adult athlete may ask about their own profile (the\nowner is told first). The same confirmation, 7-day pause and restore point as a household deletion apply,\nand \"What remains afterwards\" below applies too. What stays is the household's: the programs it wrote\n(if a program was written for that athlete alone, we will ask whether you want it removed too), any name\ntyped into a program, workout or movement, including copies of that text kept on other athletes' logs,\nand every sign-in account. For an athlete, the record of the deletion holds the athlete's internal\nidentifier and no login ids. An athlete added through the app can be erased today; the three athletes\nthe app started with cannot yet, because setup would put them back."
+        "text": ". The household owner asks; or an adult athlete may ask about their own profile, in\nwhich case the owner is told first but "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "cannot cancel it"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote (if a program was\nwritten for that athlete alone, we will ask whether you want it removed too), any name typed into a\nprogram, workout or movement, including copies of that text kept on other athletes' logs, and every\nsign-in account; an adult athlete can ask for their own account to be deleted as well. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the three athletes the app\nstarted with cannot yet, because setup would put them back."
       }
     ]
   },
@@ -2163,7 +2176,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " at Sentry, for their retention periods. Neither\nshould contain your data, but logs record that requests happened."
+              "text": " at Sentry, for their retention periods. Neither\nshould contain your data, but logs record that requests happened, and Vercel's request logs keep the\naddress of an athlete's page (it carries their internal identifier, not a name) for 24 hours."
             }
           ]
         }

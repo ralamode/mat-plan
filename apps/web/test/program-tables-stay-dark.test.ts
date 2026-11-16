@@ -29,9 +29,12 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   /**
    * 🔴 FAM-1 step 5's two tables are NEW, so even a named-column read of one fails `42P01` in a deploy
    * that races `migrate.yml`. The patterns above catch only whole-row shapes, so for these two ANY
-   * reference outside the allowlist is refused. Lane P's 6c (the first writer and reader) relaxes it.
+   * reference outside the allowlist is refused, the snake_case name in raw SQL included. Lane P's
+   * writers (`writers/program/`) are allowlisted already; 6c's reads elsewhere (`queries/program/`) are
+   * what relax it.
    */
-  const NEW_TABLES = /\b(?:schema\.)?(?:programAssignments|programAssignmentWeekdays)\b/;
+  const NEW_TABLES =
+    /\b(?:(?:schema\.)?(?:programAssignments|programAssignmentWeekdays)|program_assignments|program_assignment_weekdays)\b/;
   const NEW_TABLES_ALLOWED = [
     'packages/db/src/schema.ts',
     'packages/db/src/queries/program-assignments.ts',

@@ -1468,19 +1468,28 @@ export const prescriptionTargets = pgTable(
  *   `D <= active_to`). ⚠️ `active_to` is the INCLUSIVE last day: a program taken off today is still on
  *   today, and is no longer open. `queries/program-assignments.ts` → `assignmentOnDay` is the ONE
  *   spelling; due adds a live weekday row for `localWeekday(D)` (`assignmentDueOn`).
- * - **current as of T**: live and (`active_to IS NULL` or `T <= active_to`): on today, or starting later.
- *   `DayPlan.currentPrograms` and `ProgramOrder` are over current rows, so `idx` is read and REWRITTEN on
- *   current rows, a closed-through-today one included, and readers order by `(idx, id)` (A2 §7): on the
- *   take-off day a closed row and an open one may share an `idx`, because the order key covers open rows.
+ * - **current as of T**: live and (`active_to IS NULL` or `T <= active_to`): on today, or starting later
+ *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: taken off today and
+ *   back on from tomorrow leaves two current rows for one program (the closed one through today, the new
+ *   one from tomorrow). `DayPlan.currentPrograms` and `ProgramOrder` list each program ONCE (the schema
+ *   refuses a repeat), placed by its open or upcoming row's `idx`, or by the closed row's when it has no
+ *   other; a reorder writes the place onto that row. Readers order by `(idx, id)` (A2 §7): on the
+ *   take-off day a closed row and another program's open row may share an `idx`, because the order key
+ *   covers open rows only.
  *
  * **Keys.** `public_id` is the row's address (ASSIGN-1's version guard names it; `(profile, block)` is
  * ambiguous once closed rows exist). NO `client_id`: put-on carries none (`assignDraftSchema`); the
  * natural key is `(profile, block, active_from)`. ⚠️ **A hit on it is a replay ONLY if the row it hit is
- * still open.** Off and on again the same day (`from = today` after a take-off today) hits the CLOSED row,
- * whose `active_to` the writer must read back: a blind `ON CONFLICT DO NOTHING` would answer ok and leave
- * the athlete off from tomorrow. Whether such a put-on reopens that row or is refused is 6c's decision.
- * A second open row for one (profile, block) is refused by the open key; a later row must start after
- * the earlier one's `active_to`.
+ * still open.** 🔴 **Off and on again the same day is a trap whatever day the program started on**, and
+ * the keys catch only one case of it. A put-on `from = today` after a take-off today must look for the
+ * closed row by `(profile, block, active_to = today)` and decide:
+ * - **started today too:** the put-on hits the start key on the CLOSED row; a blind `ON CONFLICT DO
+ *   NOTHING` would answer ok and leave the athlete off from tomorrow;
+ * - **started earlier (the usual case):** NO key refuses it (another start; the old row is not open), so
+ *   it inserts a second row and the program is due twice today.
+ * Plan D15 rejected reopening the old row, so 6c starts the new row tomorrow or refuses; `db:verify`
+ * proves both cases and `assignmentsOverlapping` flags the second. A second OPEN row for one (profile,
+ * block) is refused by the open key; any later row must start after the earlier one's `active_to`.
  *
  * ⚠️ **WRITER-ENFORCED, not schema-enforced** (a choice: a carried `household_id` and composite FKs would
  * enforce the first two, at the cost of `UNIQUE (id, household_id)` on `profiles` and `program_blocks`;

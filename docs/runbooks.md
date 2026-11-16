@@ -1402,7 +1402,8 @@ child:
 --       (`db:verify` proves both joins find a planted row, `verify/schema.ts` → FAM-1 4a-ii.)
 -- (h) FAM-1 5: an ASSIGNMENT whose athlete and program are in DIFFERENT households, either side in H.
 --       Steps 9c/9d select by `profile_id ∈ H OR block_id ∈ H`, so they would delete another family's
---       child's assignment (H's block) or leave one of H's children on another family's deleted block.
+--       child's assignment to H's block. (H's child on another family's block is deleted by the profile
+--       arm, which harms nobody; it is stopped only so the operator finds out how it was written.)
 --       STOP; with a correction hard-delete the stray assignment and its weekday rows (it is a row about
 --       the other family's child, and no writer can make one: 6c refuses it). No deleted_at filter.
 --       SELECT a.id FROM program_assignments a
@@ -1691,15 +1692,23 @@ the kind of thing someone asking to be deleted does not expect to be kept. It is
 [privacy/notice.md](./privacy/notice.md) → "Deleting your data" promises it. **Manual until `PRIV-3`
 scripts it**, as the household delete is; the guarded script is `PRIV-3`'s. Read
 ["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1) first: this section reuses its
-preconditions, its transaction shape and its ledger, and says only what differs.
+transaction shape and its ledger, and says only what differs.
 
 ### ⛔ Preconditions
 
-1. **Who may ask** _(maintainer, 2026-11-16)_: the household **owner**, on the invitation channel; or an
-   **adult athlete** about their own profile, in which case the owner is told before anything happens.
-   Then precondition 1 of the household delete applies unchanged: the verified channel, the notice of a
-   date and a way to cancel, the 7-day wait, the re-confirmation, and a Neon restore branch held 7 days.
-   `OPS-3`'s rehearsal is a precondition of the first real erasure, as it is of the first deletion.
+1. **Who may ask** _(maintainer, 2026-11-16)_:
+   - **the household owner**, confirmed on the invitation channel, exactly as the household delete's
+     precondition 1; the household may cancel during the pause;
+   - **an adult athlete, about their own profile.** Confirm on **their own** invitation channel (the
+     one their membership was invited on), never on whatever address asked. Nothing in the database
+     links a profile to a person, so the **owner confirms which profile is theirs**, and the profile must
+     be `kind = 'adult'` (step 2). **The owner is told before anything happens, and cannot cancel**:
+     only the adult can _(maintainer, 2026-11-16)_.
+
+   Either way: the notice of a date and a way to cancel, the 7-day wait, the re-confirmation, and a
+   Neon restore branch held 7 days, as the household delete. `OPS-3`'s rehearsal is a precondition of
+   the first real erasure, as it is of the first deletion.
+
 2. **A seeded athlete cannot be erased yet.** The seed inserts its profiles by fixed `public_id` on every
    push to `main` (`packages/db/src/seed.ts`), so a hard-deleted seed profile comes back, as an empty
    athlete, on the next merge. Refuse if the profile's `public_id` is one of the `SEED_PROFILE*_PUBLIC_ID`
@@ -1707,21 +1716,28 @@ preconditions, its transaction shape and its ledger, and says only what differs.
 
 ### Steps
 
-**0. Record the request** in the ledger (below). **No Clerk step:** erasing an athlete deletes no sign-in
-account. An adult athlete's own account goes only with the household, or by removing their membership.
+**0. Record the request** in the ledger (below). Erasing an athlete deletes no sign-in account. If an
+adult athlete also asks for **their account** to go, delete their Clerk user as the household delete's
+step 6 does (record its id at the ledger first); their `household_members` row is hidden by removing
+the membership and keeps its `clerk_user_id` until the household goes.
 
-**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`), and the full copy on request,
-**including hidden rows**, delivered on the verified channel. Afterwards there is nothing to export.
+**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`), and the full copy on
+request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
+adult's own** for an adult athlete. Afterwards there is nothing to export.
 
-**2. Resolve the athlete by `public_id`** and assert their household:
+**2. Resolve the athlete by `public_id`** on the **production** database, and assert their household and
+kind:
 
 ```sql
-SELECT id, household_id, public_id FROM profiles WHERE public_id = :profile_public_id;
--- :P below is that id; :H its household_id. Check the household is the requester's.
+SELECT current_database(), inet_server_addr();
+SELECT id, household_id, kind, public_id FROM profiles WHERE public_id = :profile_public_id;
+-- :P below is that id; :H its household_id. The household is the requester's; for an adult athlete
+-- asking about themselves, kind = 'adult'.
 ```
 
-**3. Dry run: counts, the pre-flight, and the report.** No `deleted_at` filter anywhere: a hidden row is a
-row the erasure removes.
+**3. Dry run: counts, the pre-flights, and the report.** No `deleted_at` filter anywhere: a hidden row
+is a row the erasure removes. `db:verify` reads this block and step 4's table, and fails unless both
+name exactly `eraseAthlete`'s tables in its order.
 
 ```sql
 SELECT 'entry_set_quantities' t, count(*) FROM entry_set_quantities
@@ -1738,7 +1754,7 @@ UNION ALL SELECT 'program_assignment_weekdays', count(*) FROM program_assignment
 UNION ALL SELECT 'program_assignments', count(*) FROM program_assignments WHERE profile_id = :P
 UNION ALL SELECT 'profiles', count(*) FROM profiles WHERE id = :P;
 
--- PRE-FLIGHT (must be 0): another athlete's entry in P's session or superset. The delete would abort
+-- PRE-FLIGHT 1 (must be 0): another athlete's entry in P's session or superset. The delete would abort
 -- 23503 on it. On a non-zero, repoint or clear that pointer with a correction; NEVER delete the other
 -- athlete's row to make this pass.
 SELECT e.id FROM entries e
@@ -1747,22 +1763,31 @@ SELECT e.id FROM entries e
         OR e.superset_id IN (SELECT ss.id FROM supersets ss JOIN sessions s ON s.id = ss.session_id
                               WHERE s.profile_id = :P));
 
--- REPORT (not a stop): programs only P was ever on (every assignment row, open, closed or hidden, is P's).
--- Program text and targets belong to the household and stay, but one written for this athlete alone can
--- hold their prescribed loads and an instruction about them. List these to the household on the verified
--- channel at the START of the cooling-off and ask, for each: keep it, or remove it too.
+-- PRE-FLIGHT 2 (must be 0): P's rows on ANOTHER household's program: a target on its prescription, an
+-- assignment to its block. The household delete's (a) and (h) stop on the same shape; no writer makes
+-- one. STOP, and remove the stray row with a correction first (it ties P to another family's data).
+SELECT t.id FROM prescription_targets t
+  JOIN prescriptions x ON x.id = t.prescription_id JOIN program_blocks b ON b.id = x.block_id
+ WHERE t.profile_id = :P AND b.household_id <> :H
+UNION ALL
+SELECT a.id FROM program_assignments a JOIN program_blocks b ON b.id = a.block_id
+ WHERE a.profile_id = :P AND b.household_id <> :H;
+
+-- REPORT (not a stop): this household's programs only P was ever on (every assignment row, open, closed
+-- or hidden, is P's). Program text and targets belong to the household and stay, but one written for
+-- this athlete alone can hold their prescribed loads and an instruction about them. List these to the
+-- household on the verified channel at the START of the cooling-off and ask, for each: keep, or remove.
 SELECT b.id, b.public_id FROM program_blocks b
- WHERE b.kind = 'template'
+ WHERE b.kind = 'template' AND b.household_id = :H
    AND EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id)
    AND NOT EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id AND a.profile_id <> :P);
 ```
 
-The household pre-flight's (a)–(h) need not be re-run: they look across households, and this erasure
-stays inside one. (`prescription_targets` is deleted by its `profile_id = P` arm only: its other arm is
-the household's prescriptions, which stay.)
+(`prescription_targets` is deleted by its `profile_id = P` arm only: its other arm is the household's
+prescriptions, which stay.)
 
-**4. Apply — one transaction; re-run step 3's counts and pre-flight inside it** (the cooling-off made
-step 3's numbers stale), then the eleven DELETEs in this order, child before parent:
+**4. Apply — one transaction; re-run step 3's counts and both pre-flights inside it** (the cooling-off
+made step 3's numbers stale), then the eleven DELETEs in this order, child before parent:
 
 | #   | Table                         | Scoped by                                  |
 | --- | ----------------------------- | ------------------------------------------ |
@@ -1778,38 +1803,46 @@ step 3's numbers stale), then the eleven DELETEs in this order, child before par
 | 10  | `program_assignments`         | `profile_id` = P                           |
 | 11  | `profiles`                    | `id` = P                                   |
 
-If the household chose to remove a program only P was on, delete it in the same transaction, after step 10:
-`prescription_quantities` → `prescriptions` → `block_day_workouts` → `workouts` → `program_blocks` for
-those blocks (`prescription_targets` on them are already gone with step 8, since only P was on them;
-re-count to be sure). Then re-run the counts: **every row reads 0**, and the household's other
-athletes' counts and its program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise.
+**4b. Only if the household chose to remove a program only P was on**, and only for blocks with
+`household_id = :H`. **Before step 10** (after it the report cannot be computed), re-run the report
+inside the transaction and keep only blocks it still lists. Then this must read 0, because nobody else
+may have logged against those blocks without an assignment (doing someone else's workout creates none):
 
-`db:verify` → FAM-1 5 runs exactly this order (`verify/schema.ts` → `eraseAthlete`) on an athlete with a
-row in every table, hidden rows included, beside a sibling whose rows must come through unchanged, and
-fails when a new table gains an FK to `profiles` until it is named here and there.
+```sql
+-- :B is the list of blocks to remove.
+SELECT s.id FROM sessions s JOIN workouts w ON w.id = s.workout_id
+ WHERE w.block_id = ANY(:B) AND s.profile_id <> :P              -- would be SET NULL silently
+UNION ALL SELECT e.id FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+ WHERE x.block_id = ANY(:B) AND e.profile_id <> :P              -- would be SET NULL silently
+UNION ALL SELECT t.id FROM prescription_targets t JOIN prescriptions x ON x.id = t.prescription_id
+ WHERE x.block_id = ANY(:B) AND t.profile_id <> :P              -- would abort 23503
+UNION ALL SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
+ WHERE src.block_id = ANY(:B) AND NOT (c.block_id = ANY(:B));   -- a copy elsewhere: SET NULL
+```
 
-**5. Close out.** Ledger, the held restore branch, and tell the household it is done.
+On a non-zero, tell the household and skip that block. Otherwise, after step 11, delete for those
+blocks: `prescription_targets` (any left) → `prescription_quantities` → `prescriptions` →
+`block_day_workouts` → `workouts` → `program_blocks`, counting each first and re-counting to 0.
+`db:verify` → FAM-1 5 proves the report (this household only) and this pre-flight
+(`othersOnTheseBlocks`); this sub-order is the household delete's own (steps 8–10).
 
-### What remains afterwards
+Then re-run step 3's counts: **every row reads 0**, and the household's other athletes' counts and its
+program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise. `db:verify` → FAM-1 5
+runs step 4's order (`verify/schema.ts` → `eraseAthlete`, generated from the same list this section is
+checked against) on an athlete with a row in every table, hidden rows included, beside a sibling whose
+rows must come through unchanged, and fails when any table reachable from `profiles` by FK is not in
+that list.
 
-Say this to the household; the notice's "Deleting your data" holds the same list.
-
-- **The household's programs**, unless they asked for a program only this athlete was on to go too.
-  Their instructions and targets were written by the household and stay with it.
-- **A name typed into shared text**: a program or workout name, a movement the household typed, and the
-  frozen copies of such text on other athletes' rows (`sessions.workout_name`, `supersets.prescription_group`,
-  `entries.prescribed_snapshot`, `workouts.copied_from_program_name`).
-- **Sign-in accounts and memberships** (an adult athlete's own account included).
-- **Backups and the held restore branch**, until their windows pass; **Vercel's request logs** hold
-  `/p/<profile public_id>` paths for 24 hours; **exports already downloaded**.
-- **The ledger entry**, as below.
+**5. Close out.** Ledger, the held restore branch, and tell the household it is done, pointing them at
+[notice.md](./privacy/notice.md) → "Deleting your data", which holds the **single** list of what
+remains. Do not restate it here.
 
 ### The ledger, at athlete grain
 
 One ledger with the household delete. An athlete entry records: the request date, **the profile
 `public_id`** (the target; `OPS-3`'s replay re-applies the erasure after a restore), the verifying
-channel, the apply date, and the restore-branch-deleted date. **No Clerk ids** (nothing in Clerk is
-deleted) and no names. Retention as for a household entry.
+channel, the apply date, and the restore-branch-deleted date. **No Clerk ids**, unless the adult athlete
+also asked for their account to go (step 0); no names. Retention as for a household entry.
 
 ---
 
