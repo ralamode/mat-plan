@@ -470,6 +470,13 @@ export function fillRowValues(
  *
  * The fixed unit comes first, as in `entryUnitFor`: a Duration is minutes whatever its
  * prescription row says.
+ *
+ * ⚠️ **For an item with a live prescription only.** An item whose prescription was removed
+ * (`prescriptionPublicId: null`) has no quantities to read, and its `DayItem.unit` is the unit its
+ * logged entry was stored in; the day's read takes it from the entry, not from here.
+ * ⚠️ `null` for a type whose unit comes from the prescription (a Count, Weight × reps, Distance)
+ * means the prescription names no unit in that slot. No ✓ can then be stored (`fillRowValues`
+ * refuses every quantity), so the workout writer must not save such a prescription.
  */
 export function itemUnit(
   trackingType: TrackingType,
