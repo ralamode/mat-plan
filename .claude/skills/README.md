@@ -85,6 +85,14 @@ High-stakes means the plan or diff touches any of these:
 A plan that fixes a milestone's order or split also earns it. **When unsure, it is not
 high-stakes:** run Opus, and escalate a single lens if a finding turns out to need depth.
 
+**Record the call, every time** _(maintainer, 2026-11-16)_, so this table can be tuned from
+evidence: every review report, every `## shipit` comment and every panel log carries one line:
+
+> Models: high-stakes <area from the table | no> · <lens>: <model>, … · second pass: <model>
+
+A single-pass review with no lens agents names the reviewing session's own model. Do not leave it out
+when the answer is "opus, not high-stakes": that is the data point that shows where the line sits.
+
 Why this exists: DX-11 had pinned all eight reviewers to `fable`, so every review of everything ran on
 it, and with several lanes fanning out on every PR that spent the account's monthly Fable budget
 (2026-11-16). `skills:check` refuses a reviewer whose frontmatter pins `fable`, so the default cannot

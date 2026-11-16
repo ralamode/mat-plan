@@ -224,6 +224,7 @@ job posts it after a secret scan. The format:
 **Verdict:** <ready to merge | fix P0s first | needs rework> · P0 <x> · P1 <y> · P2 <z>
 **Matches description:** <yes | gaps: …>
 **Checks:** CI <green/red: job> · hold-the-bar <clean/findings> · guides <ok/fail>
+**Models:** high-stakes <area | no> · <lens>: <model>, … (a single pass: this session's model)
 
 ### P0 — must fix before merge
 
@@ -289,7 +290,9 @@ these hold:
   git (`git fetch origin && git merge-base --is-ancestor origin/main origin/<branch>`): with branch
   protection off, GitHub shows a behind PR as `clean`
 
-The comment lists what changed since the review, and the merge order if other approved PRs overlap.
+The comment lists what changed since the review, the merge order if other approved PRs overlap, and
+the **`Models:` line** for every pass that led to it: high-stakes or not, and the model each lens and
+the second pass ran on ([the policy](../README.md#when-a-lens-runs-on-fable)).
 
 **Posting it makes you responsible for keeping the PR mergeable until it lands.** When `main` moves
 and the PR goes CONFLICTING or behind `main`, fix it without being asked:
@@ -298,6 +301,7 @@ and the PR goes CONFLICTING or behind `main`, fix it without being asked:
 ## Done when
 
 - [ ] The mechanical checks ran first (CI, `hold-the-bar`, guides), and their results are in the report.
+- [ ] The report, and any `## shipit`, carry the `Models:` line (high-stakes or not; each lens's model).
 - [ ] Every finding was verified in the code and carries `path:line`, its rule and its fix.
 - [ ] At least one piece of the author's evidence was re-run.
 - [ ] The report follows the template, ranked by severity, with pre-existing problems under their own heading.

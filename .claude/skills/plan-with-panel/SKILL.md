@@ -91,6 +91,7 @@ reason**. Record the result in the plan's `## Review-response log`:
 ### Engineering panel (round 1)
 
 > Panel cost: correctness 81k · 4m30s, scope 73k · 4m29s, …
+> Models: high-stakes schema and migrations · correctness: fable, scope: fable, …
 
 | #   | Lens        | Critique (short)                              | Verdict      | Resolution                                                               |
 | --- | ----------- | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
