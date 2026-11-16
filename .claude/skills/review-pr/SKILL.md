@@ -302,21 +302,30 @@ With several lanes merging, `main` often moves between a PR's green CI and its m
 re-running CI for an unrelated commit buys nothing. So whoever merges checks the commits the PR is
 behind, and:
 
-- **Merges as-is when they share no file with the PR.** Check it with
-  `git diff --name-only $(git merge-base origin/<branch> origin/main) origin/main` against the PR's
-  own file list; the intersection must be empty. The squash takes in `main` either way, and `main`'s
-  CI runs on the result. The shipit names the head CI went green on and says it is behind by
-  unrelated commits.
-- **Asks the author to merge `main` and wait for CI again** when they share any file, or when the PR
-  adds a **migration** (the journal is shared, and `0NNN` must be regenerated on top), or touches a
-  **high-stakes area** in [the table](../README.md#when-a-lens-runs-on-fable): a contract shape or a
-  writer can break a disjoint caller without sharing a file with it.
+- **Merges as-is when they share no file with the PR.** The intersection must print nothing
+  (`--no-renames` on both sides, or a file `main` renamed hides one the PR edited):
+
+      b=origin/<branch>; base=$(git merge-base "$b" origin/main)
+      comm -12 <(git diff --no-renames --name-only "$base" origin/main | sort) \
+               <(git diff --no-renames --name-only "$base" "$b" | sort)
+
+  The squash takes in `main` either way, and `main`'s CI runs on the result. The shipit names the
+  head CI went green on and says it is behind by unrelated commits.
+
+- **Asks the author to merge `main` and wait for CI again** when any of these holds:
+  - they share a file;
+  - the PR adds a **migration** (the journal is shared, and `0NNN` must be regenerated on top);
+  - the PR touches a **high-stakes area** in [the table](../README.md#when-a-lens-runs-on-fable): a
+    contract shape or a writer can break a disjoint caller without sharing a file with it;
+  - `main`'s new commits change **the bar itself** (`package.json`, the lockfile, a `tsconfig`, lint
+    or test config, a workflow; [hold-the-bar](../hold-the-bar/SKILL.md)'s list), which can turn a
+    disjoint PR red.
 
 Then check `main`'s CI on the merge commit. A red one is fixed before the next merge.
 
 **Posting it makes you responsible for keeping the PR mergeable until it lands.** When `main` moves
-and the PR goes CONFLICTING or behind `main`, fix it without being asked:
-[keep-mergeable](../keep-mergeable/SKILL.md).
+and the PR goes CONFLICTING, or falls behind in a way the rule above says needs an update, fix it
+without being asked: [keep-mergeable](../keep-mergeable/SKILL.md).
 
 ## Done when
 
