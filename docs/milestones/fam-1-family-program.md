@@ -307,7 +307,8 @@ gantt
 
   section C · day page
   13 rows and ✓                :c1, 1, 2
-  13b Change, supersets        :c2, 2, 3
+  13b set rows, supersets      :c2, 2, 3
+  13b-ii Change                :c2b, 3, 4
   13d look ahead, closed days  :c3, 3, 4
   12b first real ✓             :crit, c4, 8, 9
   12c on the day page          :crit, c5, 9, 10
