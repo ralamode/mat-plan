@@ -1228,6 +1228,15 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "k": "p",
     "children": [
       {
+        "k": "text",
+        "text": "One thing is sent on purpose: when a signed-in request asks for an athlete, a program, a workout or\na workout item that the app will not show it, the app sends Sentry a security event with that item's\nrandom id and nothing else about it: no name and nothing that was logged. This is how an attempt to\nreach another family's data gets noticed."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
         "k": "strong",
         "children": [
           {
