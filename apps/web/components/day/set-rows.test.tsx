@@ -2,6 +2,7 @@
 import {
   MAX_SETS_PER_MOVEMENT,
   quantityText,
+  ROW_REFUSAL,
   supersetLabels,
   type DayPlan,
 } from '@mat-plan/shared';
@@ -18,8 +19,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
-import { DAY_COPY, TYPED_PROBLEM_COPY } from './day-copy';
+import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { card, isTick, lb, makeMount, press, status, workout } from './day-test-utils';
+import { LOGGED_CARD_CLASS, TINT_CLASS } from './item-card';
 import { formatRowValues } from './row-values';
 
 const { mount, show } = makeMount(createFakeDayActions);
@@ -89,8 +91,10 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
       set: 2,
       values: { quantities: [] },
     });
-    // Previous (`30 s` last time) and now the logged `30 s` where the field was.
-    expect(within(bodyRows(neck)[1]!).getAllByText(quantityText(30, 'sec'))).toHaveLength(2);
+    // Previous (`30 s` last time), and now the logged number where the field was: bare, since the
+    // column's header names the unit.
+    expect(within(bodyRows(neck)[1]!).getByText(quantityText(30, 'sec'))).toBeTruthy();
+    expect(within(bodyRows(neck)[1]!).getByText('30')).toBeTruthy();
     expect(within(bodyRows(neck)[1]!).queryByRole('textbox')).toBeNull();
     expect(setTick(neck, 'Neck bridge', 2).getAttribute('aria-pressed')).toBe('true');
   });
@@ -136,6 +140,28 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
       values: { reps: 12 },
     });
     expect(within(pushUps()).getByRole('button', { name: DAY_COPY.addSet })).toBeTruthy();
+  });
+
+  it('"+ Add set" numbers the new set past the highest shown, even with a gap', async () => {
+    const gap = structuredClone(todayTwoPrograms);
+    const pushUps = gap.workouts[0]!.items.find((i) => i.name === 'Push-ups')!;
+    pushUps.rows = [pushUps.rows[0]!, { ...pushUps.rows[1]!, set: 5 }];
+    const control = mount(gap);
+    const el = () => card('Morning habits', 'Push-ups');
+    await press(within(el()).getByRole('button', { name: DAY_COPY.addSet }));
+    fireEvent.change(setField(el(), 'Push-ups', 6, 'reps'), { target: { value: '10' } });
+    await press(setTick(el(), 'Push-ups', 6));
+    expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({ set: 6 });
+  });
+
+  it('a fully logged set card drops its tint while a row shows a message', async () => {
+    mount(yesterdayHalfDone, { failNext: true });
+    const neck = () => card('Morning habits', 'Neck bridge');
+    expect(neck().classList.contains(TINT_CLASS)).toBe(true);
+    await press(setTick(neck(), 'Neck bridge', 1));
+    expect(within(neck()).getByText(refusalCopy(ROW_REFUSAL.retry, 'untick').message)).toBeTruthy();
+    expect(neck().classList.contains(LOGGED_CARD_CLASS)).toBe(true);
+    expect(neck().classList.contains(TINT_CLASS)).toBe(false);
   });
 
   it('no "+ Add set" at the set limit', () => {
@@ -215,6 +241,18 @@ describe('supersets', () => {
   });
 });
 
+describe('a superset with one item shown', () => {
+  it('keeps its container, label and rest, as v12 does', () => {
+    const one = structuredClone(todayTwoPrograms);
+    const heavyB = one.workouts.find((w) => w.name === 'Heavy B')!;
+    heavyB.items = heavyB.items.filter((i) => i.name !== 'Inverted row');
+    show(one);
+    const list = within(workout('Heavy B')).getByRole('list', { name: DAY_COPY.superset('A') });
+    expect(within(list).getByRole('heading', { level: 4 }).textContent).toBe('A1 Push press');
+    expect(within(workout('Heavy B')).getByText(DAY_COPY.rest(heavyB.restAfter.a!))).toBeTruthy();
+  });
+});
+
 describe('after the program was edited (D7)', () => {
   const plan = yesterdayEditedAfterLogging;
 
@@ -244,6 +282,8 @@ describe('after the program was edited (D7)', () => {
     expect(within(el).getByText(DAY_COPY.removed)).toBeTruthy();
     expect(within(el).queryAllByRole('textbox')).toHaveLength(0);
     expect(within(el).queryByRole('button', { name: DAY_COPY.addSet })).toBeNull();
+    // Previous is for choosing what to log; a removed item cannot be logged again.
+    expect(headers(el)).not.toContain(DAY_COPY.previous);
     expect(bodyRows(el)).toHaveLength(pull.rows.length);
     expect(setTick(el, 'Pull-up', 1).getAttribute('aria-pressed')).toBe('true');
   });

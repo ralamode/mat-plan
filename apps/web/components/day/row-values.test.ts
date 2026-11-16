@@ -137,7 +137,7 @@ describe('readTyped on a set with reps', () => {
     const set = { quantities: [{ slot: primary, unit: 'lb' as const, value: 22.5 }], reps: 10 };
     expect(formatRowValues(set)).toBe('22.5 lb × 10');
     expect(formatRowValues({ quantities: [], reps: 15 })).toBe('15');
-    expect(fieldText(bench, set, 'quantity')).toBe('22.5 lb');
+    expect(fieldText(bench, set, 'quantity')).toBe('22.5');
     expect(fieldText(bench, set, 'reps')).toBe('10');
     expect(textOf(bench, set)).toEqual({ quantity: '22.5', reps: '10' });
   });

@@ -89,7 +89,9 @@ export const WorkoutCard = memo(function WorkoutCard({
             />
           ));
           const superset = group[0]!.item.superset;
-          if (!superset || group.length < 2) return cards;
+          // A group of one (only one of its items shown, on a closed day) keeps its container and
+          // its rest line, as v12 does, so its label is never unexplained.
+          if (!superset) return cards;
           const letter = (labels[group[0]!.index] ?? '').replace(/\d+$/, '');
           const rest = workout.restAfter[superset.group];
           return (

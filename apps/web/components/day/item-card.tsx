@@ -10,7 +10,7 @@ import {
   type DayRow,
   type DayWorkout,
 } from '@mat-plan/shared';
-import { memo, useEffect, useId, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
@@ -180,8 +180,9 @@ function Tick({
     );
   }
   if (!r.logged) return null;
+  // Nothing to tap on a read-only row, so the tick is text-sized and the row stays compact.
   return (
-    <span className={cn(TICK_CLASS, 'border-transparent')}>
+    <span className="flex shrink-0 items-center justify-center text-lg">
       <span aria-hidden="true">✓</span>
       <span className="sr-only">{DAY_COPY.logged}</span>
     </span>
@@ -405,14 +406,33 @@ function SetItem({
   const writable = !day.readOnly && workout.scheduled;
   const canLog = writable && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
 
+  const [withMessage, setWithMessage] = useState<ReadonlySet<number>>(() => new Set());
+  // Stable, since each row's effect depends on it.
+  const reportMessage = useCallback(
+    (set: number, has: boolean) =>
+      setWithMessage((was) => {
+        if (was.has(set) === has) return was;
+        const next = new Set(was);
+        if (has) next.add(set);
+        else next.delete(set);
+        return next;
+      }),
+    [],
+  );
   const rows: DayRow[] = [...item.rows];
   if (added !== null && !rows.some((r) => r.set === added)) {
     rows.push({ set: added, previous: null, logged: null });
   }
   const pendingAdd = added !== null && !item.rows.some((r) => r.set === added);
-  const canAdd = canLog && !pendingAdd && rows.length < MAX_SETS_PER_MOVEMENT;
+  // The next set past the highest shown: the rows need not run without a gap.
+  const nextSet = Math.max(0, ...rows.map((r) => r.set)) + 1;
+  const canAdd = canLog && !pendingAdd && nextSet <= MAX_SETS_PER_MOVEMENT;
   const allDone = rows.length > 0 && rows.every((r) => r.logged);
-  const showPrevious = writable;
+  // No tint while a row shows a message: `destructive` is under AA on it (see `TINT_CLASS`).
+  const onTint = allDone && withMessage.size === 0;
+  // Previous is for choosing what to log: none on a day that cannot be written (D33), and none for
+  // a removed item, which cannot be logged again (its `previous` is always null).
+  const showPrevious = writable && item.prescriptionPublicId !== null;
 
   // The added row's first field takes focus once it is on screen.
   useEffect(() => {
@@ -429,8 +449,8 @@ function SetItem({
   }
 
   return (
-    <li className={cn(CARD_CLASS, allDone && [LOGGED_CARD_CLASS, TINT_CLASS])}>
-      <ItemHeading item={item} label={label} onTint={allDone} />
+    <li className={cn(CARD_CLASS, allDone && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}>
+      <ItemHeading item={item} label={label} onTint={onTint} />
       <table className="mt-2 w-full table-fixed border-collapse text-sm">
         <colgroup>
           <col className="w-7" />
@@ -441,7 +461,7 @@ function SetItem({
           <col className="w-12" />
         </colgroup>
         <thead>
-          <tr className={secondaryText(allDone)}>
+          <tr className={secondaryText(onTint)}>
             <th scope="col" className="py-1 text-left font-normal">
               {DAY_COPY.set}
             </th>
@@ -471,7 +491,8 @@ function SetItem({
               row={row}
               fields={fields}
               showPrevious={showPrevious}
-              onTint={allDone}
+              onTint={onTint}
+              onMessage={reportMessage}
               focusRef={row.set === added ? addedFocus : undefined}
             />
           ))}
@@ -483,7 +504,7 @@ function SetItem({
           variant="ghost"
           className="mt-1 px-2"
           onClick={() => {
-            setAdded(rows.length + 1);
+            setAdded(nextSet);
             day.announce(DAY_COPY.setAdded(item.name));
           }}
         >
@@ -503,6 +524,7 @@ function SetRow({
   fields,
   showPrevious,
   onTint,
+  onMessage,
   focusRef,
 }: {
   workout: DayWorkout;
@@ -512,6 +534,8 @@ function SetRow({
   fields: RowField[];
   showPrevious: boolean;
   onTint: boolean;
+  /** Reports whether this row shows a message, so the card drops its tint. */
+  onMessage: (set: number, has: boolean) => void;
   focusRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const inputs = useRef<Partial<Record<RowField, HTMLInputElement | null>>>({});
@@ -520,6 +544,13 @@ function SetRow({
   const errorId = useId();
   const name = DAY_COPY.setLabel(item.name, row.set);
   useFocusRefusedField(r, inputs, fields[0]);
+  const hasMessage = r.error !== null;
+  const { set } = row;
+  useEffect(() => {
+    if (!hasMessage) return;
+    onMessage(set, true);
+    return () => onMessage(set, false);
+  }, [hasMessage, onMessage, set]);
   const shownValues = r.logged ?? r.kept;
   const previous = row.previous ? formatRowValues(row.previous) : null;
   const [lead, ...rest] = previous ? previous.split(' × ') : [];

@@ -144,11 +144,14 @@ export function textOf(item: DayItem, values: RowValues): RowText {
   };
 }
 
-/** One field of a row's values, as display text: `20 lb`, `30 s`, `8`; `''` when absent. */
+/**
+ * One field of a row's values, as the bare number its column shows (`27.5`, `30`, `8`), since the
+ * column's header names the unit; `''` when absent.
+ */
 export function fieldText(item: DayItem, values: RowValues, field: RowField): string {
   if (field === 'reps') return values.reps === undefined ? '' : String(values.reps);
   const quantity = slotQuantity(item, values.quantities);
-  return quantity ? quantityText(quantity.value, quantity.unit) : '';
+  return quantity ? String(quantity.value) : '';
 }
 
 /**
