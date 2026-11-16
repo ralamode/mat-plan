@@ -67,6 +67,28 @@ flowchart LR
 ([day-page.md](./day-page.md)). The data lanes are [program-writers.md](./program-writers.md) and
 [day-writers.md](./day-writers.md).
 
+### Helpers the lanes import
+
+Small rules and names that more than one lane needs. 🔴 **Import these from `@mat-plan/shared`; do
+not write your own.** A lane's own copy is a second definition that drifts (the first lane PRs each
+wrote some of these, which is why they are here). All of them are in the root barrel and safe in a
+`'use client'` component. If a lane needs one that is missing, it asks the contract owner
+(invariant 1).
+
+| Export                            | Where                                           | What it is                                                                                                                                                        |
+| --------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quantityText(value, unit)`       | `packages/shared/src/program/quantity-text.ts`  | One quantity as text: `25 lb`, `30 s`, `7` for the plain `count`. The spelling `prescribedText` is built from, so a logged value and its prescription read alike. |
+| `slotQuantity(item, quantities)`  | `packages/shared/src/program/pieces.ts`         | The tracking type's quantity out of a list (`TRACKING_TYPE_FIELDS[type].slot`), or `null`. `item` is anything with a `trackingType`.                              |
+| `DayWorkout`, `DayItem`, `DayRow` | `packages/shared/src/program/day-shapes.ts`     | The parts of a `DayPlan`, by name.                                                                                                                                |
+| `hasStarted(athlete, today)`      | `packages/shared/src/program/program-shapes.ts` | An athlete has started on a program when `since <= today`.                                                                                                        |
+| `MONDAY_FIRST`                    | `packages/shared/src/day.ts`                    | The weekdays in the order a week is shown (1, 2, … 6, 0). Each member is still a `Weekday` (0 = Sunday).                                                          |
+
+`quantityText` is client-safe because it reads its two primitives (`formatNumeric`, and seconds
+spelled `s`) from `packages/shared/src/quantity-spelling.ts`, which imports nothing; `csv/value.ts`
+re-exports `formatNumeric` from there and reads the same `s` into `CSV_UNIT_SUFFIX`, so the CSV's
+bytes did not change. `quantity-text.test.ts` scans every module `quantityText` reaches, and the
+root barrel's whole graph, for `csv/`.
+
 ## Invariants
 
 1. 🔴 **A shape change goes through the contract owner, and the lanes reading it wait** (plan §4).

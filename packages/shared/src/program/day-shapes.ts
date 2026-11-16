@@ -157,6 +157,15 @@ export const dayPlanSchema = z.object({
 export type DayPlan = z.infer<typeof dayPlanSchema>;
 
 /**
+ * The parts of a day, by name: one of `DayPlan.workouts`, one of its `items`, one of an item's
+ * `rows`. Derived from the schemas above, so they are `DayPlan['workouts'][number]` and so on;
+ * import these rather than re-deriving them.
+ */
+export type DayWorkout = z.infer<typeof dayWorkoutSchema>;
+export type DayItem = z.infer<typeof dayItemSchema>;
+export type DayRow = z.infer<typeof dayRowSchema>;
+
+/**
  * ✓ on a row. **`clientId` is one ✓ attempt**: a retry reuses it; a ✓ after an un-tick mints a new
  * one, because the old one answers `own_hidden` forever.
  *

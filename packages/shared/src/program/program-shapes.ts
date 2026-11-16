@@ -191,6 +191,18 @@ export const programViewSchema = z
 export type ProgramView = z.infer<typeof programViewSchema>;
 
 /**
+ * Whether an athlete has started on a program by `today`: their `since` is today or earlier.
+ * `since` may be after today (Put on, starting tomorrow), and then they are listed but not started.
+ *
+ * One rule, three readers: the page's "since" or "starts" wording, what Take off does (someone who
+ * has not started simply leaves; someone who has stays through today), and the preview's fake.
+ * Both days are `isoDaySchema` text, which sorts as the calendar does.
+ */
+export function hasStarted(athlete: { since: string }, today: string): boolean {
+  return athlete.since <= today;
+}
+
+/**
  * `createProgram`'s input. **A program is created by naming it**: there is no unnamed program on the
  * server. `clientId` is one create attempt; a retry reuses it.
  */

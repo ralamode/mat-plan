@@ -246,6 +246,26 @@ export const TRACKING_TYPE_FIELDS: Record<
   },
 };
 
+/**
+ * The tracking type's quantity out of a list of quantities: the one in the type's slot
+ * (`TRACKING_TYPE_FIELDS[type].slot`), or `null` when the list has none or the type holds none (a
+ * Check, Reps).
+ *
+ * One lookup for a prescription's quantities, a row's logged values and a row's PREVIOUS: the
+ * prescribed text, the fakes and the day screen all read it. It takes anything that carries a
+ * `trackingType` (a `DayItem`, a `WorkoutDraftItem`), so a caller passes the item it has.
+ *
+ * It returns the quantity as it is: a prescribed one may still have `value: null` ("log in this
+ * unit, no target").
+ */
+export function slotQuantity<Q extends { slot: string }>(
+  of: { trackingType: TrackingType },
+  quantities: readonly Q[],
+): Q | null {
+  const { slot } = TRACKING_TYPE_FIELDS[of.trackingType];
+  return quantities.find((q) => q.slot === slot) ?? null;
+}
+
 /** The units a type's quantity may be in: what the editor's unit select offers (plan D27). */
 export function unitsForTrackingType(type: TrackingType): Unit[] {
   const { unit, dimensions } = TRACKING_TYPE_FIELDS[type];
