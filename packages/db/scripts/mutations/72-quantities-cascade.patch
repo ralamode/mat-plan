@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -71,7 +71,7 @@
+ ALTER TABLE "prescriptions" ADD COLUMN "rest_after" text;--> statement-breakpoint
+ ALTER TABLE "prescriptions" ADD COLUMN "superset_label" text;--> statement-breakpoint
+ ALTER TABLE "prescriptions" ADD COLUMN "superset_order" integer;--> statement-breakpoint
+-ALTER TABLE "prescription_quantities" ADD CONSTRAINT "prescription_quantities_prescription_id_prescriptions_id_fk" FOREIGN KEY ("prescription_id") REFERENCES "public"."prescriptions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
++ALTER TABLE "prescription_quantities" ADD CONSTRAINT "prescription_quantities_prescription_id_prescriptions_id_fk" FOREIGN KEY ("prescription_id") REFERENCES "public"."prescriptions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ ALTER TABLE "prescription_quantities" ADD CONSTRAINT "prescription_quantities_slot_dimension_fkey" FOREIGN KEY ("slot","dimension") REFERENCES "public"."quantity_slots"("code","dimension") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ ALTER TABLE "prescription_quantities" ADD CONSTRAINT "prescription_quantities_unit_dimension_fkey" FOREIGN KEY ("unit","dimension") REFERENCES "public"."units"("code","dimension") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ CREATE INDEX "idx_prescription_quantities_prescription" ON "prescription_quantities" USING btree ("prescription_id");--> statement-breakpoint

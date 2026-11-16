@@ -4,6 +4,7 @@ import {
   FREE_TEXT_NOTE_MAX,
   hasStarted,
   LOGGABLE_DIMENSION_LABELS,
+  MAX_WORKOUT_ITEMS,
   MAX_SETS_PER_MOVEMENT,
   PROGRAM_REFUSAL,
   SLOT_LABEL_MAX,
@@ -20,7 +21,7 @@ import { itemCountText } from '@/lib/constants';
 import { formatDayShort } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
-import { formatList, plural } from '@/lib/i18n/plural';
+import { formatList, plural, quote } from '@/lib/i18n/plural';
 
 /**
  * The program builder's words, and the small rules that pick between them (FAM-1 lane B). Pure, so
@@ -362,3 +363,86 @@ export function unlinkedText(unlink: {
 export function undoneText(linked: boolean): string {
   return linked ? 'Linked again: as it was.' : 'Unlinked again: as it was.';
 }
+
+/** The item picker's words (FAM-1 step 9; the prototype's `vPicker2`). */
+export const ITEM_PICKER_COPY = {
+  title: 'Add items',
+  open: '+ Add items',
+  newItem: '+ New item',
+  noMatch: 'No item matches. Make it a new item with the button above.',
+  searchLabel: 'Search items',
+  searchPlaceholder: 'Search items',
+  giveAName: 'Give the item a name with a letter or a number in it.',
+  pickToAdd: 'Pick items to add',
+  /** The shared picker's tag reads "already in {this}". */
+  alreadyIn: 'this workout',
+  formTitle: 'New item',
+  name: 'Name',
+  namePlaceholder: 'e.g. Bear crawl',
+  tracks: 'What it tracks',
+  chooseType: 'Choose…',
+  chooseTypeFirst: 'Choose what it tracks.',
+  create: 'Create',
+  creating: 'Creating…',
+  failed: 'Couldn’t create it. Try again.',
+  refused: 'That name wasn’t accepted. Check it and try again.',
+} as const;
+
+/** "New item: “Bear Crawl”", or the plain "+ New item" for an empty search. */
+export const newItemLabel = (typed: string) =>
+  typed ? `New item: ${quote(typed)}` : ITEM_PICKER_COPY.newItem;
+
+/** The Add button, with the count. */
+export const addItemsText = (n: number) => `Add ${itemCountText(n)}`;
+
+/** The picked items, in the order they were picked, above the Add button. */
+export const pickedText = (names: readonly string[]) =>
+  `${names.length} picked: ${formatList(names)}`;
+
+/** Why a tap selected nothing: the workout is full. */
+export const capText = (max: number) => `A workout holds at most ${max} items.`;
+
+/** What each type logs, shown under the type chooser once one is picked. */
+export const TRACKING_TYPE_EXAMPLES: Record<TrackingType, string> = {
+  check: 'Done or not done.',
+  count: 'One number in a unit, like a 10 lb vest or 20 reps.',
+  reps: 'Sets of reps, like 3 × 10.',
+  weight_reps: 'Sets of reps at a weight, like 3 × 8 at 20 lb.',
+  duration: 'One length of time, like 5 min.',
+  time_sets: 'Sets of a time, like 3 × 30 s.',
+  distance: 'Sets of a distance, like 1 × 400 m.',
+};
+
+/**
+ * The permanence warning (the single picker's, `asTypedHint`, made true for the builder): an item
+ * is the household's, it cannot be deleted or renamed, and its type is set once (plan D25).
+ */
+export const newItemWarning = (name: string) =>
+  `Adds ${name ? quote(name) : 'this item'} for everyone in your household. It can’t be deleted or renamed, and what it tracks can’t be changed. Check both.`;
+
+/** The form's Create, when the name is already an item: it selects that one instead. */
+export const selectExistingText = (name: string) => `Select ${name}`;
+export const alreadyListedText = (name: string, type: string) =>
+  `Already in the list as ${name} (${type}).`;
+export const createdText = (name: string) => `${name} created and selected.`;
+/** True for a name that already existed, and for a retry whose first try landed. */
+export const existedText = (name: string, type: string) =>
+  `${name} is in the list (${type}). Selected.`;
+export const addedText = (n: number) => `${itemCountText(n)} added.`;
+
+/** A row ticked from the search's Enter, where no row has focus to say so. */
+export const selectedText = (name: string) => `${name} selected.`;
+
+/** What a refused new item says: a name refusal under the field, anything else in the footer. */
+export function newItemRefusal(reason: ProgramRefusal): {
+  field: string | null;
+  footer: string | null;
+} {
+  return reason === PROGRAM_REFUSAL.invalid
+    ? { field: ITEM_PICKER_COPY.refused, footer: null }
+    : { field: null, footer: ITEM_PICKER_COPY.failed };
+}
+
+/** Made or found, but not ticked: the workout is full. */
+export const notTickedText = (name: string) =>
+  `${name} is in the list, not ticked. ${capText(MAX_WORKOUT_ITEMS)}`;

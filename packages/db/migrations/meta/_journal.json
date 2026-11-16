@@ -176,6 +176,13 @@
       "when": 1794805118217,
       "tag": "0024_fam1_4a_ii_log_side",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794840798282,
+      "tag": "0025_fam1_4b_workout_prescriptions",
+      "breakpoints": true
     }
   ]
 }

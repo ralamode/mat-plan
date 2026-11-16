@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -58,7 +58,7 @@
+ 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+ 	"deleted_at" timestamp with time zone,
+ 	CONSTRAINT "prescription_quantities_value_min_check" CHECK ("prescription_quantities"."value_min" is null or ("prescription_quantities"."value_min" >= 0 and "prescription_quantities"."value_min" <> 'NaN')),
+-	CONSTRAINT "prescription_quantities_value_max_check" CHECK ("prescription_quantities"."value_max" is null or ("prescription_quantities"."value_min" is not null and "prescription_quantities"."value_max" >= "prescription_quantities"."value_min" and "prescription_quantities"."value_max" <> 'NaN'))
++	CONSTRAINT "prescription_quantities_value_max_check" CHECK ("prescription_quantities"."value_max" is null or ("prescription_quantities"."value_min" is not null and "prescription_quantities"."value_max" >= "prescription_quantities"."value_min"))
+ );
+ --> statement-breakpoint
+ -- The repo's first ban-drop-not-null ignore: prescriptions_day_role_xor_workout_check below holds
