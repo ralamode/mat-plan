@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { foldName } from './text';
+import { foldName, isBlankEntry } from './text';
 
 /**
  * ⚠️ **Every name below is INVENTED**, chosen for the Unicode property it exercises (a combining
@@ -47,5 +47,17 @@ describe('foldName', () => {
   it('keeps distinct names distinct', () => {
     expect(foldName('Ada')).not.toBe(foldName('Adam'));
     expect(foldName('Jo Ann')).not.toBe(foldName('Joann'));
+  });
+});
+
+describe('isBlankEntry (V1-24 3b-bw; shared with practice at 3b-life)', () => {
+  it('is true only for a string that is empty after trim', () => {
+    expect(isBlankEntry('')).toBe(true);
+    expect(isBlankEntry(' \t')).toBe(true);
+    expect(isBlankEntry('0')).toBe(false);
+  });
+
+  it('is false for anything that is not a string: no clear by omission', () => {
+    for (const v of [null, undefined, 0, new File([], 'x')]) expect(isBlankEntry(v)).toBe(false);
   });
 });

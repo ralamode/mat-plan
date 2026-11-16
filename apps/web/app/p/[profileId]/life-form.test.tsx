@@ -9,6 +9,7 @@ import { ACTIVITY_TYPE_KEYS } from '@mat-plan/shared';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 
 import { LifeForm } from './life-form';
+import { SingleValueLive } from './single-value-live';
 
 /**
  * COMPONENT TIER for the life buttons (`V1-9b` B1-2).
@@ -33,13 +34,19 @@ afterEach(cleanup);
 describe('LifeForm — the button’s identity', () => {
   it('mints a DIFFERENT client_id for a different day', () => {
     const { rerender } = render(
-      <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />,
+      <SingleValueLive>
+        <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />
+      </SingleValueLive>,
     );
     const first = clientIdOf();
     expect(first, 'the open button submits a client_id').not.toBeNull();
 
     // The same tree, one day earlier — what pressing ‹ does.
-    rerender(<LifeForm profileId="p1" day="2026-03-09" activities={[ACTIVITY]} />);
+    rerender(
+      <SingleValueLive>
+        <LifeForm profileId="p1" day="2026-03-09" activities={[ACTIVITY]} />
+      </SingleValueLive>,
+    );
     expect(
       clientIdOf(),
       'a day change must remount the button with a FRESH id — reusing it replays the other ' +
@@ -49,14 +56,24 @@ describe('LifeForm — the button’s identity', () => {
 
   it('mints a different client_id when a logged activity re-opens', () => {
     const { rerender } = render(
-      <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />,
+      <SingleValueLive>
+        <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />
+      </SingleValueLive>,
     );
     const first = clientIdOf();
     // Logged: `LifeSection` stops passing the activity, so the button unmounts.
-    rerender(<LifeForm profileId="p1" day="2026-03-10" activities={[]} />);
+    rerender(
+      <SingleValueLive>
+        <LifeForm profileId="p1" day="2026-03-10" activities={[]} />
+      </SingleValueLive>,
+    );
     expect(document.querySelector('form')).toBeNull();
     // Re-opened (after a delete): a new instance, and it must NOT reuse the id the hidden row holds.
-    rerender(<LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />);
+    rerender(
+      <SingleValueLive>
+        <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />
+      </SingleValueLive>,
+    );
     expect(clientIdOf(), 'the re-opened button submits an id').not.toBeNull();
     expect(clientIdOf()).not.toBe(first);
   });

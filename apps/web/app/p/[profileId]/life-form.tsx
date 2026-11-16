@@ -4,15 +4,21 @@ import { newId } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { LIFE_COPY } from '@/lib/constants';
 
-import { INITIAL_ACTION_STATE } from './action-state';
+import { type ActionState, INITIAL_ACTION_STATE } from './action-state';
 import { logLifeActivitiesAction } from './actions';
+import { useSingleValueLive } from './single-value-live';
 
 /**
  * One life-activity button (V1-7). Its OWN `<form>` so a single tap submits immediately (no batch
  * "Log" button). `client_id` is fixed per instance (`useState(newId)` — NO rotation, the
  * bodyweight-form idiom): log-once means a double-tap reuses it → `ON CONFLICT` dedupes. After a
  * successful log `LifeSection` stops rendering this and shows the logged row in its place.
+ *
+ * Since V1-24 3b-life it reports through the section's `SingleValueLive`, as the bodyweight row does:
+ * a log is spoken and hands focus to the logged row's Change; a refusal is an alert; and this button
+ * is the island's `field`, so after a clear focus lands on the button that comes back.
  */
 function LifeButton({
   profileId,
@@ -25,10 +31,20 @@ function LifeButton({
   activityKey: string;
   label: string;
 }) {
+  const live = useSingleValueLive();
   const [state, formAction, pending] = useActionState(
-    logLifeActivitiesAction,
+    async (prev: ActionState, formData: FormData): Promise<ActionState> => {
+      const result = await logLifeActivitiesAction(prev, formData);
+      if (result.ok) {
+        live.report({ message: LIFE_COPY.announced(label), tone: 'sr', focus: ['change'] });
+      } else if (result.error) {
+        live.report({ message: result.error, tone: 'alert', focus: ['field', 'change'] });
+      }
+      return result;
+    },
     INITIAL_ACTION_STATE,
   );
+  const takeField = live.focusRef('field');
   const [clientId, setClientId] = useState(newId);
   // 🔴 **Rotate the id on a refusal, or the recovery the copy promises is a dead end.** The key
   // above changes when the row behind the button changes — but a REFUSED submit changes nothing, so
@@ -50,14 +66,18 @@ function LifeButton({
       <input type="hidden" name="day" value={day} readOnly />
       <input type="hidden" name="clientId" value={clientId} readOnly />
       <input type="hidden" name="activityKey" value={activityKey} readOnly />
-      <Button type="submit" size="lg" disabled={pending} className="text-base">
+      {/* After a clear, focus lands here: listing the island's status (only while it shows) makes
+          arriving focus read "…cleared. It was 45 min." rather than pre-empting it. */}
+      <Button
+        ref={takeField}
+        type="submit"
+        size="lg"
+        disabled={pending}
+        aria-describedby={live.statusId}
+        className="text-base"
+      >
         {pending ? 'Logging…' : label}
       </Button>
-      {state.error ? (
-        <p role="alert" className="text-destructive text-sm">
-          {state.error}
-        </p>
-      ) : null}
     </form>
   );
 }

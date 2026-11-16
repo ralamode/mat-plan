@@ -406,6 +406,39 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     open();
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  // V1-24 3b-life-a: the shared editor's two new branches, on the bodyweight row.
+  it('a refusal under the field hands focus back to it (the tap on Save had blurred it)', async () => {
+    vi.mocked(editBodyweightAction).mockResolvedValueOnce({
+      ok: false,
+      error: 'Please fix the errors below.',
+      fieldErrors: { value: [IMPLAUSIBLE_BODYWEIGHT_MESSAGE] },
+    });
+    render(section({ logged: [W] }));
+    open();
+    fireEvent.change(amendInput()!, { target: { value: '845' } });
+    amendInput()!.blur(); // jsdom does not blur on click; a phone's tap does
+    expect(document.activeElement).toBe(document.body);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+    });
+    expect(document.activeElement).toBe(amendInput());
+  });
+
+  it('a refusal on a field the editor does not show reads as not found, never "fix the errors below"', async () => {
+    vi.mocked(editBodyweightAction).mockResolvedValueOnce({
+      ok: false,
+      error: 'Please fix the errors below.',
+      fieldErrors: { unit: ['Invalid option'] },
+    });
+    render(section({ logged: [W] }));
+    open();
+    fireEvent.change(amendInput()!, { target: { value: '85' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+    });
+    expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.notFound('weight'));
+  });
 });
 
 // The one place the duplicates copy is typed out: a CONTRACT test pinning the const's branches (the

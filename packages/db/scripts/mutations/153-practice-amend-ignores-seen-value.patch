@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/practice.ts b/packages/db/src/writers/practice.ts
+index 341594fc..39bcc775 100644
+--- a/packages/db/src/writers/practice.ts
++++ b/packages/db/src/writers/practice.ts
+@@ -38,7 +38,6 @@ export async function updatePracticeEntryById(
+       and(
+         amendablePractice(args.entryId),
+         inArray(schema.entries.id, ownedEntryIds(exec, args.profilePublicId, args.scope)),
+-        eq(schema.entries.valueNum, String(args.seenValue)),
+       ),
+     )
+     .returning({ publicId: schema.entries.publicId });
