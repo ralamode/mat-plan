@@ -182,19 +182,21 @@ and it is included). The only way anything comes out of the database today is de
 or household. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
-**What is being built, so you know what to expect.** A Delete button, per item, that works like this:
-deleting something **hides it, and then actually removes it** a set number of days later. Two things
-follow that are worth saying plainly.
+**What is being built, so you know what to expect.** A **Clear this day** control, which hides
+everything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be **put back**:
+a banner offers **Restore all**, and it survives a reload or a day change because nothing about it is
+held on your phone. Occasionally a restore will not be possible, because something has since been
+logged in that day's place — when that happens the app will say so rather than fail quietly. There
+will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
+field. Two things are worth saying plainly about every clear:
 
-- **You can put it back** during that window. A deleted item shows up as a small "Hidden — Restore" row
-  on the day it was logged, so a mis-tap is fixable, and fixable by a parent rather than only by whoever
-  tapped it. Occasionally a restore will not be possible, because something else has since taken that
-  item's place in the day — when that happens the app will say so rather than fail quietly.
-- **It hides from everyone in your household, not just from the person who deleted it.** The app does
-  not record who deleted what, and anyone signed in to your household can open any athlete. So a child
-  can delete a weigh-in and a parent will not see it either, until they use Restore. ⚠️ That is still
-  the honest shape of it: per-person sign-in is now the only way in, but the app records no author on
-  an entry, so sign-in alone did not fix this one.
+- **It hides from everyone in your household, not just from the person who cleared it.** The app does
+  not record who cleared what, and anyone signed in to your household can open any athlete. So a child
+  can clear a weigh-in and a parent will not see it either. ⚠️ That is still the honest shape of it:
+  per-person sign-in is now the only way in, but the app records no author on an entry, so sign-in
+  alone did not fix this one.
+- **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
+  until a removal that runs a set number of days later is built.
 
 There is still **no way to permanently remove one single item on demand** — the finest grain for a
 permanent removal is an athlete. Ask, and that is done.

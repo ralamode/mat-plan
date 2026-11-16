@@ -614,6 +614,20 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `messageKey` when that lane next touches it.
 - **Severity:** low.
 
+### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)
+
+- **What & why:** `INPUT_CLASS` (`lib/constants.ts`) and `Button` (`components/ui/button.tsx`) draw
+  focus with `ring-ring/50`. A reviewer measured it at about **1.54:1** on the page background (and
+  about 1.48:1 light / 1.67:1 dark on the done tint), under WCAG 2.2's 3:1 for a focus indicator
+  (SC 1.4.11 / 2.4.13). Not measured by any gate: axe does not check focus styles.
+- **Impact:** a keyboard or switch user cannot reliably see where focus is. The day page now hands
+  focus to Change or the field after every log, save and clear (V1-24 3b-bw), so the ring is the only
+  "where am I" cue on the screen it was built for.
+- **Proposed fix:** a stronger ring token (`ring-foreground`, or a solid `ring` at full opacity) in
+  the two shared places, with a contrast pin in `app/done-tokens.test.ts`'s style; its own PR, since
+  it changes every focusable control.
+- **Severity:** medium (accessibility, every screen).
+
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
 
 - **What & why:** `renameProfile` (`packages/db/src/writers/profile.ts`) has no `expected`/version

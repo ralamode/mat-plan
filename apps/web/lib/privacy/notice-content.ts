@@ -1590,20 +1590,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " A Delete button, per item, that works like this:\ndeleting something "
+        "text": " A "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "hides it, and then actually removes it"
+            "text": "Clear this day"
           }
         ]
       },
       {
         "k": "text",
-        "text": " a set number of days later. Two things\nfollow that are worth saying plainly."
+        "text": " control, which hides\neverything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "put back"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ":\na banner offers "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Restore all"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", and it survives a reload or a day change because nothing about it is\nheld on your phone. Occasionally a restore will not be possible, because something has since been\nlogged in that day's place — when that happens the app will say so rather than fail quietly. There\nwill be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its\nfield. Two things are worth saying plainly about every clear:"
       }
     ]
   },
@@ -1619,13 +1645,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "You can put it back"
+                  "text": "It hides from everyone in your household, not just from the person who cleared it."
                 }
               ]
             },
             {
               "k": "text",
-              "text": " during that window. A deleted item shows up as a small \"Hidden — Restore\" row\non the day it was logged, so a mis-tap is fixable, and fixable by a parent rather than only by whoever\ntapped it. Occasionally a restore will not be possible, because something else has since taken that\nitem's place in the day — when that happens the app will say so rather than fail quietly."
+              "text": " The app does\nnot record who cleared what, and anyone signed in to your household can open any athlete. So a child\ncan clear a weigh-in and a parent will not see it either. ⚠️ That is still the honest shape of it:\nper-person sign-in is now the only way in, but the app records no author on an entry, so sign-in\nalone did not fix this one."
             }
           ]
         }
@@ -1639,13 +1665,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "It hides from everyone in your household, not just from the person who deleted it."
+                  "text": "Nothing is erased yet."
                 }
               ]
             },
             {
               "k": "text",
-              "text": " The app does\nnot record who deleted what, and anyone signed in to your household can open any athlete. So a child\ncan delete a weigh-in and a parent will not see it either, until they use Restore. ⚠️ That is still\nthe honest shape of it: per-person sign-in is now the only way in, but the app records no author on\nan entry, so sign-in alone did not fix this one."
+              "text": " A cleared item stays in the database, out of sight and out of the export,\nuntil a removal that runs a set number of days later is built."
             }
           ]
         }
