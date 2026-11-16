@@ -1569,39 +1569,39 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "clear a\nweigh-in"
+            "text": "clear a\nweigh-in or a wrestling practice"
           }
         ]
       },
       {
         "k": "text",
-        "text": " on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and the app\n"
+        "text": " on today or yesterday (tap Change, empty the field, tap Clear): that\nhides it, and the app "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "does not offer to put a cleared weigh-in back"
+            "text": "does not offer to put a cleared one back"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", so re-enter the right weight instead. Anyone signed\nin to your household can clear any athlete's weigh-in, and the app does not record who did. A cleared\nweigh-in is not removed from the database, and it is "
+        "text": ", so re-enter the right number\ninstead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app\ndoes not record who did. A cleared one is not removed from the database, and it is "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "not in the export"
+            "text": "not in the\nexport"
           }
         ]
       },
       {
         "k": "text",
-        "text": " (ask for a full copy, below,\nand it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
+        "text": " (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
       },
       {
         "k": "strong",
@@ -1645,7 +1645,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " control, which hides\neverything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be "
+        "text": " control, which hides\neverything logged on one day at once. Unlike a cleared weigh-in or practice, a cleared day can be "
       },
       {
         "k": "strong",
@@ -1671,7 +1671,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " while that day is today or yesterday (after that, the day stays\nhidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been\nlogged in that day's place — when that happens the app will say so rather than fail quietly. There\nwill be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its\nfield. Two things are worth saying plainly about every clear:"
+        "text": " while that day is today or yesterday (after that, the day stays\nhidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been\nlogged in that day's place — when that happens the app will say so rather than fail quietly. There\nwill be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its\nfield, as above. Two things are worth saying plainly about every clear:"
       }
     ]
   },
@@ -1693,7 +1693,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " The app does\nnot record who cleared what, and anyone signed in to your household can open any athlete. So a child\ncan clear a weigh-in and a parent will not see it either. ⚠️ That is still the honest shape of it:\nper-person sign-in is now the only way in, but the app records no author on an entry, so sign-in\nalone did not fix this one."
+              "text": " The app does\nnot record who cleared what, and anyone signed in to your household can open any athlete. So a child\ncan clear a weigh-in or a practice and a parent will not see it either. ⚠️ That is still the honest shape of it:\nper-person sign-in is now the only way in, but the app records no author on an entry, so sign-in\nalone did not fix this one."
             }
           ]
         }

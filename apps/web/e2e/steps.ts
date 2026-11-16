@@ -3,6 +3,7 @@ import { ACTIVITY_TYPE_KEYS, addDays, DEFAULT_BODYWEIGHT_UNIT } from '@mat-plan/
 import { expect, type Page } from '@playwright/test';
 
 import {
+  AMEND_COPY,
   BODYWEIGHT_COPY,
   changeLabel,
   DEFAULT_TIME_ZONE,
@@ -126,7 +127,7 @@ export async function logBodyweight(
 export const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
   (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
 )!.label;
-const PRACTICE_SHOWN = formatValueUnit(DEFAULT_PRACTICE_MINUTES, 'min');
+export const PRACTICE_SHOWN = formatValueUnit(DEFAULT_PRACTICE_MINUTES, 'min');
 
 /** The logged practice's Change, named by `changeLabel` as the app names it (3b-life A1). */
 export function practiceChange(page: Page, value: string = PRACTICE_SHOWN) {
@@ -148,6 +149,18 @@ export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
   const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
   const change = practiceChange(page);
+  // A retry after a failed change left another value on the row: clear it, so the tap below runs.
+  const anyChange = life.getByRole('button', {
+    name: new RegExp(`^${changeLabel(PRACTICE_COPY.changeSubject, '')}`),
+  });
+  if (
+    (await button.count()) === 0 &&
+    (await change.count()) === 0 &&
+    (await anyChange.count()) > 0
+  ) {
+    const shown = (await anyChange.getAttribute('aria-label'))!.split(' — ')[1]!;
+    await clearPractice(page, shown);
+  }
   if ((await button.count()) > 0) {
     await button.click();
     await expect(change).toBeVisible({ timeout: 15_000 });
@@ -155,4 +168,29 @@ export async function logPractice(page: Page): Promise<void> {
   }
   await expect(life.getByText(PRACTICE_SHOWN, { exact: true })).toHaveCount(1);
   await expect(change).toHaveCount(1);
+}
+
+/** Change the logged practice from `from` (as shown, `90 min`) to `minutes`, asserting the announcement
+ * and that focus returns to the row's Change (V1-24 3b-life-a A4). */
+export async function changePractice(page: Page, from: string, minutes: string): Promise<void> {
+  const life = lifeSection(page);
+  await practiceChange(page, from).click();
+  const field = life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
+  await field.fill(minutes);
+  await life.getByRole('button', { name: AMEND_COPY.save, exact: true }).click();
+  const to = formatValueUnit(Number(minutes), 'min');
+  await expect(practiceChange(page, to)).toBeFocused({ timeout: 15_000 });
+  await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedChanged(to));
+}
+
+/** Clear the logged practice shown as `from`: empty the field, Save reads Clear; the cleared line is
+ * shown and focus lands on the one-tap ✓ that comes back (V1-24 3b-life-a A3, A4). */
+export async function clearPractice(page: Page, from: string): Promise<void> {
+  const life = lifeSection(page);
+  await practiceChange(page, from).click();
+  await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('');
+  await life.getByRole('button', { name: PRACTICE_COPY.clearLabel, exact: true }).click();
+  const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
+  await expect(button).toBeFocused({ timeout: 15_000 });
+  await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedCleared(from));
 }

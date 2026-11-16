@@ -1,18 +1,31 @@
-import { SEED_PROFILE_NAME } from '@mat-plan/shared';
+import { PRACTICE_MINUTES_MAX, SEED_PROFILE_NAME } from '@mat-plan/shared';
 import { expect, test } from '@playwright/test';
 
 import {
   ALL_ATHLETES_LINK,
+  AMEND_COPY,
   APP_HOME_PATH,
   BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   NOT_FOUND_COPY,
+  PRACTICE_COPY,
 } from '../lib/constants';
 import { formatDayLong, localDayIso } from '../lib/date';
+import { formatValueUnit } from '../lib/entries/format-value-unit';
 
 import { pickerHeading } from './contexts';
-import { logBodyweight, logPractice, selectProfile } from './steps';
+import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import {
+  changePractice,
+  clearPractice,
+  lifeSection,
+  logBodyweight,
+  logPractice,
+  PRACTICE_SHOWN,
+  practiceChange,
+  selectProfile,
+} from './steps';
 
 // The one V0-11 smoke: the full happy path UI → Server Action → Drizzle →
 // Postgres → RSC re-render, against an ephemeral migrated+seeded DB. Uses the
@@ -39,6 +52,39 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-7 / V1-24 3b-page: the one-tap wrestling practice, a duration metric with the default minutes.
   // The logged row shows those minutes on the page, where the removed "Logged entries" list did.
+  await logPractice(page);
+
+  // V1-24 3b-life-a: Change it to the WIDEST legal value, so the 360px checks measure the row at its
+  // longest; clear it (Save reads Clear); then the one-tap ✓ logs it again, so the day ends as it began.
+  // Athlete One's today is this spec's alone (the e2e rule, `global.setup.ts`).
+  await page.setViewportSize({ width: 360, height: 800 });
+  const widest = String(PRACTICE_MINUTES_MAX);
+  await changePractice(page, PRACTICE_SHOWN, widest);
+  const life = lifeSection(page);
+  const shownWidest = formatValueUnit(PRACTICE_MINUTES_MAX, 'min');
+  const change = practiceChange(page, shownWidest);
+  const row = life
+    .getByText(shownWidest, { exact: true })
+    .locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
+  // Change sits on the RIGHT of the two-line row, beside the value, never wrapped under the tick (A1).
+  const [rowBox, changeBox, valueBox] = await Promise.all([
+    row.boundingBox(),
+    change.boundingBox(),
+    life.getByText(shownWidest, { exact: true }).boundingBox(),
+  ]);
+  expect(rowBox!.x + rowBox!.width - (changeBox!.x + changeBox!.width)).toBeLessThan(24);
+  expect(changeBox!.x).toBeGreaterThan(valueBox!.x + valueBox!.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await expectNoAxeViolations(page, 'the logged practice row at 360px');
+  await expectTapTargets(page, 'the logged practice row at 360px');
+
+  // The armed Clear, on the editor's plain surface.
+  await change.click();
+  await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('');
+  await expectNoAxeViolations(page, 'the practice editor with Clear armed');
+  await life.getByRole('button', { name: AMEND_COPY.cancel, exact: true }).click();
+
+  await clearPractice(page, shownWidest);
   await logPractice(page);
 });
 

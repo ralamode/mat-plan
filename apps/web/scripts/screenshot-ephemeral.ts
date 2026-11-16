@@ -45,6 +45,8 @@ import {
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
+  LIFE_COPY,
+  PRACTICE_COPY,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
@@ -423,6 +425,11 @@ const STATES = {
   'bodyweight-editing-refused': seedAlreadyLogged,
   // V1-24 3b-bw — an empty ✓, refused in the browser. Interaction-only.
   'bodyweight-empty-tick': null,
+  // V1-24 3b-life-a — the logged practice's open editor, its editor with Clear armed, and the row after
+  // the clear (`practice-logged`, below, is the logged row). Interaction-only.
+  'practice-editing': null,
+  'practice-clear-armed': null,
+  'practice-cleared': null,
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
   'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
@@ -755,6 +762,34 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await section.getByLabel(/^Weight \(/).fill('845');
     await section.getByRole('button', { name: AMEND_COPY.save }).click();
     await section.getByRole('alert').waitFor();
+  },
+  'practice-editing': async (page) => {
+    await logPracticeOnce(page);
+    await practiceSection(page)
+      .getByRole('button', { name: /^Change wrestling practice/ })
+      .click();
+  },
+  'practice-clear-armed': async (page) => {
+    await logPracticeOnce(page);
+    const life = practiceSection(page);
+    await life.getByRole('button', { name: /^Change wrestling practice/ }).click();
+    await life.getByLabel(PRACTICE_COPY.fieldLabel).fill('');
+    await life.getByRole('button', { name: PRACTICE_COPY.clearLabel }).waitFor();
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  },
+  'practice-cleared': async (page) => {
+    // Retry-safe across the three widths: only the first finds a Change to clear.
+    const life = practiceSection(page);
+    const change = life.getByRole('button', { name: /^Change wrestling practice/ });
+    if ((await change.count()) === 0 && (await life.getByRole('status').textContent()) === '') {
+      await logPracticeOnce(page);
+    }
+    if ((await change.count()) > 0) {
+      await change.click();
+      await life.getByLabel(PRACTICE_COPY.fieldLabel).fill('');
+      await life.getByRole('button', { name: PRACTICE_COPY.clearLabel }).click();
+    }
+    await life.getByRole('button', { name: PRACTICE_COPY.label, exact: true }).waitFor();
   },
   'bodyweight-empty-tick': async (page) => {
     // Scoped to the section: Next's route announcer is a page-level `role="alert"` too.
@@ -1400,3 +1435,16 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+/** The Life section, where the practice row lives (V1-24 3b-life-a). */
+function practiceSection(page: Page) {
+  return page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
+}
+
+/** Tap the one-tap practice ✓ unless the row is already logged (the three widths share one day). */
+async function logPracticeOnce(page: Page): Promise<void> {
+  const life = practiceSection(page);
+  const button = life.getByRole('button', { name: PRACTICE_COPY.label, exact: true });
+  if ((await button.count()) > 0) await button.click();
+  await life.getByRole('button', { name: /^Change wrestling practice/ }).waitFor();
+}
