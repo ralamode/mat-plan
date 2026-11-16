@@ -9,7 +9,7 @@ import {
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
 import type { DayItem, DayPlan, DayWorkout } from '../day-shapes';
-import { TRACKING_TYPE_FIELDS, wholeReps, type RowValues } from '../pieces';
+import { prescriptionTarget, TRACKING_TYPE_FIELDS, type RowValues } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import type { ProgramList, ProgramView, WorkoutDraft, WorkoutDraftItem } from '../program-shapes';
 import { fixtureIds, type FixtureItemKey } from './ids';
@@ -254,7 +254,7 @@ function dayWorkout(
       name: draft.itemName,
       trackingType: draft.trackingType,
       prescribedText: loggedAgainst ?? live,
-      target: { reps: wholeReps(draft.targetReps), quantities: draft.quantities },
+      target: prescriptionTarget(draft.targetReps, draft.quantities),
       notes: draft.notes,
       unit: unitOf(world, item),
       superset: draft.superset,

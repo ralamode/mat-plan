@@ -320,6 +320,52 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(await actions.retickRow(retick)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
   });
 
+  it('the values are judged before the set: a bad number on a logged set is bad_value, not slot_taken', async () => {
+    // The real writer has no slot pre-check; it learns a set is taken at the insert (contract C10).
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    succeeded(await actions.logRow(write));
+    const onTheSameSet = { ...write, clientId: newId() };
+    expect(await actions.logRow(onTheSameSet)).toEqual({
+      ok: false,
+      reason: ROW_REFUSAL.slot_taken,
+    });
+    expect(
+      await actions.logRow({
+        ...onTheSameSet,
+        values: { reps: 8, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 5 }] },
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+  });
+
+  it('a slot named twice, and a value over the unit’s ceiling, are bad_value on ✓ and on Change', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    const refused = { ok: false, reason: ROW_REFUSAL.bad_value };
+    expect(
+      await actions.logRow({ ...write, values: { reps: 8, quantities: [lb(25), lb(30)] } }),
+    ).toEqual(refused);
+    expect(
+      await actions.logRow({ ...write, values: { reps: 8, quantities: [lb(99_000)] } }),
+    ).toEqual(refused);
+
+    const made = succeeded(await actions.logRow(write));
+    const amend = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      entryPublicId: made.entryPublicId,
+    };
+    expect(
+      await actions.amendRow({ ...amend, values: { reps: 8, quantities: [lb(25), lb(30)] } }),
+    ).toEqual(refused);
+    expect(
+      await actions.amendRow({ ...amend, values: { reps: 8, quantities: [lb(99_000)] } }),
+    ).toEqual(refused);
+    // Nothing was changed by the refused amends.
+    expect(
+      await actions.amendRow({ ...amend, values: { reps: 9, quantities: [lb(30)] } }),
+    ).toMatchObject({ ok: true, values: { reps: 9, quantities: [lb(30)] } });
+  });
+
   it('the ✓ that made an un-ticked row answers own_hidden from then on', async () => {
     const { actions } = day(heavyASupersets);
     const write = tick(heavyASupersets, 'DB bench press');

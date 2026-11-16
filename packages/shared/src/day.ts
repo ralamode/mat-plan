@@ -22,6 +22,29 @@ export function isoDayDiff(a: string, b: string): number {
   return Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
 }
 
+/**
+ * How many days before today a write is still accepted: 1, so today and yesterday. One number for
+ * the server's bound and for the screens that gate on it.
+ */
+export const WRITABLE_DAY_RADIUS = 1;
+
+/**
+ * Whether `day` can be written to, given the caller's `today`: **today and the
+ * `WRITABLE_DAY_RADIUS` days before it, never a day after today** (FAM-1 plan D20, D32). This is
+ * what `DayPlan.writable` means and what every row write is held to (`closed_day` otherwise).
+ *
+ * Pure: the caller supplies `today` (the request's active-timezone day), so the database package
+ * and the web app use the same rule (contract change C10).
+ *
+ * ⚠️ **Not the older forms' bound.** `apps/web/lib/entries/declared-day.ts` accepts tomorrow as
+ * well (±`WRITABLE_DAY_RADIUS`), for the single-value forms that predate FAM-1. Plan step 12c makes
+ * that one-sided by calling this; until then the two differ by exactly one day, tomorrow.
+ */
+export function inWritableWindow(day: string, today: string): boolean {
+  const diff = isoDayDiff(day, today);
+  return diff <= 0 && diff >= -WRITABLE_DAY_RADIUS;
+}
+
 /** The calendar date `n` whole days after `day` (`YYYY-MM-DD`; a negative `n` goes back). */
 export function addDays(day: string, n: number): string {
   // The `…T00:00:00Z` anchor is the V1-6c idiom, not a stylistic choice: `new Date("2026-07-30")`
