@@ -18,7 +18,7 @@ import {
 } from '../quantity-slots';
 import { numericSetSchema } from '../strength';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
-import { FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text';
+import { foldName, FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text';
 import {
   isWholeNumber,
   MAX_STORABLE_QUANTITY,
@@ -45,9 +45,16 @@ import {
  */
 
 const ONE_LINE = 'one line of text, with no control characters';
+/**
+ * A required name must fold to something (`foldName`): a name made only of characters nobody can
+ * see (zero-width spaces and joiners) is one character long, so `min(1)` takes it, and it would
+ * show as a blank line in every list. Found by FAM-1 step 6a's review; contract change C12.
+ */
+const SOMETHING_TO_READ = 'a name needs at least one character you can see';
 
 /**
- * A short text a person typed on one line: trimmed, 1..`max` characters, no control characters.
+ * A short text a person typed on one line: trimmed, 1..`max` characters, no control characters,
+ * and at least one character that can be seen.
  *
  * The control-character rule is the one `athleteNameSchema` documents: a NUL passes every length
  * check, reaches Postgres, and `text` rejects it, so the action throws instead of answering.
@@ -58,7 +65,8 @@ export function shortTextSchema(max: number) {
     .trim()
     .min(1)
     .max(max)
-    .refine((v) => !hasControlChar(v), ONE_LINE);
+    .refine((v) => !hasControlChar(v), ONE_LINE)
+    .refine((v) => foldName(v) !== '', SOMETHING_TO_READ);
 }
 
 /**
