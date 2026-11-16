@@ -244,6 +244,48 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             }
           ]
         }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Programs you build yourself"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " "
+            },
+            {
+              "k": "em",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "(coming; the app cannot save one yet)"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\n"
+            },
+            {
+              "k": "em",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "(The tables exist so the app can be built against them. Nothing writes to them today; this line is\nhere because the schema is public and you would otherwise find them.)"
+                }
+              ]
+            }
+          ]
+        }
       ]
     ]
   },

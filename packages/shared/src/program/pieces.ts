@@ -19,12 +19,13 @@ import { numericSetSchema } from '../strength';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import { FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text';
 import {
+  isWholeNumber,
   MAX_STORABLE_QUANTITY,
+  type Unit,
   UNIT_DIMENSION,
+  type UnitDimension,
   unitSchema,
   unitsOfDimension,
-  type Unit,
-  type UnitDimension,
 } from '../units';
 
 /**
@@ -126,7 +127,7 @@ export const repsSchema = z
  * it and the row writer fills an absent `reps` with it.
  */
 export function wholeReps(targetReps: string | null): number | null {
-  if (targetReps === null || !/^\d+$/.test(targetReps)) return null;
+  if (targetReps === null || !isWholeNumber(targetReps)) return null;
   const parsed = repsSchema.safeParse(Number(targetReps));
   return parsed.success ? parsed.data : null;
 }

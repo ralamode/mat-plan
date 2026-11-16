@@ -6,6 +6,7 @@ import {
   athleteEditPath,
   athletePath,
   blockedSummary,
+  itemCountText,
   NAME_WRAP_CLASS,
   NO_ATHLETE_SAVE,
   NO_PROFILE_LOG,
@@ -19,6 +20,17 @@ import {
   quantityInputLabel,
   usuallyLoggedAs,
 } from './constants';
+
+describe('itemCountText: how many items a workout holds (FAM-1)', () => {
+  it.each([
+    [0, '0 items'],
+    [1, '1 item'],
+    [2, '2 items'],
+    [12, '12 items'],
+  ])('%i reads "%s"', (n, text) => {
+    expect(itemCountText(n)).toBe(text);
+  });
+});
 
 describe('blockedSummary — the summary names the first blocker (V1-27)', () => {
   it('a set: "<name> set N needs finishing."', () => {

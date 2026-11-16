@@ -85,8 +85,10 @@ const dayItemSchema = z.object({
   unit: unitSchema.nullable(),
   superset: supersetSchema,
   /**
-   * The rows the page shows. A writable day: every prescribed set, plus any logged beyond them. A
-   * closed day, or a workout that left the week: the logged rows only. A future day: none.
+   * The rows the page shows, in set order. A writable day: every prescribed set, plus any logged
+   * beyond them. A closed day, or a workout that left the week: the logged rows only. A future day:
+   * none. **An added set is a row only while it is logged**: un-ticked, it is gone from the next
+   * read, so the set numbers may have a gap.
    */
   rows: z.array(dayRowSchema).max(MAX_SETS_PER_MOVEMENT),
 });
@@ -173,6 +175,13 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * prescription's"** (plan D13): the writer fills it from the row's prescription, and answers
  * `bad_value` where the prescription has no number to give. So an empty ✓ on a prescribed row sends
  * `{ quantities: [] }`, and the result's `values` says what was written.
+ *
+ * **`set` is any set number (`setNumberSchema`) that has no logged row: a prescribed set, or an
+ * added one.** The writer does not require an added set to be the next number. The screen numbers
+ * an added set one past the highest it SHOWS, and it keeps an un-ticked row for the page visit, so
+ * its numbers can run ahead of the rows the read lists; refusing those would refuse a valid ✓. A
+ * set whose row is logged answers `slot_taken`. Only a type with set rows (`hasSetRows`) has a set
+ * past 1: on any other type that is `bad_value`.
  */
 export const rowWriteSchema = z.object({
   clientId: uuidSchema,
