@@ -15,6 +15,19 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A failed query's params reach Vercel's runtime logs (found 2026-11-16, #447 privacy review)
+
+- **What & why it's debt:** drizzle wraps a failed statement in a `DrizzleQueryError` whose message
+  is `Failed query: …\nparams: …`. `apps/web/lib/sentry-scrub.ts` strips it before Sentry, but Next
+  writes the error with `console.error` to Vercel's runtime logs (24 hours), so the row's values (a
+  weigh-in, a note, how a session felt) land there. Any DB failure does this; a migration's deploy
+  window makes it predictable (FAM-1's `0024` fails every log insert until applied).
+- **Impact:** medium on privacy, low on likelihood today: FAM-1 merges migrations when nobody is
+  logging, and the inventory (§8, Vercel row) and runbook say so.
+- **Fix:** strip `params` (and a 23514's `detail`, the CHECK-violation row) from errors before Next
+  logs them, at the one place they are thrown up to `error.tsx`; with a test.
+- **Severity:** medium.
+
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit

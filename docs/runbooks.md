@@ -363,7 +363,14 @@ each step's migration header names the statements). The recovery is this re-run;
 migrations when nobody is logging. 0022: every movement resolved by name (a strength save with a
 typed name, existing or new) and every `insert into movements` (a new item, the seed). 0024: EVERY
 insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll Vercel back to the
-previous deployment (its code works on either schema), then re-run as below.
+previous deployment (its code works on either schema), then re-run as below. ⚠️ Once the migration is
+observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
+production from following new deployments automatically, so later merges would not go live (unverified
+here; check the Vercel dashboard after a rollback). 🔴 **The window is also a privacy condition:** a
+failed insert's `DrizzleQueryError` carries its `params` (a weigh-in, a note, how a session felt),
+which Sentry's scrubber strips but Next's `console.error` writes to Vercel's runtime logs, kept 24
+hours. If a write failed in the window, record it in the deletion ledger's incident notes
+(`docs/privacy/data-inventory.md` §7) rather than assume the logs are clean.
 
 ---
 
@@ -1329,8 +1336,8 @@ child:
 --       PGlite, never on production, so THIS is the check against real rows.)
 -- (f) FAM-1 4a-ii: a SESSION of ANOTHER household naming one of H's workouts. Step 9b would SET NULL
 --       its `workout_id` silently, and its `workout_name` (H's typed text) would stay on another
---       family's child's session, and from step 14 in their export. The writer refuses it, so a row
---       here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
+--       family's child's session, and from step 14 in their export. Step 11b's writer must refuse it
+--       (owed, with a boundary test; no writer exists before 11b), so a row here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
 --       that session (the pairing CHECK allows both NULL) before this procedure.
 --       SELECT s.id FROM sessions s
 --         JOIN profiles pr ON pr.id = s.profile_id
@@ -1541,8 +1548,12 @@ SELECT count(*) FROM movements WHERE household_id = :h_id;              -- must 
 SELECT count(*) FROM movements WHERE household_id IS NULL;              -- must be > 0
 ```
 
-Every FK except the two cascades is `NO ACTION`, so a table this procedure missed would have aborted
-the transaction rather than silently orphaning rows; that is a real safety property, not a hope — and
+Every FK except the two cascades and three `ON DELETE SET NULL` pointers is `NO ACTION`, so a table
+this procedure missed would have aborted the transaction rather than silently orphaning rows; that is
+a real safety property, not a hope. The three SET NULL pointers (`workouts.copied_from_workout_id`,
+FAM-1 4a-i; `sessions.workout_id` and `entries.prescription_id`, 4a-ii) never fire inside this
+procedure, because their child rows are deleted first (steps 3, 5, 9b); a cross-household one is
+what pre-flight (e)–(g) catches, since SET NULL would rewrite it silently — and
 `movements.household_id` is exactly that property firing, which is why step 11 exists.
 
 **6. Delete the Clerk users** (once sign-in is switched on — chunk **1c**, not 1a). Clerk dashboard →

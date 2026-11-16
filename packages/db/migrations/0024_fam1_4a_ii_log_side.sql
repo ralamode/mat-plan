@@ -14,12 +14,14 @@
 --      set means every set of one superset member holds the same place. Dropped and created inside
 --      this one transaction, under the lock, so there is never a moment without it.
 --
--- WHY IT IS SAFE AT ANY SIZE: every new column is NULL on every existing row when it is added, so
--- each CHECK's validating scan and each FK's scan read rows that cannot fail, the three new unique
--- indexes build over no rows (their predicates need a non-NULL new column), and the recreated index
+-- WHY NOTHING CAN BE REFUSED, AT ANY SIZE: every new column is NULL on every existing row when it is
+-- added, so each CHECK's validating scan and each FK's scan read rows that cannot fail, the three new
+-- unique indexes admit no row (their predicates need a non-NULL new column), and the recreated index
 -- covers exactly the rows the dropped one did (prescription_set IS NULL is true of all of them).
--- Production row counts were not measured; no gate rehearses this on populated tables (the
--- Neon-branch apply is not wired, docs/tech-debt.md).
+-- DURATION is O(rows): about a dozen full scans and index builds of entries and sessions run under
+-- the lock below, within the 60s statement_timeout. Production row counts were not measured from
+-- here (nobody logs in the app yet); no gate rehearses this on populated tables (the Neon-branch
+-- apply is not wired, docs/tech-debt.md).
 --
 -- LOCKS: workouts, prescriptions, sessions, supersets and entries are locked ACCESS EXCLUSIVE up
 -- front, before any DDL: the two FKs would otherwise take SHARE ROW EXCLUSIVE on workouts and
@@ -39,7 +41,7 @@
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
 LOCK TABLE "workouts", "prescriptions", "sessions", "supersets", "entries" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
--- Recreated below in the same transaction, under the lock taken above; entries is small.
+-- Recreated below in the same transaction, under the lock taken above.
 -- squawk-ignore require-concurrent-index-deletion
 DROP INDEX "uq_entries_superset_order";--> statement-breakpoint
 ALTER TABLE "entries" ADD COLUMN "prescription_id" bigint;--> statement-breakpoint

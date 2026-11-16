@@ -848,7 +848,8 @@ export const sessions = pgTable(
     // FAM-1 4a-ii (ADR 0007 A2 §6): the template workout this session logged. IDENTITY only, for
     // MOT-1's swap and verdict; nothing displays through it. `ON DELETE SET NULL`, so a purged
     // workout leaves the session. It must name a workout in the session profile's household (writer,
-    // plus the audit db:verify proves and the runbook's pre-flight (f) runs on real rows).
+    // plus the audit db:verify proves and the runbook's pre-flight (f) runs on real rows). A
+    // template session's `day_role` stays NULL (A2 §6; audited, not a CHECK).
     workoutId: bigint('workout_id', { mode: 'number' }).references((): AnyPgColumn => workouts.id, {
       onDelete: 'set null',
     }),

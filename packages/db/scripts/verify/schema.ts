@@ -971,6 +971,17 @@ async function workoutSessionsOfAnotherType(tx: VerifyTx): Promise<number[]> {
   return rows.map((r) => r.id);
 }
 
+/** Sessions naming a workout that also carry a `day_role` (A2 §6: it stays NULL on a template session). */
+async function workoutSessionsWithADayRole(tx: VerifyTx): Promise<number[]> {
+  const rows = await tx
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(
+      sql`${schema.sessions.workoutId} is not null and ${schema.sessions.dayRole} is not null`,
+    );
+  return rows.map((r) => r.id);
+}
+
 async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   // ── (a) the bounds are pinned to their consts ─────────────────────────────────────────────────────
   await assertLengthCheckIs('sessions_workout_name_length_check', WORKOUT_NAME_MAX);
@@ -999,10 +1010,12 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
     const [tpl] = await tx
       .select()
       .from(schema.entries)
-      .where(
-        sql`${schema.entries.sessionId} is not null and ${schema.entries.movementId} is not null and ${schema.entries.metricKey} is null and ${schema.entries.deletedAt} is null`,
-      )
       .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, a.blockId))
+      .where(
+        sql`${schema.profiles.householdId} = ${schema.programBlocks.householdId} and ${schema.entries.sessionId} is not null and ${schema.entries.movementId} is not null and ${schema.entries.metricKey} is null and ${schema.entries.deletedAt} is null`,
+      )
+      .orderBy(schema.entries.id)
       .limit(1);
     assert.ok(tpl, 'FAM-1 4a-ii: a strength entry exists to clone probe rows from');
     const {
@@ -1072,6 +1085,30 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
     const [s1] = await session();
     await expectRejectedBy(SESSION_WORKOUT_DAY_UNIQUE_INDEX, () => session(), tx);
     await session({ activityDate: '2026-11-17' }); // another day: accepted
+    // Each key column is load-bearing: the same day with ANOTHER workout, and the same day and workout
+    // for ANOTHER athlete, are both accepted (an index keyed on fewer columns would refuse them).
+    const w2 = (await insertWorkoutOwnedBy(exec, A_SCOPE, {
+      blockId: a.blockId,
+      clientId: newId(),
+      name: 'Pull day',
+      description: null,
+    }))!;
+    await session({ workoutId: w2.id, workoutName: 'Pull day' });
+    const [sibling] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(
+        sql`${schema.profiles.householdId} = ${aHousehold} and ${schema.profiles.id} <> ${profileId} and ${schema.profiles.deletedAt} is null`,
+      )
+      .orderBy(schema.profiles.id)
+      .limit(1);
+    assert.ok(sibling, 'FAM-1 4a-ii: a second athlete exists in the household');
+    await session({ profileId: sibling.id });
+    await expectRejectedBy(
+      'sessions_workout_name_length_check',
+      () => session({ activityDate: '2026-11-18', workoutName: '  ' }),
+      tx,
+    );
     await expectRejectedBy(
       'sessions_workout_named_check',
       () => session({ activityDate: '2026-11-18', workoutName: null }),
@@ -1103,7 +1140,22 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
         .returning({ id: schema.supersets.id });
     const [ss] = await superset();
     await expectRejectedBy(SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX, () => superset(), tx);
-    await superset({ prescriptionGroup: 'B' }); // another group: accepted
+    const [ssB] = await superset({ prescriptionGroup: 'B' }); // another group: accepted
+    await tx
+      .update(schema.supersets)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.supersets.id, ssB.id));
+    await assert.doesNotReject(
+      tx.transaction(async (sp) => {
+        await sp.insert(schema.supersets).values({
+          publicId: newId(),
+          clientId: newId(),
+          sessionId: s1.id,
+          prescriptionGroup: 'B',
+        });
+      }),
+      'FAM-1 4a-ii: a hidden superset frees its group',
+    );
     await expectRejectedBy(
       'supersets_prescription_group_length_check',
       () => superset({ prescriptionGroup: ' ' }),
@@ -1230,6 +1282,9 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
       activityDate: '2026-11-21',
       sessionType: SESSION_TYPES[0],
     });
+    // The NULL branch: `<>` would miss this one; `IS DISTINCT FROM` flags it.
+    const [noType] = await session({ activityDate: '2026-11-22', sessionType: null });
+    const [withRole] = await session({ activityDate: '2026-11-23', dayRole: 'strength' });
     assert.deepEqual(
       await sessionsOnForeignWorkouts(tx),
       [foreignSession.id],
@@ -1241,13 +1296,18 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
       "FAM-1 4a-ii: an entry on another household's prescription is flagged",
     );
     assert.deepEqual(
-      await workoutSessionsOfAnotherType(tx),
-      [otherType.id],
-      'FAM-1 4a-ii: a workout session of another type is flagged',
+      (await workoutSessionsOfAnotherType(tx)).sort((x, y) => x - y),
+      [otherType.id, noType.id].sort((x, y) => x - y),
+      'FAM-1 4a-ii: a workout session of another type, or of no type, is flagged',
+    );
+    assert.deepEqual(
+      await workoutSessionsWithADayRole(tx),
+      [withRole.id],
+      'FAM-1 4a-ii: a workout session with a day role is flagged',
     );
   });
   console.log(
-    "✓ FAM-1 4a-ii: the session, superset and row arbiters each refuse a twin and free a hidden place; a linked row names its set and has a session; two sets of one superset member commit, and so does their prescription's purge; cross-household pointers and a mistyped workout session are each flagged",
+    "✓ FAM-1 4a-ii: the session, superset and row arbiters each refuse a twin and free a hidden place; each varies one key column at a time; a linked row names its set and has a session; two sets of one superset member commit, and so does their prescription's purge; cross-household pointers, a workout session of another or no type, and one with a day role are each flagged",
   );
 
   // ── (g) a purged workout leaves its session with the frozen name ──────────────────────────────────
