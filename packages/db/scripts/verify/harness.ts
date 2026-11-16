@@ -39,6 +39,38 @@ export type VerifyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  */
 export const asTx = (tx: VerifyTx) => tx as unknown as Executor;
 
+/** Thrown by {@link rolledBack} to roll its transaction back. Private: nothing else throws it. */
+class Rollback extends Error {}
+
+/**
+ * Run `fn` in a transaction that is ALWAYS rolled back, so a proof's writes never persist.
+ *
+ * **Proof modules import this one** (`schema.ts`, `program.ts`, `day.ts`, `single-values.ts`), and do
+ * not write their own. The modules run on a database every later proof also reads (see
+ * `VerifyContext` below), so a proof that writes wraps its writes in this and leaves nothing behind
+ * for a later module to count. Lane A's step 3 wrote the first copy, privately in `schema.ts`; it
+ * swaps to this one in its next step.
+ *
+ * - `fn` gets the transaction handle. Issue EVERY statement on that `tx` (`asTx(tx)` for a writer
+ *   typed on `Executor`): PGlite has one connection, so a query on the module-level `db` inside the
+ *   transaction waits forever.
+ * - When `fn` returns, the transaction is rolled back and this resolves.
+ * - When `fn` throws (a failed `assert` included), the transaction is rolled back and the error
+ *   propagates unchanged, so a failing proof still fails `db:verify` with its own message.
+ * - A statement Postgres rejects aborts the transaction. To assert a rejection and carry on, pass
+ *   `tx` to `expectRejectedBy`, which runs the probe in a savepoint.
+ */
+export async function rolledBack(fn: (tx: VerifyTx) => Promise<void>): Promise<void> {
+  try {
+    await db.transaction(async (tx) => {
+      await fn(tx);
+      throw new Rollback();
+    });
+  } catch (e) {
+    if (!(e instanceof Rollback)) throw e;
+  }
+}
+
 /**
  * Assert `fn` rejects with a Postgres error whose violated constraint is `constraintName`,
  * read off `cause.constraint` (the node-postgres / PGlite error shape). Extracted from the two
@@ -172,8 +204,8 @@ export async function assertCheckCoversConst(
  * Today that is the three household scopes `verify.ts` mints, under the names it gives them, so a
  * proof reads the same in a module as it would in `verify.ts`, and a wrong scope is still a wrong
  * NAME. The reason for each is in `src/scope.test.ts` → `MINTED_SCOPES`. Everything else a proof
- * needs (`db`, `asPg`, `asTx`, `expectRejectedBy`, the catalog readers) is a plain import from this
- * file.
+ * needs (`db`, `asPg`, `asTx`, `rolledBack`, `expectRejectedBy`, the catalog readers) is a plain
+ * import from this file.
  *
  * ## What a proof module can rely on
  *

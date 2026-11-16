@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { addDays, localWeekday, WEEKDAYS, weekdaySchema } from './day';
+import { addDays, localWeekday, MONDAY_FIRST, WEEKDAYS, weekdaySchema } from './day';
 
 describe('localWeekday (V1-10 — the weekday of a bare calendar date)', () => {
   it.each([
@@ -54,5 +54,29 @@ describe('WEEKDAYS (SCHED-1 1a — the origin is `localWeekday`’s: 0 = Sunday)
 
   it('weekdaySchema accepts every member', () => {
     for (const weekday of WEEKDAYS) expect(weekdaySchema.parse(weekday)).toBe(weekday);
+  });
+});
+
+describe('MONDAY_FIRST (the order a week is shown in)', () => {
+  it('pins the order: Monday to Saturday, then Sunday', () => {
+    // A contract pin: `ProgramView.workouts[].usedOn` is listed in exactly this order.
+    expect(MONDAY_FIRST).toEqual([1, 2, 3, 4, 5, 6, 0]);
+  });
+
+  it('is WEEKDAYS reordered: the same seven, each once, still in the 0 = Sunday origin', () => {
+    expect([...MONDAY_FIRST].sort()).toEqual([...WEEKDAYS]);
+    for (const weekday of MONDAY_FIRST) expect(weekdaySchema.parse(weekday)).toBe(weekday);
+  });
+
+  it('starts on the weekday of a Monday and ends on the weekday of a Sunday', () => {
+    // 2026-10-12 is a Monday. Walking a real week from it gives the same order.
+    const week = MONDAY_FIRST.map((_, i) => localWeekday(addDays('2026-10-12', i)));
+    expect(week).toEqual([...MONDAY_FIRST]);
+    expect(localWeekday('2026-10-18')).toBe(MONDAY_FIRST[6]);
+  });
+
+  it('is exported from the root barrel', async () => {
+    const barrel = await import('./index');
+    expect(barrel.MONDAY_FIRST).toBe(MONDAY_FIRST);
   });
 });

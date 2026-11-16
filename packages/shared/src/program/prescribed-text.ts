@@ -1,9 +1,9 @@
 import { formatPrescribedForExport } from '../csv/prescribed';
-import { CSV_UNIT_SUFFIX, formatNumeric } from '../csv/value';
 import { TRACKING_TYPE } from '../movements';
 import type { Unit } from '../units';
-import { TRACKING_TYPE_FIELDS } from './pieces';
+import { slotQuantity, TRACKING_TYPE_FIELDS } from './pieces';
 import type { WorkoutDraftItem } from './program-shapes';
+import { quantityText } from './quantity-text';
 
 /**
  * A prescription as one line of text, for all seven tracking types (FAM-1 plan §4, §2).
@@ -15,13 +15,20 @@ import type { WorkoutDraftItem } from './program-shapes';
  * The format is the accepted prototype's: `4 × 8 @ 25 lb`, `3 × 10`, `3 × 30 s`, `6 × 40 yd`,
  * `5 min`, `10 lb`, and `''` for a Check.
  *
- * 🔴 **The `@mat-plan/shared/program/prescribed-text` subpath, not the root barrel.** It builds on
- * `formatPrescribedForExport` (`../csv/prescribed`), and `csv/` is kept out of the barrel that
- * `'use client'` components import. Its callers are the DAL, the writers and the export.
+ * 🔴 **Kept out of the ROOT BARREL, because it builds on `formatPrescribedForExport`
+ * (`../csv/prescribed`)**, and `csv/` stays out of the barrel every `'use client'` component
+ * imports. It is the `@mat-plan/shared/program/prescribed-text` subpath instead. That is a rule
+ * about the barrel, not about the server: this module is pure (no I/O, no `server-only`), so a
+ * client component MAY import the subpath directly when it needs a whole prescription's line. Its
+ * callers today are the DAL, the writers and the export.
  *
- * That function composes the per-set part and the `@ load`. Its own `3x10` spelling is bytes that
- * exist in every exported month and is pinned by its test, so the multiplication sign is the one
- * part written here.
+ * `formatPrescribedForExport` composes the per-set part and the `@ load`. Its own `3x10` spelling
+ * is bytes that exist in every exported month and is pinned by its test, so the multiplication
+ * sign is the one part written here.
+ *
+ * **A single quantity is spelled by `quantityText` (`./quantity-text`), the root-barrel spelling**:
+ * the day screen writes a logged value with it, so a logged `30 s` and a prescribed `3 × 30 s`
+ * agree.
  */
 
 /** The fields of a prescription the text is made from. A `WorkoutDraft` item fits as it is. */
@@ -30,20 +37,9 @@ export type PrescribedTextParts = Pick<
   'trackingType' | 'sets' | 'targetReps' | 'quantities'
 >;
 
-/**
- * A unit as the text spells it: the code, except seconds, which is `s`, and the plain `count`,
- * which is the bare number. The CSV's suffix map is the one place that already knows the first, so
- * it is read here; pounds are bare there and `lb` here.
- */
-function withUnit(value: number, unit: Unit): string {
-  const number = formatNumeric(value);
-  return unit === 'count' ? number : `${number} ${CSV_UNIT_SUFFIX[unit] || unit}`;
-}
-
-/** The type's quantity (`TRACKING_TYPE_FIELDS` says which slot), or `null` when it has no target. */
+/** The type's quantity (`slotQuantity`), or `null` when it has no target. */
 function target(parts: PrescribedTextParts): { value: number; unit: Unit } | null {
-  const { slot } = TRACKING_TYPE_FIELDS[parts.trackingType];
-  const quantity = parts.quantities.find((q) => q.slot === slot);
+  const quantity = slotQuantity(parts, parts.quantities);
   // `value: null` is "log in this unit, no target": the unit alone is not a prescription.
   return quantity && quantity.value !== null
     ? { value: quantity.value, unit: quantity.unit }
@@ -58,12 +54,12 @@ function perSet(sets: number | null, each: string): string {
 export function prescribedText(parts: PrescribedTextParts): string {
   const fields = TRACKING_TYPE_FIELDS[parts.trackingType];
   const quantity = target(parts);
-  const quantityText = quantity ? withUnit(quantity.value, quantity.unit) : '';
+  const amount = quantity ? quantityText(quantity.value, quantity.unit) : '';
 
   // Where a row has reps, the reps are the per-set part and the quantity is a load beside them.
   // A load of zero is no load: `4 × 8`, never `4 × 8 @ 0 lb`.
-  const each = fields.reps ? (parts.targetReps ?? '') : quantityText;
-  const load = fields.reps && quantity && quantity.value > 0 ? quantityText : '';
+  const each = fields.reps ? (parts.targetReps ?? '') : amount;
+  const load = fields.reps && quantity && quantity.value > 0 ? amount : '';
 
   // One set of a distance reads as the distance alone: `400 m`, not `1 × 400 m`.
   const oneDistance = parts.trackingType === TRACKING_TYPE.distance && parts.sets === 1;

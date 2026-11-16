@@ -79,4 +79,6 @@ jobs:
             exit 1
           fi
           pnpm --filter @mat-plan/db db:migrate
-          pnpm --filter @mat-plan/db db:seed
+          # FAM-1 D10: the seed-only preview database gets the program fixtures. Scoped to this one
+          # command; the seed refuses the flag unless the URL names the preview database.
+          SEED_FIXTURES=1 pnpm --filter @mat-plan/db db:seed

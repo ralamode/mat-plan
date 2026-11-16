@@ -67,6 +67,9 @@ export {
   SEED_PROFILE_2_NAME,
   SEED_FULL_ROUTINE,
   SEED_ATHLETE_TWO_ROUTINE,
+  // FAM-1 step 1: the program-fixtures flag, so the local harness and its containment test name it
+  // by import rather than re-typing it.
+  SEED_FIXTURES_ENV,
 } from './seed';
 
 export type { StrengthMonthRow } from './queries/export-month';

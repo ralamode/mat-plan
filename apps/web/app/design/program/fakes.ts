@@ -4,6 +4,8 @@ import {
   copyDraftSchema,
   createProgramSchema,
   foldName,
+  hasStarted,
+  MONDAY_FIRST,
   movementNameKey,
   newId,
   newItemSchema,
@@ -18,12 +20,15 @@ import {
   saveWorkoutSchema,
   takeOffSchema,
   hasSetRows,
+  slotQuantity,
   TRACKING_TYPE_FIELDS,
   weekDraftSchema,
-  WEEKDAYS,
   WORKOUT_NAME_MAX,
   type DayActions,
+  type DayItem,
   type DayPlan,
+  type DayRow,
+  type DayWorkout,
   type ProgramActions,
   type ProgramList,
   type ProgramRefusal,
@@ -55,10 +60,7 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
  * `failNext()` makes the next call resolve `retry` and change nothing: the "✓ that fails" state.
  */
 
-type Workout = DayPlan['workouts'][number];
-type Item = Workout['items'][number];
-type Row = Item['rows'][number];
-type Logged = NonNullable<Row['logged']>;
+type Logged = NonNullable<DayRow['logged']>;
 
 /** The switch every fake has: the next call fails once, then calls succeed again. */
 function failSwitch() {
@@ -83,7 +85,7 @@ const hideToken = () => new Date().toISOString().replace('Z', '000Z');
  * prescribed row logs the prescription). `null` when a number is missing, is in another unit, or
  * is one the type does not hold.
  */
-function storedValues(item: Item, typed: RowValues, target: Item['target'] | null) {
+function storedValues(item: DayItem, typed: RowValues, target: DayItem['target'] | null) {
   const fields = TRACKING_TYPE_FIELDS[item.trackingType];
   // A number the type has no field for is refused, never dropped: reps on a Duration, a distance on
   // a weight.
@@ -96,9 +98,9 @@ function storedValues(item: Item, typed: RowValues, target: Item['target'] | nul
     values.reps = reps;
   }
   if (fields.slot) {
-    const prescribed = target?.quantities.find((q) => q.slot === fields.slot);
+    const prescribed = target ? slotQuantity(item, target.quantities) : null;
     const quantity =
-      typed.quantities.find((q) => q.slot === fields.slot) ??
+      slotQuantity(item, typed.quantities) ??
       (prescribed && prescribed.value !== null ? { ...prescribed, value: prescribed.value } : null);
     if (!quantity || quantity.unit !== item.unit) return null;
     values.quantities.push(quantity);
@@ -141,7 +143,7 @@ export function createFakeDayActions(
   /** Un-ticked entries, by id, with the row each came from. */
   const hidden = new Map<
     string,
-    { hiddenAt: string; logged: Logged; workout: Workout; item: Item; row: Row }
+    { hiddenAt: string; logged: Logged; workout: DayWorkout; item: DayItem; row: DayRow }
   >();
 
   const refuse = (reason: RowRefusal): RowResult => ({ ok: false, reason });
@@ -166,7 +168,7 @@ export function createFakeDayActions(
     return null;
   }
   /** "6 of 10" counts live items only: a removed prescription's rows are in neither number. */
-  const count = (workout: Workout, item: Item, by: 1 | -1) => {
+  const count = (workout: DayWorkout, item: DayItem, by: 1 | -1) => {
     if (item.prescriptionPublicId) workout.progress.done += by;
   };
 
@@ -298,7 +300,8 @@ export function createFakeDayActions(
         plan.programs = plan.programs
           .map((p) => ({ ...p, order: place(p.programPublicId) }))
           .sort((a, b) => (a.order ?? last) - (b.order ?? last));
-        const rank = (w: Workout) => (w.scheduled ? (place(w.programPublicId) ?? last) : last + 1);
+        const rank = (w: DayWorkout) =>
+          w.scheduled ? (place(w.programPublicId) ?? last) : last + 1;
         plan.workouts.sort((a, b) => rank(a) - rank(b));
         changed();
         return { ok: true };
@@ -336,9 +339,6 @@ const sameName = (a: string, b: string) => foldName(a) === foldName(b);
 const COPY_SUFFIX = ' (copy)';
 const copyName = (name: string) =>
   `${name.slice(0, WORKOUT_NAME_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
-
-/** Monday first: the order `ProgramView.workouts[].usedOn` lists weekdays in. */
-const MONDAY_FIRST = [...WEEKDAYS.slice(1), WEEKDAYS[0]];
 
 /** A draft that fails `weekDraftSchema` because a day names one workout twice. */
 function repeatsAWorkout(draft: WeekDraft): boolean {
@@ -382,6 +382,7 @@ export function createFakeProgramActions(
   /** The program on screen, when it is the one this write names. */
   const shown = (programPublicId: string) =>
     state.program?.programPublicId === programPublicId ? state.program : null;
+  /** Monday first: the order `ProgramView.workouts[].usedOn` lists weekdays in. */
   const usedOn = (view: ProgramView, workoutPublicId: string) =>
     MONDAY_FIRST.filter((k) => view.week[k].some((s) => s.workoutPublicId === workoutPublicId));
 
@@ -583,7 +584,7 @@ export function createFakeProgramActions(
         const athlete = view?.athletes.find((a) => a.profilePublicId === profilePublicId);
         if (!view || !athlete) return refuse(PROGRAM_REFUSAL.not_found);
 
-        if (athlete.since > view.today) {
+        if (!hasStarted(athlete, view.today)) {
           // Not started yet: they leave, and nothing says they were ever on it.
           view.athletes = view.athletes.filter((a) => a !== athlete);
           const candidate = view.candidates.find((c) => c.profilePublicId === profilePublicId);
