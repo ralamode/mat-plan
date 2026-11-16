@@ -104,15 +104,50 @@ Neon-branch apply** yet (tech-debt.md), so don't cite one.
 
 ⚠️ **Generate on top of the newest migration on main, never before it.** drizzle's migrator applies a
 migration only when its journal `when` is later than the newest one already applied, so a migration
-generated before another one that merged first is **skipped on prod without an error**. If another
-migration lands while yours is open: copy your SQL and its hand-hardening out first; `git fetch
-origin` and merge `origin/main` in; make `meta/` **exactly** main's with `git checkout --no-overlay
-origin/main -- packages/db/migrations/meta` (a same-numbered snapshot is **main's** and stays; a
-renumbered snapshot of yours goes, or drizzle-kit diffs against it and emits main's DDL as yours),
-and check `git diff --stat origin/main -- packages/db/migrations/meta` prints nothing; delete only
-your own `.sql`; run `db:generate --name <id>_<slug>` (a hand-written migration adds `--custom` and
-gets its SQL pasted back). The new `.sql` must contain only your change; re-apply the hand-hardening
-(§2). The guard fails a journal out of time order.
+generated before another one that merged first is **skipped on prod without an error**. The guard
+fails a journal out of time order, and both of its messages point here.
+
+### Regenerate on top of main
+
+When another migration lands while yours is open (or the snapshot chain broke after a merge or a
+regenerate). Each command is one line; run them from the repo root.
+
+1. Save your migration's SQL and hand-hardening **from the commit that has your real SQL**, not one
+   after a wrong regenerate: `git show <commit>:packages/db/migrations/<your file>.sql`, saved
+   outside the repo.
+2. Bring main in:
+
+   ```bash
+   git fetch origin && git merge origin/main
+   ```
+
+3. Make `meta/` **exactly** main's. A snapshot with your number is **main's** and stays; any snapshot
+   of yours that main lacks goes, **tracked or untracked**, or drizzle-kit diffs against it and emits
+   main's DDL as yours:
+
+   ```bash
+   rm -rf packages/db/migrations/meta && git checkout origin/main -- packages/db/migrations/meta
+   git add -A packages/db/migrations/meta && git diff --cached --stat origin/main -- packages/db/migrations/meta
+   ```
+
+   The second line must print nothing.
+
+4. Delete only your own `.sql`, then generate. A migration with a schema change:
+
+   ```bash
+   pnpm --filter @mat-plan/db db:generate --name <id>_<slug>
+   ```
+
+   A hand-written migration **with no schema change** (a backfill, a `VALIDATE`):
+
+   ```bash
+   pnpm --filter @mat-plan/db db:generate --custom --name <id>_<slug>
+   ```
+
+   then paste your saved SQL into the new file.
+
+5. The new `.sql` must contain **only your change**. Re-apply its hand-hardening (§2). Never edit a
+   `when` or a `prevId` by hand.
 
 ## 6. Ship and deploy order
 
