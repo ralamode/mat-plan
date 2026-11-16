@@ -141,6 +141,10 @@ export async function migrateAndSeed(
     ...process.env,
     DATABASE_URL: dbUrl,
     DATABASE_URL_UNPOOLED: dbUrl,
+    // FAM-1 D10: every local harness (e2e:local, the screenshots, dev-local) gets the program
+    // fixtures. After the spread, so a caller's environment cannot turn it off; the URL is local
+    // (asserted above), which is what the seed's own refusal checks.
+    SEED_FIXTURES: '1',
   };
   log('▸ migrating…');
   await runScript('pnpm', ['--filter', '@mat-plan/db', 'db:migrate'], env);
