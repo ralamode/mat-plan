@@ -114,14 +114,31 @@ jobs:
             "$BASE_SHA...HEAD" -- "$MIG" ":(exclude)$JOURNAL" \
             ":(exclude)$MIG/meta/*_snapshot.json")
 
+          # Captured FIRST, on its own: the step runs `bash -e` without pipefail, so a failing
+          # `git show` inside a pipe would read as an empty journal. Here it aborts the step.
+          HEAD_JOURNAL=$(git show "HEAD:$JOURNAL")
+
           JOURNAL_BAD=''
           if git cat-file -e "$BASE_SHA:$JOURNAL" 2>/dev/null; then
             OLD=$(git show "$BASE_SHA:$JOURNAL" | jq -c '.entries')
-            NEW=$(git show "HEAD:$JOURNAL" | jq -c '.entries')
+            NEW=$(jq -c '.entries' <<<"$HEAD_JOURNAL")
             if [ "$(jq -n --argjson o "$OLD" --argjson n "$NEW" '$n[:($o|length)] == $o')" != 'true' ]; then
               JOURNAL_BAD=1
             fi
           fi
+
+          # ── Journal time order ──────────────────────────────────────────────
+          # drizzle's migrator applies a migration only when its journal `when` is LATER than the
+          # newest one already applied (`created_at < folderMillis`, drizzle-orm pg-core/dialect.js;
+          # an equal `when` is skipped too). A migration generated before another one that merged
+          # first appends an entry with an OLDER `when`, and prod skips it with no error. So every
+          # `when` must be a number strictly greater than the one before it. A non-number is
+          # refused because jq orders numbers before strings while drizzle's `<` coerces them.
+          ORDER_BAD=$(jq -r '.entries as $e
+            | [range(1; $e | length)
+              | select(($e[.].when | type) != "number" or $e[.].when <= $e[. - 1].when)
+              | "  \($e[.].tag): when=\($e[.].when), not after \($e[. - 1].tag) (\($e[. - 1].when))"]
+            | join("\n")' <<<"$HEAD_JOURNAL")
 
           # ── Snapshot chain integrity ────────────────────────────────────────
           # Each snapshot's `prevId` must be the PREVIOUS snapshot's `id`. drizzle only walks
@@ -134,16 +151,6 @@ jobs:
           # `prevId === id`, a self-reference. Checked here so the class cannot recur, and
           # checked on EVERY PR (not just ones touching migrations) because the break is
           # introduced by one PR and only surfaces in a later, unrelated one.
-          # drizzle's migrator applies a migration only when its journal `when` is LATER than the
-          # newest one already applied (`created_at < folderMillis`, drizzle-orm pg-core/dialect.js).
-          # A migration generated before another one merged, and merged after it, appends an entry
-          # with an OLDER `when` and is skipped on prod with no error. So every entry's `when` must
-          # be strictly greater than the one before it.
-          ORDER_BAD=$(git show "HEAD:$JOURNAL" | jq -r '.entries as $e
-            | [range(1; $e | length) | select($e[.].when <= $e[. - 1].when)
-            | "  \($e[.].tag): when=\($e[.].when), not after \($e[. - 1].tag) (\($e[. - 1].when))"]
-            | join("\n")')
-
           CHAIN_BAD=''
           PREV_ID=''
           for SNAP in $(ls "$MIG"/meta/[0-9]*_snapshot.json 2>/dev/null | sort); do
@@ -179,9 +186,12 @@ jobs:
             printf 'Journal entries out of time order (drizzle would SKIP these on prod, silently):\n%s\n' "$ORDER_BAD"
             cat <<'ORDERMSG'
 
-          The migration was generated before another one merged. Regenerate it on top of
-          current main: merge main in, delete your NEW migration's .sql, snapshot and journal
-          entry, then `pnpm --filter @mat-plan/db db:generate`. Never edit a `when` by hand.
+          The migration was generated before another one that merged first. Regenerate it on
+          top of current main: merge main in, delete your NEW migration's .sql, snapshot and
+          journal entry, then `pnpm --filter @mat-plan/db db:generate --name <id>_<slug>` and
+          re-apply its hand-hardening (db-migration skill). A hand-written migration with no
+          schema change: `drizzle-kit generate --custom --name <id>_<slug>` and paste the SQL
+          back. Never edit a `when` by hand.
           ORDERMSG
           fi
 
