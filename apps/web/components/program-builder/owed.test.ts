@@ -33,13 +33,8 @@ describe('WeekDraft: owed by its consumers', () => {
 });
 
 describe('ProgramList and ProgramView: owed by their consumers', () => {
-  it.todo('8a: the Programs list renders programs-list, and its empty state');
-  it.todo(
-    '8a: the program page renders family-program, new-program-empty, adult-program-with-copy',
-  );
   it.todo('10b: "Copied from" shows the frozen program name');
   it.todo('7a: createProgram and renameProgram pass the inherited action matrix');
-  it.todo('8a: Rename shows the name counter up to PROGRAM_NAME_MAX');
 });
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
@@ -54,7 +49,7 @@ describe('CopyDraft: owed by its consumers', () => {
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo('7a: no formData or headers reach a captured event');
-  it.todo('8a, 10b: a screen hides the control of a member that is undefined');
+  it.todo('10b: a screen hides the control of a member that is undefined');
   it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');

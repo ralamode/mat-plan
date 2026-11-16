@@ -19,8 +19,9 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Written at step 0b, before the lane's first step.** The three screens are stubs. Each step
-below adds its files, its diagram and its invariants here.
+🚧 **Built through step 8a.** The Programs list and the program page are real screens on the
+preview route; the workout editor is still a stub. Each step below adds its files and its
+invariants here.
 
 ## The map
 
@@ -37,8 +38,16 @@ below adds its files, its diagram and its invariants here.
 
 | File                                                            | What it is for                                                                                                        |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`. A stub until 8a.                                                         |
-| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`. A stub until 8a.                                                               |
+| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`: the list, "← Home", and `CreateProgram`.                                 |
+| `apps/web/components/program-builder/create-program.tsx`        | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.          |
+| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                 |
+| `apps/web/components/program-builder/program-header.tsx`        | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                               |
+| `apps/web/components/program-builder/whos-on-it.tsx`            | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                 |
+| `apps/web/components/program-builder/workouts-list.tsx`         | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.              |
+| `apps/web/components/program-builder/week-shell.tsx`            | The week, read-only. Step 10's week editor takes its place.                                                           |
+| `apps/web/components/program-builder/name-field.tsx`            | A name input with its counter (outside the label, by `aria-describedby`) and its refusal. Step 8 reuses it.           |
+| `apps/web/components/program-builder/builder-text.ts`           | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.              |
+| `apps/web/components/program-builder/routes.ts`                 | The builder's paths. The screens link with them; 7b builds its pages at them.                                         |
 | `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions })`; `picker` is the picker's own `MovementPickerData`. A stub until 8. |
 | `apps/web/components/program-builder/*-screen.test.tsx`         | Each stub's own output. The step that fills a stub in replaces its test.                                              |
 | `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.  |
@@ -68,6 +77,14 @@ below adds its files, its diagram and its invariants here.
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
    shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
+8. **A screen links by `routes.ts`, and 7b's pages live at those paths** _(maintainer, 2026-11-15)_.
+   The props carry only data and actions, so the screens build their own links; until 7b they
+   lead nowhere on the preview route.
+9. **"Used by … Changes apply to …" counts everyone in `athletes`**, someone whose last day is
+   today included: they are on it through today, so an edit now still changes their day.
+10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's
+    row, or to the section's heading when they had not started and leave the list. The message is
+    set after the move.
 
 ## Changing it
 
