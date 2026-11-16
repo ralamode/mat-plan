@@ -21,7 +21,7 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { card, isTick, lb, makeMount, press, status, workout } from './day-test-utils';
-import { LOGGED_CARD_CLASS, TINT_CLASS } from './item-card';
+import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
 import { formatRowValues } from './row-values';
 
 const { mount, show } = makeMount(createFakeDayActions);

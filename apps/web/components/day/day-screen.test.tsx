@@ -26,7 +26,7 @@ import {
   makeMount,
   workout,
 } from './day-test-utils';
-import { LOGGED_CARD_CLASS, TINT_CLASS } from './item-card';
+import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
 
 const { mount, show } = makeMount(createFakeDayActions);
 
