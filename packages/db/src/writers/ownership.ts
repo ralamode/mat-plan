@@ -552,18 +552,45 @@ export function programBlockIsLegacy() {
 }
 
 /**
- * 🔴 **THE template-block predicate: this household's ∧ `kind = template` ∧ live.** The only blocks
- * that own workouts (ADR 0007 A2 §2). Exported so lane P's writers (rename, save-workout, save-week,
- * copy, put-on), which arrive by `programPublicId`, apply the SAME rule instead of re-typing three
- * conjuncts; composed from `programBlockInHousehold` so the household conjunct is written once.
- * Mutations 46–48 drop each conjunct.
+ * **A template block of this household, live or hidden**: `programBlockInHousehold` ∧
+ * `kind = template`. The scope half of {@link liveTemplateBlockIn}, for a reader that must tell a
+ * hidden block from a foreign one (FAM-1 11b's `rowWorkout`): it puts the scope in the WHERE and reads
+ * liveness off the row, so a hidden block of ANOTHER household answers as missing, never as hidden
+ * (an existence oracle otherwise). Mutations 46 and 47 drop its two conjuncts.
  */
-export function liveTemplateBlockIn(scope: HouseholdScope) {
+export function templateBlockIn(scope: HouseholdScope) {
   return and(
     programBlockInHousehold(scope),
     eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.template),
-    isNull(schema.programBlocks.deletedAt),
   );
+}
+
+/**
+ * 🔴 **THE template-block predicate: this household's ∧ `kind = template` ∧ live.** The only blocks
+ * that own workouts (ADR 0007 A2 §2). Exported so lane P's writers (rename, save-workout, save-week,
+ * copy, put-on), which arrive by `programPublicId`, apply the SAME rule instead of re-typing three
+ * conjuncts; composed from {@link templateBlockIn} (FAM-1 11b) so the household and kind conjuncts
+ * are written once. Mutations 46–48 drop each conjunct.
+ */
+export function liveTemplateBlockIn(scope: HouseholdScope) {
+  return and(templateBlockIn(scope), isNull(schema.programBlocks.deletedAt));
+}
+
+/**
+ * **The block is in the same household as this profile**: `program_blocks.household_id` equals the
+ * profile's `household_id`, column to column (FAM-1 11b; runbook pre-flight (f)).
+ *
+ * 🔴 **Why a second household conjunct beside the scope's.** {@link templateBlockIn} ties the block to
+ * the SCOPE, and `isLiveProfile` ties the profile to the scope. Together they put both in one
+ * household only while a scope IS one household (ADR 0006; `ID-1` items 2 and 3). This ties the
+ * block to the profile directly, so a session can never name another family's workout whatever a
+ * scope later widens to. It reads no scope, so it adds nothing to `scope.test.ts`'s one-module rule.
+ *
+ * Consumers: the row writer's workout lookup (`writers/day/log-row.ts` → `rowWorkout`) and, at 11c,
+ * the amend. `verify/day.ts` 4d proves it apart from the scope conjunct; mutation 111 drops it.
+ */
+export function programBlockOfProfile(profileId: number) {
+  return sql`${schema.programBlocks.householdId} = (select ${schema.profiles.householdId} from ${schema.profiles} where ${schema.profiles.id} = ${profileId})`;
 }
 
 /**

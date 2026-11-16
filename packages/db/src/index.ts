@@ -59,6 +59,8 @@ export * from './writers/movement-catalog';
 export * from './writers/profile';
 export * from './writers/ownership';
 export * from './writers/strength-session';
+// FAM-1 11b: the row writer, its un-tick and its re-tick, for step 12b's Server Actions.
+export * from './writers/day';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
 // tooling (e.g. the ephemeral screenshot fixture) can target the seeded profile by
 // its stable id instead of re-typing the UUID (constants convention, single source).
