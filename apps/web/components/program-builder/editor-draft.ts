@@ -19,7 +19,9 @@ import { cleanName, EDITOR_ERRORS, quantityLabel } from './builder-text';
  * (FAM-1 step 8). Pure, so every refusal is tested without a screen.
  *
  * A card keeps the item it was loaded from (its ids, its type, its superset) and holds each field
- * as the text typed, so a half-typed value survives a move and a refusal names its field.
+ * as the text typed, so a half-typed value survives a move and a refusal names its field. The
+ * group's rest is the exception: it is the item's `restAfter`, because the superset rules move it
+ * from item to item.
  */
 export type EditorCard = {
   item: WorkoutDraftItem;

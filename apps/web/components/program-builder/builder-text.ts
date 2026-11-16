@@ -1,5 +1,6 @@
 import {
   collapseWhitespace,
+  quantityText,
   FREE_TEXT_NOTE_MAX,
   hasStarted,
   LOGGABLE_DIMENSION_LABELS,
@@ -150,6 +151,9 @@ export function copiedFromText(from: { programName: string; on: string }): strin
   return `Copied from ${from.programName} · ${formatDayShort(from.on)}`;
 }
 
+/** The link control's words, which the intro line names too. */
+const LINK_NEXT = 'Superset with next';
+
 /** The workout editor's words (FAM-1 step 8; the prototype's `vWorkout`). */
 export const EDITOR_COPY = {
   backToProgram: '← Program',
@@ -169,9 +173,8 @@ export const EDITOR_COPY = {
   instructionsHint: 'Shown with the item, every time.',
   rest: 'Rest',
   restPlaceholder: 'e.g. 90 s after each round',
-  supersetIntro:
-    'A superset is items done back to back. Tap “Superset with next” under an item; add a third the same way.',
-  linkNext: 'Superset with next',
+  supersetIntro: `A superset is items done back to back. Tap “${LINK_NEXT}” under an item; add a third the same way.`,
+  linkNext: LINK_NEXT,
   unlinkNext: 'Unlink from next',
   up: 'Up',
   down: 'Down',
@@ -230,7 +233,8 @@ export const removeLabel = (item: string) => `${EDITOR_COPY.remove} ${item}`;
 
 /** A superset's letter, read out: "A1" is "Superset A, item 1". */
 export function supersetSpoken(label: string): string {
-  return `Superset ${label[0]}, item ${label.slice(1)}`;
+  const letter = supersetLetterOf(label);
+  return `Superset ${letter}, item ${label.slice(letter.length)}`;
 }
 
 /** What a move or a remove did to the supersets, for the status line. */
@@ -267,10 +271,6 @@ export function unitChangedText(item: string, value: number, from: Unit, to: Uni
   return `${item}: now ${quantityText(value, to)} (was ${quantityText(value, from)}).`;
 }
 
-/** A number in its unit, as a sentence says it: a count is a bare number. */
-const quantityText = (value: number, unit: Unit) =>
-  unit === 'count' ? String(value) : formatValueUnit(value, unit);
-
 /** The save bar after a refused Save. No count, so it stays true as fields are fixed. */
 export function fieldsToFixText(count: number): string {
   return count === 1
@@ -305,15 +305,25 @@ export function linkText(link: {
   return link.joins ? `Join supersets ${link.joins[0]} and ${link.joins[1]}` : EDITOR_COPY.linkNext;
 }
 
-/** The control's accessible name: its visible words first, then the next item (WCAG 2.5.3). */
-export const linkLabel = (visible: string, next: string) => `${visible}: ${next}`;
+/**
+ * The control's accessible name: its visible words first (WCAG 2.5.3), then the two items it
+ * joins, this card's own first, as the card's other buttons name their own item.
+ */
+export const linkLabel = (visible: string, item: string, next: string) =>
+  `${visible}: ${item} and ${next}`;
+
+/** A superset's letter from its label: "A2" is "A", "AA1" is "AA". */
+export const supersetLetterOf = (label: string) => label.replace(/\d+$/, '');
+
+/** A rest a link or unlink removed, said one way. */
+const restRemovedText = (rest: string) => `Rest “${rest}” removed.`;
 
 /** A rest field's name, told apart from the others by its superset's letter. */
 export const restForLabel = (letter: string) => `of superset ${letter}`;
 
 /**
- * What a link did, for the status line: by superset letter, never by item names, so it stays one or
- * two lines in the save bar. A join names the rest it removed; the one kept is in the field.
+ * What a link did, for the status line: by superset letter, never by item names, so it stays
+ * within two lines in the save bar. A join names the rest it removed; the one kept is in the field.
  */
 export function linkedText(link: {
   letter: string;
@@ -322,24 +332,32 @@ export function linkedText(link: {
   from: readonly [string, string] | null;
   dropped: string | null;
 }): string {
-  if (link.joined === 'pair') return `Linked: superset ${link.letter}.`;
+  // A new pair: its rest field is on its last card, which may be off-screen.
+  if (link.joined === 'pair')
+    return `Linked: superset ${link.letter}. Its rest is on its last item.`;
   if (link.joined === 'one') return `Linked: superset ${link.letter} now has ${link.size} items.`;
   const done = `Supersets ${link.from![0]} and ${link.from![1]} are now ${link.letter}.`;
-  return link.dropped ? `${done} Rest “${link.dropped}” removed.` : done;
+  return link.dropped ? `${done} ${restRemovedText(link.dropped)}` : done;
 }
 
-/** What an unlink did: the superset ended, an item left it, or it became two. */
+/** What an unlink did: the superset ended, lost an item, or became two. By letter. */
 export function unlinkedText(unlink: {
   letter: string;
   ended: boolean;
-  left: string | null;
+  /** The size of the one side still a superset, or `null` when both are. */
+  size: number | null;
   droppedRest: string | null;
 }): string {
   if (unlink.ended) {
     const done = `Unlinked: superset ${unlink.letter} ended.`;
-    return unlink.droppedRest ? `${done} Rest removed: “${unlink.droppedRest}”.` : done;
+    return unlink.droppedRest ? `${done} ${restRemovedText(unlink.droppedRest)}` : done;
   }
-  return unlink.left
-    ? `Unlinked: ${unlink.left} left superset ${unlink.letter}.`
-    : `Unlinked: superset ${unlink.letter} is now two.`;
+  return unlink.size === null
+    ? `Unlinked: superset ${unlink.letter} is now two.`
+    : `Unlinked: superset ${unlink.letter} now has ${unlink.size} items.`;
+}
+
+/** The opposite tap, straight after: everything is as it was before the first. */
+export function undoneText(linked: boolean): string {
+  return linked ? 'Linked again: as it was.' : 'Unlinked again: as it was.';
 }

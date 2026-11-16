@@ -71,17 +71,18 @@ const unitOptions = (units: readonly Unit[]) =>
 
 /**
  * One item's card in the workout editor (FAM-1 step 8; the prototype's `.ed-card`): its name and
- * type, its fields by type (`TRACKING_TYPE_FIELDS`), its instructions, and Up, Down, Remove.
+ * type, its fields by type (`TRACKING_TYPE_FIELDS`), its instructions, and Up, Down, Remove; in its
+ * foot, the link to the next card and, on a superset's last card, the group's rest (8b).
  *
  * - **The fields sit two to a row on a phone.** At 360px a card's content box is about 300px: four
  *   fields in one row leave 43px of text, so a weight and its unit select don't fit (guide
  *   invariant 14). From `sm` they sit in one row, as the prototype's.
- * - Everything under the card's heading is one group named by it, so five "Instructions" fields
- *   are told apart.
+ * - The item's fields are one group named by its heading, so five "Instructions" fields are told
+ *   apart.
  * - The ends are `aria-disabled`, never `disabled`, so focus stays on the button (the routine
  *   editor's rule). The screen says "Already first." instead.
- * - The tools are two groups, reorder left and Remove right, so 8b's superset control can go
- *   between cards without wrapping Remove under the arrows.
+ * - The tools are two groups, reorder left and Remove right; the superset control has its own row
+ *   in the foot, so nothing wraps Remove under the arrows.
  */
 export function ItemCard({
   card,
@@ -106,7 +107,8 @@ export function ItemCard({
   isLast: boolean;
   errors: readonly EditorError[];
   controlRef: (control: CardControl, node: HTMLButtonElement | null) => void;
-  onChange: (field: Exclude<EditorField, 'name' | 'description'>, value: string) => void;
+  /** The card's typed fields; the rest has its own `onRest`, since it lives on the item. */
+  onChange: (field: Exclude<EditorField, 'name' | 'description' | 'rest'>, value: string) => void;
   onUnit: (unit: Unit) => void;
   onMove: (direction: MoveDirection) => void;
   /** With the tap's `event.timeStamp`, so the screen can tell a double tap. */
@@ -285,7 +287,7 @@ export function ItemCard({
                 type="button"
                 variant="ghost"
                 className="min-w-11"
-                aria-label={linkLabel(linkText(link), link.next)}
+                aria-label={linkLabel(linkText(link), item.itemName, link.next)}
                 onKeyDown={(event) => {
                   if (event.repeat && event.key === 'Enter') event.preventDefault();
                 }}

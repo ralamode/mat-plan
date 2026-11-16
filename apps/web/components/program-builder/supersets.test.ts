@@ -183,4 +183,35 @@ describe('linkWithNext and unlinkFromNext (step 8b)', () => {
   it('a fresh key is one the workout does not use', () => {
     expect(mintGroupKey([m('1', 'g1'), m('2', 'g1'), m('3', 'g2')])).toBe('g3');
   });
+
+  it('unlinking a group of four in the middle leaves two supersets, each with the rest', () => {
+    const four = normalizeSupersets([
+      m('1', 'a'),
+      m('2', 'a'),
+      m('3', 'a'),
+      m('4', 'a', '90 s'),
+    ]).items;
+    const out = unlinkFromNext(four, 1);
+    expect(shape(out.items)).toEqual([
+      ['a', 1, null],
+      ['a', 2, '90 s'],
+      ['g1', 1, null],
+      ['g1', 2, '90 s'],
+    ]);
+    expect(out).toMatchObject({ ended: false, droppedRest: null });
+  });
+
+  it('a blank rest is no rest: it never wins a join, and is never reported dropped', () => {
+    const out = linkWithNext(
+      [m('A1', 'a'), m('A2', 'a', '90 s'), m('B1', 'b'), m('B2', 'b', ' ')],
+      1,
+    );
+    expect(out.items.at(-1)!.restAfter).toBe('90 s');
+    expect(out.droppedRest).toBeNull();
+    const spaced = linkWithNext(
+      [m('A1', 'a'), m('A2', 'a', '90 s'), m('B1', 'b'), m('B2', 'b', '90 s ')],
+      1,
+    );
+    expect(spaced.droppedRest).toBeNull();
+  });
 });

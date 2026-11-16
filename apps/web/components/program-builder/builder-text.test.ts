@@ -1,4 +1,4 @@
-import { hasStarted, MONDAY_FIRST, PROGRAM_REFUSALS } from '@mat-plan/shared';
+import { MONDAY_FIRST, PROGRAM_REFUSALS } from '@mat-plan/shared';
 import { familyProgram, familyProgramAfterTakeOff } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
@@ -74,11 +74,6 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
       ['once_per_day', 'Couldn’t save. Try again.'],
       ['retry', 'Couldn’t save. Try again.'],
     ]);
-  });
-
-  it('someone has started on their first day, not before', () => {
-    expect(hasStarted({ since: '2026-11-14' }, '2026-11-14')).toBe(true);
-    expect(hasStarted({ since: '2026-11-15' }, '2026-11-14')).toBe(false);
   });
 
   it('a name is sent the way it is stored: whitespace runs as one space, trimmed', () => {

@@ -1,4 +1,4 @@
-import { SLOT_LABEL_MAX, type Superset } from '@mat-plan/shared';
+import { collapseWhitespace, SLOT_LABEL_MAX, type Superset } from '@mat-plan/shared';
 
 /** What the superset rules read on a card: its place in a group, and the group's rest. */
 export type SupersetMember = { superset: Superset; restAfter: string | null };
@@ -107,11 +107,16 @@ export function mintGroupKey(items: readonly SupersetMember[]): string {
   return `g${n}`;
 }
 
-/** The rest of the group keyed `group`, wherever in it it sits. */
+/** A rest as Save stores it: one line, trimmed, blank as none (so `' '` is no rest). */
+const cleanRest = (rest: string | null) => (rest ? collapseWhitespace(rest).trim() || null : null);
+
+/** The rest of the group keyed `group`, wherever in it it sits, as Save would store it. */
 const restOf = (items: readonly SupersetMember[], group: string | null) =>
   group === null
     ? null
-    : (items.find((item) => item.superset?.group === group && item.restAfter)?.restAfter ?? null);
+    : (items
+        .map((item) => (item.superset?.group === group ? cleanRest(item.restAfter) : null))
+        .find(Boolean) ?? null);
 
 /**
  * Link the item at `index` with the next one (FAM-1 step 8b; the prototype's `ss-link`).

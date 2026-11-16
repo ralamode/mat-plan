@@ -30,6 +30,8 @@ import {
   linkedText,
   removedText,
   saveRefusal,
+  supersetLetterOf,
+  undoneText,
   unlinkedText,
   unitChangedText,
   usedByText,
@@ -53,7 +55,7 @@ import { focusField, useAttempt } from './use-attempt';
 
 /**
  * The workout editor: one screen of item cards and one Save (FAM-1 step 8; plan §8 "Workout
- * editor"; the prototype's `vWorkout`). 8b adds linking supersets and their rest; 9 adds the item
+ * editor"; the prototype's `vWorkout`), with superset links and their rest (8b); 9 adds the item
  * picker ("+ Add items").
  *
  * **The screen is the page.** Its route is thin, so the screen renders the page's `<h1>` and its
@@ -89,7 +91,6 @@ const DISCARD_QUESTION_ID = 'workout-discard-question';
  */
 export const DOUBLE_TAP_MS = 500;
 
-/** Everything typed, as one comparable value: the screen is "changed" when it differs. */
 /**
  * Everything typed, as one comparable value: the screen is "changed" when it differs. Group keys
  * are compared by their order of first appearance, so a key minted by an unlink and relink is not
@@ -129,11 +130,16 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   /** The last link tap per card: a second one on the same card is the same tap. */
   const lastLinkAt = useRef(new Map<string, number>());
   /**
-   * A rest a card lost as a group's last item (a join, or an unlink that ended the group), by the
-   * card's id. When the card is a group's last again, it gets it back: Unlink after Join, or Link
-   * after Unlink, gives back what was there. Outside `cards`, so it never counts as a change.
+   * The last link or unlink: on which card, the cards before it, and the cards it made. The
+   * opposite tap on the same card, with nothing else changed in between (`cards` is still
+   * `after`, by identity: every other edit makes a new array), puts `before` back exactly. Any
+   * other edit leaves it stale, so it can never bring back a rest over one typed since.
    */
-  const lostRests = useRef(new Map<string, string>());
+  const lastToggle = useRef<{
+    id: string;
+    before: EditorCard[];
+    after: EditorCard[];
+  } | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const controls = useRef(new Map<string, HTMLButtonElement>());
   const keepEditingRef = useRef<HTMLButtonElement>(null);
@@ -153,14 +159,18 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     const [a, b] = [groupOf(index), groupOf(index + 1)];
     const joins =
       a !== null && b !== null && a !== b
-        ? ([labels[index]![0]!, labels[index + 1]![0]!] as const)
+        ? ([supersetLetterOf(labels[index]!), supersetLetterOf(labels[index + 1]!)] as const)
         : null;
     return { linked: a !== null && a === b, joins, next: next.item.itemName };
   };
   /** The superset's letter, on its last card only: where the group's rest is edited. */
   const restLetterOf = (index: number) => {
     const group = groupOf(index);
-    return group !== null && groupOf(index + 1) !== group ? (labels[index]?.[0] ?? null) : null;
+    return group !== null && groupOf(index + 1) !== group
+      ? labels[index]
+        ? supersetLetterOf(labels[index]!)
+        : null
+      : null;
   };
 
   // The browser's own "leave this page?" while there are changes. The App Router has no hook for
@@ -249,30 +259,43 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     const last = lastLinkAt.current.get(firstId);
     if (last !== undefined && at - last < DOUBLE_TAP_MS) return;
     lastLinkAt.current.set(firstId, at);
-    const items = cards.map((card) => card.item);
     const a = first.item.superset?.group ?? null;
     const b = second.item.superset?.group ?? null;
-    const letter = (i: number) => labels[i]?.[0] ?? '';
+    const unlinking = a !== null && a === b;
 
-    if (a !== null && a === b) {
+    // The opposite of the last tap, on the same card, with nothing changed since: undo it.
+    const undo = lastToggle.current;
+    if (undo && undo.id === firstId && undo.after === cards) {
+      lastToggle.current = null;
+      holdUnderThumb(firstId, 'link', undo.before);
+      report(undoneText(!unlinking));
+      return;
+    }
+
+    const items = cards.map((card) => card.item);
+    const letter = (i: number) => (labels[i] ? supersetLetterOf(labels[i]!) : '');
+    const settled = (out: readonly WorkoutDraftItem[]) => {
+      const next = withItems(out);
+      lastToggle.current = { id: firstId, before: cards, after: next };
+      holdUnderThumb(firstId, 'link', next);
+      return supersetLabels(out);
+    };
+
+    if (unlinking) {
       const result = unlinkFromNext(items, index);
-      const out = restoreRests(result.items);
-      if (result.ended && result.droppedRest) {
-        lostRests.current.set(second.item.prescriptionClientId, result.droppedRest);
-      }
-      holdUnderThumb(firstId, 'link', withItems(out));
-      const leftName = result.ended
-        ? null
-        : !out[index]!.superset
-          ? first.item.itemName
-          : !out[index + 1]!.superset
-            ? second.item.itemName
-            : null;
+      const after = settled(result.items);
+      const sides = [index, index + 1].filter((i) => result.items[i]!.superset);
+      const size =
+        sides.length === 1
+          ? result.items.filter(
+              (item) => item.superset?.group === result.items[sides[0]!]!.superset!.group,
+            ).length
+          : null;
       report(
         unlinkedText({
-          letter: letter(index),
+          letter: sides.length === 1 ? supersetLetterOf(after[sides[0]!]!) : letter(index),
           ended: result.ended,
-          left: leftName,
+          size,
           droppedRest: result.droppedRest,
         }),
       );
@@ -280,33 +303,17 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     }
 
     const result = linkWithNext(items, index);
-    if (result.merged && result.droppedRest) lostRests.current.set(firstId, result.droppedRest);
-    const out = restoreRests(result.items);
-    holdUnderThumb(firstId, 'link', withItems(out));
-    const after = supersetLabels(out);
-    const group = out[index]!.superset!.group;
-    const members = out.filter((item) => item.superset?.group === group);
+    const after = settled(result.items);
+    const group = result.items[index]!.superset!.group;
     report(
       linkedText({
-        letter: after[index]![0]!,
+        letter: supersetLetterOf(after[index]!),
         joined: result.merged ? 'groups' : a || b ? 'one' : 'pair',
-        size: members.length,
+        size: result.items.filter((item) => item.superset?.group === group).length,
         from: result.merged ? [letter(index), letter(index + 1)] : null,
         dropped: result.droppedRest,
       }),
     );
-  }
-
-  /** Each group's last card gets back a rest it lost there (`lostRests`). */
-  function restoreRests(out: WorkoutDraftItem[]): WorkoutDraftItem[] {
-    return out.map((item, i) => {
-      const group = item.superset?.group;
-      const id = cards[i]!.item.prescriptionClientId;
-      const lost = lostRests.current.get(id);
-      if (!group || lost === undefined || out[i + 1]?.superset?.group === group) return item;
-      lostRests.current.delete(id);
-      return { ...item, restAfter: lost };
-    });
   }
 
   const withItems = (out: readonly WorkoutDraftItem[]) =>
@@ -317,7 +324,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     setCards((all) =>
       all.map((card) =>
         card.item.prescriptionClientId === id
-          ? { ...card, item: { ...card.item, restAfter: value } }
+          ? { ...card, item: { ...card.item, restAfter: value === '' ? null : value } }
           : card,
       ),
     );
@@ -355,6 +362,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     const typed = card.value.trim();
     updateCard(card.item.prescriptionClientId, { unit });
     clearError(card.item.prescriptionClientId, 'value');
+    quiet();
     if (typed && card.unit && card.unit !== unit && Number.isFinite(Number(typed))) {
       report(unitChangedText(card.item.itemName, Number(typed), card.unit, unit));
     }
@@ -540,7 +548,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
       </section>
 
       {/* The save bar: always in view on a phone, where Save and what it says are. The status
-          line keeps two lines' height, the most an editor message takes at 360px, so a message
+          line keeps two lines' height, which a link or unlink message never passes, so one
           does not push the bar up over a card. */}
       <div
         ref={barRef}
