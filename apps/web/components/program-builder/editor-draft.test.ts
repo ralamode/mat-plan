@@ -7,13 +7,14 @@ import {
   TRACKING_TYPE_FIELDS,
   TRACKING_TYPES,
   unitsForTrackingType,
+  type Unit,
   type WorkoutDraft,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import { EDITOR_ERRORS, quantityLabel } from './builder-text';
-import { readDraft, toCards, type EditorCard } from './editor-draft';
+import { newCard, readDraft, toCards, type EditorCard } from './editor-draft';
 
 const typed = (cards: EditorCard[], name = heavyADraft.name) => ({
   name,
@@ -195,5 +196,44 @@ describe('a superset’s rest', () => {
     expect(
       errorsOf(readDraft(heavyADraft, typed(withRest('x'.repeat(SLOT_LABEL_MAX + 1))))),
     ).toEqual([['rest', EDITOR_ERRORS.rest]]);
+  });
+});
+
+describe('a card for a picked item', () => {
+  const option = (
+    trackingType: Parameters<typeof newCard>[0]['trackingType'],
+    unitDefault: Unit | null,
+  ) => ({
+    publicId: '00000000-0000-7000-8000-000000009001',
+    name: 'Bear crawl',
+    trackingType,
+    unitDefault,
+  });
+  it('has no numbers; its unit is the type’s, else the item’s own when the type allows it', () => {
+    const card = newCard(option('weight_reps', 'kg'), '00000000-0000-7000-8000-000000009002');
+    expect(card.item).toMatchObject({
+      prescriptionClientId: '00000000-0000-7000-8000-000000009002',
+      itemPublicId: '00000000-0000-7000-8000-000000009001',
+      itemName: 'Bear crawl',
+      trackingType: 'weight_reps',
+    });
+    // Left alone, it saves "log in the item's own unit, no target" (invariant 13's exception).
+    const read = readDraft(
+      { ...heavyADraft, items: [] },
+      { name: 'W', description: '', cards: [{ ...card, sets: '3' }] },
+    );
+    expect(saved(read).items[0]!.quantities).toEqual([
+      { slot: QUANTITY_SLOT.primary, unit: 'kg', value: null },
+    ]);
+    expect(card).toMatchObject({ sets: '', reps: '', value: '', notes: '', unit: 'kg' });
+    expect(card.item).toMatchObject({
+      sets: null,
+      targetReps: null,
+      quantities: [],
+      superset: null,
+    });
+    expect(newCard(option('weight_reps', 'min'), 'x').unit).toBeNull();
+    expect(newCard(option('duration', null), 'x').unit).toBe('min');
+    expect(newCard(option('reps', 'kg'), 'x').unit).toBeNull();
   });
 });
