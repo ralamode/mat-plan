@@ -19,9 +19,9 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 8b.** The Programs list, the program page and the workout editor, with
-its supersets, are real screens on the preview route; the editor adds no items yet (9). Each step
-below adds its files and its invariants here.
+🚧 **Built through step 9.** The Programs list, the program page and the workout editor, with
+its supersets and its item picker, are real screens on the preview route. Each step below adds its
+files and its invariants here.
 
 ## The map
 
@@ -51,31 +51,32 @@ flowchart LR
 
 ## Files
 
-| File                                                            | What it is for                                                                                                                   |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`: the list, "← Home", and `CreateProgram`.                                            |
-| `apps/web/components/program-builder/create-program.tsx`        | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.                     |
-| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                            |
-| `apps/web/components/program-builder/program-header.tsx`        | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                                          |
-| `apps/web/components/program-builder/whos-on-it.tsx`            | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                            |
-| `apps/web/components/program-builder/workouts-list.tsx`         | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.                         |
-| `apps/web/components/program-builder/week-shell.tsx`            | The week, read-only. Step 10's week editor takes its place.                                                                      |
-| `apps/web/components/program-builder/name-field.tsx`            | A short text field with its counter (outside the label, by `aria-describedby`) and its refusal; `multiline` for a note.          |
-| `apps/web/components/program-builder/status-line.tsx`           | A screen's one status line: `useStatusLine()` (clear, then set a frame later) and `StatusLine` (an `Announcer` and an alert).    |
-| `apps/web/components/program-builder/builder-text.ts`           | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.                         |
-| `apps/web/components/program-builder/routes.ts`                 | The builder's paths. The screens link with them; 7b builds its pages at them.                                                    |
-| `apps/web/components/program-builder/group-list.tsx`            | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                |
-| `apps/web/components/program-builder/use-name-form.ts`          | A name form's state and submit (Create, Rename): refuses an empty name, drops an answer that arrives after Cancel.               |
-| `apps/web/components/program-builder/use-attempt.ts`            | `useAttempt()` (one write's attempt; a late answer is dropped) and `focusField`, shared by the name forms and the editor's Save. |
-| `apps/web/components/program-builder/field-label.tsx`           | A field's label with "(optional)".                                                                                               |
-| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions, program? })`: the cards, one Save, and the save bar with its status line.         |
-| `apps/web/components/program-builder/item-card.tsx`             | One item's card: fields by type, a unit select, instructions, Up, Down, Remove; the link to the next card; the group's rest.     |
-| `apps/web/components/program-builder/editor-draft.ts`           | The editor's typed draft (`toCards`) and `readDraft`: every refusal the writer would make, per field, before Save calls.         |
-| `apps/web/components/program-builder/supersets.ts`              | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                |
-| `apps/web/components/program-builder/*.test.ts(x)`              | Each screen's and module's tests, beside it.                                                                                     |
-| `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.             |
-| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                              |
-| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                                                                                           |
+| File                                                              | What it is for                                                                                                                   |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/program-builder/programs-list-screen.tsx`    | `ProgramsListScreen({ programs, actions })`: the list, "← Home", and `CreateProgram`.                                            |
+| `apps/web/components/program-builder/create-program.tsx`          | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.                     |
+| `apps/web/components/program-builder/program-screen.tsx`          | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                            |
+| `apps/web/components/program-builder/program-header.tsx`          | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                                          |
+| `apps/web/components/program-builder/whos-on-it.tsx`              | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                            |
+| `apps/web/components/program-builder/workouts-list.tsx`           | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.                         |
+| `apps/web/components/program-builder/week-shell.tsx`              | The week, read-only. Step 10's week editor takes its place.                                                                      |
+| `apps/web/components/program-builder/name-field.tsx`              | A short text field with its counter (outside the label, by `aria-describedby`) and its refusal; `multiline` for a note.          |
+| `apps/web/components/program-builder/status-line.tsx`             | A screen's one status line: `useStatusLine()` (clear, then set a frame later) and `StatusLine` (an `Announcer` and an alert).    |
+| `apps/web/components/program-builder/builder-text.ts`             | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.                         |
+| `apps/web/components/program-builder/routes.ts`                   | The builder's paths. The screens link with them; 7b builds its pages at them.                                                    |
+| `apps/web/components/program-builder/group-list.tsx`              | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                |
+| `apps/web/components/program-builder/use-name-form.ts`            | A name form's state and submit (Create, Rename): refuses an empty name, drops an answer that arrives after Cancel.               |
+| `apps/web/components/program-builder/use-attempt.ts`              | `useAttempt()` (one write's attempt; a late answer is dropped) and `focusField`, shared by the name forms and the editor's Save. |
+| `apps/web/components/program-builder/field-label.tsx`             | A field's label with "(optional)".                                                                                               |
+| `apps/web/components/program-builder/workout-editor-screen.tsx`   | `WorkoutEditorScreen({ draft, picker, actions, program? })`: the cards, one Save, and the save bar with its status line.         |
+| `apps/web/components/program-builder/item-card.tsx`               | One item's card: fields by type, a unit select, instructions, Up, Down, Remove; the link to the next card; the group's rest.     |
+| `apps/web/components/program-builder/editor-draft.ts`             | The editor's typed draft (`toCards`) and `readDraft`: every refusal the writer would make, per field, before Save calls.         |
+| `apps/web/components/program-builder/item-picker/item-picker.tsx` | "Add items": the movement picker's multi mode, the selection's summary, "Add n items" and the new-item form.                     |
+| `apps/web/components/program-builder/supersets.ts`                | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                |
+| `apps/web/components/program-builder/*.test.ts(x)`                | Each screen's and module's tests, beside it.                                                                                     |
+| `apps/web/components/program-builder/owed.test.ts`                | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.             |
+| `apps/web/app/programs/index.ts`                                  | A placeholder so the directory exists. Not a route.                                                                              |
+| `apps/web/lib/dal/program/index.ts`                               | A placeholder so the directory exists.                                                                                           |
 
 ## Invariants
 
@@ -133,7 +134,7 @@ flowchart LR
     `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
     whole number or blank _(maintainer, 2026-11-16)_, a quantity a plain decimal under its unit's
     ceiling (blank: the unit with no target), notes one line. An item loaded with no quantity is
-    saved with none until a unit is chosen: the machine never picks the unit a kid logs in. What
+    saved with none until a unit is chosen: the machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
     `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
     editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
     sends.
@@ -160,7 +161,48 @@ flowchart LR
     (`beforeunload`). The phone's back gesture and Android Back do not: the App Router has no hook
     for a history navigation, so a swipe back discards the draft. Recorded, not built.
 
+16. **The item picker** (step 9) _(maintainer, 2026-11-16)_:
+    - **The selection is the editor's**, in pick order, kept across a Close or a back swipe until
+      Add; items made in the picker are kept too, so a reopened picker lists them.
+    - **Add** appends a card per item in pick order (`newCard`): a fresh `prescriptionClientId`, **no
+      numbers**, and the unit the type fixes, else the item's own declared unit when the type allows
+      it, else none. Focus goes to the first new card's heading; the status line says how many.
+    - **The new-item form takes over the sheet**, and **what it tracks has no default**: Create is
+      inactive until a type is chosen, with a line explaining the chosen type, and the warning that
+      the item can't be deleted or renamed and its type can't change.
+    - **A name already in the list selects that item**, by the picker's own rule (aliases
+      included): "RDL" selects Romanian Deadlift. If the server still answers `existed` (a stale
+      list, or another parent got there first), the item it names is added under its stored name
+      and the status line says "… is in the list (Reps). Selected." (v12 has no such line). The
+      name comes from the answer's `name` once contract C8 lands; until then `storedName` reads it
+      defensively, in one place (`owed.test.ts` holds the swap).
+    - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
+    - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
+      ancestors, so a form in the sheet would also submit the workout.
+    - **Focus and messages**: after Create or "Select …", focus is on that item's row, scrolled into
+      view; after Cancel, on the create button; an inactive Create moves to what is missing. A
+      message (created, selected, the cap) is seen in the footer and heard in the sheet's status, a failure to reach the server is seen above Create in the form with focus left on Create, an empty name says why once Create is pressed, and a made item is listed once per id;
+      and the next search clears it. Closing the sheet drops the form; the ticks and items made
+      stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
+      `DOUBLE_TAP_MS` of the form closing is ignored (Create sat in the same place). A name the
+      same-movement rule folds to nothing ("S") is refused, shown once Create is pressed rather
+      than on the first keystroke. **A create in flight ends** with Cancel, a closed sheet or a
+      fresh form (invariant 11): its answer leaves the screen alone, but a new item it made is still
+      listed, since the write may have landed. At the cap, an item made or found is listed but not
+      ticked, and the message says so.
+    - Differences from v12, each a decision above or recorded here: the selection survives Close;
+      the form takes over the sheet; the type has no default; added cards have no numbers (v12
+      prefilled 3 × 10 and 20 lb); a ticked row is outlined with a ✓ box, not green (the `done`
+      green means "logged"); rows are grouped under the picker's headings, not one A–Z list; the
+      search is pinned in the header; a ✕ in the header and Close in the footer; the footer lists
+      the picks ("2 picked: …", at most two lines) and the cap; an item already on a card says
+      "already in this workout"; with no match, the household's list empties under "New item: “…”" (the catalog's browse groups, once 6a supplies them, stay).
+
 ## Traps
+
+- **The sheet pops its history entry on close, and in jsdom that `popstate` lands in the next
+  test**, closing its sheet. A test file that opens a sheet stubs `history.back` (as
+  `sheet.test.tsx` does).
 
 - **A name form assumes leaving the screen unmounts it.** `useNameForm` ends the attempt in an
   effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in

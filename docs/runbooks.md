@@ -363,7 +363,9 @@ each step's migration header names the statements). The recovery is this re-run;
 migrations when nobody is logging. 0022: every movement resolved by name (a strength save with a
 typed name, existing or new) and every `insert into movements` (a new item, the seed). 0024: EVERY
 insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll Vercel back to the
-previous deployment (its code works on either schema), then re-run as below. ⚠️ Once the migration is
+previous deployment (its code works on either schema), then re-run as below. 0025: no request-path
+statement (the only insert into `prescriptions` is the fixtures seed, and nothing reads or writes
+`prescription_quantities`), so the app keeps serving; re-run as below. ⚠️ Once the migration is
 observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
 production from following new deployments automatically, so later merges would not go live (unverified
 here; check the Vercel dashboard after a rollback). 🔴 **The window is also a privacy condition:** a
@@ -1276,6 +1278,10 @@ UNION ALL SELECT 'workouts', count(*) FROM workouts WHERE block_id IN (SELECT id
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
   WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
     (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
+-- FAM-1 4b: a template prescription's typed targets, scoped through the prescription (no
+-- deleted_at filter: a hidden quantity still refuses its prescription's delete).
+UNION ALL SELECT 'prescription_quantities', count(*) FROM prescription_quantities
+  WHERE prescription_id IN (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
 -- TEN-2a: `movements` is no longer purely global. A row with `household_id = H` is free text THIS
 -- household typed; a row with `household_id IS NULL` is seeded reference data owned by nobody and
 -- must SURVIVE. Counted here because the counts are the proof, and step 5 has nothing to compare
@@ -1433,7 +1439,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 16 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 17 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -1443,30 +1449,35 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
 `packages/db/src/schema.ts` by two independent reviews:
 
-| #   | Table                   | Scoped by                                                      |
-| --- | ----------------------- | -------------------------------------------------------------- |
-| 1   | `entry_set_quantities`  | `entry_set_id` ∈ entry_sets of entries of H                    |
-| 2   | `entry_sets`            | `entry_id` ∈ entries of H                                      |
-| 3   | **`entries`**           | `profile_id` ∈ H — **before 4 and 5**                          |
-| 4   | `supersets`             | `session_id` ∈ sessions of H                                   |
-| 5   | `sessions`              | `profile_id` ∈ H                                               |
-| 6   | `day_readiness`         | `profile_id` ∈ H                                               |
-| 7   | `ramp_targets`          | `profile_id` ∈ H                                               |
-| 8   | `prescription_targets`  | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H |
-| 9   | `prescriptions`         | `block_id` ∈ program_blocks of H                               |
-| 9a  | `block_day_workouts`    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**   |
-| 9b  | `workouts`              | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**   |
-| 10  | `program_blocks`        | `household_id` = H                                             |
-| 11  | **`movements`**         | `household_id` = H — **TEN-2a; see below**                     |
-| 12  | `profiles`              | `household_id` = H                                             |
-| 13  | **`household_members`** | `household_id` = H — **AUTH-1 1b; see below**                  |
-| 14  | `households`            | `id` = H                                                       |
+| #   | Table                     | Scoped by                                                       |
+| --- | ------------------------- | --------------------------------------------------------------- |
+| 1   | `entry_set_quantities`    | `entry_set_id` ∈ entry_sets of entries of H                     |
+| 2   | `entry_sets`              | `entry_id` ∈ entries of H                                       |
+| 3   | **`entries`**             | `profile_id` ∈ H — **before 4 and 5**                           |
+| 4   | `supersets`               | `session_id` ∈ sessions of H                                    |
+| 5   | `sessions`                | `profile_id` ∈ H                                                |
+| 6   | `day_readiness`           | `profile_id` ∈ H                                                |
+| 7   | `ramp_targets`            | `profile_id` ∈ H                                                |
+| 8   | `prescription_targets`    | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H  |
+| 8a  | `prescription_quantities` | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9** |
+| 9   | `prescriptions`           | `block_id` ∈ program_blocks of H                                |
+| 9a  | `block_day_workouts`      | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**    |
+| 9b  | `workouts`                | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**    |
+| 10  | `program_blocks`          | `household_id` = H                                              |
+| 11  | **`movements`**           | `household_id` = H — **TEN-2a; see below**                      |
+| 12  | `profiles`                | `household_id` = H                                              |
+| 13  | **`household_members`**   | `household_id` = H — **AUTH-1 1b; see below**                   |
+| 14  | `households`              | `id` = H                                                        |
 
-**Steps 9a and 9b are lettered, not numbered**, so every "step 11" and "step 14" cited across the
+**Steps 8a, 9a and 9b are lettered, not numbered**, so every "step 11" and "step 14" cited across the
 repo still names the same table. A week slot references its workout through a composite FK, and a
 workout references its block, both `NO ACTION`: out of order, the delete raises `23503` and the
-transaction rolls back (`db:verify` proves both refusals and the order that commits). Steps 4b and 5
-of FAM-1 add their tables the same way.
+transaction rolls back (`db:verify` proves both refusals and the order that commits). FAM-1 4b adds
+two more `NO ACTION` edges, so step 8a precedes 9 and 9 precedes 9b: a prescription's quantity
+refuses the prescription's delete (a **hidden** quantity too, which is why no step filters on
+`deleted_at`), and a template prescription refuses its workout's, through the composite FK
+`(workout_id, block_id)` (`db:verify` → FAM-1 4b proves both, and the order that commits). Step 5 of
+FAM-1 adds its tables the same way.
 
 Steps 1 and 2 are redundant with the `ON DELETE CASCADE` on `entry_sets.entry_id` and
 `entry_set_quantities.entry_set_id` — written out anyway, because **the counts are the proof** and a
@@ -1815,7 +1826,19 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
      control rather than a scope setting. ⚠️ Do **not** write "Google sends us nothing but an email
      address" — it is false at the token, and a privacy notice that is false in a checkable way is
      worse than one that is wordy.
-- [ ] 🔴 **Clerk's data region**, and whether it is selectable on the tier in use.
+- [x] **Clerk's data region:** US only; Clerk offers no region choice (its docs, read
+      2026-11-16 for `SCALE-2`; recorded in [data-inventory.md](./privacy/data-inventory.md) §7).
+- [ ] **Sentry's data region** (`SCALE-2`): the host of production's `SENTRY_DSN` in Vercel reads
+      `…ingest.us.sentry.io` (US) or `…ingest.de.sentry.io` (EU); a host with neither segment (the
+      `.env.example` form): read the region in Sentry's organisation settings. Record it in
+      data-inventory.md §7.
+- [ ] **Vercel's function region** (`SCALE-2`): read it in the project's dashboard; that is the
+      authority. ⚠️ An `x-vercel-id` header is only a cross-check, and only on a response a function
+      served: a redirect or cached page shows one region segment, which is the EDGE, and from US
+      East the edge is also `iad1`, so it proves nothing.
+- [ ] **Each processor's data processing agreement** (`SCALE-2`): whether one is offered, which
+      version applies and whether it was accepted. Proposed as owed before the first outside family
+      (Beta 1); not yet a Beta 1 exit criterion.
 - [ ] 🔴 **Clerk's retention** for user records and sign-in/session logs → a `data-inventory.md` §8 row.
       `beta-1.md`'s exit criterion requires the notice to ship **with no blanks**, so read it while the
       console is open for the free-tier box rather than adding a fourth "not confirmed".

@@ -262,10 +262,19 @@ export type RenameProgram = z.infer<typeof renameProgramSchema>;
  * A name with no key can be matched to no item (`existingItem`), so nothing in this contract would
  * stop it being added twice; it answers `invalid` instead (contract change C8).
  */
+/**
+ * What `newItemSchema` says about a name, where `movementNameSchema`'s own messages do not cover
+ * it. A form shows a schema's message under the field, so these are sentences for a person.
+ */
+export const NEW_ITEM_NAME_MESSAGES = {
+  /** The name has no key (`S`): nothing the "same movement" rule can match on. */
+  noKey: 'Give the item a name with a letter or a number in it.',
+} as const;
+
 export const newItemSchema = z.object({
   name: movementNameSchema
     .refine((v) => !hasControlChar(v), { message: 'a name has no control characters' })
-    .refine((v) => movementNameKey(v) !== '', { message: 'a name needs more than a lone "s"' }),
+    .refine((v) => movementNameKey(v) !== '', { message: NEW_ITEM_NAME_MESSAGES.noKey }),
   trackingType: trackingTypeSchema,
 });
 export type NewItem = z.infer<typeof newItemSchema>;

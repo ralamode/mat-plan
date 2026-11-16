@@ -6,7 +6,6 @@ import {
   type StrengthSetInput,
   type Unit,
   UNIT_DIMENSION,
-  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -17,6 +16,7 @@ import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
+import { insertEntrySetRows, type EntrySetRowInput } from './session-rows';
 import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership';
 
 /**
@@ -172,12 +172,12 @@ async function writeSessionStrengthEntry(
     sessionId: number;
     movementId: number;
     movementName: string;
-    unit: Unit; // GAP-3: narrowed from `string` — it now indexes UNIT_DIMENSION_BY_CODE
+    unit: Unit; // GAP-3: narrowed from `string` — `insertEntrySetRows` indexes UNIT_DIMENSION_BY_CODE with it
     activityTypeId: number;
     day: string;
     clientId: string;
     // `weight` is optional here though the schema always emits it — direct callers omit it.
-    sets: readonly (Omit<StrengthSetInput, 'weight'> & { weight?: number | null })[];
+    sets: readonly EntrySetRowInput[];
     status?: MovementStatus;
     supersetId?: number | null;
     supersetOrder?: number | null;
@@ -233,63 +233,7 @@ async function writeSessionStrengthEntry(
     };
   }
 
-  if (args.sets.length > 0) {
-    // GAP-3: the SET row now carries only reps, status and the two qualitative booleans; every
-    // measured quantity is a child row written below. `weight_num`/`weight_label` are gone.
-    const setRows = await exec
-      .insert(schema.entrySets)
-      .values(
-        args.sets.map((s, i) => ({
-          publicId: newId(),
-          clientId: newId(),
-          entryId: entry.id,
-          idx: i + 1, // 1-based
-          reps: s.reps,
-          // `bodyweight`/`band` are MODES, not quantities (GAP-3 §7.2b) — booleans, and omitted when
-          // false so Postgres applies its own default and the row stays byte-minimal.
-          ...(s.isBodyweight ? { isBodyweight: true } : {}),
-          ...(s.isBand ? { isBand: true } : {}),
-          // GAP-1 P1-1b — same omitted-takes-the-DB-default idiom as the entry's status. A `done` set
-          // omits the column entirely, so every pre-existing caller writes a byte-identical row.
-          ...('status' in s && s.status !== undefined ? { status: s.status } : {}),
-        })),
-      )
-      .returning({ id: schema.entrySets.id });
-
-    // One PRIMARY quantity per set that carries a magnitude.
-    //
-    // The unit comes from the MOVEMENT, and the dimension is derived from that unit rather than
-    // assumed: since PR 4a the movement may be logged in `in` (a box jump) or `sec` (a hold), not only
-    // `lb`/`kg`. Deriving keeps the pair consistent with `units(code, dimension)`, which the composite
-    // FK checks — a hard-coded `'mass'` here would be an FK violation surfacing as a 500 on a gym
-    // floor. Census §4.6 is why the unit is not on the value: "weight units are never written", so a
-    // bare `185` means 185 of whatever this movement is logged in.
-    //
-    // A set with no magnitude (pure bodyweight, or a band) writes NO quantity row — a mode is not a
-    // measurement, and a row with a NULL value would be the EAV smell the child table avoids.
-    const quantityRows: (typeof schema.entrySetQuantities.$inferInsert)[] = [];
-    args.sets.forEach((s, i) => {
-      // `=== null` is not enough: the SCHEMA always emits `weight: null`, but the relaxed inner
-      // signature above lets a direct caller (a future importer) omit the key entirely, so handle
-      // both. Until DX-7 this was the ONLY thing standing between an omission and
-      // `numeric: "undefined"` from Postgres, because `packages/db` was typechecked by nothing; the
-      // package now has its own `tsconfig.json` in `pnpm typecheck`, so an omission through the
-      // public `writeStrengthSession` is a compile error. This stays as the inner guard.
-      if (s.weight === null || s.weight === undefined) return;
-      quantityRows.push({
-        clientId: newId(),
-        entrySetId: setRows[i].id,
-        slot: QUANTITY_SLOT.primary,
-        dimension: UNIT_DIMENSION_BY_CODE[args.unit],
-        unit: args.unit,
-        valueNum: String(s.weight), // numeric column takes a string (precision-safe)
-      });
-    });
-
-    if (quantityRows.length > 0) {
-      await exec.insert(schema.entrySetQuantities).values(quantityRows);
-    }
-  }
+  await insertEntrySetRows(exec, { entryId: entry.id, unit: args.unit, sets: args.sets });
 
   return { ...entry, created: true };
 }
