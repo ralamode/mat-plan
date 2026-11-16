@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0027_fam1_5_program_assignments.sql b/packages/db/migrations/0027_fam1_5_program_assignments.sql
+--- a/packages/db/migrations/0027_fam1_5_program_assignments.sql
++++ b/packages/db/migrations/0027_fam1_5_program_assignments.sql
+@@ -58,7 +58,7 @@
+ --> statement-breakpoint
+ ALTER TABLE "program_assignment_weekdays" ADD CONSTRAINT "program_assignment_weekdays_assignment_fkey" FOREIGN KEY ("assignment_id") REFERENCES "public"."program_assignments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ ALTER TABLE "program_assignments" ADD CONSTRAINT "program_assignments_block_id_program_blocks_id_fk" FOREIGN KEY ("block_id") REFERENCES "public"."program_blocks"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-ALTER TABLE "program_assignments" ADD CONSTRAINT "program_assignments_profile_id_profiles_id_fk" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
++ALTER TABLE "program_assignments" ADD CONSTRAINT "program_assignments_profile_id_profiles_id_fk" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ CREATE INDEX "idx_program_assignment_weekdays_assignment" ON "program_assignment_weekdays" USING btree ("assignment_id");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_program_assignment_weekdays_assignment_weekday" ON "program_assignment_weekdays" USING btree ("assignment_id","weekday") WHERE "program_assignment_weekdays"."deleted_at" is null;--> statement-breakpoint
+ CREATE INDEX "idx_program_assignments_block" ON "program_assignments" USING btree ("block_id");--> statement-breakpoint

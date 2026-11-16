@@ -15,6 +15,18 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### `program_blocks.name` has no length CHECK (found 2026-11-16, lane P's 6a-i review)
+
+- **What & why it's debt:** `workouts.name` and every other program text carry a length CHECK pinned
+  to its shared const by `db:verify`; `program_blocks.name` (migration `0007`) has none. A template
+  block's name is bounded only by `PROGRAM_NAME_MAX` in zod, so a writer that skips the schema would
+  store any length.
+- **Why not fixed in passing:** the column is populated (the seeded and archived blocks), so the CHECK
+  is `NOT VALID` in one migration and `VALIDATE` in a second PR, after a read of production's longest
+  name. Scoped `kind = 'template' or …` if a legacy name exceeds it, as 0025 did for `target_reps`.
+- **Owner:** lane A (FAM-1). **Trigger:** after FAM-1 step 5 (`0027`) is applied.
+- **Severity:** low (nothing writes a template block outside the zod-validated writers).
+
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program-assignments.ts b/packages/db/src/queries/program-assignments.ts
+--- a/packages/db/src/queries/program-assignments.ts
++++ b/packages/db/src/queries/program-assignments.ts
+@@ -36,7 +36,7 @@
+  */
+ export function assignmentCurrentAsOf(today: string) {
+   const a = schema.programAssignments;
+-  return and(isNull(a.deletedAt), or(isNull(a.activeTo), gte(a.activeTo, today)));
++  return and(isNull(a.deletedAt), or(isNull(a.activeTo), sql`${a.activeTo} > ${today}`));
+ }
+ 
+ /**

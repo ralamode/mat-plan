@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -2317,7 +2317,7 @@
+       SELECT a.id FROM program_assignments a
+         JOIN program_blocks b ON b.id = a.block_id
+         JOIN profiles pr ON pr.id = a.profile_id
+-       WHERE a.profile_id = ${p} AND b.household_id <> pr.household_id
++       WHERE a.profile_id = ${p} AND false
+        ORDER BY 1`),
+   );
+ }
