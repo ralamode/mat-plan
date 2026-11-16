@@ -1815,7 +1815,14 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
      control rather than a scope setting. ⚠️ Do **not** write "Google sends us nothing but an email
      address" — it is false at the token, and a privacy notice that is false in a checkable way is
      worse than one that is wordy.
-- [ ] 🔴 **Clerk's data region**, and whether it is selectable on the tier in use.
+- [x] **Clerk's data region:** US only; Clerk offers no region choice (its docs, read
+      2026-11-16 for `SCALE-2`; recorded in [data-inventory.md](./privacy/data-inventory.md) §7).
+- [ ] **Sentry's data region** (`SCALE-2`): the host of production's `SENTRY_DSN` in Vercel reads
+      `…ingest.us.sentry.io` (US) or `…ingest.de.sentry.io` (EU). Record it in data-inventory.md §7.
+- [ ] **Vercel's function region** (`SCALE-2`): `curl -sI https://<prod-host>/ | grep -i x-vercel-id`
+      shows `<edge>::<function region>::<id>`; expect `iad1`. Or read it in the dashboard.
+- [ ] **Each processor's data processing agreement** (`SCALE-2`): whether one is offered, which
+      version applies and whether it was accepted. Before the first outside family (Beta 1).
 - [ ] 🔴 **Clerk's retention** for user records and sign-in/session logs → a `data-inventory.md` §8 row.
       `beta-1.md`'s exit criterion requires the notice to ship **with no blanks**, so read it while the
       console is open for the free-tier box rather than adding a fourth "not confirmed".
