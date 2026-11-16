@@ -56,16 +56,14 @@ the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b
 
 ## Invariants
 
-1. 🔴 **`DayScreen`, plus three parts the page places** (departs from plan §6, decided by
-   the maintainer for 13d, 2026-11-16; the plan's amendment, D34, is the roadmap thread's). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
+1. 🔴 **`DayScreen`, plus three parts the page places** (plan D34, decided by the
+   maintainer for 13d, 2026-11-16). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
    once, at step 12c, after Bodyweight and Life. v12 puts three things above those sections, so
    they are their own components, given the **same `plan`** (and the same `actions` where they
    write): `AthleteSwitcher({ plan, hrefFor, className: 'lg:hidden' })` under the `<h1>` (the
    nav rail lists the athletes from `lg`), then
    `ProgramLine({ plan, actions })` and `NotOnAProgram({ plan, programsHref? })`. Everything else a
-   later step adds lives inside the screen. The preview harness is the contract owner's: it wires the three parts
-   around `DayScreen` in the page's order after 13d merges, and 12c places them on the page. Their
-   props are a contract with the page and the harness: change them through the contract owner.
+   later step adds lives inside the screen. The preview's day case mounts all four in the page's order (the contract owner's, #441), and 12c places them on the page. Their props are a contract with the page and the harness: change them through the contract owner.
 2. 🔴 **The screen is a section, not the page.** The page keeps its `<h1>` and composes Bodyweight
    and Life before it; those sections and Clear this day are lane S's. Of the plan's own lanes only
    this one edits `page.tsx`, in the order the plan's §6 seam table gives.
@@ -81,9 +79,7 @@ the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b
    shows the failure.
 6. **Each screen step is checked against its prototype states** (plan §8), at 360px on the preview
    route. The a11y scan walks every state there, so a step never edits a spec to add one.
-   ⚠️ **13d's three page-placed parts are the exception, for now:** the preview mounts them only
-   once the contract owner wires its day case (after 13d), so their side-by-side and scan are owed
-   before 12c places them (an `it.todo` in `owed.test.ts`).
+   13d's three page-placed parts joined the preview at #441, and their side-by-side was taken in 13b.
 7. **The rules every screen step carries** are the plan's (§5, end): keyed components and no full
    redraw, so typed values survive ticking another row; set rows as a list or a table with headers;
    the day label as a heading; one persistent live region; 44px targets; the layout at 360px.

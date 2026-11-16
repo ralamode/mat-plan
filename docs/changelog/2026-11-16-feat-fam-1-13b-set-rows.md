@@ -12,4 +12,4 @@
   4 × 8 @ 25 lb."), a set beyond a reduced count still shows, and a removed item's logged rows can be
   un-ticked and ticked back. The screen now uses the contract's row helpers and spelling (C1, C2,
   #436): a logged `30 s` reads as the prescription does. Change, editing a logged number in place,
-  is 13b-ii. No schema change, no new dependency, no change to production behaviour.
+  is 13b-ii. Also: 13d's program line, Program order, athlete switcher and notices, now on the preview (#441), get their 360px side-by-side with v12. No schema change, no new dependency, no change to production behaviour.

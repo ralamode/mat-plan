@@ -21,9 +21,6 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 });
 
 describe('DayPlan: owed by its consumers', () => {
-  it.todo(
-    '12c: the switcher, program line and not-on-a-program notice at 360px beside v12, and in the a11y scan, once the preview mounts them',
-  );
   it.todo('12b: the DAL sets writable, future and canGoForward');
   it.todo('12c: an older day and a future day are read-only (e2e)');
 });
