@@ -52,10 +52,10 @@ usually ends the investigation.
 | e2e                              | `pnpm e2e:local` (args pass through: `pnpm e2e:local <spec>`), never bare `pnpm --filter web e2e` |
 | gitleaks                         | `gitleaks detect --redact` (report the rule and location, **never the value**)                    |
 
-Remember: since DX-7 `typecheck` runs **two** projects — `apps/web` and `packages/db` (`src/**` plus
-`scripts/**`, so `verify.ts` and `corrections/` are covered). An error names the failing project's own
+Remember: `typecheck` runs **four** projects — `apps/web`, `packages/db` (`src/**` plus `scripts/**`,
+so `verify.ts` and `corrections/` are covered), `packages/evals` and `packages/shared` (tests included). An error names the failing project's own
 relative path (`scripts/verify.ts(…)`), with pnpm's `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL` line saying
-which package it was. `packages/shared` and `packages/engine` still have no tsconfig — they are checked
+which package it was. `packages/engine` still has no tsconfig — it is checked
 only through the app's imports, so a file nothing imports is checked by nothing. Nothing in `packages/`
 is linted.
 

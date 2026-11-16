@@ -283,9 +283,10 @@ movement picker.
 
 - **pre-commit (husky + lint-staged):** ESLint + Prettier on **staged files only**. Never put
   whole-project checks here.
-- **pre-push:** `pnpm typecheck` + affected tests — **two** `tsc --noEmit` projects, `apps/web` and
-  `packages/db` (`src/**` + `scripts/**`). ⚠️ **Not the whole repo:** `packages/shared` and
-  `packages/engine` have no tsconfig and are checked only _transitively_, through the app's imports.
+- **pre-push:** `pnpm typecheck` + affected tests — **four** `tsc --noEmit` projects: `apps/web`,
+  `packages/db` (`src/**` + `scripts/**`), `packages/evals` and `packages/shared` (`src/**`, its
+  `*.test.ts` included). ⚠️ **Not the whole repo:** `packages/engine` has no tsconfig and is checked
+  only _transitively_, through the app's imports.
 - **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it), **~40s** warm:
