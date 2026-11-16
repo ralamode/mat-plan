@@ -20,7 +20,7 @@ order, each item with its rows. The lane builds the screen against fixtures and 
 preview route first, then wires the first real ✓.
 
 🚧 **Built up step by step.** Step 13 built the workout cards and the single rows (Check, Duration,
-Count) with their ✓. An item logged set by set shows its heading only until 13b. Each later step
+Count) with their ✓. An item logged set by set shows its heading and "N logged" until 13b. Each later step
 adds its files and invariants here.
 
 ## The map
@@ -36,18 +36,18 @@ adds its files and invariants here.
 
 ## Files
 
-| File                                       | What it is for                                                                                                                                   |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/web/components/day/day-screen.tsx`   | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`. |
-| `apps/web/components/day/day-context.tsx`  | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                       |
-| `apps/web/components/day/workout-card.tsx` | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                             |
-| `apps/web/components/day/item-card.tsx`    | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading only until 13b.        |
-| `apps/web/components/day/use-row.ts`       | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b's set rows reuse it per set.                         |
-| `apps/web/components/day/row-values.ts`    | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                           |
-| `apps/web/components/day/day-copy.ts`      | Every sentence the screen says, and each refusal's copy.                                                                                         |
-| `apps/web/components/day/*.test.ts(x)`     | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                          |
-| `apps/web/components/day/owed.test.ts`     | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                             |
-| `apps/web/lib/dal/day/index.ts`            | A placeholder so the directory exists.                                                                                                           |
+| File                                       | What it is for                                                                                                                                                               |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/day/day-screen.tsx`   | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`.                             |
+| `apps/web/components/day/day-context.tsx`  | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                   |
+| `apps/web/components/day/workout-card.tsx` | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                         |
+| `apps/web/components/day/item-card.tsx`    | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading and "N logged" until 13b.                          |
+| `apps/web/components/day/use-row.ts`       | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b reuses its write state machine per set; the single-number reader moves out then. |
+| `apps/web/components/day/row-values.ts`    | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                                                       |
+| `apps/web/components/day/day-copy.ts`      | Every sentence the screen says, and each refusal's copy.                                                                                                                     |
+| `apps/web/components/day/*.test.ts(x)`     | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                                                      |
+| `apps/web/components/day/owed.test.ts`     | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                         |
+| `apps/web/lib/dal/day/index.ts`            | A placeholder so the directory exists.                                                                                                                                       |
 
 ## Invariants
 
@@ -65,8 +65,8 @@ adds its files and invariants here.
    ([program-contract.md](./program-contract.md) invariant 4, held by a source scan). A screen's
    own `*.test.tsx` may.
 5. **A ✓ is optimistic, and one attempt has one `clientId`** (plan D24, §4). If the write fails
-   the row un-ticks, keeps what was typed and says so; the retry reuses the `clientId`; a ✓ after
-   an un-tick mints a new one. `/design/program?screen=day&fixture=today-two-programs&fail=next`
+   the row un-ticks, keeps what was typed and says so. When the retry reuses the `clientId`, and
+   when a ✓ mints a new one, is invariant 11. `/design/program?screen=day&fixture=today-two-programs&fail=next`
    shows the failure.
 6. **Each screen step is checked against its prototype states** (plan §8), at 360px on the preview
    route. The a11y scan walks every state there, so a step never edits a spec to add one.
@@ -98,13 +98,26 @@ adds its files and invariants here.
 
 ## Recorded differences from the prototype (v12)
 
-Decided with the maintainer at step 13 (2026-11-15): a logged row is neutral (a `border-primary` card, a filled
-primary ✓), not green, until a "done" colour token exists; "N not saved" beside a workout's progress
-while a save has failed; a Reload button on a refusal that means the page is out of date. Also: the
-program name is plain text (the program page is not wired), shown only on a day with two programs as
-v12 does; a logged number shows as text until Change arrives at 12d; an empty ✓ that fails leaves
-the field empty rather than filling in the target. Until 13b, a set-type item shows "N logged" under its
-heading, so a closed day does not look empty.
+**Decided with the maintainer at step 13 (2026-11-15):**
+
+- A logged row is neutral (a `border-primary` card and a filled primary ✓), not green, until a
+  "done" colour token exists.
+- "N not saved" shows beside a workout's progress while a save has failed.
+- A Reload button appears on a refusal that means the page is out of date.
+
+**Calls made inside the step's row:**
+
+- The program name is plain text, because the program page is not wired. As in v12, it shows only
+  on a day with two programs.
+- A logged number shows as text until Change arrives at 12d.
+- An empty ✓ that fails leaves the field empty rather than filling in the target.
+- Until 13b, a set-type item shows "N logged" under its heading, so a closed day does not look
+  empty.
+
+**Known gap, owed by the contract:** a logged value is spelled by `formatValueUnit` (`30 sec`,
+`40 yards`), while the prescription beside it is spelled by `prescribed-text.ts` (`30 s`, `40 yd`).
+The latter's unit spelling is private, and its subpath pulls `csv/` into a client bundle, so one
+client-safe renderer has to come from the contract owner.
 
 ## Changing it
 

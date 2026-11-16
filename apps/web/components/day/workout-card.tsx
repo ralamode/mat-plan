@@ -1,15 +1,12 @@
 'use client';
 
-import type { DayPlan } from '@mat-plan/shared';
-
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
 import { ItemCard } from './item-card';
+import type { DayWorkout } from './row-values';
 import { itemKeyOf } from './use-row';
-
-type Workout = DayPlan['workouts'][number];
 
 /**
  * One workout of the day (FAM-1 step 13; v12's "Morning habits" card).
@@ -27,13 +24,15 @@ export function WorkoutCard({
   programName,
   notSaved,
 }: {
-  workout: Workout;
+  workout: DayWorkout;
   workoutKey: string;
   headingId: string;
   programName: string | null;
   notSaved: number;
 }) {
   const { done, total } = workout.progress;
+  const progress =
+    total === 0 ? null : done >= total ? DAY_COPY.doneMark : DAY_COPY.progress(done, total);
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t pt-4">
       {workout.label || programName ? (
@@ -46,18 +45,22 @@ export function WorkoutCard({
         <h3 id={headingId} className={cn('text-lg font-semibold', NAME_WRAP_CLASS)}>
           {workout.name}
         </h3>
-        <p className="text-muted-foreground text-sm">
-          {total === 0 ? null : done >= total ? DAY_COPY.doneMark : DAY_COPY.progress(done, total)}
-          {notSaved > 0 ? (
-            <>
-              {total === 0 ? null : <span aria-hidden="true"> · </span>}
-              <span className="text-destructive">{DAY_COPY.notSaved(notSaved)}</span>
-            </>
-          ) : null}
-        </p>
+        {progress || notSaved > 0 ? (
+          <p className="text-muted-foreground text-sm">
+            {progress}
+            {notSaved > 0 ? (
+              <>
+                {progress ? <span aria-hidden="true"> · </span> : null}
+                <span className="text-destructive">{DAY_COPY.notSaved(notSaved)}</span>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </div>
       {workout.description ? (
-        <p className="text-muted-foreground text-sm">{workout.description}</p>
+        <p className={cn('text-muted-foreground text-sm', NAME_WRAP_CLASS)}>
+          {workout.description}
+        </p>
       ) : null}
       <ul className="flex flex-col gap-3">
         {workout.items.map((item) => (

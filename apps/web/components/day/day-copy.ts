@@ -1,6 +1,8 @@
 import { ROW_REFUSAL, type RowRefusal } from '@mat-plan/shared';
 
-import type { TypedProblem } from './row-values';
+import { CLOSED_DAY_NOTICE } from '@/lib/constants';
+
+import type { RowWriteKind, TypedProblem } from './row-values';
 
 /**
  * The day screen's words (FAM-1 step 13), defined once so the components and their tests read the
@@ -22,7 +24,7 @@ export const DAY_COPY = {
   /** A row whose prescription left the workout after it was logged (v12, `index.html:2432`). */
   removed: 'No longer in this workout. What was logged stays.',
   /** The whole screen turns read-only after the first `closed_day`. */
-  closed: 'Only today and yesterday can be changed.',
+  closed: CLOSED_DAY_NOTICE,
   progress: (done: number, total: number) => `${done} of ${total}`,
   notSaved: (count: number) => `${count} not saved`,
   logLabel: (name: string) => `Log ${name}`,
@@ -52,7 +54,7 @@ const STALE = 'This changed since the page loaded.';
  * Every refusal, for a ✓ (`tick`) and for an un-tick (`untick`). `closed_day` is here for
  * completeness; the screen shows it once, at the top, and turns read-only.
  */
-export function refusalCopy(reason: RowRefusal, write: 'tick' | 'untick'): RefusalCopy {
+export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCopy {
   switch (reason) {
     case ROW_REFUSAL.retry:
     case ROW_REFUSAL.own_hidden:

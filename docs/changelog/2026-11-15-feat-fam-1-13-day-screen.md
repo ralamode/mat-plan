@@ -12,6 +12,6 @@
   offers Reload; the first `closed_day` turns the screen read-only. A row's state is keyed by athlete
   and day, so nothing carries into another day. A closed day and a workout that left the week show
   what was logged as text, with no ✓ and no "Last time". Items logged set by set show their heading
-  only, until 13b. Three differences from the v12 prototype, decided with the maintainer: a logged row
+  and how many sets are logged, until 13b. Three differences from the v12 prototype, decided with the maintainer: a logged row
   is neutral rather than green (no colour token yet), "N not saved" beside a workout's progress, and
   the Reload button. No schema change, no new dependency, no change to production behaviour.

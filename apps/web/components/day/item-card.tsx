@@ -1,38 +1,43 @@
 'use client';
 
-import { hasSetRows, TRACKING_TYPE, type DayPlan } from '@mat-plan/shared';
-import { useId, useRef } from 'react';
+import { hasSetRows, TRACKING_TYPE } from '@mat-plan/shared';
+import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
 import {
-  formatQuantity,
+  formatRowQuantity,
   formatRowValues,
+  slotQuantity,
   targetQuantity,
+  unitSpoken,
   unitSuffix,
   type DayItem,
+  type DayRow,
+  type DayWorkout,
 } from './row-values';
 import { useRow } from './use-row';
 
-type Workout = DayPlan['workouts'][number];
-type Row = DayItem['rows'][number];
+/** An item's card; a logged one is marked by its border (neutral until a "done" colour exists). */
+const CARD_CLASS = 'rounded-xl border p-3';
+const LOGGED_CARD_CLASS = 'border-primary';
 
 /**
  * One item of a workout, as a card in the workout's list (FAM-1 step 13).
  *
  * A Check, Duration or Count is one row, built here. An item logged set by set shows its heading
  * and how many of its sets are logged: step 13b adds its set rows, PREVIOUS, "+ Add set" and
- * supersets. The count keeps a closed day honest until then (UX panel, second pass).
+ * supersets. The count keeps a closed day honest until then.
  */
 export function ItemCard({
   workout,
   workoutKey,
   item,
 }: {
-  workout: Workout;
+  workout: DayWorkout;
   workoutKey: string;
   item: DayItem;
 }) {
@@ -40,7 +45,7 @@ export function ItemCard({
   if (hasSetRows(item.trackingType) || !row) {
     const logged = item.rows.filter((r) => r.logged).length;
     return (
-      <li className={cn('rounded-xl border p-3', logged > 0 && 'border-primary')}>
+      <li className={cn(CARD_CLASS, logged > 0 && LOGGED_CARD_CLASS)}>
         <ItemHeading item={item} />
         {logged > 0 ? (
           <p className="text-muted-foreground mt-2 text-sm">{DAY_COPY.setsLogged(logged)}</p>
@@ -61,7 +66,9 @@ function ItemHeading({ item }: { item: DayItem }) {
           <span className="text-muted-foreground ml-auto text-sm">{item.prescribedText}</span>
         ) : null}
       </div>
-      {item.notes ? <p className="text-muted-foreground mt-1 text-sm">{item.notes}</p> : null}
+      {item.notes ? (
+        <p className={cn('text-muted-foreground mt-1 text-sm', NAME_WRAP_CLASS)}>{item.notes}</p>
+      ) : null}
       {item.prescriptionPublicId === null ? (
         <p className="text-muted-foreground mt-1 text-sm">{DAY_COPY.removed}</p>
       ) : null}
@@ -72,8 +79,11 @@ function ItemHeading({ item }: { item: DayItem }) {
 /**
  * The single row of a Check, Duration or Count: what was done last time, the field, the ✓.
  *
- * The ✓ is the same element in every state, so focus stays on it after a ✓ or an un-tick; while a
- * write is in flight it is `aria-disabled`, never `disabled`, which would drop focus.
+ * **Focus never drops to the page.** The ✓ is the same element in every state, so it keeps focus
+ * after a ✓ or an un-tick; while a write is in flight it is `aria-disabled`, never `disabled`, which
+ * would drop focus. Reload hands focus to the ✓ before its own button goes. A refused number moves
+ * focus to the field once the field is back on screen (it is replaced by the value while a ✓ is in
+ * flight), so the focus happens after the commit, not in the handler.
  */
 function SingleItem({
   workout,
@@ -81,29 +91,32 @@ function SingleItem({
   item,
   row,
 }: {
-  workout: Workout;
+  workout: DayWorkout;
   workoutKey: string;
   item: DayItem;
-  row: Row;
+  row: DayRow;
 }) {
   const fieldRef = useRef<HTMLInputElement>(null);
-  const r = useRow(workout, workoutKey, item, row, fieldRef);
+  const tickRef = useRef<HTMLButtonElement>(null);
+  const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
   const isCheck = item.trackingType === TRACKING_TYPE.check;
-  const unit = item.unit ? unitSuffix(item.unit) : '';
-  const previous = row.previous?.quantities[0];
+  const previous = row.previous ? slotQuantity(item, row.previous.quantities) : null;
   const target = targetQuantity(item);
+
+  const invalid = r.error?.invalid === true;
+  useEffect(() => {
+    if (invalid) fieldRef.current?.focus();
+  }, [invalid, r.error]);
 
   let left: string | null = null;
   if (r.logged && isCheck) left = DAY_COPY.done;
   else if (!r.logged && previous && r.canWrite) {
-    left = `${DAY_COPY.lastTime} ${formatQuantity(previous.value, previous.unit)}`;
+    left = `${DAY_COPY.lastTime} ${formatRowQuantity(previous.value, previous.unit)}`;
   }
 
   return (
-    // Neutral until a "done" colour token exists (a recorded difference from v12's green). A border,
-    // not a fill: muted text on `bg-muted` fails AA contrast.
-    <li className={cn('rounded-xl border p-3', r.logged && 'border-primary')}>
+    <li className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS)}>
       <ItemHeading item={item} />
       <div className="mt-2 flex items-center gap-2">
         <span className="text-muted-foreground min-w-0 flex-1 text-sm">{left}</span>
@@ -117,27 +130,37 @@ function SingleItem({
           <span className="text-muted-foreground shrink-0 text-base tabular-nums">
             {formatRowValues(r.kept)}
           </span>
-        ) : r.hasField ? (
+        ) : r.hasField && item.unit ? (
           <>
             <input
               ref={fieldRef}
               type="text"
               inputMode="decimal"
+              enterKeyHint="done"
               autoComplete="off"
               value={r.text}
               onChange={(e) => r.setText(e.target.value)}
+              // Enter is the ✓: a keyboard or a phone's "done" key logs the row.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void r.press();
+              }}
               // The prescription's number: an empty ✓ logs it (plan D13).
               placeholder={target ? String(target.value) : undefined}
-              aria-label={DAY_COPY.fieldLabel(item.name, unit)}
-              aria-invalid={r.error?.invalid || undefined}
+              aria-label={DAY_COPY.fieldLabel(item.name, unitSpoken(item.unit))}
+              aria-invalid={invalid || undefined}
               aria-describedby={r.error ? errorId : undefined}
               className={cn(INPUT_CLASS, 'w-20 shrink-0 text-right tabular-nums')}
             />
-            {unit ? <span className="text-muted-foreground shrink-0 text-sm">{unit}</span> : null}
+            {unitSuffix(item.unit) ? (
+              <span className="text-muted-foreground shrink-0 text-sm">
+                {unitSuffix(item.unit)}
+              </span>
+            ) : null}
           </>
         ) : null}
         {r.canWrite ? (
           <button
+            ref={tickRef}
             type="button"
             onClick={r.press}
             aria-pressed={r.logged !== null}
@@ -145,7 +168,8 @@ function SingleItem({
             aria-disabled={r.pending || undefined}
             aria-describedby={r.error ? errorId : undefined}
             className={cn(
-              'focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg outline-none focus-visible:ring-3',
+              FOCUS_TARGET_CLASS,
+              'flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg',
               // Un-pressed reads as not done: a muted glyph, as v12's is.
               r.logged
                 ? 'bg-primary text-primary-foreground border-primary'
@@ -167,7 +191,15 @@ function SingleItem({
             {r.error.message}
           </p>
           {r.error.reload ? (
-            <Button type="button" variant="outline" size="sm" onClick={r.reload}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                tickRef.current?.focus();
+                r.reload();
+              }}
+            >
               {DAY_COPY.reload}
             </Button>
           ) : null}

@@ -2,13 +2,14 @@
 
 import type { DayActions, DayPlan } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
+import { Callout } from '@/components/ui/callout';
 
 import { DayContext, type DayContextValue } from './day-context';
 import { DAY_COPY } from './day-copy';
-import { workoutKeyOf } from './use-row';
+import { rowIsIn, workoutKeyOf } from './use-row';
 import { WorkoutCard } from './workout-card';
 
 /**
@@ -40,7 +41,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [closed, setClosed] = useState(false);
   const [message, setMessage] = useState('');
-  const closedRef = useRef<HTMLParagraphElement>(null);
+  const closedRef = useRef<HTMLDivElement>(null);
 
   // A row's effect depends on this, so it keeps one identity for the life of the day.
   const setRowFailed = useCallback(
@@ -60,27 +61,31 @@ function DayBody({ plan, actions }: DayScreenProps) {
     if (closed) closedRef.current?.focus();
   }, [closed]);
 
-  const day: DayContextValue = {
-    profilePublicId: plan.profilePublicId,
-    day: plan.day,
-    actions,
-    readOnly: !plan.writable || closed,
-    // A live region announces a change: the same sentence twice in a row would be silent, so the
-    // second one carries an invisible difference.
-    announce: (next) => setMessage((was) => (was === next ? `${next} ` : next)),
-    setRowFailed,
-    closeDay: () => {
-      setClosed(true);
-      setMessage(DAY_COPY.closed);
-    },
-    reload: () => router.refresh(),
-  };
+  // One object per change of what it holds, so a row's announce or failure does not re-render
+  // every other row (13b brings dozens of set rows).
+  const readOnly = !plan.writable || closed;
+  const day: DayContextValue = useMemo(
+    () => ({
+      profilePublicId: plan.profilePublicId,
+      day: plan.day,
+      actions,
+      readOnly,
+      // A live region announces a change: the same sentence twice in a row would be silent, so
+      // the second one carries a no-break space (U+00A0), which is not collapsed as a space is.
+      announce: (next) => setMessage((was) => (was === next ? `${next}\u00a0` : next)),
+      setRowFailed,
+      // The notice takes focus, which reads it; the live region would say it a second time.
+      closeDay: () => setClosed(true),
+      reload: () => router.refresh(),
+    }),
+    [plan.profilePublicId, plan.day, actions, readOnly, setRowFailed, router],
+  );
 
   const many = plan.programs.length > 1;
   const programName = (id: string | null) =>
     (many && plan.programs.find((p) => p.programPublicId === id)?.name) || null;
   const notSavedIn = (workoutKey: string) =>
-    [...failed].filter((key) => key.startsWith(`${workoutKey}/`)).length;
+    [...failed].filter((key) => rowIsIn(workoutKey, key)).length;
 
   return (
     <DayContext value={day}>
@@ -89,9 +94,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
           {DAY_COPY.heading}
         </h2>
         {closed ? (
-          <p ref={closedRef} tabIndex={-1} className="rounded-lg border p-3 text-sm outline-none">
-            {DAY_COPY.closed}
-          </p>
+          <Callout ref={closedRef} messageId={`${headingId}-closed`} message={DAY_COPY.closed} />
         ) : null}
         {plan.workouts.map((workout, index) => {
           const key = workoutKeyOf(workout, index);

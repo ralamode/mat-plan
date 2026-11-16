@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { ROW_REFUSAL, type DayActions, type DayPlan, type RowResult } from '@mat-plan/shared';
+import {
+  QUANTITY_SLOT,
+  ROW_REFUSAL,
+  type DayActions,
+  type DayPlan,
+  type RowResult,
+} from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
   DAY_PLAN_FIXTURES,
@@ -25,22 +31,40 @@ afterEach(() => {
   refresh.mockReset();
 });
 
+type Actions = Required<DayActions>;
+
 /**
  * The screen as the preview route mounts it: the fake's change comes back as new props. `wrap`
- * replaces any action, to answer what the fake never does (a rejection, a stale page).
+ * replaces any action, to answer what the fake never does (a rejection, a stale page, a write held
+ * in flight). Every action is a spy, so a test can read what the screen sent.
  */
 function mount(
   fixture: DayPlan,
-  options: { failNext?: boolean; wrap?: (actions: Required<DayActions>) => DayActions } = {},
+  options: { failNext?: boolean; wrap?: (actions: Actions) => Partial<DayActions> } = {},
 ) {
-  const control: { setPlan?: (plan: DayPlan) => void } = {};
+  const control: { plan: DayPlan; setPlan: (plan: DayPlan) => void; actions: Actions } = {
+    plan: fixture,
+    setPlan: () => {},
+    actions: undefined as unknown as Actions,
+  };
   function Harness() {
     const [plan, setPlan] = useState(fixture);
+    control.plan = plan;
     control.setPlan = setPlan;
     const [actions] = useState(() => {
       const fake = createFakeDayActions(fixture, setPlan);
       if (options.failNext) fake.failNext();
-      return options.wrap ? options.wrap(fake.actions) : fake.actions;
+      const wrapped = { ...fake.actions, ...options.wrap?.(fake.actions) };
+      control.actions = {
+        logRow: vi.fn(wrapped.logRow),
+        untickRow: vi.fn(wrapped.untickRow),
+        retickRow: vi.fn(wrapped.retickRow),
+        amendRow: vi.fn(wrapped.amendRow),
+        reorderPrograms: vi.fn(wrapped.reorderPrograms),
+      };
+      // The screen gets what step 13's routes have: no Change, no Program order.
+      const { amendRow: _amend, reorderPrograms: _reorder, ...wired } = control.actions;
+      return wired;
     });
     return <DayScreen plan={plan} actions={actions} />;
   }
@@ -48,17 +72,24 @@ function mount(
   return control;
 }
 
-/** A workout's section, by its heading. */
-const workout = (name: string) =>
-  screen.getByRole('region', { name: (n) => n === name || n.startsWith(`${name} `) });
+/** A plan rendered once, with the fake's actions: for what the screen shows, not what it does. */
+function show(plan: DayPlan) {
+  return render(<DayScreen plan={plan} actions={createFakeDayActions(plan).actions} />);
+}
 
-/** The n-th item card (an `<li>`) named `name` within a workout. */
+/** A workout's section, by its heading. */
+const workout = (name: string) => screen.getByRole('region', { name });
+
+/** The item card (an `<li>`) named `itemName` within a workout. */
 function card(workoutName: string, itemName: string) {
   const heading = within(workout(workoutName)).getByRole('heading', { level: 4, name: itemName });
   return heading.closest('li')!;
 }
-const tick = (el: HTMLElement) => within(el).getByRole('button', { name: /^Log / });
+const LOG_PREFIX = DAY_COPY.logLabel('');
+const isTick = (name: string) => name.startsWith(LOG_PREFIX);
+const tick = (el: HTMLElement) => within(el).getByRole('button', { name: isTick });
 const field = (el: HTMLElement) => within(el).getByRole<HTMLInputElement>('textbox');
+const status = () => screen.getByRole('status').textContent?.replace(/ $/, '');
 
 async function press(button: HTMLElement) {
   await act(async () => {
@@ -67,14 +98,21 @@ async function press(button: HTMLElement) {
   });
 }
 
+/** A write that stays in flight until the test resolves it. */
+function held() {
+  let resolve!: () => void;
+  const gate = new Promise<void>((r) => (resolve = r));
+  return {
+    resolve: () => act(async () => resolve()),
+    after: <T,>(write: () => Promise<T>) => gate.then(write),
+  };
+}
+
+const lb = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'lb' as const, value });
+
 describe('DayScreen: a section of the day page', () => {
   it('is an <h2> region, never the page’s <h1>', () => {
-    render(
-      <DayScreen
-        plan={todayTwoPrograms}
-        actions={createFakeDayActions(todayTwoPrograms).actions}
-      />,
-    );
+    show(todayTwoPrograms);
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect(screen.getByRole('region', { name: DAY_COPY.heading })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(DAY_COPY.heading);
@@ -83,7 +121,7 @@ describe('DayScreen: a section of the day page', () => {
   it.each(Object.entries(DAY_PLAN_FIXTURES))(
     'renders %s: one <h3> per workout, one <h4> per item',
     (_name, plan) => {
-      render(<DayScreen plan={plan} actions={createFakeDayActions(plan).actions} />);
+      show(plan);
       const workouts = screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
       expect(workouts).toEqual(plan.workouts.map((w) => w.name));
       const items = plan.workouts.reduce((sum, w) => sum + w.items.length, 0);
@@ -98,63 +136,92 @@ describe('the workout card', () => {
       ...todayTwoPrograms,
       workouts: [{ ...todayTwoPrograms.workouts[0]!, progress: { done: 0, total: 0 } }],
     };
-    const { rerender } = render(
-      <DayScreen
-        plan={todayTwoPrograms}
-        actions={createFakeDayActions(todayTwoPrograms).actions}
-      />,
-    );
+    show(todayTwoPrograms);
     expect(within(workout('Morning habits')).getByText(DAY_COPY.progress(2, 10))).toBeTruthy();
-    rerender(
-      <DayScreen
-        plan={yesterdayHalfDone}
-        actions={createFakeDayActions(yesterdayHalfDone).actions}
-      />,
-    );
+    cleanup();
+    show(yesterdayHalfDone);
     expect(within(workout('Morning habits')).getByText(DAY_COPY.doneMark)).toBeTruthy();
-    rerender(<DayScreen plan={empty} actions={createFakeDayActions(empty).actions} />);
+    cleanup();
+    show(empty);
     const section = workout('Morning habits');
     expect(within(section).queryByText(DAY_COPY.doneMark)).toBeNull();
-    expect(within(section).queryByText(/ of /)).toBeNull();
+    expect(within(section).queryByText(DAY_COPY.progress(0, 0))).toBeNull();
   });
 
   it('names the program only when the athlete is on more than one that day', () => {
-    render(
-      <DayScreen
-        plan={todayTwoPrograms}
-        actions={createFakeDayActions(todayTwoPrograms).actions}
-      />,
-    );
+    show(todayTwoPrograms);
     expect(within(workout('Evening stretch')).getByText('Stretching')).toBeTruthy();
     cleanup();
-    render(
-      <DayScreen plan={everyTypeOnce} actions={createFakeDayActions(everyTypeOnce).actions} />,
-    );
+    show(everyTypeOnce);
     expect(within(workout('One of each')).queryByText('Every type')).toBeNull();
   });
 });
 
 describe('a single row: ✓, un-tick and re-tick', () => {
-  it('an empty ✓ shows the prescription’s numbers (target) as the logged values', async () => {
-    mount(todayTwoPrograms);
+  it('an empty ✓ sends no numbers, and shows the prescription’s (target) as the logged values', async () => {
+    const control = mount(todayTwoPrograms);
     const splits = card('Morning habits', 'Splits stretch');
     expect(field(splits).getAttribute('placeholder')).toBe('5');
     await press(tick(splits));
+    // D13: the writer fills an absent quantity from the prescription; the screen sends none.
+    expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({
+      set: 1,
+      day: todayTwoPrograms.day,
+      values: { quantities: [] },
+    });
     // The prescription's `5 min`, and now the logged one where the field was.
     expect(within(splits).getAllByText('5 min')).toHaveLength(2);
     expect(within(splits).queryByRole('textbox')).toBeNull();
     expect(tick(splits).getAttribute('aria-pressed')).toBe('true');
     expect(within(workout('Morning habits')).getByText(DAY_COPY.progress(3, 10))).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe(DAY_COPY.announce.logged('Splits stretch'));
+    expect(status()).toBe(DAY_COPY.announce.logged('Splits stretch'));
+  });
+
+  it('the ✓ is optimistic: ticked while the write is in flight, and a second press sends nothing', async () => {
+    const gate = held();
+    const control = mount(todayTwoPrograms, {
+      wrap: (a) => ({ logRow: (input) => gate.after(() => a.logRow(input)) }),
+    });
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    expect(tick(splits).getAttribute('aria-pressed')).toBe('true');
+    expect(tick(splits).getAttribute('aria-disabled')).toBe('true');
+    expect(within(splits).getAllByText('5 min')).toHaveLength(2);
+    await press(tick(splits));
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.untickRow).not.toHaveBeenCalled();
+    await gate.resolve();
+    expect(tick(splits).getAttribute('aria-disabled')).toBeNull();
   });
 
   it('logs what was typed, and focus stays on the ✓', async () => {
-    mount(todayTwoPrograms);
+    const control = mount(todayTwoPrograms);
     const vest = card('Morning habits', 'Vest weight');
     fireEvent.change(field(vest), { target: { value: '12.5' } });
     await press(tick(vest));
+    expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({
+      values: { quantities: [lb(12.5)] },
+    });
     expect(within(vest).getByText('12.5 lb')).toBeTruthy();
     expect(document.activeElement).toBe(tick(vest));
+  });
+
+  it('Enter in the field is the ✓', async () => {
+    const control = mount(todayTwoPrograms);
+    const vest = card('Morning habits', 'Vest weight');
+    fireEvent.change(field(vest), { target: { value: '11' } });
+    await act(async () => {
+      fireEvent.keyDown(field(vest), { key: 'Enter' });
+    });
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+    expect(within(vest).getByText('11 lb')).toBeTruthy();
+  });
+
+  it('"Last time" shows on a row that can still be logged', () => {
+    show(todayTwoPrograms);
+    expect(
+      within(card('Morning habits', 'Splits stretch')).getByText(`${DAY_COPY.lastTime} 5 min`),
+    ).toBeTruthy();
   });
 
   it('a Check says Done only once it is logged', async () => {
@@ -170,38 +237,69 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     ['today', todayTwoPrograms],
     ['yesterday', yesterdayHalfDone],
   ])('un-tick leaves no tomb; re-tick restores the row, on %s', async (_day, plan) => {
-    const actions = createFakeDayActions(plan).actions;
-    const spy = {
-      ...actions,
-      logRow: vi.fn(actions.logRow),
-      retickRow: vi.fn(actions.retickRow),
-    };
-    render(<DayScreen plan={plan} actions={spy} />);
+    const control = mount(plan);
     const grip = card('Morning habits', 'Grip: rice bucket');
     await press(tick(grip));
     expect(tick(grip).getAttribute('aria-pressed')).toBe('false');
     expect(within(grip).queryByText(DAY_COPY.done)).toBeNull();
-    expect(screen.getByRole('status').textContent).toBe(
-      DAY_COPY.announce.unticked('Grip: rice bucket'),
-    );
+    expect(status()).toBe(DAY_COPY.announce.unticked('Grip: rice bucket'));
+    const unticked = await control.actions.untickRow.mock.results[0]!.value;
     await press(tick(grip));
     expect(tick(grip).getAttribute('aria-pressed')).toBe('true');
-    expect(spy.retickRow).toHaveBeenCalledTimes(1);
-    expect(spy.logRow).not.toHaveBeenCalled();
+    expect(control.actions.retickRow.mock.calls[0]![0]).toMatchObject({
+      entryPublicId: unticked.entryPublicId,
+      hiddenAt: unticked.hiddenAt,
+      day: plan.day,
+    });
+    expect(control.actions.logRow).not.toHaveBeenCalled();
   });
 
   it('after an un-tick the field keeps the number: unchanged re-ticks, changed logs a new entry', async () => {
-    const actions = createFakeDayActions(yesterdayHalfDone).actions;
-    const spy = { ...actions, logRow: vi.fn(actions.logRow), retickRow: vi.fn(actions.retickRow) };
-    render(<DayScreen plan={yesterdayHalfDone} actions={spy} />);
+    const control = mount(yesterdayHalfDone);
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
     expect(field(splits).value).toBe('5');
     fireEvent.change(field(splits), { target: { value: '7' } });
     await press(tick(splits));
-    expect(spy.retickRow).not.toHaveBeenCalled();
-    expect(spy.logRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.retickRow).not.toHaveBeenCalled();
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
     expect(within(splits).getByText('7 min')).toBeTruthy();
+  });
+
+  it('after an un-tick, an emptied field is a new ✓ of the prescription, not a re-tick', async () => {
+    const control = mount(yesterdayHalfDone);
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    fireEvent.change(field(splits), { target: { value: '' } });
+    await press(tick(splits));
+    expect(control.actions.retickRow).not.toHaveBeenCalled();
+    expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({ values: { quantities: [] } });
+  });
+
+  it('an untouched field re-ticks, even when the item’s unit changed since', async () => {
+    const control = mount(yesterdayHalfDone);
+    await press(tick(card('Morning habits', 'Vest weight')));
+    const plan = structuredClone(control.plan);
+    const vest = plan.workouts[0]!.items.find((i) => i.name === 'Vest weight')!;
+    vest.unit = 'kg';
+    vest.target = { reps: null, quantities: [{ ...lb(5), unit: 'kg' }] };
+    act(() => control.setPlan(plan));
+    await press(tick(card('Morning habits', 'Vest weight')));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+  });
+
+  it('a re-tick whose token is gone logs the row as a new ✓', async () => {
+    const notFound: RowResult = { ok: false, reason: ROW_REFUSAL.not_found };
+    const control = mount(yesterdayHalfDone, { wrap: () => ({ retickRow: async () => notFound }) });
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    await press(tick(splits));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({
+      values: { quantities: [{ unit: 'min', value: 5 }] },
+    });
+    expect(tick(splits).getAttribute('aria-pressed')).toBe('true');
   });
 });
 
@@ -217,7 +315,7 @@ describe('a row whose prescription was removed', () => {
       previous: null,
       logged: {
         entryPublicId: '00000000-0000-7000-8000-0000000000aa',
-        values: { quantities: [{ slot: 'primary', unit: 'lb', value: 10 }] },
+        values: { quantities: [lb(10)] },
         prescribedText: '10 lb',
       },
     };
@@ -225,10 +323,7 @@ describe('a row whose prescription was removed', () => {
   }
 
   it('un-ticks to its kept number, with no field, and ticks back the same entry', async () => {
-    const plan = removedVest();
-    const actions = createFakeDayActions(plan).actions;
-    const spy = { ...actions, logRow: vi.fn(actions.logRow), retickRow: vi.fn(actions.retickRow) };
-    render(<DayScreen plan={plan} actions={spy} />);
+    const control = mount(removedVest());
     const vest = card('Morning habits', 'Vest weight');
     expect(within(vest).getByText(DAY_COPY.removed)).toBeTruthy();
     await press(tick(vest));
@@ -237,24 +332,14 @@ describe('a row whose prescription was removed', () => {
     // The frozen prescription, and the kept number where the logged one was.
     expect(within(vest).getAllByText('10 lb')).toHaveLength(2);
     await press(tick(vest));
-    expect(spy.retickRow).toHaveBeenCalledTimes(1);
-    expect(spy.logRow).not.toHaveBeenCalled();
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).not.toHaveBeenCalled();
   });
 });
 
 describe('a ✓ that fails', () => {
   it('un-ticks, keeps what was typed, says it could not save, and the retry reuses the clientId', async () => {
-    const seen: string[] = [];
-    mount(todayTwoPrograms, {
-      failNext: true,
-      wrap: (a) => ({
-        ...a,
-        logRow: (input) => {
-          seen.push(input.clientId);
-          return a.logRow(input);
-        },
-      }),
-    });
+    const control = mount(todayTwoPrograms, { failNext: true });
     const vest = card('Morning habits', 'Vest weight');
     fireEvent.change(field(vest), { target: { value: '12' } });
     await press(tick(vest));
@@ -265,34 +350,50 @@ describe('a ✓ that fails', () => {
     expect(field(vest).getAttribute('aria-describedby')).toBe(
       tick(vest).getAttribute('aria-describedby'),
     );
+    // "Couldn't save" does not say the number is wrong.
+    expect(field(vest).getAttribute('aria-invalid')).toBeNull();
     expect(within(workout('Morning habits')).getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    expect(status()).toBe(DAY_COPY.announce.failed('Vest weight', failed));
 
     await press(tick(vest));
     expect(within(vest).getByText('12 lb')).toBeTruthy();
     expect(within(vest).queryByText(failed)).toBeNull();
     expect(within(workout('Morning habits')).queryByText(DAY_COPY.notSaved(1))).toBeNull();
-    expect(seen).toHaveLength(2);
-    expect(seen[1]).toBe(seen[0]);
+    const [first, second] = control.actions.logRow.mock.calls.map(([input]) => input.clientId);
+    expect(second).toBe(first);
   });
 
   it('a retry with a different number is a new attempt with a new clientId', async () => {
-    const seen: string[] = [];
-    mount(todayTwoPrograms, {
-      failNext: true,
-      wrap: (a) => ({ ...a, logRow: (input) => (seen.push(input.clientId), a.logRow(input)) }),
-    });
+    const control = mount(todayTwoPrograms, { failNext: true });
     const vest = card('Morning habits', 'Vest weight');
     fireEvent.change(field(vest), { target: { value: '12' } });
     await press(tick(vest));
     fireEvent.change(field(vest), { target: { value: '14' } });
     await press(tick(vest));
-    expect(seen[1]).not.toBe(seen[0]);
+    const [first, second] = control.actions.logRow.mock.calls.map(([input]) => input.clientId);
+    expect(second).not.toBe(first);
     expect(within(vest).getByText('14 lb')).toBeTruthy();
+  });
+
+  it('own_hidden: the next try is a new clientId, since that one is held by a hidden entry', async () => {
+    const ownHidden: RowResult = { ok: false, reason: ROW_REFUSAL.own_hidden };
+    let calls = 0;
+    const control = mount(todayTwoPrograms, {
+      wrap: (a) => ({
+        logRow: (input) => (++calls === 1 ? Promise.resolve(ownHidden) : a.logRow(input)),
+      }),
+    });
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    expect(within(splits).getByText(refusalCopy(ROW_REFUSAL.own_hidden, 'tick').message));
+    await press(tick(splits));
+    const [first, second] = control.actions.logRow.mock.calls.map(([input]) => input.clientId);
+    expect(second).not.toBe(first);
   });
 
   it('a rejected write (a dropped connection) fails the same way, never left ticked', async () => {
     mount(todayTwoPrograms, {
-      wrap: (a) => ({ ...a, logRow: () => Promise.reject(new Error('offline')) }),
+      wrap: () => ({ logRow: () => Promise.reject(new Error('offline')) }),
     });
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
@@ -307,6 +408,25 @@ describe('a ✓ that fails', () => {
     expect(tick(grip).getAttribute('aria-pressed')).toBe('true');
     expect(within(grip).getByText(refusalCopy(ROW_REFUSAL.retry, 'untick').message)).toBeTruthy();
   });
+
+  it('a change to the row in the page’s data clears its old message', async () => {
+    const control = mount(todayTwoPrograms, { failNext: true });
+    await press(tick(card('Morning habits', 'Vest weight')));
+    const failed = refusalCopy(ROW_REFUSAL.retry, 'tick').message;
+    expect(screen.getByText(failed)).toBeTruthy();
+    // Another phone logged it meanwhile, and the page's data now says so.
+    const plan = structuredClone(control.plan);
+    const vest = plan.workouts[0]!.items.find((i) => i.name === 'Vest weight')!;
+    vest.rows[0]!.logged = {
+      entryPublicId: '00000000-0000-7000-8000-0000000000bb',
+      values: { quantities: [lb(10)] },
+      prescribedText: '10 lb',
+    };
+    act(() => control.setPlan(plan));
+    expect(screen.queryByText(failed)).toBeNull();
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+    expect(tick(card('Morning habits', 'Vest weight')).getAttribute('aria-pressed')).toBe('true');
+  });
 });
 
 describe('inline refusals', () => {
@@ -314,39 +434,55 @@ describe('inline refusals', () => {
     ['5 min', 'not_a_number'],
     ['-5', 'not_a_number'],
     ['1e3', 'not_a_number'],
+    ['5.1234', 'not_a_number'],
     ['5000', 'out_of_range'],
   ] as const)(
-    'a non-number (%s) is refused by the field, which takes focus',
+    'a non-number (%s) is refused by the field, which takes focus and says why',
     async (typed, problem) => {
-      const logRow = vi.fn();
-      mount(todayTwoPrograms, { wrap: (a) => ({ ...a, logRow }) });
+      const control = mount(todayTwoPrograms);
       const splits = card('Morning habits', 'Splits stretch');
       fireEvent.change(field(splits), { target: { value: typed } });
       await press(tick(splits));
       expect(within(splits).getByText(TYPED_PROBLEM_COPY[problem])).toBeTruthy();
       expect(document.activeElement).toBe(field(splits));
       expect(field(splits).getAttribute('aria-invalid')).toBe('true');
-      expect(logRow).not.toHaveBeenCalled();
+      expect(status()).toBe(
+        DAY_COPY.announce.failed('Splits stretch', TYPED_PROBLEM_COPY[problem]),
+      );
+      expect(control.actions.logRow).not.toHaveBeenCalled();
+      // A refused number was never a save: it is not "not saved", and typing clears it.
+      expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+      fireEvent.change(field(splits), { target: { value: '6' } });
+      expect(within(splits).queryByText(TYPED_PROBLEM_COPY[problem])).toBeNull();
     },
   );
 
-  it('a stale page offers Reload, which refreshes and keeps the other rows’ typed text', async () => {
+  it('a number the server refuses (bad_value) marks the field, which takes focus', async () => {
+    const bad: RowResult = { ok: false, reason: ROW_REFUSAL.bad_value };
+    mount(todayTwoPrograms, { wrap: () => ({ logRow: async () => bad }) });
+    const vest = card('Morning habits', 'Vest weight');
+    fireEvent.change(field(vest), { target: { value: '12' } });
+    await press(tick(vest));
+    expect(within(vest).getByText(refusalCopy(ROW_REFUSAL.bad_value, 'tick').message));
+    expect(field(vest).getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(field(vest));
+  });
+
+  it('a stale page offers Reload, which refreshes, keeps focus on the ✓ and the other rows’ text', async () => {
     const stale: RowResult = { ok: false, reason: ROW_REFUSAL.program_changed };
-    mount(todayTwoPrograms, { wrap: (a) => ({ ...a, logRow: async () => stale }) });
+    mount(todayTwoPrograms, { wrap: () => ({ logRow: async () => stale }) });
     const vest = card('Morning habits', 'Vest weight');
     fireEvent.change(field(vest), { target: { value: '11' } });
-    await press(tick(card('Morning habits', 'Splits stretch')));
-    await press(
-      within(card('Morning habits', 'Splits stretch')).getByRole('button', {
-        name: DAY_COPY.reload,
-      }),
-    );
+    const splits = () => card('Morning habits', 'Splits stretch');
+    await press(tick(splits()));
+    expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    await press(within(splits()).getByRole('button', { name: DAY_COPY.reload }));
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(field(vest).value).toBe('11');
+    expect(document.activeElement).toBe(tick(splits()));
     // Reload clears that row's message and its "not saved": the data is about to say what is true.
-    const splits = card('Morning habits', 'Splits stretch');
     expect(
-      within(splits).queryByText(refusalCopy(ROW_REFUSAL.program_changed, 'tick').message),
+      within(splits()).queryByText(refusalCopy(ROW_REFUSAL.program_changed, 'tick').message),
     ).toBeNull();
     expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
   });
@@ -355,34 +491,22 @@ describe('inline refusals', () => {
     const control = mount(todayTwoPrograms, { failNext: true });
     await press(tick(card('Morning habits', 'Splits stretch')));
     expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
-    const [morning, ...rest] = todayTwoPrograms.workouts;
-    const without = {
-      ...todayTwoPrograms,
-      workouts: [
-        { ...morning!, items: morning!.items.filter((i) => i.name !== 'Splits stretch') },
-        ...rest,
-      ],
-    };
-    act(() => control.setPlan!(without));
+    const plan = structuredClone(control.plan);
+    plan.workouts[0]!.items = plan.workouts[0]!.items.filter((i) => i.name !== 'Splits stretch');
+    act(() => control.setPlan(plan));
     expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
   });
 
-  it('"Couldn’t save" does not mark the number wrong; a refused number does', async () => {
-    mount(todayTwoPrograms, { failNext: true });
-    const vest = card('Morning habits', 'Vest weight');
-    fireEvent.change(field(vest), { target: { value: '12' } });
-    await press(tick(vest));
-    expect(field(vest).getAttribute('aria-invalid')).toBeNull();
-  });
-
-  it('the first closed_day turns the whole screen read-only', async () => {
+  it('the first closed_day turns the whole screen read-only, and focus goes to its notice', async () => {
     const closed: RowResult = { ok: false, reason: ROW_REFUSAL.closed_day };
-    mount(todayTwoPrograms, { wrap: (a) => ({ ...a, logRow: async () => closed }) });
+    mount(todayTwoPrograms, { wrap: () => ({ logRow: async () => closed }) });
     await press(tick(card('Morning habits', 'Splits stretch')));
-    expect(screen.getAllByText(DAY_COPY.closed).length).toBeGreaterThan(0);
-    expect(screen.queryAllByRole('button', { name: /^Log / })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: isTick })).toHaveLength(0);
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
-    expect(document.activeElement?.textContent).toBe(DAY_COPY.closed);
+    const notice = screen.getByRole('group', { name: DAY_COPY.closed });
+    expect(document.activeElement).toBe(notice);
+    // No "last time" on a day nothing can be logged on (D33).
+    expect(screen.queryByText(new RegExp(`^${DAY_COPY.lastTime}`))).toBeNull();
   });
 
   it('after closed_day, an earlier failure no longer counts or shows: nothing is left to retry', async () => {
@@ -391,7 +515,6 @@ describe('inline refusals', () => {
     mount(todayTwoPrograms, {
       failNext: true,
       wrap: (a) => ({
-        ...a,
         logRow: (input) => (++calls === 1 ? a.logRow(input) : Promise.resolve(closed)),
       }),
     });
@@ -418,7 +541,7 @@ describe('typed values and redraws', () => {
     fireEvent.change(field(card('Morning habits', 'Vest weight')), { target: { value: '11' } });
     await press(tick(card('Morning habits', 'Splits stretch')));
     expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
-    act(() => control.setPlan!({ ...todayTwoPrograms, day: '2026-11-13' }));
+    act(() => control.setPlan({ ...todayTwoPrograms, day: '2026-11-13' }));
     expect(field(card('Morning habits', 'Vest weight')).value).toBe('');
     expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
   });
@@ -426,47 +549,28 @@ describe('typed values and redraws', () => {
 
 describe('a day that cannot be written', () => {
   it('a closed day shows what was logged as text, with no ✓, field or Previous', () => {
-    render(
-      <DayScreen
-        plan={closedDayLoggedOnly}
-        actions={createFakeDayActions(closedDayLoggedOnly).actions}
-      />,
-    );
+    show(closedDayLoggedOnly);
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     const splits = card('Morning habits', 'Splits stretch');
     expect(within(splits).getAllByText('5 min')).toHaveLength(2);
     expect(within(splits).getByText(DAY_COPY.logged)).toBeTruthy();
-    expect(within(splits).queryByText(new RegExp(DAY_COPY.lastTime))).toBeNull();
   });
 
   it('a set-type item says how many sets are logged, until 13b shows its rows', () => {
-    render(
-      <DayScreen
-        plan={closedDayLoggedOnly}
-        actions={createFakeDayActions(closedDayLoggedOnly).actions}
-      />,
-    );
+    show(closedDayLoggedOnly);
     expect(
       within(card('Morning habits', 'Neck bridge')).getByText(DAY_COPY.setsLogged(3)),
     ).toBeTruthy();
     cleanup();
-    render(
-      <DayScreen
-        plan={todayTwoPrograms}
-        actions={createFakeDayActions(todayTwoPrograms).actions}
-      />,
-    );
-    expect(within(card('Morning habits', 'Neck bridge')).queryByText(/ logged$/)).toBeNull();
+    show(todayTwoPrograms);
+    expect(
+      within(card('Morning habits', 'Neck bridge')).queryByText(DAY_COPY.setsLogged(0)),
+    ).toBeNull();
   });
 
   it('a workout that left the week is read-only on a writable day', () => {
-    render(
-      <DayScreen
-        plan={workoutLeftTheWeek}
-        actions={createFakeDayActions(workoutLeftTheWeek).actions}
-      />,
-    );
+    show(workoutLeftTheWeek);
     expect(within(workout('Heavy A')).queryAllByRole('button')).toHaveLength(0);
     expect(within(workout('Morning habits')).queryAllByRole('button').length).toBeGreaterThan(0);
   });
