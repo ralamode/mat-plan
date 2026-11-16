@@ -69,6 +69,9 @@ async function safariTap(input: HTMLInputElement, tickButton: HTMLElement) {
   });
 }
 
+/** An entry id for a row this test logs (the fixture's own are for its logged rows). */
+const ENTRY_3 = '01930000-0000-7000-8000-0000000000e3';
+
 const amendOk = (input: RowAmend): Promise<RowResult> =>
   Promise.resolve({ ok: true, entryPublicId: input.entryPublicId, values: input.values });
 
@@ -159,7 +162,7 @@ describe('Change: saving', () => {
     expect(document.activeElement).toBe(benchTick());
   });
 
-  it('a ✓ pressed from the keyboard while a number is changed saves it and never un-ticks', async () => {
+  it('a ✓ tapped while a number is changed saves it and never un-ticks', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
     type(load(), '30');
     await press(benchTick());
@@ -662,5 +665,122 @@ describe('Change: review fixes', () => {
     type(load(), '35');
     await press(button(DAY_COPY.change.cancel));
     expect(status()).toBe(DAY_COPY.announce.cancelled(setLabel(1)));
+  });
+});
+
+describe('Change: second-pass fixes', () => {
+  it('a Change whose write lands but whose answer is lost stops counting once the data has it', async () => {
+    mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (a) => ({
+        amendRow: async (input) => {
+          await a.amendRow(input);
+          throw new Error('connection dropped');
+        },
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    expect(load().value).toBe('30');
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+    expect(within(bench()).queryByText(DAY_COPY.change.failed('27.5 lb × 8'))).toBeNull();
+  });
+
+  it('a logged field only focused, then the ✓ tapped in Safari’s order, un-ticks on that tap', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    act(() => load().focus());
+    await safariTap(load(), benchTick());
+    expect(actions.untickRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape while a Change is in flight cancels nothing and says nothing', async () => {
+    const gate = held();
+    mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (a) => ({ amendRow: (input) => gate.after(() => a.amendRow(input)) }),
+    });
+    type(load(), '30');
+    await leave(load()); // sent, and held in flight
+    expect(load().readOnly).toBe(true); // the Change is in flight
+    fireEvent.keyDown(load(), { key: 'Escape' });
+    expect(status()).not.toBe(DAY_COPY.announce.cancelled(setLabel(1)));
+    await gate.resolve();
+    expect(load().value).toBe('30');
+  });
+
+  it('a ✓ then a Change before the data caught up still shows another phone’s later number', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (a) => ({
+        // The server fills the prescription's reps in, as the real writer does (D13).
+        logRow: async (input) => ({
+          ok: true,
+          entryPublicId: ENTRY_3,
+          values: { ...input.values, reps: input.values.reps ?? 8 },
+        }),
+        amendRow: amendOk,
+        untickRow: a.untickRow,
+      }),
+    });
+    const set3 = () =>
+      within(bench()).getByRole<HTMLInputElement>('textbox', {
+        name: DAY_COPY.fieldLabel(setLabel(3), SPOKEN.lb),
+      });
+    type(set3(), '30');
+    await press(benchTick(3));
+    type(set3(), '35');
+    await leave(set3());
+    const withSet3 = (value: number): DayPlan => {
+      const next: DayPlan = structuredClone(control.plan);
+      const row = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+        .rows[2]!;
+      row.logged = {
+        ...yesterdayHalfDone.workouts
+          .find((w) => w.name === HEAVY)!
+          .items.find((i) => i.name === BENCH)!.rows[0]!.logged!,
+        entryPublicId: ENTRY_3,
+        values: { reps: 8, quantities: [{ slot: 'primary', unit: 'lb', value }] },
+      };
+      return next;
+    };
+    act(() => control.setPlan(withSet3(30))); // a refresh from before the Change
+    expect(set3().value).toBe('35');
+    act(() => control.setPlan(withSet3(40))); // another phone
+    expect(set3().value).toBe('40');
+  });
+
+  it('a ✓ then an un-tick before the data has the ✓: its late refresh keeps the set un-ticked', async () => {
+    const splits = yesterdayHalfDone.workouts
+      .find((w) => w.name === 'Morning habits')!
+      .items.find((i) => i.name === 'Splits stretch')!;
+    const empty: DayPlan = structuredClone(yesterdayHalfDone);
+    empty.workouts
+      .find((w) => w.name === 'Morning habits')!
+      .items.find((i) => i.name === 'Splits stretch')!.rows[0]!.logged = null;
+    const control = mount(empty, {
+      wrap: () => ({
+        logRow: async (input) => ({ ok: true, entryPublicId: ENTRY_3, values: input.values }),
+        untickRow: async () => ({
+          ok: true,
+          entryPublicId: ENTRY_3,
+          values: splits.rows[0]!.logged!.values,
+          hiddenAt: '2026-11-13T18:00:00.000Z',
+        }),
+      }),
+    });
+    const el = () => card('Morning habits', 'Splits stretch');
+    const tickButton = () =>
+      within(el()).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') });
+    await press(tickButton()); // ✓ (the data has not caught up)
+    await press(tickButton()); // un-tick the mis-tap
+    const late: DayPlan = structuredClone(control.plan);
+    late.workouts
+      .find((w) => w.name === 'Morning habits')!
+      .items.find((i) => i.name === 'Splits stretch')!.rows[0]!.logged = {
+      ...splits.rows[0]!.logged!,
+      entryPublicId: ENTRY_3,
+    };
+    act(() => control.setPlan(late)); // the ✓'s refresh, arriving late
+    expect(tickButton().getAttribute('aria-pressed')).toBe('false');
   });
 });

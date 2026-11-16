@@ -64,8 +64,8 @@ type Logged = { entryPublicId: string; values: RowValues };
  */
 type Override =
   | ({ kind: 'logged'; planValues: RowValues | null } & Logged)
-  | ({ kind: 'amended'; planValues: RowValues | null } & Logged)
-  | ({ kind: 'unticked'; hiddenAt: string | null; sawEmpty: boolean } & Logged);
+  | ({ kind: 'amended'; lagging: RowValues[]; planShown: boolean } & Logged)
+  | ({ kind: 'unticked'; hiddenAt: string | null; sawEntry: boolean; sawEmpty: boolean } & Logged);
 /**
  * A row's message.
  * - `counts`: a ✓ that did not save, which the workout counts as "not saved". A number the field
@@ -183,14 +183,22 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     const caughtUp =
       fromPlan?.entryPublicId === override.entryPublicId &&
       sameValues(fromPlan.values, override.values);
+    // The data may still show what it, or this visit, held before the Change (`lagging`); any other
+    // numbers are another phone's.
     const movedOn = fromPlan
       ? fromPlan.entryPublicId !== override.entryPublicId ||
-        (override.planValues !== null && !sameValues(fromPlan.values, override.planValues))
-      : override.planValues !== null;
+        !override.lagging.some((values) => sameValues(values, fromPlan.values))
+      : override.planShown;
     if (caughtUp || movedOn) setOverride(null);
   }
   if (override?.kind === 'unticked') {
-    if (!fromPlan && !override.sawEmpty) setOverride({ ...override, sawEmpty: true });
+    const showsEntry = fromPlan?.entryPublicId === override.entryPublicId;
+    // A refresh from before the un-tick (this visit's ✓ arriving late) shows the entry first: only
+    // an empty seen AFTER the data has shown the entry means the data has caught up.
+    if (showsEntry && !override.sawEntry) setOverride({ ...override, sawEntry: true });
+    if (!fromPlan && override.sawEntry && !override.sawEmpty) {
+      setOverride({ ...override, sawEmpty: true });
+    }
     // Logged again after the data caught up with the un-tick, or another entry: the data is right.
     if (fromPlan && (override.sawEmpty || fromPlan.entryPublicId !== override.entryPublicId)) {
       setOverride(null);
@@ -259,7 +267,13 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     );
     setPending(null);
     if (result.ok) {
-      setOverride(storedFrom(result, 'amended'));
+      setOverride({
+        kind: 'amended',
+        entryPublicId: result.entryPublicId,
+        values: result.values,
+        lagging: [...(fromPlan ? [fromPlan.values] : []), target.values],
+        planShown: fromPlan?.entryPublicId === target.entryPublicId,
+      });
       setError(null);
     } else if (result.reason === ROW_REFUSAL.closed_day) {
       closeDay();
@@ -290,13 +304,10 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     day.announce(message);
   }
 
-  /** What a write stored, held until the page's data shows it (`logged`, or `amended`). */
-  function storedFrom(
-    result: RowResult & { ok: true },
-    kind: 'logged' | 'amended' = 'logged',
-  ): Override {
+  /** What a ✓ or re-tick stored, held until the page's data shows it. */
+  function storedFrom(result: RowResult & { ok: true }): Override {
     return {
-      kind,
+      kind: 'logged',
       entryPublicId: result.entryPublicId,
       values: result.values,
       planValues: fromPlan?.values ?? null,
@@ -376,6 +387,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
           entryPublicId: result.entryPublicId,
           values: result.values,
           hiddenAt: result.hiddenAt ?? null,
+          sawEntry: fromPlan?.entryPublicId === result.entryPublicId,
           sawEmpty: false,
         },
         DAY_COPY.announce.unticked(rowName(item, row)),

@@ -230,8 +230,11 @@ function readNumber(
  */
 export function canChangeValues(item: DayItem, logged: RowValues): boolean {
   if (fieldsOf(item).length === 0) return false;
-  const quantity = slotQuantity(item, logged.quantities);
-  return !quantity || quantity.unit === item.unit;
+  const { slot, reps } = TRACKING_TYPE_FIELDS[item.trackingType];
+  // Logged as another type (the item's type changed since): a Change would send numbers the type
+  // no longer has, so it stays text like a row in another unit.
+  if (logged.reps !== undefined && !reps) return false;
+  return logged.quantities.every((q) => q.slot === slot && q.unit === item.unit);
 }
 
 /**

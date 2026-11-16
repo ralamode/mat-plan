@@ -36,8 +36,8 @@ import { rowName, type useRow } from './use-row';
  * Escape, so while a number differs from the stored one the row says "Not saved. Was 30 lb." with
  * a Cancel.
  *
- * **When a Change is sent: when focus leaves the row** (both of its table rows), on Enter in its last
- * field, or on its ✓; one amend per row, so a load and reps changed together are one write. Never
+ * **When a Change is sent: when focus leaves the row from one of its fields** (for anywhere outside
+ * both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so a load and reps changed together are one write. Never
  * when the window loses focus (a kid checking a timer would save the half-typed number).
  *
  * 🔴 **Safari does not focus a tapped button**, so a field's blur (with no `relatedTarget`) arrives
@@ -110,7 +110,10 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     setLine(null);
   }
   // A row that stops being changeable (its item's unit changed, the day closed) drops what was typed.
-  if (!editable && draft !== null) setDraft(null);
+  if (!editable && draft !== null) {
+    setDraft(null);
+    if (r.error?.write === 'amend') r.clearError();
+  }
   // Another phone's Change (or a reload) retires the line, its Undo and Undo's baseline: the row no
   // longer holds what the line says it changed to, and Undo would write over that phone's number.
   if (
@@ -122,6 +125,7 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
   ) {
     setLine(null);
     setBaseline(null);
+    if (r.error?.write === 'amend') r.clearError();
   }
 
   const clean = entry ? textOf(item, entry.values) : EMPTY_TEXT;
@@ -130,6 +134,9 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     (field) => text[field] !== clean[field],
   );
   const dirty = editable && changedFields.length > 0;
+  // Nothing typed differs from what is stored any more (the data caught up with a write whose
+  // answer was lost): a failed save's "not saved" no longer says anything true.
+  if (!dirty && r.error?.write === 'amend' && r.error.counts) r.clearError();
   const shownLine = editable && !dirty ? line : null;
 
   function clearChangeError() {
@@ -147,6 +154,9 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
   }
 
   function revert() {
+    // A Change in flight cannot be called back: Escape then would say "cancelled" over a write
+    // that still lands (Cancel is hidden then, for the same reason).
+    if (r.pending) return;
     cancelling.current = false;
     const was = dirty;
     setDraft(null);
@@ -287,7 +297,12 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     },
     /** A field's blur: sends the Change once focus has left the row, never on a window blur. */
     onFieldBlur(event: React.FocusEvent<HTMLInputElement>) {
-      if (!dirty || cancelling.current) return;
+      if (cancelling.current) {
+        // Consumed here, so a Cancel press that turned into a scroll stops nothing later.
+        cancelling.current = false;
+        return;
+      }
+      if (!dirty) return;
       const to = event.relatedTarget;
       if (to instanceof Element && inRow(to, rowId)) return;
       // The window lost focus (another app, the lock screen): the field is still the page's active

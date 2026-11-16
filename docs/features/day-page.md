@@ -109,9 +109,11 @@ edited in place. The wiring (12b on) comes next; each step adds its files and in
     `logRow`, because a re-tick restores the old numbers. A retry with different numbers mints a
     new `clientId`, or the server would answer with the first attempt's. **An entry id does not say
     the data has caught up** (a writer may revive an un-ticked entry, so a ✓ after an un-tick can come back with the same id): an
-    un-tick holds until the data has shown the set empty, and the set shown logged after that is the
-    truth (another phone's ✓, or this phone's whose answer was lost); a ✓ holds while the data
-    still shows what it showed when the ✓ was sent.
+    un-tick holds until the data has shown the entry and then the set empty (a late refresh from
+    before the un-tick shows the entry first), and the set shown logged after that is the truth
+    (another phone's ✓, or this phone's whose answer was lost); a ✓ holds while the data still
+    shows what it showed when the ✓ was sent; a Change holds while the data shows its numbers from
+    before (the data's, or this visit's), and any other numbers are another phone's.
 12. **Read-only is `!writable`, a workout that left the week, or a `closed_day` already seen.** Such
     rows show what was logged as text, with no ✓, field or "Last time" (D33). A read-only row shows no
     message and no longer counts as "not saved": there is nothing left to retry. The count is an
@@ -166,7 +168,7 @@ border).
 before the first Change this visit (a typo between two changes never comes back). While a logged
 number is typed over, the row says "Not saved. Was 30 lb." with a Cancel, since phones have no
 Escape key. No trace of a Change shows after a reload; an "edited" marker is a contract question for
-later. Also different from v12: a Change is sent once per row, when focus leaves it (v12 per field);
+later. Also different from v12: a Change is sent once per row, when focus leaves the row from one of its fields (v12 per field);
 the ✓ during an edit saves it (v12 un-ticked); a number is checked as a ✓'s is (v12 took anything
 `+v` reads, such as `1e3`); and a row logged in another unit stays text.
 

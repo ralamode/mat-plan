@@ -224,6 +224,13 @@ describe('readAmend (Change, 13b-ii)', () => {
     expect(canChangeValues(bench, logged)).toBe(true);
     expect(canChangeValues({ ...bench, unit: 'kg' }, logged)).toBe(false);
     expect(canChangeValues(grip, { quantities: [] })).toBe(false);
+    // Logged as another type (reps on what is now a Duration): no numbers it no longer has.
+    expect(
+      canChangeValues(splits, {
+        quantities: logged.quantities.map((q) => ({ ...q, unit: 'min' as const })),
+        reps: 8,
+      }),
+    ).toBe(false);
   });
 
   it('the Changed line prints only what moved', () => {
