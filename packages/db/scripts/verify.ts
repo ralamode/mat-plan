@@ -9839,6 +9839,22 @@ console.log(
   );
 }
 
+// ── SCALE-3: the migrating role carries a 15 s statement timeout ──────────────────────────────────
+// A "migration applied" check, and a guard against a later migration resetting the value. It cannot
+// prove the runtime is bounded: PGlite is one connection, and a role default is applied only when a
+// backend starts. That is the runbook's check (docs/runbooks.md → "The runtime statement timeout").
+{
+  const rows = await db.execute<{ rolconfig: string[] | null }>(
+    sql`select rolconfig from pg_roles where rolname = current_user`,
+  );
+  assert.deepEqual(
+    rows.rows[0]?.rolconfig?.filter((c) => c.startsWith('statement_timeout=')),
+    ['statement_timeout=15s'],
+    'SCALE-3: the migrating role has exactly one statement_timeout default, 15s',
+  );
+  console.log('✓ SCALE-3: the migrating role defaults to a 15s statement timeout');
+}
+
 // ── FAM-1 step 0c: the lanes' proof modules. Each is called exactly ONCE, here, and LAST ─────────
 // Last on purpose (`verify/harness.ts` → `VerifyContext` has the reasoning): nothing in this file
 // runs after them, so rows a lane writes cannot change what an assertion above counts, and a lane's

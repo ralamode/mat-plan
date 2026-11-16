@@ -353,6 +353,30 @@ without dropping it, which is what you want before measuring a specific change.
 cannot tell you a page got slower for a person on a phone. That is Core Web Vitals, and it is blocked
 behind the `connect-src` decision in [OBS-1](./plan.md#obs-1).
 
+## The runtime statement timeout (`SCALE-3`)
+
+**When:** after the `SCALE-3` migration merges; after any restore from a Neon branch cut before it;
+or when a manual query fails with `57014 canceling statement due to statement timeout`.
+
+**Why it is manual:** the timeout is a default on the database role, applied only when a backend
+starts, so no gate can watch pooled traffic pick it up ([plan](./plans/scale-3-statement-timeout.md)).
+
+1. **The app's role carries it.** On the **pooled** string (the one Vercel's `DATABASE_URL` holds, so
+   this reads the app's role, not the migrator's):
+   `SELECT current_user, rolconfig FROM pg_roles WHERE rolname = current_user;` must include
+   `statement_timeout=15s`. It reads the catalog, so the age of the backend does not matter.
+2. **No backend predates it.** On the direct string, with `<t>` the time `migrate.yml`'s "Apply
+   migrations" step **finished** (later is safe; the run's start time would miss a backend opened during
+   setup), `0` from this means every live backend is bounded (read-only; re-run later if not):
+   `SELECT count(*) FROM pg_stat_activity WHERE usename = current_user AND backend_start < '<t>';`
+3. **A long manual query of your own:** `BEGIN; SET LOCAL statement_timeout = 0; <query>; COMMIT;`.
+   It lasts for that transaction only, on either string, and never reaches a backend the app reuses.
+4. **Emergency: the timeout is cancelling legitimate traffic.** On the direct string,
+   `ALTER ROLE CURRENT_USER RESET statement_timeout;` (it, too, reaches only new backends), then a
+   forward migration that does the same, so `db:verify` and production agree again.
+
+**Safety:** steps 1–3 are read-only or transaction-scoped. Step 4 writes one catalog row.
+
 ## A pending migration wedges prod and the seed with it
 
 **When:** a `migrate.yml` run failed and left a migration **pending**. Promoted to its own heading at
