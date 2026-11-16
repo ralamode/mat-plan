@@ -1,0 +1,11 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -544,7 +544,6 @@ export async function insertProfileOwnedBy(
+ /** `program_blocks` rows that are THIS household's live TEMPLATE blocks — the only ones that own workouts. */
+ function liveTemplateBlockIn(scope: HouseholdScope) {
+   return and(
+-    eq(schema.programBlocks.householdId, scope.householdId),
+     eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.template),
+     isNull(schema.programBlocks.deletedAt),
+   );

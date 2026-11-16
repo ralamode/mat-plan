@@ -1,0 +1,11 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -546,7 +546,6 @@ function liveTemplateBlockIn(scope: HouseholdScope) {
+   return and(
+     eq(schema.programBlocks.householdId, scope.householdId),
+     eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.template),
+-    isNull(schema.programBlocks.deletedAt),
+   );
+ }
+ 
