@@ -33,15 +33,15 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## Files
 
-| File                                                | What it is for                                                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/program/create-program.ts` | `createProgram`: a program is a TEMPLATE block, created by naming it. Replay first, then the name, then a free slug.                  |
-| `packages/db/src/writers/program/rename-program.ts` | `renameProgram`: `not_found` (any block that is not this household's live template), then `name_taken`, then the update.              |
-| `packages/db/src/writers/program/program-name.ts`   | The two rules both share: `programNameTaken` (folded, live templates only) and `freeProgramSlug` (`-2`, `-3`… past every live block). |
-| `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                       |
-| `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.             |
-| `packages/db/src/queries/program/index.ts`          | A placeholder so the directory exists. The first real module may replace it.                                                          |
-| `packages/db/scripts/verify/program.ts`             | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                         |
+| File                                                | What it is for                                                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/program/create-program.ts` | `createProgram`: a program is a TEMPLATE block, created by naming it. Replay first, then the name, then a free slug.                         |
+| `packages/db/src/writers/program/rename-program.ts` | `renameProgram`: `not_found` (any block that is not this household's live template), then `name_taken`, then the name and a new slug.        |
+| `packages/db/src/writers/program/program-name.ts`   | What both share: `programNameTaken` (folded, live templates only), `freeProgramSlug` (`-2`, `-3`… past every live block) and `lostSlugRace`. |
+| `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                              |
+| `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                    |
+| `packages/db/src/queries/program/index.ts`          | A placeholder so the directory exists. The first real module may replace it.                                                                 |
+| `packages/db/scripts/verify/program.ts`             | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                |
 
 ## Invariants
 
@@ -57,22 +57,32 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 4. **Start on open, merge on applied** (plan §6). A step may be written on top of an open PR it is
    gated on; it merges only when that gate has merged and, for a migration, been observed applied.
 5. **[write-path.md](./write-path.md)'s invariants still apply to these files**, though the guide
-   gate no longer sends a PR there: ownership proven by `public_id` inside the transaction (2), the
+   gate no longer sends a PR there: ownership proven by `public_id` inside the query (2), the
    writer shared with `db:verify` (3), idempotency by a client id, a database UNIQUE and
    `ON CONFLICT` (5), and a create that is replay-first with a named conflict target (12).
-
-6. 🔴 **Every writer takes `input: unknown` and parses it with the contract's schema**, answering
-   `invalid`; it never throws for a refusal (`ProgramActions`: "None throws for a refusal"). Its
-   refusals come in the preview fake's order (`apps/web/app/design/program/fakes.ts`), so a screen
-   sees the same answer on the preview route and in production.
+6. 🔴 **Every writer behind a `ProgramActions` member takes `input: unknown` and parses it with the
+   contract's schema**, answering `invalid`; it never throws for a refusal (`ProgramActions`: "None
+   throws for a refusal"). Its refusals come in the preview fake's order
+   (`apps/web/app/design/program/fakes.ts`), so a screen sees the same answer on the preview route
+   and in production. **Each is correct on a bare `db`**: the DAL need not wrap it in a transaction.
 7. 🔴 **A create answers its replay before any check** (invariant 5): `createProgram` looks up
-   `clientId` first, so a retried create is never told its own name is taken (`db:mutations` patch
-   `83`). A replay of a program removed since answers `not_found`; the key is spent.
+   `clientId` first, and its name check leaves out its own `clientId`, so a retry is never told its
+   own name is taken, even when it races its first attempt (mutation
+   `create-checks-name-before-replay`). A replay of a program removed since answers `not_found`; the
+   key is spent.
 8. **Program names are compared folded, among live TEMPLATE blocks only** (plan D5). The seeded
    block's name is not a program's; its **slug** still is, since `uq_program_blocks_household_slug`
-   spans both kinds (D9; patches `82`, `84`). A rename keeps the slug. Two devices creating one name
-   in the same second can both pass the name check, and the same-slug case throws on the unique
-   index; both races are accepted and written on the functions.
+   spans both kinds (D9; mutations `program-name-not-folded`, `program-slug-counts-removed`,
+   `program-slug-ignores-household`). **A rename re-slugs**, so a renamed program keeps no trace of
+   its old name (mutation `rename-slug-counts-itself`).
+9. **Two races are accepted, and written on the functions.** Two names written at the same moment
+   (creates or renames of different programs) can both pass the name check. Two writes that pick one
+   slug at the same moment: the loser fails the slug index, and `lostSlugRace` answers it (a create's
+   replay, or `retry`) instead of throwing. PGlite has one connection, so neither interleaving is
+   staged; `lostSlugRace` is proven by forcing the collision it catches.
+10. **No diagram yet**: 6a-i's two writers are straight-line (parse, find, check, write). 6a-ii's
+    save-workout, which matches rows by `client_id` and reorders through the band, adds the lane's
+    first.
 
 ## Changing it
 

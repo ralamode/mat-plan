@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict';
 
-import { movementSlug, newId, PROGRAM_BLOCK_KIND, PROGRAM_REFUSAL } from '@mat-plan/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import {
+  movementSlug,
+  newId,
+  PROGRAM_BLOCK_KIND,
+  PROGRAM_NAME_MAX,
+  PROGRAM_REFUSAL,
+  PROGRAM_SEED,
+} from '@mat-plan/shared';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import type { HouseholdScope } from '../../src/scope';
-import { programBlockInHousehold } from '../../src/writers/ownership';
+import {
+  insertProgramBlockOwnedBy,
+  programBlockInHousehold,
+  programBlockIsLegacy,
+} from '../../src/writers/ownership';
 import { createProgram } from '../../src/writers/program/create-program';
+import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
 import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 
@@ -39,9 +51,10 @@ import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyCreateProgram(ctx);
   await verifyRenameProgram(ctx);
+  await verifySlugRace(ctx);
 }
 
-/** A program block of `scope`'s household, by public id, as the proofs compare it. */
+/** A program block, by public id, as the proofs compare it. */
 async function blockRow(tx: VerifyTx, publicId: string) {
   const [row] = await tx
     .select({
@@ -55,6 +68,12 @@ async function blockRow(tx: VerifyTx, publicId: string) {
   return row;
 }
 
+/** The two columns a rename writes. */
+async function nameAndSlug(tx: VerifyTx, publicId: string) {
+  const row = await blockRow(tx, publicId);
+  return { name: row?.name, slug: row?.slug };
+}
+
 /** How many blocks `scope`'s household holds, hidden ones included. */
 async function blocksIn(tx: VerifyTx, scope: HouseholdScope): Promise<number> {
   const rows = await tx
@@ -62,6 +81,29 @@ async function blocksIn(tx: VerifyTx, scope: HouseholdScope): Promise<number> {
     .from(schema.programBlocks)
     .where(programBlockInHousehold(scope));
   return rows.length;
+}
+
+/**
+ * THE seeded block of `scope`'s household: `PROGRAM_SEED`'s, live, picked by its slug. Never "the
+ * first legacy row": `verify.ts` adds legacy fixture blocks of its own, whose slugs are not their
+ * names', and an unordered pick made the slug proof pass on one of those.
+ */
+async function seededBlock(tx: VerifyTx, scope: HouseholdScope) {
+  const seed = PROGRAM_SEED[0]!;
+  const [row] = await tx
+    .select({ publicId: schema.programBlocks.publicId, name: schema.programBlocks.name })
+    .from(schema.programBlocks)
+    .where(
+      and(
+        programBlockInHousehold(scope),
+        programBlockIsLegacy(),
+        isNull(schema.programBlocks.deletedAt),
+        eq(schema.programBlocks.slug, seed.slug),
+      ),
+    );
+  assert.ok(row, 'FAM-1 6a-i: household A has the seeded block (the proofs need it)');
+  assert.equal(movementSlug(row.name), seed.slug, 'the seeded slug is its name’s movementSlug');
+  return { ...row, slug: seed.slug };
 }
 
 /** Create a program that must succeed, and return its public id. */
@@ -78,6 +120,8 @@ async function hide(tx: VerifyTx, publicId: string) {
     .where(eq(schema.programBlocks.publicId, publicId));
 }
 
+const TOO_LONG = 'x'.repeat(PROGRAM_NAME_MAX + 1);
+
 async function verifyCreateProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
@@ -90,14 +134,18 @@ async function verifyCreateProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
     assert.equal(row?.name, 'Heavy A', 'FAM-1 6a-i: the name is stored as typed');
     assert.equal(row?.slug, movementSlug('Heavy A'), 'FAM-1 6a-i: the slug is movementSlug(name)');
     const [aOwn] = await tx
-      .select({ householdId: schema.programBlocks.householdId })
+      .select({ id: schema.programBlocks.id })
       .from(schema.programBlocks)
       .where(and(eq(schema.programBlocks.publicId, heavy), programBlockInHousehold(A_SCOPE)));
     assert.ok(aOwn, "FAM-1 6a-i: the program is the caller's household's");
 
     // ── a replay answers the first call's program, and adds nothing ──
+    // "Other" is ANOTHER program's name: a replay under it must still be a replay, which only holds
+    // if the replay is looked up before the name (a same-name replay is excluded from the name
+    // check by its own client id, so it cannot show the order).
+    await mustCreate(tx, A_SCOPE, 'Other');
     const before = await blocksIn(tx, A_SCOPE);
-    for (const name of ['Heavy A', 'Something else']) {
+    for (const name of ['Heavy A', 'Something else', 'Other']) {
       const replay = await createProgram(exec, A_SCOPE, { clientId, name });
       assert.deepEqual(
         replay,
@@ -126,7 +174,7 @@ async function verifyCreateProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
     for (const input of [
       { clientId: newId(), name: '' },
       { clientId: newId(), name: '   ' },
-      { clientId: newId(), name: 'x'.repeat(61) },
+      { clientId: newId(), name: TOO_LONG },
       { clientId: 'not-a-uuid', name: 'Fine' },
       null,
     ]) {
@@ -149,35 +197,24 @@ async function verifyCreateProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
       `${movementSlug('Heavy A')}-2`,
       'FAM-1 6a-i: a second program with the same slug gets -2',
     );
-    const [legacy] = await tx
-      .select({ name: schema.programBlocks.name, slug: schema.programBlocks.slug })
-      .from(schema.programBlocks)
-      .where(
-        and(
-          programBlockInHousehold(A_SCOPE),
-          eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy),
-          sql`${schema.programBlocks.deletedAt} is null`,
-        ),
-      );
-    assert.ok(legacy, 'FAM-1 6a-i: household A has the seeded block (the proof below needs it)');
-    // Its name is not a program's, so it is not taken.
-    await mustCreate(tx, A_SCOPE, legacy.name);
-    // Its slug is: a program whose name slugs to it is suffixed past it (the slug index spans kinds).
-    assert.equal(movementSlug(legacy.slug), legacy.slug, 'the seeded slug is its own movementSlug');
-    const sameSlug = await mustCreate(tx, A_SCOPE, legacy.slug);
+    const seeded = await seededBlock(tx, A_SCOPE);
+    // Its name is not a program's, so it is not taken; its slug is (the slug index spans kinds).
+    const sameAsSeeded = await mustCreate(tx, A_SCOPE, seeded.name);
     assert.equal(
-      (await blockRow(tx, sameSlug))?.slug,
-      `${legacy.slug}-2`,
-      "FAM-1 6a-i: a program is slugged past the seeded block's slug",
+      (await blockRow(tx, sameAsSeeded))?.slug,
+      `${seeded.slug}-2`,
+      "FAM-1 6a-i: the seeded block's name is not taken, and its slug is suffixed past",
     );
 
-    // ── another household: its own names, its own client ids ──
+    // ── another household: its own names, its own slugs, its own client ids ──
     const bHeavy = await mustCreate(tx, B_SCOPE, 'Heavy A', clientId);
     assert.notEqual(bHeavy, heavy, "FAM-1 6a-i: the same client id in B is B's own program");
-    assert.notEqual(
-      (await blockRow(tx, bHeavy))?.householdId,
-      row?.householdId,
-      "FAM-1 6a-i: B's program is in B's household",
+    const bRow = await blockRow(tx, bHeavy);
+    assert.notEqual(bRow?.householdId, row?.householdId, "FAM-1 6a-i: B's program is B's");
+    assert.equal(
+      bRow?.slug,
+      movementSlug('Heavy A'),
+      "FAM-1 6a-i: B's slug ignores A's (the slug read is household-scoped)",
     );
 
     // ── a removed program: its replay is not_found; its name and slug are free again ──
@@ -187,6 +224,7 @@ async function verifyCreateProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
       { ok: false, reason: PROGRAM_REFUSAL.not_found },
       'FAM-1 6a-i: replaying the create of a removed program is not_found, not a second program',
     );
+    await hide(tx, underscored);
     const again = await mustCreate(tx, A_SCOPE, 'Heavy A');
     assert.equal(
       (await blockRow(tx, again))?.slug,
@@ -209,16 +247,31 @@ async function verifyRenameProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
       { ok: true },
       'FAM-1 6a-i: a rename succeeds',
     );
-    assert.equal((await blockRow(tx, heavy))?.name, 'Heavy B', 'FAM-1 6a-i: the name is stored');
-    assert.equal(
-      (await blockRow(tx, heavy))?.slug,
-      movementSlug('Heavy A'),
-      'FAM-1 6a-i: a rename keeps the slug',
+    assert.deepEqual(
+      await nameAndSlug(tx, heavy),
+      { name: 'Heavy B', slug: movementSlug('Heavy B') },
+      'FAM-1 6a-i: a rename stores the name and re-slugs: the old name is kept nowhere',
     );
     assert.deepEqual(
       await renameProgram(exec, A_SCOPE, { programPublicId: heavy, name: 'heavy b' }),
       { ok: true },
       "FAM-1 6a-i: a program's own name, re-spelt, is not taken",
+    );
+    assert.equal(
+      (await blockRow(tx, heavy))?.slug,
+      movementSlug('Heavy B'),
+      'FAM-1 6a-i: a re-spelling keeps its own slug (not -2 past itself)',
+    );
+    // A name of its own whose slug another program holds: renamed, and suffixed past it.
+    assert.deepEqual(
+      await renameProgram(exec, A_SCOPE, { programPublicId: heavy, name: 'Light_A' }),
+      { ok: true },
+      'FAM-1 6a-i: a name that only shares a slug is not taken',
+    );
+    assert.equal(
+      (await blockRow(tx, heavy))?.slug,
+      `${movementSlug('Light A')}-2`,
+      "FAM-1 6a-i: a rename is suffixed past another program's slug",
     );
 
     for (const name of ['Light A', 'light  a']) {
@@ -228,7 +281,7 @@ async function verifyRenameProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
         `FAM-1 6a-i: renaming to "${name}", another program's name, is name_taken`,
       );
     }
-    for (const name of ['', '  ', 'x'.repeat(61)]) {
+    for (const name of ['', '  ', TOO_LONG]) {
       assert.deepEqual(
         await renameProgram(exec, A_SCOPE, { programPublicId: heavy, name }),
         { ok: false, reason: PROGRAM_REFUSAL.invalid },
@@ -237,25 +290,16 @@ async function verifyRenameProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
     }
     assert.equal(
       (await blockRow(tx, heavy))?.name,
-      'heavy b',
+      'Light_A',
       'FAM-1 6a-i: a refusal writes nothing',
     );
 
     // ── not_found, the same answer for each: another household's, the seeded block, removed, unknown ──
-    const [legacy] = await tx
-      .select({ publicId: schema.programBlocks.publicId, name: schema.programBlocks.name })
-      .from(schema.programBlocks)
-      .where(
-        and(
-          programBlockInHousehold(A_SCOPE),
-          eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy),
-        ),
-      );
-    assert.ok(legacy, 'FAM-1 6a-i: household A has the seeded block (the proof below needs it)');
+    const seeded = await seededBlock(tx, A_SCOPE);
     await hide(tx, light);
     const cases: Array<[string, string]> = [
       ["another household's program", theirs],
-      ['the seeded (legacy) block', legacy.publicId],
+      ['the seeded (legacy) block', seeded.publicId],
       ['a removed program', light],
       ['an unknown id', newId()],
     ];
@@ -266,14 +310,10 @@ async function verifyRenameProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
         `FAM-1 6a-i: renaming ${what} is not_found`,
       );
     }
-    assert.equal(
-      (await blockRow(tx, theirs))?.name,
-      'Theirs',
-      "FAM-1 6a-i: B's program is unchanged",
-    );
-    assert.equal(
-      (await blockRow(tx, legacy.publicId))?.name,
-      legacy.name,
+    assert.equal((await blockRow(tx, theirs))?.name, 'Theirs', "FAM-1 6a-i: B's is unchanged");
+    assert.deepEqual(
+      await nameAndSlug(tx, seeded.publicId),
+      { name: seeded.name, slug: seeded.slug },
       'FAM-1 6a-i: the seeded block is unchanged',
     );
     assert.equal(
@@ -282,5 +322,43 @@ async function verifyRenameProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
       'FAM-1 6a-i: a removed one is unchanged',
     );
   });
-  console.log('✓ FAM-1 6a-i: renameProgram (name_taken, invalid, not_found across households)');
+  console.log('✓ FAM-1 6a-i: renameProgram (re-slugs, name_taken, invalid, not_found)');
+}
+
+/**
+ * `lostSlugRace`: the one catch both writers rely on for a race PGlite cannot stage. Proven by
+ * forcing the collision it names, so its constraint name cannot drift from the schema's.
+ */
+async function verifySlugRace({ A_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const seeded = await seededBlock(tx, A_SCOPE);
+    const collide = (e: typeof exec) =>
+      insertProgramBlockOwnedBy(e, A_SCOPE, {
+        clientId: newId(),
+        slug: seeded.slug,
+        name: 'Collides',
+        notes: null,
+      });
+    assert.equal(
+      await lostSlugRace(exec, collide),
+      true,
+      'FAM-1 6a-i: a write on a live slug is a lost slug race',
+    );
+    // Only the savepoint rolled back: the enclosing transaction still answers.
+    assert.ok(await blocksIn(tx, A_SCOPE), 'FAM-1 6a-i: the caller’s transaction survives');
+    assert.equal(
+      await lostSlugRace(exec, async () => undefined),
+      false,
+      'FAM-1 6a-i: a write that succeeds lost no race',
+    );
+    await assert.rejects(
+      lostSlugRace(exec, async () => {
+        throw new Error('something else');
+      }),
+      /something else/,
+      'FAM-1 6a-i: any other error is thrown unchanged',
+    );
+  });
+  console.log('✓ FAM-1 6a-i: lostSlugRace (the slug index, the savepoint, other errors)');
 }

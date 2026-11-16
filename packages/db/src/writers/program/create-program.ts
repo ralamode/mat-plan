@@ -1,36 +1,28 @@
-import {
-  createProgramSchema,
-  PROGRAM_REFUSAL,
-  PROGRAM_BLOCK_KIND,
-  type ProgramResult,
-} from '@mat-plan/shared';
+import { createProgramSchema, PROGRAM_REFUSAL, type ProgramResult } from '@mat-plan/shared';
 
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { insertProgramBlockOwnedBy, programBlockByClientId } from '../ownership';
-import { freeProgramSlug, programNameTaken } from './program-name';
+import { freeProgramSlug, lostSlugRace, programNameTaken } from './program-name';
 
 /**
- * `ProgramActions.createProgram`'s writer (FAM-1 step 6a): a program is created by naming it, as a
- * TEMPLATE block of `scope`'s household.
+ * `ProgramActions.createProgram`'s writer (FAM-1 step 6a-i): a program is created by naming it, as a
+ * TEMPLATE block of `scope`'s household. Correct on a bare `db` or inside a transaction.
  *
- * The order, and why:
+ * The order, which is the preview fake's (`apps/web/app/design/program/fakes.ts`):
  *
- * 1. **Parse** with `createProgramSchema`: a bad input answers `invalid`, as the preview's fake does.
+ * 1. **Parse** with `createProgramSchema`: a bad input answers `invalid`.
  * 2. **The replay, before any check** (AGENTS.md → Idempotency; `write-path.md` invariant 12): a
- *    block this household already holds under `clientId` is answered with its id, so a retried
- *    create is never told its own name is taken. The lookup is household-scoped, so another
- *    household's use of the same id is not seen.
- * 3. **The name** ({@link programNameTaken}): another live program of the household with the same
- *    folded name answers `name_taken`.
+ *    block this household holds under `clientId` is answered with its id, so a retried create is
+ *    never told its own name is taken. Household-scoped, so another household's use of the id is
+ *    not seen. Only template blocks carry a `client_id` (the seed writes none), so a hit is always
+ *    this attempt's program; one removed since answers `not_found` (the key is spent).
+ * 3. **The name** ({@link programNameTaken}, excluding this attempt): `name_taken`.
  * 4. **Insert** through `insertProgramBlockOwnedBy` (it sets `kind = template` and mints the
  *    `public_id`), with a slug free in the household ({@link freeProgramSlug}), then re-read by
- *    `clientId`.
- *
- * ⚠️ Two devices creating programs whose names share a slug at the same moment both pick the same
- * free slug, and the second insert fails `uq_program_blocks_household_slug` and throws (an
- * unexpected error, not a refusal). Same-second creates from two devices; accepted, as
- * {@link programNameTaken}'s race is.
+ *    `clientId`. A slug race lost ({@link lostSlugRace}) is answered by that re-read too: a twin of
+ *    this attempt won it, and its program is this one; otherwise another program took the slug
+ *    first, and `retry` picks a new one.
  */
 export async function createProgram(
   exec: Executor,
@@ -41,30 +33,25 @@ export async function createProgram(
   if (!parsed.success) return { ok: false, reason: PROGRAM_REFUSAL.invalid };
   const { clientId, name } = parsed.data;
 
-  const replay = await programBlockByClientId(exec, scope, clientId);
-  if (replay) {
-    // Only a template block carries a `client_id` (the seed writes none), so this is the first call's
-    // program. Checked anyway: a legacy block must never be handed to the builder as a program.
-    if (replay.kind !== PROGRAM_BLOCK_KIND.template) {
-      return { ok: false, reason: PROGRAM_REFUSAL.invalid };
-    }
-    // Removed since: the key is spent (the index is non-partial), so the honest answer is that the
-    // program is gone, never a second program under an id the device believes it already used.
-    return replay.deleted
+  const answer = async (): Promise<ProgramResult<{ programPublicId: string }> | null> => {
+    const block = await programBlockByClientId(exec, scope, clientId);
+    if (!block) return null;
+    return block.deleted
       ? { ok: false, reason: PROGRAM_REFUSAL.not_found }
-      : { ok: true, programPublicId: replay.publicId };
-  }
+      : { ok: true, programPublicId: block.publicId };
+  };
 
-  if (await programNameTaken(exec, scope, name)) {
+  const replay = await answer();
+  if (replay) return replay;
+
+  if (await programNameTaken(exec, scope, name, { exceptClientId: clientId })) {
     return { ok: false, reason: PROGRAM_REFUSAL.name_taken };
   }
 
   const slug = await freeProgramSlug(exec, scope, name);
-  await insertProgramBlockOwnedBy(exec, scope, { clientId, slug, name, notes: null });
+  await lostSlugRace(exec, (tx) =>
+    insertProgramBlockOwnedBy(tx, scope, { clientId, slug, name, notes: null }),
+  );
 
-  const created = await programBlockByClientId(exec, scope, clientId);
-  // A same-id race lost to step 2 lands here with the winner's row, which is this attempt's program.
-  return created
-    ? { ok: true, programPublicId: created.publicId }
-    : { ok: false, reason: PROGRAM_REFUSAL.retry };
+  return (await answer()) ?? { ok: false, reason: PROGRAM_REFUSAL.retry };
 }
