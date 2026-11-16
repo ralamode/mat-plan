@@ -29,7 +29,7 @@ import {
   usedByText,
 } from './builder-text';
 import { programPath } from './routes';
-import { DOUBLE_TAP_MS } from './use-attempt';
+import { tapClock } from './test-taps';
 import { WorkoutEditorScreen } from './workout-editor-screen';
 
 afterEach(cleanup);
@@ -296,8 +296,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     );
   });
 
-  it('removing the last card moves focus to the Items heading', async () => {
+  it('removing the last card moves focus to the Items heading', () => {
     editor();
+    const clock = tapClock();
     for (const name of [
       'DB bench press',
       'Pull-up',
@@ -305,9 +306,8 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       'Sprawls',
       'Hollow-body hold',
     ]) {
-      fireEvent.click(screen.getByRole('button', { name: removeLabel(name) }));
-      // Past the double-tap window, so each Remove is its own tap.
-      await new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
+      // A second apart: each Remove is its own tap.
+      clock.tap(screen.getByRole('button', { name: removeLabel(name) }));
     }
     expect(screen.getByText(EDITOR_COPY.noItems)).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: EDITOR_COPY.items }));
@@ -352,8 +352,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
   it('a second Remove straight after the first is the same tap, and removes nothing', () => {
     editor();
-    fireEvent.click(screen.getByRole('button', { name: removeLabel('Goblet squat') }));
-    fireEvent.click(screen.getByRole('button', { name: removeLabel('Sprawls') }));
+    const clock = tapClock();
+    clock.tap(screen.getByRole('button', { name: removeLabel('Goblet squat') }));
+    clock.again(screen.getByRole('button', { name: removeLabel('Sprawls') }));
     expect(cards()).toHaveLength(4);
   });
 
@@ -589,8 +590,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
     it('a second tap on the link straight after the first is the same tap', () => {
       editor();
-      fireEvent.click(linkButton('Hollow-body hold'));
-      fireEvent.click(linkButton('Hollow-body hold'));
+      const clock = tapClock();
+      clock.tap(linkButton('Hollow-body hold'));
+      clock.again(linkButton('Hollow-body hold'));
       expect(linkButton('Hollow-body hold').textContent).toBe(EDITOR_COPY.unlinkNext);
     });
 
@@ -613,21 +615,19 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
           ],
         },
       );
-      fireEvent.click(linkButton('Goblet squat'));
+      const clock = tapClock();
+      clock.tap(linkButton('Goblet squat'));
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
-      await new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
-      fireEvent.click(linkButton('Goblet squat'));
+      clock.tap(linkButton('Goblet squat'));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
       expect(push).toHaveBeenCalledWith(BACK);
     });
 
-    const pause = () => new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
-
     it('Unlink straight after Join gives each superset back its own rest', async () => {
       editor();
-      fireEvent.click(linkButton('Goblet squat'));
-      await pause();
-      fireEvent.click(linkButton('Goblet squat'));
+      const clock = tapClock();
+      clock.tap(linkButton('Goblet squat'));
+      clock.tap(linkButton('Goblet squat'));
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
       expect(restIn(cards()[3]!)).toBe('60 s after each round');
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
@@ -636,9 +636,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
     it('a pair unlinked and linked again gets its rest back, and nothing has changed', async () => {
       editor();
-      fireEvent.click(linkButton('Pull-up'));
-      await pause();
-      fireEvent.click(linkButton('Pull-up'));
+      const clock = tapClock();
+      clock.tap(linkButton('Pull-up'));
+      clock.tap(linkButton('Pull-up'));
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
       expect(push).toHaveBeenCalledWith(BACK);
@@ -657,7 +657,8 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
           ],
         },
       );
-      fireEvent.click(linkButton('Pull-up'));
+      const clock = tapClock();
+      clock.tap(linkButton('Pull-up'));
       await waitFor(() =>
         expect(screen.getByRole('status').textContent).toBe(
           'Unlinked: superset A now has 2 items.',
@@ -668,8 +669,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       const sets = within(cards()[0]!).getByLabelText(EDITOR_COPY.sets);
       fireEvent.change(sets, { target: { value: '9' } });
       fireEvent.change(sets, { target: { value: String(bench!.sets) } });
-      await pause();
-      fireEvent.click(linkButton('Pull-up'));
+      clock.tap(linkButton('Pull-up'));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
       expect(push).toHaveBeenCalledWith(BACK);
     });
@@ -692,9 +692,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
     it('Join then Unlink, when only one superset had a rest, gives back neither more nor less', async () => {
       editor({}, withoutRest(3));
-      fireEvent.click(linkButton('Goblet squat'));
-      await pause();
-      fireEvent.click(linkButton('Goblet squat'));
+      const clock = tapClock();
+      clock.tap(linkButton('Goblet squat'));
+      clock.tap(linkButton('Goblet squat'));
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
       expect(restIn(cards()[3]!)).toBe('');
       await waitFor(() => expect(screen.getByRole('status').textContent).toBe(undoneText(false)));
@@ -704,10 +704,10 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
     it('an edit between two taps means the second is not an undo: a rest typed since stays', async () => {
       editor();
-      fireEvent.click(linkButton('Goblet squat'));
+      const clock = tapClock();
+      clock.tap(linkButton('Goblet squat'));
       fireEvent.change(within(cards()[3]!).getByLabelText(/^Rest/), { target: { value: '2 min' } });
-      await pause();
-      fireEvent.click(linkButton('Goblet squat'));
+      clock.tap(linkButton('Goblet squat'));
       // The plain unlink rule: the rest is copied to both sides.
       expect(restIn(cards()[1]!)).toBe('2 min');
       expect(restIn(cards()[3]!)).toBe('2 min');
@@ -715,11 +715,11 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
     it('a rest removed by a join never comes back over one typed later', async () => {
       editor();
-      fireEvent.click(linkButton('Goblet squat'));
-      fireEvent.click(linkButton('Sprawls'));
+      const clock = tapClock();
+      clock.tap(linkButton('Goblet squat'));
+      clock.tap(linkButton('Sprawls'));
       fireEvent.change(within(cards()[2]!).getByLabelText(/^Rest/), { target: { value: '2 min' } });
-      await pause();
-      fireEvent.click(linkButton('Goblet squat'));
+      clock.tap(linkButton('Goblet squat'));
       expect(restIn(cards()[1]!)).toBe('2 min');
     });
 

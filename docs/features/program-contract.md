@@ -3,8 +3,8 @@ feature: The program contract (FAM-1's shapes, fixtures, fakes and preview route
 owns:
   - packages/shared/src/program/
   - apps/web/app/design/program/
-  # The scan of every state on the preview route. It reads the route's own list, so a lane never
-  # edits it; a change to how the states are scanned is a contract change.
+  # The scan of every state a fixture can load on the preview route. It reads the route's own
+  # list, so a lane never edits it; a change to how the states are scanned is a contract change.
   - apps/web/e2e/program-preview-a11y.spec.ts
   # The two spellings `quantityText` is built from (`formatNumeric`, and seconds as `s`). Outside
   # `program/` because the CSV reads them too, and owned here so a change to either is a contract
@@ -218,6 +218,34 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     logged is told the number is wrong, not that the page is out of date, so no Reload is offered
     until the number is fixed and the next ✓ answers `slot_taken`. `entryUnitFor` answers plan §2's
     table whatever unit it is handed for a type whose unit is fixed.
+
+17. **A required name is not made only of characters that fold away** (`shortTextSchema`: a
+    program's name, a workout's, a superset's group key and the keys of a day's `restAfter`;
+    contract change C12). A name of zero-width or format characters only, or of combining marks
+    only, is one character long, so a length check alone takes it; it must also fold to something
+    (`foldName`). `invalid` otherwise. ⚠️ This is narrower than "can be seen": the braille blank and
+    the Hangul filler characters draw as nothing and still pass, because `foldName` keeps them; they
+    are named on the schema. An item's name is held to more by `movementNameSchema` (a letter) and
+    `newItemSchema` (a key, invariant 15).
+
+18. **A slot holds at most one entry** (plan D35, maintainer, 2026-11-16; a slot is one athlete,
+    day, prescription and set). Program rows only: bodyweight and practice are not slots in this
+    sense and keep "re-entry is a new row". A new ✓ on a set whose entry was un-ticked, or hidden by
+    Clear day, brings that entry back: same `entryPublicId`, no second entry, however many times a
+    row is un-ticked and ticked. The revived entry is what a new ✓ would have made but for its id:
+    this ✓'s numbers and the prescription's text as it reads now. The rules are on `rowWriteSchema`
+    (and, for a late re-tick, `rowRetickSchema`) and in the fake: the entry answers to the reviving
+    ✓'s `clientId`; that id never revives its own hidden entry (`own_hidden`); a refused ✓ leaves the
+    hidden entry untouched; a re-tick that arrives after the revive answers with the live entry.
+    ⚠️ **One known limit:** the entry stores one `clientId`, so an id a revive replaced is forgotten.
+    Replayed after the set is un-ticked again, it revives the entry with that old attempt's numbers
+    (`fakes.test.ts` pins it). No screen re-sends such an attempt and there is no offline queue;
+    closing it means keeping the replaced ids, which is a table. The maintainer accepted the limit
+    (2026-11-16); it is revisited when an offline sync queue arrives. The real writer gets all of
+    this at step 11c. Until then 11b inserts where 11c will revive, so two answers differ between the two
+    steps: a re-tick after a new ✓ (`slot_taken` under 11b), and a replay of the first ✓'s id while
+    its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
+    is the limit above).
 
 ## Traps
 

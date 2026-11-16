@@ -520,6 +520,15 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Vitest / RTL (component tests)
 
+- **A test that taps twice "straight after" in real time fails on a busy machine.** → A double-tap
+  guard compares the taps' `event.timeStamp`s, so "within 500ms" in a test depends on how loaded the
+  machine is: with three suites at once, two consecutive `fireEvent.click`s were more than 500ms apart.
+  → Tap at stated times (`components/program-builder/test-taps.ts`, `tapAt` / `tapClock`), never sleep
+  to get past a window. Diagnosis: run two or three full `vitest run`s at once; a contention failure
+  shows across many files at once (tests at 5–8s), a timing bug in one test fails fast.
+  ⚠️ Plain contention (a render chain slower than `waitFor`'s 1s) is not fixed per test by padding a
+  timeout; take it to the suite's configuration.
+
 - **A whole feature shipped INERT with every gate green — an action parsed a field and then forgot to
   forward it.** → GAP-1 P0-1 validated `dayRole` and omitted it from the `logStrengthSession({…})`
   call, so `sessions.day_role` was never written from the app. Three gates missed it independently:
@@ -681,7 +690,10 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   worktrees share it — restores the file from **that snapshot rather than from `HEAD`**, and then
   verifies the restore byte for byte. It also refuses a dirty file by default, reports GREEN as a
   defect, treats a gate that cannot spawn as DID-NOT-RUN, and takes `--expect` so "red for the right
-  reason" is checkable. ⚠️ **The lesson here is not about probing.** A rule that has to be remembered
+  reason" is checkable. **Since 2026-11-16 it also runs the gate once BEFORE mutating**: a gate
+  already red can print the `--expect` text on its own (a failing test's name), so the probe read
+  "RED for the named reason" on a test that failed with or without the mutation. A red baseline is
+  now DID-NOT-PROVE, and so is a green one whose output already contains `--expect`. ⚠️ **The lesson here is not about probing.** A rule that has to be remembered
   at the moment of risk is not a control; this one was re-derived correctly three times and applied
   wrongly anyway. When a convention keeps failing, the next version of it is a script with a
   self-test, not a better-worded paragraph.

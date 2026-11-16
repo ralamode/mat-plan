@@ -303,7 +303,7 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(await actions.untickRow(input)).toEqual(first);
   });
 
-  it('re-tick refuses another token, and a row that was logged again', async () => {
+  it('re-tick refuses another token; after a new ✓ the entry is already back, and it answers with it', async () => {
     const { actions } = day(everyTypeOnce);
     const { entryPublicId } = loggedBench();
     const unticked = succeeded(
@@ -314,10 +314,220 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(await actions.retickRow({ ...retick, hiddenAt: '2026-11-14T00:00:00.000000Z' })).toEqual(
       { ok: false, reason: ROW_REFUSAL.not_found },
     );
-    succeeded(
-      await actions.logRow(tick(itemOnly(everyTypeOnce, 'DB bench press'), 'DB bench press')),
+    // A new ✓ on the set brings the same entry back (one entry per slot, plan D35), so the
+    // re-tick that arrives late has nothing to restore and answers with the entry as it is now.
+    const again = succeeded(
+      await actions.logRow(
+        tick(itemOnly(everyTypeOnce, 'DB bench press'), 'DB bench press', {
+          reps: 9,
+          quantities: [lb(30)],
+        }),
+      ),
     );
-    expect(await actions.retickRow(retick)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+    expect(again.entryPublicId).toBe(entryPublicId);
+    expect(await actions.retickRow(retick)).toEqual(again);
+  });
+
+  it('a new ✓ on an un-ticked set brings the same entry back with the new numbers: one entry per slot', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const first = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(first));
+    const before = itemOf(plan(), 'DB bench press');
+
+    // Un-tick and ✓ again, five times over, each with another number and a new attempt.
+    let latest = { ...first };
+    for (const reps of [9, 10, 11, 12, 13]) {
+      succeeded(await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }));
+      latest = { ...first, clientId: newId(), values: { reps, quantities: [lb(reps * 5)] } };
+      const back = succeeded(await actions.logRow(latest));
+      // The same entry every time, never a second one, holding what was just typed.
+      expect(back.entryPublicId).toBe(made.entryPublicId);
+      expect(back.values).toEqual({ reps, quantities: [lb(reps * 5)] });
+    }
+    const after = itemOf(plan(), 'DB bench press');
+    expect(after.item.rows.map((r) => r.set)).toEqual(before.item.rows.map((r) => r.set));
+    expect(after.workout.progress).toEqual(before.workout.progress);
+    expect(after.item.rows[0]?.logged).toMatchObject({
+      entryPublicId: made.entryPublicId,
+      values: { reps: 13, quantities: [lb(65)] },
+    });
+
+    // A retry of the ✓ that brought it back answers as that ✓ did.
+    expect(await actions.logRow(latest)).toMatchObject({
+      ok: true,
+      entryPublicId: made.entryPublicId,
+      values: { reps: 13 },
+    });
+    // The ✓ it was FIRST logged under names nothing now: replayed, it is a ✓ on a logged set.
+    expect(await actions.logRow(first)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+
+    // Un-ticked once more, the entry's current ✓ answers `own_hidden`: a replay never revives.
+    succeeded(await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }));
+    expect(await actions.logRow(latest)).toEqual({ ok: false, reason: ROW_REFUSAL.own_hidden });
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged).toBeNull();
+  });
+
+  it('a revived entry is what a new ✓ would have made: the numbers and the text of the prescription as it is now', async () => {
+    // "Yesterday, after the program was edited": the bench press was logged as 4 × 8 @ 25 lb and
+    // the prescription now reads 3 × 8 @ 30 lb.
+    const { actions, plan } = day(yesterdayEditedAfterLogging);
+    const { item } = itemOf(yesterdayEditedAfterLogging, 'DB bench press');
+    const old = item.rows.find((r) => r.logged)!;
+    expect(old.logged!.prescribedText).not.toBe(item.prescribedText);
+    const address = {
+      profilePublicId: yesterdayEditedAfterLogging.profilePublicId,
+      day: yesterdayEditedAfterLogging.day,
+    };
+    succeeded(await actions.untickRow({ ...address, entryPublicId: old.logged!.entryPublicId }));
+
+    // An empty ✓: the numbers come from the prescription as it is now, and so does the text.
+    const fresh = succeeded(
+      await actions.logRow({
+        ...tick(itemOnly(yesterdayEditedAfterLogging, 'DB bench press'), 'DB bench press'),
+        set: old.set,
+      }),
+    );
+    expect(fresh.entryPublicId).toBe(old.logged!.entryPublicId);
+    const row = itemOf(plan(), 'DB bench press').item.rows.find((r) => r.set === old.set)!;
+    expect(row.logged).toEqual({
+      entryPublicId: old.logged!.entryPublicId,
+      values: { reps: item.target.reps, quantities: item.target.quantities },
+      prescribedText: item.prescribedText,
+    });
+  });
+
+  it('a ✓ that is refused leaves the un-ticked entry hidden and untouched', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(write));
+    const hidden = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }),
+    );
+
+    // A number the type cannot hold, then a write that fails outright.
+    expect(
+      await actions.logRow({
+        ...write,
+        clientId: newId(),
+        values: { reps: 8, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 5 }] },
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+    expect(
+      itemOf(plan(), 'DB bench press').item.rows.find((r) => r.set === write.set)?.logged,
+    ).toBeNull();
+    // Still restorable under its token, with the numbers it had.
+    expect(
+      await actions.retickRow({
+        ...address,
+        entryPublicId: made.entryPublicId,
+        hiddenAt: hidden.hiddenAt!,
+      }),
+    ).toEqual({ ok: true, entryPublicId: made.entryPublicId, values: made.values });
+  });
+
+  it('a clientId a revive replaced is forgotten: the known limit, pinned so closing it is deliberate', async () => {
+    // The entry stores one `clientId`. After ✓(c1), un-tick, ✓(c2), the entry answers to c2 and
+    // nothing remembers c1.
+    const { actions, plan } = day(heavyASupersets);
+    const c1 = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(c1));
+    succeeded(await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }));
+    const c2 = { ...c1, clientId: newId(), values: { reps: 9, quantities: [lb(30)] } };
+    succeeded(await actions.logRow(c2));
+
+    // While the set is logged, c1 replayed is a ✓ on a logged set.
+    expect(await actions.logRow(c1)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+
+    // Un-ticked again: c2, the entry's current id, never revives...
+    succeeded(await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }));
+    expect(await actions.logRow(c2)).toEqual({ ok: false, reason: ROW_REFUSAL.own_hidden });
+    // ...but c1 cannot be told from a new ✓, and brings the entry back with its old numbers.
+    // ⚠️ This is the limit `rowWriteSchema` records (plan D35), not a wanted behaviour: the real
+    // writer has nowhere to remember c1 either. If replaced ids are ever kept, this becomes
+    // `own_hidden` and this test changes with it.
+    expect(await actions.logRow(c1)).toEqual({
+      ok: true,
+      entryPublicId: made.entryPublicId,
+      values: { reps: 8, quantities: [lb(25)] },
+    });
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.values).toEqual({
+      reps: 8,
+      quantities: [lb(25)],
+    });
+  });
+
+  it('two un-ticks in the same instant get different tokens', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(write));
+    const first = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }),
+    );
+    succeeded(await actions.logRow({ ...write, clientId: newId() }));
+    const second = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }),
+    );
+    expect(second.hiddenAt).not.toBe(first.hiddenAt);
+    // The first un-tick's token is dead: it must not restore what the second un-tick hid.
+    expect(
+      await actions.retickRow({
+        ...address,
+        entryPublicId: made.entryPublicId,
+        hiddenAt: first.hiddenAt!,
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.not_found });
+    expect(
+      (
+        await actions.retickRow({
+          ...address,
+          entryPublicId: made.entryPublicId,
+          hiddenAt: second.hiddenAt!,
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('a ✓ brings back only the entry of its own set', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const one = succeeded(await actions.logRow(write));
+    succeeded(
+      await actions.untickRow({
+        profilePublicId: heavyASupersets.profilePublicId,
+        day: heavyASupersets.day,
+        entryPublicId: one.entryPublicId,
+      }),
+    );
+    // Another set of the same item, and the same set of another item, are other slots.
+    const otherSet = succeeded(
+      await actions.logRow({ ...write, clientId: newId(), set: write.set + 1 }),
+    );
+    expect(otherSet.entryPublicId).not.toBe(one.entryPublicId);
+    const another = heavyASupersets.workouts
+      .flatMap((w) => w.items)
+      .find(
+        (i) =>
+          i.name !== 'DB bench press' && i.prescriptionPublicId && i.rows.some((r) => !r.logged),
+      );
+    if (!another) throw new Error('the fixture has a second item with an open row');
+    const otherItem = succeeded(await actions.logRow(tick(heavyASupersets, another.name)));
+    expect(otherItem.entryPublicId).not.toBe(one.entryPublicId);
   });
 
   it('the values are judged before the set: a bad number on a logged set is bad_value, not slot_taken', async () => {
@@ -372,7 +582,7 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     ).toMatchObject({ ok: true, values: { reps: 9, quantities: [lb(30)] } });
   });
 
-  it('the ✓ that made an un-ticked row answers own_hidden from then on', async () => {
+  it('the ✓ that made an un-ticked row answers own_hidden while its entry is hidden', async () => {
     const { actions } = day(heavyASupersets);
     const write = tick(heavyASupersets, 'DB bench press');
     const { entryPublicId } = succeeded(await actions.logRow(write));
@@ -382,8 +592,11 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
       entryPublicId,
     });
     expect(await actions.logRow(write)).toEqual({ ok: false, reason: ROW_REFUSAL.own_hidden });
-    // A new ✓ is a new attempt.
-    expect((await actions.logRow({ ...write, clientId: newId() })).ok).toBe(true);
+    // A new ✓ is a new attempt, and it brings that entry back; it does not make a second.
+    expect(await actions.logRow({ ...write, clientId: newId() })).toMatchObject({
+      ok: true,
+      entryPublicId,
+    });
   });
 
   it('a row whose item left the workout can be un-ticked and ticked back', async () => {
@@ -1078,7 +1291,7 @@ describe('the fakes: rules found in review', () => {
     expect(fifth.entryPublicId).not.toBe(fourth.entryPublicId);
   });
 
-  it('a gap an un-ticked added set left can be logged again, and then the old entry cannot return', async () => {
+  it('a gap an un-ticked added set left can be logged again, and it is the same entry', async () => {
     const { actions, plan } = day(heavyASupersets);
     const sets = itemOf(heavyASupersets, 'DB bench press').item.rows.length;
     const add = (set: number) =>
@@ -1094,19 +1307,21 @@ describe('the fakes: rules found in review', () => {
       await actions.untickRow({ ...address, entryPublicId: fourth.entryPublicId }),
     );
 
-    // A changed number on the un-ticked set is a new ✓ for the same set number.
+    // A changed number on the un-ticked set is a new ✓ for the same set number, and it brings the
+    // set's own entry back (plan D35): the row returns where its number belongs.
     const again = succeeded(await add(sets + 1));
-    expect(again.entryPublicId).not.toBe(fourth.entryPublicId);
+    expect(again.entryPublicId).toBe(fourth.entryPublicId);
     expect(itemOf(plan(), 'DB bench press').item.rows.map((r) => r.set)).toEqual(
       Array.from({ length: sets + 2 }, (_, i) => i + 1),
     );
+    // The re-tick that arrives late finds the entry live and answers with it.
     expect(
       await actions.retickRow({
         ...address,
         entryPublicId: fourth.entryPublicId,
         hiddenAt: hidden.hiddenAt!,
       }),
-    ).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+    ).toEqual(again);
     expect(dayPlanSchema.safeParse(plan()).success).toBe(true);
   });
 

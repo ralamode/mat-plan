@@ -29,7 +29,6 @@ describe('WorkoutDraft: owed by its consumers', () => {
 });
 
 describe('WeekDraft: owed by its consumers', () => {
-  it.todo('10: adding to several days skips the days that have it, and says so');
   it.todo('7a: saveWeek passes the inherited action matrix');
 });
 

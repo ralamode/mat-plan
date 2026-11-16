@@ -102,14 +102,6 @@ export type SheetProps = {
    */
   initialFocus?: RefObject<HTMLElement | null>;
   /**
-   * Below this `visualViewport.height` (CSS px) the footer stops pinning and scrolls at the end of the
-   * body, so the list keeps room. Defaults to `COMPACT_VIEWPORT_HEIGHT` (480), which was sized for a
-   * one-button footer (~77px). A taller footer needs a higher threshold: the item picker's footer
-   * (picks summary, Add, Close) is ~157–177px, which at 480–560px with the keyboard up leaves about
-   * one row of matches.
-   */
-  compactBelow?: number;
-  /**
    * Runs once per close, after focus has been returned: to `returnFocusTo`, or the `main` fallback
    * when the trigger is gone. On a page with no `main` at all there is nowhere to return focus, so it
    * runs with focus on `<body>`. The safe moment for a page-level announcement such as "3 items
@@ -209,7 +201,7 @@ const FOOTER_CLASS =
  * ref through `useState` re-renders when the node arrives, so the node itself is a dependency.
  * `e2e/a11y.spec.ts` now asserts the property is non-empty, which is the only tier that can.
  */
-function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow: number): boolean {
+function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
@@ -219,11 +211,12 @@ function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow
     const write = () => {
       node.style.setProperty('--sheet-vvh', `${vv.height}px`);
       node.style.setProperty('--sheet-vvt', `${vv.offsetTop}px`);
-      // 🔴 **STATE, not just an attribute, because the compact rule MOVES the footer.** Under
-      // compact the footer scrolls at the end of the body rather than pinning, which is a DOM
-      // change no class can make. `setState` with the same boolean is a no-op in React, so this
-      // does not re-render on every scroll frame — only when the flag actually flips.
-      setCompact(vv.height < compactBelow);
+      // **STATE, not just an attribute:** compact decides whether the footer is sticky (pinned) or
+      // scrolls with the list, and several classes follow it. The scroller and the footer are
+      // one element each either way, so a flip re-mounts nothing and keeps the scroll offset.
+      // `setState` with the same boolean is a no-op in React, so this does not re-render on every
+      // scroll frame — only when the flag actually flips.
+      setCompact(vv.height < COMPACT_VIEWPORT_HEIGHT);
     };
 
     write();
@@ -233,10 +226,32 @@ function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow
       vv.removeEventListener('resize', write);
       vv.removeEventListener('scroll', write);
     };
-  }, [open, node, compactBelow]);
+  }, [open, node]);
 
   // A closed sheet has no geometry; reset so the next open starts from the pinned layout.
   return open && compact;
+}
+
+/**
+ * Writes the footer's height as `--sheet-footer-h` on the footer's scroller, while it exists.
+ *
+ * 🔴 **WCAG 2.2 SC 2.4.11, Focus Not Obscured.** A pinned footer is `sticky` INSIDE the scroller, so
+ * the browser's own focus-scroll and `scrollIntoView` would happily park a focused row behind it —
+ * a probe at 390×844 found 9 of 39 tabbed rows mostly covered (review of #476). `scroll-padding-
+ * bottom` tells both to stop above the footer, and it has to be the MEASURED height: footers hold
+ * one to three buttons and wrap at 200% zoom. Same callback-node pattern as `useVisualViewport`.
+ */
+function useFooterHeight(node: HTMLElement | null): void {
+  useEffect(() => {
+    const scroller = node?.parentElement;
+    if (!node || !scroller || typeof ResizeObserver === 'undefined') return;
+    const write = () =>
+      scroller.style.setProperty('--sheet-footer-h', `${node.getBoundingClientRect().height}px`);
+    write();
+    const observer = new ResizeObserver(write);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
 }
 
 /**
@@ -375,7 +390,6 @@ export function Sheet({
   footer,
   status,
   initialFocus,
-  compactBelow = COMPACT_VIEWPORT_HEIGHT,
   onReturned,
   dataTokens,
 }: SheetProps) {
@@ -386,7 +400,10 @@ export function Sheet({
   // no effect needs to re-run when it mounts.
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  const compact = useVisualViewport(open, content, compactBelow);
+  const compact = useVisualViewport(open, content);
+  // The footer's measured height, for the scroller's `scroll-padding-bottom` (see the render).
+  const [footerNode, setFooterNode] = useState<HTMLDivElement | null>(null);
+  useFooterHeight(footerNode);
   useBackGesture(open, id, onOpenChange);
 
   useEffect(() => {
@@ -535,22 +552,40 @@ export function Sheet({
             {headerExtra}
           </div>
 
-          {/* `min-h-0` is what lets this shrink inside the flex column; without it the body refuses
-              to scroll and pushes the footer off instead. */}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-            {children}
-            {compact ? <div className={FOOTER_CLASS}>{footer ?? <FooterFallback />}</div> : null}
-          </div>
-
-          {/* ⚠️ `[&_[data-slot=button]]` forces wrapping on whatever a consumer passes: `Button` is
-              `whitespace-nowrap`, and at 200% zoom on a 390px phone (195 CSS px) a long action
-              overflows — INVISIBLY to the document-level overflow helper, because a `fixed` box
-              contributes nothing to the document's scrollable width. */}
-          {compact ? null : (
-            <div className={cn('shrink-0 border-t', FOOTER_CLASS)}>
+          {/* 🔴 **ONE scroller and ONE footer element, pinned or compact.** The footer used to render
+              in two places (inside the body under compact, after it otherwise), so each flip
+              unmounted it and focus on a footer button dropped to `<body>` whenever the keyboard
+              opened or closed (lane B: a retry focuses Create, the keyboard closes). Moving only
+              the scroller fixed focus but lost the SCROLL POSITION, because a different element
+              scrolled after the flip (review of #476, a Chromium probe at 844×390). So nothing
+              moves now: this wrapper is always the scroller, and compact only changes whether the
+              footer is `sticky` at its bottom (pinned) or scrolls with the list (compact), the
+              same idiom as `program-screen.tsx`. `min-h-0` is what lets it shrink inside the flex
+              column; without it the scroller refuses to scroll and pushes the footer off. */}
+          <div
+            className={cn(
+              'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain',
+              // Focus never lands behind the sticky footer — `useFooterHeight`.
+              !compact && 'scroll-pb-[var(--sheet-footer-h,0px)]',
+            )}
+          >
+            <div className="grow p-4">{children}</div>
+            {/* ⚠️ `[&_[data-slot=button]]` forces wrapping on whatever a consumer passes: `Button` is
+                `whitespace-nowrap`, and at 200% zoom on a 390px phone (195 CSS px) a long action
+                overflows — INVISIBLY to the document-level overflow helper, because a `fixed` box
+                contributes nothing to the document's scrollable width. */}
+            <div
+              ref={setFooterNode}
+              className={cn(
+                FOOTER_CLASS,
+                !compact && 'bg-background sticky bottom-0 border-t',
+                // The footer's own background would square off the capped dialog's rounded corners.
+                isDialog ? 'rounded-b-xl' : 'min-[600px]:rounded-b-xl',
+              )}
+            >
               {footer ?? <FooterFallback />}
             </div>
-          )}
+          </div>
 
           {/* Criterion 46. INSIDE the content, because Radix `aria-hidden`s every sibling of the
               portal while this is open, so a page-level region is dropped by a screen reader.

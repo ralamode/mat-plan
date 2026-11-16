@@ -8,6 +8,9 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// The week editor refreshes the page on a stale week.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+
 import { SAVING_LABEL } from '@/lib/constants';
 
 import {
@@ -21,6 +24,7 @@ import {
   takeOffLabel,
   takingOffLabel,
   usedByText,
+  WEEK_COPY,
   workoutSummary,
 } from './builder-text';
 import { ProgramScreen } from './program-screen';
@@ -82,21 +86,23 @@ describe('ProgramScreen (FAM-1 8a)', () => {
       'Wednesday',
       'Thursday',
       'Friday',
-      'Saturday',
+      // The fixture's today is a Saturday.
+      `Saturday · ${WEEK_COPY.today}`,
       'Sunday',
     ]);
-    // Saturday: three slots in the author's order; Sunday: a rest day, as text.
-    const saturday = week.getByRole('heading', { name: 'Saturday' }).parentElement!;
+    // Saturday: three slots in the author's order, each its label over its workout.
+    const saturday = week.getByRole('heading', { name: /^Saturday/ }).parentElement!.parentElement!;
     expect(
       within(saturday)
         .getAllByRole('listitem')
-        .map((li) => li.textContent),
+        .map((li) => li.querySelector('button')!.textContent),
     ).toEqual([
-      'Morning · : Morning habits',
-      'After lunch · : Heavy B',
-      'Evening · : Conditioning',
+      // The text, ✎ included; it is aria-hidden, so not part of the button's name.
+      `${WEEK_COPY.editLabel}: Morning✎Morning habits`,
+      `${WEEK_COPY.editLabel}: After lunch✎Heavy B`,
+      `${WEEK_COPY.editLabel}: Evening✎Conditioning`,
     ]);
-    const sunday = week.getByRole('heading', { name: 'Sunday' }).parentElement!;
+    const sunday = week.getByRole('heading', { name: 'Sunday' }).parentElement!.parentElement!;
     expect(within(sunday).queryByRole('list')).toBeNull();
     expect(within(sunday).getByText(BUILDER_COPY.restDay)).toBeTruthy();
   });
