@@ -446,8 +446,19 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       metricKey: null,
       status: ENTRY_STATUS.done,
     });
-    const write = (profileId: number, values: CheckinInsertValue[]) =>
-      writeCheckinEntries(exec, { profileId, values });
+    // A writer or restore that THROWS fails the named proof, not the run: a mutation that brings back
+    // a bare 23505 must go red on the assertion that names it (the mutation gate reads the first one).
+    const orFail = async <T>(what: string, run: () => Promise<T>): Promise<T> => {
+      try {
+        return await run();
+      } catch (e) {
+        assert.fail(`${what} (threw: ${String((e as Error).message).slice(0, 120)})`);
+      }
+    };
+    const outcomes = async (profileId: number, values: CheckinInsertValue[], what: string) =>
+      (await orFail(what, () => writeCheckinEntries(exec, { profileId, values }))).map(
+        (r) => r.outcome,
+      );
     const livePractices = async (profileId: number, day: string) =>
       tx
         .select({ publicId: schema.entries.publicId, valueNum: schema.entries.valueNum })
@@ -488,11 +499,18 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     const D1 = '2026-10-01';
     const first = practice(D1);
     assert.deepEqual(
-      (await write(athlete.id, [first])).map((r) => r.outcome),
+      await outcomes(athlete.id, [first], '3b-0: a first practice is created'),
       ['created'],
       '3b-0: a first practice is created',
     );
-    const replayed = await write(athlete.id, [{ ...first, publicId: newId() }]);
+    const replayed = await orFail(
+      '3b-0: the same client_id again is a replay of the same row',
+      () =>
+        writeCheckinEntries(exec, {
+          profileId: athlete.id,
+          values: [{ ...first, publicId: newId() }],
+        }),
+    );
     assert.deepEqual(
       replayed,
       [
@@ -507,7 +525,11 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     // Another phone, same day: refused as `day_taken`, the first row untouched, still one live row.
     const secondPhone = { ...practice(D1), valueNum: '45' };
     assert.deepEqual(
-      (await write(athlete.id, [secondPhone])).map((r) => r.outcome),
+      await outcomes(
+        athlete.id,
+        [secondPhone],
+        "3b-0: another phone's practice on a held day is day_taken, not a second row",
+      ),
       ['day_taken'],
       "3b-0: another phone's practice on a held day is day_taken, not a second row",
     );
@@ -518,7 +540,11 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     );
     // One batch: a habit beside a taken practice still inserts (target-less skips per row).
     assert.deepEqual(
-      (await write(athlete.id, [habit(D1), practice(D1)])).map((r) => r.outcome),
+      await outcomes(
+        athlete.id,
+        [habit(D1), practice(D1)],
+        '3b-0: a habit in the same batch as a taken practice still inserts',
+      ),
       ['created', 'day_taken'],
       '3b-0: a habit in the same batch as a taken practice still inserts',
     );
@@ -526,7 +552,7 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     // After a hide, the day is free again: a new practice is created.
     const D2 = '2026-10-02';
     const toHide = practice(D2);
-    await write(athlete.id, [toHide]);
+    await outcomes(athlete.id, [toHide], '3b-0: a practice to hide is created');
     const hiddenRow = (await livePractices(athlete.id, D2))[0]!;
     const hid = await hideEntries(exec, {
       profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
@@ -537,35 +563,53 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     assert.ok('hiddenAt' in hid, '3b-0: the practice hides');
     // The hidden row still holds its client_id: a replay of it, with the day free, is own_hidden.
     assert.deepEqual(
-      (await write(athlete.id, [{ ...toHide, publicId: newId() }])).map((r) => r.outcome),
+      await outcomes(
+        athlete.id,
+        [{ ...toHide, publicId: newId() }],
+        "3b-0: a hidden row's client_id with the day free is own_hidden (the slot lookup is live-only)",
+      ),
       ['own_hidden'],
       "3b-0: a hidden row's client_id with the day free is own_hidden (the slot lookup is live-only)",
     );
     const reentered = practice(D2);
     assert.deepEqual(
-      (await write(athlete.id, [reentered])).map((r) => r.outcome),
+      await outcomes(
+        athlete.id,
+        [reentered],
+        '3b-0: after a hide, a new practice on that day is created',
+      ),
       ['created'],
       '3b-0: after a hide, a new practice on that day is created',
     );
     // Now the hidden row's id AND a held day: the day decides (Z4: day_taken before own_hidden).
     assert.deepEqual(
-      (await write(athlete.id, [{ ...toHide, publicId: newId() }])).map((r) => r.outcome),
+      await outcomes(
+        athlete.id,
+        [{ ...toHide, publicId: newId() }],
+        '3b-0: a hidden client_id on a re-entered day is day_taken',
+      ),
       ['day_taken'],
       '3b-0: a hidden client_id on a re-entered day is day_taken',
     );
     // A client_id reused under another metric or day is not a replay of it (the pin, Z4 step 1).
     assert.deepEqual(
-      (await write(athlete.id, [{ ...habit('2026-10-03'), clientId: first.clientId }])).map(
-        (r) => r.outcome,
+      await outcomes(
+        athlete.id,
+        [{ ...habit('2026-10-03'), clientId: first.clientId }],
+        "3b-0: a practice's client_id reused for a habit is a conflict, never a replay",
       ),
       ['conflict'],
       "3b-0: a practice's client_id reused for a habit is a conflict, never a replay",
     );
-    // A non-practice that did not insert and has no holder is not a shape the database produces;
-    // with the metric pin on day_taken, a habit on a practice-held day is still created.
+    // Only a practice can be day_taken: a habit that did not insert, in a batch with a practice on a
+    // held day, is still classified by its own holder (here a live row of another metric: conflict).
     assert.deepEqual(
-      (await write(athlete.id, [habit(D2)])).map((r) => r.outcome),
-      ['created'],
+      await outcomes(
+        athlete.id,
+        [{ ...habit(D1), clientId: first.clientId }, practice(D1)],
+        '3b-0: only a practice can be day_taken',
+      ),
+      ['conflict', 'day_taken'],
       '3b-0: only a practice can be day_taken',
     );
 
@@ -573,7 +617,7 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     //     same event restores, and the hidden practice restores once the live one is hidden.
     const D3 = '2026-10-04';
     const morningHabit = habit(D3);
-    await write(athlete.id, [practice(D3), morningHabit]);
+    await outcomes(athlete.id, [practice(D3), morningHabit], '3b-0: a day to clear is logged');
     const ids = (
       await tx
         .select({ publicId: schema.entries.publicId, metricKey: schema.entries.metricKey })
@@ -599,14 +643,16 @@ async function verifyPracticeOnePerDay(): Promise<void> {
           ),
         )
     )[0]!.publicId;
-    await write(athlete.id, [practice(D3)]); // re-entered after the clear
-    const restored = await restoreHidden(exec, {
-      profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
-      scope: SCOPE,
-      day: D3,
-      hiddenAt: clearDay.hiddenAt,
-      entryPublicIds: ids,
-    });
+    await outcomes(athlete.id, [practice(D3)], '3b-0: a re-entry after the clear is created');
+    const restored = await orFail('3b-0: Restore all into a re-entered day', () =>
+      restoreHidden(exec, {
+        profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
+        scope: SCOPE,
+        day: D3,
+        hiddenAt: clearDay.hiddenAt,
+        entryPublicIds: ids,
+      }),
+    );
     assert.deepEqual(
       Object.fromEntries(restored.map((r) => [r.entryPublicId, r])),
       Object.fromEntries(
