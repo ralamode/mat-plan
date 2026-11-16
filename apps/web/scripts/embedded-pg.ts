@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import net from 'node:net';
 import { join } from 'node:path';
 
+import { SEED_FIXTURES_ENV } from '@mat-plan/db';
 import EmbeddedPostgres from 'embedded-postgres';
 
 import { E2E_SESSION_BYPASS_USER, isLocalDbHost, SEED_HOUSEHOLD_PUBLIC_ID } from '@mat-plan/shared';
@@ -144,7 +145,7 @@ export async function migrateAndSeed(
     // FAM-1 D10: every local harness (e2e:local, the screenshots, dev-local) gets the program
     // fixtures. After the spread, so a caller's environment cannot turn it off; the URL is local
     // (asserted above), which is what the seed's own refusal checks.
-    SEED_FIXTURES: '1',
+    [SEED_FIXTURES_ENV]: '1',
   };
   log('▸ migrating…');
   await runScript('pnpm', ['--filter', '@mat-plan/db', 'db:migrate'], env);

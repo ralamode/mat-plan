@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertFixturesTargetAllowed,
   FIXTURES_TARGET_REFUSED,
+  resolveSeedOptions,
   SEED_FIXTURES_ENV,
   seedFixturesRequested,
 } from './seed';
@@ -26,6 +27,16 @@ describe('SEED_FIXTURES: the flag', () => {
   });
 });
 
+/** The message `assertFixturesTargetAllowed` throws for `url`, or `null` when it allows it. */
+function refusalOf(url: string): string | null {
+  try {
+    assertFixturesTargetAllowed(url);
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
 describe('assertFixturesTargetAllowed: an allowlist on the URL itself', () => {
   it.each([
     'postgres://u:p@localhost:5432/mat_plan',
@@ -33,7 +44,7 @@ describe('assertFixturesTargetAllowed: an allowlist on the URL itself', () => {
     'postgres://u:p@[::1]:5432/mat_plan',
     'postgres://u:p@ep-x.us-east-2.aws.neon.tech/mat_plan_preview?sslmode=require',
   ])('allows %s', (url) => {
-    expect(() => assertFixturesTargetAllowed(url)).not.toThrow();
+    expect(refusalOf(url)).toBeNull();
   });
 
   it.each([
@@ -46,15 +57,39 @@ describe('assertFixturesTargetAllowed: an allowlist on the URL itself', () => {
     'postgres://u:p@ep-prod.us-east-2.aws.neon.tech/',
     'not a url',
   ])('refuses %s', (url) => {
-    expect(() => assertFixturesTargetAllowed(url)).toThrow(FIXTURES_TARGET_REFUSED);
+    expect(refusalOf(url)).toBe(FIXTURES_TARGET_REFUSED);
   });
 
-  // The refusal lands in a world-readable Actions log: fixed text, nothing from the URL.
+  // The refusal lands in a world-readable Actions log: fixed text, nothing from the URL. Asserted as
+  // EQUALITY with the fixed text — a `toThrow(string)` is a substring match, and `not.toContain(secret)`
+  // on the constant would pass however the message were built (db-environment.ts's own rule).
   it('names nothing from the connection string', () => {
     const url = 'postgres://someuser:s3cret@ep-prod-host.aws.neon.tech/prod_db_name';
-    expect(() => assertFixturesTargetAllowed(url)).toThrow();
+    const message = refusalOf(url);
+    expect(message).toBe(FIXTURES_TARGET_REFUSED);
     for (const part of ['someuser', 's3cret', 'ep-prod-host', 'prod_db_name']) {
-      expect(FIXTURES_TARGET_REFUSED).not.toContain(part);
+      expect(message).not.toContain(part);
     }
+  });
+});
+
+// `scripts/seed.ts` is one call to this, so deleting the guard or hard-coding `fixtures` is a test edit.
+describe('resolveSeedOptions: what db:seed decides before it connects', () => {
+  const PROD = 'postgres://u:p@ep-prod.us-east-2.aws.neon.tech/mat_plan?sslmode=require';
+  const LOCAL = 'postgres://u:p@localhost:5432/mat_plan';
+
+  it('flag off: no fixtures, whatever the URL', () => {
+    expect(resolveSeedOptions({}, PROD)).toEqual({ fixtures: false });
+    expect(resolveSeedOptions({ [SEED_FIXTURES_ENV]: '0' }, PROD)).toEqual({ fixtures: false });
+  });
+
+  it('flag on against a local database: fixtures', () => {
+    expect(resolveSeedOptions({ [SEED_FIXTURES_ENV]: '1' }, LOCAL)).toEqual({ fixtures: true });
+  });
+
+  it('flag on against production: refused, before anything connects', () => {
+    expect(() => resolveSeedOptions({ [SEED_FIXTURES_ENV]: '1' }, PROD)).toThrow(
+      new Error(FIXTURES_TARGET_REFUSED),
+    );
   });
 });

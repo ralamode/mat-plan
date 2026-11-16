@@ -1,5 +1,7 @@
 import { globSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
+import { SEED_FIXTURES_ENV } from '@mat-plan/db';
 import { describe, expect, it } from 'vitest';
 
 import { WEB_DIR } from './source-scan';
@@ -17,16 +19,8 @@ const REPO = resolve(WEB_DIR, '../..');
  * Modelled on `fixture-member-is-contained.test.ts`.
  */
 describe('the program-fixtures flag is contained (FAM-1 D10)', () => {
-  /**
-   * Read from its definition, not re-typed: `packages/db` publishes only `"."`, so `apps/web` cannot
-   * import the constant, which leaves the name a literal in the workflows and the harness.
-   */
-  const FLAG = (() => {
-    const seed = readFileSync(join(REPO, 'packages/db/src/seed.ts'), 'utf8');
-    const m = seed.match(/export const SEED_FIXTURES_ENV = '([A-Z_]+)'/);
-    expect(m, 'SEED_FIXTURES_ENV must still be defined in seed.ts').not.toBeNull();
-    return m![1];
-  })();
+  /** Imported, not re-typed. The workflows are YAML and spell it as a literal, which is what this checks. */
+  const FLAG = SEED_FIXTURES_ENV;
 
   const workflows = globSync('.github/workflows/*.{yml,yaml}', { cwd: REPO });
 
@@ -53,8 +47,13 @@ describe('the program-fixtures flag is contained (FAM-1 D10)', () => {
 
   it('the local harness sets it after the environment spread, where a caller cannot unset it', () => {
     const harness = readFileSync(join(WEB_DIR, 'scripts/embedded-pg.ts'), 'utf8');
-    const spread = harness.indexOf('...process.env,');
-    const flag = harness.indexOf(`${FLAG}: '1'`);
+    // Inside `migrateAndSeed` only: the file has other `...process.env` spreads.
+    const start = harness.indexOf('export async function migrateAndSeed(');
+    const end = harness.indexOf('\nexport ', start + 1);
+    expect(start).toBeGreaterThan(-1);
+    const body = harness.slice(start, end === -1 ? undefined : end);
+    const spread = body.indexOf('...process.env,');
+    const flag = body.indexOf("[SEED_FIXTURES_ENV]: '1'");
     expect(spread).toBeGreaterThan(-1);
     expect(flag).toBeGreaterThan(spread);
   });

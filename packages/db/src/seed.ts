@@ -148,7 +148,7 @@ export function seedFixturesRequested(raw: string | undefined): boolean {
 export const FIXTURES_TARGET_REFUSED =
   'db:seed: refusing to seed program fixtures — SEED_FIXTURES=1 is allowed only against a local ' +
   'database or the preview database, and this connection string names neither (FAM-1 plan D10; ' +
-  'docs/runbooks.md -> OPS-1)';
+  'docs/features/programming.md, invariant 3)';
 
 /**
  * 🔴 **Program fixtures go only to a database that is provably not production**: one on this machine,
@@ -169,6 +169,20 @@ export function assertFixturesTargetAllowed(connectionString: string): void {
 /** What a caller must decide about every seed run. `fixtures` is REQUIRED: none gets it by omission. */
 export interface SeedOptions {
   readonly fixtures: boolean;
+}
+
+/**
+ * `db:seed`'s whole decision, in one tested function (`scripts/seed.ts` passes its result straight to
+ * `seed`): the flag from the environment, and, when it is on, the allowlist on the URL the seed
+ * connects with. Throws `FIXTURES_TARGET_REFUSED` before anything connects.
+ */
+export function resolveSeedOptions(
+  env: Readonly<Record<string, string | undefined>>,
+  connectionString: string,
+): SeedOptions {
+  const fixtures = seedFixturesRequested(env[SEED_FIXTURES_ENV]);
+  if (fixtures) assertFixturesTargetAllowed(connectionString);
+  return { fixtures };
 }
 
 export async function seed(
