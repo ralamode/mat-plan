@@ -1,0 +1,26 @@
+diff --git a/packages/db/src/writers/program/create-program.ts b/packages/db/src/writers/program/create-program.ts
+index 3a4d7962..dc22fc96 100644
+--- a/packages/db/src/writers/program/create-program.ts
++++ b/packages/db/src/writers/program/create-program.ts
+@@ -41,6 +41,10 @@ export async function createProgram(
+   if (!parsed.success) return { ok: false, reason: PROGRAM_REFUSAL.invalid };
+   const { clientId, name } = parsed.data;
+ 
++  if (await programNameTaken(exec, scope, name)) {
++    return { ok: false, reason: PROGRAM_REFUSAL.name_taken };
++  }
++
+   const replay = await programBlockByClientId(exec, scope, clientId);
+   if (replay) {
+     // Only a template block carries a `client_id` (the seed writes none), so this is the first call's
+@@ -55,10 +59,6 @@ export async function createProgram(
+       : { ok: true, programPublicId: replay.publicId };
+   }
+ 
+-  if (await programNameTaken(exec, scope, name)) {
+-    return { ok: false, reason: PROGRAM_REFUSAL.name_taken };
+-  }
+-
+   const slug = await freeProgramSlug(exec, scope, name);
+   await insertProgramBlockOwnedBy(exec, scope, { clientId, slug, name, notes: null });
+ 
