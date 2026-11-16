@@ -571,7 +571,9 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: |
           pnpm --filter @mat-plan/db db:migrate
-          pnpm --filter @mat-plan/db db:seed
+          # FAM-1 D10: the smoke's database gets the program fixtures. The seed itself refuses the flag
+          # unless the URL is local or the preview database (packages/db/src/seed.ts).
+          SEED_FIXTURES=1 pnpm --filter @mat-plan/db db:seed
           # AUTH-1 1c-4a — the bypass principal needs a MEMBERSHIP row, not just an id: from 1c-4 the
           # household scope is derived from it. CI does not go through `scripts/embedded-pg.ts`, so it
           # needs its own call, exactly as it needs its own bypass injection below.

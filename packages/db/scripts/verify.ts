@@ -211,8 +211,8 @@ console.log('✓ migration applied to PGlite');
 // "AUTH-1 1c-4: the seed refuses a household it does not own".
 
 // Seed twice → must be idempotent.
-await seed(asPg);
-await seed(asPg);
+await seed(asPg, { fixtures: true });
+await seed(asPg, { fixtures: true });
 
 const units = await db.select().from(schema.units);
 const profiles = await db.select().from(schema.profiles);
@@ -308,7 +308,7 @@ console.log(
     // `seed()` returns — which is what makes this assertion able to fail
     // (`10-seed-ignores-live-household.patch`).
     await assert.rejects(
-      () => seed(asPg),
+      () => seed(asPg, { fixtures: true }),
       /refusing to seed into a household this seed does not own/,
       'AUTH-1 1c-4: a live household under a foreign public_id makes the seed REFUSE, by the message it throws — not by a TypeError',
     );
@@ -414,7 +414,7 @@ await db
   .update(schema.households)
   .set({ synthetic: true })
   .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
-await seed(asPg);
+await seed(asPg, { fixtures: true });
 const [afterReseed] = await db
   .select({ synthetic: schema.households.synthetic })
   .from(schema.households)
@@ -431,7 +431,7 @@ await db
   .update(schema.households)
   .set({ synthetic: false })
   .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
-await seed(asPg);
+await seed(asPg, { fixtures: true });
 const [afterRestore] = await db
   .select({ synthetic: schema.households.synthetic })
   .from(schema.households)
@@ -6965,8 +6965,9 @@ console.log(
 //
 // ⚠️ **No DDL left in this block.** It used to drop and re-`ADD` `movements_slug_unique` three times
 // and had to be LAST in the file for that reason; it no longer mutates the schema at all. It still
-// cannot run inside a transaction: `seed()` queries the module-level `db`, and PGlite has ONE
-// connection, so calling it inside `db.transaction` would wait forever.
+// cannot run inside a transaction AS WRITTEN: it calls `seed(asPg, …)`, the module-level `db`, and
+// PGlite has ONE connection, so calling that inside `db.transaction` would wait forever. (`seed(tx)`
+// with the transaction's own handle does run inside one: `verify/schema.ts`' FAM-1 step-1 proof.)
 {
   const [guardHousehold] = await db
     .select({ id: schema.households.id })
@@ -7074,7 +7075,7 @@ console.log(
     'TEN-2c guard fixture: the curated row for the shadowed slug is absent before the seed runs — otherwise "the curated row lands" would hold because it never left',
   );
   const guardMessage = await captureWarnings(async () => {
-    await seed(asPg);
+    await seed(asPg, { fixtures: true });
   });
   assert.deepEqual(
     (
@@ -7111,7 +7112,7 @@ console.log(
     .delete(schema.movements)
     .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'));
   const quietMessage = await captureWarnings(async () => {
-    await seed(asPg);
+    await seed(asPg, { fixtures: true });
   });
   assert.equal(
     quietMessage,
