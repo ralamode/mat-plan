@@ -176,11 +176,13 @@ jobs:
 
           Each meta/NNNN_snapshot.json must have prevId == the PREVIOUS snapshot's id.
           drizzle only walks this chain when appending, so a break is silent until the
-          NEXT migration fails to generate. Fix by setting the offending prevId to the
-          id of the snapshot before it — the snapshot files are NOT applied to prod and
-          are safe to repair. EXCEPT right after a regenerate: then a stale snapshot was
-          left in meta/ and the new .sql is probably wrong; redo the regenerate with meta/
-          made exactly main's (see the journal-order message), don't hand-edit the prevId.
+          NEXT migration fails to generate. Outside a merge with main (the two-pass
+          add-or-drop in the db-migration skill), fix it by setting the offending prevId to
+          the id of the snapshot before it — the snapshot files are NOT applied to prod and
+          are safe to repair. NOT after merging main or after a regenerate: then a
+          snapshot of yours main lacks is probably still in meta/, and the .sql may hold
+          main's DDL. Don't hand-edit the prevId; follow .claude/skills/db-migration/SKILL.md
+          -> "Regenerate on top of main".
           CHAINMSG
           fi
 
@@ -189,17 +191,8 @@ jobs:
             cat <<'ORDERMSG'
 
           The migration was generated before another one that merged first. Regenerate it on
-          top of current main:
-            1. Copy your migration's SQL and hand-hardening out first (or `git show HEAD:<path>`).
-            2. `git fetch origin` and merge origin/main in.
-            3. Make meta/ exactly main's: `git checkout --no-overlay origin/main --
-               packages/db/migrations/meta` (a same-numbered snapshot is MAIN's and stays; any
-               snapshot of yours that main lacks goes). Check: `git diff --stat origin/main --
-               packages/db/migrations/meta` prints nothing.
-            4. Delete only your own .sql, then `pnpm --filter @mat-plan/db db:generate --name
-               <id>_<slug>` (a hand-written migration: add `--custom` and paste your SQL back).
-            5. The new .sql must contain ONLY your change. Re-apply its hand-hardening.
-          Never edit a `when` by hand.
+          top of current main: follow .claude/skills/db-migration/SKILL.md -> "Regenerate on
+          top of main" (one command per line there). Never edit a `when` by hand.
           ORDERMSG
           fi
 
