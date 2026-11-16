@@ -1335,6 +1335,7 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
         eq(schema.programBlocks.householdId, schema.profiles.householdId),
       )
       .where(eq(schema.programBlocks.id, blockId))
+      .orderBy(schema.profiles.id)
       .limit(1);
     const [s] = await tx
       .insert(schema.sessions)
