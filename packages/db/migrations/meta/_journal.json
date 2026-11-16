@@ -183,6 +183,13 @@
       "when": 1794840798282,
       "tag": "0025_fam1_4b_workout_prescriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794845567367,
+      "tag": "0026_v1_24_3b0_practice_one_per_day",
+      "breakpoints": true
     }
   ]
 }

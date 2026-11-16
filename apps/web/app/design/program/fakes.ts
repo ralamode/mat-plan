@@ -7,6 +7,7 @@ import {
   hasStarted,
   MONDAY_FIRST,
   existingItem,
+  fillRowValues,
   newId,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -20,8 +21,6 @@ import {
   saveWorkoutSchema,
   takeOffSchema,
   hasSetRows,
-  slotQuantity,
-  TRACKING_TYPE_FIELDS,
   weekDraftSchema,
   WORKOUT_NAME_MAX,
   type DayActions,
@@ -35,7 +34,6 @@ import {
   type ProgramView,
   type RowRefusal,
   type RowResult,
-  type RowValues,
   type WeekDraft,
 } from '@mat-plan/shared';
 
@@ -91,35 +89,6 @@ function insertBySet(rows: DayRow[], row: DayRow): void {
 let tokensMade = 0;
 const hideToken = () =>
   new Date().toISOString().replace('Z', `${String(tokensMade++ % 1000).padStart(3, '0')}Z`);
-
-/**
- * What a row stores, for an item of this type: the reps where the type has them and the one
- * quantity in the type's slot, each as typed, else from `target` (plan D13: an empty ✓ on a
- * prescribed row logs the prescription). `null` when a number is missing, is in another unit, or
- * is one the type does not hold.
- */
-function storedValues(item: DayItem, typed: RowValues, target: DayItem['target'] | null) {
-  const fields = TRACKING_TYPE_FIELDS[item.trackingType];
-  // A number the type has no field for is refused, never dropped: reps on a Duration, a distance on
-  // a weight.
-  if (typed.reps !== undefined && !fields.reps) return null;
-  if (typed.quantities.some((q) => q.slot !== fields.slot)) return null;
-  const values: RowValues = { quantities: [] };
-  if (fields.reps) {
-    const reps = typed.reps ?? target?.reps ?? null;
-    if (reps === null) return null;
-    values.reps = reps;
-  }
-  if (fields.slot) {
-    const prescribed = target ? slotQuantity(item, target.quantities) : null;
-    const quantity =
-      slotQuantity(item, typed.quantities) ??
-      (prescribed && prescribed.value !== null ? { ...prescribed, value: prescribed.value } : null);
-    if (!quantity || quantity.unit !== item.unit) return null;
-    values.quantities.push(quantity);
-  }
-  return values;
-}
 
 export type FakeDay = {
   /** Every member, the optional ones included. */
@@ -226,10 +195,13 @@ export function createFakeDayActions(
         );
         if (!workout || !item) return refuse(ROW_REFUSAL.program_changed);
         if (!workout.scheduled) return refuse(ROW_REFUSAL.not_scheduled);
+        // The values before the slot, as the real writer has it (plan step 11b): it has no slot
+        // pre-check, and learns a set is taken from the database's arbiter at the insert. So a bad
+        // number on a set that is already logged answers `bad_value`, not `slot_taken`.
+        const values = fillRowValues(item, write.values, item.target);
+        if (!values) return refuse(ROW_REFUSAL.bad_value);
         let row = item.rows.find((r) => r.set === write.set);
         if (row?.logged) return refuse(ROW_REFUSAL.slot_taken);
-        const values = storedValues(item, write.values, item.target);
-        if (!values) return refuse(ROW_REFUSAL.bad_value);
 
         if (!row) {
           // "+ Add set": only a type logged set by set has a second row. Any set number the schema
@@ -333,7 +305,7 @@ export function createFakeDayActions(
         // A row whose item left the workout can be un-ticked and ticked back, nothing more.
         if (!found.item.prescriptionPublicId) return refuse(ROW_REFUSAL.program_changed);
         // No prescription to fall back on: a blank keeps the number that is there.
-        const values = storedValues(found.item, parsed.data.values, null);
+        const values = fillRowValues(found.item, parsed.data.values, null);
         if (!values) return refuse(ROW_REFUSAL.bad_value);
 
         found.logged.values = values;

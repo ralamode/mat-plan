@@ -18,10 +18,11 @@ import {
 } from '../quantity-slots';
 import { numericSetSchema } from '../strength';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
-import { FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text';
+import { foldName, FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text';
 import {
   isWholeNumber,
   MAX_STORABLE_QUANTITY,
+  quantityCeiling,
   type Unit,
   UNIT_DIMENSION,
   type UnitDimension,
@@ -44,9 +45,22 @@ import {
  */
 
 const ONE_LINE = 'one line of text, with no control characters';
+/**
+ * A required name must fold to something (`foldName`): a name made only of zero-width or format
+ * characters (zero-width spaces and joiners, direction marks, variation selectors), or only of
+ * combining marks, is one character long, so `min(1)` takes it, and it would show as a blank line
+ * in every list. Found by FAM-1 step 6a's review; contract change C12.
+ *
+ * ⚠️ Not a promise that a name can be seen. A few characters that draw as blank are letters or
+ * symbols to Unicode and still pass: the braille blank (U+2800), the Hangul fillers (U+3164,
+ * U+115F, U+1160, U+FFA0) and the object replacement character (U+FFFC). Closing those means
+ * stripping them in `foldName`, which every name in the app shares, so it is not done here.
+ */
+const SOMETHING_TO_READ = 'a name needs more than invisible characters';
 
 /**
- * A short text a person typed on one line: trimmed, 1..`max` characters, no control characters.
+ * A short text a person typed on one line: trimmed, 1..`max` characters, no control characters,
+ * and not made only of zero-width, format or combining characters (`SOMETHING_TO_READ`).
  *
  * The control-character rule is the one `athleteNameSchema` documents: a NUL passes every length
  * check, reaches Postgres, and `text` rejects it, so the action throws instead of answering.
@@ -57,7 +71,8 @@ export function shortTextSchema(max: number) {
     .trim()
     .min(1)
     .max(max)
-    .refine((v) => !hasControlChar(v), ONE_LINE);
+    .refine((v) => !hasControlChar(v), ONE_LINE)
+    .refine((v) => foldName(v) !== '', SOMETHING_TO_READ);
 }
 
 /**
@@ -352,4 +367,126 @@ export function existingItem<T extends MatchableMovement & { readonly isCatalog:
 ): T | undefined {
   const { matches, exact, aliasHit } = matchMovementOptions(options, name);
   return exact || aliasHit !== null ? matches[0] : undefined;
+}
+
+/** The prescribed numbers of one item, as a `DayItem` carries them in `target`. */
+export type PrescribedTarget = {
+  reps: number | null;
+  quantities: z.infer<typeof prescribedQuantitiesSchema>;
+};
+
+/**
+ * A prescription's numbers as a row can use them: the one way `DayItem.target` is built (contract
+ * change C10). The day's read builds each item's `target` with it and the row writer builds the
+ * target an empty ✓ is filled from, so the placeholder a row shows and the number an empty ✓
+ * stores cannot differ.
+ *
+ * - `reps` is the prescription's reps when they are a whole number (`wholeReps`), else `null`: the
+ *   row then asks for reps.
+ * - **A range has no number to accept.** A quantity whose `valueMax` is set becomes `value: null`,
+ *   the same as "log in this unit, no target": the row shows no number and an empty ✓ answers
+ *   `bad_value`. Any `valueMax` makes it a range, one equal to `value` included: the rule reads the
+ *   column, not the arithmetic. No FAM-1 screen can write a range (`saveWorkoutSchema` holds one value); the rule
+ *   is here so a row that has one is not logged at its low end without anyone typing it.
+ *
+ * Numbers, not the database's numeric strings: the caller converts.
+ */
+export function prescribedTarget(
+  targetReps: string | null,
+  quantities: readonly {
+    slot: QuantitySlot;
+    unit: Unit;
+    value: number | null;
+    valueMax?: number | null;
+  }[],
+): PrescribedTarget {
+  return {
+    reps: wholeReps(targetReps),
+    quantities: quantities.map(({ slot, unit, value, valueMax }) => ({
+      slot,
+      unit,
+      value: valueMax === null || valueMax === undefined ? value : null,
+    })),
+  };
+}
+
+/**
+ * What a row stores, for an item of this type: **the one value-fill rule** (contract change C10),
+ * for the row writer, the amend writer and the preview's fake. `null` means `bad_value`.
+ *
+ * The reps where the type has them and the one quantity in the type's slot, each as typed, else
+ * from `target` (plan D13: an empty ✓ on a prescribed row logs the prescription). An amend passes
+ * `target: null`, so nothing is filled and a field left out is refused.
+ *
+ * Refused, never dropped or repaired:
+ * - a number the type has no field for (reps on a Duration, a distance on a weight);
+ * - **a slot named twice** in what was typed (which of the two to keep is not ours to choose);
+ * - a number that is missing and that `target` cannot supply;
+ * - a quantity in another unit than the item logs in (`item.unit`);
+ * - **a value over the unit's ceiling** (`quantityCeiling`), or in a unit that has none.
+ *
+ * It does not check that `typed` is well formed: parse with `rowWriteSchema` or `rowAmendSchema`
+ * first (reps and each value are then numbers in the storable range).
+ */
+export function fillRowValues(
+  item: { trackingType: TrackingType; unit: Unit | null },
+  typed: RowValues,
+  target: PrescribedTarget | null,
+): RowValues | null {
+  const fields = TRACKING_TYPE_FIELDS[item.trackingType];
+  if (typed.reps !== undefined && !fields.reps) return null;
+  if (typed.quantities.some((q) => q.slot !== fields.slot)) return null;
+  if (typed.quantities.length > 1) return null; // every one is in the type's slot: a repeat
+  const values: RowValues = { quantities: [] };
+  if (fields.reps) {
+    const reps = typed.reps ?? target?.reps ?? null;
+    if (reps === null) return null;
+    values.reps = reps;
+  }
+  if (fields.slot) {
+    const prescribed = target ? slotQuantity(item, target.quantities) : null;
+    const quantity =
+      slotQuantity(item, typed.quantities) ??
+      (prescribed && prescribed.value !== null ? { ...prescribed, value: prescribed.value } : null);
+    if (!quantity || quantity.unit !== item.unit) return null;
+    // ⚠️ `undefined` is "no ceiling known", which refuses: `n > undefined` is false in JS.
+    const ceiling = quantityCeiling(quantity.unit);
+    if (ceiling === undefined || quantity.value > ceiling) return null;
+    values.quantities.push(quantity);
+  }
+  return values;
+}
+
+/**
+ * The unit an entry is stored under when its type has no quantity of its own (plan §2, the
+ * `entries.unit` column of the seven types): a Check is done or not, Reps are a count.
+ */
+export const ENTRY_UNIT_WITHOUT_QUANTITY = {
+  check: 'bool',
+  reps: 'count',
+} as const satisfies Partial<Record<TrackingType, Unit>>;
+
+/**
+ * The unit a logged row's entry stores (`entries.unit`), as plan §2's table has it: `bool` for a
+ * Check and `count` for Reps; the type's fixed unit where it has one (`min` for a Duration, `sec`
+ * for Time per set: `TRACKING_TYPE_FIELDS[type].unit`); else the unit the item is prescribed in.
+ * One rule for the row writer and for the export (contract change C10).
+ *
+ * A type whose unit is fixed ignores the unit it is handed, so the answer is the table's whatever
+ * the caller passes. It throws for a type whose unit comes from the prescription when none is
+ * given: that is a caller's bug (every such item has a unit, `DayItem.unit`), not something to
+ * answer a person with.
+ */
+export function entryUnitFor(trackingType: TrackingType, prescribedUnit: Unit | null): Unit {
+  if (Object.hasOwn(ENTRY_UNIT_WITHOUT_QUANTITY, trackingType)) {
+    return ENTRY_UNIT_WITHOUT_QUANTITY[trackingType as keyof typeof ENTRY_UNIT_WITHOUT_QUANTITY];
+  }
+  const fixed = TRACKING_TYPE_FIELDS[trackingType].unit;
+  if (fixed) return fixed;
+  if (prescribedUnit === null) {
+    throw new Error(
+      `a ${trackingType} item has a quantity, so its entry needs the prescribed unit`,
+    );
+  }
+  return prescribedUnit;
 }

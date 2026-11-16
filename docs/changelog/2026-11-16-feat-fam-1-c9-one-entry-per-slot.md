@@ -1,6 +1,6 @@
 - **2026-11-16** — **FAM-1 contract change C9: a slot holds at most one entry**
   ([plan](../plans/fam-1-family-program.md) D35; [contract](../features/program-contract.md)
-  invariant 16). Each un-tick hid an entry and the next ✓ with a new number added another, so one
+  invariant 18). Each un-tick hid an entry and the next ✓ with a new number added another, so one
   set of one item on one day could collect any number of hidden entries. The maintainer's rule: a
   new ✓ on a set whose entry was un-ticked (or hidden by Clear day) brings that entry back with the
   new numbers, in one transaction. The rule is written on `rowWriteSchema`, and the preview's fake

@@ -2,7 +2,7 @@
 name: reuse-reviewer
 description: Adversarial code-reuse / DRY reviewer for a mat-plan plan or PR — a constant, enum, schema, type, helper, query or rule that already exists and should be imported, or is now written twice. One of the four standing panel lenses (docs/plans/README.md).
 tools: Read, Grep, Glob, Bash
-model: fable
+model: opus
 effort: high
 ---
 

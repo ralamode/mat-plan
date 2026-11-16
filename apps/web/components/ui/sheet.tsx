@@ -45,7 +45,8 @@ import { cn } from '@/lib/utils';
  * - ⚠️ **Do not announce the result on a PAGE-level region in the same tick as closing.** Radix
  *   `aria-hidden`s every sibling of the portal while the sheet is open (`hideOthers`,
  *   `react-dialog@1.3.1:163-166`), and the undo runs in an effect cleanup that `Presence` delays for
- *   the exit. Announce after `onCloseAutoFocus`, or put the result in the focus target's name.
+ *   the exit. Announce from `onReturned`, which runs once focus is back, or put the result in the
+ *   focus target's name.
  * - **One sheet at a time** (see `openSheets` below).
  */
 export type SheetVariant = 'sheet' | 'dialog';
@@ -100,6 +101,21 @@ export type SheetProps = {
    * phone.
    */
   initialFocus?: RefObject<HTMLElement | null>;
+  /**
+   * Below this `visualViewport.height` (CSS px) the footer stops pinning and scrolls at the end of the
+   * body, so the list keeps room. Defaults to `COMPACT_VIEWPORT_HEIGHT` (480), which was sized for a
+   * one-button footer (~77px). A taller footer needs a higher threshold: the item picker's footer
+   * (picks summary, Add, Close) is ~157–177px, which at 480–560px with the keyboard up leaves about
+   * one row of matches.
+   */
+  compactBelow?: number;
+  /**
+   * Runs once per close, after focus has been returned: to `returnFocusTo`, or the `main` fallback
+   * when the trigger is gone. On a page with no `main` at all there is nowhere to return focus, so it
+   * runs with focus on `<body>`. The safe moment for a page-level announcement such as "3 items
+   * added." — see "What consumers owe". It does not run on open.
+   */
+  onReturned?: () => void;
   /**
    * The design-inventory page scopes a candidate palette with `[data-tokens]` on a wrapper, but
    * `Dialog.Portal` mounts under `document.body` — outside every cell. Forwarded so the portaled
@@ -193,7 +209,7 @@ const FOOTER_CLASS =
  * ref through `useState` re-renders when the node arrives, so the node itself is a dependency.
  * `e2e/a11y.spec.ts` now asserts the property is non-empty, which is the only tier that can.
  */
-function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
+function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow: number): boolean {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
@@ -207,7 +223,7 @@ function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
       // compact the footer scrolls at the end of the body rather than pinning, which is a DOM
       // change no class can make. `setState` with the same boolean is a no-op in React, so this
       // does not re-render on every scroll frame — only when the flag actually flips.
-      setCompact(vv.height < COMPACT_VIEWPORT_HEIGHT);
+      setCompact(vv.height < compactBelow);
     };
 
     write();
@@ -217,7 +233,7 @@ function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
       vv.removeEventListener('resize', write);
       vv.removeEventListener('scroll', write);
     };
-  }, [open, node]);
+  }, [open, node, compactBelow]);
 
   // A closed sheet has no geometry; reset so the next open starts from the pinned layout.
   return open && compact;
@@ -359,6 +375,8 @@ export function Sheet({
   footer,
   status,
   initialFocus,
+  compactBelow = COMPACT_VIEWPORT_HEIGHT,
+  onReturned,
   dataTokens,
 }: SheetProps) {
   // 🔴 A callback ref, NOT `useRef` — `useVisualViewport`'s docblock has the reason, and it is the
@@ -368,7 +386,7 @@ export function Sheet({
   // no effect needs to re-run when it mounts.
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  const compact = useVisualViewport(open, content);
+  const compact = useVisualViewport(open, content, compactBelow);
   useBackGesture(open, id, onOpenChange);
 
   useEffect(() => {
@@ -424,6 +442,7 @@ export function Sheet({
               // Radix focuses with `preventScroll: true` (`react-focus-scope@1.3.1:239-245`), so
               // after a full-screen sheet on a long form the target can be off-screen.
               el.scrollIntoView?.({ block: 'nearest' });
+              onReturned?.();
               return;
             }
             // The trigger can be re-rendered away by the very action that closed the sheet (a pick
@@ -431,7 +450,10 @@ export function Sheet({
             // would leave a screen-reader user at the top of the document.
             const fallback =
               document.getElementById(MAIN_CONTENT_ID) ?? document.querySelector('main');
-            if (!(fallback instanceof HTMLElement)) return;
+            if (!(fallback instanceof HTMLElement)) {
+              onReturned?.();
+              return;
+            }
             // 🔴 **The `tabIndex` is set here when the landmark does not already carry one.**
             // `focus()` on an element that is not focusable is another silent no-op, and this used
             // to do nothing in the real app while its unit test passed, because the harness had
@@ -445,6 +467,7 @@ export function Sheet({
             // the precise target, and `querySelector('main')` stays as the fallback's fallback.
             if (!fallback.hasAttribute('tabindex')) fallback.tabIndex = -1;
             fallback.focus();
+            onReturned?.();
           }}
           className={cn(
             // `inset-0` is the fallback floor — note 4.
