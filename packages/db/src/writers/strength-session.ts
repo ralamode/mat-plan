@@ -17,6 +17,7 @@ import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
+import { insertSupersetRow, reselectLiveByClientId } from './session-rows';
 import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership';
 
 /**
@@ -30,42 +31,6 @@ import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership
  * `getActivityTypeIdByKey`, app-side —
  * both resolved BEFORE the transaction opens). No `server-only`, no app imports.
  */
-
-/** The three graph tables that share the `client_id` + `deleted_at` idempotency shape. */
-type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof schema.entries;
-
-/**
- * Re-select a live row by its `client_id` after an ON-CONFLICT no-op (a replay). The **`deleted_at
- * IS NULL` guard is load-bearing**, and since **V1-9b B0** it is load-bearing for the opposite
- * reason to the one originally written here.
- *
- * It used to read: *"the partial UNIQUE lets a soft-deleted row share the client_id, so an unguarded
- * re-select could return the dead row"*. B0 made these arbiters non-partial, so a hidden row no
- * longer shares the id — it **holds** it. The guard now matters because a conflict can be with a
- * HIDDEN row, and an unguarded re-select would return that row's id and attach children to a dead
- * parent. Either way the guard stays, which is why B0 changes no code here.
- *
- * ⚠️ The throw is the behaviour `db:verify`'s B0 case asserts: replaying a hidden write is a
- * REFUSAL, not a twin. `B1-2` owns turning it into a typed envelope; today it reaches `error.tsx`.
- * Extracted so the three graph-row inserts can't drift on this. A SELECT over the table union needs
- * no `as never`.
- */
-async function reselectLiveByClientId(
-  exec: Executor,
-  table: GraphTable,
-  clientId: string,
-): Promise<{ id: number; publicId: string }> {
-  const [row] = await exec
-    .select({ id: table.id, publicId: table.publicId })
-    .from(table)
-    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
-    .limit(1);
-  // The re-select follows an ON-CONFLICT no-op, so a live row should exist. If it doesn't (e.g. the row
-  // was soft-deleted between the conflict and this SELECT), fail with a clear error rather than let a
-  // caller crash on `.id` of undefined — keeps the non-null return contract honest.
-  if (!row) throw new Error(`no live row for client_id ${clientId}`);
-  return row;
-}
 
 /**
  * A session movement with its catalog `movementId` already resolved (the caller owns
@@ -129,30 +94,6 @@ async function insertStrengthSessionRow(
     .returning({ id: schema.sessions.id, publicId: schema.sessions.publicId });
   // On conflict (a replay) re-select the LIVE row (the deleted_at-guarded helper).
   return row ?? reselectLiveByClientId(exec, schema.sessions, args.clientId);
-}
-
-/**
- * Insert a `supersets` grouping row, idempotent by `client_id` (the `insertStrengthSessionRow` twin).
- * NOT exported — reached only via `writeStrengthSession`'s tx. On a replay, re-selects the live row.
- */
-async function insertSupersetRow(
-  exec: Executor,
-  args: { sessionId: number; clientId: string; label?: string },
-): Promise<{ id: number }> {
-  const [row] = await exec
-    .insert(schema.supersets)
-    .values({
-      publicId: newId(),
-      clientId: args.clientId,
-      sessionId: args.sessionId,
-      label: args.label ?? null,
-    })
-    .onConflictDoNothing({
-      target: schema.supersets.clientId,
-      where: isNull(schema.supersets.deletedAt),
-    })
-    .returning({ id: schema.supersets.id });
-  return row ?? reselectLiveByClientId(exec, schema.supersets, args.clientId);
 }
 
 /**
