@@ -170,6 +170,21 @@ export async function columnCatalogShape(
   ).rows[0];
 }
 
+/** One constraint's definition as Postgres renders it (`pg_get_constraintdef`); the cast lives here once. */
+export async function constraintDef(conname: string): Promise<string> {
+  const res = await db.execute(
+    sql`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = ${conname}`,
+  );
+  const rows = (res as unknown as { rows: { def: string }[] }).rows;
+  assert.equal(rows.length, 1, `${conname} exists`);
+  return rows[0].def;
+}
+
+/** The `id` column of a raw `execute` result, as numbers (an audit query's flagged rows). */
+export function idsOf(res: unknown): number[] {
+  return (res as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+}
+
 // CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
 // its shared const (pins the schema CHECKs to the single source of truth — one can't drift
 // from the other without this failing). V1-2 extends this from input_shape to the movement
@@ -178,11 +193,7 @@ export async function assertCheckCoversConst(
   conname: string,
   values: readonly string[],
 ): Promise<void> {
-  const res = await db.execute(sql`
-    SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = ${conname}`);
-  const rows = (res as unknown as { rows: { def: string }[] }).rows;
-  assert.equal(rows.length, 1, `${conname} exists`);
-  const def = rows[0].def;
+  const def = await constraintDef(conname);
   for (const value of values) {
     assert.ok(def.includes(`'${value}'`), `${conname} includes shared const member '${value}'`);
   }
