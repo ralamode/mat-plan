@@ -54,7 +54,10 @@ export function AddForm({
       aria-label={addOnLabel(day)}
       onSubmit={(event) => {
         event.preventDefault();
-        if (!workout) return;
+        if (!workout) {
+          setError(WEEK_COPY.chooseWorkout);
+          return document.getElementById(addWorkoutId(day))?.focus();
+        }
         if (!fresh.length) return setError(WEEK_COPY.pickADay);
         onAdd({ workoutPublicId: workout, label: label.trim() || null }, ticked);
       }}

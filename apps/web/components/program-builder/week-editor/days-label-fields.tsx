@@ -57,20 +57,7 @@ export function DaysLabelFields({
           error={null}
           optional
         />
-        <div className="flex flex-wrap gap-2">
-          {SLOT_LABEL_SUGGESTIONS.map((suggestion) => (
-            <Button
-              key={suggestion}
-              type="button"
-              variant="outline"
-              className="min-w-11"
-              aria-pressed={label === suggestion}
-              onClick={() => onLabel(suggestion)}
-            >
-              {suggestion}
-            </Button>
-          ))}
-        </div>
+        <LabelSuggestions label={label} onLabel={onLabel} />
       </div>
       <fieldset
         className="flex flex-col gap-2"
@@ -85,8 +72,10 @@ export function DaysLabelFields({
             return (
               <label
                 key={day}
+                // Stacked: at 360px a column is ~70px, too narrow for a box, "Wed" and "has it"
+                // side by side.
                 className={cn(
-                  'flex min-h-11 items-center gap-2 rounded-lg border px-2 text-sm',
+                  'flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1 text-sm',
                   has && 'text-muted-foreground',
                 )}
               >
@@ -102,9 +91,10 @@ export function DaysLabelFields({
                     else next.add(day);
                     onDays(next);
                   }}
-                  className="size-4"
+                  // Dimmed, so a day that has it does not look like one the person ticked.
+                  className="size-4 aria-disabled:opacity-50"
                 />
-                <span aria-hidden>
+                <span aria-hidden className="text-center whitespace-nowrap">
                   {weekdayName(day, 'short')}
                   {has ? <span className="block text-xs">{WEEK_COPY.hasIt}</span> : null}
                 </span>
@@ -120,5 +110,34 @@ export function DaysLabelFields({
         </p>
       </fieldset>
     </>
+  );
+}
+
+/**
+ * The label's suggestions, as buttons that fill the field (a `<datalist>` barely shows on iOS); a
+ * pressed one clears it. The add form and the label editor both offer them (plan D8).
+ */
+export function LabelSuggestions({
+  label,
+  onLabel,
+}: {
+  label: string;
+  onLabel: (label: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {SLOT_LABEL_SUGGESTIONS.map((suggestion) => (
+        <Button
+          key={suggestion}
+          type="button"
+          variant="outline"
+          className="min-w-11"
+          aria-pressed={label === suggestion}
+          onClick={() => onLabel(label === suggestion ? '' : suggestion)}
+        >
+          {suggestion}
+        </Button>
+      ))}
+    </div>
   );
 }

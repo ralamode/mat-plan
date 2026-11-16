@@ -13,6 +13,7 @@ import {
   removedRowText,
   removeFromLabel,
   restoredText,
+  undoLabel,
   WEEK_COPY,
   weekdayName,
 } from '../builder-text';
@@ -121,7 +122,7 @@ describe('the week editor (FAM-1 10)', () => {
     const { all } = page();
     const clock = tapClock();
     clock.tap(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
-    const undo = within(day(6)).getByRole('button', { name: WEEK_COPY.undo });
+    const undo = within(day(6)).getByRole('button', { name: undoLabel('Heavy B', 6) });
     expect(document.activeElement).toBe(undo);
     expect(within(day(6)).getByText(removedRowText('Heavy B'))).toBeTruthy();
     // The row stays where the slot was: second, between the other two.
@@ -131,7 +132,7 @@ describe('the week editor (FAM-1 10)', () => {
     // A double tap on ✕ lands on Undo: it is the same tap.
     clock.again(undo);
     expect(all.saveWeek).toHaveBeenCalledTimes(1);
-    clock.tap(within(day(6)).getByRole('button', { name: WEEK_COPY.undo }));
+    clock.tap(within(day(6)).getByRole('button', { name: undoLabel('Heavy B', 6) }));
     await waitFor(() => expect(all.saveWeek).toHaveBeenCalledTimes(2));
     expect(sent(all, 1)).toEqual(familyProgram.week);
     expect(slotNames(6)).toEqual([
@@ -139,9 +140,10 @@ describe('the week editor (FAM-1 10)', () => {
       'After lunchHeavy B',
       'EveningConditioning',
     ]);
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }),
-    );
+    // Focus on the slot's text, not its ✕: a double tap on Undo must not remove it again.
+    expect(document.activeElement?.textContent).toContain('Heavy B');
+    clock.again(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
+    expect(all.saveWeek).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(status()).toBe(restoredText('Heavy B', 6)));
   });
 
@@ -153,6 +155,8 @@ describe('the week editor (FAM-1 10)', () => {
     fireEvent.click(text);
     const field = within(day(6)).getByLabelText(/^Label/) as HTMLInputElement;
     expect(field.value).toBe('After lunch');
+    // Focused in the same tap, so a phone raises its keyboard.
+    expect(document.activeElement).toBe(field);
     fireEvent.change(field, { target: { value: 'Dawn' } });
     fireEvent.click(within(day(6)).getByRole('button', { name: WEEK_COPY.save }));
     await waitFor(() => expect(all.saveWeek).toHaveBeenCalled());

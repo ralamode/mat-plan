@@ -466,6 +466,7 @@ export const WEEK_COPY = {
   addButton: 'Add',
   save: 'Save',
   undo: 'Undo',
+  addLabel: '+ Label',
   editLabel: 'Edit label',
   noWorkouts: 'Make a workout first, then add it to days.',
   stale: 'This week changed. Reload the page to see it.',
@@ -519,3 +520,7 @@ export function weekRefusal(reason: ProgramRefusal): string {
     ? WEEK_COPY.stale
     : WEEK_COPY.failed;
 }
+
+/** The Undo button's name: the row's words are not linked to it. */
+export const undoLabel = (workout: string, day: number) =>
+  `Undo: put ${workout} back on ${weekdayName(day)}`;

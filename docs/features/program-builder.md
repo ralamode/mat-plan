@@ -214,10 +214,18 @@ flowchart LR
       the chosen workout show ticked and inactive ("has it"), and the message names the days that
       took it and the days skipped, Monday first.
     - **The page's status line is a bar pinned to the bottom of the screen**, for Rename, Take off
-      and the week alike: on a phone the week is about 650px below the top.
+      and the week alike: on a phone the week is about 650px below the top. It is one line tall from
+      the first paint ("Changes save as you make them." until a message), so it never appears, or
+      blinks away between messages, over what was just tapped; controls scroll 7rem clear of it.
+    - **Undo is its own double-tap guard both ways**: a second tap on ✕ is not an Undo, and a second
+      tap on Undo is not a removal (focus goes to the restored slot's text, not its ✕).
+    - **The label editor opens focused, with the add form's suggestions**; a slot with no label
+      shows "+ Label", one with a label a ✎, so the text reads as tappable.
     - Differences from v12, each a decision above: the status bar; Undo; label editing; no default
       workout and the "has it" days; the label stacked over the workout's name; "· today" on today's
-      day; one line, not seven "+ Add", when there are no workouts.
+      day; one line, not seven "+ Add", when there are no workouts; ↑ on the first slot and ↓ on the
+      last are dimmed (`aria-disabled`); "+ Label" and ✎; the week capped at `max-w-2xl` on a wide
+      screen.
 
 ## Traps
 

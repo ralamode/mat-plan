@@ -28,6 +28,7 @@ import {
   removedRowText,
   removeFromLabel,
   restoredText,
+  undoLabel,
   WEEK_COPY,
   weekdayName,
   weekRefusal,
@@ -36,9 +37,11 @@ import { NameField } from '../name-field';
 import type { StatusTone } from '../status-line';
 import { DOUBLE_TAP_MS } from '../use-attempt';
 import { AddForm, addWorkoutId } from './add-form';
+import { LabelSuggestions } from './days-label-fields';
 import { addToDays, moveSlot, removeSlot, setLabel, type Week } from './week-draft';
 
 const HEADING_ID = 'program-week';
+const labelFieldId = (day: Weekday, workout: string) => `week-label-${day}-${workout}`;
 
 /** A slot's control, keyed by the day and the workout (a workout is on a day at most once). */
 type Control = 'up' | 'down' | 'remove' | 'text' | 'undo';
@@ -173,9 +176,19 @@ export function WeekEditor({
     if (!removed) return;
     // The ✕ sat where Undo is: a double tap on ✕ is not an Undo.
     if (at - removed.at < DOUBLE_TAP_MS) return;
+    // Nor is a double tap on Undo a removal: the restored ✕ sits where Undo was.
+    lastRemoveAt.current = at;
     const { day, workout, before } = removed;
     change(before, restoredText(nameOf(workout), day));
-    control(day, workout, 'remove')?.focus();
+    control(day, workout, 'text')?.focus();
+  }
+
+  /** Opens a slot's label under it, focused in the same tap so a phone raises its keyboard. */
+  function openLabel(day: Weekday, workout: string, label: string | null) {
+    flushSync(() => setEditing({ day, workout, value: label ?? '' }));
+    const field = document.getElementById(labelFieldId(day, workout)) as HTMLInputElement | null;
+    field?.focus();
+    field?.select();
   }
 
   function openAdd(day: Weekday) {
@@ -217,13 +230,12 @@ export function WeekEditor({
       <h2 id={HEADING_ID} className="text-lg font-semibold">
         {BUILDER_COPY.week}
       </h2>
-      <p className="text-muted-foreground text-sm">
-        {WEEK_COPY.intro} {WEEK_COPY.savesAsYouGo}
-      </p>
+      <p className="text-muted-foreground text-sm">{WEEK_COPY.intro}</p>
       {program.workouts.length ? null : (
         <p className="text-muted-foreground text-sm">{WEEK_COPY.noWorkouts}</p>
       )}
-      <div className="flex flex-col divide-y">
+      {/* Capped on a wide screen, so ↑ ↓ ✕ stay beside the name they act on. */}
+      <div className="flex max-w-2xl flex-col divide-y">
         {MONDAY_FIRST.map((day) => {
           const slots = week[day];
           const pendingUndo = removed?.day === day ? removed : null;
@@ -264,6 +276,7 @@ export function WeekEditor({
                         {pendingUndo?.index === index ? (
                           <UndoRow
                             name={nameOf(pendingUndo.workout)}
+                            day={day}
                             undoRef={ref(controlKey(day, pendingUndo.workout, 'undo'))}
                             onUndo={undo}
                           />
@@ -274,13 +287,7 @@ export function WeekEditor({
                               ref={ref(controlKey(day, slot.workoutPublicId, 'text'))}
                               type="button"
                               aria-expanded={isEditing}
-                              onClick={() =>
-                                setEditing({
-                                  day,
-                                  workout: slot.workoutPublicId,
-                                  value: slot.label ?? '',
-                                })
-                              }
+                              onClick={() => openLabel(day, slot.workoutPublicId, slot.label)}
                               className={cn(
                                 'flex min-h-11 min-w-0 flex-1 flex-col justify-center rounded-sm text-left',
                                 FOCUS_TARGET_CLASS,
@@ -288,13 +295,19 @@ export function WeekEditor({
                             >
                               {/* Its name keeps the visible words; the action is said first. */}
                               <span className="sr-only">{WEEK_COPY.editLabel}: </span>
+                              {/* The label, or where one goes: what says the text can be tapped. The
+                                  pencil is drawn, not text, so the name stays the visible words. */}
                               {slot.label ? (
                                 <span
-                                  className={`text-muted-foreground text-xs font-semibold tracking-wide uppercase ${NAME_WRAP_CLASS}`}
+                                  className={`text-muted-foreground text-xs font-semibold tracking-wide uppercase ${NAME_WRAP_CLASS} after:ml-1 after:content-['✎']`}
                                 >
                                   {slot.label}
                                 </span>
-                              ) : null}
+                              ) : (
+                                <span className="text-muted-foreground text-xs">
+                                  {WEEK_COPY.addLabel}
+                                </span>
+                              )}
                               <span className={`text-sm ${NAME_WRAP_CLASS}`}>{name}</span>
                             </button>
                             {(['up', 'down'] as const).map((direction) => (
@@ -331,7 +344,7 @@ export function WeekEditor({
                           </div>
                           {isEditing ? (
                             <LabelEditor
-                              id={`week-label-${day}-${slot.workoutPublicId}`}
+                              id={labelFieldId(day, slot.workoutPublicId)}
                               value={editing.value}
                               onChange={(value) => setEditing({ ...editing, value })}
                               onSave={saveLabel}
@@ -345,6 +358,7 @@ export function WeekEditor({
                   {pendingUndo && pendingUndo.index >= slots.length ? (
                     <UndoRow
                       name={nameOf(pendingUndo.workout)}
+                      day={day}
                       undoRef={ref(controlKey(day, pendingUndo.workout, 'undo'))}
                       onUndo={undo}
                     />
@@ -381,10 +395,12 @@ export function WeekEditor({
 /** "Heavy A removed · Undo", where the slot was, until the next change. */
 function UndoRow({
   name,
+  day,
   undoRef,
   onUndo,
 }: {
   name: string;
+  day: Weekday;
   undoRef: (node: HTMLElement | null) => void;
   onUndo: (at: number) => void;
 }) {
@@ -395,6 +411,7 @@ function UndoRow({
         ref={undoRef}
         type="button"
         variant="outline"
+        aria-label={undoLabel(name, day)}
         onClick={(event) => onUndo(event.timeStamp)}
       >
         {WEEK_COPY.undo}
@@ -442,6 +459,7 @@ function LabelEditor({
         error={null}
         optional
       />
+      <LabelSuggestions label={value} onLabel={onChange} />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>
           {BUILDER_COPY.cancel}
