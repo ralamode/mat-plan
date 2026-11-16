@@ -1,5 +1,7 @@
 import type { ErrorEvent, Event } from '@sentry/nextjs';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
+import { format } from 'node:util';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -403,6 +405,45 @@ describe('scrubSentryEvent — a rejected row never leaves the server (Postgres 
     expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
     expect(JSON.stringify(event)).not.toContain('partner');
     expect(event.exception?.values?.[0]?.value).toBe('insert failed: ');
+  });
+
+  // The form a log actually carries: `console.error(err)` / `util.format` prints the error with
+  // `util.inspect`, so the detail appears as `detail: '…'`, split into `'…' +` continuation lines when
+  // long. Built to node-postgres's DatabaseError shape (own, enumerable fields), since apps/web does
+  // not depend on `pg` directly.
+  class DatabaseError extends Error {
+    constructor(message: string, fields: Record<string, unknown>) {
+      super(message);
+      this.name = 'DatabaseError';
+      Object.assign(this, fields);
+    }
+  }
+  const failing = (detail: string) =>
+    new DatabaseError(
+      'new row for relation "workouts" violates check constraint "workouts_name_len"',
+      {
+        severity: 'ERROR',
+        code: '23514',
+        detail,
+        constraint: 'workouts_name_len',
+        table: 'workouts',
+      },
+    );
+
+  it.each([
+    ['a short detail', ROW],
+    [
+      'a long, multi-line detail inspect splits into continuation lines',
+      `Failing row contains (42, 7, ${'Saturday hill sprints '.repeat(6)}with (a)\npartner, null).`,
+    ],
+  ])('a printed DatabaseError (util.format) loses %s, and keeps its code', (_what, detail) => {
+    const log = beforeSendLogScrubbed({
+      level: 'error',
+      message: format(failing(detail)),
+    } as Parameters<typeof beforeSendLogScrubbed>[0]);
+    expect(log.message).not.toContain('Saturday hill sprints');
+    expect(log.message).not.toContain('partner');
+    expect(log.message).toContain("code: '23514'");
   });
 
   it('beforeSendLog and beforeBreadcrumb drop it too', () => {

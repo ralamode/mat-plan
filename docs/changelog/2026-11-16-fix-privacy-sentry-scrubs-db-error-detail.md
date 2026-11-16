@@ -7,8 +7,11 @@ could ride a captured error to Sentry. The scrubber stripped only drizzle's `par
 review of FAM-1 step 4a-i (#437), before any writer can hit those CHECKs.
 
 - `apps/web/lib/sentry-scrub.ts`: every key named `detail` is dropped, wherever an error was
-  normalized; every string is cut from a `DETAIL:` line on, and Postgres's detail sentences are cut
-  where they sit inside a longer line. The SQLSTATE `code`, `constraint`, `table` and `column` stay.
-- `apps/web/lib/sentry-scrub.test.ts`: four cases (keys, a printed `DETAIL:` line, a sentence inside a
-  line with a `)` in the row, logs and breadcrumbs). All four fail on the parent commit.
+  normalized. Every string loses a printed error's `detail: '…'` entry (`util.inspect`, which is what
+  `console.error(err)` writes), including the `'…' +` continuation lines a long value is split into; a
+  psql-style `DETAIL:` line; and Postgres's two detail sentences. The SQLSTATE `code`, `constraint`,
+  `table` and `column` stay.
+- `apps/web/lib/sentry-scrub.test.ts`: six cases, including a pg-shaped `DatabaseError` printed with
+  `util.format`, short and long. All fail on the parent commit; the long one also fails against this
+  PR's first pattern, which stopped at the first continuation line (found by the review thread).
 - `docs/privacy/data-inventory.md`: the Sentry paragraph lists it.
