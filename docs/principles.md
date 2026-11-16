@@ -57,6 +57,9 @@ scope (AGENTS.md: scope discipline is a first-class constraint).
 - **In a plan:** name the one-way doors and what a 10× and a 100× version of this would change. If
   the answer is "a rewrite", redesign; if it is "add an index / a queue / a cache", note it and move on.
 - **Enforced by:** the engineering panel (architecture lens); the database PR rules.
+- ⚠️ **Not yet true of the code (`SCALE-4`, 2026-11-16):** no list is cursor-paginated, and the zip
+  export is built in memory, every month at once, on the request path
+  (`apps/web/lib/dal/export.ts`). No backlog row owns that yet; a plan that grows the export names it.
 
 ## 5 · Fast is a feature
 
@@ -100,6 +103,9 @@ English only for now, but nothing should make translation a rewrite (I18N-1, RTL
   numbers and units are formatted with `Intl`, never by string concatenation; layout uses logical
   properties (`ms-`/`me-`, `start`/`end`), not left and right; no text baked into images.
 - **Enforced by:** review. I18N-1 brings catalogs when a second locale is real.
+- ⚠️ **Not yet true of the code (`SCALE-4`, 2026-11-16):** dates go through `Intl.DateTimeFormat`
+  (`apps/web/lib/date.ts`), but numbers and units are concatenated (`formatValueUnit` in
+  `apps/web/lib/entries/format-value-unit.ts`) and nothing uses `Intl.NumberFormat`. `I18N-1` owns it.
 
 ## Adding or changing a principle
 

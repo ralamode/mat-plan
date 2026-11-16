@@ -137,8 +137,8 @@ Keys:   internal PK = bigint GENERATED ALWAYS AS IDENTITY (never serial/UUIDv4 P
         client_id = UUIDv7, UNIQUE, non-partial for NEW ones (ADR 0008 3.4); NOT NULL unless a
         server-side creator needs NULL (say so in the column's docblock).
 Time:   all timestamptz, UTC, created_at DEFAULT now(). deleted_at NULL for soft delete.
-        LWW: compare CLIENT-supplied updated_at/version (not server clock); upsert
-        setWhere incoming >= stored. (offline clock-skew correctness)
+        LWW (v1.5 /api/sync, NOT wired): compare CLIENT updated_at/version, not server now();
+        upsert setWhere incoming >= stored.
 Naming: snake_case; tables plural; FK <singular>_id; idx_<table>_<cols>. Drizzle casing:'snake_case'.
 Constraints: NOT NULL default; FK+index on every ref.
         Tagged union: CHECK ((movement_id IS NOT NULL) <> (metric_key IS NOT NULL)).
@@ -168,7 +168,7 @@ Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag aft
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
 Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
-        enableLogs + structured context (userId, householdId, batchId).
+        enableLogs + structured context: NOT wired (ADR 0001).
 ```
 
 Security baseline lives in [.github/SECURITY.md](./.github/SECURITY.md) (BOLA-first,
@@ -400,8 +400,8 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   1 re-verify authN inside it (page/middleware auth does NOT protect an action — it's a public POST).
   2 re-verify authZ / resource ownership (IDOR guard).  3 zod-validate ALL input first.
   4 return a minimal DTO, never a raw row.  5 db+auth via the server-only DAL; keep 'use server' thin.
-  6 mutations: Idempotency-Key → persist first result → replay on retry.
-  7 typed error envelope + structured logs (correlation id) + Sentry; rate-limit expensive ops.
+  6 idempotent by body clientId, not an Idempotency-Key header.
+  7 typed refusal + Sentry; rate-limit expensive ops (NOT wired: zip export, correlation ids).
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.
