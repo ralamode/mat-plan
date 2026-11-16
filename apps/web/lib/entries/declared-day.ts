@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { addDays, isoDayDiff, isoDaySchema } from '@mat-plan/shared';
+import { addDays, isoDayDiff, isoDaySchema, WRITABLE_DAY_RADIUS } from '@mat-plan/shared';
 
 import { getActiveLocalDay } from '@/lib/active-timezone';
 
@@ -24,20 +24,26 @@ export async function resolveDeclaredDay(
   const parsed = isoDaySchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: DECLARED_DAY_CLOSED_ERROR };
   const today = await getActiveLocalDay();
-  if (Math.abs(isoDayDiff(parsed.data, today)) > 1) {
+  if (!isWritableDay(parsed.data, today)) {
     return { ok: false, error: DECLARED_DAY_CLOSED_ERROR };
   }
   return { ok: true, day: parsed.data };
 }
 
 /**
- * How many days either side of today a write is accepted. Exported so the UI can gate its forms on
- * the SAME number the server enforces — a re-typed `1` in `page.tsx` is exactly the drift the
- * constants rule exists to stop.
+ * How many days either side of today a write is accepted. The number lives in `@mat-plan/shared`
+ * (`day.ts`, FAM-1 contract change C10) so the database package reads the same one; re-exported
+ * because the UI gates its forms on it.
  */
-export const WRITABLE_DAY_RADIUS = 1;
+export { WRITABLE_DAY_RADIUS };
 
-/** Whether `day` is inside the write window. The UI half of `resolveDeclaredDay`'s bound. */
+/**
+ * Whether `day` is inside the write window of the forms that predate FAM-1: today, yesterday and
+ * **tomorrow**. `resolveDeclaredDay` is this, so the UI and the server cannot differ.
+ *
+ * ⚠️ FAM-1's rows use the shared `inWritableWindow`, which never accepts a day after today (plan
+ * D32). Plan step 12c makes this function that one.
+ */
 export function isWritableDay(day: string, today: string): boolean {
   return Math.abs(isoDayDiff(day, today)) <= WRITABLE_DAY_RADIUS;
 }
