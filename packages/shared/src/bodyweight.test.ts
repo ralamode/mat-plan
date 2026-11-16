@@ -8,7 +8,7 @@ import {
   DEFAULT_BODYWEIGHT_UNIT,
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
   editBodyweightSchema,
-  isBlankWeight,
+  isBlankEntry,
   logBodyweightSchema,
   type BodyweightUnit,
 } from './bodyweight';
@@ -168,12 +168,12 @@ describe('both schemas read a typed weight the same way (V1-24 3b-bw, plan W3)',
     }
   });
 
-  it('isBlankWeight is true only for a string that is empty after trim', () => {
-    expect(isBlankWeight('')).toBe(true);
-    expect(isBlankWeight(' \t')).toBe(true);
-    expect(isBlankWeight('0')).toBe(false);
-    expect(isBlankWeight(null)).toBe(false);
-    expect(isBlankWeight(undefined)).toBe(false);
+  it('isBlankEntry is true only for a string that is empty after trim', () => {
+    expect(isBlankEntry('')).toBe(true);
+    expect(isBlankEntry(' \t')).toBe(true);
+    expect(isBlankEntry('0')).toBe(false);
+    expect(isBlankEntry(null)).toBe(false);
+    expect(isBlankEntry(undefined)).toBe(false);
   });
 });
 

@@ -4,7 +4,7 @@ import {
   BODYWEIGHT_UNITS,
   type BodyweightUnit,
   DEFAULT_BODYWEIGHT_UNIT,
-  isBlankWeight,
+  isBlankEntry,
   newId,
 } from '@mat-plan/shared';
 import { Check, LoaderCircle } from 'lucide-react';
@@ -99,7 +99,7 @@ export function BodyweightForm({
       onSubmit={(e) => {
         // An empty ✓ is refused here, synchronously, so focus lands on the field inside the same tap
         // and the phone opens its keypad. No request is sent.
-        if (isBlankWeight(value)) {
+        if (isBlankEntry(value)) {
           e.preventDefault();
           setBlank(true);
           inputRef.current?.focus();

@@ -1,6 +1,6 @@
 'use client';
 
-import { isBlankWeight, parseTypedWeight } from '@mat-plan/shared';
+import { isBlankEntry, parseTypedWeight } from '@mat-plan/shared';
 import { useActionState, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -45,7 +45,7 @@ import { useSingleValueLive } from './single-value-live';
  * ## A blank Save clears, and says so before it is tapped
  *
  * While the field is empty after trim, Save reads **Clear** (`Clear bodyweight`, destructive), and the
- * line under the field always says how a weigh-in is removed. `isBlankWeight` is the one predicate the
+ * line under the field always says how a weigh-in is removed. `isBlankEntry` is the one predicate the
  * label, the report and the server share. An archived athlete (`canClear` false) keeps Save and no
  * hint, and a blank is refused: their page has no empty field to re-enter a cleared weight into.
  */
@@ -67,7 +67,7 @@ export function BodyweightAmend({
       const result = await editBodyweightAction(prev, formData);
       const submitted = formData.get('value');
       if (result.ok) {
-        if (isBlankWeight(submitted)) {
+        if (isBlankEntry(submitted)) {
           // The row unmounts; the field it leaves behind takes focus, and the line stays on screen.
           live.report({
             message: BODYWEIGHT_COPY.announcedCleared(shown),
@@ -127,7 +127,7 @@ export function BodyweightAmend({
   }, [editing]);
 
   const fresh = state !== stateAtOpen;
-  const blank = isBlankWeight(value);
+  const blank = isBlankEntry(value);
   const clears = blank && canClear;
   const valueErr = blankRefused
     ? BODYWEIGHT_COPY.blankSave

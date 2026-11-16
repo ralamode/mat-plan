@@ -69,7 +69,7 @@ export const IMPLAUSIBLE_BODYWEIGHT_MESSAGE =
  * turns it into `null`. Three copies of "empty" would let the label say Clear while the server
  * refuses, or the reverse.
  */
-export function isBlankWeight(value: unknown): boolean {
+export function isBlankEntry(value: unknown): boolean {
   return typeof value === 'string' && value.trim() === '';
 }
 
@@ -176,7 +176,7 @@ export const editBodyweightSchema = bodyweightValueShape
     /**
      * ## A blank is a CLEAR (V1-24 3b-bw, plan W7)
      *
-     * Saving an empty field hides the weigh-in, so `value` is `null` exactly when `isBlankWeight`
+     * Saving an empty field hides the weigh-in, so `value` is `null` exactly when `isBlankEntry`
      * holds. ⚠️ **Only a STRING that is empty after trim.** An ABSENT field, `null` or a `File` is
      * refused: a crafted POST that drops `value` must not clear a weigh-in by omission, and the first
      * draft's `.nullable()` would have done exactly that. The create schema keeps refusing a blank.
@@ -185,7 +185,7 @@ export const editBodyweightSchema = bodyweightValueShape
       [
         z
           .string()
-          .refine(isBlankWeight)
+          .refine(isBlankEntry)
           .transform(() => null),
         weightText,
       ],

@@ -5,6 +5,12 @@ import * as Sentry from '@sentry/nextjs';
 import {
   ACTIVITY_TYPE_KEYS,
   editBodyweightSchema,
+  editPracticeSchema,
+  PRACTICE_AMEND_REFUSAL,
+  TRANSPORT_REFUSALS,
+  type EditPracticeInput,
+  type PracticeAmendRefusal,
+  type PracticeAmendResult,
   editStrengthSetSchema,
   logBodyweightSchema,
   logStrengthSessionSchema,
@@ -44,6 +50,10 @@ import {
   ownedBodyweightValue,
   bodyweightRowDay,
   clearBodyweightEntry,
+  clearPracticeEntry,
+  editPractice,
+  ownedPracticeMinutes,
+  practiceRowDay,
 } from '@/lib/dal/entries';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
@@ -676,6 +686,84 @@ export async function editBodyweightAction(
     // (c) Someone else got there first. Revalidate so the receipt shows the value that won.
     return refuse(AMEND_ERROR_COPY.staleWrite);
   });
+}
+
+/**
+ * Server Action: change or clear ONE logged wrestling practice (V1-24 3b-life A5).
+ *
+ * 🔴 **The FAM-1 contract, as AGENTS.md requires of a new mutation**: typed input
+ * (`editPracticeSchema`), a typed result (`practiceAmendResultSchema`), refusals returned, never
+ * thrown. FormData stays at the edge: the editor's client wrapper builds this input and maps each
+ * reason to copy. `enterMutation` is C7's entry (#469); the registry row is `actions.registry.ts`.
+ *
+ * The order is `editBodyweightAction`'s (plan W7): validate → profile → the pre-read (the row's DAY,
+ * live or hidden) → bound the write by THAT day → a blank clears, a number updates through the
+ * guarded UPDATE → its three-way branch. The metric and unit are pinned in the writers.
+ */
+export async function editPracticeAction(input: EditPracticeInput): Promise<PracticeAmendResult> {
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
+  return await Sentry.withServerActionInstrumentation(
+    'editPracticeAction',
+    async (): Promise<PracticeAmendResult> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = editPracticeSchema.safeParse(input);
+      if (!parsed.success) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.invalid };
+
+      const { profilePublicId, entryId, value, seenValue } = parsed.data;
+      const profile = await getProfileByPublicId(profilePublicId);
+      if (!profile) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.not_found };
+      const refuse = (reason: PracticeAmendRefusal): PracticeAmendResult => {
+        revalidatePath(athletePath(profile.id));
+        return { ok: false, reason };
+      };
+
+      const row = await practiceRowDay({ profilePublicId: profile.id, entryId });
+      // Not theirs, not a practice, or gone: one answer, so a crafted id learns nothing a stale one
+      // wouldn't.
+      if (!row) return refuse(PRACTICE_AMEND_REFUSAL.not_found);
+      const day = await resolveDeclaredDay(row.day);
+      if (!day.ok) return refuse(PRACTICE_AMEND_REFUSAL.read_only);
+
+      if (value === null) {
+        // An archived athlete has no field to re-enter a cleared practice into (plan A3).
+        if (profile.archived) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.archived_blank };
+        const cleared = await clearPracticeEntry({
+          profilePublicId: profile.id,
+          entryId,
+          seenValue,
+        });
+        if ('cleared' in cleared) {
+          revalidatePath(athletePath(profile.id));
+          return { ok: true };
+        }
+        return refuse(
+          'stale' in cleared ? PRACTICE_AMEND_REFUSAL.stale : PRACTICE_AMEND_REFUSAL.not_found,
+        );
+      }
+
+      const updated = await editPractice({
+        profilePublicId: profile.id,
+        entryId,
+        minutes: value,
+        seenValue,
+      });
+      if (updated) {
+        revalidatePath(athletePath(profile.id));
+        return { ok: true };
+      }
+      const current = await ownedPracticeMinutes({ profilePublicId: profile.id, entryId });
+      // (a) Gone, never theirs, or not an amendable practice.
+      if (!current) return refuse(PRACTICE_AMEND_REFUSAL.not_found);
+      // (b) REPLAY: the row already holds what was asked for. One effect, success.
+      if (current.minutes === value) {
+        revalidatePath(athletePath(profile.id));
+        return { ok: true };
+      }
+      // (c) Another phone got there first; the revalidate shows the value that won.
+      return refuse(PRACTICE_AMEND_REFUSAL.stale);
+    },
+  );
 }
 
 /**
