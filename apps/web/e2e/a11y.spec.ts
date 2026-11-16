@@ -11,6 +11,7 @@ import {
 
 import {
   ADD_ATHLETE_PATH,
+  AMEND_COPY,
   APP_HOME_PATH,
   BODYWEIGHT_COPY,
   MAIN_CONTENT_ID,
@@ -31,7 +32,7 @@ import {
   logBodyweight,
   SEED_PROFILE_2_ROUTE,
   SEED_PROFILE_ROUTE,
-  shownWeight,
+  loggedWeight,
 } from './steps';
 import {
   DESKTOP_VIEWPORT,
@@ -324,6 +325,23 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
     await expectTapTargets(page, 'weigh-in (empty form)');
     await expectNoHorizontalOverflow(page, 'weigh-in (empty form, 360px)');
 
+    // V1-24 3b-bw (plan W1): the field and the ✓ share ONE row at 360px, and the ✓ is a full 44px
+    // wide. Neither gate above sees a ✓ wrapped onto its own line, or a width below the target
+    // (`expectTapTargets` measures height).
+    const tick = section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel });
+    const [fieldBox, tickBox] = [await input.boundingBox(), await tick.boundingBox()];
+    expect(tickBox!.width, 'the ✓ is at least 44px wide').toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+    expect(
+      Math.abs(fieldBox!.y + fieldBox!.height - (tickBox!.y + tickBox!.height)),
+      'the field and the ✓ sit on one row at 360px',
+    ).toBeLessThanOrEqual(2);
+
+    // An empty ✓ is refused in the browser, with the copy and focus on the field (plan W3).
+    await tick.click();
+    await expect(section.getByRole('alert')).toContainText(BODYWEIGHT_COPY.blankLog.split('✓')[0]!);
+    await expect(input).toBeFocused();
+    await expectNoAxeViolations(page, 'weigh-in (empty ✓ refused)');
+
     // THE REJECTED SAVE (round 2 on #180). Here, before the valid log, because a rejected save writes
     // nothing — so it cannot break the disjoint (profile, day) rule. A slipped decimal in the NON-default
     // unit: React 19 resets uncontrolled fields when a form action settles, even on `{ ok: false }`,
@@ -334,7 +352,7 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
     expect(Number(slipped)).toBeGreaterThan(BODYWEIGHT_BOUNDS[otherUnit].max);
     await unit.selectOption(otherUnit);
     await input.fill(slipped);
-    await section.getByRole('button', { name: 'Log weight' }).click();
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
     await expect(section.getByRole('alert')).toHaveText(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
     await expect(input, 'the rejected value must survive, so the kid can fix it').toHaveValue(
       slipped,
@@ -347,13 +365,10 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   }
 
   const widest = String(BODYWEIGHT_BOUNDS[DEFAULT_BODYWEIGHT_UNIT].max);
-  await logBodyweight(page, widest); // asserts the receipt value + focus on it
+  await logBodyweight(page, widest); // asserts the logged value + focus on Change
 
-  // The full receipt copy is present — the widths below are measured WITH it.
-  await expect(
-    section.getByText(BODYWEIGHT_COPY.saved(shownWeight(widest)), { exact: true }),
-  ).toBeVisible();
-  await expect(section.getByText(BODYWEIGHT_COPY.onePerDay, { exact: true })).toBeVisible();
+  // The logged row is present — the widths below are measured WITH it.
+  await expect(loggedWeight(page, widest)).toBeVisible();
 
   await expectNoAxeViolations(page, 'weigh-in (receipt)');
   await expectTapTargets(page, 'weigh-in (receipt)');
@@ -368,6 +383,20 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   await section.getByRole('button', { name: /^Change weight/ }).click();
   await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
   await expectNoAxeViolations(page, 'weigh-in (editing)');
+  // V1-24 3b-bw: emptied, Save reads Clear in the destructive style (the row drops its tint while editing).
+  const editorField = section.getByLabel(/^Weight \(/);
+  await editorField.fill('');
+  const clear = section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel });
+  await expect(clear).toBeVisible();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  await expectNoAxeViolations(page, 'weigh-in (editing, Save reads Clear)');
+  // …and with a field error under it: the error text is the pair the done tint must never carry
+  // (`app/done-tokens.test.ts`), which is why the row drops its tint while the editor is open.
+  await editorField.fill('845');
+  await section.getByRole('button', { name: AMEND_COPY.save }).click();
+  await expect(section.getByRole('alert')).toHaveText(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
+  await expectNoAxeViolations(page, 'weigh-in (editing, a refused value)');
+  await editorField.fill(widest);
   await expectTapTargets(page, 'weigh-in (editing)');
   await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');
 });

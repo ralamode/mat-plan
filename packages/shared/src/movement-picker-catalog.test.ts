@@ -80,7 +80,7 @@ describe('the aliases', () => {
   });
 
   it('points every alias at a seeded slug', () => {
-    const slugs = new Set(MOVEMENT_SEED_ROWS.map((r) => r.slug));
+    const slugs = new Set<string>(MOVEMENT_SEED_ROWS.map((r) => r.slug));
     for (const { alias, slug } of MOVEMENT_PICKER_ALIASES)
       expect(slugs.has(slug), alias).toBe(true);
   });

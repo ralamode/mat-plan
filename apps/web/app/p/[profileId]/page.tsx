@@ -7,7 +7,7 @@ import { getActiveTimeZone } from '@/lib/active-timezone';
 import { localDayIso, localWeekStartIso } from '@/lib/date';
 import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
-import { listEntriesForDay } from '@/lib/dal/entries';
+import { lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
 import { loggedBodyweight, loggedLifeActivities } from '@/lib/entries/activity-totals';
@@ -89,6 +89,9 @@ export default async function TodayPage({
   // surface render the RECEIPT instead of an empty input. Derived from the entries already fetched
   // above (no extra query).
   const bodyweight = loggedBodyweight(entries);
+  // V1-24 3b-bw: "Last time", read only when the ✓ row renders (nothing logged, a writable day).
+  const lastWeight =
+    bodyweight.length === 0 && writable ? await lastBodyweight(profile.id, day) : null;
 
   // V1-24 3b-page: the day page is Bodyweight and Life. The routine still chooses the life
   // activities (`profile.routine`, resolved by the DAL); its strength and check-in keys render
@@ -189,6 +192,7 @@ export default async function TodayPage({
           writable={writable}
           amendable={amendable}
           logged={bodyweight}
+          last={lastWeight}
         />
         <LifeSection
           profileId={profile.id}

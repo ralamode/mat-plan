@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-09. This is a beta.**
+**Last updated: 2026-11-16. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -185,24 +185,30 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | An export you have downloaded                                | Yours — we cannot keep or delete it                                                                                                                                    |
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
-⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. The only way anything comes
-out of the database today is deleting a whole athlete or household, and the one time a row has been
-removed from view, it stayed in the database. **Nothing automatically clears it.** You should know that
-before you log something you might regret.
+⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
+weigh-in** on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and the app
+**does not offer to put a cleared weigh-in back**, so re-enter the right weight instead. Anyone signed
+in to your household can clear any athlete's weigh-in, and the app does not record who did. A cleared
+weigh-in is not removed from the database, and it is **not in the export** (ask for a full copy, below,
+and it is included). The only way anything comes out of the database today is deleting a whole athlete
+or household. **Nothing automatically removes a hidden row.** You should know that before you log
+something you might regret.
 
-**What is being built, so you know what to expect.** A Delete button, per item, that works like this:
-deleting something **hides it, and then actually removes it** a set number of days later. Two things
-follow that are worth saying plainly.
+**What is being built, so you know what to expect.** A **Clear this day** control, which hides
+everything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be **put back**:
+a banner offers **Restore all** while that day is today or yesterday (after that, the day stays
+hidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been
+logged in that day's place — when that happens the app will say so rather than fail quietly. There
+will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
+field. Two things are worth saying plainly about every clear:
 
-- **You can put it back** during that window. A deleted item shows up as a small "Hidden — Restore" row
-  on the day it was logged, so a mis-tap is fixable, and fixable by a parent rather than only by whoever
-  tapped it. Occasionally a restore will not be possible, because something else has since taken that
-  item's place in the day — when that happens the app will say so rather than fail quietly.
-- **It hides from everyone in your household, not just from the person who deleted it.** The app does
-  not record who deleted what, and anyone signed in to your household can open any athlete. So a child
-  can delete a weigh-in and a parent will not see it either, until they use Restore. ⚠️ That is still
-  the honest shape of it: per-person sign-in is now the only way in, but the app records no author on
-  an entry, so sign-in alone did not fix this one.
+- **It hides from everyone in your household, not just from the person who cleared it.** The app does
+  not record who cleared what, and anyone signed in to your household can open any athlete. So a child
+  can clear a weigh-in and a parent will not see it either. ⚠️ That is still the honest shape of it:
+  per-person sign-in is now the only way in, but the app records no author on an entry, so sign-in
+  alone did not fix this one.
+- **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
+  until a removal that runs a set number of days later is built.
 
 There is still **no way to permanently remove one single item on demand** — the finest grain for a
 permanent removal is an athlete. Ask, and that is done.
@@ -222,7 +228,8 @@ or delete anything they logged. Their export is on the **Household settings** sc
 name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty
 file — an empty zip looks exactly like a download that failed.
 
-**If you want everything, ask** and you will be sent a full copy — including what Clerk holds about
+**If you want everything, ask** and you will be sent a full copy — including anything you have
+cleared or hidden, which the export leaves out, and what Clerk holds about
 your login: your email address, your name, your profile picture, your Google account identifier, and when
 you signed in. And **export before you delete anything** — once a profile is removed, its data can no
 longer be exported, even though it is still in the database.
