@@ -2962,7 +2962,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
     [PR 3b plan](./plans/v1-24-3b-logs-in-place.md): **3b-0** ✅ #461 one practice per day in the database ·
     **3b-page** ✅ #418 the old Check-ins and Strength forms, the "Logged entries" list and the
     "Calisthenics today" card leave the page; a logged practice shows its minutes · **3b-bw** ✅ #442 bodyweight logs with ✓ under a "Last time" hint, and a blank Save on Change clears it ·
-    **3b-life** practice is an empty minutes field, entered once then changed; no Wake. Earlier entries
+    **3b-life-a** ✅ #479 a logged practice can be changed, and emptying the field clears it · **3b-life-b** practice is an empty minutes field (10–300); no Wake. Earlier entries
     are not shown until FAM-1 is done, and days before yesterday are read-only.
   - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
     re-run just before 1d merges. `migrate.yml` runs on every push to main with no gate, so a 1d that
