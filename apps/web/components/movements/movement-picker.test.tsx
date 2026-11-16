@@ -100,11 +100,11 @@ function Harness({
 }
 
 const open = () => act(() => void trigger().click());
-const search = () => screen.getByRole('searchbox');
+const search = (name: string = COPY.searchLabel) => screen.getByRole('searchbox', { name });
 let lastTyped = '';
-const type = (value: string) => {
+const type = (value: string, name: string = COPY.searchLabel) => {
   lastTyped = value.trim();
-  act(() => void fireEvent.change(search(), { target: { value } }));
+  act(() => void fireEvent.change(search(name), { target: { value } }));
 };
 const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
 const status = () => document.querySelector('[role="status"]')?.textContent ?? '';
@@ -660,12 +660,12 @@ describe('multi-select', () => {
     const onCreate = vi.fn();
     render(<MultiHarness data={data} onCreate={onCreate} />);
     open();
-    type('rdl');
-    fireEvent.keyDown(search(), { key: 'Enter' });
-    expect((search() as HTMLInputElement).value).toBe('');
+    type('rdl', 'Search items');
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect((search('Search items') as HTMLInputElement).value).toBe('');
     expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
-    type('rdl');
-    fireEvent.keyDown(search(), { key: 'Enter' });
+    type('rdl', 'Search items');
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
     expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
     expect(onCreate).not.toHaveBeenCalled();
   });
@@ -673,7 +673,7 @@ describe('multi-select', () => {
   it('an alias hit offers no create: "RDL" is Romanian Deadlift', () => {
     render(<MultiHarness data={data} />);
     open();
-    type('RDL');
+    type('RDL', 'Search items');
     expect(screen.queryByRole('button', { name: /^New item/ })).toBeNull();
     expect(status()).toContain(COPY.statusAlreadyListed('Romanian Deadlift'));
   });
@@ -683,7 +683,7 @@ describe('multi-select', () => {
     render(<MultiHarness data={data} onCreate={onCreate} />);
     open();
     expect(screen.getByRole('button', { name: '+ New item' })).toBeTruthy();
-    type('Bear crawl');
+    type('Bear crawl', 'Search items');
     expect(screen.getByText('No item matches.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'New item: Bear crawl' }));
     expect(onCreate).toHaveBeenCalledWith('Bear crawl');

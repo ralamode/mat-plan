@@ -211,6 +211,20 @@ describe('a card for a picked item', () => {
   });
   it('has no numbers; its unit is the type’s, else the item’s own when the type allows it', () => {
     const card = newCard(option('weight_reps', 'kg'), '00000000-0000-7000-8000-000000009002');
+    expect(card.item).toMatchObject({
+      prescriptionClientId: '00000000-0000-7000-8000-000000009002',
+      itemPublicId: '00000000-0000-7000-8000-000000009001',
+      itemName: 'Bear crawl',
+      trackingType: 'weight_reps',
+    });
+    // Left alone, it saves "log in the item's own unit, no target" (invariant 13's exception).
+    const read = readDraft(
+      { ...heavyADraft, items: [] },
+      { name: 'W', description: '', cards: [{ ...card, sets: '3' }] },
+    );
+    expect(saved(read).items[0]!.quantities).toEqual([
+      { slot: QUANTITY_SLOT.primary, unit: 'kg', value: null },
+    ]);
     expect(card).toMatchObject({ sets: '', reps: '', value: '', notes: '', unit: 'kg' });
     expect(card.item).toMatchObject({
       sets: null,

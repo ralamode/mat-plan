@@ -66,7 +66,8 @@ export type TodaysProgramForPicker = {
 export type MultiPick = {
   /** Selected option ids, in the order they were picked. */
   readonly selected: readonly string[];
-  onToggle: (option: MovementOptionDTO) => void;
+  /** `via` is `'enter'` for the search's Enter, where no row has focus to say what happened. */
+  onToggle: (option: MovementOptionDTO, via?: 'tap' | 'enter') => void;
   /** The typed text, trimmed (`''` from the plain "+ New item"). Never fired from Enter. */
   onCreate: (typed: string) => void;
   /** The create button's words: `''` gives the plain one, a name gives "New item: “Bear Crawl”". */
@@ -112,6 +113,33 @@ export type MovementPickerProps = {
     }
   | { multiple: MultiPick; onPick?: never }
 );
+
+/**
+ * The picker's match over its own options: ONE place that turns a `MovementOptionDTO` into what
+ * `matchMovementOptions` reads (catalog-first, aliases from the catalog only). The item picker's
+ * form asks the same question through `listedAs`, so "RDL" is withheld in the list and selects
+ * Romanian Deadlift in the form by one rule, not two copies of it.
+ */
+export function matchPickerOptions(options: readonly MovementOptionDTO[], text: string) {
+  return matchMovementOptions(
+    options.map((option) => ({
+      name: option.name,
+      isCatalog: option.owner === 'catalog',
+      aliases: option.owner === 'catalog' ? option.aliases : [],
+      option,
+    })),
+    text,
+  );
+}
+
+/** The option `text` already names (an exact name or an alias hit), or `undefined`. */
+export function listedAs(
+  options: readonly MovementOptionDTO[],
+  text: string,
+): MovementOptionDTO | undefined {
+  const result = matchPickerOptions(options, text);
+  return result.exact || result.aliasHit ? result.matches[0]?.option : undefined;
+}
 
 /** A row, plus the single tag it earns. One tag per row, by precedence (panel 2 · 5). */
 type Row = { option: MovementOptionDTO; tag: string | null };
@@ -213,16 +241,7 @@ export function MovementPicker({
   const deferredTrimmed = useDeferredValue(query).trim();
 
   const result = useMemo(
-    () =>
-      matchMovementOptions(
-        data.options.map((option) => ({
-          name: option.name,
-          isCatalog: option.owner === 'catalog',
-          aliases: option.owner === 'catalog' ? option.aliases : [],
-          option,
-        })),
-        deferredTrimmed,
-      ),
+    () => matchPickerOptions(data.options, deferredTrimmed),
     [data.options, deferredTrimmed],
   );
 
@@ -371,7 +390,7 @@ export function MovementPicker({
                 if (!enterTarget) return;
                 if (!multiple) return pickExisting(enterTarget);
                 // Multi: Enter SELECTS (never deselects, never creates), then clears for the next.
-                if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget);
+                if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget, 'enter');
                 setQuery('');
                 if (!prefersKeyboardFocus) e.currentTarget.blur();
               }}
@@ -392,7 +411,8 @@ export function MovementPicker({
               enterKeyHint="search"
               placeholder={multiple?.searchPlaceholder ?? COPY.searchPlaceholder}
               aria-describedby={sheetStatusId(SHEET_ID)}
-              className={cn(INPUT_CLASS, 'w-full')}
+              // The placeholder is the field's only visible label: muted text, not the 3.74:1 default.
+              className={cn(INPUT_CLASS, 'placeholder:text-muted-foreground w-full')}
             />
           </div>
         )
@@ -441,7 +461,7 @@ export function MovementPicker({
                   // chose `aria-disabled` so a keyboard user could REACH the reason, not so a sighted
                   // user would lose the inert cue — without these the button looks live, the tap does
                   // nothing, and the only signal is a `text-xs` line underneath.
-                  className="h-auto min-h-11 w-full whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                  className="h-auto min-h-11 w-full whitespace-normal wrap-anywhere text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                 >
                   {COPY.asTyped(deferredTrimmed)}
                 </Button>
@@ -569,7 +589,7 @@ function CreateTop({
           if (issue) return;
           multiple.onCreate(typed);
         }}
-        className="h-auto min-h-11 w-full justify-start whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+        className="h-auto min-h-11 w-full justify-start whitespace-normal wrap-anywhere text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
       >
         {multiple.createLabel(typed)}
       </Button>

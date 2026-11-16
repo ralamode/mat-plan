@@ -134,7 +134,7 @@ flowchart LR
     `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
     whole number or blank _(maintainer, 2026-11-16)_, a quantity a plain decimal under its unit's
     ceiling (blank: the unit with no target), notes one line. An item loaded with no quantity is
-    saved with none until a unit is chosen: the machine never picks the unit a kid logs in. What
+    saved with none until a unit is chosen: the machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
     `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
     editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
     sends.
@@ -174,7 +174,8 @@ flowchart LR
       included): "RDL" selects Romanian Deadlift. If the server still answers `existed` (a stale
       list, or another parent got there first), the item it names is added under its stored name
       and the status line says "… is in the list (Reps). Selected." (v12 has no such line). The
-      name comes from the answer's `name` (contract C8), read in one place, `storedName`.
+      name comes from the answer's `name` once contract C8 lands; until then `storedName` reads it
+      defensively, in one place (`owed.test.ts` holds the swap).
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.
@@ -184,14 +185,18 @@ flowchart LR
       and the next search clears it. Closing the sheet drops the form; the ticks and items made
       stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
       `DOUBLE_TAP_MS` of the form closing is ignored (Create sat in the same place). A name the
-      same-movement rule folds to nothing ("S") is refused.
+      same-movement rule folds to nothing ("S") is refused, shown once Create is pressed rather
+      than on the first keystroke. **A create in flight ends** with Cancel, a closed sheet or a
+      fresh form (invariant 11): its answer leaves the screen alone, but a new item it made is still
+      listed, since the write may have landed. At the cap, an item made or found is listed but not
+      ticked, and the message says so.
     - Differences from v12, each a decision above or recorded here: the selection survives Close;
       the form takes over the sheet; the type has no default; added cards have no numbers (v12
       prefilled 3 × 10 and 20 lb); a ticked row is outlined with a ✓ box, not green (the `done`
       green means "logged"); rows are grouped under the picker's headings, not one A–Z list; the
       search is pinned in the header; a ✕ in the header and Close in the footer; the footer lists
       the picks ("2 picked: …", at most two lines) and the cap; an item already on a card says
-      "already in this workout"; with no match, the list empties under "New item: “…”".
+      "already in this workout"; with no match, the household's list empties under "New item: “…”" (the catalog's browse groups, once 6a supplies them, stay).
 
 ## Traps
 

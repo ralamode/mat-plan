@@ -4,6 +4,7 @@ import {
   FREE_TEXT_NOTE_MAX,
   hasStarted,
   LOGGABLE_DIMENSION_LABELS,
+  MAX_WORKOUT_ITEMS,
   MAX_SETS_PER_MOVEMENT,
   PROGRAM_REFUSAL,
   SLOT_LABEL_MAX,
@@ -373,7 +374,8 @@ export const ITEM_PICKER_COPY = {
   searchPlaceholder: 'Search items',
   giveAName: 'Give the item a name with a letter or a number in it.',
   pickToAdd: 'Pick items to add',
-  alreadyIn: 'already in this workout',
+  /** The shared picker's tag reads "already in {this}". */
+  alreadyIn: 'this workout',
   formTitle: 'New item',
   name: 'Name',
   namePlaceholder: 'e.g. Bear crawl',
@@ -427,3 +429,20 @@ export const createdText = (name: string) => `${name} created and selected.`;
 export const existedText = (name: string, type: string) =>
   `${name} is in the list (${type}). Selected.`;
 export const addedText = (n: number) => `${itemCountText(n)} added.`;
+
+/** A row ticked from the search's Enter, where no row has focus to say so. */
+export const selectedText = (name: string) => `${name} selected.`;
+
+/** What a refused new item says: a name refusal under the field, anything else in the footer. */
+export function newItemRefusal(reason: ProgramRefusal): {
+  field: string | null;
+  footer: string | null;
+} {
+  return reason === PROGRAM_REFUSAL.invalid
+    ? { field: ITEM_PICKER_COPY.refused, footer: null }
+    : { field: null, footer: ITEM_PICKER_COPY.failed };
+}
+
+/** Made or found, but not ticked: the workout is full. */
+export const notTickedText = (name: string) =>
+  `${name} is in the list, not ticked. ${capText(MAX_WORKOUT_ITEMS)}`;

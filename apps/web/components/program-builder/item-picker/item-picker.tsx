@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  matchMovementOptions,
   MAX_WORKOUT_ITEMS,
   MOVEMENT_NAME_MAX,
   movementNameKey,
@@ -15,6 +14,7 @@ import { useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
 import {
+  listedAs,
   MovementPicker,
   OPTION_ID_ATTR,
   PICKER_CREATE_ID,
@@ -33,16 +33,18 @@ import {
   existedText,
   ITEM_PICKER_COPY as COPY,
   newItemLabel,
+  newItemRefusal,
   newItemWarning,
   PENDING_CLASS,
+  notTickedText,
   pickedText,
+  selectedText,
   selectExistingText,
   TRACKING_TYPE_EXAMPLES,
 } from '../builder-text';
 import { FieldLabel } from '../field-label';
 import { NameField } from '../name-field';
-import { useAttempt } from '../use-attempt';
-import { DOUBLE_TAP_MS } from '../workout-editor-screen';
+import { DOUBLE_TAP_MS, useAttempt } from '../use-attempt';
 
 /**
  * The item's stored name from `newItem`'s answer. ⚠️ Contract change C8 (roadmap thread, 2026-11-16)
@@ -59,6 +61,8 @@ const NAME_ID = 'new-item-name';
 const TYPE_ID = 'new-item-type';
 const TYPE_HINT_ID = 'new-item-type-hint';
 const WARNING_ID = 'new-item-warning';
+const EXISTING_ID = 'new-item-existing';
+const SUMMARY_ID = 'item-picker-picked';
 
 /**
  * The workout editor's item picker (FAM-1 step 9; plan §8 "Item picker"; the prototype's `vPicker2`):
@@ -119,14 +123,28 @@ export function ItemPicker({
   };
   /** When the form last closed: a tap within `DOUBLE_TAP_MS` of it is the same tap, not Add. */
   const formClosedAt = useRef(0);
-  const SUMMARY_ID = 'item-picker-picked';
   const [form, setForm] = useState<{
     name: string;
     type: TrackingType | '';
     error: string | null;
     pending: boolean;
+    /** Create was pressed: the name's problems show from then on, not on the first keystroke. */
+    tried: boolean;
   } | null>(null);
-  const { begin, isCurrent } = useAttempt();
+  const { begin, isCurrent, cancel } = useAttempt();
+  const createRef = useRef<HTMLButtonElement>(null);
+
+  // A closed sheet drops the form, its message and any create in flight; the ticks and items made
+  // stay. On the `open` prop, so Add's own close counts too. Adjusted during render (React's pattern
+  // for deriving state from a prop; the movement picker does the same).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) {
+      setForm(null);
+      setNoticeNow('');
+    }
+  }
   const typeRef = useRef<HTMLSelectElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -137,34 +155,28 @@ export function ItemPicker({
   });
   const full = selected.length >= room;
 
-  const toggle = (option: MovementOptionDTO) => {
+  const toggle = (option: MovementOptionDTO, via?: 'tap' | 'enter') => {
     if (!selected.includes(option.publicId) && full) {
       setNotice(capText(MAX_WORKOUT_ITEMS));
       return;
     }
-    setNotice('');
+    // A tapped row says its own state; Enter ticks a row that has no focus, so it is said here.
+    setNotice(via === 'enter' ? selectedText(option.name) : '');
     onToggle(option);
   };
 
+  /** Ticks `option` unless it is ticked already; `false` when the workout is full. */
   const select = (option: MovementOptionDTO) => {
-    if (!selected.includes(option.publicId) && !full) onToggle(option);
+    if (selected.includes(option.publicId)) return true;
+    if (full) return false;
+    onToggle(option);
+    return true;
   };
 
   // ── The new-item form ───────────────────────────────────────────────────────────────────────────
   const cleaned = form ? cleanName(form.name) : '';
-  const match = form
-    ? matchMovementOptions(
-        options.map((option) => ({
-          name: option.name,
-          isCatalog: option.owner === 'catalog',
-          aliases: option.owner === 'catalog' ? option.aliases : [],
-          option,
-        })),
-        cleaned,
-      )
-    : null;
-  /** The item this name already is, by the picker's rule. */
-  const existing = match && (match.exact || match.aliasHit) ? match.matches[0]?.option : undefined;
+  /** The item this name already is, by the picker's own rule (`listedAs`: name or alias). */
+  const existing = form && cleaned ? listedAs(options, cleaned) : undefined;
   const nameIssue =
     form && cleaned && !existing
       ? (() => {
@@ -180,7 +192,8 @@ export function ItemPicker({
 
   const openForm = (typed: string) => {
     setNotice('');
-    flushSync(() => setForm({ name: typed, type: '', error: null, pending: false }));
+    cancel();
+    flushSync(() => setForm({ name: typed, type: '', error: null, pending: false, tried: false }));
     // In the same tap, so a phone raises the keyboard (program-builder trap).
     nameRef.current?.focus();
   };
@@ -191,62 +204,76 @@ export function ItemPicker({
    * the sheet itself has no visible focus ring.
    */
   const closeForm = (focusId?: string) => {
+    // Cancel: an answer still in flight no longer belongs to the screen.
+    if (!focusId) cancel();
     // The frame's time is on the same clock as a tap's `event.timeStamp`.
     requestAnimationFrame((time) => {
       formClosedAt.current = time;
     });
     flushSync(() => setForm(null));
-    const target = focusId
-      ? document.querySelector<HTMLElement>(`[${OPTION_ID_ATTR}="${focusId}"]`)
-      : document.getElementById(PICKER_CREATE_ID);
+    const target =
+      (focusId && document.querySelector<HTMLElement>(`[${OPTION_ID_ATTR}="${focusId}"]`)) ||
+      document.getElementById(PICKER_CREATE_ID);
     target?.focus();
     target?.scrollIntoView?.({ block: 'nearest' });
   };
 
-  /** A Create that cannot run says why, by moving to what is missing. */
-  const showMissing = () => (cleaned ? typeRef.current : nameRef.current)?.focus();
+  /**
+   * A Create that cannot run says why: the name's problems show from now on, and focus moves to
+   * what is missing (the name first).
+   */
+  const showMissing = () => {
+    if (!form) return;
+    setForm({ ...form, tried: true });
+    (!cleaned || nameIssue ? nameRef.current : typeRef.current)?.focus();
+  };
+
+  /** What to say once an item is chosen: selected, or not ticked because the workout is full. */
+  const said = (ticked: boolean, option: MovementOptionDTO, existed: boolean) =>
+    !ticked
+      ? notTickedText(option.name)
+      : existed
+        ? existedText(option.name, TRACKING_TYPE_LABELS[option.trackingType])
+        : createdText(option.name);
 
   async function create() {
-    if (!form) return;
+    if (!form || form.pending) return;
     if (!canCreate) return showMissing();
     if (existing) {
-      select(existing);
-      setNotice(existedText(existing.name, TRACKING_TYPE_LABELS[existing.trackingType]));
+      setNotice(said(select(existing), existing, true));
       return closeForm(existing.publicId);
     }
     const trackingType = form.type as TrackingType;
     const mine = begin();
     setForm({ ...form, pending: true, error: null });
     const result = await newItem({ name: cleaned, trackingType });
-    if (!isCurrent(mine)) return;
-    if (!result.ok) {
-      setForm(
-        (now) =>
-          now && {
-            ...now,
-            pending: false,
-            error: result.reason === 'invalid' ? COPY.refused : COPY.failed,
-          },
-      );
-      nameRef.current?.focus();
-      return;
-    }
-    const known = byId.get(result.itemPublicId);
-    const option: MovementOptionDTO = known ?? {
-      publicId: result.itemPublicId,
-      name: storedName(result, cleaned),
-      trackingType: result.trackingType,
+    const known = result.ok ? byId.get(result.itemPublicId) : undefined;
+    const made = (answer: Extract<typeof result, { ok: true }>): MovementOptionDTO => ({
+      publicId: answer.itemPublicId,
+      name: storedName(answer, cleaned),
+      trackingType: answer.trackingType,
       owner: 'household',
       unitDefault: null,
       isBodyweight: false,
-    };
+    });
+    if (!isCurrent(mine)) {
+      // Cancelled, closed or replaced by a newer form: leave the screen alone. The write may have
+      // landed all the same (invariant 11), so a new item is still listed.
+      if (result.ok && !known) onCreated(made(result));
+      return;
+    }
+    if (!result.ok) {
+      const refusal = newItemRefusal(result.reason);
+      setForm((now) => now && { ...now, pending: false, error: refusal.field, tried: true });
+      // A name refusal is the name's; a failure to reach the server is not, so it is not marked
+      // on the field.
+      if (refusal.footer) setNotice(refusal.footer);
+      nameRef.current?.focus();
+      return;
+    }
+    const option = known ?? made(result);
     if (!known) onCreated(option);
-    select(option);
-    setNotice(
-      result.existed
-        ? existedText(option.name, TRACKING_TYPE_LABELS[option.trackingType])
-        : createdText(option.name),
-    );
+    setNotice(said(select(option), option, result.existed));
     closeForm(option.publicId);
   }
 
@@ -267,10 +294,10 @@ export function ItemPicker({
             </h3>
             <div
               onKeyDown={(event) => {
-                // Enter in the name moves on to the type; it never creates.
+                // Enter in the name moves on (to the type, or to "Select …"); it never creates.
                 if (event.key === 'Enter' && (event.target as HTMLElement).tagName === 'INPUT') {
                   event.preventDefault();
-                  typeRef.current?.focus();
+                  (typeRef.current ?? createRef.current)?.focus();
                 }
               }}
             >
@@ -283,15 +310,20 @@ export function ItemPicker({
                 placeholder={COPY.namePlaceholder}
                 autoCapitalize="words"
                 enterKeyHint="next"
-                error={form.error ?? nameIssue}
+                error={form.error ?? (form.tried ? nameIssue : null)}
                 onChange={(name) => setForm({ ...form, name, error: null })}
               />
-              {/* Not a refusal: the name is fine, and Create becomes "Select …". */}
-              {existing ? (
-                <p className={`mt-1 text-sm ${NAME_WRAP_CLASS}`}>
-                  {alreadyListedText(existing.name, TRACKING_TYPE_LABELS[existing.trackingType])}
-                </p>
-              ) : null}
+              {/* Not a refusal: the name is fine, and Create becomes "Select …". A polite status,
+                  mounted empty, so a screen reader hears it when it appears. */}
+              <p
+                id={EXISTING_ID}
+                role="status"
+                className={existing ? `mt-1 text-sm ${NAME_WRAP_CLASS}` : 'h-0'}
+              >
+                {existing
+                  ? alreadyListedText(existing.name, TRACKING_TYPE_LABELS[existing.trackingType])
+                  : ''}
+              </p>
             </div>
             {existing ? null : (
               <div className="flex flex-col gap-1">
@@ -304,6 +336,7 @@ export function ItemPicker({
                     setForm({ ...form, type: event.target.value as TrackingType | '' })
                   }
                   aria-describedby={TYPE_HINT_ID}
+                  aria-invalid={(form.tried && !form.type) || undefined}
                   className={`${INPUT_CLASS} w-full`}
                 >
                   <option value="" disabled>
@@ -315,7 +348,14 @@ export function ItemPicker({
                     </option>
                   ))}
                 </select>
-                <p id={TYPE_HINT_ID} className="text-muted-foreground text-sm">
+                <p
+                  id={TYPE_HINT_ID}
+                  className={
+                    form.tried && !form.type
+                      ? 'text-destructive text-sm'
+                      : 'text-muted-foreground text-sm'
+                  }
+                >
                   {form.type ? TRACKING_TYPE_EXAMPLES[form.type] : COPY.chooseTypeFirst}
                 </p>
               </div>
@@ -330,13 +370,14 @@ export function ItemPicker({
         footer: (
           <div className="flex flex-col gap-2">
             <Button
+              ref={createRef}
               type="submit"
               form={FORM_ID}
               size="lg"
               className={`h-auto w-full text-base whitespace-normal ${NAME_WRAP_CLASS} ${PENDING_CLASS}`}
               aria-disabled={!canCreate || undefined}
               aria-describedby={
-                existing ? undefined : form.type ? WARNING_ID : `${TYPE_HINT_ID} ${WARNING_ID}`
+                existing ? EXISTING_ID : form.type ? WARNING_ID : `${TYPE_HINT_ID} ${WARNING_ID}`
               }
             >
               {form.pending
@@ -363,11 +404,8 @@ export function ItemPicker({
     <MovementPicker
       open={open}
       onOpenChange={(next) => {
-        // A closed sheet drops the form and its message; the ticks and items made stay.
-        if (!next) {
-          setForm(null);
-          setNoticeNow('');
-        }
+        // A create in flight no longer belongs to the screen (the form itself goes on `open`).
+        if (!next) cancel();
         onOpenChange(next);
       }}
       title={COPY.title}

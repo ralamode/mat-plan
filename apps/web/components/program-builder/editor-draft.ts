@@ -163,6 +163,9 @@ export function readDraft(
 export const fieldId = (card: string | null, field: EditorField) =>
   card ? `card-${card}-${field}` : `workout-${field}`;
 
+/** The id of a card's heading: the item picker focuses the first card it added. */
+export const cardHeadingId = (card: string) => `card-${card}-heading`;
+
 /** The id of a card's unit select. */
 export const unitFieldId = (card: string) => `${fieldId(card, 'value')}-unit`;
 

@@ -23,6 +23,9 @@ describe('WorkoutDraft: owed by its consumers', () => {
   it.todo('7a: saveWorkout and newItem pass the inherited action matrix');
   it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
   it.todo('7b: every path in routes.ts has its page.tsx under app/programs/');
+  it.todo(
+    'C8: newItem answers the stored name; storedName becomes result.name, and the fold-to-nothing check moves to newItemSchema',
+  );
 });
 
 describe('WeekDraft: owed by its consumers', () => {

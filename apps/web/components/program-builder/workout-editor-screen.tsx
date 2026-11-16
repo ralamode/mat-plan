@@ -52,6 +52,7 @@ import {
 import {
   fieldId,
   readDraft,
+  cardHeadingId,
   newCard,
   toCards,
   type EditorCard,
@@ -64,7 +65,7 @@ import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
 import { linkWithNext, normalizeSupersets, unlinkFromNext } from './supersets';
-import { focusField, useAttempt } from './use-attempt';
+import { DOUBLE_TAP_MS, focusField, useAttempt } from './use-attempt';
 
 /**
  * The workout editor: one screen of item cards and one Save (FAM-1 step 8; plan §8 "Workout
@@ -98,11 +99,6 @@ const HEADING_ID = 'workout-editor-heading';
 const ITEMS_HEADING_ID = 'workout-items';
 const SAVE_ALERT_ID = 'workout-save-alert';
 const DISCARD_QUESTION_ID = 'workout-discard-question';
-/**
- * How soon after a Remove or a link a second one is taken as the same tap: the next card's Remove
- * slides up under the thumb, and the link control flips to its opposite in place.
- */
-export const DOUBLE_TAP_MS = 500;
 
 /**
  * Everything typed, as one comparable value: the screen is "changed" when it differs. Group keys
@@ -365,7 +361,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
       setPicked([]);
     });
     pickerReturn.current = document.getElementById(
-      `card-${added[0]!.item.prescriptionClientId}-heading`,
+      cardHeadingId(added[0]!.item.prescriptionClientId),
     );
     setPickerOpen(false);
     quiet();

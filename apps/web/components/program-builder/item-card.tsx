@@ -32,6 +32,7 @@ import {
   type MoveDirection,
 } from './builder-text';
 import {
+  cardHeadingId,
   fieldId,
   unitFieldId,
   type EditorCard,
@@ -124,7 +125,7 @@ export function ItemCard({
   const { item } = card;
   const id = item.prescriptionClientId;
   const fields = TRACKING_TYPE_FIELDS[item.trackingType];
-  const headingId = `card-${id}-heading`;
+  const headingId = cardHeadingId(id);
   const errorOf = (field: EditorField) => errors.find((error) => error.field === field) ?? null;
   const errorId = (field: EditorField) => `${fieldId(id, field)}-error`;
   const quantity = quantityLabel(item.trackingType);
