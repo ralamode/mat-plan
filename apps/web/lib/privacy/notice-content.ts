@@ -1671,7 +1671,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", and it survives a reload or a day change because nothing about it is\nheld on your phone. Occasionally a restore will not be possible, because something has since been\nlogged in that day's place — when that happens the app will say so rather than fail quietly. There\nwill be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its\nfield. Two things are worth saying plainly about every clear:"
+        "text": " while that day is today or yesterday (after that, the day stays\nhidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been\nlogged in that day's place — when that happens the app will say so rather than fail quietly. There\nwill be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its\nfield. Two things are worth saying plainly about every clear:"
       }
     ]
   },

@@ -18,7 +18,7 @@ says the same thing; if these two ever disagree, the inventory is right. [ADR 00
 [the plan](../plans/v1-9b-delete-and-restore.md) holds the decisions and their alternatives.
 
 🔴 **Read this before touching anything that reads `entries`.** The invariants here live _between_
-files — one writer, one tombstone-returning reader (plus the clear's day-and-flag pre-read), and every other query in the repo obliged to
+files — one writer, one tombstone-returning reader (plus the clear's day-only pre-read), and every other query in the repo obliged to
 filter. None of them can be checked by looking at a single file.
 
 ## The file map
@@ -32,7 +32,7 @@ filter. None of them can be checked by looking at a single file.
 | `packages/db/src/writers/bodyweight.ts`                             | `bodyweightSlot` — the day-slot predicate, shared with `restoreHidden`'s holder lookup so the two cannot disagree about what "the slot" is.                                                                             |
 | `packages/db/scripts/verify.ts`                                     | § `V1-9b B1-1b`, the proofs, including the reader audit.                                                                                                                                                                |
 | _(B1-2)_ `app/p/[profileId]/entry-actions.ts`, `lib/dal/entries.ts` | The actions and the DAL wrapper. Not yet built.                                                                                                                                                                         |
-| _(B1-3)_ `app/p/[profileId]/hidden/`                                | The screen. Not yet built.                                                                                                                                                                                              |
+| _(B1-3)_ `app/p/[profileId]/hidden/`                                | The screen. Cut from Beta 0 (#412).                                                                                                                                                                                     |
 
 ## Invariants that live between files
 
@@ -40,11 +40,11 @@ filter. None of them can be checked by looking at a single file.
 a finite claim — but the unqualified version ("the only writer") is **false**, and a privacy lens
 caught it. There are three:
 
-| Writer                                                | Reachable by                                                                                           | Production       |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------- |
-| `writers/hide.ts`                                     | the app: a blank Save clears a weigh-in from V1-24 3b-bw (`writers/single-value.ts`); B1-2 adds Delete | from 3b-bw       |
-| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run                                                                            | **has been run** |
-| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB                                                                              | no               |
+| Writer                                                | Reachable by                                                                                                                                                    | Production       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `writers/hide.ts`                                     | the app: a blank Save clears a weigh-in from V1-24 3b-bw (`writers/single-value.ts`); the next caller is B2's Clear this day, and Beta 0 has no per-item Delete | from 3b-bw       |
+| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run                                                                                                                                     | **has been run** |
+| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB                                                                                                                                       | no               |
 
 🔴 **The consequence `B1-3` has to decide, so it is written down here rather than discovered:**
 `hiddenEntriesForDay` does **not** distinguish a row the person hid from a row the _correction_ hid.

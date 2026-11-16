@@ -189,8 +189,8 @@ something you might regret.
 
 **What is being built, so you know what to expect.** A **Clear this day** control, which hides
 everything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be **put back**:
-a banner offers **Restore all**, and it survives a reload or a day change because nothing about it is
-held on your phone. Occasionally a restore will not be possible, because something has since been
+a banner offers **Restore all** while that day is today or yesterday (after that, the day stays
+hidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been
 logged in that day's place — when that happens the app will say so rather than fail quietly. There
 will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
 field. Two things are worth saying plainly about every clear:

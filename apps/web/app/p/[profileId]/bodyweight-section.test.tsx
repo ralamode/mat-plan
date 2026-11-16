@@ -327,6 +327,20 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(field().getAttribute('aria-describedby')?.split(' ')).toContain(statusId);
   });
 
+  it('a spoken-only status never describes the field: not on load, not after a log cleared elsewhere', async () => {
+    const { rerender } = render(section());
+    const statusId = screen.getByRole('status').id;
+    expect(field().getAttribute('aria-describedby')?.split(' ') ?? []).not.toContain(statusId);
+    fireEvent.change(field(), { target: { value: '84.5' } });
+    await act(async () => {
+      fireEvent.click(logButton());
+    });
+    rerender(section({ logged: [weight(84.5)] }));
+    rerender(section({ logged: [] })); // another phone cleared it
+    expect(statusText()).toBe(BODYWEIGHT_COPY.announcedLogged);
+    expect(field().getAttribute('aria-describedby')?.split(' ') ?? []).not.toContain(statusId);
+  });
+
   it('a day change drops an open editor and its typed value', () => {
     const { rerender } = render(section({ logged: [W] }));
     open();
