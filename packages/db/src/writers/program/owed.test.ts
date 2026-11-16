@@ -33,8 +33,6 @@ describe('ProgramList and ProgramView: owed by their consumers', () => {
   it.todo('6c: the program-list query deep-equals programs-list');
   it.todo('6c: the program-view query deep-equals family-program');
   it.todo('6c: the seeded fixture programs equal the contract fixtures');
-  it.todo('6a: a replayed createProgram (same clientId) adds nothing; a taken name is name_taken');
-  it.todo('6a: renameProgram refuses an empty name and a name another program holds');
 });
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
