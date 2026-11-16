@@ -105,11 +105,14 @@ Neon-branch apply** yet (tech-debt.md), so don't cite one.
 ⚠️ **Generate on top of the newest migration on main, never before it.** drizzle's migrator applies a
 migration only when its journal `when` is later than the newest one already applied, so a migration
 generated before another one that merged first is **skipped on prod without an error**. If another
-migration lands while yours is open, merge main in, take main's `meta/` as it is (`git checkout
-origin/main -- packages/db/migrations/meta`: a snapshot with your number is **main's**, so never
-delete it), delete only your own `.sql`, run `db:generate --name <id>_<slug>` again, and re-apply
-the hand-hardening (§2). A hand-written migration with no schema change regenerates with
-`pnpm --filter @mat-plan/db db:generate --custom --name <id>_<slug>`, with its SQL pasted back. The guard fails a journal out of time order.
+migration lands while yours is open: copy your SQL and its hand-hardening out first; `git fetch
+origin` and merge `origin/main` in; make `meta/` **exactly** main's with `git checkout --no-overlay
+origin/main -- packages/db/migrations/meta` (a same-numbered snapshot is **main's** and stays; a
+renumbered snapshot of yours goes, or drizzle-kit diffs against it and emits main's DDL as yours),
+and check `git diff --stat origin/main -- packages/db/migrations/meta` prints nothing; delete only
+your own `.sql`; run `db:generate --name <id>_<slug>` (a hand-written migration adds `--custom` and
+gets its SQL pasted back). The new `.sql` must contain only your change; re-apply the hand-hardening
+(§2). The guard fails a journal out of time order.
 
 ## 6. Ship and deploy order
 
