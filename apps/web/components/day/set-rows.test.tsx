@@ -308,6 +308,39 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
     ).toBeTruthy();
   });
 
+  it('a set the program cut, never logged, goes on a re-read; a logged one stays', async () => {
+    const control = mount(todayTwoPrograms);
+    const el = () => card('Morning habits', 'Push-ups');
+    await press(setTick(el(), 'Push-ups', 1));
+    const cut = structuredClone(control.plan);
+    const pushUps = item(cut, 'Morning habits', 'Push-ups');
+    pushUps.rows = pushUps.rows.filter((r) => r.set === 1);
+    await act(async () => control.setPlan(cut));
+    expect(bodyRows(el())).toHaveLength(1);
+  });
+
+  it('the ✓ takes focus when tapped, though a phone does not focus a tapped button', async () => {
+    mount(todayTwoPrograms);
+    const el = card('Morning habits', 'Push-ups');
+    const reps = setField(el, 'Push-ups', 1, SPOKEN.reps);
+    reps.focus();
+    await act(async () => {
+      fireEvent.click(setTick(el, 'Push-ups', 1));
+    });
+    expect(document.activeElement).toBe(setTick(card('Morning habits', 'Push-ups'), 'Push-ups', 1));
+  });
+
+  it('a row added here does not linger on a day that turns read-only', async () => {
+    mount(todayTwoPrograms, {
+      wrap: () => ({ logRow: async () => ({ ok: false, reason: ROW_REFUSAL.closed_day }) }),
+    });
+    const el = () => card('Morning habits', 'Push-ups');
+    const sets = bodyRows(el()).length;
+    await press(within(el()).getByRole('button', { name: DAY_COPY.addSetTo('Push-ups') }));
+    await press(setTick(el(), 'Push-ups', 1));
+    expect(bodyRows(el())).toHaveLength(sets);
+  });
+
   it('no "+ Add set" at the set limit', () => {
     const full = structuredClone(todayTwoPrograms);
     const pushUps = full.workouts[0]!.items.find((i) => i.name === 'Push-ups')!;
@@ -387,6 +420,22 @@ describe('supersets', () => {
   });
 });
 
+describe('a superset after an item is added above it', () => {
+  it('keeps what was typed in it: the group is not remounted', async () => {
+    const control = mount(todayTwoPrograms);
+    const el = () => card('Heavy B', 'Push press');
+    fireEvent.change(setField(el(), 'Push press', 1, SPOKEN.lb), { target: { value: '33' } });
+    const next = structuredClone(control.plan);
+    const heavyB = next.workouts.find((w) => w.name === 'Heavy B')!;
+    const extra = structuredClone(heavyB.items.find((i) => i.name === 'Split squat')!);
+    extra.prescriptionPublicId = '00000000-0000-7000-8000-0000000000f1';
+    extra.name = 'Warm-up squat';
+    heavyB.items.unshift(extra);
+    await act(async () => control.setPlan(next));
+    expect(setField(el(), 'Push press', 1, SPOKEN.lb).value).toBe('33');
+  });
+});
+
 describe('a superset with one item shown', () => {
   it('keeps its container, label and rest, as v12 does', () => {
     const one = structuredClone(todayTwoPrograms);
@@ -444,6 +493,53 @@ describe('after the program was edited (D7)', () => {
     await press(setTick(el(), 'Pull-up', 1));
     expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
     expect(control.actions.logRow).not.toHaveBeenCalled();
+  });
+
+  it('🔴 an un-ticked load logged in another unit never goes back out in the item’s unit', async () => {
+    const changed = structuredClone(yesterdayHalfDone);
+    const bench = changed.workouts
+      .find((w) => w.name === 'Heavy A')!
+      .items.find((i) => i.name === 'DB bench press')!;
+    bench.unit = 'kg';
+    bench.target = { ...bench.target, quantities: [{ ...lb(30), unit: 'kg' }] };
+    const control = mount(changed);
+    const el = () => card('Heavy A', 'DB bench press');
+    await press(setTick(el(), 'DB bench press', 1));
+    // The field is in kg: the lb number is not put in it.
+    expect(setField(el(), 'DB bench press', 1, unitSpoken('kg')).value).toBe('');
+    fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
+    await press(setTick(el(), 'DB bench press', 1));
+    const sent = control.actions.logRow.mock.calls[0]![0].values;
+    expect(sent.quantities).toEqual([]);
+    expect(sent.reps).toBe(7);
+  });
+
+  it('🔴 an un-ticked number is cleared if the item’s unit changes after, and still re-ticks', async () => {
+    const control = mount(yesterdayHalfDone);
+    const el = () => card('Heavy A', 'DB bench press');
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(setField(el(), 'DB bench press', 1, SPOKEN.lb).value).not.toBe('');
+    const next = structuredClone(control.plan);
+    item(next, 'Heavy A', 'DB bench press').unit = 'kg';
+    await act(async () => control.setPlan(next));
+    expect(setField(el(), 'DB bench press', 1, unitSpoken('kg')).value).toBe('');
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+  });
+
+  it('a removed item whose every set is un-ticked keeps its card when the page drops it', async () => {
+    const control = mount(plan);
+    const el = () => card('Heavy A', 'Pull-up');
+    const sets = item(plan, 'Heavy A', 'Pull-up').rows.map((r) => r.set);
+    for (const set of sets) await press(setTick(el(), 'Pull-up', set));
+    const next = structuredClone(control.plan);
+    const heavyA = next.workouts.find((w) => w.name === 'Heavy A')!;
+    heavyA.items = heavyA.items.filter((i) => i.name !== 'Pull-up');
+    await act(async () => control.setPlan(next));
+    expect(setTick(el(), 'Pull-up', sets[0]!).getAttribute('aria-pressed')).toBe('false');
+    await press(setTick(el(), 'Pull-up', sets[0]!));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
   });
 
   it('a load logged in another unit than the item’s now keeps its unit (D7)', () => {

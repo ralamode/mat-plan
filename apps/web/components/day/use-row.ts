@@ -10,6 +10,7 @@ import {
   type RowRefusal,
   type RowResult,
   type RowValues,
+  type Unit,
 } from '@mat-plan/shared';
 import { useEffect, useState } from 'react';
 
@@ -124,6 +125,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   const rowKey = rowKeyOf(workoutKey, item, row);
 
   const [text, setTextState] = useState<RowText>(EMPTY_TEXT);
+  /**
+   * The unit an un-tick filled the quantity field in. 🔴 If the item's unit changes after that, the
+   * number is cleared: the field is in the item's unit, and `27.5` filled from lb must never go out
+   * as 27.5 kg (a load in the wrong unit is an injury risk).
+   */
+  const [filledUnit, setFilledUnit] = useState<Unit | null>(null);
+  if (filledUnit !== null && filledUnit !== item.unit) {
+    setFilledUnit(null);
+    setTextState((was) => ({ ...was, quantity: '' }));
+  }
   const [error, setError] = useState<RowError | null>(null);
   const [pending, setPending] = useState<
     { write: 'tick'; shown: RowValues } | { write: 'untick' } | null
@@ -179,6 +190,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   /** Typing over a refused number clears the refusal: the field is being fixed. */
   function setText(field: RowField, next: string) {
     setTextState((was) => ({ ...was, [field]: next }));
+    // A number typed now is in the item's unit as it is now.
+    if (field === 'quantity') setFilledUnit(null);
     if (error?.invalid) setError(null);
   }
 
@@ -275,7 +288,9 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     );
     setPending(null);
     if (result.ok) {
-      setTextState(textOf(item, result.values));
+      const kept = textOf(item, result.values);
+      setTextState(kept);
+      setFilledUnit(kept.quantity === '' ? null : item.unit);
       setAttempt(null);
       succeed(
         {

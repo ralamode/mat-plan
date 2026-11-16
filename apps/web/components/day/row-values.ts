@@ -135,11 +135,18 @@ export function sameValues(a: RowValues, b: RowValues): boolean {
   );
 }
 
-/** The fields' text for a row's values: what an un-ticked row keeps in its fields. */
+/**
+ * The fields' text for a row's values: what an un-ticked row keeps in its fields.
+ *
+ * 🔴 **A quantity logged in another unit than the item's is left out**, never put in the field: the
+ * field is in the item's unit, so `27.5` logged in lb would be sent as 27.5 kg on the next ✓ (a load
+ * in the wrong unit is an injury risk). An untouched field still re-ticks, which restores the entry
+ * as it was logged.
+ */
 export function textOf(item: DayItem, values: RowValues): RowText {
   const quantity = slotQuantity(item, values.quantities);
   return {
-    quantity: quantity ? String(quantity.value) : '',
+    quantity: quantity && quantity.unit === item.unit ? String(quantity.value) : '',
     reps: values.reps === undefined ? '' : String(values.reps),
   };
 }

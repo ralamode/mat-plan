@@ -79,15 +79,15 @@ export function SetItem({
       }),
     [],
   );
-  // Every set number shown this visit: the page's rows, and any added or un-ticked since.
-  const [shown, setShown] = useState<ReadonlySet<number>>(
-    () => new Set(item.rows.map((r) => r.set)),
-  );
-  if (item.rows.some((r) => !shown.has(r.set))) {
-    setShown(new Set([...shown, ...item.rows.map((r) => r.set)]));
-  }
+  // The sets this visit keeps beyond the page's data: every set the page has shown logged (so an
+  // un-ticked one keeps its row when the data drops it), and every set added here. A set the page
+  // listed but never logged is not kept: if the program cuts it, it goes.
+  const loggedSets = item.rows.filter((r) => r.logged).map((r) => r.set);
+  const [kept, setKept] = useState<ReadonlySet<number>>(() => new Set(loggedSets));
+  if (loggedSets.some((set) => !kept.has(set))) setKept(new Set([...kept, ...loggedSets]));
   const fromPage = new Map(item.rows.map((r) => [r.set, r]));
-  const rows: DayRow[] = [...new Set([...shown, ...fromPage.keys()])]
+  // A day that cannot be written shows the page's rows only: nothing kept here can be ticked there.
+  const rows: DayRow[] = [...new Set([...(writable ? kept : []), ...fromPage.keys()])]
     .sort((a, b) => a - b)
     .map((set) => fromPage.get(set) ?? { set, previous: null, logged: null });
   // A row beyond the page's data that is not logged: an added set not ticked yet, or an extra
@@ -170,7 +170,7 @@ export function SetItem({
           aria-label={DAY_COPY.addSetTo(item.name)}
           onClick={() => {
             focusAdded.current = true;
-            setShown(new Set([...shown, nextSet]));
+            setKept(new Set([...kept, nextSet]));
             day.announce(DAY_COPY.setAdded(item.name));
           }}
         >

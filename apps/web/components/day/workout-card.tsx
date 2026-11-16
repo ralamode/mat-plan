@@ -1,13 +1,14 @@
 'use client';
 
 import { supersetLabels, type DayItem, type DayWorkout } from '@mat-plan/shared';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
 import { ItemCard } from './item-card';
+import { useDay } from './day-context';
 import { itemKeyOf } from './use-row';
 
 /**
@@ -47,7 +48,8 @@ export const WorkoutCard = memo(function WorkoutCard({
       : done >= total
         ? DAY_COPY.doneMark
         : DAY_COPY.progress(done, total);
-  const labels = supersetLabels(workout.items);
+  const items = useItemsShownThisVisit(workout);
+  const labels = supersetLabels(items);
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t pt-4">
       {workout.label || programName ? (
@@ -78,7 +80,7 @@ export const WorkoutCard = memo(function WorkoutCard({
         </p>
       ) : null}
       <ul className="flex flex-col gap-3">
-        {groupsOf(workout.items).map((group) => {
+        {groupsOf(items).map((group) => {
           const cards = group.map(({ item, index }) => (
             <ItemCard
               key={itemKeyOf(item)}
@@ -95,9 +97,10 @@ export const WorkoutCard = memo(function WorkoutCard({
           const letter = supersetLetterOf(labels[group[0]!.index] ?? '');
           const rest = workout.restAfter[superset.group];
           return (
-            // Keyed by its place too: a group whose items are not neighbours shows as two runs.
+            // Keyed by its first item: a group whose items are not neighbours shows as two runs, and
+            // an item added above it must not remount it (typed text and un-tick tokens live inside).
             <li
-              key={`superset:${superset.group}:${group[0]!.index}`}
+              key={`superset:${itemKeyOf(group[0]!.item)}`}
               className="border-primary border-l-2 pl-3"
             >
               <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
@@ -134,4 +137,24 @@ function groupsOf(items: readonly DayItem[]): Array<Array<{ item: DayItem; index
 /** A superset label's letter: `A` of `A1`, `AB` of `AB2` (the contract's labels, `supersetLabels`). */
 export function supersetLetterOf(label: string): string {
   return label.replace(/\d+$/, '');
+}
+
+/**
+ * The workout's items, plus any **removed item** shown earlier this visit that the page's data has
+ * since dropped (D20, D7). A removed item is listed only through its logged rows, so un-ticking all
+ * of them drops it from the data; kept here, its rows stay, un-ticked, and can be ticked back. Only
+ * on a day that can be written: a read-only day shows the page's data as it is.
+ */
+function useItemsShownThisVisit(workout: DayWorkout): DayItem[] {
+  const { readOnly } = useDay();
+  const removedNow = workout.items.filter((i) => i.prescriptionPublicId === null);
+  const [removed, setRemoved] = useState<ReadonlyMap<string, DayItem>>(
+    () => new Map(removedNow.map((i) => [itemKeyOf(i), i])),
+  );
+  if (removedNow.some((i) => removed.get(itemKeyOf(i)) !== i)) {
+    setRemoved(new Map([...removed, ...removedNow.map((i) => [itemKeyOf(i), i] as const)]));
+  }
+  if (readOnly || !workout.scheduled) return workout.items;
+  const listed = new Set(workout.items.map(itemKeyOf));
+  return [...workout.items, ...[...removed.values()].filter((i) => !listed.has(itemKeyOf(i)))];
 }
