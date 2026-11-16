@@ -24,13 +24,18 @@
 -- transaction), with no scan. Ordered by hand, cold tables first: program_blocks, ramp_targets, then
 -- the logging tables entries before entry_set_quantities (the strength writer's order), so the hot
 -- tables are held for the shortest time and weeklyAdherenceRows (ramp_targets then entries) cannot
--- deadlock against it. No up-front LOCK TABLE, which would hold the hot tables longer. ⚠️ drizzle-kit
+-- deadlock against it. No up-front LOCK TABLE, which would hold the hot tables longer. One known
+-- reverse-order case: the set amend (updateStrengthSetById) reads entry_set_quantities before entries in
+-- one UPDATE, so it can deadlock with this file; Postgres then aborts one side (the user's edit errors,
+-- or this migration rolls back and stays pending: re-dispatch migrate.yml). lock_timeout is 2s, not 5s:
+-- since 0028 every app query has a 15s statement_timeout that includes lock waits, and a read queued
+-- behind program_blocks (every day page) must not reach it; four waits of 2s cap the hold near 8s. ⚠️ drizzle-kit
 -- emits these alphabetically, so a regenerate loses this order: restore it by hand. PGlite does not
 -- model locks; only review enforces this. Merge outside logging hours.
 --
 -- DEPLOY WINDOW: none. No column changes, so Drizzle's inserts are unaffected. Recovery if this
 -- fails: re-dispatch migrate.yml (docs/runbooks.md); nothing is scanned, so data cannot fail it.
-SET lock_timeout = '5s';--> statement-breakpoint
+SET lock_timeout = '2s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
 ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_name_length_check" CHECK (char_length(btrim("program_blocks"."name")) >= 1 and char_length("program_blocks"."name") <= 60) NOT VALID;--> statement-breakpoint
 ALTER TABLE "ramp_targets" ADD CONSTRAINT "ramp_targets_target_value_not_nan_check" CHECK ("ramp_targets"."target_value" <> 'NaN') NOT VALID;--> statement-breakpoint

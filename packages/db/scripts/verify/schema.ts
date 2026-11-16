@@ -3211,8 +3211,9 @@ const TECH_DEBT_CHECKS = [
 
 async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
   // ── (a) each exists, NOT VALID until the validating migration, and the name bound is its const ─────
-  // ⚠️ Read straight off the migrations: no fixture in db:verify drops and re-adds any of these four (the
-  // TEN-2c lesson, verify.ts: a re-added constraint would make this read measure itself).
+  // ⚠️ Read straight off the migrations, BEFORE (c) below drops and re-adds the name CHECK inside a
+  // rolled-back transaction (the TEN-2c lesson, verify.ts: a re-added constraint would make this read
+  // measure itself). (c) re-reads it afterwards, so a (c) that commits fails here.
   const rows = rowsOf<{ conname: string; convalidated: boolean }>(
     await db.execute(sql`
       SELECT conname, convalidated FROM pg_constraint
@@ -3317,6 +3318,10 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
   });
 
   // ── (c) why the production read gates the merge: NOT VALID still refuses an UPDATE of a bad row ───
+  // A demonstration of Postgres's NOT VALID behaviour on THIS constraint: it drops the migrated CHECK,
+  // plants a violator, re-adds the CHECK NOT VALID, and shows the violator's soft delete is refused. The
+  // re-added definition is asserted equal to the migrated one, so the copy below cannot drift from 0029.
+  const migratedDef = await constraintDef('program_blocks_name_length_check');
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
     const householdId = await householdOfBlock(
@@ -3335,9 +3340,17 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
         name: 'x'.repeat(PROGRAM_NAME_MAX + 1),
       })
       .returning({ id: schema.programBlocks.id });
-    // Re-added exactly as 0029 writes it (NOT VALID: the planted row is not scanned).
     await tx.execute(sql`ALTER TABLE program_blocks ADD CONSTRAINT program_blocks_name_length_check
-      CHECK (char_length(btrim(name)) >= 1 and char_length(name) <= 60) NOT VALID`);
+      CHECK (char_length(btrim(name)) >= 1 and char_length(name) <= 60) NOT VALID`); // DDL takes no parameter; the equality below ties this 60 to 0029's
+    const [{ def: readded }] = rowsOf<{ def: string }>(
+      await tx.execute(sql`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+        WHERE conname = 'program_blocks_name_length_check'`),
+    );
+    assert.equal(
+      readded,
+      migratedDef,
+      'lane A tech-debt: the re-added CHECK is exactly the migrated one',
+    );
     await expectRejectedBy(
       'program_blocks_name_length_check',
       () =>
@@ -3348,6 +3361,12 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
       tx,
     );
   });
+  // (c) rolled back: the migrated constraint is still the NOT VALID one 0029 added.
+  const [{ convalidated }] = rowsOf<{ convalidated: boolean }>(
+    await db.execute(sql`SELECT convalidated FROM pg_constraint
+      WHERE conname = 'program_blocks_name_length_check'`),
+  );
+  assert.equal(convalidated, false, 'lane A tech-debt: (c) left the migrated name CHECK as it was');
   console.log(
     '✓ lane A tech-debt: a long or blank block name, a negative or NaN reading, a NaN quantity and a NaN ramp target are each refused by name; the bounds are accepted; and NOT VALID still refuses a soft delete of an existing bad row, which is why the production read gates the merge',
   );

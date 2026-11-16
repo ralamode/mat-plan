@@ -213,7 +213,7 @@ export const programBlockSeedRowSchema = z.object({
   slug: z.string(),
   // The database bounds every block's name (`program_blocks_name_length_check`); a seed name past it
   // would fail the fixture seed with 23514 instead of here.
-  name: z.string().min(1).max(PROGRAM_NAME_MAX),
+  name: z.string().trim().min(1).max(PROGRAM_NAME_MAX),
   notes: z.string().nullable(),
   prescriptions: z.array(prescriptionSeedRowSchema),
 });

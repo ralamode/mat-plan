@@ -5,6 +5,7 @@ import {
   dayRoleSchema,
   MOVEMENT_SEED_ROWS,
   movementSlug,
+  PROGRAM_NAME_MAX,
   PROGRAM_SEED,
   prescriptionSeedRowSchema,
   programBlockSeedRowSchema,
@@ -94,6 +95,22 @@ describe('seed-row schemas', () => {
       prescriptions: [goodPrescription],
     };
     expect(programBlockSeedRowSchema.safeParse(block).success).toBe(true);
+  });
+
+  it("bounds a seed block's name as program_blocks_name_length_check does: blank and over-long refused", () => {
+    const block = {
+      householdPublicId: 'hh1',
+      slug: 'strength_a',
+      name: 'x'.repeat(PROGRAM_NAME_MAX),
+      notes: null,
+      prescriptions: [goodPrescription],
+    };
+    expect(programBlockSeedRowSchema.safeParse(block).success).toBe(true);
+    expect(
+      programBlockSeedRowSchema.safeParse({ ...block, name: 'x'.repeat(PROGRAM_NAME_MAX + 1) })
+        .success,
+    ).toBe(false);
+    expect(programBlockSeedRowSchema.safeParse({ ...block, name: '   ' }).success).toBe(false);
   });
 
   it('rejects a negative idx, a non-positive set count, and a bad day role', () => {

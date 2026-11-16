@@ -1,8 +1,8 @@
 diff --git a/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql b/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
 --- a/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
 +++ b/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
-@@ -33,6 +33,6 @@
- SET lock_timeout = '5s';--> statement-breakpoint
+@@ -38,6 +38,6 @@
+ SET lock_timeout = '2s';--> statement-breakpoint
  SET statement_timeout = '60s';--> statement-breakpoint
  ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_name_length_check" CHECK (char_length(btrim("program_blocks"."name")) >= 1 and char_length("program_blocks"."name") <= 60) NOT VALID;--> statement-breakpoint
 -ALTER TABLE "ramp_targets" ADD CONSTRAINT "ramp_targets_target_value_not_nan_check" CHECK ("ramp_targets"."target_value" <> 'NaN') NOT VALID;--> statement-breakpoint

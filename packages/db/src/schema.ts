@@ -476,7 +476,7 @@ export const entries = pgTable(
       .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'practice_minutes'`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
-    // Lane A tech-debt (0029, NOT VALID; validated by 0030). Non-negative is a fact of today's catalog:
+    // Lane A tech-debt (0029, NOT VALID; validated by the next migration). Non-negative is a fact of today's catalog:
     // a signed metric (a delta) must relax this CHECK first. `'NaN' >= 0` is TRUE in Postgres, so NaN
     // is refused by name.
     check(
@@ -620,7 +620,7 @@ export const entrySetQuantities = pgTable(
     uniqueIndex('uq_entry_set_quantities_client_id').on(t.clientId),
     // `weight_num` never had this (enforced only in parseLoad); the typed column gets it in the DB.
     check('entry_set_quantities_value_num_check', sql`${t.valueNum} >= 0`),
-    // `'NaN' >= 0` is TRUE in Postgres, so the check above admits NaN (0029, NOT VALID; validated by 0030).
+    // `'NaN' >= 0` is TRUE in Postgres, so the check above admits NaN (0029, NOT VALID; validated by the next migration).
     check('entry_set_quantities_value_num_not_nan_check', sql`${t.valueNum} <> 'NaN'`),
   ],
 );
@@ -1066,7 +1066,7 @@ export const rampTargets = pgTable(
       .on(t.profileId, t.metricKey, t.weekStart)
       .where(sql`${t.deletedAt} is null`),
     check('ramp_targets_target_value_check', sql`${t.targetValue} >= 0`),
-    // As `entry_set_quantities_value_num_not_nan_check` (0029, NOT VALID; validated by 0030).
+    // As `entry_set_quantities_value_num_not_nan_check` (0029, NOT VALID; validated by the next migration).
     check('ramp_targets_target_value_not_nan_check', sql`${t.targetValue} <> 'NaN'`),
   ],
 );
@@ -1105,7 +1105,7 @@ export const programBlocks = pgTable(
       .where(sql`${t.deletedAt} is null`),
     check('program_blocks_kind_check', sql`${t.kind} in ('legacy', 'template')`),
     // PROGRAM_NAME_MAX, exactly `workouts_name_length_check`'s form, on every row (0029, NOT VALID;
-    // validated by 0030 after a production read of the longest name). Pinned by db:verify.
+    // validated by the next migration, after a read-only production check of all four CHECKs). Pinned by db:verify.
     check(
       'program_blocks_name_length_check',
       sql`char_length(btrim(${t.name})) >= 1 and char_length(${t.name}) <= 60`,

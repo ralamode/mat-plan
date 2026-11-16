@@ -1,9 +1,9 @@
 diff --git a/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql b/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
 --- a/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
 +++ b/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
-@@ -32,7 +32,7 @@
+@@ -37,7 +37,7 @@
  -- fails: re-dispatch migrate.yml (docs/runbooks.md); nothing is scanned, so data cannot fail it.
- SET lock_timeout = '5s';--> statement-breakpoint
+ SET lock_timeout = '2s';--> statement-breakpoint
  SET statement_timeout = '60s';--> statement-breakpoint
 -ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_name_length_check" CHECK (char_length(btrim("program_blocks"."name")) >= 1 and char_length("program_blocks"."name") <= 60) NOT VALID;--> statement-breakpoint
 +ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_name_length_check" CHECK (char_length(btrim("program_blocks"."name")) >= 1 and char_length("program_blocks"."name") <= 61) NOT VALID;--> statement-breakpoint
