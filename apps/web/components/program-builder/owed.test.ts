@@ -34,22 +34,22 @@ describe('ProgramList and ProgramView: owed by their consumers', () => {
 });
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
-  it.todo('10b: Start is disabled until someone is picked');
   it.todo('15: a parent puts a test athlete on a program and they log it (e2e)');
 });
 
 describe('CopyDraft: owed by its consumers', () => {
-  it.todo('10b: a copy’s name stays within WORKOUT_NAME_MAX');
   it.todo('7a: copyWorkout passes the inherited action matrix');
 });
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo('7a: no formData or headers reach a captured event');
-  it.todo('10b: a screen hides the control of a member that is undefined');
   it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');
   it.todo(
     '7b: the e2e hears "n items added." only after the item picker has closed (jsdom closes the sheet before a frame, so no unit test can)',
+  );
+  it.todo(
+    '7b: the e2e opens the Copy and Put-on dialogs at 360px and runs axe, tap targets and overflow',
   );
 });
