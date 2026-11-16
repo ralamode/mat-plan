@@ -248,7 +248,8 @@ function supersetChangeText({ ended, left, droppedRests }: SupersetChange): stri
   const parts: string[] = [];
   if (ended) {
     parts.push(plural(ended, { one: 'A superset ended.', other: `${ended} supersets ended.` }));
-  } else if (left.length) {
+  }
+  if (left.length) {
     parts.push(`${formatList(left)} left ${left.length === 1 ? 'its' : 'their'} superset.`);
   }
   if (droppedRests) {

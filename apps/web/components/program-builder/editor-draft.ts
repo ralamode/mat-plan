@@ -42,8 +42,8 @@ export type EditorError = { card: string | null; field: EditorField; message: st
 /**
  * A plain decimal with at most `QUANTITY_DECIMALS` places: `5`, `5.5`, `.5`; not `-5`, `1e3` or
  * `5 lb`. ⚠️ The same rule as the day page's `PLAIN_DECIMAL` (`components/day/row-values.ts`),
- * which is lane C's and not exported; both belong in `@mat-plan/shared` (raised with the contract
- * owner, 2026-11-16).
+ * which is lane C's. The contract now exports one (`@mat-plan/shared`, #436); step 8b swaps this
+ * copy for it.
  */
 const PLAIN_DECIMAL = new RegExp(
   `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,

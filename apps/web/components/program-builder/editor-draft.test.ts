@@ -74,6 +74,13 @@ describe('the editor’s draft', () => {
     };
     const draft = saved(readDraft(bare, { name: 'Bare', description: '', cards: toCards(bare) }));
     expect(draft.items.map((item) => item.quantities)).toEqual(bare.items.map(() => []));
+    // A unit chosen with no number keeps the unit, as "log in this unit, no target".
+    const bareCount = toCards(bare).find((card) => card.item.trackingType === 'count')!;
+    expect(
+      saved(
+        readDraft(bare, { name: 'Bare', description: '', cards: [{ ...bareCount, unit: 'lb' }] }),
+      ).items[0]!.quantities,
+    ).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: null }]);
     // A number typed with no unit chosen asks for the unit.
     const count = toCards(bare).find((card) => card.item.trackingType === 'count')!;
     expect(

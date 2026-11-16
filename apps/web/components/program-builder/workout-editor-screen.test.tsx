@@ -161,7 +161,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     await waitFor(() => expect(alerts()).toContain(EDITOR_ERRORS.name));
   });
 
-  it('a blank Sets is refused on its card, which takes focus; the bar counts what to fix', async () => {
+  it('a blank Sets is refused on its card, which takes focus; the bar says to fix it', async () => {
     const all = editor();
     const sets = within(cards()[0]!).getByLabelText(EDITOR_COPY.sets);
     fireEvent.change(sets, { target: { value: '' } });
@@ -403,13 +403,20 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     );
   });
 
-  it('removing a card takes its refusals with it, and the bar’s alert goes', async () => {
+  it('a removed card’s refusals go with it: fixing the other field clears the bar', async () => {
     editor();
-    const sets = within(cards()[4]!).getByLabelText(EDITOR_COPY.sets);
-    fireEvent.change(sets, { target: { value: '' } });
+    fireEvent.change(within(cards()[0]!).getByLabelText(EDITOR_COPY.sets), {
+      target: { value: '' },
+    });
+    fireEvent.change(within(cards()[4]!).getByLabelText(EDITOR_COPY.sets), {
+      target: { value: '' },
+    });
     save();
-    await waitFor(() => expect(alerts()).toEqual([fieldsToFixText(1)]));
+    await waitFor(() => expect(alerts()).toEqual([fieldsToFixText(2)]));
     fireEvent.click(screen.getByRole('button', { name: removeLabel('Hollow-body hold') }));
+    fireEvent.change(within(cards()[0]!).getByLabelText(EDITOR_COPY.sets), {
+      target: { value: '4' },
+    });
     await frames();
     expect(alerts()).toEqual([]);
   });
@@ -463,5 +470,42 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       [{ group: 'a', order: 1 }, null],
       [{ group: 'a', order: 2 }, '90 s after each round'],
     ]);
+  });
+
+  it('an item pushed out of a group of three is said to have left it', async () => {
+    const [bench, pullUp, goblet, , hollow] = heavyADraft.items;
+    const three = {
+      ...heavyADraft,
+      items: [
+        { ...bench!, superset: { group: 'a', order: 1 }, restAfter: null },
+        { ...pullUp!, superset: { group: 'a', order: 2 }, restAfter: null },
+        { ...goblet!, superset: { group: 'a', order: 3 }, restAfter: '90 s after each round' },
+        hollow!,
+      ],
+    };
+    editor({}, three);
+    fireEvent.click(screen.getByRole('button', { name: moveLabel('down', 'Goblet squat') }));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'Goblet squat moved down. Goblet squat left its superset.',
+      ),
+    );
+  });
+
+  it('a held Enter on Remove is held back; other held keys pass', () => {
+    editor();
+    const remove = screen.getByRole('button', { name: removeLabel('Pull-up') });
+    expect(fireEvent.keyDown(remove, { key: 'Enter', repeat: true })).toBe(false);
+    expect(fireEvent.keyDown(remove, { key: 'Tab', repeat: true })).toBe(true);
+  });
+
+  it('a draft the contract refuses is not sent, and the bar says so with no field blamed', async () => {
+    const all = editor();
+    fireEvent.change(screen.getByLabelText(EDITOR_COPY.workoutName), {
+      target: { value: 'Heavy\u0000A' },
+    });
+    save();
+    await waitFor(() => expect(alerts()).toEqual([saveRefusal(PROGRAM_REFUSAL.invalid)]));
+    expect(all.saveWorkout).not.toHaveBeenCalled();
   });
 });

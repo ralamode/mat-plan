@@ -143,8 +143,8 @@ flowchart LR
 ## Traps
 
 - **The editor's decimal rule is restated.** `editor-draft.ts`'s `PLAIN_DECIMAL` is the day page's
-  (`components/day/row-values.ts`, lane C's, not exported). Change both, until the contract owner
-  moves the one rule into `@mat-plan/shared`.
+  (`components/day/row-values.ts`, lane C's). The contract exports one since #436; 8b swaps to it.
+  Until then, a change to the rule changes both.
 
 - **A name form assumes leaving the screen unmounts it.** `useNameForm` ends the attempt in an
   effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in
