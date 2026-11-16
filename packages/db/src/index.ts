@@ -59,6 +59,10 @@ export * from './writers/movement-catalog';
 export * from './writers/profile';
 export * from './writers/ownership';
 export * from './writers/strength-session';
+// FAM-1 lane P (6a-ii; the board's seam turn): the program writers behind ProgramActions and the
+// builder's reads. Named, so the lane's helpers stay in the package.
+export * from './writers/program';
+export { readWorkoutDraft } from './queries/program/workout';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
 // tooling (e.g. the ephemeral screenshot fixture) can target the seeded profile by
 // its stable id instead of re-typing the UUID (constants convention, single source).

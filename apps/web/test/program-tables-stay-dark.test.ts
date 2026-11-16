@@ -116,4 +116,18 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b)', () => {
     const web = files.filter((f) => f.startsWith('apps/web/'));
     expect(web.filter((f) => HELPERS.test(code(join(REPO, f))))).toEqual([]);
   });
+
+  // FAM-1 6a-ii (the board's seam turn): `@mat-plan/db` now exports lane P's program writers. The
+  // names are also `ProgramActions` members, which the screens and the preview's fake implement, so
+  // the scan matches an IMPORT of one from the package, not the bare name. 7a changes this line.
+  const LANE_P_WRITERS =
+    /import\s*(?:type\s*)?\{[^}]*\b(createProgram|renameProgram|saveWorkout|readWorkoutDraft)\b[^}]*\}\s*from\s*['"]@mat-plan\/db['"]/;
+
+  it("apps/web imports none of lane P's program writers yet (step 7a wires them)", () => {
+    const web = files.filter((f) => f.startsWith('apps/web/'));
+    expect(web.filter((f) => LANE_P_WRITERS.test(code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: the pattern catches the import it names, and not a ProgramActions member.
+    expect(LANE_P_WRITERS.test("import { db, saveWorkout } from '@mat-plan/db';")).toBe(true);
+    expect(LANE_P_WRITERS.test('async saveWorkout(draft) {')).toBe(false);
+  });
 });

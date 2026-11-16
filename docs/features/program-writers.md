@@ -25,7 +25,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | Step   | Adds                                                                                                                                |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | 6a-i   | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                                                |
-| 6a-ii  | `writers/program/{save-workout,shift-band}.ts`; `queries/program/workout.ts`                                                        |
+| 6a-ii  | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                                               |
 | 6a-iii | the copy path; `queries/program/movement-options.ts`; `writers/program/new-item.ts` (after contract change C8)                      |
 | 6b     | `writers/program/save-week.ts`; `queries/program/week.ts`                                                                           |
 | 6c     | `writers/program/assign.ts` (put on); `queries/program/{program-view,program-list}.ts`; fills in `writers/program/seed-fixtures.ts` |
@@ -38,6 +38,10 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/create-program.ts` | `createProgram`: a program is a TEMPLATE block, created by naming it. Replay first, then the name, then a free slug.                         |
 | `packages/db/src/writers/program/rename-program.ts` | `renameProgram`: `not_found` (any block that is not this household's live template), then `name_taken`, then the name and a new slug.        |
 | `packages/db/src/writers/program/program-name.ts`   | What both share: `programNameTaken` (folded, live templates only), `freeProgramSlug` (`-2`, `-3`… past every live block) and `lostSlugRace`. |
+| `packages/db/src/writers/program/save-workout.ts`   | `saveWorkout`: the editor's full draft. Matches rows by `prescriptionClientId` (D19), hides gone cards, places through the band.             |
+| `packages/db/src/writers/program/shift-band.ts`     | `shiftIntoBand`: move a set of placed rows out of the way (`idx + SHIFT_BAND`) so their final places can be written.                         |
+| `packages/db/src/writers/program/index.ts`          | The writers behind `ProgramActions`, by name: what `packages/db/src/index.ts` publishes.                                                     |
+| `packages/db/src/queries/program/workout.ts`        | `readWorkoutDraft`: a saved workout as the editor loads it. Deep-equals the contract's `heavy-a-draft`.                                      |
 | `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                              |
 | `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                    |
 | `packages/db/src/queries/program/index.ts`          | A placeholder so the directory exists. The first real module may replace it.                                                                 |
@@ -47,7 +51,9 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 1. 🔴 **The lane's files go in these three paths and nowhere else.** It never edits `seed.ts`,
    `writers/ownership.ts` or `schema.ts` (plan §5): those are lane A's. A column the plan missed is
-   a **column request** to lane A, added expand-only in its next migration (plan §6).
+   a **column request** to lane A, added expand-only in its next migration (plan §6). The one
+   exception is a **seam turn the board grants**: 6a-ii's line in `packages/db/src/index.ts` and its
+   case in `apps/web/test/program-tables-stay-dark.test.ts`.
 2. 🔴 **A read deep-equals the contract's fixture.** Seed the state the fixture describes, run the
    query, and compare through `scripts/verify/normalize-fixture.ts`: `workout` with `heavy-a-draft`
    (6a), `program-view` with `family-program` (6c). The shapes and fixtures are
@@ -82,9 +88,44 @@ rules it starts under. Each step below adds its files, its diagram and its invar
    staged by two connections; `verify/program.ts` stages the slug race on one by writing the
    colliding row as the writer opens its savepoint (mutations `rename-lets-slug-race-escape`,
    `create-lets-slug-race-escape`).
-10. **No diagram yet**: 6a-i's two writers are straight-line (parse, find, check, write). 6a-ii's
-    save-workout, which matches rows by `client_id` and reorders through the band, adds the lane's
-    first.
+10. 🔴 **A save is the workout's full state, matched by card** (D19). A card's
+    `prescriptionClientId` keeps its row, and so the entries logged against it, whatever its place;
+    a gone card is hidden with its quantities, never deleted; a swapped item arrives under a new id
+    (the editor mints it), so its old row is hidden and a new one written. A known id under another
+    item, or a hidden card's id, is `invalid`. Quantities are matched by place `(prescription, slot)`,
+    so a replayed save writes no row, hidden ones included (mutation
+    `quantities-replaced-every-save`).
+11. 🔴 **Places go through the band** (`shift-band.ts`; mutation `save-skips-the-band`):
+    `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
+    unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use
+    the same helper.
+12. **Every refusal comes before the first write**, and the whole save is one transaction (a
+    savepoint inside the caller's). Its locks are the block `FOR SHARE`, then the program's workouts
+    `FOR UPDATE` (`insertWorkoutOwnedBy`'s order), which also serialises two saves' name checks
+    within a program. Items must be available to the household (mutation
+    `save-takes-any-households-item`) and of the type the draft says; a type's fields are
+    `TRACKING_TYPE_FIELDS`' (Reps a whole number 1 to 1000; at most one quantity, in the type's slot
+    and units); supersets are neighbours, numbered 1..n, at least two, with the rest on the last.
+
+```mermaid
+flowchart TD
+  P[parse saveWorkoutSchema] -->|fails| I1[invalid]
+  P --> S{supersets and item fields well formed?}
+  S -->|no| I1
+  S --> B[block FOR SHARE, live template of the household]
+  B -->|none| N[not_found]
+  B --> W[the program's workouts FOR UPDATE: self by public id, or by client id for a new one]
+  W -->|unknown or hidden| N
+  W --> T{another live workout with the folded name?}
+  T -->|yes| NT[name_taken]
+  T --> M[items: available to the household, of the draft's type]
+  M -->|unknown| N
+  M -->|wrong type| I1
+  M --> R{a card's id known under another item, or hidden?}
+  R -->|yes| I1
+  R --> X[write: workout, hide gone cards and their quantities, shift into band, place and update or insert each card, quantities by slot]
+  X --> OK["ok, workoutPublicId"]
+```
 
 ## Changing it
 
