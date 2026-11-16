@@ -639,6 +639,91 @@ flowchart TB
   CHK["✓ CHECK: at-most-one of movement_id / metric_key"]
 ```
 
+### 4b. The program tables (FAM-1, through 4b)
+
+A household's program is a `program_blocks` row (`kind` is `template` for a block built in the
+app, `legacy` for the seeded one). Its workouts are `workouts`; the week template places them on weekdays through
+`block_day_workouts`; a workout's items are `prescriptions`, with typed targets in
+`prescription_quantities`. Two links run from the log side back to the plan: `sessions.workout_id`
+and `entries.prescription_id`. Both are `ON DELETE SET NULL` and identity only: what was asked
+is frozen on the log row (`sessions.workout_name`, `entries.prescribed_snapshot`), so a rename or
+purge never rewrites history. Who is on which block (assignments) arrives with FAM-1 step 5, which
+adds its tables here.
+
+```mermaid
+erDiagram
+  households ||--o{ program_blocks : "owns (household_id)"
+  program_blocks ||--o{ workouts : "block_id"
+  program_blocks ||--o{ block_day_workouts : "the week template (block_id)"
+  workouts ||--o{ block_day_workouts : "(workout_id, block_id) composite FK"
+  program_blocks ||--o{ prescriptions : "block_id"
+  workouts |o--o{ prescriptions : "(workout_id, block_id) composite FK (4b); NULL on legacy rows"
+  workouts |o--o{ workouts : "copied_from_workout_id, SET NULL"
+  movements ||--o{ prescriptions : "movement_id"
+  prescriptions ||--o{ prescription_quantities : "typed targets (4b)"
+  quantity_slots ||--o{ prescription_quantities : "(slot, dimension)"
+  units ||--o{ prescription_quantities : "(unit, dimension)"
+  prescriptions ||--o{ prescription_targets : "per-athlete load and reps (legacy)"
+  profiles ||--o{ prescription_targets : "profile_id"
+  workouts |o--o{ sessions : "workout_id, SET NULL (4a-ii)"
+  prescriptions |o--o{ entries : "prescription_id, SET NULL (4a-ii)"
+
+  program_blocks {
+    bigint id PK
+    uuid public_id UK "anti-IDOR"
+    bigint household_id FK "the authz root"
+    text kind "legacy or template (4a-i)"
+    uuid client_id "UNIQUE per household; required on template"
+    text name
+  }
+  workouts {
+    bigint id PK
+    uuid public_id UK "anti-IDOR"
+    uuid client_id "UNIQUE per block (block_id, client_id)"
+    bigint block_id FK
+    text name
+    bigint copied_from_workout_id FK "SET NULL"
+    text copied_from_program_name "frozen on Copy"
+  }
+  block_day_workouts {
+    bigint block_id FK
+    int weekday "the week template"
+    int idx "order within the day"
+    bigint workout_id FK "composite with block_id"
+    text label "optional"
+  }
+  prescriptions {
+    bigint id PK
+    uuid public_id UK "anti-IDOR"
+    bigint block_id FK
+    bigint workout_id FK "4b; XOR with day_role"
+    text day_role "legacy rows only"
+    uuid client_id "4b; on template rows; UNIQUE per workout"
+    int sets "prescribed set count"
+    text notes "the author's instructions"
+    text rest_after "a superset's last item only"
+    text superset_label "copied to supersets.prescription_group"
+    int superset_order "place in the group"
+  }
+  prescription_quantities {
+    bigint prescription_id FK
+    text slot "FK as a pair with dimension"
+    text dimension "denormalized for the two pair FKs"
+    text unit "FK as a pair with dimension"
+    numeric value_min "NULL means no target"
+    numeric value_max "a range needs both ends"
+  }
+  sessions {
+    bigint workout_id FK "identity only"
+    text workout_name "frozen at log time"
+  }
+  entries {
+    bigint prescription_id FK "identity only"
+    int prescription_set "1-based; marks a row logged in a program"
+    text prescribed_snapshot "what was asked, frozen"
+  }
+```
+
 ## 5. Deploy & CI topology
 
 ```mermaid
