@@ -44,6 +44,7 @@ import {
   AMEND_COPY,
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
+  changeLabel,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
@@ -765,14 +766,12 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   'practice-editing': async (page) => {
     await logPracticeOnce(page);
-    await practiceSection(page)
-      .getByRole('button', { name: /^Change wrestling practice/ })
-      .click();
+    await practiceSection(page).getByRole('button', { name: PRACTICE_CHANGE }).click();
   },
   'practice-clear-armed': async (page) => {
     await logPracticeOnce(page);
     const life = practiceSection(page);
-    await life.getByRole('button', { name: /^Change wrestling practice/ }).click();
+    await life.getByRole('button', { name: PRACTICE_CHANGE }).click();
     await life.getByLabel(PRACTICE_COPY.fieldLabel).fill('');
     await life.getByRole('button', { name: PRACTICE_COPY.clearLabel }).waitFor();
     await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
@@ -780,7 +779,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'practice-cleared': async (page) => {
     // Retry-safe across the three widths: only the first finds a Change to clear.
     const life = practiceSection(page);
-    const change = life.getByRole('button', { name: /^Change wrestling practice/ });
+    const change = life.getByRole('button', { name: PRACTICE_CHANGE });
     if ((await change.count()) === 0 && (await life.getByRole('status').textContent()) === '') {
       await logPracticeOnce(page);
     }
@@ -1436,6 +1435,11 @@ main().catch((err) => {
   process.exit(1);
 });
 
+/** The logged practice's Change, whatever its value: `changeLabel`'s own prefix, never re-typed. */
+const PRACTICE_CHANGE = new RegExp(
+  `^${changeLabel(PRACTICE_COPY.changeSubject, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+);
+
 /** The Life section, where the practice row lives (V1-24 3b-life-a). */
 function practiceSection(page: Page) {
   return page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
@@ -1446,5 +1450,5 @@ async function logPracticeOnce(page: Page): Promise<void> {
   const life = practiceSection(page);
   const button = life.getByRole('button', { name: PRACTICE_COPY.label, exact: true });
   if ((await button.count()) > 0) await button.click();
-  await life.getByRole('button', { name: /^Change wrestling practice/ }).waitFor();
+  await life.getByRole('button', { name: PRACTICE_CHANGE }).waitFor();
 }

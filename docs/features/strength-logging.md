@@ -288,7 +288,7 @@ all derived from the one unit, so none can disagree with it:
 - **A save is announced and focused from the action's own result** (`savedId`, the session's public
   id), once that id appears in the section's props, and it **leads with the receipt's heading**
   ("Strength A session 2 saved: …") so a second session with the same movements is still a text
-  change. `SavedAnnouncer` is NOT used: it deliberately ignores value→value changes (parent B5).
+  change. The day page's old `SavedAnnouncer` was NOT used (it ignored value→value changes, parent B5); it is deleted since V1-24 3b-life-a.
 - **Names and "logged", in `lib/entries/activity-totals.ts`:** `movementNames` is the ONE display
   builder for "Already saved for this day" and the announcement (skipped marked, repeats removed);
   `loggedMovements` is the shared notion of "logged" (done vs skipped) that 3a-iii's fill filter

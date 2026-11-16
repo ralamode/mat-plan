@@ -708,7 +708,7 @@ export async function editPracticeAction(input: EditPracticeInput): Promise<Prac
       const entry = await enterMutation(TRANSPORT_REFUSALS);
       if (!entry.ok) return entry;
       const parsed = editPracticeSchema.safeParse(input);
-      if (!parsed.success) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.invalid };
+      if (!parsed.success) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.bad_value };
 
       const { profilePublicId, entryId, value, seenValue } = parsed.data;
       const profile = await getProfileByPublicId(profilePublicId);
@@ -723,7 +723,7 @@ export async function editPracticeAction(input: EditPracticeInput): Promise<Prac
       // wouldn't.
       if (!row) return refuse(PRACTICE_AMEND_REFUSAL.not_found);
       const day = await resolveDeclaredDay(row.day);
-      if (!day.ok) return refuse(PRACTICE_AMEND_REFUSAL.read_only);
+      if (!day.ok) return refuse(PRACTICE_AMEND_REFUSAL.closed_day);
 
       if (value === null) {
         // An archived athlete has no field to re-enter a cleared practice into (plan A3).

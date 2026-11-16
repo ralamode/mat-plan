@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
-import { isBlankEntry } from './bodyweight';
+import { METRIC_DEFINITION_SEED_ROWS, METRIC_KEYS } from './catalog-metrics';
+import { keyBySelf } from './enums';
 import { uuidSchema } from './id';
 import { TRANSPORT_REFUSALS } from './program/actions';
+import { isBlankEntry } from './text';
 import { isWholeNumber } from './units';
 
 /**
@@ -15,13 +17,20 @@ import { isWholeNumber } from './units';
 /**
  * The plausible range, a typo guard and not a unit cap (`MAX_QUANTITY_BY_UNIT.min` is 1440).
  * The floor catches a number meant as hours ("2" for two hours) _(maintainer, 2026-11-16)_; the
- * ceiling, a slipped digit ("900" for 90). Contract tests pin both.
+ * ceiling, a slipped digit ("900" for 90). `practice-shapes.test.ts` pins both, and that both are
+ * inclusive.
  */
 export const PRACTICE_MINUTES_MIN = 10;
 export const PRACTICE_MINUTES_MAX = 300;
 
-/** The practice metric's unit, as `catalog-metrics.ts` seeds it. Pinned by the writers, never posted. */
-export const PRACTICE_UNIT = 'min';
+/**
+ * The practice metric's unit, READ from the seed row that defines it, never re-typed: both writers pin
+ * it in their WHERE, so a copy that drifted from the seed would make every amend and clear match
+ * nothing, silently. Never posted.
+ */
+export const PRACTICE_UNIT = METRIC_DEFINITION_SEED_ROWS.find(
+  (r) => r.key === METRIC_KEYS.practice_minutes,
+)!.unit;
 
 /**
  * Whole minutes from the field's text, or `null` when it is not whole digits. The range is the
@@ -70,34 +79,35 @@ export const editPracticeSchema = z.object({
 export type EditPracticeInput = z.input<typeof editPracticeSchema>;
 
 /**
- * Why a practice amend did not happen. Each maps to copy on the client.
+ * Why a practice amend did not happen. Each maps to copy on the client. The words are the FAM-1 row
+ * contract's where the meaning is the same (`ROW_REFUSALS`: `bad_value`, `closed_day`, `not_found`),
+ * so a practice row folded into the day screen later speaks one vocabulary.
  *
- * - `invalid`: the input failed `editPracticeSchema`.
+ * - `bad_value`: the input failed `editPracticeSchema`.
  * - `not_found`: not this athlete's practice, or gone (one answer for foreign and stale ids). Also
  *   the transport's "no session".
- * - `read_only`: the practice's day is before yesterday.
+ * - `closed_day`: the practice's day is before yesterday.
  * - `stale`: another phone changed or cleared it since this form rendered.
  * - `archived_blank`: an archived athlete cannot clear (there is no field to re-enter into).
  * - `retry`: the transport's rate limit.
  */
 export const PRACTICE_AMEND_REFUSALS = [
-  'invalid',
+  'bad_value',
   'not_found',
-  'read_only',
+  'closed_day',
   'stale',
   'archived_blank',
   'retry',
-] as const satisfies readonly string[];
+] as const;
 
 export type PracticeAmendRefusal = (typeof PRACTICE_AMEND_REFUSALS)[number];
 
-export const PRACTICE_AMEND_REFUSAL = Object.fromEntries(
-  PRACTICE_AMEND_REFUSALS.map((r) => [r, r]),
-) as { readonly [K in PracticeAmendRefusal]: K };
+export const PRACTICE_AMEND_REFUSAL = keyBySelf(PRACTICE_AMEND_REFUSALS);
+export const practiceAmendRefusalSchema = z.enum(PRACTICE_AMEND_REFUSALS);
 
 export const practiceAmendResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true) }),
-  z.object({ ok: z.literal(false), reason: z.enum(PRACTICE_AMEND_REFUSALS) }),
+  z.object({ ok: z.literal(false), reason: practiceAmendRefusalSchema }),
 ]);
 
 export type PracticeAmendResult = z.infer<typeof practiceAmendResultSchema>;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { uuidSchema } from './id';
-import { freeTextNoteSchema } from './text';
+import { freeTextNoteSchema, isBlankEntry } from './text';
 import { PLAIN_DECIMAL, type Unit } from './units';
 
 /** Bodyweight is logged in lb or kg — a drift-checked subset of Unit. */
@@ -62,16 +62,6 @@ export const IMPLAUSIBLE_BODYWEIGHT_MESSAGE =
  * So: keep the base plain, extend it per path, and apply the bound **last** via the one shared
  * refiner below. Both paths then enforce an identical rule from a single definition.
  */
-
-/**
- * Whether a typed weight is empty (V1-24 3b-bw, plan W5/W7). **One predicate for both sides**: the
- * Change editor reads `Clear` while it holds, the amend's wrapper reports a clear, and the edit schema
- * turns it into `null`. Three copies of "empty" would let the label say Clear while the server
- * refuses, or the reverse.
- */
-export function isBlankEntry(value: unknown): boolean {
-  return typeof value === 'string' && value.trim() === '';
-}
 
 /**
  * A typed weight, as the field submits it: text (V1-24 3b-bw, plan W3). `null` when it is not one.

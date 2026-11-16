@@ -12,7 +12,7 @@ import { SingleValueLive } from './single-value-live';
 
 /**
  * The life activities the day page shows: the routine's, minus Wake (V1-24 3b-page). The tap time is
- * not the wake time, so Wake leaves the page; the action still accepts it until 3b-life.
+ * not the wake time, so Wake leaves the page; the action still accepts it until 3b-life-b.
  */
 function shownLifeActivities(activityKeys: readonly string[]) {
   return lifeActivitiesForKeys(activityKeys).filter((a) => a.key !== ACTIVITY_TYPE_KEYS.wake);

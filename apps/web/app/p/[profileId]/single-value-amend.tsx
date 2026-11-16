@@ -102,6 +102,10 @@ export function SingleValueAmend({
         // elsewhere, the day closed), so the island shows it. If the editor survives (a stale value),
         // it stays open on the value that won, and its field keeps focus.
         live.report({ message: result.error, tone: 'alert', focus: ['field', 'change'] });
+      } else {
+        // A refusal under the field: the tap on Save blurred it and closed the keypad, so hand focus
+        // back to the field (plan A4) — only from <body> or inside the island, never a steal.
+        live.claimFocus(['field']);
       }
       return result;
     },

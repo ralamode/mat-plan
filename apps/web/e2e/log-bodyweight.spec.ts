@@ -1,4 +1,9 @@
-import { PRACTICE_MINUTES_MAX, SEED_PROFILE_NAME } from '@mat-plan/shared';
+import {
+  PRACTICE_MINUTES_MAX,
+  PRACTICE_MINUTES_MIN,
+  PRACTICE_UNIT,
+  SEED_PROFILE_NAME,
+} from '@mat-plan/shared';
 import { expect, test } from '@playwright/test';
 
 import {
@@ -54,34 +59,47 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   // The logged row shows those minutes on the page, where the removed "Logged entries" list did.
   await logPractice(page);
 
-  // V1-24 3b-life-a: Change it to the WIDEST legal value, so the 360px checks measure the row at its
-  // longest; clear it (Save reads Clear); then the one-tap ✓ logs it again, so the day ends as it began.
-  // Athlete One's today is this spec's alone (the e2e rule, `global.setup.ts`).
+  // V1-24 3b-life-a: Change it to the largest legal value (the longest minutes line; the label is the
+  // row's widest line either way), check the row at 360px, refuse an out-of-range value, clear it (Save
+  // reads Clear), then the one-tap ✓ logs it again, so the day ends as it began. Athlete One's today is
+  // this spec's alone (the e2e rule, `global.setup.ts`).
   await page.setViewportSize({ width: 360, height: 800 });
-  const widest = String(PRACTICE_MINUTES_MAX);
-  await changePractice(page, PRACTICE_SHOWN, widest);
+  await changePractice(page, PRACTICE_SHOWN, String(PRACTICE_MINUTES_MAX));
   const life = lifeSection(page);
-  const shownWidest = formatValueUnit(PRACTICE_MINUTES_MAX, 'min');
+  const shownWidest = formatValueUnit(PRACTICE_MINUTES_MAX, PRACTICE_UNIT);
   const change = practiceChange(page, shownWidest);
-  const row = life
-    .getByText(shownWidest, { exact: true })
-    .locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
-  // Change sits on the RIGHT of the two-line row, beside the value, never wrapped under the tick (A1).
-  const [rowBox, changeBox, valueBox] = await Promise.all([
-    row.boundingBox(),
+  // Change sits on the RIGHT of the two-line row, clear of the label (the box it could collide with),
+  // and vertically between the label's top and the minutes line's bottom (A1). Never wrapped under the
+  // tick: a wrapped flex item starts the next line on the LEFT.
+  const [lifeBox, changeBox, labelBox, valueBox] = await Promise.all([
+    life.boundingBox(),
     change.boundingBox(),
+    life.getByText(PRACTICE_COPY.label, { exact: true }).boundingBox(),
     life.getByText(shownWidest, { exact: true }).boundingBox(),
   ]);
-  expect(rowBox!.x + rowBox!.width - (changeBox!.x + changeBox!.width)).toBeLessThan(24);
-  expect(changeBox!.x).toBeGreaterThan(valueBox!.x + valueBox!.width);
+  expect(lifeBox!.x + lifeBox!.width - (changeBox!.x + changeBox!.width)).toBeLessThan(24);
+  expect(changeBox!.x).toBeGreaterThan(labelBox!.x + labelBox!.width);
+  const changeMid = changeBox!.y + changeBox!.height / 2;
+  expect(changeMid).toBeGreaterThan(labelBox!.y);
+  expect(changeMid).toBeLessThan(valueBox!.y + valueBox!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   await expectNoAxeViolations(page, 'the logged practice row at 360px');
   await expectTapTargets(page, 'the logged practice row at 360px');
 
-  // The armed Clear, on the editor's plain surface.
+  // A refused value: its line under the field, focus back on the field (A4), and axe on that state.
   await change.click();
-  await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('');
-  await expect(life.getByRole('button', { name: PRACTICE_COPY.clearLabel })).toBeVisible();
+  const editorField = life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
+  await editorField.fill(String(PRACTICE_MINUTES_MIN - 1));
+  await life.getByRole('button', { name: AMEND_COPY.save, exact: true }).click();
+  await expect(life.getByRole('alert')).toHaveText(PRACTICE_COPY.outOfRange);
+  await expect(editorField).toBeFocused();
+  await expectNoAxeViolations(page, 'the practice editor with a refused value');
+
+  // The armed Clear, on the editor's plain surface.
+  await editorField.fill('');
+  await expect(
+    life.getByRole('button', { name: PRACTICE_COPY.clearLabel, exact: true }),
+  ).toBeVisible();
   // Save → Clear is a colour transition (`transition-all`): scan it settled, not mid-fade, as the
   // bodyweight scan does (`a11y.spec.ts`). Mid-fade the text briefly fails contrast.
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));

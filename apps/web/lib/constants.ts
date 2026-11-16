@@ -1,4 +1,5 @@
 import {
+  ACTIVITY_TYPE_KEYS,
   MAX_HOUSEHOLD_ATHLETES,
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
@@ -12,6 +13,7 @@ import {
 } from '@mat-plan/shared';
 
 import { plural } from './i18n/plural';
+import { LIFE_ACTIVITIES } from './life/life-activities';
 
 /**
  * App-only, cross-feature constants. **No server or IO dependencies** — only `@mat-plan/shared`'s
@@ -699,12 +701,9 @@ export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
 
-/**
- * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
- *
- * 1a ships the receipt BEFORE amend exists, and what makes that honest is this copy, so it is
- * specified rather than improvised. Every string here is asserted by a spec through this object.
- */
+/** The sr-only word beside a logged single value's tick, so it reads "Logged 84.5 lb" (3b-bw W4). */
+export const LOGGED_SR_LABEL = 'Logged';
+
 /**
  * The copy a single value's Change editor and its island share (V1-24 3b-life A2): one template per
  * subject, so bodyweight and practice cannot drift into two spellings of "changed to" or "cleared".
@@ -737,6 +736,12 @@ function singleValueCopy(o: {
 
 export type SingleValueCopy = ReturnType<typeof singleValueCopy>;
 
+/**
+ * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
+ *
+ * 1a ships the receipt BEFORE amend exists, and what makes that honest is this copy, so it is
+ * specified rather than improvised. Every string here is asserted by a spec through this object.
+ */
 export const BODYWEIGHT_COPY = {
   /** A second weigh-in refused by V1-24 1d's one-per-day index (two phones, or a stale tab). The
    *  page revalidates and shows the one that landed; the amend corrects its value. */
@@ -748,7 +753,7 @@ export const BODYWEIGHT_COPY = {
   /** An empty ✓, refused in the browser before any request (plan W3). */
   blankLog: 'Enter your bodyweight, then ✓.',
   /** The sr-only word beside a logged row's tick, so it reads "Logged 84.5 lb". */
-  logged: 'Logged',
+  logged: LOGGED_SR_LABEL,
   /**
    * The muted hint over the unlogged row (plan W10): `Last time 72.5 lb`, with the day when it was not
    * yesterday (`· Tue`, or `· Nov 3` from a week back). Never a placeholder or a prefill.
@@ -793,20 +798,28 @@ export const BODYWEIGHT_COPY = {
  * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
  * the day's TOTAL, and the hint says so (plan A3).
  */
+/** The practice activity's label, from the one list that also names its one-tap button. */
+const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
+  (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
+)!.label;
+
 export const PRACTICE_COPY = {
-  label: 'Wrestling practice',
+  label: PRACTICE_LABEL,
   /** `changeLabel`'s subject: `Change wrestling practice — 90 min`. */
-  changeSubject: 'wrestling practice',
+  changeSubject: PRACTICE_LABEL.toLowerCase(),
+  /** `AMEND_ERROR_COPY`'s subject: `the practice wasn't changed`. */
+  noun: 'practice',
   /** The amend field's accessible name; the visible `min` beside it is `aria-hidden`. */
-  fieldLabel: 'Wrestling practice minutes',
+  fieldLabel: `${PRACTICE_LABEL} minutes`,
   ...singleValueCopy({
-    subject: 'Wrestling practice',
-    clearLabel: 'Clear wrestling practice',
+    subject: PRACTICE_LABEL,
+    clearLabel: `Clear ${PRACTICE_LABEL.toLowerCase()}`,
+    // "That day", not "today": Change renders on yesterday too, the evening-after path this is for.
     clearHint:
-      'To clear this practice, leave the field empty. Two practices today? Enter the total.',
+      'To clear this practice, leave the field empty. Two practices that day? Enter the total.',
     blankSave: 'Enter the minutes, then Save.',
   }),
-  /** A refused amend (`invalid`): the one rule, its range from the shared consts. */
+  /** A refused amend (`bad_value`): the one rule, its range from the shared consts. */
   outOfRange: `Enter whole minutes, ${PRACTICE_MINUTES_MIN} to ${PRACTICE_MINUTES_MAX}.`,
 } as const;
 

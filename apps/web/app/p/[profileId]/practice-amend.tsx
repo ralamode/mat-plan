@@ -15,18 +15,18 @@ import { type AmendOutcome, SingleValueAmend } from './single-value-amend';
 /** Each refusal's copy. A field error stays under the open editor; the rest go to the island. */
 function outcomeFor(reason: PracticeAmendRefusal): AmendOutcome {
   switch (reason) {
-    case PRACTICE_AMEND_REFUSAL.invalid:
+    case PRACTICE_AMEND_REFUSAL.bad_value:
       return { ok: false, error: PRACTICE_COPY.outOfRange, field: PRACTICE_COPY.outOfRange };
     case PRACTICE_AMEND_REFUSAL.archived_blank:
       return { ok: false, error: PRACTICE_COPY.blankSave, field: PRACTICE_COPY.blankSave };
-    case PRACTICE_AMEND_REFUSAL.read_only:
-      return { ok: false, error: AMEND_ERROR_COPY.dayReadOnly('practice') };
+    case PRACTICE_AMEND_REFUSAL.closed_day:
+      return { ok: false, error: AMEND_ERROR_COPY.dayReadOnly(PRACTICE_COPY.noun) };
     case PRACTICE_AMEND_REFUSAL.stale:
       return { ok: false, error: AMEND_ERROR_COPY.staleWrite };
     case PRACTICE_AMEND_REFUSAL.retry:
       return { ok: false, error: RATE_LIMITED };
     case PRACTICE_AMEND_REFUSAL.not_found:
-      return { ok: false, error: AMEND_ERROR_COPY.notFound('practice') };
+      return { ok: false, error: AMEND_ERROR_COPY.notFound(PRACTICE_COPY.noun) };
   }
 }
 
@@ -57,10 +57,14 @@ export function PracticeAmend({
       parse={parsePracticeMinutes}
       hiddenFields={{}}
       submit={async (formData) => {
+        // ⚠️ Only a STRING reaches the action: a missing field must never become `''`, which is a
+        // blank, which is a CLEAR (the schema refuses an absent value for exactly this reason).
+        const value = formData.get('value');
+        if (typeof value !== 'string') return outcomeFor(PRACTICE_AMEND_REFUSAL.bad_value);
         const result = await editPracticeAction({
           profilePublicId: profileId,
           entryId: logged.entryId,
-          value: String(formData.get('value') ?? ''),
+          value,
           seenValue: logged.minutes,
         });
         return result.ok ? { ok: true } : outcomeFor(result.reason);

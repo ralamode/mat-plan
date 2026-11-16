@@ -66,7 +66,16 @@ function LifeButton({
       <input type="hidden" name="day" value={day} readOnly />
       <input type="hidden" name="clientId" value={clientId} readOnly />
       <input type="hidden" name="activityKey" value={activityKey} readOnly />
-      <Button ref={takeField} type="submit" size="lg" disabled={pending} className="text-base">
+      {/* After a clear, focus lands here: listing the island's status (only while it shows) makes
+          arriving focus read "…cleared. It was 45 min." rather than pre-empting it. */}
+      <Button
+        ref={takeField}
+        type="submit"
+        size="lg"
+        disabled={pending}
+        aria-describedby={live.statusId}
+        className="text-base"
+      >
         {pending ? 'Logging…' : label}
       </Button>
     </form>

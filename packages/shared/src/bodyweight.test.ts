@@ -1,3 +1,4 @@
+import { isBlankEntry } from './text';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,7 +9,6 @@ import {
   DEFAULT_BODYWEIGHT_UNIT,
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
   editBodyweightSchema,
-  isBlankEntry,
   logBodyweightSchema,
   type BodyweightUnit,
 } from './bodyweight';

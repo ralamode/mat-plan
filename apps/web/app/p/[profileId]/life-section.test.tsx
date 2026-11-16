@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ACTIVITY_TYPE_KEYS, PRACTICE_AMEND_REFUSAL } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, PRACTICE_AMEND_REFUSAL, PRACTICE_UNIT } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +14,7 @@ import {
   changeLabel,
   LIFE_COPY,
   PRACTICE_COPY,
+  RATE_LIMITED,
 } from '@/lib/constants';
 import type { LoggedLifeActivity } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
@@ -35,8 +36,8 @@ const practiceLabel = LIFE_ACTIVITIES.find((a) => a.key === PRACTICE)!.label;
 const wakeLabel = LIFE_ACTIVITIES.find((a) => a.key === WAKE)!.label;
 
 const practice = (value: number, entryId = `019826b4-0000-7000-8000-00000000c${value}`) =>
-  ({ entryId, activityKey: PRACTICE, value, unit: 'min' }) satisfies LoggedLifeActivity;
-const minutes = (value: number) => formatValueUnit(value, 'min');
+  ({ entryId, activityKey: PRACTICE, value, unit: PRACTICE_UNIT }) satisfies LoggedLifeActivity;
+const minutes = (value: number) => formatValueUnit(value, PRACTICE_UNIT);
 
 type Props = Parameters<typeof LifeSection>[0];
 const section = (overrides: Partial<Props> = {}) => (
@@ -185,7 +186,10 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     const status = screen.getByRole('status');
     expect(status.textContent).toBe(PRACTICE_COPY.announcedCleared(minutes(90)));
     expect(status.className).not.toContain('sr-only');
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: practiceLabel }));
+    const returning = screen.getByRole('button', { name: practiceLabel });
+    expect(document.activeElement).toBe(returning);
+    // …and it is described by the shown line, so arriving focus reads what was cleared.
+    expect(returning.getAttribute('aria-describedby')).toBe(status.id);
   });
 
   it('an archived athlete: Save stays Save, and a blank is refused before any request', async () => {
@@ -203,7 +207,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     open(90);
     vi.mocked(editPracticeAction).mockResolvedValueOnce({
       ok: false,
-      reason: PRACTICE_AMEND_REFUSAL.invalid,
+      reason: PRACTICE_AMEND_REFUSAL.bad_value,
     });
     fireEvent.change(field(), { target: { value: '5' } });
     await submit(AMEND_COPY.save);
@@ -217,5 +221,21 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     fireEvent.change(field(), { target: { value: '60' } });
     await submit(AMEND_COPY.save);
     expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.staleWrite);
+  });
+
+  it.each([
+    [
+      PRACTICE_AMEND_REFUSAL.closed_day,
+      (): string => AMEND_ERROR_COPY.dayReadOnly(PRACTICE_COPY.noun),
+    ],
+    [PRACTICE_AMEND_REFUSAL.not_found, (): string => AMEND_ERROR_COPY.notFound(PRACTICE_COPY.noun)],
+    [PRACTICE_AMEND_REFUSAL.retry, (): string => RATE_LIMITED],
+  ] as const)('a %s refusal is the island alert with its own copy', async (reason, copy) => {
+    render(section({ logged: [practice(90)] }));
+    open(90);
+    vi.mocked(editPracticeAction).mockResolvedValueOnce({ ok: false, reason });
+    fireEvent.change(field(), { target: { value: '60' } });
+    await submit(AMEND_COPY.save);
+    expect(screen.getByRole('alert').textContent).toBe(copy());
   });
 });

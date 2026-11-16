@@ -636,7 +636,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
 
 ### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
 
-- **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
+- **What & why:** `saved-announcer.tsx` (deleted at V1-24 3b-life-a), `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
   an effect. What TRIGGERS each is deliberately different (B5: an island announces its own save,
   never a value diff), but the presentational half is copied.
@@ -646,7 +646,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ✅ **Half of the destination exists as of `PROF-1` a-r (2026-11-07): `apps/web/components/ui/announcer.tsx`.**
   It owns the REGION — the `role="status"` element and the mounted-while-empty rule — and deliberately
   **not** the trigger: the four copies differ in _what_ announces, and that difference is load-bearing
-  (`saved-announcer.tsx` explains why a value→value change must not announce). The transition half is
+  (a value→value change, such as paging to a logged day, must not announce). The transition half is
   already single-sourced for action results, in `use-on-action-success.ts`.
   ⚠️ **The count is still four.** a-r is the component's first consumer and converted none of them, so
   this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b

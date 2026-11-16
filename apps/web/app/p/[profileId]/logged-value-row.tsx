@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { BODYWEIGHT_COPY, LOGGED_ROW_CLASS } from '@/lib/constants';
+import { LOGGED_ROW_CLASS, LOGGED_SR_LABEL } from '@/lib/constants';
 
 /**
  * ONE logged single value, in the done style (V1-24 3b-bw W4; shared with practice at 3b-life A2):
@@ -33,7 +33,7 @@ export function LoggedValueRow({
           >
             ✓
           </span>
-          <span className="sr-only">{BODYWEIGHT_COPY.logged} </span>
+          <span className="sr-only">{LOGGED_SR_LABEL} </span>
           {children}
         </p>
         {control ?? null}

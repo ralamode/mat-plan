@@ -2,7 +2,7 @@
 
 import { parseTypedWeight } from '@mat-plan/shared';
 
-import { AMEND_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
+import { AMEND_COPY, AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 
 import { INITIAL_ACTION_STATE } from './action-state';
@@ -38,11 +38,13 @@ export function BodyweightAmend({
       submit={async (formData) => {
         const result = await editBodyweightAction(INITIAL_ACTION_STATE, formData);
         if (result.ok) return { ok: true };
-        return {
-          ok: false,
-          error: result.error ?? '',
-          field: result.fieldErrors?.value?.[0],
-        };
+        const field = result.fieldErrors?.value?.[0];
+        // A zod refusal on a field this editor does not show (a tampered `unit` or `seenValue`, or a
+        // stale bundle) has no "errors below" to point at; say what is true instead.
+        if (result.fieldErrors && !field) {
+          return { ok: false, error: AMEND_ERROR_COPY.notFound('weight') };
+        }
+        return { ok: false, error: result.error ?? '', field };
       }}
     />
   );

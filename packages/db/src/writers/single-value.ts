@@ -78,27 +78,32 @@ function ownedSingleValue(
  */
 export async function bodyweightRowForAmend(
   exec: Executor,
-  args: { profilePublicId: string; scope: HouseholdScope; entryId: string },
+  args: RowForAmendArgs,
 ): Promise<{ day: string } | null> {
-  const [row] = await exec
-    .select({ day: schema.entries.activityDate })
-    .from(schema.entries)
-    .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-    .where(ownedSingleValue(BODYWEIGHT, args.profilePublicId, args.scope, args.entryId))
-    .limit(1);
-  return row ? { day: row.day } : null;
+  return singleValueRowForAmend(exec, BODYWEIGHT, args);
 }
 
 /** `bodyweightRowForAmend`'s twin for a practice (V1-24 3b-life): its DAY only, live or hidden. */
 export async function practiceRowForAmend(
   exec: Executor,
-  args: { profilePublicId: string; scope: HouseholdScope; entryId: string },
+  args: RowForAmendArgs,
+): Promise<{ day: string } | null> {
+  return singleValueRowForAmend(exec, PRACTICE, args);
+}
+
+type RowForAmendArgs = { profilePublicId: string; scope: HouseholdScope; entryId: string };
+
+/** The one pre-read both wrappers share; the metric stays a pinned constant in each wrapper. */
+async function singleValueRowForAmend(
+  exec: Executor,
+  metric: SingleValueMetric,
+  args: RowForAmendArgs,
 ): Promise<{ day: string } | null> {
   const [row] = await exec
     .select({ day: schema.entries.activityDate })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-    .where(ownedSingleValue(PRACTICE, args.profilePublicId, args.scope, args.entryId))
+    .where(ownedSingleValue(metric, args.profilePublicId, args.scope, args.entryId))
     .limit(1);
   return row ? { day: row.day } : null;
 }
