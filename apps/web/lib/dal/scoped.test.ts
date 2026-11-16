@@ -215,7 +215,9 @@ describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', ()
   /**
    * **Exception list 2 — one declaration.** `household.ts#reportScopeMiss`, ADR 0006 obligation 3's
    * existence-only probe: deliberately unscoped, because telling `cross_household` from
-   * `unknown_resource` is the entire signal the scoped predicate destroys. It selects a literal,
+   * `unknown_resource` is the entire signal the scoped predicate destroys. It selects only the
+   * public id it was asked for (for a program, a workout or a prescription id it asks for a row
+   * outside the caller's household, through `programBlockInHousehold`, negated: FAM-1 C11),
    * returns `void` (so it cannot be copied into something that returns data) and swallows its own
    * errors; the external answer is still a 404. Documented at the call site.
    *
