@@ -259,6 +259,11 @@ async function fixture(tx: VerifyTx) {
     malformed: await prescription(w1, moves.duration, {}, [
       { slot: primary, unit: 'lb', valueMin: '10' },
     ]),
+    // A type with no fixed unit, prescribed in another dimension's unit: only step 10's re-check
+    // refuses it, since `itemUnit` takes the row's unit and `fillRowValues` then agrees with it.
+    malformedWeight: await prescription(w1, moves.weight_reps, { sets: 3, targetReps: '8' }, [
+      { slot: primary, unit: 'sec', valueMin: '30' },
+    ]),
     hiddenQuantity: await prescription(w1, moves.weight_reps, { sets: 3, targetReps: '5' }, [
       { slot: primary, unit: 'lb', valueMin: '99', hidden: true },
       { slot: primary, unit: 'lb', valueMin: '50' },
@@ -919,6 +924,12 @@ async function verifyRowWriter(): Promise<void> {
 
   // ── 5b · a malformed prescription is bad_value (P21, 127) ────────────────────────────────────────
   await proof('5b: a malformed prescription', async (f) => {
+    expectRefused(
+      await f.tick({ prescriptionPublicId: f.p.malformedWeight.publicId }),
+      ROW_REFUSAL.bad_value,
+      'FAM-1 11b 5b: a Weight × reps prescribed in sec is bad_value',
+    );
+    // A Duration in lb is refused twice over (the re-check, and `fillRowValues` against its fixed `min`).
     expectRefused(
       await f.tick({ prescriptionPublicId: f.p.malformed.publicId }),
       ROW_REFUSAL.bad_value,
