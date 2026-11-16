@@ -317,9 +317,8 @@ behind, and:
   - the PR adds a **migration** (the journal is shared, and `0NNN` must be regenerated on top);
   - the PR touches a **high-stakes area** in [the table](../README.md#when-a-lens-runs-on-fable): a
     contract shape or a writer can break a disjoint caller without sharing a file with it;
-  - `main`'s new commits change **the bar itself** (`package.json`, the lockfile, a `tsconfig`, lint
-    or test config, a workflow; [hold-the-bar](../hold-the-bar/SKILL.md)'s list), which can turn a
-    disjoint PR red.
+  - `main`'s new commits change **the bar itself**: `package.json`, `pnpm-lock.yaml`, any
+    `tsconfig*.json`, lint or test config, or a workflow. Any of those can turn a disjoint PR red.
 
 Then check `main`'s CI on the merge commit. A red one is fixed before the next merge.
 
