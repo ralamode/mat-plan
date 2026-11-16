@@ -76,8 +76,9 @@ export const hiddenAtSchema = z
  * which is why restore names the **items** as well as the event (Decision 3).
  *
  * - `ok` — restored, or already live (a replay; one effect, identical response).
- * - `slot_taken` — a weigh-in was restored into a day that now holds another one. The holder is
- *   named so the screen can offer "Use {value} instead".
+ * - `slot_taken` — a one-per-day value (a weigh-in; a practice since V1-24 3b-0) was restored into
+ *   a day that now holds another one. For a weigh-in the holder is named (`heldBy`) so the screen
+ *   can offer "Use {value} instead"; a practice names none.
  * - `changed` — the item is hidden under a **different** token, so something happened between the
  *   read and the tap. Maps to `AMEND_ERROR_COPY.staleWrite`.
  * - `not_found` — not an owned entry of that athlete on that day. One answer for foreign, stale and

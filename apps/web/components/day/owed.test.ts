@@ -36,7 +36,12 @@ describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers'
 describe('RowAmend: owed by its consumers', () => {
   it.todo('12d: amendRow passes the inherited action matrix');
   it.todo('12d: a weight × reps set and a superset on real data; change a number (e2e)');
-  it.todo('13b-ii: Change keeps the old number if the new one is blank or not a number');
+  it.todo(
+    '12d: Change’s typed states (typed over, changed with Undo, kept, failed) pass axe, 44px and 360px (e2e)',
+  );
+  it.todo(
+    '12c: an un-tick or a Change, then the page’s data arriving in several refreshes, shows what was stored',
+  );
 });
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
