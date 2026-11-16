@@ -34,5 +34,10 @@
   before. Every `WorkoutDraft` fixture and every workout in the prototype's world already kept
   the rule, so no fixture changed, and the preview's fake refuses the same drafts because it
   parses with the same schema. `prescribed-text.ts`'s note now says what is true: it is kept out
-  of the root barrel, and a client component may import its subpath. No schema change, no
-  migration, no change to production behaviour.
+  of the root barrel, and a client component may import its subpath. Two more rules that two
+  lanes had each written are exported once: `PLAIN_DECIMAL` and `isPlainDecimal(text)`
+  (`packages/shared/src/units.ts`), the shape of a quantity typed into a text field, the same
+  pattern byte for byte as the day page's; and `supersetLabels(items)`
+  (`program/pieces.ts`), the A1, A2, B1 labels by `supersetSchema`'s rule (ordinal letters among
+  the items shown, AA after Z). No schema change, no migration, no change to production
+  behaviour.

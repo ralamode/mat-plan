@@ -1,10 +1,13 @@
 import {
   DEFAULT_TRACKING_TYPE,
   hasStarted,
+  isPlainDecimal,
   MONDAY_FIRST,
+  PLAIN_DECIMAL,
   QUANTITY_SLOT,
   quantityText,
   slotQuantity,
+  supersetLabels,
   TRACKING_TYPE,
   type DayItem,
   type DayPlan,
@@ -14,10 +17,17 @@ import {
   type ProgramListEntry,
   type ProgramView,
   type RowValues,
+  type Superset,
   type TrackingType,
   type Weekday,
 } from '@mat-plan/shared';
-import { everyTypeOnce, familyProgram, programsList } from '@mat-plan/shared/program/fixtures';
+import {
+  everyTypeOnce,
+  familyProgram,
+  heavyADraft,
+  heavyASupersets,
+  programsList,
+} from '@mat-plan/shared/program/fixtures';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 /**
@@ -93,6 +103,25 @@ describe('the helpers, with the arguments the lanes pass', () => {
     const view: ProgramView = familyProgram;
     expectTypeOf(hasStarted).toBeCallableWith(view.athletes[0], view.today);
     expect(view.athletes.every((athlete) => hasStarted(athlete, view.today))).toBe(true);
+  });
+
+  it('supersetLabels takes the items each screen has, and answers a label or null for each', () => {
+    // The day page's items, the editor's draft items, and the editor's own card shape (a superset
+    // and a rest) all fit: it reads `superset` and nothing else.
+    const card: { superset: Superset; restAfter: string | null }[] = heavyADraft.items.map(
+      ({ superset, restAfter }) => ({ superset, restAfter }),
+    );
+    expectTypeOf(supersetLabels(card)).toEqualTypeOf<(string | null)[]>();
+    expectTypeOf(supersetLabels).toBeCallableWith(heavyADraft.items);
+    expectTypeOf(supersetLabels).toBeCallableWith(heavyASupersets.workouts[0].items);
+    expect(supersetLabels(card)).toEqual(supersetLabels(heavyADraft.items));
+  });
+
+  it('isPlainDecimal takes a field’s text; PLAIN_DECIMAL is the pattern itself', () => {
+    expectTypeOf(isPlainDecimal).toEqualTypeOf<(text: string) => boolean>();
+    expectTypeOf(PLAIN_DECIMAL).toEqualTypeOf<RegExp>();
+    const typed = ' 5.5 '.trim();
+    expect(isPlainDecimal(typed)).toBe(PLAIN_DECIMAL.test(typed));
   });
 
   it('MONDAY_FIRST is weekdays, so each one indexes a program’s week', () => {

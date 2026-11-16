@@ -203,6 +203,34 @@ export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = 
 export const QUANTITY_DECIMALS = 3;
 
 /**
+ * A quantity as a person types it into a text field: a plain decimal with at most
+ * `QUANTITY_DECIMALS` places, which is what `numeric(8,3)` keeps. `5`, `5.5` and `.5`; not `-5`,
+ * `1e3`, `0x10`, `5.` or `5 min`.
+ *
+ * **Why a pattern and not `Number()`**: `Number()` accepts or half-accepts every one of those
+ * refused forms (`Number('1e3')` is 1000, `Number('0x10')` is 16, `Number('')` is 0), so a typo or
+ * a pasted value would be stored as a number nobody typed.
+ *
+ * One definition for the FAM-1 screens that read a quantity from a field (the day page's rows, the
+ * workout editor's prescriptions): import it, do not restate it. Built from `QUANTITY_DECIMALS`, so
+ * the pattern follows the precision if it moves.
+ *
+ * ⚠️ **It is the shape only.** It does not trim (trim first), and it sets no ceiling: a value that
+ * matches may still be past the unit's `quantityCeiling` or `MAX_STORABLE_QUANTITY`. No `g` flag,
+ * so `.test()` keeps no state between calls.
+ *
+ * Not the legacy strength form's check (`strength.ts`), which is its own and refuses `.5`.
+ */
+export const PLAIN_DECIMAL = new RegExp(
+  `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,
+);
+
+/** Whether `text` is a plain decimal (`PLAIN_DECIMAL`). `Number(text)` is then finite and not negative. */
+export function isPlainDecimal(text: string): boolean {
+  return PLAIN_DECIMAL.test(text);
+}
+
+/**
  * The SINGULAR of the units whose history line is spelled out, for `value === 1` (V1-30b-ii).
  *
  * A TOTAL `Record` with explicit `null`, not a `Partial` — "deliberately a code" becomes a declared

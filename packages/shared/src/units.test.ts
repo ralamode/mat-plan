@@ -10,6 +10,7 @@ import { QUANTITY_SLOT, QUANTITY_SLOT_ROWS, slotAcceptsDimension } from './quant
 import { sessionMovementSchema } from './strength-session';
 import {
   isLoggableUnit,
+  isPlainDecimal,
   LOGGABLE_DIMENSION_NOUNS,
   LOGGABLE_DIMENSIONS,
   LOGGABLE_UNITS,
@@ -19,6 +20,8 @@ import {
   MASS_QUANTITY_CEILING,
   MAX_REPS_PER_SET,
   MAX_STORABLE_QUANTITY,
+  PLAIN_DECIMAL,
+  QUANTITY_DECIMALS,
   UNIT_LABELS,
   quantityCeiling,
   UNIT_DIMENSION,
@@ -197,5 +200,78 @@ describe('FAM-1 step 3: every tracking type is storable', () => {
     ).toBe('2 mi');
     expect(CSV_UNIT_SUFFIX.mi).toBe('mi');
     expect(UNIT_SINGULAR_LABELS.mi).toBe('mile');
+  });
+});
+
+describe('PLAIN_DECIMAL / isPlainDecimal: a quantity as a person types it', () => {
+  it('pins the pattern, byte for byte', () => {
+    // A contract pin. The day page and the workout editor each held this exact pattern before it
+    // was shared (FAM-1 contract change C2); their swap to this one must change nothing.
+    expect(QUANTITY_DECIMALS).toBe(3);
+    expect(PLAIN_DECIMAL.source).toBe(String.raw`^(\d+(\.\d{1,3})?|\.\d{1,3})$`);
+    expect(PLAIN_DECIMAL.flags).toBe('');
+  });
+
+  it.each(['5', '5.5', '.5', '0', '0.5', '0.125', '12345.678', '99999.999', '007', '.001'])(
+    'accepts %j',
+    (text) => {
+      expect(isPlainDecimal(text)).toBe(true);
+      // What it accepts, `Number()` reads as a finite number that is not negative.
+      expect(Number.isFinite(Number(text))).toBe(true);
+      expect(Number(text)).toBeGreaterThanOrEqual(0);
+    },
+  );
+
+  it.each([
+    ['-5', 'a sign'],
+    ['+5', 'a sign'],
+    ['1e3', 'an exponent'],
+    ['0x10', 'hex'],
+    ['5.', 'a point with nothing after it'],
+    ['.', 'a point alone'],
+    ['5 min', 'a unit'],
+    ['5 lb', 'a unit'],
+    ['5.1234', 'a fourth decimal place'],
+    ['.1234', 'a fourth decimal place'],
+    ['5,5', 'a comma'],
+    ['1,000', 'a thousands separator'],
+    ['5.5.5', 'two points'],
+    ['', 'nothing'],
+    [' ', 'a space'],
+    [' 5', 'a leading space (trim first)'],
+    ['5 ', 'a trailing space (trim first)'],
+    ['5\n', 'a trailing newline'],
+    ['Infinity', 'a word Number() accepts'],
+    ['NaN', 'a word'],
+    ['５', 'a full-width digit'],
+  ])('refuses %j: %s', (text) => {
+    expect(isPlainDecimal(text)).toBe(false);
+  });
+
+  it('refuses forms Number() would accept or half-accept', () => {
+    // Why this is a pattern and not `!isNaN(Number(text))`: each of these is a number to `Number()`.
+    for (const text of ['-5', '1e3', '0x10', '5.', '', ' 5 ', 'Infinity']) {
+      expect(Number.isNaN(Number(text))).toBe(false);
+      expect(isPlainDecimal(text)).toBe(false);
+    }
+  });
+
+  it('follows QUANTITY_DECIMALS: that many places and no more', () => {
+    expect(isPlainDecimal(`1.${'1'.repeat(QUANTITY_DECIMALS)}`)).toBe(true);
+    expect(isPlainDecimal(`1.${'1'.repeat(QUANTITY_DECIMALS + 1)}`)).toBe(false);
+    expect(isPlainDecimal(`.${'1'.repeat(QUANTITY_DECIMALS + 1)}`)).toBe(false);
+  });
+
+  it('is the shape only: it sets no ceiling, and keeps no state between calls', () => {
+    // A value past every ceiling still has the shape; the ceiling is `quantityCeiling`'s check.
+    expect(isPlainDecimal(String(MAX_STORABLE_QUANTITY * 10))).toBe(true);
+    expect([1, 2, 3].map(() => isPlainDecimal('5.5'))).toEqual([true, true, true]);
+    expect([1, 2, 3].map(() => PLAIN_DECIMAL.test('5.5'))).toEqual([true, true, true]);
+  });
+
+  it('is exported from the root barrel', async () => {
+    const barrel = await import('./index');
+    expect(barrel.PLAIN_DECIMAL).toBe(PLAIN_DECIMAL);
+    expect(barrel.isPlainDecimal).toBe(isPlainDecimal);
   });
 });
