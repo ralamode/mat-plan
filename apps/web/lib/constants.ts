@@ -864,8 +864,11 @@ export const movementCount = (n: number) =>
  *
  * Here and not in `@mat-plan/shared`: the count is spelled in the app's locale, and the locale
  * (`./i18n/locale`) and `plural()` are the web app's. `movementCount` above is the same shape.
+ *
+ * Named `…Text`, as `quantityText` and `prescribedText` are, because `itemCount` is already the
+ * number itself: the contract's `WorkoutSummary.itemCount`, and the builder's own parameter.
  */
-export const itemCount = (n: number) => plural(n, { one: `${n} item`, other: `${n} items` });
+export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other: `${n} items` });
 export const skippedCount = (n: number) => `${n} skipped`;
 
 /** A session receipt's id in the strength section — the focus target after its save. The prefix is

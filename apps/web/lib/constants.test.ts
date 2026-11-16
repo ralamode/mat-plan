@@ -6,7 +6,7 @@ import {
   athleteEditPath,
   athletePath,
   blockedSummary,
-  itemCount,
+  itemCountText,
   NAME_WRAP_CLASS,
   NO_ATHLETE_SAVE,
   NO_PROFILE_LOG,
@@ -21,14 +21,14 @@ import {
   usuallyLoggedAs,
 } from './constants';
 
-describe('itemCount: how many items a workout holds (FAM-1)', () => {
+describe('itemCountText: how many items a workout holds (FAM-1)', () => {
   it.each([
     [0, '0 items'],
     [1, '1 item'],
     [2, '2 items'],
     [12, '12 items'],
   ])('%i reads "%s"', (n, text) => {
-    expect(itemCount(n)).toBe(text);
+    expect(itemCountText(n)).toBe(text);
   });
 });
 
