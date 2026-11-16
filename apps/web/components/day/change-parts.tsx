@@ -94,7 +94,7 @@ export function ChangeInput({
       className={cn(
         INPUT_CLASS,
         className,
-        change.dirty ? CHANGED_FIELD_CLASS : LOGGED_FIELD_CLASS,
+        change.fieldDirty(field) ? CHANGED_FIELD_CLASS : LOGGED_FIELD_CLASS,
       )}
     />
   );

@@ -51,14 +51,17 @@ import {
 
 type Logged = { entryPublicId: string; values: RowValues };
 /**
- * - `logged`: this visit's ✓ or re-tick, until the page's data shows the entry.
+ * - `logged`: this visit's ✓ or re-tick, until the page's data shows the entry. A ✓ after an
+ *   un-tick may answer with the SAME entry id (the writer revives the hidden entry, contract C9),
+ *   so data still showing that entry with the numbers it held before the ✓ (`planValues`) has not
+ *   caught up, and the override holds.
  * - `amended`: this visit's Change (13b-ii). An amend keeps the entry's id, so the data showing the
  *   entry is not enough: the override holds until the data shows the amended numbers, or until the
  *   data moves on from what it held at the time (another phone changed the row since).
  * - `unticked`: this visit's un-tick, with the token a re-tick needs.
  */
 type Override =
-  | ({ kind: 'logged' } & Logged)
+  | ({ kind: 'logged'; planValues: RowValues | null } & Logged)
   | ({ kind: 'amended'; planValues: RowValues | null } & Logged)
   | ({ kind: 'unticked'; hiddenAt: string | null } & Logged);
 /**
@@ -162,7 +165,13 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setError(null);
   }
   // Once the page's data shows the entry this visit logged, the data is the truth again.
-  if (override?.kind === 'logged' && fromPlan?.entryPublicId === override.entryPublicId) {
+  if (
+    override?.kind === 'logged' &&
+    fromPlan?.entryPublicId === override.entryPublicId &&
+    (sameValues(fromPlan.values, override.values) ||
+      override.planValues === null ||
+      !sameValues(fromPlan.values, override.planValues))
+  ) {
     setOverride(null);
   }
   // A Change holds until the data shows its numbers, or the data has moved on without them (the
@@ -277,7 +286,12 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   }
 
   function loggedFrom(result: RowResult & { ok: true }): Override {
-    return { kind: 'logged', entryPublicId: result.entryPublicId, values: result.values };
+    return {
+      kind: 'logged',
+      entryPublicId: result.entryPublicId,
+      values: result.values,
+      planValues: fromPlan?.values ?? null,
+    };
   }
 
   async function log(values: RowValues, shown: RowValues) {

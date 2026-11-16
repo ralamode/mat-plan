@@ -187,6 +187,8 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     editable,
     text,
     dirty,
+    /** Whether this field holds a number other than the stored one: only it loses the logged look. */
+    fieldDirty: (field: RowField) => dirty && text[field] !== clean[field],
     /** What the line under the row says when it is not an error: the Change, Undo's, or a kept number. */
     line: shownLine
       ? shownLine.kind === 'kept'

@@ -240,6 +240,8 @@ describe('Change: a number that is not saved', () => {
     type(load(), '35');
     for (const part of CHANGED_FIELD_CLASS.split(' ')) expect(load().classList).toContain(part);
     expect(load().classList).not.toContain('bg-done-surface');
+    // The reps still hold the stored number, so they keep the logged look.
+    for (const part of LOGGED_FIELD_CLASS.split(' ')) expect(reps().classList).toContain(part);
     expect(within(bench()).getByText(DAY_COPY.change.notSaved('27.5 lb × 8'))).toBeTruthy();
     expect(button(DAY_COPY.change.cancel)).toBeTruthy();
   });
@@ -384,5 +386,36 @@ describe('Change: Undo and what the row shows after', () => {
     act(() => control.setPlan(next));
     expect(load().value).toBe('40');
     expect(within(bench()).queryByRole('button', { name: DAY_COPY.change.undo })).toBeNull();
+  });
+});
+
+describe('a ✓ after an un-tick that answers with the same entry (contract C9)', () => {
+  it('shows the new number while the page’s data still holds the old one', async () => {
+    const splits = yesterdayHalfDone.workouts
+      .find((w) => w.name === 'Morning habits')!
+      .items.find((i) => i.name === 'Splits stretch')!;
+    const id = splits.rows[0]!.logged!.entryPublicId;
+    // The page's data never moves: it still shows the entry with 5 min, as a slow refresh would.
+    mount(yesterdayHalfDone, {
+      wrap: () => ({
+        untickRow: async () => ({
+          ok: true,
+          entryPublicId: id,
+          values: splits.rows[0]!.logged!.values,
+          hiddenAt: '2026-11-13T18:00:00.000Z',
+        }),
+        logRow: async (input) => ({ ok: true, entryPublicId: id, values: input.values }),
+      }),
+    });
+    const el = () => card('Morning habits', 'Splits stretch');
+    const tickButton = () =>
+      within(el()).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') });
+    await press(tickButton());
+    const minutes = within(el()).getByRole<HTMLInputElement>('textbox');
+    fireEvent.change(minutes, { target: { value: '6' } });
+    await press(tickButton());
+    expect(tickButton().getAttribute('aria-pressed')).toBe('true');
+    expect(el().textContent).toContain('6 min');
+    // (The heading's prescription also reads "5 min", so only the new number is asserted.)
   });
 });
