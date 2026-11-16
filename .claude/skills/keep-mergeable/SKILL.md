@@ -44,7 +44,10 @@ for n in $(gh pr list --state open --json number --jq '.[].number'); do
 done
 ```
 
-Act when **`mergeable` is `CONFLICTING`** or **`behind_main` is `yes`**. Behind-ness is checked with
+Act when **`mergeable` is `CONFLICTING`**, or when **`behind_main` is `yes`** and
+[review-pr → "Merging a PR that is behind `main`"](../review-pr/SKILL.md#merging-a-pr-that-is-behind-main)
+says it needs an update (a shared file, a migration, a high-stakes area, or a change to the bar). A PR
+behind only by unrelated commits is left alone. Behind-ness is checked with
 git, not GitHub: branch protection is off on this repo (verified 2026-09-30), so GitHub never reports
 `BEHIND` and shows a behind PR as `clean`. `UNKNOWN` means GitHub is still computing: wait and re-read,
 never guess.

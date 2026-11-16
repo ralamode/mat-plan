@@ -4,10 +4,12 @@ import { TRACKING_TYPE, TRACKING_TYPES } from '../movements';
 import { QUANTITY_SLOT } from '../quantity-slots';
 import { quantityCeiling, type Unit } from '../units';
 
+import { DAY_PLAN_FIXTURES } from './fixtures';
 import {
   ENTRY_UNIT_WITHOUT_QUANTITY,
   entryUnitFor,
   fillRowValues,
+  itemUnit,
   prescribedTarget,
   rowValuesSchema,
   TRACKING_TYPE_FIELDS,
@@ -255,5 +257,58 @@ describe('entryUnitFor: the unit an entry stores (plan §2)', () => {
       prescribedTarget('8', [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25, valueMax: 25 }])
         .quantities[0]?.value,
     ).toBeNull();
+  });
+});
+
+describe('itemUnit: the unit an item logs in (`DayItem.unit`)', () => {
+  const lbs = [primary('lb', 25)];
+
+  it('is null for a type with no quantity, whatever it is handed', () => {
+    expect(itemUnit(TRACKING_TYPE.check, [])).toBeNull();
+    expect(itemUnit(TRACKING_TYPE.reps, lbs)).toBeNull();
+  });
+
+  it('is the type’s fixed unit, whatever the prescription row says', () => {
+    expect(itemUnit(TRACKING_TYPE.duration, [])).toBe('min');
+    expect(itemUnit(TRACKING_TYPE.duration, [primary('sec', 30)])).toBe('min');
+    expect(itemUnit(TRACKING_TYPE.time_sets, [primary('min', 1)])).toBe('sec');
+  });
+
+  it('is the prescription’s unit in the type’s own slot, else null', () => {
+    expect(itemUnit(TRACKING_TYPE.weight_reps, lbs)).toBe('lb');
+    expect(itemUnit(TRACKING_TYPE.count, [primary('kg', 10)])).toBe('kg');
+    expect(itemUnit(TRACKING_TYPE.distance, [{ slot: QUANTITY_SLOT.distance, unit: 'yd' }])).toBe(
+      'yd',
+    );
+    // A quantity in another slot is not this type's.
+    expect(itemUnit(TRACKING_TYPE.distance, lbs)).toBeNull();
+    expect(itemUnit(TRACKING_TYPE.weight_reps, [])).toBeNull();
+  });
+
+  it('agrees with `entryUnitFor` wherever the item has a unit', () => {
+    for (const type of TRACKING_TYPES) {
+      for (const unit of unitsForTrackingType(type)) {
+        const slot = TRACKING_TYPE_FIELDS[type].slot!;
+        const logsIn = itemUnit(type, [{ slot, unit }]);
+        expect(logsIn, `${type} in ${unit}`).not.toBeNull();
+        expect(entryUnitFor(type, logsIn), `${type} in ${unit}`).toBe(logsIn);
+      }
+    }
+  });
+
+  it('is what every day fixture’s item carries', () => {
+    let checked = 0;
+    for (const plan of Object.values(DAY_PLAN_FIXTURES)) {
+      for (const item of plan.workouts.flatMap((w) => w.items)) {
+        // An item whose prescription was removed keeps the unit it was logged in, and has no
+        // target to derive it from.
+        if (item.prescriptionPublicId === null) continue;
+        expect(item.unit, `${plan.day} ${item.name}`).toBe(
+          itemUnit(item.trackingType, item.target.quantities),
+        );
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
   });
 });

@@ -123,6 +123,8 @@ a parent can see that something was removed, which a silent hide never allows.
 
 ## Decision 3 — a hide is a **syncable event**; the freed slot is a migration this ADR does not authorize
 
+> ⚠️ Amended 2026-11-16 for FAM-1's rows — see [Amendment 2](#amendment-2-2026-11-16-one-entry-per-slot). Items 2 and 4 are narrowed for a revived entry; the rest stands.
+
 1. **A hide is an event in the outbox**, carrying the row's `client_id` and the client's timestamp — not an absence, which is indistinguishable from "this device never had it". Un-hide likewise.
 2. ✅ **A replay must never resolve onto a hidden row.** This **adopts** V1-24 1e rather than overturning it; the first draft prescribed the inverse and cited that very proof as support.
 3. 🔴 **`deleted_at` is never written as a side effect of an ordinary field upsert** — otherwise an edit from a device that never saw the delete silently un-hides the row, which defeats item 1 from the other direction.
@@ -224,6 +226,30 @@ Decisions 1, 3 and 4 are unchanged._
   yesterday only, so a hide is restorable while its day is open, not until the purge. A clear's rows on
   a day that has closed stay hidden until the purge.
 - **When per-row removal returns** (FAM-1 11a and 11b: un-ticking a row), it is a hide under this ADR.
+
+## Amendment 2 (2026-11-16): one entry per slot
+
+_The maintainer's decision of 2026-11-16, recorded as FAM-1 plan decision
+[D35](../plans/fam-1-family-program.md#1-decisions); the contract's rule is on `rowWriteSchema`
+(`packages/shared/src/program/day-shapes.ts`). Decisions 1, 2 and 4 are unchanged._
+
+A ✓ on a program row whose entry the athlete un-ticked, or that Clear this day hid, **revives that
+entry** and writes the new numbers on it, in one transaction. It does not insert a second entry, so a
+slot (one athlete, day, prescription and set) holds at most one. Program rows only: single values
+keep "re-entry is a new row" (Amendment 1).
+
+- **Decision 3, item 2** ("a replay must never resolve onto a hidden row") now holds for the entry's
+  **current** attempt id only. A revive replaces the stored `client_id` with the reviving ✓'s. An id
+  it replaced is not remembered, so replayed after a later un-tick it cannot be told from a new ✓,
+  and it revives the entry.
+- **Decision 3, item 4** (a hidden row holds its `client_id`) holds until a revive rewrites it.
+- **Decision 3, item 3** is unchanged in what it protects: the un-hide is done only by the row
+  writer's revive, for a person's new ✓, never as a side effect of an ordinary field update.
+- **Accepted for Beta 0:** no screen re-sends an old attempt, and there is no offline queue. The
+  sync work (v1.5), the first thing that could replay an old request, must keep the replaced ids
+  before it can do so.
+
+_Signed by the maintainer, 2026-11-16._
 
 ## Review-response log
 
