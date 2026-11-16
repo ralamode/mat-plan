@@ -1,5 +1,7 @@
 import type { ErrorEvent, Event } from '@sentry/nextjs';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
+import { format } from 'node:util';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -350,5 +352,115 @@ describe('the identified user never reaches Sentry (AUTH-1 1c-1)', () => {
       reason: 'cross_household',
       profilePublicId: 'p_1',
     });
+  });
+});
+
+// FAM-1 4a-i review: a CHECK (23514) or UNIQUE (23505) violation's `detail` is the rejected row,
+// household text included. node-postgres puts it on the error as an own property, so a normalized
+// error carries it as a key, and a printed error carries it as a `DETAIL:` line.
+describe('scrubSentryEvent — a rejected row never leaves the server (Postgres `detail`)', () => {
+  const ROW = 'Failing row contains (42, 7, Saturday hill sprints with (a) partner, null).';
+  const KEY = 'Key (household_id, name)=(7, Saturday hill sprints) already exists.';
+
+  it('drops `detail` keys wherever an error was normalized, and keeps the diagnosable fields', () => {
+    const event = scrubSentryEvent({
+      contexts: {
+        DatabaseError: {
+          code: '23514',
+          constraint: 'workouts_name_len',
+          table: 'workouts',
+          detail: ROW,
+        },
+      },
+      breadcrumbs: [
+        { category: 'query', data: { error: { message: 'violates check', detail: KEY } } },
+      ],
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
+    expect(event.contexts?.DatabaseError).toEqual({
+      code: '23514',
+      constraint: 'workouts_name_len',
+      table: 'workouts',
+    });
+  });
+
+  it('cuts a printed `DETAIL:` line and everything after it, keeping the message', () => {
+    const printed = `new row for relation "workouts" violates check constraint "workouts_name_len"\nDETAIL:  ${ROW}`;
+    const event = scrubSentryEvent({
+      exception: { values: [{ value: printed }] },
+      message: printed.replace('\n', '\\n'),
+    } as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
+    expect(event.exception?.values?.[0]?.value).toBe(
+      'new row for relation "workouts" violates check constraint "workouts_name_len"',
+    );
+  });
+
+  it('cuts the detail sentence where it sits inside a longer line, even with a ")" in the row', () => {
+    const event = scrubSentryEvent({
+      exception: {
+        values: [{ value: `insert failed: ${ROW} (code 23514)` }, { value: `dup: ${KEY}` }],
+      },
+    } as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
+    expect(JSON.stringify(event)).not.toContain('partner');
+    expect(event.exception?.values?.[0]?.value).toBe('insert failed: ');
+  });
+
+  // The form a log actually carries: `console.error(err)` / `util.format` prints the error with
+  // `util.inspect`, so the detail appears as `detail: '…'`, split into `'…' +` continuation lines when
+  // long. Built to node-postgres's DatabaseError shape (own, enumerable fields), since apps/web does
+  // not depend on `pg` directly.
+  class DatabaseError extends Error {
+    constructor(message: string, fields: Record<string, unknown>) {
+      super(message);
+      this.name = 'DatabaseError';
+      Object.assign(this, fields);
+    }
+  }
+  const failing = (detail: string) =>
+    new DatabaseError(
+      'new row for relation "workouts" violates check constraint "workouts_name_len"',
+      {
+        severity: 'ERROR',
+        code: '23514',
+        detail,
+        constraint: 'workouts_name_len',
+        table: 'workouts',
+      },
+    );
+
+  it.each([
+    ['a short detail', ROW],
+    [
+      'a long, multi-line detail inspect splits into continuation lines',
+      `Failing row contains (42, 7, ${'Saturday hill sprints '.repeat(6)}with (a)\npartner, null).`,
+    ],
+    [
+      'a long, multi-line detail with an apostrophe, which inspect prints in double quotes',
+      `Failing row contains (42, 7, ${"Sam's Saturday hill sprints ".repeat(6)}with (a)\npartner, null).`,
+    ],
+    [
+      'a long, multi-line detail with both quote kinds, which inspect prints in backticks',
+      `Failing row contains (42, 7, ${'Sam\'s "Saturday hill sprints" '.repeat(6)}with (a)\npartner, null).`,
+    ],
+  ])('a printed DatabaseError (util.format) loses %s, and keeps its code', (_what, detail) => {
+    const log = beforeSendLogScrubbed({
+      level: 'error',
+      message: format(failing(detail)),
+    } as Parameters<typeof beforeSendLogScrubbed>[0]);
+    expect(log.message).not.toContain('Saturday hill sprints');
+    expect(log.message).not.toContain('partner');
+    expect(log.message).toContain("code: '23514'");
+  });
+
+  it('beforeSendLog and beforeBreadcrumb drop it too', () => {
+    const log = beforeSendLogScrubbed({
+      level: 'error',
+      message: `write failed\nDETAIL: ${ROW}`,
+      attributes: { err: { detail: KEY } },
+    } as Parameters<typeof beforeSendLogScrubbed>[0]);
+    const crumb = beforeBreadcrumbScrubbed({ message: `x\nDETAIL: ${KEY}`, data: { detail: ROW } });
+    expect(JSON.stringify({ log, crumb })).not.toContain('Saturday hill sprints');
   });
 });
