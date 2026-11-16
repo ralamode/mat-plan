@@ -23,8 +23,6 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 
 describe('DayPlan: owed by its consumers', () => {
   it.todo('12b: the DAL sets writable, future and canGoForward');
-  it.todo('13: each DayPlan fixture renders on the preview route');
-  it.todo('13: typed numbers survive ticking another row');
   it.todo('13b: set rows, PREVIOUS and Add set, per set');
   it.todo('13b: heavy-a-supersets renders linked supersets with their rest');
   it.todo('13b: superset letters are ordinal: group b reads A1, A2 when group a is gone');
@@ -40,10 +38,6 @@ describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers'
   it.todo('12b: a crafted un-tick or re-tick on an older or a future day answers closed_day');
   it.todo('12b: an entry that is not this athlete’s on that day answers not_found');
   it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
-  it.todo('13: a ✓ that fails un-ticks, keeps what was typed, and says it could not save');
-  it.todo('13: un-tick leaves no tomb; re-tick restores the row, on today and yesterday');
-  it.todo('13: an empty ✓ shows the prescription’s numbers (target) as the logged values');
-  it.todo('13: a non-number is refused by the field, which takes focus');
 });
 
 describe('RowAmend: owed by its consumers', () => {
