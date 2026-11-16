@@ -48,7 +48,9 @@ path and **creating** the deliberate one.
 ## Invariants
 
 1. 🔴 **`movementNameKey` is THE "same movement" rule, and it has more than one consumer.** The
-   picker's `exact` test, its alias hit, and `MOV-1`'s rename-collision check all fold by it. Two
+   picker's `exact` test, its alias hit, `MOV-1`'s rename-collision check, and (FAM-1 contract
+   change C8) the program builder's `newItem`, through `existingItem`
+   ([program-contract.md](./program-contract.md) invariant 15), all fold by it. Two
    surfaces disagreeing about what a duplicate is would let a rename refuse a name the picker had
    just offered. It builds on PROF-1's `foldName` and adds only the movement-specific part (plurals,
    punctuation, the possessive's orphan `s`) — a source scan asserts the import, because a local

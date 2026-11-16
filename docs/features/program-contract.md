@@ -91,6 +91,7 @@ safe in a `'use client'` component; `rolledBack` is the proof modules' and comes
 | `WHOLE_NUMBER`, `isWholeNumber(text)`    | `packages/shared/src/units.ts`                  | The shape of reps as typed: digits only. It does not trim and sets no range (`repsSchema` holds 1..1000).                                                                                                                                                                                                                                                                                                      |
 | `ProgramListEntry`                       | `packages/shared/src/program/program-shapes.ts` | One program of a `ProgramList` (`ProgramList[number]`), by name.                                                                                                                                                                                                                                                                                                                                               |
 | `TRANSPORT_REFUSALS`, `TransportRefusal` | `packages/shared/src/program/actions.ts`        | What a transport answers before the action runs: no session is `not_found`, over the rate limit is `retry`. A real action hands it to `enterMutation` and returns the refusal untouched (invariant 14).                                                                                                                                                                                                        |
+| `existingItem(options, name)`            | `packages/shared/src/program/pieces.ts`         | The item a typed name already names, or `undefined`: its name's key or one of its aliases matches (`push ups` is Push-ups, `RDL` is Romanian Deadlift). Each option carries `isCatalog` (required: the picker's tie-break). The one rule for "this item exists" in `newItem`, for the real writer and the fake; it is the picker's `exact` or `aliasHit` (invariant 15).                                       |
 | `DEFAULT_TRACKING_TYPE`                  | `packages/shared/src/movements.ts`              | The type an item gets when none is named: `weight_reps`, the `movements.tracking_type` column's default. `packages/db/src/tracking-type-default.test.ts` holds the const and the schema's default equal.                                                                                                                                                                                                       |
 | `rolledBack(fn)`                         | `packages/db/scripts/verify/harness.ts`         | For `db:verify` proof modules, not the app: runs a proof's writes in a transaction that is always rolled back, and rethrows the proof's own failure. Imported from `./harness`, beside `asTx` and `expectRejectedBy`.                                                                                                                                                                                          |
 
@@ -187,6 +188,19 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     [write-path.md](./write-path.md) invariant 1); a later API transport returns the same two.
     Neither list gains a "signed out" or "forbidden" member (ADR 0006). A fake calls no
     transport, so it never answers either word for these two reasons.
+
+15. **`newItem` makes no second item for a name or an alias that already names one in the
+    household's list, and it answers with the item's own name.** A typed name that `existingItem` matches selects that item
+    (`existed: true`); it is not a refusal. The picker withholds "add as new" for the same two cases
+    (`matchMovementOptions`' `exact` and `aliasHit`), so the client's guard and the server's answer
+    are one rule: the guard saves a round trip, the server holds when the page is stale or the call
+    did not come from the picker. `name` is on every success (the stored name, which is not always
+    what was typed), so a card never shows `rdl` for Romanian Deadlift.
+    Three limits, each on purpose: the options passed must carry `isCatalog` (the picker's
+    tie-break, so the type requires it); a name whose key is empty (`S`) is refused by
+    `newItemSchema`, since it could be matched to nothing; and the check is a read before the
+    insert, so two calls in the same moment with names that share a key but not a slug can both
+    insert (plan D25).
 
 ## Traps
 

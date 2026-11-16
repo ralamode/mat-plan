@@ -88,10 +88,28 @@ export interface ProgramActions {
   saveWorkout(draft: WorkoutDraft): Promise<ProgramResult<{ workoutPublicId: string }>>;
   saveWeek(draft: WeekDraft): Promise<ProgramResult>;
   copyWorkout(draft: CopyDraft): Promise<ProgramResult<{ workoutPublicId: string }>>;
-  /** A name that already exists selects that item: `existed` is true and `trackingType` is its own. */
-  newItem(
-    input: NewItem,
-  ): Promise<ProgramResult<{ itemPublicId: string; trackingType: TrackingType; existed: boolean }>>;
+  /**
+   * A name that already names an item selects that item: `existed` is true, and `name` and
+   * `trackingType` are the item's own, not what was typed.
+   *
+   * **"Already names an item" is the picker's rule, the same on the server as in the picker**
+   * (`existingItem` in `./pieces`): the typed name has the same key as an item's name (`push ups`
+   * is Push-ups), or the same key as one of its aliases (`RDL` is Romanian Deadlift). Either selects
+   * that item. It is never a refusal and never a second item: a household must not end up with an
+   * item called "RDL" beside Romanian Deadlift because a stale page or a direct call got past the
+   * picker, which withholds "add as new" for both cases.
+   *
+   * `name` is on every success, so the caller shows the stored name without looking it up: the item
+   * may not be in the list the page loaded, and the typed text is not the stored name (`' rdl '`).
+   */
+  newItem(input: NewItem): Promise<
+    ProgramResult<{
+      itemPublicId: string;
+      name: string;
+      trackingType: TrackingType;
+      existed: boolean;
+    }>
+  >;
   putOn?(draft: AssignDraft): Promise<ProgramResult>;
   takeOff?(input: TakeOff): Promise<ProgramResult>;
 }

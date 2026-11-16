@@ -637,6 +637,7 @@ describe('the actions interfaces', () => {
       newItem: async () => ({
         ...done,
         itemPublicId: fixtureIds.item('grip'),
+        name: 'Grip',
         trackingType: TRACKING_TYPE.check,
         existed: true,
       }),
