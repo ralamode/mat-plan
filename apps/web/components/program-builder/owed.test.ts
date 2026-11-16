@@ -17,9 +17,10 @@ import { describe, it } from 'vitest';
  */
 
 describe('WorkoutDraft: owed by its consumers', () => {
-  it.todo('8: the editor renders heavy-a-draft and new-workout-empty');
-  it.todo('8: the name counter stops at WORKOUT_NAME_MAX; the unit select offers the type’s units');
-  it.todo('8b: a superset left with one item dissolves on Save and drops its rest');
+  it.todo('8b: linking two neighbours makes a group; the rest field edits the group’s last item');
+  it.todo(
+    '7b: the workout pages pass program; the editor names it and says who a change applies to',
+  );
   it.todo('9: items picked together are added in the order they were picked');
   it.todo('9: a new item is made with its type; an existing name selects that item');
   it.todo('7a: saveWorkout and newItem pass the inherited action matrix');

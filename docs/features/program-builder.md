@@ -19,9 +19,9 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 8a.** The Programs list and the program page are real screens on the
-preview route; the workout editor is still a stub. Each step below adds its files and its
-invariants here.
+🚧 **Built through step 8.** The Programs list, the program page and the workout editor are real
+screens on the preview route; the editor links no supersets yet (8b) and adds no items (9). Each
+step below adds its files and its invariants here.
 
 ## The map
 
@@ -51,25 +51,31 @@ flowchart LR
 
 ## Files
 
-| File                                                            | What it is for                                                                                                                      |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`: the list, "← Home", and `CreateProgram`.                                               |
-| `apps/web/components/program-builder/create-program.tsx`        | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.                        |
-| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                               |
-| `apps/web/components/program-builder/program-header.tsx`        | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                                             |
-| `apps/web/components/program-builder/whos-on-it.tsx`            | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                               |
-| `apps/web/components/program-builder/workouts-list.tsx`         | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.                            |
-| `apps/web/components/program-builder/week-shell.tsx`            | The week, read-only. Step 10's week editor takes its place.                                                                         |
-| `apps/web/components/program-builder/name-field.tsx`            | A name input with its counter (outside the label, by `aria-describedby`) and its refusal. Step 8 reuses it.                         |
-| `apps/web/components/program-builder/builder-text.ts`           | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.                            |
-| `apps/web/components/program-builder/routes.ts`                 | The builder's paths. The screens link with them; 7b builds its pages at them.                                                       |
-| `apps/web/components/program-builder/group-list.tsx`            | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                   |
-| `apps/web/components/program-builder/use-name-form.ts`          | A name form's state and submit: cleans the name, refuses an empty one, drops an answer that arrives after Cancel. Step 8 reuses it. |
-| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions })`; `picker` is the picker's own `MovementPickerData`. A stub until 8.               |
-| `apps/web/components/program-builder/*-screen.test.tsx`         | Each screen's tests. The workout editor's is still the stub's own output until step 8 replaces it.                                  |
-| `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                |
-| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                                 |
-| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                                                                                              |
+| File                                                            | What it is for                                                                                                                   |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`: the list, "← Home", and `CreateProgram`.                                            |
+| `apps/web/components/program-builder/create-program.tsx`        | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.                     |
+| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                            |
+| `apps/web/components/program-builder/program-header.tsx`        | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                                          |
+| `apps/web/components/program-builder/whos-on-it.tsx`            | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                            |
+| `apps/web/components/program-builder/workouts-list.tsx`         | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.                         |
+| `apps/web/components/program-builder/week-shell.tsx`            | The week, read-only. Step 10's week editor takes its place.                                                                      |
+| `apps/web/components/program-builder/name-field.tsx`            | A short text field with its counter (outside the label, by `aria-describedby`) and its refusal; `multiline` for a note.          |
+| `apps/web/components/program-builder/status-line.tsx`           | A screen's one status line: `useStatusLine()` (clear, then set a frame later) and `StatusLine` (an `Announcer` and an alert).    |
+| `apps/web/components/program-builder/builder-text.ts`           | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.                         |
+| `apps/web/components/program-builder/routes.ts`                 | The builder's paths. The screens link with them; 7b builds its pages at them.                                                    |
+| `apps/web/components/program-builder/group-list.tsx`            | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                |
+| `apps/web/components/program-builder/use-name-form.ts`          | A name form's state and submit (Create, Rename): refuses an empty name, drops an answer that arrives after Cancel.               |
+| `apps/web/components/program-builder/use-attempt.ts`            | `useAttempt()` (one write's attempt; a late answer is dropped) and `focusField`, shared by the name forms and the editor's Save. |
+| `apps/web/components/program-builder/field-label.tsx`           | A field's label with "(optional)".                                                                                               |
+| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions, program? })`: the cards, one Save, and the save bar with its status line.         |
+| `apps/web/components/program-builder/item-card.tsx`             | One item's card: fields by type (`TRACKING_TYPE_FIELDS`), a unit select, instructions, Up, Down, Remove.                         |
+| `apps/web/components/program-builder/editor-draft.ts`           | The editor's typed draft (`toCards`) and `readDraft`: every refusal the writer would make, per field, before Save calls.         |
+| `apps/web/components/program-builder/supersets.ts`              | `normalizeSupersets` (after every move and remove) and `supersetLabels` (ordinal A1, A2).                                        |
+| `apps/web/components/program-builder/*.test.ts(x)`              | Each screen's and module's tests, beside it.                                                                                     |
+| `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.             |
+| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                              |
+| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                                                                                           |
 
 ## Invariants
 
@@ -103,11 +109,42 @@ flowchart LR
     row, or to the section's heading when they had not started and leave the list. The message is
     set after the move. Focus moves only if it is still where the tap left it: an answer that lands
     after the person moved on (into Rename, say) leaves their focus alone.
-11. **A name form drops a late answer, but not the write.** Cancel, Escape, a fresh open or
-    leaving the screen ends the attempt, so a late answer neither navigates nor shows an alert. The
-    create or rename it sent may still have landed; 6a and 7a inherit that.
+11. **A name form, and the editor's Save, drop a late answer, but not the write** (`useAttempt`).
+    Cancel, Escape, a fresh open or leaving the screen ends the attempt, so a late answer neither
+    navigates nor shows an alert. The create, rename or save it sent may still have landed; 6a and
+    7a inherit that.
+12. **A saved draft's supersets are always well formed** _(maintainer, 2026-11-16)_.
+    `normalizeSupersets` runs after every move and remove: a group is a run of neighbours, a group
+    of one dissolves (D14), `order` runs 1..n, and the rest is on the last item. **The rest is the
+    group's**: it stays with the run that held it, passes to the group's surviving run, and is
+    dropped only when no run of the group survives (a Remove of the rest's holder hands it on
+    first). The status line says when a group ends, an item leaves one, or a rest goes. 8b adds
+    linking and the rest field on top of it.
+13. **The editor refuses on the client what the writer refuses**, field by field (`readDraft`), so
+    `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
+    whole number or blank _(maintainer, 2026-11-16)_, a quantity a plain decimal under its unit's
+    ceiling (blank: the unit with no target), notes one line. An item loaded with no quantity is
+    saved with none until a unit is chosen: the machine never picks the unit a kid logs in. What
+    `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
+    editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
+    sends.
+14. **The editor differs from the prototype on purpose** (each a decision, 2026-11-16): fields two
+    to a row on a phone (four in one row leave 43px of text at 360px); "Used by …" under the
+    heading (a lb→kg switch changes everyone's load); the back link names the program only when
+    the route passes `program` (the preview does not; 7b does); "(optional)" on the fields a blank
+    is allowed in; a superset shows its letter and a rule, not the prototype's tinted pill; "type
+    locked, it has logs" is not shown (the draft carries no logs). Remove has no undo but Cancel,
+    as the prototype; a second Remove within `REMOVE_DEBOUNCE_MS` is taken as the same tap. **7b must
+    pass `program`** (`owed.test.ts`).
+15. **Leaving with changes asks first, from Cancel and the back link only.** A reload asks too
+    (`beforeunload`). The phone's back gesture and Android Back do not: the App Router has no hook
+    for a history navigation, so a swipe back discards the draft. Recorded, not built.
 
 ## Traps
+
+- **The editor's decimal rule is restated.** `editor-draft.ts`'s `PLAIN_DECIMAL` is the day page's
+  (`components/day/row-values.ts`, lane C's). The contract exports one since #436; 8b swaps to it.
+  Until then, a change to the rule changes both.
 
 - **A name form assumes leaving the screen unmounts it.** `useNameForm` ends the attempt in an
   effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in
