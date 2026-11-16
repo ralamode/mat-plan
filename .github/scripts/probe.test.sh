@@ -71,16 +71,26 @@ else
 fi
 
 # 5b · a gate already RED before the mutation is DID-NOT-PROVE, even when its output names --expect
-printf '#!/bin/sh\necho "GATE SAYS NO"; exit 1\n' >"$tmp/red.sh" && chmod +x "$tmp/red.sh"
+# red.sh records it if it EVER sees the mutation, so "the file was never written" can fail: the
+# old script wrote the mutation, ran, and restored, leaving src.js looking untouched afterwards.
+printf '#!/bin/sh\ngrep -q KEEP "$(dirname "$0")/src.js" || echo MUTATED >>"$(dirname "$0")/seen.log"\necho "GATE SAYS NO"; exit 1\n' >"$tmp/red.sh" && chmod +x "$tmp/red.sh"
 git -C "$tmp" add -A && git -C "$tmp" commit -qm red
 run 'a red baseline is DID-NOT-PROVE, not RED' 1 'DID-NOT-PROVE' -- \
   --file src.js --from KEEP --to GONE --gate ./red.sh --expect 'GATE SAYS NO'
-if ! grep -q KEEP "$tmp/src.js"; then
-  printf '✗ a red baseline must not write the mutation\n'
+if [ -e "$tmp/seen.log" ]; then
+  printf '✗ a red baseline must never write the mutation (the gate saw it)\n'
   fails=$((fails + 1))
 else
-  printf '✓ a red baseline leaves the file untouched\n'
+  printf '✓ a red baseline never writes the mutation\n'
 fi
+run 'a red baseline prints the gate output' 1 'GATE SAYS NO' -- \
+  --file src.js --from KEEP --to GONE --gate ./red.sh --expect 'x'
+
+# 5c · a GREEN baseline that already prints --expect cannot prove the catch either
+printf '#!/bin/sh\necho "test: GATE SAYS NO"\ngrep -q KEEP "$(dirname "$0")/src.js" || exit 1\n' >"$tmp/verbose.sh" && chmod +x "$tmp/verbose.sh"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm verbose
+run 'a passing gate that already prints --expect is DID-NOT-PROVE' 1 'PASSING output already contains' -- \
+  --file src.js --from KEEP --to GONE --gate ./verbose.sh --expect 'GATE SAYS NO'
 
 # 6 · 🔴 THE CASE THIS FILE EXISTS FOR: uncommitted work in the probed file SURVIVES.
 printf 'export const value = "KEEP";\nexport const precious = "UNCOMMITTED WORK";\n' >"$tmp/src.js"

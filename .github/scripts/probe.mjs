@@ -125,12 +125,23 @@ const baseline = spawnSync(args.gate, { shell: true, encoding: 'utf8', cwd: root
 if (baseline.error || baseline.status === 127) {
   fail(`the gate could not run (${baseline.error?.message ?? 'exit 127'}). Nothing was proved.`);
 }
+const baselineOutput = `${baseline.stdout ?? ''}${baseline.stderr ?? ''}`;
 if (baseline.status !== 0) {
+  const tail = baselineOutput.trimEnd().split('\n').slice(-20).join('\n');
   fail(
     `DID-NOT-PROVE — the gate is already RED before any mutation (exit ${baseline.status}).\n` +
       `  A red baseline can print the --expect text on its own (a failing test's name, say), so the\n` +
       `  mutated run would read as caught when the mutation did nothing. Nothing was changed.\n` +
-      `  Make \`${args.gate}\` pass on the unmutated tree first.`,
+      `  Make \`${args.gate}\` pass on the unmutated tree first. Its last lines:\n${tail}`,
+  );
+}
+// A GREEN baseline that already prints --expect (a verbose reporter listing passing test names)
+// would make any red run look like the named catch. Refuse it too.
+if (args.expect && baselineOutput.includes(args.expect)) {
+  fail(
+    `DID-NOT-PROVE — the gate's PASSING output already contains --expect ("${args.expect}"),\n` +
+      `  so a red run could not show it was this assertion that caught the mutation. Pick an\n` +
+      `  --expect only the failure prints (the assertion's message, not the test's name).`,
   );
 }
 
