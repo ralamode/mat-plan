@@ -10,7 +10,8 @@ import { schema } from '../client';
 import type { Executor } from './executor';
 
 /**
- * Row helpers for the entry graph that more than one writer needs (FAM-1 step 11a).
+ * Row helpers for the entry graph: the strength writer uses them, and the FAM-1 row writer (11b)
+ * will (FAM-1 step 11a).
  *
  * ⚠️ Not re-exported from `src/index.ts`. Each helper writes part of an entry inside its caller's
  * transaction; called on its own it would leave a half-written graph.
@@ -65,19 +66,19 @@ export async function insertEntrySetRows(
 
   // One PRIMARY quantity per set that carries a magnitude.
   //
-  // The unit comes from the MOVEMENT, and the dimension is derived from that unit rather than
-  // assumed: since PR 4a the movement may be logged in `in` (a box jump) or `sec` (a hold), not only
+  // The unit is the caller's (the strength writer passes the movement's), and the dimension is
+  // derived from that unit rather than assumed: since PR 4a a movement may be logged in `in` (a box jump) or `sec` (a hold), not only
   // `lb`/`kg`. Deriving keeps the pair consistent with `units(code, dimension)`, which the composite
   // FK checks — a hard-coded `'mass'` here would be an FK violation surfacing as a 500 on a gym
   // floor. Census §4.6 is why the unit is not on the value: "weight units are never written", so a
-  // bare `185` means 185 of whatever this movement is logged in.
+  // bare `185` means 185 of whatever unit the caller passed.
   //
   // A set with no magnitude (pure bodyweight, or a band) writes NO quantity row — a mode is not a
   // measurement, and a row with a NULL value would be the EAV smell the child table avoids.
   const quantityRows: (typeof schema.entrySetQuantities.$inferInsert)[] = [];
   args.sets.forEach((s, i) => {
-    // `=== null` is not enough: the SCHEMA always emits `weight: null`, but the relaxed signature of
-    // `writeSessionStrengthEntry` lets a direct caller (a future importer) omit the key entirely, so handle
+    // `=== null` is not enough: the SCHEMA always emits `weight: null`, but the relaxed
+    // `EntrySetRowInput` lets a direct caller (a future importer) omit the key entirely, so handle
     // both. Until DX-7 this was the ONLY thing standing between an omission and
     // `numeric: "undefined"` from Postgres, because `packages/db` was typechecked by nothing; the
     // package now has its own `tsconfig.json` in `pnpm typecheck`, so an omission through the
