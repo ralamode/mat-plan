@@ -144,7 +144,10 @@ flowchart LR
     link control reads "Superset with next", "Unlink from next" or "Join supersets A and B", never
     the next item's name (up to 100 characters at 360px); its accessible name adds it. It sits in
     its own row below the tools, and the rest field last in the card, so what a link moves is
-    always below the tapped control. **7b must pass `program`** (`owed.test.ts`).
+    always below the tapped control. Three 8b answers differ from v12, as plan §8 records: an unlink
+    copies the rest to both sides (v12: the first part only); a join keeps the later group's rest
+    and names the dropped one (v12: the earlier one, silently); the field is "Rest", e.g. "90 s
+    after each round" (v12: "Rest after each round", e.g. "90 s"). **7b must pass `program`** (`owed.test.ts`).
 15. **Leaving with changes asks first, from Cancel and the back link only.** A reload asks too
     (`beforeunload`). The phone's back gesture and Android Back do not: the App Router has no hook
     for a history navigation, so a swipe back discards the draft. Recorded, not built.
