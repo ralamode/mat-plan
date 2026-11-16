@@ -314,7 +314,7 @@ async function fixture(tx: VerifyTx) {
 
   // Step 5: who is on which program. Every athlete that ticks is assigned (the athlete and the
   // sibling to H's block, the foreigner to F's), from well before the proof day and still open, so
-  // YESTERDAY and DAY are both on it. 6d's three athletes are not on H's block on DAY.
+  // YESTERDAY and DAY are both on it. 6d's first three athletes are not on H's block on DAY; startsToday is on it from DAY, so not on YESTERDAY.
   let assignIdx = 0;
   const assign = (
     profileId: number,
