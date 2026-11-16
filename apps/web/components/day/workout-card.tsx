@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -17,7 +18,7 @@ import { itemKeyOf } from './use-row';
  * count** (plan §4 "As built": `total` 0 never reads as done). "1 not saved" stays beside it while a
  * row's save has failed, so a failure that scrolled out of sight is still seen.
  */
-export function WorkoutCard({
+export const WorkoutCard = memo(function WorkoutCard({
   workout,
   workoutKey,
   headingId,
@@ -69,4 +70,4 @@ export function WorkoutCard({
       </ul>
     </section>
   );
-}
+});

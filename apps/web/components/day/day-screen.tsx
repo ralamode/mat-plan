@@ -61,8 +61,8 @@ function DayBody({ plan, actions }: DayScreenProps) {
     if (closed) closedRef.current?.focus();
   }, [closed]);
 
-  // One object per change of what it holds, so a row's announce or failure does not re-render
-  // every other row (13b brings dozens of set rows).
+  // One object per change of what it holds. With the cards memoised, an announce or a failure
+  // re-renders this section and the cards whose props changed, not every row (13b brings dozens).
   const readOnly = !plan.writable || closed;
   const day: DayContextValue = useMemo(
     () => ({

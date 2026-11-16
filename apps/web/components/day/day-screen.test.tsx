@@ -22,6 +22,7 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { DayScreen } from './day-screen';
+import { LOGGED_CARD_CLASS, TINT_CLASS } from './item-card';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -217,6 +218,8 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     });
     expect(control.actions.logRow).toHaveBeenCalledTimes(1);
     expect(within(vest).getByText('11 lb')).toBeTruthy();
+    // The field is gone once the row is logged: focus is on the ✓, never the page.
+    expect(document.activeElement).toBe(tick(vest));
   });
 
   it('"Last time" shows on a row that can still be logged', () => {
@@ -287,6 +290,16 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     vest.target = { reps: null, quantities: [{ ...lb(5), unit: 'kg' }] };
     act(() => control.setPlan(plan));
     await press(tick(card('Morning habits', 'Vest weight')));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+  });
+
+  it('after an un-tick, the same number typed again (5.0 for 5) re-ticks the same entry', async () => {
+    const control = mount(yesterdayHalfDone);
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    fireEvent.change(field(splits), { target: { value: '5.0' } });
+    await press(tick(splits));
     expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
     expect(control.actions.logRow).not.toHaveBeenCalled();
   });
@@ -409,6 +422,9 @@ describe('a ✓ that fails', () => {
     await press(tick(grip));
     expect(tick(grip).getAttribute('aria-pressed')).toBe('true');
     expect(within(grip).getByText(refusalCopy(ROW_REFUSAL.retry, 'untick').message)).toBeTruthy();
+    // Still logged, so still edged; no tint while a message shows (destructive is under AA on it).
+    expect(grip.classList.contains(LOGGED_CARD_CLASS)).toBe(true);
+    expect(grip.classList.contains(TINT_CLASS)).toBe(false);
   });
 
   it('a change to the row in the page’s data clears its old message', async () => {
@@ -470,7 +486,7 @@ describe('inline refusals', () => {
     expect(document.activeElement).toBe(field(vest));
   });
 
-  it('a stale page offers Reload, which refreshes, keeps focus on the ✓ and the other rows’ text', async () => {
+  it('a stale page offers Reload, which refreshes and keeps focus on the ✓', async () => {
     const stale: RowResult = { ok: false, reason: ROW_REFUSAL.program_changed };
     mount(todayTwoPrograms, { wrap: () => ({ logRow: async () => stale }) });
     const vest = card('Morning habits', 'Vest weight');
@@ -480,6 +496,8 @@ describe('inline refusals', () => {
     expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
     await press(within(splits()).getByRole('button', { name: DAY_COPY.reload }));
     expect(refresh).toHaveBeenCalledTimes(1);
+    // Reload does not clear other rows itself (whether a real refresh keeps them is Next's
+    // router.refresh contract, which keeps client state).
     expect(field(vest).value).toBe('11');
     expect(document.activeElement).toBe(tick(splits()));
     // Reload clears that row's message and its "not saved": the data is about to say what is true.
@@ -569,6 +587,18 @@ describe('a day that cannot be written', () => {
     expect(
       within(card('Morning habits', 'Neck bridge')).queryByText(DAY_COPY.setsLogged(0)),
     ).toBeNull();
+  });
+
+  it('a set-type card looks done only when every set is logged', () => {
+    show(yesterdayHalfDone);
+    // DB bench press: 2 of 4 logged. Neck bridge: 3 of 3.
+    const half = card('Heavy A', 'DB bench press');
+    expect(within(half).getByText(DAY_COPY.setsLogged(2))).toBeTruthy();
+    expect(half.classList.contains(LOGGED_CARD_CLASS)).toBe(false);
+    expect(half.classList.contains(TINT_CLASS)).toBe(false);
+    const full = card('Morning habits', 'Neck bridge');
+    expect(full.classList.contains(LOGGED_CARD_CLASS)).toBe(true);
+    expect(full.classList.contains(TINT_CLASS)).toBe(true);
   });
 
   it('a workout that left the week is read-only on a writable day', () => {

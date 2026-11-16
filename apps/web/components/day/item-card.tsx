@@ -1,7 +1,7 @@
 'use client';
 
 import { hasSetRows, TRACKING_TYPE } from '@mat-plan/shared';
-import { useEffect, useId, useRef } from 'react';
+import { memo, useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
@@ -31,17 +31,20 @@ import { useRow } from './use-row';
  * still say it is logged.
  */
 const CARD_CLASS = 'rounded-xl border p-3';
-const LOGGED_CARD_CLASS = 'border-done';
-const TINT_CLASS = 'bg-done-surface';
+export const LOGGED_CARD_CLASS = 'border-done';
+export const TINT_CLASS = 'bg-done-surface';
 const secondaryText = (onTint: boolean) =>
   onTint ? 'text-done-muted-foreground' : 'text-muted-foreground';
 
 /**
  * The ✓'s focus ring (design.md): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
  * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
+ *
+ * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline
+ * style to `none` through a variable that `outline-3` reads, so without it no ring is drawn.
  */
 const TICK_FOCUS_CLASS =
-  'outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
+  'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
 /**
  * One item of a workout, as a card in the workout's list (FAM-1 step 13).
@@ -50,7 +53,7 @@ const TICK_FOCUS_CLASS =
  * and how many of its sets are logged: step 13b adds its set rows, PREVIOUS, "+ Add set" and
  * supersets. The count keeps a closed day honest until then.
  */
-export function ItemCard({
+export const ItemCard = memo(function ItemCard({
   workout,
   workoutKey,
   item,
@@ -62,17 +65,21 @@ export function ItemCard({
   const row = item.rows[0];
   if (hasSetRows(item.trackingType) || !row) {
     const logged = item.rows.filter((r) => r.logged).length;
+    // Done only when every set shown is logged, as v12's card is: 1 of 4 must not look done.
+    const allDone = logged > 0 && logged === item.rows.length;
     return (
-      <li className={cn(CARD_CLASS, logged > 0 && [LOGGED_CARD_CLASS, TINT_CLASS])}>
-        <ItemHeading item={item} onTint={logged > 0} />
+      <li className={cn(CARD_CLASS, allDone && [LOGGED_CARD_CLASS, TINT_CLASS])}>
+        <ItemHeading item={item} onTint={allDone} />
         {logged > 0 ? (
-          <p className={cn('mt-2 text-sm', secondaryText(true))}>{DAY_COPY.setsLogged(logged)}</p>
+          <p className={cn('mt-2 text-sm', secondaryText(allDone))}>
+            {DAY_COPY.setsLogged(logged)}
+          </p>
         ) : null}
       </li>
     );
   }
   return <SingleItem workout={workout} workoutKey={workoutKey} item={item} row={row} />;
-}
+});
 
 function ItemHeading({ item, onTint }: { item: DayItem; onTint: boolean }) {
   const muted = secondaryText(onTint);
@@ -162,8 +169,12 @@ function SingleItem({
               value={r.text}
               onChange={(e) => r.setText(e.target.value)}
               // Enter is the ✓: a keyboard or a phone's "done" key logs the row.
+              // The field goes while the ✓ is in flight, so focus moves to the ✓ first, as Reload's
+              // does; a refused number brings it back to the field.
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void r.press();
+                if (e.key !== 'Enter') return;
+                tickRef.current?.focus();
+                void r.press();
               }}
               // The prescription's number: an empty ✓ logs it (plan D13).
               placeholder={target ? String(target.value) : undefined}

@@ -115,7 +115,8 @@ adds its files and invariants here.
 - A logged number shows as text until Change arrives at 12d.
 - An empty ✓ that fails leaves the field empty rather than filling in the target.
 - Until 13b, a set-type item shows "N logged" under its heading, so a closed day does not look
-  empty.
+  empty. It looks done (edge and tint) only when every set shown is
+  logged, as v12's card does.
 
 **Known gap, owed by the contract:** a logged value is spelled by `formatValueUnit` (`30 sec`,
 `40 yards`), while the prescription beside it is spelled by `prescribed-text.ts` (`30 s`, `40 yd`).
