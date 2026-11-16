@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useDay } from './day-context';
 import { DAY_COPY } from './day-copy';
 import { placeholderOf, unitSpoken, unitSuffix, type RowField } from './row-values';
+import type { RowChange } from './use-change';
 import { useRow } from './use-row';
 
 /**
@@ -41,6 +42,20 @@ export const secondaryText = (onTint: boolean) =>
  */
 export const TICK_FOCUS_CLASS =
   'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
+
+/**
+ * A logged number that Change can edit (13b-ii; maintainer, 2026-11-16): a green-edged field, so a
+ * bordered well means editable and a read-only day's plain text does not. The ✓'s foreground outline,
+ * since `INPUT_CLASS`'s `ring-ring/50` is under 3:1 on the tint.
+ *
+ * 🔴 **Only while it holds the stored number.** Typed over, it is a plain field with a heavier
+ * `foreground` border (a width cue that survives forced colours): a number that is not saved must
+ * never wear the logged look (invariant 10).
+ */
+export const LOGGED_FIELD_CLASS = `bg-done-surface border-done focus-visible:ring-0 ${TICK_FOCUS_CLASS}`;
+export const CHANGED_FIELD_CLASS = `bg-background border-2 border-foreground focus-visible:ring-0 ${TICK_FOCUS_CLASS}`;
+/** A button on the tint (Undo, Cancel, "+ Add set"): the ✓'s outline, not `Button`'s faint ring. */
+export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
 
 export const TICK_CLASS =
   'flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg';
@@ -97,18 +112,24 @@ export function ItemHeading({
   );
 }
 
-/** The ✓ of a row that can be written, or the static tick of one that cannot. */
+/**
+ * The ✓ of a row that can be written, or the static tick of one that cannot. `change` is the row's
+ * Change (13b-ii), whose ✓ saves an open edit and never un-ticks one (`use-change.ts`).
+ */
 export function Tick({
   r,
+  change,
   label,
   errorId,
   tickRef,
 }: {
   r: ReturnType<typeof useRow>;
+  change?: RowChange;
   label: string;
   errorId: string;
   tickRef: React.RefObject<HTMLButtonElement | null>;
 }) {
+  const described = r.error !== null || change?.was != null || change?.line != null;
   if (r.canWrite) {
     return (
       <button
@@ -116,14 +137,16 @@ export function Tick({
         type="button"
         // Safari does not focus a tapped button: focus it here, or a field the ✓ replaces would
         // take focus with it to the page.
+        onPointerDown={change?.notePress}
+        onKeyDown={change?.noteKey}
         onClick={() => {
           tickRef.current?.focus();
-          void r.press();
+          void (change ? change.pressTick() : r.press());
         }}
         aria-pressed={r.logged !== null}
         aria-label={DAY_COPY.logLabel(label)}
         aria-disabled={r.pending || undefined}
-        aria-describedby={r.error ? errorId : undefined}
+        aria-describedby={described ? errorId : undefined}
         className={cn(
           TICK_FOCUS_CLASS,
           TICK_CLASS,

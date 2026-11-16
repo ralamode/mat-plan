@@ -50,8 +50,17 @@ import {
  */
 
 type Logged = { entryPublicId: string; values: RowValues };
+/**
+ * - `logged`: this visit's ✓ or re-tick, until the page's data shows the entry.
+ * - `amended`: this visit's Change (13b-ii). An amend keeps the entry's id, so the data showing the
+ *   entry is not enough: the override holds until the data shows the amended numbers, or until the
+ *   data moves on from what it held at the time (another phone changed the row since).
+ * - `unticked`: this visit's un-tick, with the token a re-tick needs.
+ */
 type Override =
-  ({ kind: 'logged' } & Logged) | ({ kind: 'unticked'; hiddenAt: string | null } & Logged);
+  | ({ kind: 'logged' } & Logged)
+  | ({ kind: 'amended'; planValues: RowValues | null } & Logged)
+  | ({ kind: 'unticked'; hiddenAt: string | null } & Logged);
 /**
  * A row's message.
  * - `counts`: a ✓ that did not save, which the workout counts as "not saved". A number the field
@@ -66,6 +75,8 @@ type RowError = {
   invalid: boolean;
   /** The field a refused number is in, so that field is the one marked and focused. */
   field?: RowField;
+  /** The write that failed: a Change's message is cleared when its edit is abandoned. */
+  write?: RowWriteKind;
 };
 
 const RETRY: RowResult = { ok: false, reason: ROW_REFUSAL.retry };
@@ -137,7 +148,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   }
   const [error, setError] = useState<RowError | null>(null);
   const [pending, setPending] = useState<
-    { write: 'tick'; shown: RowValues } | { write: 'untick' } | null
+    { write: 'tick'; shown: RowValues } | { write: 'untick' } | { write: 'amend' } | null
   >(null);
   const [override, setOverride] = useState<Override | null>(null);
   const [attempt, setAttempt] = useState<{ clientId: string; values: RowValues } | null>(null);
@@ -154,6 +165,19 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   if (override?.kind === 'logged' && fromPlan?.entryPublicId === override.entryPublicId) {
     setOverride(null);
   }
+  // A Change holds until the data shows its numbers, or the data has moved on without them (the
+  // entry went, or another phone changed it). Data that has not caught up with this visit's ✓ yet
+  // (`planValues` null, nothing in the data) keeps it.
+  if (override?.kind === 'amended') {
+    const caughtUp =
+      fromPlan?.entryPublicId === override.entryPublicId &&
+      sameValues(fromPlan.values, override.values);
+    const movedOn = fromPlan
+      ? fromPlan.entryPublicId !== override.entryPublicId ||
+        (override.planValues !== null && !sameValues(fromPlan.values, override.planValues))
+      : override.planValues !== null;
+    if (caughtUp || movedOn) setOverride(null);
+  }
   const unticked =
     override?.kind === 'unticked' &&
     (!fromPlan || fromPlan.entryPublicId === override.entryPublicId)
@@ -162,7 +186,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   // This visit's own ✓ wins over data that has not caught up with it yet.
   const settled: Logged | null = unticked
     ? null
-    : override?.kind === 'logged'
+    : override?.kind === 'logged' || override?.kind === 'amended'
       ? override
       : fromPlan;
   const logged: RowValues | null =
@@ -171,6 +195,9 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       : pending?.write === 'untick'
         ? null
         : (settled?.values ?? null);
+  /** The entry a Change edits: only once it is stored, so never during a ✓ or an un-tick. */
+  const entry: Logged | null =
+    pending?.write === 'tick' || pending?.write === 'untick' ? null : settled;
 
   const { canWrite, canLog } = rowAccess(day.readOnly, workout, item);
   const hasField = canLog && fieldsOf(item).length > 0;
@@ -198,6 +225,34 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   function showError(next: RowError) {
     setError(next);
     day.announce(DAY_COPY.announce.failed(rowName(item, row), next.message));
+  }
+
+  /**
+   * A Change (13b-ii): sends the row's new numbers for the stored entry and answers with the result,
+   * so `use-change.ts` says what happened. `closed_day` turns the page read-only here, as for a ✓.
+   */
+  async function amend(values: RowValues): Promise<RowResult> {
+    const target = entry;
+    const write = day.actions.amendRow;
+    if (!target || !write || pending) return RETRY;
+    setPending({ write: 'amend' });
+    const result = await settle(() =>
+      write({ profilePublicId: day.profilePublicId, entryPublicId: target.entryPublicId, values }),
+    );
+    setPending(null);
+    if (result.ok) {
+      setOverride({
+        kind: 'amended',
+        entryPublicId: result.entryPublicId,
+        values: result.values,
+        planValues: fromPlan?.values ?? null,
+      });
+      setError(null);
+    } else if (result.reason === ROW_REFUSAL.closed_day) {
+      setError(null);
+      day.closeDay();
+    }
+    return result;
   }
 
   function fail(reason: RowRefusal, write: RowWriteKind) {
@@ -343,6 +398,12 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     /** An un-ticked row with no field (a Check, a removed prescription) still shows what it held. */
     kept: !hasField && !logged && unticked ? unticked.values : null,
     pending: pending !== null,
+    /** The stored entry, for Change; `null` while a ✓ or un-tick is in flight. */
+    entry,
+    amend,
+    /** A message from a Change (13b-ii), shown in the row's message slot. */
+    showError,
+    clearError: () => setError(null),
     canWrite,
     hasField,
     press,

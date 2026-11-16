@@ -12,16 +12,18 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
+import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, fieldText, valueParts, type RowField } from './row-values';
+import { useChange } from './use-change';
 import { rowAccess, rowName, useRow } from './use-row';
 import {
   CARD_CLASS,
   fieldHeader,
   ItemHeading,
   LOGGED_CARD_CLASS,
+  ON_TINT_BUTTON_FOCUS_CLASS,
   RowInput,
-  RowMessage,
   secondaryText,
   Tick,
   TINT_CLASS,
@@ -119,7 +121,7 @@ export function SetItem({
           <col className="w-7" />
           {showPrevious ? <col /> : null}
           {fields.map((field) => (
-            <col key={field} className={canLog ? 'w-14' : showPrevious ? 'w-16' : undefined} />
+            <col key={field} className={fieldColumnClass(field, canLog, showPrevious)} />
           ))}
           {/* A wider ✓ column keeps the ✓ clear of the last field: an empty ✓ logs a set (D13). */}
           <col className="w-14" />
@@ -166,7 +168,7 @@ export function SetItem({
         <Button
           type="button"
           variant="ghost"
-          className="mt-1 px-2"
+          className={cn('mt-1 px-2', ON_TINT_BUTTON_FOCUS_CLASS)}
           aria-label={DAY_COPY.addSetTo(item.name)}
           onClick={() => {
             focusAdded.current = true;
@@ -181,7 +183,17 @@ export function SetItem({
   );
 }
 
-/** One set: its number, Previous, a field per value (or the logged values), the ✓. */
+/**
+ * A field's column. A load is `w-16` where it is a field: its content box (64px less the cell's and
+ * the field's padding and a 2px border) holds a six-character load (`1012.5`, 51px at 16px), which
+ * `w-14` clipped once a logged load became a Change field (13b-ii). Reps stay `w-14` (`1000` is 38px).
+ */
+function fieldColumnClass(field: RowField, canLog: boolean, showPrevious: boolean) {
+  if (canLog) return field === 'quantity' ? 'w-16' : 'w-14';
+  return showPrevious ? 'w-16' : undefined;
+}
+
+/** One set: its number, Previous, a field per value (or the logged values, or Change's), the ✓. */
 function SetRow({
   workout,
   workoutKey,
@@ -208,9 +220,12 @@ function SetRow({
   const tickRef = useRef<HTMLButtonElement>(null);
   const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
+  const rowId = useId();
+  const change = useChange(r, item, row, rowId);
   const name = rowName(item, row);
   useFocusRefusedField(r, inputs, fields[0]);
   const hasMessage = r.error !== null;
+  const status = hasRowStatus(r, change);
   const { set } = row;
   useEffect(() => {
     if (!hasMessage) return;
@@ -222,7 +237,7 @@ function SetRow({
 
   return (
     <>
-      <tr>
+      <tr data-row-id={rowId}>
         <th scope="row" className="py-1 text-left font-normal tabular-nums">
           {row.set}
         </th>
@@ -246,7 +261,22 @@ function SetRow({
         ) : null}
         {fields.map((field, index) => (
           <td key={field} className="px-0.5 py-1 text-center">
-            {shownValues || !r.hasField ? (
+            {change.editable ? (
+              <ChangeInput
+                change={change}
+                item={item}
+                field={field}
+                name={name}
+                lineId={errorId}
+                described={status}
+                tickRef={tickRef}
+                inputRef={(el) => {
+                  inputs.current[field] = el;
+                }}
+                last={index === fields.length - 1}
+                className="w-full px-0.5 text-center tabular-nums"
+              />
+            ) : shownValues || !r.hasField ? (
               <span
                 className={cn(
                   'tabular-nums',
@@ -268,7 +298,7 @@ function SetRow({
                   if (index === 0 && focusRef) focusRef.current = el;
                 }}
                 last={index === fields.length - 1}
-                // `px-0.5`: a six-character load (`1012.5`) fits the 56px column.
+                // `px-0.5`: a six-character load (`1012.5`) fits the load column (`fieldColumnClass`).
                 className="w-full px-0.5 text-center tabular-nums"
               />
             )}
@@ -276,14 +306,14 @@ function SetRow({
         ))}
         <td className="py-1">
           <div className="flex justify-center">
-            <Tick r={r} label={name} errorId={errorId} tickRef={tickRef} />
+            <Tick r={r} change={change} label={name} errorId={errorId} tickRef={tickRef} />
           </div>
         </td>
       </tr>
-      {r.error ? (
-        <tr>
+      {status ? (
+        <tr data-row-id={rowId}>
           <td colSpan={fields.length + (showPrevious ? 3 : 2)} className="pb-1">
-            <RowMessage r={r} errorId={errorId} tickRef={tickRef} />
+            <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
           </td>
         </tr>
       ) : null}

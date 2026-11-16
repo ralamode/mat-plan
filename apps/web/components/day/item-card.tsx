@@ -13,15 +13,16 @@ import { memo, useId, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
+import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, formatRowValues, unitSuffix, type RowField } from './row-values';
+import { useChange } from './use-change';
 import { useRow } from './use-row';
 import {
   CARD_CLASS,
   ItemHeading,
   LOGGED_CARD_CLASS,
   RowInput,
-  RowMessage,
   secondaryText,
   Tick,
   TINT_CLASS,
@@ -87,6 +88,9 @@ function SingleItem({
   const tickRef = useRef<HTMLButtonElement>(null);
   const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
+  const rowId = useId();
+  const change = useChange(r, item, row, rowId);
+  const status = hasRowStatus(r, change);
   const isCheck = item.trackingType === TRACKING_TYPE.check;
   const previous = row.previous ? slotQuantity(item, row.previous.quantities) : null;
   useFocusRefusedField(r, fields, fieldsOf(item)[0]);
@@ -99,11 +103,35 @@ function SingleItem({
   const onTint = r.logged !== null && !r.error;
 
   return (
-    <li className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}>
+    <li
+      data-row-id={rowId}
+      className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}
+    >
       <ItemHeading item={item} label={label} onTint={onTint} />
       <div className="mt-2 flex items-center gap-2">
         <span className={cn('min-w-0 flex-1 text-sm', secondaryText(onTint))}>{left}</span>
-        {r.logged ? (
+        {change.editable && item.unit ? (
+          <>
+            <ChangeInput
+              change={change}
+              item={item}
+              field="quantity"
+              name={item.name}
+              lineId={errorId}
+              described={status}
+              tickRef={tickRef}
+              inputRef={(el) => {
+                fields.current.quantity = el;
+              }}
+              className="w-20 shrink-0 text-right tabular-nums"
+            />
+            {unitSuffix(item.unit) ? (
+              <span className={cn('shrink-0 text-sm', secondaryText(onTint))}>
+                {unitSuffix(item.unit)}
+              </span>
+            ) : null}
+          </>
+        ) : r.logged ? (
           !isCheck && (
             <span className="shrink-0 text-base font-medium tabular-nums">
               {formatRowValues(r.logged)}
@@ -134,10 +162,10 @@ function SingleItem({
             ) : null}
           </>
         ) : null}
-        <Tick r={r} label={item.name} errorId={errorId} tickRef={tickRef} />
+        <Tick r={r} change={change} label={item.name} errorId={errorId} tickRef={tickRef} />
       </div>
       <div className="mt-2 empty:hidden">
-        <RowMessage r={r} errorId={errorId} tickRef={tickRef} />
+        <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
       </div>
     </li>
   );

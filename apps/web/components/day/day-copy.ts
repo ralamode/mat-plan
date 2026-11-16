@@ -46,8 +46,31 @@ export const DAY_COPY = {
   notSaved: (count: number) => `${count} not saved`,
   logLabel: (name: string) => `Log ${name}`,
   fieldLabel: (name: string, unit: string) => (unit ? `${name}, in ${unit}` : name),
+  /**
+   * Change (13b-ii): the line under a logged row. Every number is printed with its unit or "reps", so
+   * the line says which field it means. The maintainer's guards (2026-11-16): Undo returns the number
+   * from before the first Change this visit, and a Cancel stands in for Escape on a phone.
+   */
+  change: {
+    changed: (from: string, to: string) => `Changed ${from} → ${to}`,
+    changedBack: (to: string) => `Changed back to ${to}`,
+    notSaved: (was: string) => `Not saved. Was ${was}.`,
+    failed: (still: string) => `Couldn’t save. Still ${still}.`,
+    undoFailed: (still: string) => `Couldn’t undo. Still ${still}.`,
+    kept: {
+      missing: (kept: string) => `Kept ${kept}: enter a number to change it.`,
+      not_a_number: (kept: string) => `Kept ${kept}: numbers only.`,
+      out_of_range: (kept: string, typed: string) => `Kept ${kept}. ${typed} won’t work.`,
+    },
+    undo: 'Undo',
+    cancel: 'Cancel',
+    /** The ✓'s description while a logged number is being changed: the ✓ saves it. */
+    tickSaves: 'The ✓ saves the change.',
+  },
   announce: {
     logged: (name: string) => `${name} logged`,
+    changed: (name: string, from: string, to: string) => `${name} changed from ${from} to ${to}`,
+    changedBack: (name: string, to: string) => `${name} changed back to ${to}`,
     unticked: (name: string) => `${name} un-checked`,
     failed: (name: string, message: string) => `${name}: ${message}`,
   },
@@ -106,7 +129,7 @@ export type RefusalCopy = { message: string; reload: boolean; focusField: boolea
 const UNTICK_FAILED = 'Still logged. Couldn’t un-check; try again.';
 
 /**
- * Every refusal, for a ✓ (`tick`) and for an un-tick (`untick`). `closed_day` is here for
+ * Every refusal, for a ✓ (`tick`), an un-tick (`untick`) and a Change (`amend`). `closed_day` is here for
  * completeness; the screen shows it once, at the top, and turns read-only.
  */
 export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCopy {
@@ -119,6 +142,9 @@ export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCop
         focusField: false,
       };
     case ROW_REFUSAL.bad_value:
+      // A Change is checked before it is sent, so a refused one means the item changed under the
+      // page (its unit, say): a reload, not the number.
+      if (write === 'amend') return { message: STALE, reload: true, focusField: false };
       return { message: TYPED_PROBLEM_COPY.out_of_range, reload: false, focusField: true };
     case ROW_REFUSAL.closed_day:
       return { message: DAY_COPY.closed, reload: false, focusField: false };

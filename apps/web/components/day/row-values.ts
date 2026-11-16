@@ -25,8 +25,8 @@ import { VALUE_JOINER } from '@/lib/constants';
  * reps, so a weight × reps set has both, a Reps set has reps only, and a Check has none.
  */
 
-/** The two writes a row makes: a ✓, or an un-tick. */
-export type RowWriteKind = 'tick' | 'untick';
+/** The writes a row makes: a ✓, an un-tick, or a Change to a logged row's numbers (13b-ii). */
+export type RowWriteKind = 'tick' | 'untick' | 'amend';
 
 /** A row's typed fields. */
 export type RowField = 'quantity' | 'reps';
@@ -193,4 +193,129 @@ export function unitSuffix(unit: Unit): string {
 /** The unit as a screen reader should say it: `pounds`, not `lb`; `inches`, not `in`. */
 export function unitSpoken(unit: Unit): string {
   return unit === 'count' ? '' : UNIT_LABELS[unit].toLowerCase();
+}
+
+/** Why a changed field kept its logged number (13b-ii): blank, not a number, or out of range. */
+export type KeptField = { field: RowField; problem: TypedProblem; typed: string };
+
+/** Reads one typed number the way a ✓ does: digits for reps, a plain decimal under the ceiling. */
+function readNumber(
+  item: DayItem,
+  field: RowField,
+  typed: string,
+): { ok: true; value: number } | { ok: false; problem: TypedProblem } {
+  if (typed === '') return { ok: false, problem: 'missing' };
+  if (field === 'reps') {
+    if (!isWholeNumber(typed)) return { ok: false, problem: 'not_a_number' };
+    const reps = repsSchema.safeParse(Number(typed));
+    return reps.success ? { ok: true, value: reps.data } : { ok: false, problem: 'out_of_range' };
+  }
+  if (!isPlainDecimal(typed)) return { ok: false, problem: 'not_a_number' };
+  const value = Number(typed);
+  // A unit with no declared ceiling refuses (`quantityCeiling`'s rule): no bound is not "no cap".
+  const ceiling = item.unit ? quantityCeiling(item.unit) : undefined;
+  if (ceiling === undefined || value > ceiling) return { ok: false, problem: 'out_of_range' };
+  return { ok: true, value };
+}
+
+/**
+ * Whether a logged row's numbers can be changed in place: 🔴 **never when its quantity was logged in
+ * another unit than the item's** (13b-ii). A Change is sent in the item's unit (`rowAmendSchema`), so
+ * a `27.5 lb` row on an item now in kg would go out as 27.5 kg; even a reps-only change has to send
+ * the quantity. The row stays text, and un-tick then a new ✓ is the way to change it.
+ */
+export function canChangeValues(item: DayItem, logged: RowValues): boolean {
+  if (fieldsOf(item).length === 0) return false;
+  const quantity = slotQuantity(item, logged.quantities);
+  return !quantity || quantity.unit === item.unit;
+}
+
+/**
+ * What a Change sends (13b-ii; plan §8, "Change keeps the old number if the new one is blank or not a
+ * number"). Unlike `readTyped`, **nothing comes from the prescription**: every field is the typed
+ * number or, when that is blank, not a number or out of range, **its own logged number**, and the
+ * other fields are still sent. `send` is `null` when no number differs from the logged row.
+ *
+ * Every other quantity the row holds is sent unchanged, so a Change touches only the fields shown.
+ */
+export function readAmend(
+  item: DayItem,
+  text: RowText,
+  logged: RowValues,
+): { send: RowValues | null; kept: KeptField[] } {
+  const kept: KeptField[] = [];
+  const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
+  let quantities = logged.quantities;
+  let reps = logged.reps;
+  for (const field of fieldsOf(item)) {
+    const typed = text[field].trim();
+    const read = readNumber(item, field, typed);
+    if (!read.ok) {
+      kept.push({ field, problem: read.problem, typed });
+      continue;
+    }
+    if (field === 'reps') {
+      reps = read.value;
+      continue;
+    }
+    if (!slot || !item.unit) continue;
+    const quantity = { slot, unit: item.unit, value: read.value };
+    quantities = quantities.some((q) => q.slot === slot)
+      ? quantities.map((q) => (q.slot === slot ? quantity : q))
+      : [...quantities, quantity];
+  }
+  const values: RowValues = reps === undefined ? { quantities } : { quantities, reps };
+  if (sameValues(values, logged) || !rowValuesSchema.safeParse(values).success) {
+    return { send: null, kept };
+  }
+  return { send: values, kept };
+}
+
+/** One field of a row's values as words on the screen: `25 lb`, `8 reps`, `30 s`. */
+export function fieldValueText(item: DayItem, values: RowValues, field: RowField): string {
+  if (field === 'reps') return values.reps === undefined ? '' : `${values.reps} reps`;
+  const quantity = slotQuantity(item, values.quantities);
+  return quantity ? quantityText(quantity.value, quantity.unit) : '';
+}
+
+/**
+ * A row's values as a status line says them: `25 lb × 8`, and a reps-only row as `8 reps` (a bare
+ * `8` in a sentence says nothing).
+ */
+export function valuesText(values: RowValues): string {
+  if (values.quantities.length === 0 && values.reps !== undefined) return `${values.reps} reps`;
+  return formatRowValues(values);
+}
+
+/**
+ * The part of a row that a Change changed, before and after, as the "Changed … → …" line prints it:
+ * only the numbers that moved, so a long load and reps still fit beside Undo at 360px.
+ */
+export function changedText(
+  item: DayItem,
+  from: RowValues,
+  to: RowValues,
+): { from: string; to: string } {
+  const moved = fieldsOf(item).filter(
+    (field) => fieldValueText(item, from, field) !== fieldValueText(item, to, field),
+  );
+  if (moved.length === 1 && moved[0] === 'reps') {
+    return { from: String(from.reps ?? ''), to: `${to.reps ?? ''} reps` };
+  }
+  if (moved.length === 1) {
+    return {
+      from: fieldValueText(item, from, 'quantity'),
+      to: fieldValueText(item, to, 'quantity'),
+    };
+  }
+  return { from: valuesText(from), to: valuesText(to) };
+}
+
+/** A row's values as a screen reader should hear them: `25 pounds, 8 reps`, never `lb × 8`. */
+export function spokenValues(values: RowValues): string {
+  const parts = values.quantities.map((q) =>
+    q.unit === 'count' ? String(q.value) : `${q.value} ${unitSpoken(q.unit)}`,
+  );
+  if (values.reps !== undefined) parts.push(`${values.reps} reps`);
+  return parts.join(', ');
 }

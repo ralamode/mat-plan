@@ -39,7 +39,12 @@ export function makeMount(createFake: FakeFactory) {
 
   function mount(
     fixture: DayPlan,
-    options: { failNext?: boolean; wrap?: (actions: Actions) => Partial<DayActions> } = {},
+    options: {
+      failNext?: boolean;
+      wrap?: (actions: Actions) => Partial<DayActions>;
+      /** Hand the screen `amendRow`, as 12d's routes will: Change (13b-ii). */
+      change?: boolean;
+    } = {},
   ) {
     const control: { plan: DayPlan; setPlan: (plan: DayPlan) => void; actions: Spies } = {
       plan: fixture,
@@ -61,9 +66,11 @@ export function makeMount(createFake: FakeFactory) {
           amendRow: vi.fn(wrapped.amendRow),
           reorderPrograms: vi.fn(wrapped.reorderPrograms),
         };
-        // The screen gets what step 13's routes have: no Change, no Program order.
-        const { logRow, untickRow, retickRow } = control.actions;
-        return { logRow, untickRow, retickRow };
+        // The screen gets what step 13's routes have: no Program order, and Change only when asked.
+        const { logRow, untickRow, retickRow, amendRow } = control.actions;
+        return options.change
+          ? { logRow, untickRow, retickRow, amendRow }
+          : { logRow, untickRow, retickRow };
       });
       return <DayScreen plan={plan} actions={actions} />;
     }
