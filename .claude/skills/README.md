@@ -59,14 +59,36 @@ CI merge-gates".
 [the DX-11 plan](../../docs/plans/dx-11-agent-model-effort.md) (frozen — the frontmatter is the living
 source).
 
-🔴 **Reviewers are pinned to `opus`; Fable is for plan panels only** _(maintainer, 2026-11-16)_.
-`plan-with-panel` asks for it at spawn time (`model: "fable"`), which beats the frontmatter, so a
-plan's lenses run on Fable and everything else (`review-pr`'s fan-out, `doubt-check`, an ad-hoc lens)
-runs on Opus. DX-11 had pinned all eight to `fable`, and with several lanes fanning out on every PR
-that spent the account's monthly Fable budget on PR reviews. `skills:check` now refuses a reviewer
-whose frontmatter pins `fable`. Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL`
-env var and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. The main session is never governed by this policy —
-it stays whatever `/model` picks.
+Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL` env
+var and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. The main session is never governed by this policy — it
+stays whatever `/model` picks.
+
+### When a lens runs on Fable
+
+🔴 **Reviewers are pinned to `opus`. Fable is asked for at spawn time (`model: "fable"`, which beats
+the frontmatter) only when the work is high-stakes** _(maintainer, 2026-11-16)_: a mistake that is expensive to undo or quiet
+enough that the gates miss it. That applies to a **plan** (`plan-with-panel`) and to a **PR review**
+(`review-pr`'s fan-out) alike. Everything else, including re-review passes after fixes, `doubt-check`,
+UX panels, screens, copy, refactors, docs and DX tooling, runs on Opus.
+
+High-stakes means the plan or diff touches any of these:
+
+| Area                              | Paths (any match)                                                                                                                      | Why it earns Fable                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Contract and shared shapes        | `packages/shared/src/program/**`, `packages/shared/src/**/*schema*.ts`, `apps/web/app/**/actions.ts`, `apps/web/app/**/row-actions.ts` | Several lanes build against it at once; a wrong shape is rework everywhere |
+| Schema and migrations             | `packages/db/migrations/**`, `packages/db/src/schema.ts`                                                                               | Forward-only: an applied migration cannot be edited                        |
+| The write path                    | `packages/db/src/writers/**`, `docs/features/write-path.md`                                                                            | Idempotency, arbiters, hide/restore: silent double-writes or lost logs     |
+| Authorization and household scope | `apps/web/lib/dal/**`, `apps/web/app/p/mutation-entry.ts`, `packages/db/src/writers/ownership.ts`, anything `ID-1` covers              | One family's data reaching another                                         |
+| Privacy                           | `docs/privacy/**`, an export, a deletion or erasure path, a new third party                                                            | Minors' health data in a public repo; some mistakes cannot be taken back   |
+| Loads                             | prescriptions' targets, `packages/engine/**`                                                                                           | The one inviolable product rule: the LLM never authors loads               |
+
+A plan that fixes a milestone's order or split also earns it. **When unsure, it is not
+high-stakes:** run Opus, and escalate a single lens if a finding turns out to need depth.
+
+Why this exists: DX-11 had pinned all eight reviewers to `fable`, so every review of everything ran on
+it, and with several lanes fanning out on every PR that spent the account's monthly Fable budget
+(2026-11-16). `skills:check` refuses a reviewer whose frontmatter pins `fable`, so the default cannot
+drift back.
 
 ## Backlog, in priority order
 

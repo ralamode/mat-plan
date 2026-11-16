@@ -34,7 +34,7 @@ When done: `rm -rf .claude/worktrees/pr-<n> && git worktree prune`. (Not `git wo
 the main-checkout guard denies `--force`, and the `*.pr-data` renames make a plain `remove` refuse.)
 
 **Size the effort.** ("Effort" here means fan-out breadth; each spawned agent's model and
-reasoning effort are pinned in its own frontmatter — DX-11. They run on Opus here; never pass `model: "fable"` from a review — Fable is for plan panels only.) Under ~150 changed lines, do a single
+reasoning effort are pinned in its own frontmatter — DX-11. They run on Opus unless the diff is high-stakes per [the table](../README.md#when-a-lens-runs-on-fable), then pass `model: "fable"` to the fan-out; a re-review after fixes stays on Opus.) Under ~150 changed lines, do a single
 pass. Larger PRs or a baseline audit:
 fan out to the named agents in [`.claude/agents/`](../../agents/) in one message, each following the
 [reporting contract](./reporting-contract.md):

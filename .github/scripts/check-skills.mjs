@@ -445,8 +445,9 @@ export function latestMergedPr(subjects) {
 export const FORBIDDEN_AGENT_MODELS = ['fable'];
 export function checkAgentModels(agents) {
   return agents.flatMap(({ file, text }) => {
-    const fm = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? '';
-    const model = /^model:[ \t]*(\S+)/m.exec(fm)?.[1]?.toLowerCase();
+    // CRLF-tolerant, and a quoted value (`model: "fable"`, `'fable'`) is the same YAML scalar.
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? '';
+    const model = /^model:[ \t]*['"]?([^'"\s#]+)/m.exec(fm)?.[1]?.toLowerCase();
     return model &&
       FORBIDDEN_AGENT_MODELS.some((m) => model === m || model.startsWith(`claude-${m}`))
       ? [
