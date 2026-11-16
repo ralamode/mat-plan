@@ -7,6 +7,6 @@
   naming this household's workout, answers `not_found` with nothing written. The row's values come
   from contract step C10's shared rules. `hide.ts`'s restore gains the program row arbiter, so a
   re-tick onto a set ticked again answers `slot_taken`, and its matcher is now the shared
-  `isUniqueViolationOn`. 34 `db:verify` proofs in `verify/day.ts` and mutations 110–119, 121–129 and 170–184
+  `isUniqueViolationOn`. 34 `db:verify` proofs in `verify/day.ts` and mutations 110–119, 121–129 and 170–186
   (46–48 retargeted, 86 regenerated). A ✓ is refused unless the athlete is on that program that day,
   through step 5's `assignmentOnDay`. No Server Action calls the writers yet (12b).

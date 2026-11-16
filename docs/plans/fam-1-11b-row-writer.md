@@ -159,7 +159,7 @@ profiles.household_id`, column to column, so pre-flight (f) holds whatever a sco
    `queries/day/scheduled.ts` (12a's `scheduled` flag uses it too) → else `not_scheduled`. **P8.**
 8. **On the program that day** (M7, step 5). `isOnProgramThatDay` in `scheduled.ts`, on step 5's
    `assignmentOnDay` → else `program_changed`, which is how the fake answers a workout missing from
-   the athlete's day. _As built:_ **182** drops the check, **183** its block, **184** its dates; proof
+   the athlete's day. _As built:_ **182** drops the check, **183** its block, **184** its dates, **185** asks about `today` rather than the row's day, **186** drops its athlete; proof
    6d's three athletes (on no program, taken off yesterday, on another program) each redden one.
 9. **Set.** `set > 1` on a type without set rows (`hasSetRows`) → `bad_value`. **P9.**
 10. **Values.** First, the prescription's type and unit are re-checked against `TRACKING_TYPE_FIELDS`
