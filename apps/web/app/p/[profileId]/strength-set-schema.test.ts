@@ -11,7 +11,6 @@ import {
   SET_STATUSES,
   strengthSetSchema,
   UNIT_DIMENSION_BY_CODE,
-  unitsOfDimension,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -207,7 +206,8 @@ describe('LOGGABLE_UNITS is DERIVED, so it cannot drift from the slot vocabulary
       ...LOGGABLE_DIMENSIONS,
       'count',
     ]);
-    expect([...LOGGABLE_UNITS]).toEqual(LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension));
+    // The legacy form's units, pinned once: FAM-1 step 3's `mi` is excluded by name.
+    expect([...LOGGABLE_UNITS]).toEqual(['lb', 'kg', 'in', 'cm', 'ft', 'm', 'yd', 'sec', 'min']);
   });
 
   // The guarantee that matters: every unit the form can offer is one the composite FK will accept in

@@ -51,8 +51,9 @@ describe('offerable ⊆ accepted ⊆ exportable', () => {
 
   // Independent of the server's enum: every dimension the Measuring select offers must have units,
   // or the form shows "Time" with an empty Unit select (loggableUnitsOf filters through the schema).
-  it.each(LOGGABLE_DIMENSIONS)('the form offers every %s unit', (d) => {
-    expect(loggableUnitsOf(d)).toEqual(unitsOfDimension(d));
+  // Every unit of the dimension, except `mi`, which FAM-1 step 3 added for the new day page only.
+  it.each(LOGGABLE_DIMENSIONS)('the form offers every %s unit it had', (d) => {
+    expect(loggableUnitsOf(d)).toEqual(unitsOfDimension(d).filter((u) => u !== 'mi'));
     expect(loggableUnitsOf(d).length).toBeGreaterThan(0);
   });
 
@@ -81,12 +82,17 @@ describe('the units no form offers', () => {
 
   // The one literal pin of this set (AGENTS.md → constants). A new unit code lands in exactly one of
   // the two lists, and this says which.
-  it('are exactly bool, count and timing', () => {
-    expect([...NON_LOGGABLE].sort()).toEqual(['bool', 'count', 'timing']);
+  it('are exactly bool, count, mi and timing', () => {
+    expect([...NON_LOGGABLE].sort()).toEqual(['bool', 'count', 'mi', 'timing']);
   });
 
-  it.each(NON_LOGGABLE)('%s is refused by the server and has no CSV spelling', (unit) => {
+  it.each(NON_LOGGABLE)('%s is refused by the legacy server schema', (unit) => {
     expect(sessionMovementSchema.shape.unit.safeParse(unit).success).toBe(false);
+  });
+
+  // `mi` is the one exception: the old form never offers it, but a Distance item on the new day page
+  // logs in it, so the export must be able to write it (FAM-1 step 3).
+  it.each(NON_LOGGABLE.filter((u) => u !== 'mi'))('%s has no CSV spelling', (unit) => {
     expect(EXPORTABLE_UNITS).not.toContain(unit);
   });
 });
@@ -164,7 +170,10 @@ describe('FAM-1 step 3: every tracking type is storable', () => {
     expect(TRACKING_TYPE_FIELDS[TRACKING_TYPE.count].slot).toBe(QUANTITY_SLOT.primary);
     expect(unitsForTrackingType(TRACKING_TYPE.count)).toContain('count');
     expect(slotAcceptsDimension(QUANTITY_SLOT.primary, UNIT_DIMENSION.count)).toBe(true);
-    expect(QUANTITY_SLOT_ROWS).toContainEqual({ code: 'primary', dimension: 'count' });
+    expect(QUANTITY_SLOT_ROWS).toContainEqual({
+      code: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION.count,
+    });
     expect(quantityCeiling('count')).toBe(MAX_REPS_PER_SET);
   });
 

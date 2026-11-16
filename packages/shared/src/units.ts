@@ -117,8 +117,9 @@ export function unitsOfDimension(dimension: UnitDimension): Unit[] {
  *
  * DERIVED, never hand-listed (AGENTS.md constants rule). The authority is the `primary` slot's own
  * declared dimension set in `quantity-slots.ts` — so "every loggable unit is legal in the primary
- * slot" is true by construction rather than by a reviewer noticing. A fourth dimension added there
- * shows up here, in the form's picker and in the composite FK, with no second edit.
+ * slot" is true by construction rather than by a reviewer noticing. A dimension added there shows up
+ * here, in the form's picker and in the composite FK, with no second edit — unless it is excluded
+ * by name below, as `count` is.
  *
  * Excludes `bool` and `timing` because no slot accepts them: a checkbox is not a measurement, and a
  * clock reading is not a duration.
@@ -132,7 +133,16 @@ export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] = QUANTITY_SLOT_DIMEN
   QUANTITY_SLOT.primary
 ].filter((d) => d !== UNIT_DIMENSION.count);
 
-export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension);
+/**
+ * ⚠️ **Excludes `mi` BY NAME, for the same reason as `count` above.** FAM-1 step 3 adds it for a
+ * Distance item on the new day page (`TRACKING_TYPE_FIELDS`); the legacy form keeps the five length
+ * units it had, so step 3 changes nothing a person sees there.
+ */
+const NOT_LOGGABLE_IN_THE_LEGACY_FORM: readonly Unit[] = ['mi'];
+
+export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension).filter(
+  (u) => !NOT_LOGGABLE_IN_THE_LEGACY_FORM.includes(u),
+);
 
 /**
  * The movement unit the write path accepts: exactly `LOGGABLE_UNITS`. zod 4 takes the widened

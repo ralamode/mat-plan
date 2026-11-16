@@ -683,7 +683,7 @@ export const movements = pgTable(
     isBodyweight: boolean('is_bodyweight').notNull().default(false),
     // FAM-1 step 3 (plan D1, D25): how the item is logged; mirrors shared TRACKING_TYPES (pinned by
     // db:verify). Set ONCE: built-ins by migration 0022's typing, a new item when it is made
-    // (`findOrCreateMovement`). Nothing retypes a row. The default is what an item made in the old
+    // (`findOrCreateTypedMovement`). Nothing retypes a row. The default is what an item made in the old
     // strength form gets.
     trackingType: text('tracking_type').notNull().default('weight_reps'),
     videoUrl: text('video_url'),
@@ -775,7 +775,8 @@ export const sessions = pgTable(
     sessionType: text('session_type'), // mirrors SESSION_TYPES (nullable); 'workout' since FAM-1 step 3 (D6)
     // GAP-1 P0-1: WHICH PROGRAMMED DAY this session was (mirrors shared DAY_ROLES). Distinct from
     // `session_type` on purpose — session_type is what a session IS, day_role is which program day it
-    // fulfilled — and DAY_ROLES is a superset carrying strength_a/b/c, which session_type cannot express.
+    // fulfilled — and DAY_ROLES is a superset of LEGACY_SESSION_TYPES carrying strength_a/b/c, which
+    // session_type cannot express (and session_type's 'workout', FAM-1 step 3, is no day role).
     //
     // PROVENANCE IS THE POINT: a non-null value means A HUMAN ASSERTED IT (the log form's day-role
     // select). It is deliberately NOT derived from the weekday at write time: `DAY_ROLE_BY_WEEKDAY` is a
@@ -949,7 +950,7 @@ export const programBlocks = pgTable(
 
 /**
  * prescription — one movement in a block's day (V1-10; spec.md §4). `day_role` (text+CHECK ∈ shared
- * DAY_ROLES — its OWN vocabulary, a superset of SESSION_TYPES incl. strength_a/strength_b) + `idx` order it
+ * DAY_ROLES — its OWN vocabulary, a superset of LEGACY_SESSION_TYPES incl. strength_a/strength_b) + `idx` order it
  * within the day; `sets`/`target_reps` are the prescription shared across kids (per-kid loads live in
  * `prescription_targets`). Config → no client_id; natural key `(block_id, day_role, idx)` is a SLOT arbiter
  * (a movement may legitimately appear twice in a day — warm-up + working — so the key is NOT movement_id),

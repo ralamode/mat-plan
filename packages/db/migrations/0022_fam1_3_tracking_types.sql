@@ -25,9 +25,12 @@
 -- lock mid-file. The CHECKs take the small-table route: a NOT VALID → VALIDATE split in one file is
 -- one transaction and buys nothing (0013's header; AGENTS.md).
 --
--- DEPLOY WINDOW: until this file applies, new code's `insert into movements` names tracking_type and
--- fails 42703 (findOrCreateMovement → insertMovementOwnedBy; the seed). No movement read uses a bare
--- select. Merge when nobody is logging; recovery is to re-dispatch migrate.yml (docs/runbooks.md).
+-- DEPLOY WINDOW: until this file applies, new code fails 42703 on (1) every resolve of a movement
+-- BY NAME — findOrCreateMovement delegates to findOrCreateTypedMovement, whose lookups select
+-- tracking_type, so a strength save with a typed name fails for an existing name too — and (2) every
+-- insert into movements (insertMovementOwnedBy; the seed). Reads by public id and the program/export
+-- queries name their columns and are unaffected. Merge when nobody is logging; recovery is to
+-- re-dispatch migrate.yml (docs/runbooks.md).
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
 LOCK TABLE "movements", "sessions" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint

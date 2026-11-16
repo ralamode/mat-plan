@@ -117,7 +117,10 @@ export async function findOrCreateTypedMovement(
       .from(schema.movements)
       .where(where)
       .limit(1);
-    // The column is CHECK-pinned to TRACKING_TYPES; parsing narrows it without a cast.
+    // The column is CHECK-pinned to TRACKING_TYPES; parsing narrows it without a cast. ⚠️ This is a
+    // throw site on the legacy strength path too: it fires only if a row holds a type this code does
+    // not know (an eighth type written by newer code before this deploy is replaced). Add a type by
+    // deploying the const before any writer can store it.
     return row && { id: row.id, trackingType: trackingTypeSchema.parse(row.trackingType) };
   };
 

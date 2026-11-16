@@ -94,7 +94,9 @@ flowchart LR
    `preview-registry.ts`, which reads the contract's fixture lists. A new fixture is on the route
    and in the scan with no further edit.
 9. 🔴 **No lane's step edits a file this guide owns.** If one had to, every lane would owe this
-   guide and they would be one queue again. Two things keep it so. The harness test
+   guide and they would be one queue again. (One recorded exception: FAM-1 step 3 added the unit
+   `mi` and `(primary, count)`, which the plan assigns to it, and so adjusted the unit pins in
+   `shapes.test.ts`; maintainer-approved, 2026-11-15.) Two things keep it so. The harness test
    (`preview-harness.test.tsx`) mocks the four screens and asserts only what the harness hands
    them, so filling a stub in changes no file here; a screen's own output is tested beside the
    screen. And each lane's list of owed tests is a file in its own directory:

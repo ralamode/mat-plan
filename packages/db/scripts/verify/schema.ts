@@ -11,11 +11,15 @@ import {
   TRACKING_TYPES,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
+import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { findOrCreateTypedMovement } from '../../src/writers/movement-catalog';
-import { insertMovementOwnedBy, movementInHousehold } from '../../src/writers/ownership';
+import {
+  insertMovementOwnedBy,
+  movementInHousehold,
+  movementIsGlobal,
+} from '../../src/writers/ownership';
 import {
   asTx,
   assertCheckCoversConst,
@@ -99,10 +103,7 @@ async function globalTypesBySlug(tx: VerifyTx | typeof db): Promise<Map<string, 
     .select({ slug: schema.movements.slug, trackingType: schema.movements.trackingType })
     .from(schema.movements)
     .where(
-      and(
-        isNull(schema.movements.householdId),
-        inArray(schema.movements.slug, [...SEEDED_TYPE_BY_SLUG.keys()]),
-      ),
+      and(movementIsGlobal(), inArray(schema.movements.slug, [...SEEDED_TYPE_BY_SLUG.keys()])),
     );
   return new Map(rows.map((r) => [r.slug, r.trackingType]));
 }
@@ -189,7 +190,7 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
     await tx
       .update(schema.movements)
       .set({ trackingType: TRACKING_TYPE.weight_reps })
-      .where(and(isNull(schema.movements.householdId), seededSlug));
+      .where(and(movementIsGlobal(), seededSlug));
     await insertMovementOwnedBy(asTx(tx), A_SCOPE, {
       publicId: newId(),
       slug: ownSlug,
@@ -197,6 +198,13 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
       isBodyweight: true,
     });
 
+    // The reset took: every built-in is at the default before the typing runs, so what follows
+    // measures the migration, not a leftover type.
+    assert.deepEqual(
+      [...new Set((await globalTypesBySlug(tx)).values())],
+      [TRACKING_TYPE.weight_reps],
+      'FAM-1 3: every built-in is at the default before the typing runs',
+    );
     await tx.execute(typing); // the migration's own text, verbatim — not interpolated input
 
     assert.deepEqual(

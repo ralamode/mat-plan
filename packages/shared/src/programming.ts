@@ -108,7 +108,8 @@ export const STRENGTH_DAY_ROLES = DAY_ROLES.filter(
 
 /**
  * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card
- * header. The 1:1 roles SPREAD `SESSION_TYPE_LABELS` (never re-typed); only the split strength days,
+ * header. The 1:1 roles SPREAD `LEGACY_SESSION_TYPE_LABELS` (never re-typed; not the full map, which
+ * has `workout` since FAM-1 step 3); only the split strength days,
  * which `SESSION_TYPE_LABELS` collapses to a single "Strength", add their letter — and they take the
  * "Strength" noun from that same map. An annotated object literal, NOT a computed `Object.fromEntries`
  * + cast: this way TypeScript actually enforces exhaustiveness over `DayRole` (a cast would assert the
