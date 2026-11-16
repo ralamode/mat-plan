@@ -294,8 +294,9 @@ const SCHEMA_MISSING_CODES = new Set(['42P01', '42703']);
  * mis-classification. A test must therefore be built on a REAL wrapped error, not a fabricated
  * `{ code }`, or it passes while production is down.
  *
- * This is the repo's first pg-error-code check: TEN-2d deleted the only other one, and
- * `isUniqueViolationOn` was never written. Later ones should follow this shape.
+ * This is the repo's first pg-error-code check: TEN-2d deleted the only other one. A unique
+ * violation is matched by `isUniqueViolationOn` (`packages/db/src/writers/unique-violation.ts`, FAM-1
+ * 11b), which reads the code the same way. Later ones should follow this shape.
  */
 function isSchemaMissing(error: unknown): boolean {
   const e = error as { cause?: { code?: unknown }; code?: unknown } | null;

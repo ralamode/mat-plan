@@ -285,7 +285,7 @@ export async function restoreHidden(
  *
  * 🔴 **A list of index names, by decision** _(maintainer, 2026-11-16)_: the live-only uniques on
  * `entries` whose collision has a meaningful answer for a person. V1-24 3b-0 added practice; FAM-1
- * 11b appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. (#447's other two arbiters are on `sessions` and
+ * 11b added `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`, a program row. (#447's other two arbiters are on `sessions` and
  * `supersets`, which a restore never writes.) ⚠️ Not every live-only unique on `entries` is here:
  * `uq_entries_superset_order` is not, because a row's position in a superset is not a place a person
  * chose, and a collision there is a bug that should propagate.

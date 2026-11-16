@@ -16,12 +16,13 @@ import {
   type RowValues,
   type RowWrite,
   SESSION_TYPE,
+  slotQuantity,
   TRACKING_TYPE_FIELDS,
   type TrackingType,
   trackingTypeSchema,
   type Unit,
-  UNIT_DIMENSION_BY_CODE,
   unitSchema,
+  unitsForTrackingType,
 } from '@mat-plan/shared';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -29,7 +30,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../../client';
 import { schema } from '../../client';
-import { scheduledOn } from '../../queries/day/scheduled';
+import { isScheduledOn } from '../../queries/day/scheduled';
 import { readRowValues } from '../../queries/day/stored-row-values';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
@@ -176,7 +177,8 @@ export type RowHolder =
  * (`programRowOf`), for this set, against this prescription, in a session of this workout. A
  * `client_id` reused for anything else answers `not_found`, never `ok` with another row's values.
  * `verify/day.ts` 3c–3h prove each condition with its own mutation, except the program-row
- * condition, which the prescription pin implies (`entries_prescription_needs_set_check`).
+ * condition's `prescription_set IS NOT NULL`: `prescription_set = write.set` alone already makes it
+ * non-null, so dropping it changes no answer (3d has no patch of its own).
  */
 export async function classifyRowHolder(
   exec: Executor,
@@ -211,7 +213,13 @@ export async function classifyRowHolder(
   };
 }
 
-/** A held `client_id`'s answer: `ok` with what it stores, `own_hidden` (D18), or `not_found`. */
+/**
+ * A held `client_id`'s answer: `ok` with what it stores, `own_hidden` (D18), or `not_found`.
+ *
+ * ⚠️ **The pin decides before liveness**: a HIDDEN row of another household holding the id answers
+ * `not_found`, never `own_hidden`, which would say "your deleted row" about someone else's
+ * (`verify/day.ts` 3i).
+ */
 async function answerHolder(
   exec: Executor,
   holder: Extract<RowHolder, { held: true }>,
@@ -280,24 +288,30 @@ type PrescribedQuantityRow = {
 
 /**
  * Step 10's first half: **does the prescription's quantity fit its tracking type?** Every live
- * quantity is in the type's slot, in one of its dimensions, and in its fixed unit where it has one
- * (`TRACKING_TYPE_FIELDS`); and a type whose unit comes from the prescription has one. A malformed
+ * quantity is in the type's slot and in a unit the type may use (`unitsForTrackingType`, the
+ * editor's own list: the fixed unit where the type has one); and a type whose unit comes from the
+ * prescription has one. A malformed
  * prescription (a Duration in `lb`) answers `bad_value` rather than storing a wrong row or reaching
  * `entryUnitFor`'s throw.
  */
 function fitsItsType(trackingType: TrackingType, quantities: readonly PrescribedQuantityRow[]) {
   const fields = TRACKING_TYPE_FIELDS[trackingType];
-  const fits = quantities.every(
-    (q) =>
-      q.slot === fields.slot &&
-      fields.dimensions.includes(UNIT_DIMENSION_BY_CODE[q.unit]) &&
-      (fields.unit === null || q.unit === fields.unit),
-  );
+  const units = unitsForTrackingType(trackingType);
+  const fits = quantities.every((q) => q.slot === fields.slot && units.includes(q.unit));
   const unitKnown = fields.slot === null || fields.unit !== null || quantities.length > 0;
   return fits && unitKnown;
 }
 
 const toNumber = (v: string | null) => (v === null ? null : Number(v));
+
+/**
+ * The one live row an insert-then-reselect must find, or a throw: a broken natural key (two live
+ * rows, or none after the insert) fails whatever the row order, never by picking one.
+ */
+function exactlyOneLive<T extends { id: number }>(rows: readonly T[], what: string): T {
+  if (rows.length !== 1) throw new Error(`expected one live ${what}, found ${rows.length}`);
+  return rows[0];
+}
 
 // ── logRow ──────────────────────────────────────────────────────────────────────────────────────────
 
@@ -401,15 +415,13 @@ export async function logRow(
     const trackingType = trackingTypeSchema.parse(movement.trackingType);
 
     // 7 — on the workout's week on this day.
-    const [slot] = await tx
-      .select({ id: schema.blockDayWorkouts.id })
-      .from(schema.blockDayWorkouts)
-      .where(scheduledOn(workout.blockId, workout.id, write.day))
-      .limit(1);
-    if (!slot) refuse(ROW_REFUSAL.not_scheduled);
+    if (!(await isScheduledOn(tx, workout.blockId, workout.id, write.day))) {
+      refuse(ROW_REFUSAL.not_scheduled);
+    }
 
     // 8 — OWED(step 5): the athlete is on this program on this day → else `program_changed`. Lands
-    //     inside `scheduledOn` with `program_assignments` (plan M7, P20, proof 6d).
+    //     inside `scheduledOn` with `program_assignments` (plan M7, P20, proof 6d; see the marker
+    //     in `queries/day/scheduled.ts` for the proofs that change with it).
 
     // 9 — a set past 1 only on a type with set rows.
     if (write.set > 1 && !hasSetRows(trackingType)) refuse(ROW_REFUSAL.bad_value);
@@ -417,7 +429,9 @@ export async function logRow(
     // 10 — the values: the prescription fits its type, then the one fill rule.
     if (!fitsItsType(trackingType, quantities)) refuse(ROW_REFUSAL.bad_value);
     const fields = TRACKING_TYPE_FIELDS[trackingType];
-    const unit = quantities.find((q) => q.slot === fields.slot)?.unit ?? fields.unit;
+    // The unit the item logs in: its slot's prescribed unit, else the type's fixed one. ⚠️ 12a's
+    // `DayItem.unit` must be this same rule, or the row's placeholder and its ✓ disagree.
+    const unit = slotQuantity({ trackingType }, quantities)?.unit ?? fields.unit;
     const target = prescribedTarget(prescription.targetReps, quantities);
     const values = fillRowValues({ trackingType, unit }, write.values, target);
     if (!values) refuse(ROW_REFUSAL.bad_value);
@@ -437,21 +451,18 @@ export async function logRow(
         dayRole: null,
       })
       .onConflictDoNothing();
-    const sessions = await tx
-      .select({ id: schema.sessions.id })
-      .from(schema.sessions)
-      .where(
-        and(
-          workoutSessionSlot(profileId, write.day, workout.id),
-          isNull(schema.sessions.deletedAt),
+    const { id: sessionId } = exactlyOneLive(
+      await tx
+        .select({ id: schema.sessions.id })
+        .from(schema.sessions)
+        .where(
+          and(
+            workoutSessionSlot(profileId, write.day, workout.id),
+            isNull(schema.sessions.deletedAt),
+          ),
         ),
-      );
-    if (sessions.length !== 1) {
-      throw new Error(
-        `expected one live session for workout ${workout.id}, found ${sessions.length}`,
-      );
-    }
-    const sessionId = sessions[0].id;
+      `session for workout ${workout.id}`,
+    );
 
     // The superset, when the prescription is in a group: one live per (session, group).
     let supersetId: number | null = null;
@@ -465,19 +476,18 @@ export async function logRow(
           prescriptionGroup: prescription.supersetLabel,
         })
         .onConflictDoNothing();
-      const supersets = await tx
-        .select({ id: schema.supersets.id })
-        .from(schema.supersets)
-        .where(
-          and(
-            workoutSupersetSlot(sessionId, prescription.supersetLabel),
-            isNull(schema.supersets.deletedAt),
+      supersetId = exactlyOneLive(
+        await tx
+          .select({ id: schema.supersets.id })
+          .from(schema.supersets)
+          .where(
+            and(
+              workoutSupersetSlot(sessionId, prescription.supersetLabel),
+              isNull(schema.supersets.deletedAt),
+            ),
           ),
-        );
-      if (supersets.length !== 1) {
-        throw new Error(`expected one live superset for a group, found ${supersets.length}`);
-      }
-      supersetId = supersets[0].id;
+        'superset for a group',
+      ).id;
     }
 
     // The entry. Bare `ON CONFLICT DO NOTHING`: the `client_id` and the row arbiter
@@ -533,8 +543,9 @@ export async function logRow(
     // The set row: one per ✓ (D3).
     await insertEntrySetRows(tx, { entryId: entry.id, sets: [values] });
 
-    // 12
-    return { ok: true, entryPublicId: entry.publicId, values };
+    // 12 — answered from the stored row, read the one way a replay reads it: `numeric(8,3)` rounds
+    //      (40.12345 is stored 40.123), so `values` itself would differ from the replay's answer.
+    return { ok: true, entryPublicId: entry.publicId, values: await storedValues(tx, entry.id) };
   });
 }
 
@@ -580,13 +591,7 @@ export async function untickRow(
       const scheduled =
         entry.workoutId !== null &&
         entry.blockId !== null &&
-        (
-          await tx
-            .select({ id: schema.blockDayWorkouts.id })
-            .from(schema.blockDayWorkouts)
-            .where(scheduledOn(entry.blockId, entry.workoutId, input.day))
-            .limit(1)
-        ).length > 0;
+        (await isScheduledOn(tx, entry.blockId, entry.workoutId, input.day));
       if (!scheduled) refuse(ROW_REFUSAL.not_scheduled);
     }
 

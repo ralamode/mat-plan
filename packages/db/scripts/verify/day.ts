@@ -6,6 +6,7 @@ import {
   ENTRY_KIND,
   ENTRY_STATUS,
   hasSetRows,
+  MASS_QUANTITY_CEILING,
   newId,
   PROFILE_KIND,
   QUANTITY_SLOT,
@@ -47,7 +48,7 @@ import { asTx, idsOf, rolledBack, type VerifyContext, type VerifyTx } from './ha
  * - step 11a: none of its own (the existing strength proofs in `verify.ts` must pass unchanged);
  * - **step 11b (below)**: the row writer, its un-tick and its re-tick, proof by proof as
  *   `docs/plans/fam-1-11b-row-writer.md` → § Test plan numbers them, each with the mutation patch
- *   that turns it red (`scripts/mutations/README.md`, 110–129 and 170–177);
+ *   that turns it red (`scripts/mutations/README.md`, 110–129 and 170–181);
  * - step 12a: seeds the state each `DayPlan` fixture describes and deep-equals it, with
  *   hand-written timestamps;
  * - step 11c: amend each type; a non-number is refused; an older day is refused;
@@ -565,6 +566,28 @@ async function verifyRowWriter(): Promise<void> {
     );
   });
 
+  // ── 2a · the first answer and a replay's are the same stored row (181) ──────────────────────────
+  await proof('2a: every answer is the stored row', async (f) => {
+    const clientId = newId();
+    const typed = {
+      quantities: [{ slot: QUANTITY_SLOT.distance, unit: 'yd' as Unit, value: 40.12345 }],
+    };
+    const first = expectOk(
+      await f.tick({ clientId, prescriptionPublicId: f.p.distance.publicId, values: typed }),
+      'FAM-1 11b 2a: a distance of 40.12345',
+    );
+    assert.deepEqual(
+      await f.tick({ clientId, prescriptionPublicId: f.p.distance.publicId, values: typed }),
+      first,
+      'FAM-1 11b 2a: a replay answers exactly what the first call answered (numeric(8,3) rounds)',
+    );
+    assert.equal(
+      first.values.quantities[0].value,
+      40.123,
+      'FAM-1 11b 2a: the answer is the stored 40.123',
+    );
+  });
+
   // ── 3b · ✓ c1, un-tick, ✓ c2 on the same set, replay c1 → own_hidden (P18, 125) ──────────────────
   // Before 3: mutation 125 reddens 3 as well, and this is its proof.
   await proof('3b: a replay of an un-ticked attempt after a new ✓', async (f) => {
@@ -733,7 +756,39 @@ async function verifyRowWriter(): Promise<void> {
     ),
   );
 
-  // ── 4 · each tracking type, empty ✓ and typed, read back; the shape CHECK (P13, 120) ─────────────
+  // ── 3i · a HIDDEN row of another household holding the clientId → not_found, never own_hidden (179)
+  await proof('3i: another household’s hidden holder', async (f) => {
+    const clientId = newId();
+    const theirs = expectOk(
+      await f.tickIn(
+        f.F_SCOPE,
+        {
+          clientId,
+          profilePublicId: f.foreigner.publicId,
+          workoutPublicId: f.fw.publicId,
+          prescriptionPublicId: f.fp.publicId,
+        },
+        DAY,
+      ),
+      'FAM-1 11b 3i: F’s tick',
+    );
+    const hidden = await hideEntries(f.exec, {
+      profilePublicId: f.foreigner.publicId,
+      scope: f.F_SCOPE,
+      day: DAY,
+      entryPublicIds: [theirs.entryPublicId],
+    });
+    assert.ok('hiddenAt' in hidden, 'FAM-1 11b 3i: F’s row is hidden');
+    expectRefused(
+      await f.tick({ clientId, prescriptionPublicId: f.p.check.publicId }),
+      ROW_REFUSAL.not_found,
+      'FAM-1 11b 3i: a clientId held by another household’s hidden row is not_found',
+    );
+  });
+
+  // ── 4 · each tracking type, empty ✓ and typed, read back; the shape CHECK ───────────────────────
+  // No patch of its own (plan P13): hard-coding the quantity's dimension reddens `verify.ts`'s GAP-3
+  // hold proof first, as a raw FK error (`scripts/mutations/README.md`).
   await proof('4: every tracking type', async (f, tx) => {
     const lb = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'lb' as Unit, value });
     const cases: {
@@ -836,7 +891,8 @@ async function verifyRowWriter(): Promise<void> {
     });
   });
 
-  // ── 4d · 4e · rowWorkout where profile and scope disagree (P3 111; 47) ───────────────────────────
+  // ── 4d · 4e · rowWorkout where profile and scope disagree (P3 111) ───────────────────────────────
+  // 4e is red under mutation 47 too, but shadowed: 4a-i's assertion in `verify/schema.ts` fails first.
   await proof('4d/4e: the workout lookup’s two household conjuncts', async (f) => {
     assert.ok(
       await rowWorkout(f.exec, f.athlete.id, f.H_SCOPE, f.w1.publicId),
@@ -874,7 +930,9 @@ async function verifyRowWriter(): Promise<void> {
     });
     await bad('a weight over the ceiling', {
       prescriptionPublicId: f.p.weightReps.publicId,
-      values: { quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 2001 }] },
+      values: {
+        quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: MASS_QUANTITY_CEILING + 1 }],
+      },
     });
     expectOk(
       await f.tick({
@@ -968,7 +1026,7 @@ async function verifyRowWriter(): Promise<void> {
     );
   });
 
-  // ── 6c · not_found (P5 112, P7 114, 47) ──────────────────────────────────────────────────────────
+  // ── 6c · not_found (P5 112, P7 114) ──────────────────────────────────────────────────────────────
   await proof('6c: not_found', async (f) => {
     const notFound = async (title: string, run: Promise<Settled>) =>
       expectRefused(await run, ROW_REFUSAL.not_found, `FAM-1 11b 6c: ${title} is not_found`);
@@ -1086,6 +1144,40 @@ async function verifyRowWriter(): Promise<void> {
     );
   });
 
+  // ── 8a · a refusal after the superset insert rolls it back (RowRefused, 178) ───────────────────────
+  await proof('8a: a refusal after an insert leaves nothing behind', async (f, tx) => {
+    const r = expectOk(
+      await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+      'FAM-1 11b 8a: a tick makes the W1 session',
+    );
+    const sessionId = (await f.entryRow(r.entryPublicId)).sessionId!;
+    // A live linked row on the superset member's set 1 with no superset (as if the item was grouped
+    // after it was ticked). The next ✓ inserts a fresh superset, then meets the row arbiter.
+    await tx.insert(schema.entries).values({
+      publicId: newId(),
+      clientId: newId(),
+      profileId: f.athlete.id,
+      activityDate: DAY,
+      unit: 'count',
+      movementName: 'verify-11b-reps',
+      movementId: f.moves.reps,
+      activityTypeId: f.activityTypeId,
+      sessionId,
+      prescriptionId: f.p.supA.id,
+      prescriptionSet: 1,
+    });
+    expectRefused(
+      await f.tick({ prescriptionPublicId: f.p.supA.publicId }),
+      ROW_REFUSAL.slot_taken,
+      'FAM-1 11b 8a: the member’s set is slot_taken',
+    );
+    const [{ n }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.supersets)
+      .where(eq(schema.supersets.sessionId, sessionId));
+    assert.equal(n, 0, 'FAM-1 11b 8a: the refused tick left no superset row');
+  });
+
   // ── 9 · prescribed_snapshot is prescribedText of the prescription; '' for a Check (P23, 129) ─────
   await proof('9: the frozen prescription', async (f) => {
     const wr = expectOk(
@@ -1113,25 +1205,64 @@ async function verifyRowWriter(): Promise<void> {
       '',
       "FAM-1 11b 9: a Check's prescribed_snapshot is ''",
     );
+    // A range freezes the target's text (`prescribedTarget`: no number), as the day page shows it,
+    // never its low end.
+    const range = expectOk(
+      await f.tick({
+        prescriptionPublicId: f.p.range.publicId,
+        values: { quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25 }] },
+      }),
+      'FAM-1 11b 9: the range tick',
+    );
+    const rangeText = prescribedText({
+      trackingType: TRACKING_TYPE.weight_reps,
+      sets: 3,
+      targetReps: '5',
+      quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: null }],
+    });
+    assert.deepEqual(
+      [(await f.entryRow(range.entryPublicId)).snapshot, rangeText.includes('20')],
+      [rangeText, false],
+      "FAM-1 11b 9: a range's prescribed_snapshot is the target's text, not its low end",
+    );
   });
 
   // ── 10 · un-tick and re-tick (P26 172, P15 122) ──────────────────────────────────────────────────
   await proof('10: un-tick and re-tick', async (f, tx) => {
     const first = expectOk(
-      await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
+      await f.tick({ prescriptionPublicId: f.p.weightReps.publicId }),
       'FAM-1 11b 10: the tick',
     );
-    // A hidden set row under the entry: `readRowValues`' parent filter keeps it out.
-    await tx.insert(schema.entrySets).values({
-      publicId: newId(),
+    const stored = {
+      reps: 8,
+      quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25 }],
+    };
+    // A HIDDEN set row under the entry, carrying a LIVE 99 lb quantity: `readRowValues` reads the
+    // quantities of live sets only, so a read by entry (rather than by live set id) shows 99 lb.
+    const [hiddenSet] = await tx
+      .insert(schema.entrySets)
+      .values({
+        publicId: newId(),
+        clientId: newId(),
+        entryId: (await f.entryRow(first.entryPublicId)).id,
+        idx: 1,
+        reps: 99,
+        deletedAt: new Date(),
+      })
+      .returning({ id: schema.entrySets.id });
+    await tx.insert(schema.entrySetQuantities).values({
       clientId: newId(),
-      entryId: (await f.entryRow(first.entryPublicId)).id,
-      idx: 1,
-      reps: 99,
-      deletedAt: new Date(),
+      entrySetId: hiddenSet.id,
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION_BY_CODE.lb,
+      unit: 'lb',
+      valueNum: '99',
     });
     const hidden = expectOk(await f.untick(first.entryPublicId), 'FAM-1 11b 10: un-tick is ok');
     assert.ok(hidden.hiddenAt, 'FAM-1 11b 10: un-tick answers a token');
+    // ⚠️ This cannot tell two tokens apart: every hide in one transaction shares one `now()`, and
+    // the whole proof is one transaction. It proves the replay answers `ok` with A token; 10e proves
+    // a different token is refused.
     assert.deepEqual(
       await f.untick(first.entryPublicId),
       hidden,
@@ -1139,12 +1270,12 @@ async function verifyRowWriter(): Promise<void> {
     );
     assert.deepEqual(
       await f.retick(first.entryPublicId, hidden.hiddenAt!),
-      { ok: true, entryPublicId: first.entryPublicId, values: { reps: 10, quantities: [] } },
+      { ok: true, entryPublicId: first.entryPublicId, values: stored },
       'FAM-1 11b 10: re-tick answers ok with the row’s values',
     );
     const again = expectOk(await f.untick(first.entryPublicId), 'FAM-1 11b 10: un-tick it again');
     expectOk(
-      await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
+      await f.tick({ prescriptionPublicId: f.p.weightReps.publicId }),
       'FAM-1 11b 10: a new ✓ on the same set',
     );
     expectRefused(
@@ -1155,6 +1286,75 @@ async function verifyRowWriter(): Promise<void> {
     assert.ok(
       (await f.entryRow(first.entryPublicId)).deletedAt !== null,
       'FAM-1 11b 10: the refused re-tick left the row hidden',
+    );
+  });
+
+  // ── 10d · another household's program row is never un-ticked or re-ticked from here ─────────────
+  // No patch of its own: `programRowOf`'s profile conjunct is the first guard (mutation 173 drops it,
+  // and 3c fails first), and behind it `hideEntries` / `restoreHidden` re-resolve the profile inside
+  // the scope (`isLiveProfile` joined to the entry), so dropping it alone leaves this green.
+  await proof('10d: another household’s row', async (f, tx) => {
+    const theirs = expectOk(
+      await f.tickIn(
+        f.F_SCOPE,
+        {
+          profilePublicId: f.foreigner.publicId,
+          workoutPublicId: f.fw.publicId,
+          prescriptionPublicId: f.fp.publicId,
+        },
+        DAY,
+      ),
+      'FAM-1 11b 10d: F’s tick',
+    );
+    const deletedAt = async () =>
+      (
+        await tx
+          .select({ t: sql<string | null>`${schema.entries.deletedAt}::text` })
+          .from(schema.entries)
+          .where(eq(schema.entries.publicId, theirs.entryPublicId))
+      )[0].t;
+    expectRefused(
+      await f.untick(theirs.entryPublicId),
+      ROW_REFUSAL.not_found,
+      'FAM-1 11b 10d: un-tick of F’s row from H is not_found',
+    );
+    assert.equal(await deletedAt(), null, 'FAM-1 11b 10d: F’s row is still live');
+    const hidden = await hideEntries(f.exec, {
+      profilePublicId: f.foreigner.publicId,
+      scope: f.F_SCOPE,
+      day: DAY,
+      entryPublicIds: [theirs.entryPublicId],
+    });
+    assert.ok('hiddenAt' in hidden, 'FAM-1 11b 10d: F hides its row');
+    const before = await deletedAt();
+    expectRefused(
+      await f.retick(theirs.entryPublicId, hidden.hiddenAt),
+      ROW_REFUSAL.not_found,
+      'FAM-1 11b 10d: re-tick of F’s row from H is not_found',
+    );
+    assert.equal(await deletedAt(), before, 'FAM-1 11b 10d: F’s deleted_at is unchanged');
+  });
+
+  // ── 10e · a re-tick with a stale token → not_found, the row still hidden (180) ──────────────────
+  await proof('10e: a stale re-tick token', async (f, tx) => {
+    const r = expectOk(
+      await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+      'FAM-1 11b 10e: the tick',
+    );
+    const hidden = expectOk(await f.untick(r.entryPublicId), 'FAM-1 11b 10e: un-tick');
+    // Another hide event since (a Clear day in another tab): the row's token is no longer this one.
+    await tx
+      .update(schema.entries)
+      .set({ deletedAt: sql`${schema.entries.deletedAt} + interval '1 second'` })
+      .where(eq(schema.entries.publicId, r.entryPublicId));
+    expectRefused(
+      await f.retick(r.entryPublicId, hidden.hiddenAt!),
+      ROW_REFUSAL.not_found,
+      'FAM-1 11b 10e: a re-tick with a stale token is not_found',
+    );
+    assert.ok(
+      (await f.entryRow(r.entryPublicId)).deletedAt !== null,
+      'FAM-1 11b 10e: the row is still hidden',
     );
   });
 

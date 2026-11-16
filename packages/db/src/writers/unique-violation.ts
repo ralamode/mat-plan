@@ -2,7 +2,8 @@
  * Did this error come from a unique violation (`23505`) on one of `indexNames`?
  *
  * The one matcher for "a named unique index refused this write", for every writer that turns a
- * specific collision into an answer (`hide.ts`'s restore, the FAM-1 row writer). It reads the shape
+ * specific collision into an answer. Its caller today is `hide.ts`'s restore (`RESTORE_SLOT_INDEXES`);
+ * the FAM-1 row writer arbitrates with a bare `ON CONFLICT DO NOTHING` and matches none. It reads the shape
  * both drivers give: drizzle wraps the driver error in a `DrizzleQueryError` whose `cause` is it, and
  * node-postgres / PGlite put `code` and `constraint` on that error.
  *
