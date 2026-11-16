@@ -199,7 +199,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   }
   const unticked =
     override?.kind === 'unticked' &&
-    (!fromPlan || (!override.sawEmpty && fromPlan.entryPublicId === override.entryPublicId))
+    (!fromPlan || fromPlan.entryPublicId === override.entryPublicId)
       ? override
       : null;
   // This visit's own ✓ wins over data that has not caught up with it yet.
