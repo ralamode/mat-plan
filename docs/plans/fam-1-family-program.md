@@ -363,9 +363,12 @@ in the shapes as planned. Both are fixed in the code, with the smaller changes b
   - **A saved draft's supersets are contiguous, numbered 1..n, with the rest on the last item**: the
     editor fixes them up after every move and remove _(maintainer, in lane B's chat)_; 6a's writer
     may rely on it and refuses a draft that is not.
-  - **The workout editor takes a `program` prop** (`ProgramListEntry`: id, name, athletes), beside the
-    draft and never inside it, for the back link's name. Whether the editor also shows "Used by …"
-    (v12 shows it on the program page only) is the maintainer's answer in lane B's chat.
+  - **The workout editor takes an optional `program` prop** (`ProgramListEntry`: id, name, athletes),
+    beside the draft and never inside it. With it, the back link names the program and the editor
+    shows "Used by …", an addition beyond v12 (which shows it on the program page only) _(maintainer,
+    in lane B's chat)_. A live kid-facing line on each card: not now _(maintainer)_.
+  - **No lane edits the preview harness** _(maintainer)_: a lane adds its props or exports in its own
+    directory, and the contract owner wires the harness after that PR merges.
   - **The renderer's subpath may be imported by a client component**; it is only the root barrel it
     stays out of.
 - **Added after the lanes started (contract change C1):** `quantityText` (one client-safe spelling of
@@ -599,8 +602,9 @@ directories exist; that is what makes the overlap check run (the #228 failure,
   waits for another to mount its work. **One exception, the day page (D34):** three parts the
   page places itself (`AthleteSwitcher`, `ProgramLine`, `NotOnAProgram`), because v12 puts them above
   sections another lane owns. They are lane C's, they take the same `DayPlan` and `DayActions`, and
-  only lane C's own step (12c) places them. The preview harness mounts them the same way: 13d edits
-  the harness's day case once, a seam the contract owner granted and reviews.
+  only lane C's own step (12c) places them. The preview harness mounts them the same way; the
+  contract owner wires that once 13d has merged, since no lane edits the harness _(maintainer,
+  2026-11-16)_.
 - **Fakes on the preview route, real actions in production, never a mix.** 0b ships in-memory fakes of
   both actions objects, so a screen is fully clickable on the preview route (`/design/program`, the
   `/design/tokens` precedent) before any table exists. In production a route passes only the real
@@ -987,15 +991,15 @@ what changed; this is where each flaw was caught.
 The lane prompts' cold read (the DX thread) and the first PRs of lanes A, B and C found where this plan
 disagreed with itself or with the repo. None changed a shape. Fixed here:
 
-| #   | Found by     | What                                                                                                                            | Now                                                                                                        |
-| --- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| L1  | cold read    | §3 and §6 let lane S's migrations go before lane A's chain; §5 and §7 put them after step 5                                     | one rule: the migration PR that is ready first goes next, never two unapplied (§3, §6)                     |
-| L2  | cold read    | `PROGRAM_BLOCK_KINDS`, which 4a-i's CHECK pins to, existed nowhere                                                              | 4a-i adds it to `programming.ts` and joins the `programming.md` queue before 5b                            |
-| L3  | cold read    | "the second to merge rebases", against AGENTS.md                                                                                | merges `main` in                                                                                           |
-| L4  | cold read    | "a step that departs amends the plan", but lanes do not edit it                                                                 | the lane stops and tells the maintainer; the roadmap thread amends                                         |
-| L5  | cold read    | 12c's gate named 3b-page for `page.tsx`; §6's queue puts 3b-bw and 3b-life first                                                | the gate follows §6                                                                                        |
-| L6  | cold read    | a stale line cite in step 1; 6c's row lacked the `programs-list` deep-equal; §8 had no way to capture 360px                     | fixed; §8 says how the picture is taken                                                                    |
-| L7  | lane C (13)  | 15's gate lacked 13b; §8 gave the closed day to 13 alone; the differences from v12 it built were recorded nowhere               | 15 waits for 13b; the closed day is 13 and 13b; §8 has a table of recorded differences                     |
-| L8  | lane A (3)   | a migration generated earlier but merged later is skipped on prod with no error                                                 | §3: regenerate on top of whatever merged; the DX thread is adding a guard                                  |
-| L9  | lane C (13d) | v12 puts the switcher and the programs line above Bodyweight, but the day screen mounts once, below Life                        | D34: three page-placed parts; 12c places them; the harness's day case mounts them (a one-time seam in 13d) |
-| L10 | lane B (8)   | the workout editor had no program to name in its back link; whether `sets: null` may be saved on a set-based type was undecided | a `program` prop (a one-time harness seam in step 8); sets required on save for set-based types            |
+| #   | Found by     | What                                                                                                                            | Now                                                                                                                                       |
+| --- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| L1  | cold read    | §3 and §6 let lane S's migrations go before lane A's chain; §5 and §7 put them after step 5                                     | one rule: the migration PR that is ready first goes next, never two unapplied (§3, §6)                                                    |
+| L2  | cold read    | `PROGRAM_BLOCK_KINDS`, which 4a-i's CHECK pins to, existed nowhere                                                              | 4a-i adds it to `programming.ts` and joins the `programming.md` queue before 5b                                                           |
+| L3  | cold read    | "the second to merge rebases", against AGENTS.md                                                                                | merges `main` in                                                                                                                          |
+| L4  | cold read    | "a step that departs amends the plan", but lanes do not edit it                                                                 | the lane stops and tells the maintainer; the roadmap thread amends                                                                        |
+| L5  | cold read    | 12c's gate named 3b-page for `page.tsx`; §6's queue puts 3b-bw and 3b-life first                                                | the gate follows §6                                                                                                                       |
+| L6  | cold read    | a stale line cite in step 1; 6c's row lacked the `programs-list` deep-equal; §8 had no way to capture 360px                     | fixed; §8 says how the picture is taken                                                                                                   |
+| L7  | lane C (13)  | 15's gate lacked 13b; §8 gave the closed day to 13 alone; the differences from v12 it built were recorded nowhere               | 15 waits for 13b; the closed day is 13 and 13b; §8 has a table of recorded differences                                                    |
+| L8  | lane A (3)   | a migration generated earlier but merged later is skipped on prod with no error                                                 | §3: regenerate on top of whatever merged; the DX thread is adding a guard                                                                 |
+| L9  | lane C (13d) | v12 puts the switcher and the programs line above Bodyweight, but the day screen mounts once, below Life                        | D34: three page-placed parts; 12c places them; the contract owner mounts them in the harness's day case after 13d merges                  |
+| L10 | lane B (8)   | the workout editor had no program to name in its back link; whether `sets: null` may be saved on a set-based type was undecided | an optional `program` prop, which the contract owner passes in the harness after step 8 merges; sets required on save for set-based types |
