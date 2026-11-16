@@ -406,6 +406,8 @@ export function createFakeProgramActions(
   const { failNext, failed } = failSwitch();
   /** Client id → the id its first call minted. */
   const minted = new Map<string, string>();
+  /** The names of the workouts this fake has copied into each OTHER program. */
+  const copiedInto = new Map<string, string[]>();
 
   const refuse = (reason: ProgramRefusal) => ({ ok: false, reason }) as const;
   const changed = () => onChange?.(structuredClone(state));
@@ -536,6 +538,15 @@ export function createFakeProgramActions(
             copiedFrom: { programName: view.name, on: view.today },
           });
         } else {
+          // Another program's workouts are not in this fake's state, so it knows that program's
+          // names only by what it has copied there: a second copy under a name already copied in
+          // is the clash, and the dialog then asks for a name (maintainer, 2026-11-16).
+          const name = copy.name ?? source.name;
+          const there = copiedInto.get(copy.toProgramPublicId) ?? [];
+          if (there.some((taken) => sameName(taken, name))) {
+            return refuse(PROGRAM_REFUSAL.name_taken);
+          }
+          copiedInto.set(copy.toProgramPublicId, [...there, name]);
           minted.set(copy.clientId, workoutPublicId);
         }
         changed();
@@ -590,7 +601,16 @@ export function createFakeProgramActions(
         // The new program takes its place in the household's order among the ones they keep.
         const rank = (name: string) => state.programs.findIndex((p) => p.name === name);
         for (const candidate of picked) {
-          if (!candidate || candidate.on) continue;
+          if (!candidate) continue;
+          if (candidate.on) {
+            // On it already. If Take off gave them a last day, Put on undoes that: they stay on
+            // with no gap, one stretch, whichever day was picked (maintainer, 2026-11-16).
+            const athlete = view.athletes.find(
+              (a) => a.profilePublicId === candidate.profilePublicId,
+            );
+            if (athlete) athlete.lastDay = null;
+            continue;
+          }
           const { profilePublicId, name, keeps } = candidate;
           view.athletes.push({ profilePublicId, name, since: from, lastDay: null, alsoOn: keeps });
           const later = keeps.findIndex((kept) => rank(kept) > rank(view.name));

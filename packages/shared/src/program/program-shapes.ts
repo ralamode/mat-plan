@@ -288,7 +288,15 @@ export const newItemSchema = z.object({
 });
 export type NewItem = z.infer<typeof newItemSchema>;
 
-/** Put someone on a program. `from` is today or tomorrow; the action checks it against its own clock. */
+/**
+ * Put someone on a program. `from` is today or tomorrow; the action checks it against its own clock.
+ *
+ * **Someone already on it is skipped, with one exception: an athlete whose last day is today**
+ * (Take off was tapped). Putting them on undoes the Take off: their last day is cleared and they
+ * stay on with no gap, one stretch, whatever `from` says (maintainer, 2026-11-16). So the dialog
+ * lists such an athlete as available, marked "last day today"; it finds them by joining
+ * `candidates` (where they are still `on`) with `athletes` (where `lastDay` is set).
+ */
 export const assignDraftSchema = z.object({
   programPublicId: uuidSchema,
   profilePublicIds: z.array(uuidSchema).min(1).max(MAX_HOUSEHOLD_ATHLETES).refine(distinct),
@@ -335,8 +343,10 @@ export type ProgramOrder = z.infer<typeof programOrderSchema>;
  * **`name` is the copy's name, when the person gave one** (maintainer, 2026-11-16). A copy into the
  * workout's own program always needs a different name, so the dialog shows a Name field there,
  * prefilled with the workout's name and " (copy)". Left out, the copy takes that default in its own
- * program and the workout's own name in another. A name already used in the program it is copied
- * into answers `name_taken`.
+ * program and the workout's own name in another. **A name already used in the program it is copied
+ * into answers `name_taken`, in any program** (maintainer, 2026-11-16: never two workouts with one
+ * name). The dialog then shows the Name field, prefilled with the name and " (copy)", and the
+ * person copies again; it needs no list of the other program's workouts to do that.
  */
 export const copyDraftSchema = z.object({
   clientId: uuidSchema,

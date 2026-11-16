@@ -972,6 +972,59 @@ describe('the fake ProgramActions: workouts and the week', () => {
       }),
     ).toEqual(refusal('not_found'));
   });
+
+  it('a copy that would clash in another program is refused; with a name of its own it goes through', async () => {
+    const { actions, view } = builder();
+    const [other] = familyProgram.otherPrograms;
+    const copy = (name?: string) => ({
+      clientId: newId(),
+      workoutPublicId: conditioning.workoutPublicId,
+      toProgramPublicId: other!.programPublicId,
+      weekdays: [],
+      label: null,
+      ...(name === undefined ? {} : { name }),
+    });
+    // The first copy lands under the workout's own name. A second would be a second workout of
+    // that name in the other program: never (maintainer, 2026-11-16).
+    expect((await actions.copyWorkout(copy())).ok).toBe(true);
+    expect(await actions.copyWorkout(copy())).toEqual(refusal('name_taken'));
+    // The dialog then asks for a name, and the copy goes through under it...
+    const named = `${conditioning.name} (copy)`;
+    expect((await actions.copyWorkout(copy(named))).ok).toBe(true);
+    // ...once: that name is taken there now too, by its fold.
+    expect(await actions.copyWorkout(copy(named.toUpperCase()))).toEqual(refusal('name_taken'));
+    // Another program's names do not clash with this one's, and this page is untouched.
+    const [, another] = familyProgram.otherPrograms;
+    if (another) {
+      expect(
+        (await actions.copyWorkout({ ...copy(), toProgramPublicId: another.programPublicId })).ok,
+      ).toBe(true);
+    }
+    expect(view()).toEqual(familyProgram);
+  });
+
+  it('a refused copy is not remembered: the retry under the same attempt can still succeed', async () => {
+    const { actions } = builder();
+    const [other] = familyProgram.otherPrograms;
+    const base = {
+      workoutPublicId: conditioning.workoutPublicId,
+      toProgramPublicId: other!.programPublicId,
+      weekdays: [],
+      label: null,
+    };
+    expect((await actions.copyWorkout({ ...base, clientId: newId() })).ok).toBe(true);
+    const attempt = newId();
+    expect(await actions.copyWorkout({ ...base, clientId: attempt })).toEqual(
+      refusal('name_taken'),
+    );
+    // The same attempt, now with a name: it is a new request as far as the name goes.
+    const renamed = await actions.copyWorkout({ ...base, clientId: attempt, name: 'Finisher' });
+    expect(renamed.ok).toBe(true);
+    // And replayed, it answers the same id.
+    expect(await actions.copyWorkout({ ...base, clientId: attempt, name: 'Finisher' })).toEqual(
+      renamed,
+    );
+  });
 });
 
 describe('the fake ProgramActions: items and athletes', () => {
@@ -1096,6 +1149,32 @@ describe('the fake ProgramActions: items and athletes', () => {
     // They started before today, so they stay on through today; the answer says so.
     expect(result).toEqual({ ok: true, lastDay: FIXTURE_TODAY });
     expect(view()).toEqual(familyProgramAfterTakeOff);
+  });
+
+  it('Put on undoes a Take off whose last day is today: one stretch, no gap', async () => {
+    const { actions, view } = builder();
+    const { programPublicId } = familyProgram;
+    const profilePublicId = fixtureIds.athlete('a2');
+    const before = familyProgram.athletes.find((a) => a.profilePublicId === profilePublicId)!;
+    expect(before.lastDay).toBeNull();
+
+    expect(await actions.takeOff({ programPublicId, profilePublicId })).toEqual({
+      ok: true,
+      lastDay: FIXTURE_TODAY,
+    });
+    expect(view()).toEqual(familyProgramAfterTakeOff);
+
+    // They are still `on` in the dialog's list, with a last day on the page: that is how the
+    // dialog knows to offer them. Putting them on, from either day, clears the last day and
+    // changes nothing else: the same `since`, the same place.
+    for (const from of [FIXTURE_TODAY, addDays(FIXTURE_TODAY, 1)]) {
+      await actions.takeOff({ programPublicId, profilePublicId });
+      expect(view().candidates.find((c) => c.profilePublicId === profilePublicId)?.on).toBe(true);
+      expect(
+        await actions.putOn({ programPublicId, profilePublicIds: [profilePublicId], from }),
+      ).toEqual({ ok: true });
+      expect(view()).toEqual(familyProgram);
+    }
   });
 
   it('a Put on from today is undone by Take off the same day: the start is removed', async () => {

@@ -257,10 +257,18 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     today. The answer's `lastDay` is today, or `null` for a removed start, and the screen words its
     message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
     program fake holds no logged rows, so in the preview a start dated today is always removed.
-20. **A copy may carry its own name** (`CopyDraft.name`, optional). Without one, a copy into the
-    workout's own program is named with " (copy)" and a copy into another program keeps the name.
-    A name already used in the program it is copied into answers `name_taken`, as saving a workout
-    under a taken name does.
+20. **A copy may carry its own name, and no program ever holds two workouts with one name**
+    (`CopyDraft.name`, optional; maintainer, 2026-11-16). Without a name, a copy into the workout's
+    own program is named with " (copy)" and a copy into another program keeps the name. A name
+    already used in the program it is copied into answers `name_taken`, in any program. The dialog
+    then shows its Name field, prefilled, and the person copies again; it needs no list of the other
+    program's workouts. ⚠️ The fake knows another program's names only by what it has copied there,
+    so in the preview the clash is a second copy of one workout into the same other program.
+21. **Put on undoes a Take off whose last day is today** (`assignDraftSchema`; maintainer,
+    2026-11-16). An athlete already on a program is skipped by Put on, except one with a last day:
+    that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
+    athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
+    to list them as available.
 
 ## Traps
 
