@@ -1,6 +1,7 @@
 import {
   addDays,
   dayPlanSchema,
+  existingItem,
   hiddenAtSchema,
   newId,
   PROGRAM_REFUSAL,
@@ -802,6 +803,13 @@ describe('the fake ProgramActions: items and athletes', () => {
         await actions.newItem({ name: 'rdl', trackingType: TRACKING_TYPE.check }),
       ).toMatchObject({ itemPublicId: catalog.publicId, name: 'Romanian Deadlift', existed: true });
     }
+  });
+
+  it('an option list without the catalog flag is a type error, not a silent tie-break by name', () => {
+    // ⚠️ Pinned HERE, not beside `existingItem`: `pnpm typecheck` covers this app's tests and not
+    // the shared package's, so the same directive there would never be checked.
+    // @ts-expect-error — `MovementOptionDTO` has `owner`, not `isCatalog`; the caller maps it
+    expect(existingItem([...pickerOptions], 'Push-ups')?.name).toBe('Push-ups');
   });
 
   it('a name with nothing to match on is refused, so it cannot be added twice', async () => {

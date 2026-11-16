@@ -55,12 +55,6 @@ describe('existingItem: the item a typed name already names', () => {
     expect(newItemSchema.safeParse({ name: 'Ss', trackingType: 'check' }).success).toBe(true);
   });
 
-  it('an option list without the catalog flag does not compile', () => {
-    // @ts-expect-error — `isCatalog` is required: without it the tie-break is by name alone
-    existingItem([{ id: 'x', name: 'Deadlift' }], 'deadlift');
-    expect(true).toBe(true);
-  });
-
   it('when two items qualify, the catalog one is the answer', () => {
     // A household item named after the alias, made before the rule; the alias still means the
     // catalog's item, whichever order the rows arrive in.

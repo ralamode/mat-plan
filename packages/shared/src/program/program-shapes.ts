@@ -259,8 +259,8 @@ export type RenameProgram = z.infer<typeof renameProgramSchema>;
  *
  * **A name must have a key** (`movementNameKey`, the "same movement" rule): `S` and `s s` have a
  * letter, so `movementNameSchema` takes them, but the fold drops a lone `s` and their key is empty.
- * A name with no key can be matched to no item (`existingItem`), so adding it twice would make two
- * items; it answers `invalid` instead (contract change C8).
+ * A name with no key can be matched to no item (`existingItem`), so nothing in this contract would
+ * stop it being added twice; it answers `invalid` instead (contract change C8).
  */
 export const newItemSchema = z.object({
   name: movementNameSchema

@@ -15,10 +15,10 @@ import { foldName } from './text';
  * on `movementSlug`, and auto-correcting a typed name server-side is a thing `PICK-2`'s backlog row
  * forbids (`docs/plan.md` → PICK-1/PICK-2) and would change that function's pinned contract. There
  * these helpers decide what the PICKER offers; the server decides what a name resolves to.
- * **One server reader, since FAM-1 contract change C8: the program builder's `newItem`.** It asks
- * `existingItem` (`program/pieces.ts`), which is `matchMovementOptions`' `exact` or `aliasHit`,
- * whether a typed name already names an item, and selects that item if so. That corrects nothing a
- * person typed: it is the same two cases in which the picker withholds "use as typed", held on the
+ * **One server reader is planned, since FAM-1 contract change C8: the program builder's `newItem`**
+ * (its writer is plan step 6a; today only the preview's fake calls it). It will ask `existingItem`
+ * (`program/pieces.ts`), which is `matchMovementOptions`' `exact` or `aliasHit`, whether a typed
+ * name already names an item, and select that item if so. That corrects nothing a person typed: it is the same two cases in which the picker withholds "use as typed", held on the
  * server for a stale page or a call that did not come from the picker.
  */
 
@@ -61,13 +61,15 @@ export function foldMovementQuery(value: string): string {
  * `pullups` and `Pull-Ups` all key to `pullup`.
  *
  * One definition, several consumers, which is the whole point (AGENTS.md → constants): the picker's
- * `exact` test and its alias hit, and `MOV-1`'s rename-collision check. Two surfaces disagreeing
- * about what a duplicate is would let a rename refuse a name the picker had just offered.
+ * `exact` test and its alias hit, `MOV-1`'s rename-collision check, and the program builder's
+ * `existingItem` and `newItemSchema` (`program/`). Two surfaces disagreeing about what a duplicate
+ * is would let a rename refuse a name the picker had just offered.
  *
- * ⚠️ **It can return `''`** — a name of only punctuation or combining marks folds to nothing.
- * Callers must not read `''` as "matches everything": `movementNameSchema` refuses such a name at the
- * boundary, so it never reaches a comparison from a submit, and the picker withholds "use as typed"
- * for it on its own rule.
+ * ⚠️ **It can return `''`** — a name of only punctuation or combining marks folds to nothing, and so
+ * does a name made only of the letter `s` (`S`, `s s`: the fold drops a lone `s`).
+ * Callers must not read `''` as "matches everything". `movementNameSchema` refuses the first kind at
+ * the boundary (a name needs a letter) but NOT the second, which has one; `newItemSchema` refuses
+ * both, and `matchMovementOptions` matches nothing for an empty key.
  */
 export function movementNameKey(value: string): string {
   return foldMovementQuery(value).replaceAll(' ', '');

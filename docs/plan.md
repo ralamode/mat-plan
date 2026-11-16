@@ -305,9 +305,10 @@ and panelled; the milestones order them.
     answering a wording question on FAM-1 step 9: "eventually we should also have a typeahead where
     it filters and shows that as an option (fuzzy search, forgiving of typos)")._ As a parent types
     a new item's name, the field shows the existing items that match, typos included, so a
-    duplicate is seen before Create. Today that field is guarded for an exact name or an alias only
-    (`existingItem`, [program-contract](./features/program-contract.md) invariant 15), which is the
-    floor this builds on; the fuzzy matching itself is [`CAT-3`](#cat-3)'s. Not in FAM-1's scope.
+    duplicate is seen before Create. FAM-1 step 9 guards that field for an exact name or an alias
+    only (`existingItem`, [program-contract](./features/program-contract.md) invariant 15), which is
+    the floor this builds on; the fuzzy matching itself is `CAT-3`'s (the backlog table above). Not
+    in FAM-1's scope.
   - **Not covered:** movements that are already misspelled. Those are still fixed with a `db:correct`
     correction; this row only stops new ones.
   - **Gated on PICK-1**, whose picker this extends. **Owes** a plan, the engineering panel, and a UX
