@@ -202,6 +202,16 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     insert, so two calls in the same moment with names that share a key but not a slug can both
     insert (plan D25).
 
+16. **A slot holds at most one entry** (plan D35, maintainer, 2026-11-16; a slot is one athlete,
+    day, prescription and set). A new ✓ on a set whose entry was un-ticked, or hidden by Clear day,
+    brings that entry back with the new numbers: same `entryPublicId`, no second entry, however
+    many times a row is un-ticked and ticked. The rules that follow from it, all in the fake and on
+    `rowWriteSchema`: the entry answers to the reviving ✓'s `clientId` from then on; the `clientId`
+    it was first logged under answers `slot_taken`; a replayed `clientId` whose own entry is hidden
+    still answers `own_hidden` and revives nothing; a re-tick that arrives after the revive answers
+    with the live entry. The real writer gets this at step 11c; 11b is built before it and refuses
+    nothing differently, it only inserts where 11c will revive.
+
 ## Traps
 
 - **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are

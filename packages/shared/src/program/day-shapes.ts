@@ -182,6 +182,16 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * its numbers can run ahead of the rows the read lists; refusing those would refuse a valid ✓. A
  * set whose row is logged answers `slot_taken`. Only a type with set rows (`hasSetRows`) has a set
  * past 1: on any other type that is `bad_value`.
+ *
+ * 🔴 **A slot holds at most one entry** (plan D35; a slot is one athlete, day, prescription and
+ * set). A ✓ under a NEW `clientId`, on a set with no logged row whose entry the athlete un-ticked
+ * (or that Clear day hid), does not add a second entry: the writer brings that entry back and
+ * writes this ✓'s numbers on it, in one transaction, and answers with ITS `entryPublicId`. The
+ * numbers are this ✓'s, filled from the prescription as for any ✓. From then on the entry answers
+ * to this `clientId` (a retry answers as the first call did), and the `clientId` it was first
+ * logged under names nothing: replayed, it is a ✓ on a logged set (`slot_taken`).
+ * **A replay never revives.** A `clientId` whose own entry is hidden still answers `own_hidden` and
+ * writes nothing: only a new attempt, which is a person ticking again, brings an entry back.
  */
 export const rowWriteSchema = z.object({
   clientId: uuidSchema,
@@ -206,7 +216,12 @@ export const rowUntickSchema = z.object({
 });
 export type RowUntick = z.infer<typeof rowUntickSchema>;
 
-/** Re-tick in the same page visit: restores the entry hidden under this token. Bounded as un-tick is. */
+/**
+ * Re-tick in the same page visit: restores the entry hidden under this token, with the numbers it
+ * had. Bounded as un-tick is. An entry that is already live again (a new ✓ on its set brought it
+ * back, `rowWriteSchema`) answers with the entry as it is now; `slot_taken` is for a set that
+ * another entry holds.
+ */
 export const rowRetickSchema = z.object({
   profilePublicId: uuidSchema,
   day: isoDaySchema,

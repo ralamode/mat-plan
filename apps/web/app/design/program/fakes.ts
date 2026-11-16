@@ -129,8 +129,12 @@ export type FakeDay = {
  * - A retry under the same `clientId` answers as the first call did; once its row is un-ticked that
  *   `clientId` answers `own_hidden`.
  * - Un-tick leaves no tomb: the row is simply not logged, and the answer carries the `hiddenAt`
- *   token. Re-tick under that token puts the same entry back, unless the row was logged again
- *   (`slot_taken`).
+ *   token. Re-tick under that token puts the same entry back.
+ * - **A slot holds at most one entry** (plan D35): a new ✓ on a set whose entry was un-ticked brings
+ *   THAT entry back with the new numbers, and the entry answers to the new `clientId` from then on.
+ *   So a re-tick that arrives afterwards finds its entry live and answers with it. (`slot_taken` on
+ *   a re-tick is the real writer's answer for a slot another entry holds, which the fake, starting
+ *   from a fixture with no hidden entries, cannot reach.)
  * - Change replaces a logged row's numbers; a blank or a non-number keeps the old ones (`bad_value`).
  * - A day that is not writable refuses every row write (`closed_day`), and so does a workout that
  *   has left the week (`not_scheduled`): both show their logged rows, read-only.
@@ -182,6 +186,9 @@ export function createFakeDayActions(
     }
     return null;
   }
+  /** The athlete's un-ticked entry on one set of an item, if there is one. */
+  const hiddenOn = (item: DayItem, set: number) =>
+    [...hidden.values()].find((gone) => gone.item === item && gone.row.set === set);
   /** "6 of 10" counts live items only: a removed prescription's rows are in neither number. */
   const count = (workout: DayWorkout, item: DayItem, by: 1 | -1) => {
     if (item.prescriptionPublicId) workout.progress.done += by;
@@ -227,7 +234,19 @@ export function createFakeDayActions(
           insertBySet(item.rows, row);
           workout.progress.total += 1;
         }
-        row.logged = { entryPublicId: newId(), values, prescribedText: item.prescribedText };
+        // One entry per slot (plan D35): the athlete's own un-ticked entry on this set comes back
+        // with this ✓'s numbers; only a set that never had one gets a new entry.
+        const revived = hiddenOn(item, write.set);
+        if (revived) {
+          hidden.delete(revived.logged.entryPublicId);
+          // The entry answers to this ✓ from now on; the ✓ it was first logged under names nothing.
+          for (const [clientId, entry] of attempts) {
+            if (entry === revived.logged.entryPublicId) attempts.delete(clientId);
+          }
+        }
+        row.logged = revived
+          ? { ...revived.logged, values }
+          : { entryPublicId: newId(), values, prescribedText: item.prescribedText };
         count(workout, item, 1);
         attempts.set(write.clientId, row.logged.entryPublicId);
         changed();
@@ -273,10 +292,9 @@ export function createFakeDayActions(
           return found ? done(found.logged) : refuse(ROW_REFUSAL.not_found);
         }
         if (gone.hiddenAt !== hiddenAt) return refuse(ROW_REFUSAL.not_found);
-        // The set was logged again since: on its own row, or (an added set) on a new row that took
-        // its number.
+        // A ✓ on this set since the un-tick would have brought this very entry back (`logRow`), so
+        // an entry still hidden here has an un-logged set: its own row, or none (an added set).
         const holder = gone.item.rows.find((r) => r.set === gone.row.set);
-        if (holder?.logged) return refuse(ROW_REFUSAL.slot_taken);
 
         if (!holder) {
           // An added set comes back as a row, in set order.
