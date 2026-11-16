@@ -23,9 +23,6 @@ describe('WorkoutDraft: owed by its consumers', () => {
   it.todo('7a: saveWorkout and newItem pass the inherited action matrix');
   it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
   it.todo('7b: every path in routes.ts has its page.tsx under app/programs/');
-  it.todo(
-    'C8: newItem answers the stored name; storedName becomes result.name, and the fold-to-nothing check moves to newItemSchema',
-  );
 });
 
 describe('WeekDraft: owed by its consumers', () => {
@@ -52,4 +49,7 @@ describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');
+  it.todo(
+    '7b: the e2e hears "n items added." only after the item picker has closed (jsdom closes the sheet before a frame, so no unit test can)',
+  );
 });

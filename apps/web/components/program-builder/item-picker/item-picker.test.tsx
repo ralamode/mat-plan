@@ -6,6 +6,7 @@ import {
   TRACKING_TYPE_LABELS,
   type ProgramActions,
   type WorkoutDraft,
+  NEW_ITEM_NAME_MESSAGES,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -35,7 +36,8 @@ import {
   selectExistingText,
   TRACKING_TYPE_EXAMPLES,
 } from '../builder-text';
-import { DOUBLE_TAP_MS } from '../use-attempt';
+import { tapAt, tapClock } from '../test-taps';
+import { SHEET_COPY } from '@/components/ui/sheet';
 import { WorkoutEditorScreen } from '../workout-editor-screen';
 
 afterEach(cleanup);
@@ -59,6 +61,7 @@ function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
     newItem: vi.fn().mockResolvedValue({
       ok: true,
       itemPublicId: NEW_ID,
+      name: 'Bear crawl',
       trackingType: TRACKING_TYPE.reps,
       existed: false,
     }),
@@ -87,11 +90,13 @@ const row = (name: string) =>
   within(sheet()).getByRole('checkbox', { name: new RegExp(`^${name}`) });
 const cardNames = () =>
   [...document.querySelectorAll('ol > li h3')].map((heading) => heading.textContent);
-/** The footer's line of picked names. */
-const picked = () =>
-  within(sheet())
+/** The picks so far: the line Add is described by. */
+const picked = () => {
+  const id = within(sheet())
     .getByRole('button', { name: /^Add \d/ })
-    .parentElement!.querySelector('p')?.textContent;
+    .getAttribute('aria-describedby');
+  return id ? document.getElementById(id)?.textContent : undefined;
+};
 const search = (text: string) =>
   fireEvent.change(within(sheet()).getByRole('searchbox'), { target: { value: text } });
 
@@ -120,6 +125,26 @@ describe('the item picker (FAM-1 9)', () => {
     expect(sets.every((value) => value === '')).toBe(true);
     expect(document.activeElement?.textContent).toBe('Sprawls');
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe(addedText(3)));
+  });
+
+  it('"n items added." is said once, after Add; a plain Close after it says nothing new', async () => {
+    editor();
+    openPicker();
+    fireEvent.click(row('Sprawls'));
+    fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+    const bar = screen.getByRole('status');
+    await waitFor(() => expect(bar.textContent).toBe(addedText(1)));
+    // From here, any change to the bar is a second announcement.
+    let changes = 0;
+    const watch = new MutationObserver(() => changes++);
+    watch.observe(bar, { childList: true, characterData: true, subtree: true });
+    openPicker();
+    // The footer's Close (the header's ✕ has the same name).
+    fireEvent.click(within(sheet()).getAllByRole('button', { name: SHEET_COPY.close }).at(-1)!);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    watch.disconnect();
+    expect(changes).toBe(0);
   });
 
   it('an untick takes the item out of the order', () => {
@@ -286,6 +311,7 @@ describe('the item picker (FAM-1 9)', () => {
         newItem: vi.fn().mockResolvedValue({
           ok: true,
           itemPublicId: pullUp.publicId,
+          name: pullUp.name,
           trackingType: TRACKING_TYPE.reps,
           existed: true,
         }),
@@ -399,14 +425,15 @@ describe('the item picker (FAM-1 9)', () => {
       const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
       fireEvent.change(name, { target: { value: 'S' } });
       // Not on the first keystroke of "Squat".
-      expect(within(sheet()).queryByText(ITEM_PICKER_COPY.giveAName)).toBeNull();
+      expect(within(sheet()).queryByText(NEW_ITEM_NAME_MESSAGES.noKey)).toBeNull();
       fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
         target: { value: TRACKING_TYPE.reps },
       });
       const create = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create });
       expect(create.getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(create);
-      expect(within(sheet()).getByText(ITEM_PICKER_COPY.giveAName)).toBeTruthy();
+      // The contract's own refusal (C8), not the lane's copy of it.
+      expect(within(sheet()).getByText(NEW_ITEM_NAME_MESSAGES.noKey)).toBeTruthy();
       expect(document.activeElement).toBe(name);
       expect(all.newItem).not.toHaveBeenCalled();
     });
@@ -554,7 +581,13 @@ describe('the item picker (FAM-1 9)', () => {
       fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
         target: { value: 'Other thing' },
       });
-      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      answer({
+        ok: true,
+        itemPublicId: NEW_ID,
+        name: 'Bear crawl',
+        trackingType: TRACKING_TYPE.reps,
+        existed: false,
+      });
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(
         (within(sheet()).getByLabelText(ITEM_PICKER_COPY.name) as HTMLInputElement).value,
@@ -564,14 +597,33 @@ describe('the item picker (FAM-1 9)', () => {
       await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
     });
 
+    it('a double tap on Cancel is not an Add: Add sits where Cancel was', () => {
+      editor();
+      openPicker();
+      fireEvent.click(row('Sprawls'));
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const at = Date.now() + 1000;
+      tapAt(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }), at);
+      const add = within(sheet()).getByRole('button', { name: addItemsText(1) });
+      tapAt(add, at + 100);
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(cardNames()).toEqual([]);
+      tapAt(add, at + 1000);
+      expect(cardNames()).toEqual(['Sprawls']);
+    });
+
     it('a message does not outlive Add', async () => {
       editor();
       openForm();
       typeReps();
       pressCreate();
       await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('true'));
-      await new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 50));
-      fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+      // The message is there first (it is set a frame later), so Add is what clears it.
+      await waitFor(() =>
+        expect(within(sheet()).getAllByText(createdText('Bear crawl')).length).toBeGreaterThan(0),
+      );
+      // A second after Create: a new tap, not the same one.
+      tapClock().tap(within(sheet()).getByRole('button', { name: addItemsText(1) }));
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       openPicker();
       expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
@@ -582,6 +634,7 @@ describe('the item picker (FAM-1 9)', () => {
         newItem: vi.fn().mockResolvedValue({
           ok: true,
           itemPublicId: NEW_ID,
+          name: 'Bear crawl',
           trackingType: TRACKING_TYPE.duration,
           existed: true,
         }),
@@ -600,6 +653,29 @@ describe('the item picker (FAM-1 9)', () => {
         name: 'Bear crawl',
         trackingType: TRACKING_TYPE.reps,
       });
+    });
+
+    it('an item another parent made takes its stored name, not the one typed', async () => {
+      editor({
+        newItem: vi.fn().mockResolvedValue({
+          ok: true,
+          itemPublicId: NEW_ID,
+          name: 'Bear Crawl',
+          trackingType: TRACKING_TYPE.reps,
+          existed: true,
+        }),
+      });
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'bear crawl' },
+      });
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(row('Bear Crawl')).toBeTruthy());
+      tapClock().tap(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(cardNames()).toEqual(['Bear Crawl']);
     });
 
     it('an invalid name with a type chosen: Create moves to the name', () => {
@@ -668,7 +744,13 @@ describe('the item picker (FAM-1 9)', () => {
       typeReps();
       pressCreate();
       fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
-      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      answer({
+        ok: true,
+        itemPublicId: NEW_ID,
+        name: 'Bear crawl',
+        trackingType: TRACKING_TYPE.reps,
+        existed: false,
+      });
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
       search('Bear');
@@ -693,6 +775,7 @@ describe('the item picker (FAM-1 9)', () => {
       answers[0]!({
         ok: true,
         itemPublicId: NEW_ID,
+        name: 'Bear crawl',
         trackingType: TRACKING_TYPE.reps,
         existed: false,
       });
@@ -700,6 +783,7 @@ describe('the item picker (FAM-1 9)', () => {
       answers[1]!({
         ok: true,
         itemPublicId: NEW_ID,
+        name: 'Bear crawl',
         trackingType: TRACKING_TYPE.reps,
         existed: true,
       });
@@ -734,7 +818,13 @@ describe('the item picker (FAM-1 9)', () => {
       typeReps();
       pressCreate();
       fireEvent.keyDown(sheet(), { key: 'Escape' });
-      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      answer({
+        ok: true,
+        itemPublicId: NEW_ID,
+        name: 'Bear crawl',
+        trackingType: TRACKING_TYPE.reps,
+        existed: false,
+      });
       await new Promise((resolve) => setTimeout(resolve, 50));
       openPicker();
       expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
