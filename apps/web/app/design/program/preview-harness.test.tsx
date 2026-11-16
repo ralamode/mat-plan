@@ -189,8 +189,10 @@ describe('the preview harness', () => {
       expect(Object.keys(latest('program-line').props).sort()).toEqual(['actions', 'plan']);
       expect(Object.keys(latest('not-on-a-program').props)).toEqual(['plan']);
 
-      // First render, top to bottom: the switcher, the line, the notice, then the screen.
-      expect(mounted.calls.slice(0, 4).map((call) => call.screen)).toEqual([...DAY_PARTS, 'day']);
+      // Top to bottom: the switcher, the line, the notice, then the screen.
+      // First occurrences, so a double render (StrictMode) cannot make a wrong order look right.
+      const firstSeen = [...new Set(mounted.calls.map((call) => call.screen))];
+      expect(firstSeen).toEqual([...DAY_PARTS, 'day']);
     },
   );
 
