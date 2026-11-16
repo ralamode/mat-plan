@@ -15,6 +15,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
+
+- **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
+  `ramp_targets` rows for every profile with `kind = 'kid'`, with no household predicate and no
+  `deleted_at IS NULL`. The seed runs on every push to `main`. The schedule ships empty
+  (`packages/shared/src/ramp-schedule.ts`), so it writes nothing today.
+- **Impact:** none while the schedule is empty. The day it is filled, the next deploy writes ramp
+  targets for the kids of every household in the database, archived athletes included: one
+  schedule written to every household's kids, by a path with no scope.
+- **Fix:** the ramp card and its read leave the app at FAM-1 step 12f (plan D21). Remove the
+  expansion from the seed in the same change, or scope it to the seeded household and to live
+  profiles if the ramp is kept. Either way before the first outside family is invited.
+- **Severity:** low today, high the moment the schedule has a row. Owner: lane A (`seed.ts` is its
+  file), with step 12f.
+
 ### A logged quantity's CHECK admits `NaN` (found 2026-11-16, FAM-1 step 4b's panel)
 
 - **What & why it's debt:** `entry_set_quantities_value_num_check` is `CHECK (value_num >= 0)`

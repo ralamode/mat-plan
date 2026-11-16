@@ -457,6 +457,19 @@ export function fillRowValues(
   return values;
 }
 
+/** What a copy's default name ends with, inside the workout's own program. */
+export const COPY_NAME_SUFFIX = ' (copy)';
+
+/**
+ * The name a copy of a workout takes in its own program when the person gives none, and what the
+ * Copy dialog prefills its Name field with: the workout's name and " (copy)", **cut so the whole
+ * still fits `WORKOUT_NAME_MAX`** (a 30-character name keeps its first 23). One function, so the
+ * dialog's prefill and the writer's default cannot differ (contract change C15).
+ */
+export function copyName(name: string): string {
+  return `${name.slice(0, WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length)}${COPY_NAME_SUFFIX}`;
+}
+
 /**
  * The unit an item logs in, which is `DayItem.unit`: `null` for a type with no quantity (a Check,
  * Reps); the type's fixed unit where it has one (a Duration is minutes, Time per set seconds); else
