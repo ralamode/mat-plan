@@ -913,6 +913,12 @@ $(git merge-base HEAD origin/main)` should list only your files.
     verify is in flight, wait for it; `probe.mjs` is safe to interleave only because it snapshots
     first and restores from the snapshot rather than from HEAD, which is the same lesson one level
     up.
+  - **It recurred on 2026-11-16 (V1-24 3b-life-a), through `git commit --amend` with only `apps`
+    and `docs` named on the `git add`.** The amend still took the INDEX, and the runner had staged
+    `63-superset-label-check-drifts`'s edit to lane A's applied `0025` there. Restricting the paths
+    you stage does not protect you; only not committing does. Caught by `git status` listing an
+    applied migration, and repaired before the first push by folding the commit with the next one
+    and checking `git diff --quiet origin/main <each commit> -- <the migration>`.
   - **What nearly hid it:** the branch diff had 3,500 insertions (a drizzle snapshot), so one
     20-line file in `--stat` is easy to skim past. `git diff origin/main...HEAD --name-only` and
     asking "does this branch have any business touching that file?" is the check.
