@@ -433,3 +433,57 @@ describe('a ✓ after an un-tick that answers with the same entry (contract C9)'
     // (The heading's prescription also reads "5 min", so only the new number is asserted.)
   });
 });
+
+describe('an un-tick that the page’s data has caught up with (contract C9: the same id comes back)', () => {
+  const MORNING = 'Morning habits';
+  const SPLITS = 'Splits stretch';
+  const splitsOf = (plan: DayPlan) =>
+    plan.workouts.find((w) => w.name === MORNING)!.items.find((i) => i.name === SPLITS)!;
+  const original = splitsOf(yesterdayHalfDone).rows[0]!.logged!;
+  /** The plan with Splits stretch logged again under its old entry id, at `minutes`. */
+  function loggedAgain(plan: DayPlan, minutes: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    splitsOf(next).rows[0]!.logged = {
+      ...original,
+      values: { quantities: [{ ...original.values.quantities[0]!, value: minutes }] },
+    };
+    return next;
+  }
+  const el = () => card(MORNING, SPLITS);
+  const tickButton = () => within(el()).getByRole('button', { name: DAY_COPY.logLabel(SPLITS) });
+
+  it('another phone’s ✓ after this one’s un-tick shows the set logged', async () => {
+    const control = mount(yesterdayHalfDone);
+    await press(tickButton());
+    expect(tickButton().getAttribute('aria-pressed')).toBe('false');
+    expect(splitsOf(control.plan).rows[0]!.logged).toBeNull(); // the data has caught up
+    act(() => control.setPlan(loggedAgain(control.plan, 7)));
+    expect(tickButton().getAttribute('aria-pressed')).toBe('true');
+    expect(el().textContent).toContain('7 min');
+  });
+
+  it('a ✓ whose answer was lost shows logged once the data has it, and stops counting', async () => {
+    const box: { control?: ReturnType<typeof mount> } = {};
+    box.control = mount(yesterdayHalfDone, {
+      wrap: (a) => ({
+        logRow: async () => {
+          // The write lands (the data will show it), but the answer never arrives.
+          const control = box.control!;
+          setTimeout(() => act(() => control.setPlan(loggedAgain(control.plan, 6))));
+          throw new Error('connection dropped');
+        },
+        untickRow: a.untickRow,
+      }),
+    });
+    await press(tickButton());
+    const minutes = within(el()).getByRole<HTMLInputElement>('textbox');
+    fireEvent.change(minutes, { target: { value: '6' } });
+    await press(tickButton());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(tickButton().getAttribute('aria-pressed')).toBe('true');
+    expect(el().textContent).toContain('6 min');
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+});

@@ -58,12 +58,15 @@ type Logged = { entryPublicId: string; values: RowValues };
  * - `amended`: this visit's Change (13b-ii). An amend keeps the entry's id, so the data showing the
  *   entry is not enough: the override holds until the data shows the amended numbers, or until the
  *   data moves on from what it held at the time (another phone changed the row since).
- * - `unticked`: this visit's un-tick, with the token a re-tick needs.
+ * - `unticked`: this visit's un-tick, with the token a re-tick needs. `sawEmpty` records that the
+ *   page's data has shown the set empty since: until then, data still showing the entry is data
+ *   that has not caught up; after it, the entry shown again (the same id under C9: another phone's
+ *   ✓, or this phone's ✓ whose answer was lost) is the truth, and the override ends.
  */
 type Override =
   | ({ kind: 'logged'; planValues: RowValues | null } & Logged)
   | ({ kind: 'amended'; planValues: RowValues | null } & Logged)
-  | ({ kind: 'unticked'; hiddenAt: string | null } & Logged);
+  | ({ kind: 'unticked'; hiddenAt: string | null; sawEmpty: boolean } & Logged);
 /**
  * A row's message.
  * - `counts`: a ✓ that did not save, which the workout counts as "not saved". A number the field
@@ -187,9 +190,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       : override.planValues !== null;
     if (caughtUp || movedOn) setOverride(null);
   }
+  if (override?.kind === 'unticked') {
+    if (!fromPlan && !override.sawEmpty) setOverride({ ...override, sawEmpty: true });
+    // Logged again after the data caught up with the un-tick, or another entry: the data is right.
+    if (fromPlan && (override.sawEmpty || fromPlan.entryPublicId !== override.entryPublicId)) {
+      setOverride(null);
+    }
+  }
   const unticked =
     override?.kind === 'unticked' &&
-    (!fromPlan || fromPlan.entryPublicId === override.entryPublicId)
+    (!fromPlan || (!override.sawEmpty && fromPlan.entryPublicId === override.entryPublicId))
       ? override
       : null;
   // This visit's own ✓ wins over data that has not caught up with it yet.
@@ -317,7 +327,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
-    // A `clientId` held by a hidden entry answers `own_hidden` forever: the next try is a new one.
+    // A `clientId` refused as `own_hidden` is not sent again: the next try mints a new one.
     if (result.reason === ROW_REFUSAL.own_hidden) setAttempt(null);
     fail(result.reason, 'tick');
   }
@@ -367,6 +377,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
           entryPublicId: result.entryPublicId,
           values: result.values,
           hiddenAt: result.hiddenAt ?? null,
+          sawEmpty: false,
         },
         DAY_COPY.announce.unticked(rowName(item, row)),
       );
