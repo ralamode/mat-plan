@@ -24,6 +24,7 @@ import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
 import {
   changePractice,
   bodyweightSection,
+  clearAnyPractice,
   clearPractice,
   lifeSection,
   logBodyweight,
@@ -74,7 +75,7 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   // finds the practice logged: clear it first, so these checks always run.
   await page.setViewportSize({ width: 360, height: 800 });
   const minutesField = practiceLogField(page);
-  if ((await minutesField.count()) === 0) await clearPractice(page, PRACTICE_SHOWN);
+  await clearAnyPractice(page);
   const logTick = lifeSection(page).getByRole('button', {
     name: PRACTICE_COPY.logLabel,
     exact: true,

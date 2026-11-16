@@ -85,6 +85,8 @@ export function PracticeForm({ profileId, day }: { profileId: string; day: strin
         const message = problem ? PRACTICE_PROBLEM_COPY[problem](minutes) : null;
         if (message) {
           e.preventDefault();
+          // An earlier island alert ("That wasn't saved…") is about a try this one replaces.
+          live.dismiss();
           setRefused(message);
           inputRef.current?.focus();
         }

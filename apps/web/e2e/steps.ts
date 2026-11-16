@@ -152,19 +152,8 @@ export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
   const button = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   const change = practiceChange(page);
-  // A retry after a failed change left another value on the row: clear it, so the tap below runs.
-  const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
-  const anyChange = life.getByRole('button', {
-    name: new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-  });
-  if (
-    (await button.count()) === 0 &&
-    (await change.count()) === 0 &&
-    (await anyChange.count()) > 0
-  ) {
-    const shown = (await anyChange.getAttribute('aria-label'))!.slice(prefix.length);
-    await clearPractice(page, shown);
-  }
+  // A retry after a failed change left another value on the row: clear it, so the log below runs.
+  if ((await button.count()) === 0 && (await change.count()) === 0) await clearAnyPractice(page);
   if ((await button.count()) > 0) {
     await practiceLogField(page).fill(String(PRACTICE_MINUTES));
     await button.click();
@@ -197,4 +186,19 @@ export async function clearPractice(page: Page, from: string): Promise<void> {
   await life.getByRole('button', { name: PRACTICE_COPY.clearLabel, exact: true }).click();
   await expect(practiceLogField(page)).toBeFocused({ timeout: 15_000 });
   await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedCleared(from));
+}
+
+/**
+ * Clear whatever practice the row shows, at any value, so a Playwright retry (which reuses the DB) can
+ * start from the empty field. A no-op when the field is already there.
+ */
+export async function clearAnyPractice(page: Page): Promise<void> {
+  const life = lifeSection(page);
+  const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
+  const anyChange = life.getByRole('button', {
+    name: new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+  });
+  if ((await anyChange.count()) === 0) return;
+  const shown = (await anyChange.getAttribute('aria-label'))!.slice(prefix.length);
+  await clearPractice(page, shown);
 }

@@ -147,8 +147,11 @@ export function SingleValueAmend({
   const clears = blank && canClear;
   const valueErr = blankRefused ? copy.blankSave : fresh && !state.ok ? state.field : undefined;
   const describedBy =
-    [canClear ? ids.hint : null, valueErr ? ids.error : null].filter(Boolean).join(' ') ||
-    undefined;
+    // A kept "already logged" alert (the only one that survives Change opening) names the number
+    // that was not saved, so the field this editor focuses is described by it too.
+    [canClear ? ids.hint : null, valueErr ? ids.error : null, live.alertId]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   if (!editing) {
     return (

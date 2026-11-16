@@ -220,7 +220,27 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — how many minutes, and the day. Typed by whoever logs it."
+              "text": " — how many minutes, and the day. Typed by whoever logs it (before 16\nNovember 2026 a tap always recorded 90 minutes)."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Earlier check-ins and wake-up times"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — whether a habit was done or a count, and the day, and\nthe clock time a wake-up was tapped. These are still stored from before November 2026; the day page\nno longer records new ones."
             }
           ]
         }

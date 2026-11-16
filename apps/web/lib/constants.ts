@@ -796,6 +796,9 @@ export const BODYWEIGHT_COPY = {
 } as const;
 
 /** The practice activity's label, from the one list that also names its button (one source). */
+/** The sr-only words after the practice label that make the field's name (`… minutes`). */
+const PRACTICE_FIELD_SUFFIX = ' minutes';
+
 const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
   (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
 )!.label;
@@ -810,10 +813,10 @@ export const PRACTICE_COPY = {
   changeSubject: PRACTICE_LABEL.toLowerCase(),
   /** `AMEND_ERROR_COPY`'s subject: `the practice wasn't changed`. */
   noun: 'practice',
-  /** The field's accessible name is the visible label plus this sr-only suffix (both rows). */
-  fieldLabelSuffix: ' minutes',
-  /** The field's accessible name; the visible `min` beside it is `aria-hidden`. */
-  fieldLabel: `${PRACTICE_LABEL} minutes`,
+  /** The log row's sr-only suffix after its visible label, so its name is `fieldLabel`. */
+  fieldLabelSuffix: PRACTICE_FIELD_SUFFIX,
+  /** The field's accessible name on BOTH rows (log and Change); the visible `min` is `aria-hidden`. */
+  fieldLabel: `${PRACTICE_LABEL}${PRACTICE_FIELD_SUFFIX}`,
   ...singleValueCopy({
     subject: PRACTICE_LABEL,
     clearLabel: `Clear ${PRACTICE_LABEL.toLowerCase()}`,
@@ -836,7 +839,7 @@ export const PRACTICE_COPY = {
    */
   hoursNotMinutes: (typed: string) => {
     const t = typed.trim();
-    const hours = /^[1-5]$/.test(t) ? Number(t) : null;
+    const hours = /^0*[1-5]$/.test(t) ? Number(t) : null;
     return hours === null
       ? 'Minutes, not hours: 1 and a half hours is 90.'
       : `Minutes, not hours: ${hours} ${hours === 1 ? 'hour is' : 'hours is'} ${hours * 60}.`;

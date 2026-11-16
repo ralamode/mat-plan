@@ -93,4 +93,18 @@ describe('PracticeForm — the typed row (3b-life-b)', () => {
     await submit();
     expect(postedClientId(1)).toBe(postedClientId(0));
   });
+
+  it('a refusal the server puts on the field shows under it and hands focus back to it', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.outOfRange,
+      fieldErrors: { minutes: [PRACTICE_COPY.outOfRange] },
+    });
+    renderForm();
+    fireEvent.change(field(), { target: { value: '45' } });
+    field().blur(); // jsdom does not blur on click; a phone's tap does
+    await submit();
+    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.outOfRange);
+    expect(document.activeElement).toBe(field());
+  });
 });

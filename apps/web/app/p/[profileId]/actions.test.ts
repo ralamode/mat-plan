@@ -1320,7 +1320,11 @@ describe('logLifeActivitiesAction — boundary', () => {
 
   it('rejects a missing/malformed profileId or clientId without touching the DAL', async () => {
     for (const over of [{ profileId: 'nope' }, { clientId: 'nope' }] as Record<string, string>[]) {
-      expect((await logLifeActivitiesAction(initial, lifeForm(over))).ok).toBe(false);
+      // Valid minutes, so the page itself is stale or crafted: a reload, not "fix the errors below".
+      expect(await logLifeActivitiesAction(initial, lifeForm(over))).toEqual({
+        ok: false,
+        error: PRACTICE_COPY.reloadToLog,
+      });
     }
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
