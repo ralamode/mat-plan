@@ -2,7 +2,16 @@ import { QUANTITY_SLOT, quantityCeiling, UNIT_CODES, type DayItem } from '@mat-p
 import { everyTypeOnce } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
-import { fieldText, formatRowValues, readTyped, sameValues, textOf } from './row-values';
+import {
+  canChangeValues,
+  changedText,
+  fieldText,
+  formatRowValues,
+  readAmend,
+  readTyped,
+  sameValues,
+  textOf,
+} from './row-values';
 
 const primary = QUANTITY_SLOT.primary;
 /** A row's fields with only the quantity typed. */
@@ -165,5 +174,74 @@ describe('sameValues, textOf and formatRowValues', () => {
     expect(formatRowValues({ quantities: [{ slot: primary, unit: 'count', value: 12 }] })).toBe(
       '12',
     );
+  });
+});
+
+describe('readAmend (Change, 13b-ii)', () => {
+  const bench: DayItem = {
+    ...splits,
+    name: 'DB bench press',
+    trackingType: 'weight_reps',
+    unit: 'lb',
+    target: { reps: 8, quantities: [{ slot: primary, unit: 'lb', value: 25 }] },
+  };
+  const logged = { quantities: [{ slot: primary, unit: 'lb' as const, value: 27.5 }], reps: 8 };
+
+  it('sends every number, the typed ones and the rest as logged', () => {
+    expect(readAmend(bench, { quantity: '30', reps: '8' }, logged)).toEqual({
+      send: { quantities: [{ slot: primary, unit: 'lb', value: 30 }], reps: 8 },
+      kept: [],
+    });
+  });
+
+  it('a blank keeps its own logged number, never the prescription, and the other field is sent', () => {
+    expect(readAmend(bench, { quantity: '30', reps: '' }, logged)).toEqual({
+      send: { quantities: [{ slot: primary, unit: 'lb', value: 30 }], reps: 8 },
+      kept: [{ field: 'reps', problem: 'missing', typed: '' }],
+    });
+  });
+
+  it('nothing to send when no number moved, or none could be read', () => {
+    expect(readAmend(bench, { quantity: '27.50', reps: '8' }, logged).send).toBeNull();
+    expect(readAmend(bench, { quantity: 'x', reps: '8.5' }, logged)).toEqual({
+      send: null,
+      kept: [
+        { field: 'quantity', problem: 'not_a_number', typed: 'x' },
+        { field: 'reps', problem: 'not_a_number', typed: '8.5' },
+      ],
+    });
+  });
+
+  it('a load over the unit’s ceiling is kept, not sent', () => {
+    const over = String(quantityCeiling('lb')! + 1);
+    expect(readAmend(bench, { quantity: over, reps: '8' }, logged)).toEqual({
+      send: null,
+      kept: [{ field: 'quantity', problem: 'out_of_range', typed: over }],
+    });
+  });
+
+  it('🔴 a row logged in another unit cannot be changed in place', () => {
+    expect(canChangeValues(bench, logged)).toBe(true);
+    expect(canChangeValues({ ...bench, unit: 'kg' }, logged)).toBe(false);
+    expect(canChangeValues(grip, { quantities: [] })).toBe(false);
+    // Logged as reps only, on what is now weight × reps: no load to send.
+    expect(canChangeValues(bench, { quantities: [], reps: 8 })).toBe(false);
+    // Logged as another type (reps on what is now a Duration): no numbers it no longer has.
+    expect(
+      canChangeValues(splits, {
+        quantities: logged.quantities.map((q) => ({ ...q, unit: 'min' as const })),
+        reps: 8,
+      }),
+    ).toBe(false);
+  });
+
+  it('the Changed line prints only what moved', () => {
+    const to = { ...logged, quantities: [{ ...logged.quantities[0]!, value: 30 }] };
+    expect(changedText(bench, logged, to)).toEqual({ from: '27.5 lb', to: '30 lb' });
+    expect(changedText(bench, logged, { ...logged, reps: 6 })).toEqual({ from: '8', to: '6 reps' });
+    expect(changedText(bench, logged, { ...to, reps: 6 })).toEqual({
+      from: '27.5 lb × 8',
+      to: '30 lb × 6',
+    });
   });
 });
