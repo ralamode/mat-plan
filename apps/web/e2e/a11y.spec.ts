@@ -689,12 +689,42 @@ test.describe('U0 — the sheet, open', () => {
       el.scrollTop = Math.min(40, el.scrollHeight - el.clientHeight);
       return el.scrollTop;
     });
+    // Or the test passes trivially on a list too short to scroll.
+    expect(before, 'the list scrolls at 360×640, so there is an offset to keep').toBeGreaterThan(0);
     await page.setViewportSize({ width: 360, height: 400 });
     await expect(dialog.locator('[data-probe=same]')).toHaveCount(1);
     await expect(action).toBeFocused();
     expect(await scroller.evaluate((el) => el.scrollTop), 'the offset survives the flip').toBe(
       before,
     );
+  });
+
+  /**
+   * 🔴 **WCAG 2.2 SC 2.4.11 — focus never lands behind the sticky footer** (#476). The pinned
+   * footer sits inside the scroller, so without `scroll-padding-bottom` the browser parks a tabbed
+   * row under it. Tab through every focusable in the body and check each one's bottom edge.
+   */
+  test('a focused control in the body is never hidden behind the pinned footer', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 520 });
+    const dialog = await openSheet(page);
+    const footerTop = async () =>
+      dialog.getByRole('button', { name: 'Use as typed' }).evaluate((b) => {
+        const footer = b.closest('.sticky');
+        return footer ? footer.getBoundingClientRect().top : Infinity;
+      });
+    const controls = dialog.locator('.grow a, .grow button');
+    const count = await controls.count();
+    expect(count, 'the demo body has focusable controls').toBeGreaterThan(0);
+    for (let i = 0; i < count; i += 1) {
+      const control = controls.nth(i);
+      await control.focus();
+      const bottom = await control.evaluate((el) => el.getBoundingClientRect().bottom);
+      expect(bottom, `control ${i} clears the footer`).toBeLessThanOrEqual(
+        (await footerTop()) + 0.5,
+      );
+    }
   });
 
   /**

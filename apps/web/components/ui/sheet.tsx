@@ -241,6 +241,28 @@ function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow
 }
 
 /**
+ * Writes the footer's height as `--sheet-footer-h` on the footer's scroller, while it exists.
+ *
+ * 🔴 **WCAG 2.2 SC 2.4.11, Focus Not Obscured.** A pinned footer is `sticky` INSIDE the scroller, so
+ * the browser's own focus-scroll and `scrollIntoView` would happily park a focused row behind it —
+ * a probe at 390×844 found 9 of 39 tabbed rows mostly covered (review of #476). `scroll-padding-
+ * bottom` tells both to stop above the footer, and it has to be the MEASURED height: footers hold
+ * one to three buttons and wrap at 200% zoom. Same callback-node pattern as `useVisualViewport`.
+ */
+function useFooterHeight(node: HTMLElement | null): void {
+  useEffect(() => {
+    const scroller = node?.parentElement;
+    if (!node || !scroller || typeof ResizeObserver === 'undefined') return;
+    const write = () =>
+      scroller.style.setProperty('--sheet-footer-h', `${node.getBoundingClientRect().height}px`);
+    write();
+    const observer = new ResizeObserver(write);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+}
+
+/**
  * The back gesture: one history entry per open sheet, so the system back button closes it instead of
  * leaving the page (`pick-1-movement-picker.md`'s hazard — "the back gesture navigates away and loses
  * the form").
@@ -388,6 +410,9 @@ export function Sheet({
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   const compact = useVisualViewport(open, content, compactBelow);
+  // The footer's measured height, for the scroller's `scroll-padding-bottom` (see the render).
+  const [footerNode, setFooterNode] = useState<HTMLDivElement | null>(null);
+  useFooterHeight(footerNode);
   useBackGesture(open, id, onOpenChange);
 
   useEffect(() => {
@@ -546,13 +571,27 @@ export function Sheet({
               footer is `sticky` at its bottom (pinned) or scrolls with the list (compact), the
               same idiom as `program-screen.tsx`. `min-h-0` is what lets it shrink inside the flex
               column; without it the scroller refuses to scroll and pushes the footer off. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          <div
+            className={cn(
+              'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain',
+              // Focus never lands behind the sticky footer — `useFooterHeight`.
+              !compact && 'scroll-pb-[var(--sheet-footer-h,0px)]',
+            )}
+          >
             <div className="grow p-4">{children}</div>
             {/* ⚠️ `[&_[data-slot=button]]` forces wrapping on whatever a consumer passes: `Button` is
                 `whitespace-nowrap`, and at 200% zoom on a 390px phone (195 CSS px) a long action
                 overflows — INVISIBLY to the document-level overflow helper, because a `fixed` box
                 contributes nothing to the document's scrollable width. */}
-            <div className={cn(FOOTER_CLASS, !compact && 'bg-background sticky bottom-0 border-t')}>
+            <div
+              ref={setFooterNode}
+              className={cn(
+                FOOTER_CLASS,
+                !compact && 'bg-background sticky bottom-0 border-t',
+                // The footer's own background would square off the capped dialog's rounded corners.
+                isDialog ? 'rounded-b-xl' : 'min-[600px]:rounded-b-xl',
+              )}
+            >
               {footer ?? <FooterFallback />}
             </div>
           </div>
