@@ -547,6 +547,7 @@ export const PUT_ON_COPY = {
   startPending: 'Starting…',
   failed: 'Couldn’t start them. Try again.',
   stale: 'This program changed somewhere else. It now shows the latest; no one was started.',
+  dayChanged: 'The day has changed since this page loaded. It now shows today; no one was started.',
 } as const;
 
 export const putOnTitle = (program: string) => `Put someone on ${program}`;
@@ -592,6 +593,9 @@ export function startedText(
   const when = from === today ? 'today' : `on ${formatDayShort(from)}`;
   return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${when}.`;
 }
+/** Someone put back on after a Take off: they never left, whatever the start date (C15). */
+export const backOnText = (names: readonly string[], program: string) =>
+  `${formatList(names)} ${names.length > 1 ? 'stay' : 'stays'} on ${program}.`;
 
 /** The Copy dialog's words (FAM-1 step 10b; the prototype's `openCopy`). */
 export const COPY_COPY = {
@@ -606,6 +610,8 @@ export const COPY_COPY = {
   copy: 'Copy',
   copying: 'Copying…',
   name: 'Name',
+  nameMissing: 'Give the copy a name.',
+  nameInvalid: 'A name is one line of plain text.',
   failed: 'Couldn’t copy it. Try again.',
   stale: 'This program changed somewhere else. It now shows the latest; nothing was copied.',
 } as const;

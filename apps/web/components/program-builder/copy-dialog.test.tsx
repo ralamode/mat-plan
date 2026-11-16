@@ -6,11 +6,15 @@ import {
   type ProgramActions,
   type ProgramView,
 } from '@mat-plan/shared';
-import { familyProgram } from '@mat-plan/shared/program/fixtures';
+import { familyProgram, programsList } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }) }));
+
+import { createFakeProgramActions, type FakeProgramState } from '@/app/design/program/fakes';
 
 import {
   COPY_COPY,
@@ -197,11 +201,88 @@ describe('Copy to a program (FAM-1 10b)', () => {
     await waitFor(() => expect(within(dialog()).getByText(COPY_COPY.failed)).toBeTruthy());
   });
 
-  it('a copy’s name stays within WORKOUT_NAME_MAX', () => {
+  it('the Name field’s prefill stays within WORKOUT_NAME_MAX for a 30-character workout', () => {
     const long = 'x'.repeat(WORKOUT_NAME_MAX);
-    expect(copyName(long).length).toBe(WORKOUT_NAME_MAX);
-    expect(copyName(long).endsWith(' (copy)')).toBe(true);
-    expect(copyName('Heavy A')).toBe('Heavy A (copy)');
+    const program = {
+      ...familyProgram,
+      workouts: familyProgram.workouts.map((w) => (w === heavyA ? { ...w, name: long } : w)),
+    };
+    page({}, program);
+    openCopy(long);
+    const select = within(screen.getByRole('dialog')).getByLabelText(COPY_COPY.to);
+    fireEvent.change(select, { target: { value: familyProgram.programPublicId } });
+    const name = (within(screen.getByRole('dialog')).getByLabelText(/^Name/) as HTMLInputElement)
+      .value;
+    expect(name.length).toBe(WORKOUT_NAME_MAX);
+    expect(name.endsWith(' (copy)')).toBe(true);
+  });
+
+  it('an emptied Name is said in words, and nothing is sent', () => {
+    const all = page();
+    openCopy();
+    fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
+    fireEvent.change(within(dialog()).getByLabelText(/^Name/), { target: { value: '   ' } });
+    fireEvent.click(copyButton());
+    expect(within(dialog()).getByText(COPY_COPY.nameMissing)).toBeTruthy();
+    expect(all.copyWorkout).not.toHaveBeenCalled();
+  });
+
+  it('a label the person typed stays when To changes', () => {
+    page();
+    openCopy();
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    fireEvent.click(day(1));
+    fireEvent.change(within(dialog()).getByLabelText(/^Label/), { target: { value: 'Dawn' } });
+    fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
+    expect((within(dialog()).getByLabelText(/^Label/) as HTMLInputElement).value).toBe('Dawn');
+  });
+
+  it('after a retry, a changed draft is a new attempt', async () => {
+    const all = page({
+      copyWorkout: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry })
+        .mockResolvedValue({ ok: true, workoutPublicId: 'new' }),
+    });
+    openCopy();
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(within(dialog()).getByText(COPY_COPY.failed)).toBeTruthy());
+    fireEvent.change(to(), { target: { value: stretching!.programPublicId } });
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(all.copyWorkout).toHaveBeenCalledTimes(2));
+    const [first, second] = vi.mocked(all.copyWorkout).mock.calls.map(([d]) => d.clientId);
+    expect(second).not.toBe(first);
+  });
+
+  it('a stale page closes, refreshes and says nothing was copied', async () => {
+    page({
+      copyWorkout: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.not_found }),
+    });
+    openCopy();
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(COPY_COPY.stale));
+  });
+
+  it('a copy into this program takes focus to its new row', async () => {
+    const seed: FakeProgramState = { programs: programsList, program: familyProgram, items: [] };
+    function Harness() {
+      const [state, setState] = useState(seed);
+      const [fake] = useState(() => createFakeProgramActions(seed, setState));
+      return <ProgramScreen program={state.program!} actions={fake.actions} />;
+    }
+    render(<Harness />);
+    openCopy();
+    fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toContain(copyName(heavyA.name)),
+    );
+    expect(document.activeElement?.tagName).toBe('A');
   });
 
   it('someone on both programs who already does it on a picked day is named', () => {

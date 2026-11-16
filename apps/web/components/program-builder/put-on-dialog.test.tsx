@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }
 import { createFakeProgramActions, type FakeProgramState } from '@/app/design/program/fakes';
 
 import {
+  backOnText,
   candidateOnLabel,
   keepsText,
   lastDayText,
@@ -204,5 +205,31 @@ describe('Put someone on (FAM-1 10b)', () => {
       ),
     );
     expect(document.activeElement).toBe(screen.getByText(PUT_ON_COPY.everyoneOn));
+  });
+
+  it('a start that is now yesterday (left past midnight) refreshes the day, not "try again"', async () => {
+    page({ putOn: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.invalid }) });
+    openDialog();
+    fireEvent.click(box(adult.name));
+    fireEvent.click(start(1));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(PUT_ON_COPY.dayChanged),
+    );
+  });
+
+  it('someone put back on is said to stay, not to start', async () => {
+    page({}, familyProgramAfterTakeOff);
+    openDialog();
+    const off = familyProgramAfterTakeOff.athletes.find((a) => a.lastDay)!;
+    fireEvent.click(box(off.name));
+    fireEvent.click(within(dialog()).getByRole('radio', { name: /^Tomorrow/ }));
+    fireEvent.click(start(1));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        backOnText([off.name], familyProgram.name),
+      ),
+    );
   });
 });

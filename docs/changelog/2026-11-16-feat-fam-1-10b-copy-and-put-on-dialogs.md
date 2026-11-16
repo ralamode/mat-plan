@@ -3,5 +3,6 @@
   workout has "Copy to…": the program it goes to (none chosen for you), who is on that program, and
   optional days with a label; someone who would end up doing it twice on a day is named. "Put someone
   on this program…" lists the household with what each keeps, starts today or tomorrow, and says what
-  that day changes. Production shows neither until steps 7b and 15 wire them. No schema change, no new
+  that day changes. A copy into the same program, or one another program refuses by name, gets a Name
+  field prefilled "Heavy A (copy)"; someone taken off today can be put back on, which undoes it. Production shows neither until steps 7b and 15 wire them. No schema change, no new
   dependency.

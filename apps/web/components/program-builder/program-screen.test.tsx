@@ -153,6 +153,25 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     expect(screen.getByRole('button', { name: takeOffLabel('Athlete One') })).toBeTruthy();
   });
 
+  it('Take off follows its answer, not the dates: a start dated today with no last day leaves', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: true, lastDay: null });
+    const today = {
+      ...familyProgram,
+      athletes: [{ ...familyProgram.athletes[1]!, since: familyProgram.today }],
+    };
+    const { rerender } = render(<ProgramScreen program={today} actions={actions({ takeOff })} />);
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete Two') }));
+    rerender(<ProgramScreen program={{ ...today, athletes: [] }} actions={actions({ takeOff })} />);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        takenOffText('Athlete Two', familyProgram.name, false),
+      ),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { name: BUILDER_COPY.whosOnIt }),
+    );
+  });
+
   it('Take off someone who has not started: they leave, and focus goes to the heading', async () => {
     // Take off answers what it did (C15): no last day, so they never start.
     const takeOff = vi.fn().mockResolvedValue({ ok: true, lastDay: null });

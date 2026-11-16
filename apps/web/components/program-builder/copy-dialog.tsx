@@ -22,6 +22,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 
 import {
+  cleanName,
   COPY_COPY,
   copiedText,
   copyTakenElsewhereText,
@@ -100,6 +101,9 @@ export function CopyWorkout({
   const [pending, setPending] = useState(false);
   // One attempt's id, reused on a retry; a new opening is a new attempt.
   const [clientId, setClientId] = useState(newId);
+  // A changed draft is a new attempt: a retry reuses the id only for the very same copy, or a
+  // replay would answer for the old one (a dropped connection after it landed).
+  const changed = () => setClientId(newId());
   const said = useRef<{ text: string; focus: string | null } | null>(null);
   const { begin, isCurrent, cancel } = useAttempt();
   const ids = useId();
@@ -157,6 +161,7 @@ export function CopyWorkout({
 
   function choose(next: string) {
     setTo(next);
+    changed();
     setMessage('');
     setNameError(null);
     // Replace the label only if it is still the prefill: what the person typed stays theirs.
@@ -186,7 +191,8 @@ export function CopyWorkout({
     }
     const named = naming ? workoutNameSchema.safeParse(name) : null;
     if (named && !named.success) {
-      setNameError(named.error.issues[0]?.message ?? WEEK_COPY.labelInvalid);
+      // Fixed sentences, never the schema's own message (written for a developer).
+      setNameError(cleanName(name) ? COPY_COPY.nameInvalid : COPY_COPY.nameMissing);
       return focusField(document.getElementById(NAME_ID));
     }
     const copyAs = named?.success ? named.data : workout.name;
@@ -308,6 +314,7 @@ export function CopyWorkout({
             onChange={(next) => {
               setName(next);
               setNameError(null);
+              changed();
             }}
             error={nameError}
           />
@@ -318,6 +325,7 @@ export function CopyWorkout({
           onDays={(next) => {
             setDays(next);
             setMessage('');
+            changed();
           }}
           legend={
             <>
@@ -343,6 +351,7 @@ export function CopyWorkout({
             onLabel={(next) => {
               setLabel(next);
               setLabelError(null);
+              changed();
             }}
             error={labelError}
             hint={COPY_COPY.labelHint}

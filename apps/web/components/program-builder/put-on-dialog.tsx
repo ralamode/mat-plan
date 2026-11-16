@@ -24,6 +24,7 @@ import {
   orderHintText,
   PUT_ON_COPY,
   putOnTitle,
+  backOnText,
   startedText,
   startEffectText,
   startLabel,
@@ -139,21 +140,24 @@ export function PutOn({
     if (!isCurrent(mine)) return;
     setPending(false);
     if (!result.ok) {
-      // `invalid` too: a dialog left open past midnight sends a start that is now yesterday.
-      if (result.reason === PROGRAM_REFUSAL.retry || result.reason === PROGRAM_REFUSAL.invalid) {
-        return setMessage(PUT_ON_COPY.failed);
-      }
-      said.current = PUT_ON_COPY.stale;
+      if (result.reason === PROGRAM_REFUSAL.retry) return setMessage(PUT_ON_COPY.failed);
+      // `invalid`: a page loaded before midnight sends a start that is now yesterday, and a retry
+      // would send it again. The page's today is stale: fetch it, as a stale program is.
+      said.current =
+        result.reason === PROGRAM_REFUSAL.invalid ? PUT_ON_COPY.dayChanged : PUT_ON_COPY.stale;
       setOpen(false);
       router.refresh();
       return;
     }
-    said.current = startedText(
-      ticked.map((c) => c.name),
-      program.name,
-      from,
-      program.today,
-    );
+    // Someone taken off and put back on never left: they are not said to start (C15).
+    const back = ticked.filter((c) => c.on).map((c) => c.name);
+    const fresh = ticked.filter((c) => !c.on).map((c) => c.name);
+    said.current = [
+      fresh.length ? startedText(fresh, program.name, from, program.today) : '',
+      back.length ? backOnText(back, program.name) : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
     setOpen(false);
   }
 
