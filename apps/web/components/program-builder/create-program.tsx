@@ -2,15 +2,16 @@
 
 import { newId, PROGRAM_NAME_MAX, type ProgramActions } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { CTA_CLASS } from '@/lib/constants';
 
-import { BUILDER_COPY, nameRefusal } from './builder-text';
+import { BUILDER_COPY, PENDING_CLASS } from './builder-text';
 import { NameField } from './name-field';
 import { programPath } from './routes';
+import { useNameForm } from './use-name-form';
 
 const NAME_ID = 'new-program-name';
 
@@ -23,9 +24,8 @@ const NAME_ID = 'new-program-name';
  *   program is one field and one tap away. Otherwise the button opens it and focuses the field;
  *   Cancel closes it and returns focus to the button.
  * - **One `clientId` per opened form**: a retry after `retry` reuses it, so a create that did land
- *   is not made twice (`createProgramSchema`).
- * - A refusal shows under the field, takes focus back to it and scrolls it into view: on a phone
- *   the keyboard covers the bottom of the list, which is where this form is.
+ *   is not made twice (`createProgramSchema`); opening the form again mints a new one.
+ * - The name, its refusals and a Cancel mid-save are `useNameForm`'s.
  */
 export function CreateProgram({
   createProgram,
@@ -36,32 +36,27 @@ export function CreateProgram({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(startOpen);
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const clientId = useRef(newId());
-  const fieldRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
+  const {
+    name: draft,
+    error,
+    pending,
+    fieldRef,
+    onChange,
+    onSubmit,
+    reset,
+  } = useNameForm({
+    initial: '',
+    submit: (name) => createProgram({ clientId: clientId.current, name }),
+    // `pending` stays set: the button must not read "Create" again while the page changes.
+    onSaved: (result) => router.push(programPath(result.programPublicId)),
+  });
 
-  const refuse = (message: string) => {
-    setError(message);
-    fieldRef.current?.focus();
-    fieldRef.current?.scrollIntoView?.({ block: 'center' });
-  };
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (pending) return;
-    const trimmed = name.trim();
-    if (!trimmed) return refuse(nameRefusal('invalid'));
-    setPending(true);
-    const result = await createProgram({ clientId: clientId.current, name: trimmed });
-    setPending(false);
-    if (result.ok) {
-      router.push(programPath(result.programPublicId));
-      return;
-    }
-    refuse(nameRefusal(result.reason));
+  function close() {
+    reset();
+    setOpen(false);
+    requestAnimationFrame(() => openerRef.current?.focus());
   }
 
   if (!open) {
@@ -72,6 +67,7 @@ export function CreateProgram({
         className={CTA_CLASS}
         onClick={() => {
           clientId.current = newId();
+          reset();
           // Focus inside the tap, so iOS raises the keyboard: the form must exist by then.
           flushSync(() => setOpen(true));
           fieldRef.current?.focus();
@@ -84,29 +80,30 @@ export function CreateProgram({
 
   return (
     <form
-      onSubmit={submit}
+      onSubmit={onSubmit}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && !startOpen) close();
       }}
       className="flex flex-col gap-3 rounded-lg border p-4"
-      aria-label="Create a program"
+      aria-label={BUILDER_COPY.createProgramForm}
     >
       <NameField
         ref={fieldRef}
         id={NAME_ID}
         label={BUILDER_COPY.programName}
         placeholder={BUILDER_COPY.programNamePlaceholder}
-        value={name}
+        value={draft}
         max={PROGRAM_NAME_MAX}
-        onChange={(value) => {
-          setName(value);
-          setError(null);
-        }}
+        onChange={onChange}
         error={error}
       />
       <div className="flex gap-2">
         {/* `aria-disabled`, not `disabled`: a disabled button drops focus to <body> mid-save. */}
-        <Button type="submit" aria-disabled={pending || undefined} className="flex-1">
+        <Button
+          type="submit"
+          aria-disabled={pending || undefined}
+          className={`flex-1 ${PENDING_CLASS}`}
+        >
           {pending ? BUILDER_COPY.creating : BUILDER_COPY.create}
         </Button>
         {startOpen ? null : (
@@ -117,11 +114,4 @@ export function CreateProgram({
       </div>
     </form>
   );
-
-  function close() {
-    setOpen(false);
-    setName('');
-    setError(null);
-    requestAnimationFrame(() => openerRef.current?.focus());
-  }
 }

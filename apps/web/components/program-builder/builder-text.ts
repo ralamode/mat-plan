@@ -1,6 +1,7 @@
 import { PROGRAM_REFUSAL, WEEKDAYS, type ProgramRefusal, type ProgramView } from '@mat-plan/shared';
 
 import { formatDayShort } from '@/lib/date';
+import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural } from '@/lib/i18n/plural';
 
 /**
@@ -15,6 +16,7 @@ export const BUILDER_COPY = {
   noPrograms: 'No programs yet.',
   noOneYet: 'No one yet',
   createProgram: '+ Create a program',
+  createProgramForm: 'Create a program',
   create: 'Create',
   creating: 'Creating…',
   cancel: 'Cancel',
@@ -23,7 +25,6 @@ export const BUILDER_COPY = {
   severalPrograms: 'A person can be on several programs.',
   rename: 'Rename',
   save: 'Save',
-  saving: 'Saving…',
   renamed: 'Program renamed',
   whosOnIt: 'Who’s on it',
   noOneOnIt: 'No one yet.',
@@ -36,6 +37,12 @@ export const BUILDER_COPY = {
   weekIntro: 'Each day runs its workouts in this order. A day with none is a rest day.',
   restDay: 'Rest day',
 } as const;
+
+/**
+ * A pending button: `aria-disabled` (a disabled one drops focus to <body>), which `Button` does
+ * not style, so it is dimmed here.
+ */
+export const PENDING_CLASS = 'aria-disabled:opacity-60';
 
 /** What a refused name write says, under the field. */
 export function nameRefusal(reason: ProgramRefusal): string {
@@ -62,9 +69,27 @@ export function usedByText(athletes: readonly string[]): string {
   return `Used by ${formatList(athletes)}. Changes apply to ${who}.`;
 }
 
+/**
+ * Whether an athlete has started on the program by `today`. One rule for the "since" or "starts"
+ * wording and for what Take off does (someone who had not started simply leaves).
+ */
+export function hasStarted(athlete: { since: string }, today: string): boolean {
+  return athlete.since <= today;
+}
+
+/**
+ * Accessible names that name their subject, so a screen reader's list of buttons tells them
+ * apart. The visible word is a prefix of each (WCAG 2.5.3, as `changeLabel` in `lib/constants`).
+ */
+export const renameLabel = (program: string) => `${BUILDER_COPY.rename} ${program}`;
+export const takeOffLabel = (athlete: string) => `${BUILDER_COPY.takeOff} ${athlete}`;
+export const takingOffLabel = (athlete: string) => `${BUILDER_COPY.takingOff} ${athlete}`;
+
 /** An athlete's line on the program page: "since Mon, Nov 9 · last day … · also on Stretching". */
 export function athleteHint(athlete: ProgramView['athletes'][number], today: string): string {
-  const parts = [`${athlete.since > today ? 'starts' : 'since'} ${formatDayShort(athlete.since)}`];
+  const parts = [
+    `${hasStarted(athlete, today) ? 'since' : 'starts'} ${formatDayShort(athlete.since)}`,
+  ];
   if (athlete.lastDay) parts.push(`last day ${formatDayShort(athlete.lastDay)}`);
   if (athlete.alsoOn.length) parts.push(`also on ${formatList(athlete.alsoOn)}`);
   return parts.join(' · ');
@@ -90,7 +115,7 @@ export const MONDAY_FIRST = [...WEEKDAYS.slice(1), WEEKDAYS[0]];
 
 /** A weekday's name, from a fixed week that starts on a Sunday (2026-11-15). */
 export function weekdayName(weekday: number, style: 'long' | 'short' = 'long'): string {
-  return new Intl.DateTimeFormat('en-US', { weekday: style, timeZone: 'UTC' }).format(
+  return new Intl.DateTimeFormat(APP_LOCALE, { weekday: style, timeZone: 'UTC' }).format(
     new Date(Date.UTC(2026, 10, 15 + weekday)),
   );
 }
@@ -99,7 +124,11 @@ export function weekdayName(weekday: number, style: 'long' | 'short' = 'long'): 
 export function workoutSummary(itemCount: number, usedOn: readonly number[]): string {
   const items = plural(itemCount, { one: '1 item', other: `${itemCount} items` });
   const days = usedOn.length
-    ? `Used ${usedOn.map((k) => weekdayName(k, 'short')).join(', ')}`
+    ? `Used ${formatList(
+        usedOn.map((k) => weekdayName(k, 'short')),
+        APP_LOCALE,
+        'unit',
+      )}`
     : 'Not on any day yet';
   return `${items} · ${days}`;
 }

@@ -1,14 +1,15 @@
 'use client';
 
 import { PROGRAM_NAME_MAX, type ProgramActions } from '@mat-plan/shared';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { NAME_WRAP_CLASS, SAVING_LABEL } from '@/lib/constants';
 
-import { BUILDER_COPY, nameRefusal } from './builder-text';
+import { BUILDER_COPY, PENDING_CLASS, renameLabel } from './builder-text';
 import { NameField } from './name-field';
+import { useNameForm } from './use-name-form';
 
 const NAME_ID = 'program-name';
 
@@ -18,8 +19,8 @@ const NAME_ID = 'program-name';
  * Rename swaps the heading's row for a stacked form: at 360px a field beside its buttons would show
  * about 20 of the name's 60 characters. Beyond the prototype it has Cancel and Escape, and the
  * counter plan §8 asks of every name. On a save, the heading comes back, focus returns to Rename
- * and `onStatus` reports it; an unchanged name just closes. A refusal keeps the form open, says
- * why under the field and focuses it.
+ * and `onStatus` reports it; an unchanged name just closes. The name, its refusals and a Cancel
+ * mid-save are `useNameForm`'s.
  */
 export function ProgramHeader({
   programPublicId,
@@ -34,35 +35,32 @@ export function ProgramHeader({
   onStatus: (message: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const fieldRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLButtonElement>(null);
+  const {
+    name: draft,
+    error,
+    pending,
+    fieldRef,
+    onChange,
+    onSubmit,
+    reset,
+  } = useNameForm({
+    initial: name,
+    submit: (cleaned) =>
+      cleaned === name ? null : renameProgram({ programPublicId, name: cleaned }),
+    onSaved: (_result, called) => {
+      close();
+      if (called) onStatus(BUILDER_COPY.renamed);
+    },
+  });
 
-  const refuse = (message: string) => {
-    setError(message);
-    fieldRef.current?.focus();
-  };
-
+  /** Back to the heading, focus on Rename. Synchronous, so Rename exists when it is focused. */
   function close() {
-    setEditing(false);
-    setError(null);
-    requestAnimationFrame(() => renameRef.current?.focus());
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (pending) return;
-    const trimmed = draft.trim();
-    if (!trimmed) return refuse(nameRefusal('invalid'));
-    if (trimmed === name) return close();
-    setPending(true);
-    const result = await renameProgram({ programPublicId, name: trimmed });
-    setPending(false);
-    if (!result.ok) return refuse(nameRefusal(result.reason));
-    close();
-    onStatus(BUILDER_COPY.renamed);
+    flushSync(() => {
+      reset(name);
+      setEditing(false);
+    });
+    renameRef.current?.focus();
   }
 
   if (!editing) {
@@ -75,12 +73,12 @@ export function ProgramHeader({
           ref={renameRef}
           variant="ghost"
           className="shrink-0"
-          aria-label={`${BUILDER_COPY.rename} ${name}`}
+          aria-label={renameLabel(name)}
           onClick={() => {
             onStatus('');
             // Focus inside the tap, so iOS raises the keyboard: the form must exist by then.
             flushSync(() => {
-              setDraft(name);
+              reset(name);
               setEditing(true);
             });
             fieldRef.current?.focus();
@@ -94,30 +92,31 @@ export function ProgramHeader({
 
   return (
     <form
-      onSubmit={submit}
+      onSubmit={onSubmit}
       onKeyDown={(event) => {
         if (event.key === 'Escape') close();
       }}
       className="flex flex-col gap-3"
-      aria-label={`${BUILDER_COPY.rename} ${name}`}
+      aria-label={renameLabel(name)}
     >
       {/* The page keeps its one <h1> while the form is open; the field says what it renames. */}
-      <h1 className="sr-only">{name}</h1>
+      <h1 className={`sr-only ${NAME_WRAP_CLASS}`}>{name}</h1>
       <NameField
         ref={fieldRef}
         id={NAME_ID}
         label={BUILDER_COPY.programName}
         value={draft}
         max={PROGRAM_NAME_MAX}
-        onChange={(value) => {
-          setDraft(value);
-          setError(null);
-        }}
+        onChange={onChange}
         error={error}
       />
       <div className="flex gap-2">
-        <Button type="submit" aria-disabled={pending || undefined} className="flex-1">
-          {pending ? BUILDER_COPY.saving : BUILDER_COPY.save}
+        <Button
+          type="submit"
+          aria-disabled={pending || undefined}
+          className={`flex-1 ${PENDING_CLASS}`}
+        >
+          {pending ? SAVING_LABEL : BUILDER_COPY.save}
         </Button>
         <Button type="button" variant="ghost" onClick={close}>
           {BUILDER_COPY.cancel}

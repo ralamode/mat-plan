@@ -5,8 +5,8 @@ import { APP_HOME_PATH, NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants'
 import { formatList } from '@/lib/i18n/plural';
 
 import { BUILDER_COPY } from './builder-text';
-import { CHEVRON_CLASS, GROUP_LIST_CLASS, GROUP_ROW_LINK_CLASS } from './classes';
 import { CreateProgram } from './create-program';
+import { GroupList, GroupRowLink } from './group-list';
 import { programPath } from './routes';
 
 /**
@@ -32,28 +32,17 @@ export function ProgramsListScreen({ programs, actions }: ProgramsListScreenProp
       </Link>
       <h1 className="text-2xl font-semibold tracking-tight">{BUILDER_COPY.programs}</h1>
       {programs.length ? (
-        <ul className={GROUP_LIST_CLASS}>
+        <GroupList>
           {programs.map((program) => (
             <li key={program.programPublicId}>
-              <Link href={programPath(program.programPublicId)} className={GROUP_ROW_LINK_CLASS}>
-                {/* The row link stacks its children, so the chevron needs a row of its own. */}
-                <span className="flex items-center gap-3">
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className={`font-semibold ${NAME_WRAP_CLASS}`}>{program.name}</span>
-                    <span className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-                      {program.athletes.length
-                        ? formatList(program.athletes)
-                        : BUILDER_COPY.noOneYet}
-                    </span>
-                  </span>
-                  <span aria-hidden="true" className={CHEVRON_CLASS}>
-                    ›
-                  </span>
+              <GroupRowLink href={programPath(program.programPublicId)} title={program.name}>
+                <span className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+                  {program.athletes.length ? formatList(program.athletes) : BUILDER_COPY.noOneYet}
                 </span>
-              </Link>
+              </GroupRowLink>
             </li>
           ))}
-        </ul>
+        </GroupList>
       ) : (
         <p className="text-muted-foreground">{BUILDER_COPY.noPrograms}</p>
       )}

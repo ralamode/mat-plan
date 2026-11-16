@@ -6,7 +6,7 @@ import { CTA_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { BUILDER_COPY, copiedFromText, workoutSummary } from './builder-text';
-import { CHEVRON_CLASS, GROUP_LIST_CLASS, GROUP_ROW_LINK_CLASS } from './classes';
+import { GroupList, GroupRowLink } from './group-list';
 import { newWorkoutPath, workoutPath } from './routes';
 
 const HEADING_ID = 'program-workouts';
@@ -26,33 +26,26 @@ export function WorkoutsList({ program }: { program: ProgramView }) {
         {BUILDER_COPY.workouts}
       </h2>
       {workouts.length ? (
-        <ul className={GROUP_LIST_CLASS}>
+        <GroupList>
           {workouts.map((workout) => (
             <li key={workout.workoutPublicId} className="flex items-stretch">
-              <Link
+              <GroupRowLink
                 href={workoutPath(programPublicId, workout.workoutPublicId)}
-                className={cn(GROUP_ROW_LINK_CLASS, 'min-w-0 flex-1')}
+                title={workout.name}
+                className="min-w-0 flex-1"
               >
-                <span className="flex items-center gap-3">
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className={`font-semibold ${NAME_WRAP_CLASS}`}>{workout.name}</span>
-                    <span className="text-muted-foreground text-sm">
-                      {workoutSummary(workout.itemCount, workout.usedOn)}
-                    </span>
-                    {workout.copiedFrom ? (
-                      <span className={`text-muted-foreground text-sm italic ${NAME_WRAP_CLASS}`}>
-                        {copiedFromText(workout.copiedFrom)}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span aria-hidden="true" className={CHEVRON_CLASS}>
-                    ›
-                  </span>
+                <span className="text-muted-foreground text-sm">
+                  {workoutSummary(workout.itemCount, workout.usedOn)}
                 </span>
-              </Link>
+                {workout.copiedFrom ? (
+                  <span className={`text-muted-foreground text-sm italic ${NAME_WRAP_CLASS}`}>
+                    {copiedFromText(workout.copiedFrom)}
+                  </span>
+                ) : null}
+              </GroupRowLink>
             </li>
           ))}
-        </ul>
+        </GroupList>
       ) : (
         <p className="text-muted-foreground">{BUILDER_COPY.noWorkouts}</p>
       )}

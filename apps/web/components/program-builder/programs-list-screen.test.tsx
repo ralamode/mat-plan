@@ -124,4 +124,61 @@ describe('ProgramsListScreen (FAM-1 8a)', () => {
     const opener = screen.getByRole('button', { name: BUILDER_COPY.createProgram });
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
+  it('a new opening mints a new client id; a success keeps the button pending', async () => {
+    const createProgram = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry })
+      .mockResolvedValueOnce({ ok: true, programPublicId: NEW_ID });
+    render(<ProgramsListScreen programs={programsList} actions={actionsWith(createProgram)} />);
+    const attempt = async () => {
+      fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.createProgram }));
+      fireEvent.change(screen.getByLabelText(BUILDER_COPY.programName), {
+        target: { value: 'Summer block' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.create }));
+    };
+    await attempt();
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+    await attempt();
+    await waitFor(() => expect(push).toHaveBeenCalledWith(programPath(NEW_ID)));
+    const [first, second] = createProgram.mock.calls.map(([input]) => input.clientId);
+    expect(second).not.toBe(first);
+    const button = screen.getByRole('button', { name: BUILDER_COPY.creating });
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('a create that lands after Cancel does not navigate', async () => {
+    let answer!: (result: { ok: true; programPublicId: string }) => void;
+    const createProgram = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    render(
+      <ProgramsListScreen
+        programs={programsList}
+        actions={actionsWith(createProgram as ProgramActions['createProgram'])}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.createProgram }));
+    fireEvent.change(screen.getByLabelText(BUILDER_COPY.programName), {
+      target: { value: 'Summer block' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.create }));
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.creating }));
+    expect(createProgram).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+    answer({ ok: true, programPublicId: NEW_ID });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('a pasted tab is sent as a space (a text input already drops newlines)', async () => {
+    const createProgram = vi.fn().mockResolvedValue({ ok: true, programPublicId: NEW_ID });
+    render(<ProgramsListScreen programs={[]} actions={actionsWith(createProgram)} />);
+    fireEvent.change(screen.getByLabelText(BUILDER_COPY.programName), {
+      target: { value: 'Summer\t\tblock 2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.create }));
+    await waitFor(() => expect(createProgram).toHaveBeenCalled());
+    expect(createProgram.mock.calls[0]![0].name).toBe('Summer block 2');
+  });
 });

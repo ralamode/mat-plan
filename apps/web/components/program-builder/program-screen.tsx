@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
-import { NAV_LINK_CLASS } from '@/lib/constants';
+import { NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
 
 import { BUILDER_COPY, usedByText } from './builder-text';
 import { ProgramHeader } from './program-header';
@@ -29,15 +29,19 @@ import { WorkoutsList } from './workouts-list';
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
  * hides its control (plan §6). `takeOff` arrives that way, at step 15.
  */
+/** The status line once it has a message: the prototype's banner. Names in it may be long. */
+const BANNER_CLASS = `rounded-lg px-3 py-2 text-sm font-medium ${NAME_WRAP_CLASS}`;
+
 export type ProgramScreenProps = { program: ProgramView; actions: ProgramActions };
 
 export function ProgramScreen({ program, actions }: ProgramScreenProps) {
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState({ message: '', tone: 'status' as 'status' | 'alert' });
   // Cleared first, so the same message twice is announced twice and the banner blinks.
-  const report = useCallback((message: string) => {
-    setStatus('');
-    if (message) requestAnimationFrame(() => setStatus(message));
+  const report = useCallback((message: string, tone: 'status' | 'alert' = 'status') => {
+    setStatus({ message: '', tone });
+    if (message) requestAnimationFrame(() => setStatus({ message, tone }));
   }, []);
+  const shown = (tone: 'status' | 'alert') => (status.tone === tone ? status.message : '');
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -50,14 +54,21 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
           renameProgram={actions.renameProgram}
           onStatus={report}
         />
-        <p className="text-muted-foreground text-sm">
+        <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
           {usedByText(program.athletes.map((athlete) => athlete.name))}
         </p>
-        {/* Mounted empty with no height, as `Announcer` asks; a banner once it has something. */}
+        {/* Both mounted empty with no height, as `Announcer` asks; a banner once they have
+            something. A refusal the person must act on is an alert, not a status. */}
         <Announcer
-          message={status}
-          className={status ? 'bg-muted rounded-lg px-3 py-2 text-sm font-medium' : 'h-0'}
+          message={shown('status')}
+          className={shown('status') ? `${BANNER_CLASS} bg-muted` : 'h-0'}
         />
+        <p
+          role="alert"
+          className={shown('alert') ? `${BANNER_CLASS} bg-destructive/10 text-destructive` : 'h-0'}
+        >
+          {shown('alert')}
+        </p>
       </div>
       <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={report} />
       <WorkoutsList program={program} />

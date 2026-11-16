@@ -25,6 +25,7 @@ describe('WorkoutDraft: owed by its consumers', () => {
   it.todo('7a: saveWorkout and newItem pass the inherited action matrix');
   it.todo('9: the picker renders picker-options (step 0b’s fixture), and its no-match state');
   it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
+  it.todo('7b: every path in routes.ts has its page.tsx under app/programs/');
 });
 
 describe('WeekDraft: owed by its consumers', () => {
@@ -33,7 +34,6 @@ describe('WeekDraft: owed by its consumers', () => {
 });
 
 describe('ProgramList and ProgramView: owed by their consumers', () => {
-  it.todo('10b: "Copied from" shows the frozen program name');
   it.todo('7a: createProgram and renameProgram pass the inherited action matrix');
 });
 

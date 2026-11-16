@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   athleteHint,
   copiedFromText,
+  hasStarted,
   MONDAY_FIRST,
   nameRefusal,
   takenOffText,
@@ -12,6 +13,7 @@ import {
   weekdayName,
   workoutSummary,
 } from './builder-text';
+import { cleanName } from './use-name-form';
 
 describe('the program builder’s sentences (the prototype’s wording)', () => {
   it('"Used by": none, one, both, all n', () => {
@@ -66,8 +68,22 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
     ]);
   });
 
-  it('every refusal has words', () => {
-    for (const reason of PROGRAM_REFUSALS) expect(nameRefusal(reason)).toMatch(/\.$/);
-    expect(nameRefusal('name_taken')).toBe('A program with this name already exists.');
+  it('each refusal has its own words (pinned once, here)', () => {
+    expect(PROGRAM_REFUSALS.map((reason) => [reason, nameRefusal(reason)])).toEqual([
+      ['name_taken', 'A program with this name already exists.'],
+      ['invalid', 'Give the program a name.'],
+      ['not_found', 'This program no longer exists.'],
+      ['once_per_day', 'Couldn’t save. Try again.'],
+      ['retry', 'Couldn’t save. Try again.'],
+    ]);
+  });
+
+  it('someone has started on their first day, not before', () => {
+    expect(hasStarted({ since: '2026-11-14' }, '2026-11-14')).toBe(true);
+    expect(hasStarted({ since: '2026-11-15' }, '2026-11-14')).toBe(false);
+  });
+
+  it('a name is sent the way it is stored: whitespace runs as one space, trimmed', () => {
+    expect(cleanName('  Summer\t block\n ')).toBe('Summer block');
   });
 });

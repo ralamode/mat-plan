@@ -4,10 +4,18 @@ import type { ProgramActions, ProgramView } from '@mat-plan/shared';
 import { useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 
-import { athleteHint, BUILDER_COPY, takenOffText, takeOffFailedText } from './builder-text';
-import { FOCUS_TARGET_CLASS } from './classes';
+import {
+  athleteHint,
+  BUILDER_COPY,
+  hasStarted,
+  PENDING_CLASS,
+  takenOffText,
+  takeOffFailedText,
+  takeOffLabel,
+  takingOffLabel,
+} from './builder-text';
 
 const HEADING_ID = 'program-whos-on-it';
 
@@ -20,7 +28,8 @@ const HEADING_ID = 'program-whos-on-it';
  *   listed with a last day, so focus moves to their row; someone who had not started leaves the
  *   list, so focus moves to the section's heading. The message is reported after the move, so the
  *   polite announcement is not cut off by it.
- * - A refusal keeps the button, refocuses it and says so.
+ * - A refusal keeps the button, refocuses it and says so as an alert. While one Take off is
+ *   pending, every Take off button is `aria-disabled`.
  */
 export function WhosOnIt({
   program,
@@ -29,7 +38,8 @@ export function WhosOnIt({
 }: {
   program: ProgramView;
   takeOff: ProgramActions['takeOff'];
-  onStatus: (message: string) => void;
+  /** Reports to the page's status line; `alert` for a refusal the person must act on. */
+  onStatus: (message: string, tone?: 'alert') => void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const rows = useRef(new Map<string, HTMLElement>());
@@ -38,7 +48,7 @@ export function WhosOnIt({
 
   async function takeOffAthlete(athlete: ProgramView['athletes'][number]) {
     if (!takeOff || pending) return;
-    const started = athlete.since <= program.today;
+    const started = hasStarted(athlete, program.today);
     setPending(athlete.profilePublicId);
     const result = await takeOff({
       programPublicId: program.programPublicId,
@@ -47,7 +57,7 @@ export function WhosOnIt({
     setPending(null);
     if (!result.ok) {
       buttons.current.get(athlete.profilePublicId)?.focus();
-      onStatus(takeOffFailedText(athlete.name));
+      onStatus(takeOffFailedText(athlete.name), 'alert');
       return;
     }
     requestAnimationFrame(() => {
@@ -63,7 +73,7 @@ export function WhosOnIt({
         id={HEADING_ID}
         ref={headingRef}
         tabIndex={-1}
-        className={`text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
+        className={`rounded-sm text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
       >
         {BUILDER_COPY.whosOnIt}
       </h2>
@@ -80,7 +90,7 @@ export function WhosOnIt({
                   else rows.current.delete(athlete.profilePublicId);
                 }}
                 tabIndex={-1}
-                className={`flex min-w-0 flex-1 flex-col ${FOCUS_TARGET_CLASS}`}
+                className={`flex min-w-0 flex-1 flex-col rounded-sm ${FOCUS_TARGET_CLASS}`}
               >
                 <span className={`font-medium ${NAME_WRAP_CLASS}`}>{athlete.name}</span>
                 <span className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
@@ -94,9 +104,14 @@ export function WhosOnIt({
                     else buttons.current.delete(athlete.profilePublicId);
                   }}
                   variant="ghost"
-                  className="shrink-0"
-                  aria-label={`${BUILDER_COPY.takeOff} ${athlete.name}`}
-                  aria-disabled={pending === athlete.profilePublicId || undefined}
+                  className={`shrink-0 ${PENDING_CLASS}`}
+                  aria-label={
+                    pending === athlete.profilePublicId
+                      ? takingOffLabel(athlete.name)
+                      : takeOffLabel(athlete.name)
+                  }
+                  // One Take off at a time: every button says so while one is pending.
+                  aria-disabled={pending !== null || undefined}
                   onClick={() => takeOffAthlete(athlete)}
                 >
                   {pending === athlete.profilePublicId

@@ -8,13 +8,18 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { SAVING_LABEL } from '@/lib/constants';
+
 import {
   athleteHint,
   BUILDER_COPY,
   copiedFromText,
   nameRefusal,
+  renameLabel,
   takenOffText,
   takeOffFailedText,
+  takeOffLabel,
+  takingOffLabel,
   usedByText,
   workoutSummary,
 } from './builder-text';
@@ -36,6 +41,12 @@ function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
 }
 
 const section = (name: string) => screen.getByRole('region', { name });
+/** What the page's alerts say. The status line's alert is mounted empty, so empty ones are skipped. */
+const alerts = () =>
+  screen
+    .queryAllByRole('alert')
+    .map((el) => el.textContent)
+    .filter(Boolean);
 
 describe('ProgramScreen (FAM-1 8a)', () => {
   it('renders family-program: header, who’s on it, workouts, the week', () => {
@@ -112,7 +123,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     const { rerender } = render(
       <ProgramScreen program={familyProgram} actions={actions({ takeOff })} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Take off Athlete Two' }));
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete Two') }));
     // The fake hands the screen the next state, as a real action's re-render does.
     const after = {
       ...familyProgram,
@@ -127,9 +138,10 @@ describe('ProgramScreen (FAM-1 8a)', () => {
       programPublicId: familyProgram.programPublicId,
       profilePublicId: familyProgram.athletes[1]!.profilePublicId,
     });
-    expect(document.activeElement?.textContent).toContain('Athlete Two');
-    expect(screen.queryByRole('button', { name: 'Take off Athlete Two' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Take off Athlete One' })).toBeTruthy();
+    // The row's text block, not merely something containing the name (<body> would).
+    expect(document.activeElement).toBe(screen.getByText('Athlete Two').parentElement);
+    expect(screen.queryByRole('button', { name: takeOffLabel('Athlete Two') })).toBeNull();
+    expect(screen.getByRole('button', { name: takeOffLabel('Athlete One') })).toBeTruthy();
   });
 
   it('Take off someone who has not started: they leave, and focus goes to the heading', async () => {
@@ -139,7 +151,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
       athletes: [{ ...familyProgram.athletes[1]!, since: '2026-11-15' }],
     };
     const { rerender } = render(<ProgramScreen program={later} actions={actions({ takeOff })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Take off Athlete Two' }));
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete Two') }));
     rerender(<ProgramScreen program={{ ...later, athletes: [] }} actions={actions({ takeOff })} />);
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe(
@@ -151,32 +163,35 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     );
   });
 
-  it('Take off says it is working while the action is pending', () => {
+  it('Take off says it is working while one is pending, on every button', () => {
     const takeOff = vi.fn(() => new Promise<never>(() => {}));
     render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
-    const button = screen.getByRole('button', { name: 'Take off Athlete One' });
+    const button = screen.getByRole('button', { name: takeOffLabel('Athlete One') });
     fireEvent.click(button);
     expect(button.textContent).toBe(BUILDER_COPY.takingOff);
+    expect(button.getAttribute('aria-label')).toBe(takingOffLabel('Athlete One'));
     expect(button.getAttribute('aria-disabled')).toBe('true');
+    const other = screen.getByRole('button', { name: takeOffLabel('Athlete Two') });
+    expect(other.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(button);
+    fireEvent.click(other);
     expect(takeOff).toHaveBeenCalledTimes(1);
   });
 
   it('a Take off that fails keeps the button, refocuses it and says so', async () => {
     const takeOff = vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry });
     render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
-    const button = screen.getByRole('button', { name: 'Take off Athlete One' });
+    const button = screen.getByRole('button', { name: takeOffLabel('Athlete One') });
     fireEvent.click(button);
-    await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toBe(takeOffFailedText('Athlete One')),
-    );
+    await waitFor(() => expect(alerts()).toEqual([takeOffFailedText('Athlete One')]));
+    expect(screen.getByRole('status').textContent).toBe('');
     expect(document.activeElement).toBe(button);
   });
 
   it('Rename: a stacked form with the counter up to PROGRAM_NAME_MAX; Save returns to the heading', async () => {
     const renameProgram = vi.fn().mockResolvedValue({ ok: true });
     render(<ProgramScreen program={familyProgram} actions={actions({ renameProgram })} />);
-    fireEvent.click(screen.getByRole('button', { name: `Rename ${familyProgram.name}` }));
+    fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
     const field = screen.getByLabelText(BUILDER_COPY.programName) as HTMLInputElement;
     expect(field.value).toBe(familyProgram.name);
     expect(field.maxLength).toBe(PROGRAM_NAME_MAX);
@@ -195,7 +210,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     });
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: `Rename ${familyProgram.name}` }),
+        screen.getByRole('button', { name: renameLabel(familyProgram.name) }),
       ),
     );
   });
@@ -205,16 +220,75 @@ describe('ProgramScreen (FAM-1 8a)', () => {
       .fn()
       .mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.name_taken });
     render(<ProgramScreen program={familyProgram} actions={actions({ renameProgram })} />);
-    fireEvent.click(screen.getByRole('button', { name: `Rename ${familyProgram.name}` }));
+    fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
     const field = screen.getByLabelText(BUILDER_COPY.programName);
     fireEvent.change(field, { target: { value: 'Stretching' } });
     fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.save }));
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      nameRefusal(PROGRAM_REFUSAL.name_taken),
-    );
+    await waitFor(() => expect(alerts()).toEqual([nameRefusal(PROGRAM_REFUSAL.name_taken)]));
     expect(document.activeElement).toBe(field);
     fireEvent.keyDown(field, { key: 'Escape' });
     expect(screen.queryByLabelText(BUILDER_COPY.programName)).toBeNull();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(familyProgram.name);
+  });
+  it('Rename with the name unchanged closes without a call or a message', async () => {
+    const renameProgram = vi.fn();
+    render(<ProgramScreen program={familyProgram} actions={actions({ renameProgram })} />);
+    fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
+    fireEvent.change(screen.getByLabelText(BUILDER_COPY.programName), {
+      target: { value: `  ${familyProgram.name} ` },
+    });
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.save }));
+    expect(screen.queryByLabelText(BUILDER_COPY.programName)).toBeNull();
+    expect(renameProgram).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
+
+  it('opening Rename clears the status line', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry });
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete One') }));
+    await waitFor(() => expect(alerts()).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
+    expect(alerts()).toEqual([]);
+  });
+
+  it('the same message twice is cleared, then said again', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry });
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    const button = screen.getByRole('button', { name: takeOffLabel('Athlete One') });
+    fireEvent.click(button);
+    await waitFor(() => expect(alerts()).toHaveLength(1));
+    fireEvent.click(button);
+    await waitFor(() => expect(alerts()).toEqual([]));
+    await waitFor(() => expect(alerts()).toEqual([takeOffFailedText('Athlete One')]));
+  });
+
+  it('a rename answer that arrives after Cancel is dropped', async () => {
+    let answer!: (result: { ok: false; reason: 'name_taken' }) => void;
+    const renameProgram = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    render(
+      <ProgramScreen
+        program={familyProgram}
+        actions={actions({ renameProgram: renameProgram as ProgramActions['renameProgram'] })}
+      />,
+    );
+    const open = () =>
+      fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
+    open();
+    fireEvent.change(screen.getByLabelText(BUILDER_COPY.programName), {
+      target: { value: 'Stretching' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.save }));
+    expect(screen.getByRole('button', { name: SAVING_LABEL }).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+    answer({ ok: false, reason: 'name_taken' });
+    await Promise.resolve();
+    open();
+    const field = screen.getByLabelText(BUILDER_COPY.programName);
+    expect(alerts()).toEqual([]);
+    expect(field.getAttribute('aria-invalid')).toBeNull();
+    expect((field as HTMLInputElement).value).toBe(familyProgram.name);
   });
 });
