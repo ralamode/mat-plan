@@ -411,6 +411,15 @@ const STATES = {
   // A closed day WITH a weight (the receipt, recovery line, no form) and one WITHOUT
   // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
   'bodyweight-closed': seedClosedDays,
+  // V1-24 3b-bw — today's ✓ row under a "Last time" line: the closed-day fixture leaves an earlier
+  // weigh-in and an empty today, so the line names its weekday or date.
+  'bodyweight-last-time': seedClosedDays,
+  // V1-24 3b-bw — the editor with its field emptied (Save reads Clear), and the row after the clear.
+  // Interaction states on top of the already-logged fixture.
+  'bodyweight-clear-armed': seedAlreadyLogged,
+  'bodyweight-cleared': seedAlreadyLogged,
+  // V1-24 3b-bw — an empty ✓, refused in the browser. Interaction-only.
+  'bodyweight-empty-tick': null,
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
   'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
@@ -719,6 +728,25 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       );
     }
     await change.click();
+  },
+  'bodyweight-clear-armed': async (page) => {
+    await page.getByRole('button', { name: /^Change weight/ }).click();
+    await page.getByLabel(/^Weight \(/).fill('');
+    await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).waitFor();
+  },
+  'bodyweight-cleared': async (page) => {
+    // Retry-safe across the three widths: only the first finds a Change to clear.
+    const change = page.getByRole('button', { name: /^Change weight/ });
+    if ((await change.count()) > 0) {
+      await change.click();
+      await page.getByLabel(/^Weight \(/).fill('');
+      await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).click();
+    }
+    await page.getByLabel('Weight', { exact: true }).waitFor();
+  },
+  'bodyweight-empty-tick': async (page) => {
+    await page.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
+    await page.getByRole('alert').waitFor();
   },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();
