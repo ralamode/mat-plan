@@ -203,7 +203,8 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     insert (plan D25).
 
 16. **A slot holds at most one entry** (plan D35, maintainer, 2026-11-16; a slot is one athlete,
-    day, prescription and set). A new ✓ on a set whose entry was un-ticked, or hidden by Clear day,
+    day, prescription and set). Program rows only: bodyweight and practice are not slots in this
+    sense and keep "re-entry is a new row". A new ✓ on a set whose entry was un-ticked, or hidden by Clear day,
     brings that entry back with the new numbers: same `entryPublicId`, no second entry, however
     many times a row is un-ticked and ticked. The rules that follow from it, all in the fake and on
     `rowWriteSchema`: the entry answers to the reviving ✓'s `clientId` from then on; the `clientId`

@@ -184,7 +184,8 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * past 1: on any other type that is `bad_value`.
  *
  * 🔴 **A slot holds at most one entry** (plan D35; a slot is one athlete, day, prescription and
- * set). A ✓ under a NEW `clientId`, on a set with no logged row whose entry the athlete un-ticked
+ * set). Program rows only: bodyweight and practice are single values with their own writers,
+ * and a re-entry there is a new row. A ✓ under a NEW `clientId`, on a set with no logged row whose entry the athlete un-ticked
  * (or that Clear day hid), does not add a second entry: the writer brings that entry back and
  * writes this ✓'s numbers on it, in one transaction, and answers with ITS `entryPublicId`. The
  * numbers are this ✓'s, filled from the prescription as for any ✓. From then on the entry answers
