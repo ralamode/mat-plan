@@ -104,15 +104,58 @@ Neon-branch apply** yet (tech-debt.md), so don't cite one.
 
 ⚠️ **Generate on top of the newest migration on main, never before it.** drizzle's migrator applies a
 migration only when its journal `when` is later than the newest one already applied, so a migration
-generated before another one that merged first is **skipped on prod without an error**. If another
-migration lands while yours is open: copy your SQL and its hand-hardening out first; `git fetch
-origin` and merge `origin/main` in; make `meta/` **exactly** main's with `git checkout --no-overlay
-origin/main -- packages/db/migrations/meta` (a same-numbered snapshot is **main's** and stays; a
-renumbered snapshot of yours goes, or drizzle-kit diffs against it and emits main's DDL as yours),
-and check `git diff --stat origin/main -- packages/db/migrations/meta` prints nothing; delete only
-your own `.sql`; run `db:generate --name <id>_<slug>` (a hand-written migration adds `--custom` and
-gets its SQL pasted back). The new `.sql` must contain only your change; re-apply the hand-hardening
-(§2). The guard fails a journal out of time order.
+generated before another one that merged first is **skipped on prod without an error**. The guard
+fails a journal out of time order, and both of its messages point here.
+
+### Regenerate on top of main
+
+When another migration lands while yours is open (or the snapshot chain broke after a merge or a
+regenerate). Each command is one line; run them from the repo root.
+
+1. Save your migration's SQL and hand-hardening **from the commit that has your real SQL**, not one
+   after a wrong regenerate: `git show <commit>:packages/db/migrations/<your file>.sql`, saved
+   outside the repo.
+2. Bring main in, and make sure it **is** in. A merge that CONFLICTS is fine: you resolve it below,
+   and it is still in progress. A merge that is REFUSED (a dirty tree: "Your local changes would be
+   overwritten") brings nothing in, and every later step then regenerates against an old main and
+   drops main's columns. Resolve `packages/db/src/schema.ts` by keeping **both** sides, never "ours".
+
+   ```bash
+   git fetch origin && git merge origin/main
+   git rev-parse -q --verify MERGE_HEAD >/dev/null || git merge-base --is-ancestor origin/main HEAD || echo "STOP: main is not merged"
+   ```
+
+   The second line must print nothing.
+
+3. Make `meta/` **exactly** main's. A snapshot with your number is **main's** and stays; any snapshot
+   of yours that main lacks goes, **tracked or untracked**, or drizzle-kit diffs against it and emits
+   main's DDL as yours:
+
+   ```bash
+   rm -rf packages/db/migrations/meta && git checkout origin/main -- packages/db/migrations/meta
+   git add -A packages/db/migrations/meta && git diff --cached --stat origin/main -- packages/db/migrations/meta
+   ```
+
+   The second line must print nothing.
+
+4. Delete only your own `.sql`, then generate. A migration with a schema change:
+
+   ```bash
+   pnpm --filter @mat-plan/db db:generate --name <id>_<slug>
+   ```
+
+   A hand-written migration **with no schema change** (a backfill, a `VALIDATE`):
+
+   ```bash
+   pnpm --filter @mat-plan/db db:generate --custom --name <id>_<slug>
+   ```
+
+   then paste your saved SQL into the new file.
+
+5. The new `.sql` must contain **only your change**. Re-apply its hand-hardening (§2). Then commit:
+   while a merge is in progress, that commit concludes it. In this recipe, never edit a `when` or a
+   `prevId` by hand. (Repairing a `prevId` is right in one other case, the two-pass add-or-drop
+   above, where no merge with main is involved.)
 
 ## 6. Ship and deploy order
 
