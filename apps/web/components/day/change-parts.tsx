@@ -151,6 +151,8 @@ export function RowStatus({
         {...buttonProps}
         // Safari: the field's blur comes before this click and must not send what Cancel discards.
         onPointerDown={change.noteCancel}
+        // A touch that becomes a scroll is called off: the next blur must still send.
+        onPointerCancel={change.noteFocus}
         onClick={() => {
           tickRef.current?.focus();
           change.revert();

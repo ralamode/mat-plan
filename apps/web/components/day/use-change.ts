@@ -279,7 +279,7 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     noteKey() {
       pressBeganInEdit.current = false;
     },
-    /** A field took focus: any Cancel press that never became a click is over. */
+    /** A field took focus, or Cancel's press was called off (a scroll): no Cancel is under way. */
     noteFocus() {
       cancelling.current = false;
     },
@@ -297,12 +297,7 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     },
     /** A field's blur: sends the Change once focus has left the row, never on a window blur. */
     onFieldBlur(event: React.FocusEvent<HTMLInputElement>) {
-      if (cancelling.current) {
-        // Consumed here, so a Cancel press that turned into a scroll stops nothing later.
-        cancelling.current = false;
-        return;
-      }
-      if (!dirty) return;
+      if (!dirty || cancelling.current) return;
       const to = event.relatedTarget;
       if (to instanceof Element && inRow(to, rowId)) return;
       // The window lost focus (another app, the lock screen): the field is still the page's active
