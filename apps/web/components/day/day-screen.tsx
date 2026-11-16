@@ -116,6 +116,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
               key={key}
               workout={workout}
               workoutKey={key}
+              future={plan.future}
               headingId={`${headingId}-w${index}`}
               programName={programName(workout.programPublicId)}
               notSaved={notSavedIn(key)}

@@ -1,36 +1,47 @@
 import {
-  QUANTITY_DECIMALS,
+  isPlainDecimal,
   quantityCeiling,
+  quantityText,
+  repsSchema,
   rowValuesSchema,
+  slotQuantity,
   TRACKING_TYPE_FIELDS,
   UNIT_LABELS,
-  type DayPlan,
+  type DayItem,
   type RowValues,
   type Unit,
 } from '@mat-plan/shared';
 
-import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { VALUE_JOINER } from '@/lib/constants';
 
 /**
- * What a day row's fields mean, as pure functions (FAM-1 step 13): read what was typed, say what a
- * row holds, compare two rows. The row hook (`use-row.ts`) and its tests read these; nothing here
- * renders or writes.
+ * What a day row's fields mean, as pure functions (FAM-1 steps 13 and 13b): read what was typed,
+ * say what a row holds, compare two rows. The row hook (`use-row.ts`) and its tests read these;
+ * nothing here renders or writes.
  *
  * The fields of each type come from `TRACKING_TYPE_FIELDS` (plan §4 "As built"), never a re-typed
- * table.
+ * table: a row has a **quantity** field where the type has a slot and a **reps** field where it has
+ * reps, so a weight × reps set has both, a Reps set has reps only, and a Check has none.
  */
 
-export type DayWorkout = DayPlan['workouts'][number];
-export type DayItem = DayWorkout['items'][number];
-export type DayRow = DayItem['rows'][number];
 /** The two writes a row makes: a ✓, or an un-tick. */
 export type RowWriteKind = 'tick' | 'untick';
 
-/** The quantity in the item's slot, from a row's values or the prescription; `null` when absent. */
-export function slotQuantity<Q extends { slot: string }>(item: DayItem, quantities: Q[]): Q | null {
-  const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
-  return quantities.find((q) => q.slot === slot) ?? null;
+/** A row's typed fields. */
+export type RowField = 'quantity' | 'reps';
+export type RowText = Record<RowField, string>;
+export const EMPTY_TEXT: RowText = { quantity: '', reps: '' };
+
+/**
+ * The fields a row of this item shows, in the order the table shows them: the load before the reps,
+ * as v12's `lb | Reps`.
+ */
+export function fieldsOf(item: DayItem): RowField[] {
+  const { slot, reps } = TRACKING_TYPE_FIELDS[item.trackingType];
+  const fields: RowField[] = [];
+  if (slot && item.unit) fields.push('quantity');
+  if (reps) fields.push('reps');
+  return fields;
 }
 
 /** The item's prescribed quantity in its type's slot, when it has a number. */
@@ -41,58 +52,79 @@ export function targetQuantity(item: DayItem): RowValues['quantities'][number] |
     : null;
 }
 
-/** Whether a row of this item has a number to type. A Check has none. */
-export function hasQuantityField(item: DayItem): boolean {
-  return TRACKING_TYPE_FIELDS[item.trackingType].slot !== null && item.unit !== null;
+/** What an empty field shows as its placeholder: the prescription's number (plan D13). */
+export function placeholderOf(item: DayItem, field: RowField): string | undefined {
+  if (field === 'reps') return item.target.reps === null ? undefined : String(item.target.reps);
+  const target = targetQuantity(item);
+  return target ? String(target.value) : undefined;
 }
 
 /** Why a typed value cannot be sent, before any write. */
 export type TypedProblem = 'not_a_number' | 'out_of_range' | 'missing';
 
-/**
- * A plain decimal with at most `QUANTITY_DECIMALS` places, what `numeric(8,3)` keeps: `5`, `5.5`,
- * `.5`. Not `-5`, `1e3`, `0x10`, `5.` or `5 min`, which `Number()` would accept or half-accept (the
- * prototype's `isNaN(+typed)` let `-5` and `1e9` through).
- */
-const PLAIN_DECIMAL = new RegExp(
-  `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,
-);
+/** A whole number of reps, as typed: digits only (`8`, not `8.0` or `8 reps`). */
+const WHOLE = /^\d+$/;
 
 /**
- * What a ✓ on a single row sends, from the field's text (plan D13).
+ * What a ✓ sends, from the row's fields (plan D13).
  *
- * - Empty, where the prescription has a number: `{ quantities: [] }`, and the writer logs the
- *   prescription. `empty: true` says so, and `shown` is what the row displays meanwhile.
- * - Empty, where it has none: `missing`; the field asks for a number.
+ * - An empty field where the prescription has a number is left out, and the writer logs the
+ *   prescription's; `shown` is what the row displays meanwhile, with that number filled in.
+ *   Reps are filled only when the prescription's are whole (`target.reps`).
+ * - An empty field where it has none: `missing`, by that field.
  * - A Check: always `{ quantities: [] }`.
  *
- * ⚠️ Single rows only (a Check, Duration or Count): a type with reps reads two fields, which 13b's
- * set rows add.
+ * `empty` is true when nothing was typed in any field.
  */
 export function readTyped(
   item: DayItem,
-  text: string,
+  text: RowText,
 ):
   | { ok: true; values: RowValues; shown: RowValues; empty: boolean }
-  | { ok: false; problem: TypedProblem } {
-  const none: RowValues = { quantities: [] };
-  const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
-  if (!slot || !item.unit) return { ok: true, values: none, shown: none, empty: true };
+  | { ok: false; problem: TypedProblem; field: RowField } {
+  const values: RowValues = { quantities: [] };
+  const shown: RowValues = { quantities: [] };
+  let empty = true;
 
-  const typed = text.trim();
-  if (typed === '') {
-    const target = targetQuantity(item);
-    if (!target) return { ok: false, problem: 'missing' };
-    return { ok: true, values: none, shown: { quantities: [target] }, empty: true };
+  for (const field of fieldsOf(item)) {
+    const typed = text[field].trim();
+    if (field === 'reps') {
+      if (typed === '') {
+        if (item.target.reps === null) return { ok: false, problem: 'missing', field };
+        shown.reps = item.target.reps;
+        continue;
+      }
+      empty = false;
+      if (!WHOLE.test(typed)) return { ok: false, problem: 'not_a_number', field };
+      const reps = repsSchema.safeParse(Number(typed));
+      if (!reps.success) return { ok: false, problem: 'out_of_range', field };
+      values.reps = shown.reps = reps.data;
+      continue;
+    }
+    const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
+    if (!slot || !item.unit) continue;
+    if (typed === '') {
+      const target = targetQuantity(item);
+      if (!target) return { ok: false, problem: 'missing', field };
+      shown.quantities.push(target);
+      continue;
+    }
+    empty = false;
+    if (!isPlainDecimal(typed)) return { ok: false, problem: 'not_a_number', field };
+    const value = Number(typed);
+    // A unit with no declared ceiling refuses (`quantityCeiling`'s rule): no bound is not "no cap".
+    const ceiling = quantityCeiling(item.unit);
+    if (ceiling === undefined || value > ceiling) {
+      return { ok: false, problem: 'out_of_range', field };
+    }
+    const quantity = { slot, unit: item.unit, value };
+    values.quantities.push(quantity);
+    shown.quantities.push(quantity);
   }
-  if (!PLAIN_DECIMAL.test(typed)) return { ok: false, problem: 'not_a_number' };
-  const value = Number(typed);
-  // A unit with no declared ceiling refuses (`quantityCeiling`'s rule): no bound is not "no cap".
-  const ceiling = quantityCeiling(item.unit);
-  if (ceiling === undefined || value > ceiling) return { ok: false, problem: 'out_of_range' };
-  const values: RowValues = { quantities: [{ slot, unit: item.unit, value }] };
-  if (!rowValuesSchema.safeParse(values).success) return { ok: false, problem: 'out_of_range' };
-  return { ok: true, values, shown: values, empty: false };
+  if (!rowValuesSchema.safeParse(values).success) {
+    return { ok: false, problem: 'out_of_range', field: fieldsOf(item)[0] ?? 'quantity' };
+  }
+  return { ok: true, values, shown, empty };
 }
 
 /** Two rows hold the same numbers: `5` and `5.0` are one value. Order of quantities is ignored. */
@@ -103,24 +135,55 @@ export function sameValues(a: RowValues, b: RowValues): boolean {
   );
 }
 
-/** The field's text for a row's values: what an un-ticked row keeps in its field. */
-export function textOf(item: DayItem, values: RowValues): string {
+/**
+ * The fields' text for a row's values: what an un-ticked row keeps in its fields.
+ *
+ * 🔴 **A quantity logged in another unit than the item's is left out**, never put in the field: the
+ * field is in the item's unit, so `27.5` logged in lb would be sent as 27.5 kg on the next ✓ (a load
+ * in the wrong unit is an injury risk). An untouched field still re-ticks, which restores the entry
+ * as it was logged.
+ */
+export function textOf(item: DayItem, values: RowValues): RowText {
   const quantity = slotQuantity(item, values.quantities);
-  return quantity ? String(quantity.value) : '';
+  return {
+    quantity: quantity && quantity.unit === item.unit ? String(quantity.value) : '',
+    reps: values.reps === undefined ? '' : String(values.reps),
+  };
 }
 
 /**
- * A row's value with its unit, for display (`formatValueUnit`'s spelling). A plain count is the bare
- * number. Not the CSV's `formatQuantity`, and not the prescription's spelling, which is private to
- * `prescribed-text.ts` (a difference recorded in the day-page guide).
+ * One field of a row's values, as its column shows it: the bare number (`27.5`, `30`, `8`), since
+ * the column's header names the unit; **with its unit when it was logged in another one** (the
+ * item's unit changed since, D7), so `27.5 lb` never reads as kg. `''` when absent.
  */
-export function formatRowQuantity(value: number, unit: Unit): string {
-  return unit === 'count' ? String(value) : formatValueUnit(value, unit);
+export function fieldText(item: DayItem, values: RowValues, field: RowField): string {
+  if (field === 'reps') return values.reps === undefined ? '' : String(values.reps);
+  const quantity = slotQuantity(item, values.quantities);
+  if (!quantity) return '';
+  return quantity.unit === item.unit
+    ? String(quantity.value)
+    : quantityText(quantity.value, quantity.unit);
 }
 
-/** A row's values as text: `5 min`, `10 lb`, or `''` for a Check. */
+/**
+ * A row's values as parts: the quantities, then the reps as `× 6` where there is a quantity before
+ * them. Each part is unbreakable text, so Previous wraps between them and never inside one.
+ */
+export function valueParts(values: RowValues): string[] {
+  const quantities = values.quantities.map((q) => quantityText(q.value, q.unit));
+  const parts = quantities.length ? [quantities.join(VALUE_JOINER)] : [];
+  if (values.reps !== undefined) {
+    parts.push(parts.length ? `× ${values.reps}` : String(values.reps));
+  }
+  return parts;
+}
+
+/**
+ * A row's values as text, in the prescription's spelling (`quantityText`): `5 min`, `30 s`,
+ * `20 lb × 6`, `15`, or `''` for a Check. Also PREVIOUS's text.
+ */
 export function formatRowValues(values: RowValues): string {
-  return values.quantities.map((q) => formatRowQuantity(q.value, q.unit)).join(VALUE_JOINER);
+  return valueParts(values).join(' ');
 }
 
 /** The visible label beside a field: the unit's code, none for a plain count. */
