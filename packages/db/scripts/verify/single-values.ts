@@ -373,24 +373,34 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     .map((part) => part.trim())
     .find((part) => part.startsWith('DO $$'));
   assert.ok(doBlock, '3b-0: the migration ships its duplicate pre-check');
-  // The order is the safety argument (Z2): the timeouts, then the SHARE lock, then the count, then
-  // the build, so the count and the build judge the same rows.
-  const statementHeads = readFileSync(new URL(migrationFile, migrationsDir), 'utf8')
+  // The order is the safety argument (Z2): the timeouts, then the SHARE lock (the one that blocks
+  // inserts; ACCESS SHARE would not), then the count, then the build, so the count and the build judge
+  // the same rows. The first three are pinned whole, because a regenerate could change a value.
+  const statements = readFileSync(new URL(migrationFile, migrationsDir), 'utf8')
     .split('--> statement-breakpoint')
     .map((part) =>
       part
         .split('\n')
         .filter((line) => line.trim() !== '' && !line.trim().startsWith('--'))
         .join(' ')
-        .trim()
-        .split(' ')
-        .slice(0, 2)
-        .join(' '),
+        .trim(),
     );
   assert.deepEqual(
-    statementHeads,
-    ['SET lock_timeout', 'SET statement_timeout', 'LOCK TABLE', 'DO $$', 'CREATE UNIQUE'],
-    '3b-0: the migration sets its timeouts, locks, pre-checks, then builds, in that order',
+    [
+      ...statements.slice(0, 3),
+      statements[3]?.slice(0, 5),
+      statements[4]?.slice(0, 'CREATE UNIQUE INDEX'.length),
+      statements.length,
+    ],
+    [
+      "SET lock_timeout = '5s';",
+      "SET statement_timeout = '60s';",
+      'LOCK TABLE "entries" IN SHARE MODE;',
+      'DO $$',
+      'CREATE UNIQUE INDEX',
+      5,
+    ],
+    '3b-0: the migration sets its timeouts, takes the SHARE lock, pre-checks, then builds, in that order',
   );
 
   await rolledBack(async (tx) => {
@@ -637,6 +647,17 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       [{ ...habit(D1), clientId: first.clientId }, practice(D1)],
       ['conflict', 'day_taken'],
       '3b-0: only a practice can be day_taken',
+    );
+
+    // Another profile's HIDDEN row holding the id is a conflict, never this athlete's own_hidden:
+    // `client_id` is globally unique, so a foreign tombstone must not read as "you deleted this".
+    const foreignHidden = habit(D1);
+    await raw(sibling.id, foreignHidden, new Date('2026-10-01T12:00:00Z'));
+    await expectOutcomes(
+      athlete.id,
+      [{ ...foreignHidden, publicId: newId() }],
+      ['conflict'],
+      "3b-0: another profile's hidden row holding the id is a conflict, never own_hidden",
     );
 
     // (d) Restore all into a re-entered day: the practice answers slot_taken, a habit hidden by the

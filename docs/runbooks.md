@@ -246,7 +246,7 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
 
 **If 3b-0's migration refuses** (V1-24 3b-0, one live practice per athlete and day; the error names
 this section: _"V1-24 3b-0: N (profile, day) group(s) hold more than one live practice"_), it is the
-same wedge as 1d's above, with the same freeze and the same exceptions. Two differences:
+same wedge as 1d's above, with the same freeze and the same exceptions. What differs:
 
 - **A group may be two real sessions, not a duplicate.** `practice_minutes` sums, so two rows on one
   day may be a morning and an evening practice. Read the groups (aggregate first, inside
@@ -263,6 +263,9 @@ IS NULL AND metric_key = 'practice_minutes' GROUP BY profile_id, activity_date H
   file, a PR or a chat.
 - **The preview database refuses too** if it holds a duplicate (`migrate-preview.yml` runs the same
   file). Seed-only data needs no correction: "Standing: reset the preview database" below clears it.
+  After a clean apply, an open branch that has not merged main still runs the old `client_id`-target
+  writer against the shared preview database, so a second same-day practice there is an error page
+  until that branch merges main.
 
 **3b-life merges only after 3b-0's index is live in prod.** Check both, as for 1e above:
 

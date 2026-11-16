@@ -463,10 +463,10 @@ The shapes those lanes agree on, the fakes and the preview route are
    - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
      branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
      now names this case. Also asserted in the B0 block.
-   - **check-ins** → `created: false, id: null` per item, which the action renders as "already
-     logged": a typed refusal, and the best of the four.
-   - **life activities** → the action ignores the per-item result, so a hidden replay reports plain
-     success and writes nothing. Pre-existing shape, now reachable; B1-2 owns it.
+   - **check-ins** → `own_hidden` per item; since `V1-9b` B1-2 (#387) the action names the field
+     that did not save.
+   - **life activities** → `own_hidden`; since B1-2 the action refuses with
+     `HIDE_COPY.loggedThenDeleted` rather than reporting success.
      🔴 **All four were a silent TWIN before B0**, which is the defect, so a refusal — even an ugly one
      — is the improvement. `V1-9b` B1-2 is what turns each into a typed envelope.
      **Still true for a PARTIAL index, of which several remain on `deleted_at`:** the predicate must be
