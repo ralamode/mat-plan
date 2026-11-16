@@ -20,8 +20,8 @@ import { liveTemplateBlockIn, programBlockInHousehold } from '../ownership';
  *   miss the replay lookup, the first inserts) must not be told its own program's name is taken;
  *   it falls through and the re-read returns that program (`createProfile`'s `excludeClientId`,
  *   for the same reason). A plain `!==` is safe: every template block has a `client_id`
- *   (`program_blocks_template_client_id_check`). Not yet staged: `verify/program.ts`'s
- *   slug-race proxy shows how (a twin under this `clientId`, written as the name is read).
+ *   (`program_blocks_template_client_id_check`). Not yet staged: the proxy technique in
+ *   `verify/program.ts` would do it, hooked on the name read (a twin under this `clientId`).
  * - **Template blocks only** ({@link liveTemplateBlockIn}): the seeded (legacy) block is not on the
  *   Programs list, so its name is not taken. Its slug still is: {@link freeProgramSlug}.
  * - **Live only**: a removed program's name is free again.

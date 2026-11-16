@@ -66,10 +66,10 @@ rules it starts under. Each step below adds its files, its diagram and its invar
    (`apps/web/app/design/program/fakes.ts`), so a screen sees the same answer on the preview route
    and in production. **Each is correct on a bare `db`**: the DAL need not wrap it in a transaction.
 7. 🔴 **A create answers its replay before any check** (invariant 5): `createProgram` looks up
-   `clientId` first, and its name check leaves out its own `clientId`, so a retry is never told its
-   own name is taken, even when it races its first attempt (mutation
-   `create-checks-name-before-replay`). A replay of a program removed since answers `not_found`; the
-   key is spent.
+   `clientId` first, so a retry is never told its own name is taken (mutation
+   `create-checks-name-before-replay`). Its name check also leaves out its own `clientId`, for a retry
+   that races its first attempt; that interleaving is not yet staged (`program-name.ts`). A replay of
+   a program removed since answers `not_found`; the key is spent.
 8. **Program names are compared folded, among live TEMPLATE blocks only** (plan D5). The seeded
    block's name is not a program's; its **slug** still is, since `uq_program_blocks_household_slug`
    spans both kinds (D9; mutations `program-name-not-folded`, `program-slug-counts-removed`,
