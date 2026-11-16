@@ -57,7 +57,14 @@ CI merge-gates".
 `effort`, read by Claude Code on every spawn, by any session. Print it with
 `grep -H '^model:\|^effort:' .claude/agents/*.md`; the rationale and starting values are in
 [the DX-11 plan](../../docs/plans/dx-11-agent-model-effort.md) (frozen — the frontmatter is the living
-source). Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL`
+source).
+
+🔴 **Reviewers are pinned to `opus`; Fable is for plan panels only** _(maintainer, 2026-11-16)_.
+`plan-with-panel` asks for it at spawn time (`model: "fable"`), which beats the frontmatter, so a
+plan's lenses run on Fable and everything else (`review-pr`'s fan-out, `doubt-check`, an ad-hoc lens)
+runs on Opus. DX-11 had pinned all eight to `fable`, and with several lanes fanning out on every PR
+that spent the account's monthly Fable budget on PR reviews. `skills:check` now refuses a reviewer
+whose frontmatter pins `fable`. Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL`
 env var and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. The main session is never governed by this policy —
 it stays whatever `/model` picks.
 

@@ -52,7 +52,7 @@ draft from its answers, including its "claimed but not wired" section.
 
 ## 2. Run the panel: lenses in parallel, one named agent each
 
-The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each (each pins its own `model`/`effort` in frontmatter — DX-11), so the
+The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each (each pins its own `model`/`effort` in frontmatter — DX-11; **spawn each plan lens with `model: "fable"`**, the one place Fable is used, which beats the frontmatter's `opus` — [the policy](../README.md#model--effort-policy-dx-11)), so the
 ≥3 independent reviewers AGENTS.md and `docs/plans/README.md` require stay independent. Each carries
 its own checklist and follows the shared
 [reporting contract](../review-pr/reporting-contract.md). Send them **in one message** so they run
