@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProgramView, Weekday } from '@mat-plan/shared';
+import { slotLabelSchema, type ProgramView, type Weekday } from '@mat-plan/shared';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -8,11 +8,13 @@ import { INPUT_CLASS } from '@/lib/constants';
 
 import { addOnLabel, alreadyOnText, BUILDER_COPY, PENDING_CLASS, WEEK_COPY } from '../builder-text';
 import { FieldLabel } from '../field-label';
+import { focusField } from '../use-attempt';
 import { DaysLabelFields } from './days-label-fields';
 import { daysWith, type Slot, type Week } from './week-draft';
 
 /** The workout select's id on a day: the editor focuses it in the tap that opens the form. */
-export const addWorkoutId = (day: Weekday) => `week-add-${day}-workout`;
+const addFormId = (day: Weekday) => `week-add-${day}`;
+export const addWorkoutId = (day: Weekday) => `${addFormId(day)}-workout`;
 
 /**
  * "+ Add" on a day, opened under it (FAM-1 step 10; the prototype's inline form): a workout, an
@@ -42,11 +44,14 @@ export function AddForm({
   const [label, setLabel] = useState('');
   const [days, setDays] = useState<Set<Weekday>>(() => new Set([day]));
   const [error, setError] = useState<string | null>(null);
+  const [workoutError, setWorkoutError] = useState<string | null>(null);
+  const [labelError, setLabelError] = useState<string | null>(null);
   const hasIt = workout ? daysWith(week, workout) : new Set<Weekday>();
   // Every ticked day, the "has it" ones included: they are skipped and the message says so.
   const ticked = [...new Set([...days, ...hasIt])];
   const fresh = ticked.filter((d) => !hasIt.has(d));
-  const prefix = `week-add-${day}`;
+  const prefix = addFormId(day);
+  const workoutErrorId = `${addWorkoutId(day)}-error`;
 
   return (
     <form
@@ -55,11 +60,17 @@ export function AddForm({
       onSubmit={(event) => {
         event.preventDefault();
         if (!workout) {
-          setError(WEEK_COPY.chooseWorkout);
-          return document.getElementById(addWorkoutId(day))?.focus();
+          setWorkoutError(WEEK_COPY.chooseWorkout);
+          return focusField(document.getElementById(addWorkoutId(day)));
+        }
+        // The endpoint's own rule, so a label it would refuse never costs the week.
+        const parsed = slotLabelSchema.safeParse(label);
+        if (!parsed.success) {
+          setLabelError(WEEK_COPY.labelInvalid);
+          return focusField(document.getElementById(`${prefix}-label`));
         }
         if (!fresh.length) return setError(WEEK_COPY.pickADay);
-        onAdd({ workoutPublicId: workout, label: label.trim() || null }, ticked);
+        onAdd({ workoutPublicId: workout, label: parsed.data }, ticked);
       }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -76,7 +87,10 @@ export function AddForm({
           onChange={(event) => {
             setWorkout(event.target.value);
             setError(null);
+            setWorkoutError(null);
           }}
+          aria-invalid={workoutError ? true : undefined}
+          aria-describedby={workoutError ? workoutErrorId : undefined}
           className={`${INPUT_CLASS} w-full min-w-0`}
         >
           <option value="" disabled>
@@ -88,11 +102,20 @@ export function AddForm({
             </option>
           ))}
         </select>
+        {workoutError ? (
+          <p id={workoutErrorId} className="text-destructive text-sm">
+            {workoutError}
+          </p>
+        ) : null}
       </div>
       <DaysLabelFields
         idPrefix={prefix}
         label={label}
-        onLabel={setLabel}
+        onLabel={(next) => {
+          setLabel(next);
+          setLabelError(null);
+        }}
+        labelError={labelError}
         days={days}
         onDays={(next) => {
           setDays(next);

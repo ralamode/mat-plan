@@ -6,8 +6,8 @@ import { fireEvent } from '@testing-library/react';
  * by how loaded the machine was: under three suites at once, "straight after" took more than 500ms.
  * Taps at stated times make "the same tap" and "a new tap" exact, and need no sleep.
  *
- * Keep the times well above `performance.now()` in a test run (a `fireEvent.click` tap's own), so a
- * stated tap never reads as earlier than a real one on the same control.
+ * jsdom stamps a real event with `Date.now()`, so the clock starts there: a stated tap after a
+ * `fireEvent.click` on the same control never reads as earlier than it.
  */
 export function tapAt(element: Element, timeStamp: number) {
   const event = new MouseEvent('click', { bubbles: true, cancelable: true });
@@ -16,7 +16,7 @@ export function tapAt(element: Element, timeStamp: number) {
 }
 
 /** A clock for a run of taps, each a second apart: no two are the same tap. */
-export function tapClock(start = 1e9) {
+export function tapClock(start = Date.now()) {
   let now = start;
   return {
     /** A tap a full second after the last. */

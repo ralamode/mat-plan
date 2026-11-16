@@ -2,9 +2,11 @@
 
 import type { ProgramActions, ProgramView } from '@mat-plan/shared';
 import Link from 'next/link';
+import { useRef } from 'react';
+
 import { NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
 
-import { BUILDER_COPY, usedByText, WEEK_COPY } from './builder-text';
+import { BUILDER_COPY, usedByText } from './builder-text';
 import { ProgramHeader } from './program-header';
 import { PROGRAMS_PATH } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
@@ -34,6 +36,7 @@ export type ProgramScreenProps = { program: ProgramView; actions: ProgramActions
 
 export function ProgramScreen({ program, actions }: ProgramScreenProps) {
   const { status, report } = useStatusLine();
+  const barRef = useRef<HTMLDivElement>(null);
   return (
     // Controls scroll clear of the status bar when focused near the bottom.
     // (7rem: the bar with a two-line message and the iPhone's home bar.)
@@ -54,11 +57,14 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
       </div>
       <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={report} />
       <WorkoutsList program={program} />
-      <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} />
+      <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />
       {/* The page's one status bar, in view wherever the change was made. */}
-      <div className="bg-background sticky bottom-0 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div
+        ref={barRef}
+        className="bg-background sticky bottom-0 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
         {status.message ? null : (
-          <p className="text-muted-foreground px-3 py-2 text-sm">{WEEK_COPY.savesAsYouGo}</p>
+          <p className="text-muted-foreground px-3 py-2 text-sm">{BUILDER_COPY.savesAsYouGo}</p>
         )}
         <StatusLine status={status} className="flex flex-col" />
       </div>

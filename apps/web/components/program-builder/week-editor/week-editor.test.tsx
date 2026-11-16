@@ -4,10 +4,14 @@ import { familyProgram, newProgramEmpty } from '@mat-plan/shared/program/fixture
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }) }));
 
 import {
   addedOnText,
+  BUILDER_COPY,
+  EDITOR_COPY,
+  hasItLabel,
   addOnLabel,
   moveOnLabel,
   removedRowText,
@@ -20,7 +24,10 @@ import {
 import { ProgramScreen } from '../program-screen';
 import { tapClock } from '../test-taps';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  refresh.mockClear();
+});
 
 const id = (name: string) => familyProgram.workouts.find((w) => w.name === name)!.workoutPublicId;
 const HEAVY_A = id('Heavy A');
@@ -52,6 +59,20 @@ const slotNames = (weekday: number) =>
     .map((li) => li.querySelector('button')?.textContent?.replace(`${WEEK_COPY.editLabel}: `, ''));
 const sent = (all: ProgramActions, call = 0) => vi.mocked(all.saveWeek).mock.calls[call]![0].days;
 const status = () => screen.getByRole('status').textContent;
+const alerts = () =>
+  screen
+    .getAllByRole('alert')
+    .map((el) => el.textContent)
+    .filter(Boolean);
+/** A save that waits until the test answers it. */
+function held() {
+  const answers: ((value: { ok: true } | { ok: false; reason: string }) => void)[] = [];
+  const saveWeek = vi.fn(
+    () => new Promise((resolve) => answers.push(resolve as (typeof answers)[number])),
+  );
+  return { saveWeek: saveWeek as unknown as ProgramActions['saveWeek'], answers };
+}
+const SATURDAY = ['MorningMorning habits', 'After lunchHeavy B', 'EveningConditioning'];
 
 describe('the week editor (FAM-1 10)', () => {
   it('+ Add opens a form under the day: the workout has no default, and Add waits for one', () => {
@@ -75,7 +96,7 @@ describe('the week editor (FAM-1 10)', () => {
       target: { value: HEAVY_A },
     });
     // Monday and Friday have it: shown ticked, and inactive.
-    const monday = within(form).getByRole('checkbox', { name: `Monday, ${WEEK_COPY.hasIt}` });
+    const monday = within(form).getByRole('checkbox', { name: hasItLabel(1) });
     expect(monday.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(within(form).getByRole('checkbox', { name: 'Tuesday' }));
     fireEvent.click(within(form).getByRole('checkbox', { name: 'Sunday' }));
@@ -158,7 +179,7 @@ describe('the week editor (FAM-1 10)', () => {
     // Focused in the same tap, so a phone raises its keyboard.
     expect(document.activeElement).toBe(field);
     fireEvent.change(field, { target: { value: 'Dawn' } });
-    fireEvent.click(within(day(6)).getByRole('button', { name: WEEK_COPY.save }));
+    fireEvent.click(within(day(6)).getByRole('button', { name: BUILDER_COPY.save }));
     await waitFor(() => expect(all.saveWeek).toHaveBeenCalled());
     expect(sent(all)[6][1]).toEqual({ workoutPublicId: HEAVY_B, label: 'Dawn' });
     expect(document.activeElement?.textContent).toContain('Heavy B');
@@ -169,14 +190,9 @@ describe('the week editor (FAM-1 10)', () => {
       saveWeek: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.once_per_day }),
     });
     fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
-    await waitFor(() =>
-      expect(
-        screen
-          .getAllByRole('alert')
-          .map((el) => el.textContent)
-          .filter(Boolean),
-      ).toEqual([WEEK_COPY.stale]),
-    );
+    await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.stale]));
+    // The page's week is the stale one: the latest is fetched, as the message says.
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(slotNames(6)).toEqual([
       'MorningMorning habits',
       'After lunchHeavy B',
@@ -221,5 +237,123 @@ describe('the week editor (FAM-1 10)', () => {
       'After lunchHeavy B',
       'EveningConditioning',
     ]);
+  });
+
+  it('a save that throws (a dropped connection) is a retry: the week goes back, and the next change is sent', async () => {
+    const saveWeek = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Failed to fetch'))
+      .mockResolvedValue({ ok: true });
+    page({ saveWeek });
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.failed]));
+    expect(slotNames(6)).toEqual(SATURDAY);
+    expect(refresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy A', 1) }));
+    await waitFor(() => expect(saveWeek).toHaveBeenCalledTimes(2));
+  });
+
+  it('a refusal drops a change queued on top of it; the next change is sent on its own', async () => {
+    const { saveWeek, answers } = held();
+    const { all } = page({ saveWeek });
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy A', 1) }));
+    answers[0]!({ ok: false, reason: PROGRAM_REFUSAL.retry });
+    await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.failed]));
+    expect(saveWeek).toHaveBeenCalledTimes(1);
+    expect(slotNames(1)).toEqual(['MorningMorning habits', 'After schoolHeavy A']);
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('down', 'Morning habits', 3) }));
+    expect(saveWeek).toHaveBeenCalledTimes(2);
+    expect(sent(all, 1)[6]).toEqual(familyProgram.week[6]);
+  });
+
+  it('a week the page brings while a save is out shows once the save is back', async () => {
+    const { saveWeek, answers } = held();
+    const { all, view } = page({ saveWeek });
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    const week = { ...familyProgram.week, 0: [{ workoutPublicId: HEAVY_A, label: 'Copied' }] };
+    view.rerender(<ProgramScreen program={{ ...familyProgram, week }} actions={all} />);
+    // Still the editor's own week while its save is out.
+    expect(slotNames(6)[0]).toBe('After lunchHeavy B');
+    answers[0]!({ ok: true });
+    await waitFor(() => expect(slotNames(0)).toEqual(['CopiedHeavy A']));
+  });
+
+  it('Undo puts the slot back into the week as it is now, keeping a change that came since', async () => {
+    const { all, view } = page();
+    const clock = tapClock();
+    clock.tap(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
+    await waitFor(() => expect(all.saveWeek).toHaveBeenCalledTimes(1));
+    const week = { ...sent(all), 0: [{ workoutPublicId: HEAVY_A, label: 'Copied' }] };
+    view.rerender(<ProgramScreen program={{ ...familyProgram, week }} actions={all} />);
+    clock.tap(within(day(6)).getByRole('button', { name: undoLabel('Heavy B', 6) }));
+    await waitFor(() => expect(all.saveWeek).toHaveBeenCalledTimes(2));
+    expect(sent(all, 1)[0]).toEqual(week[0]);
+    expect(sent(all, 1)[6]).toEqual(familyProgram.week[6]);
+  });
+
+  it('removing a day’s last slot leaves Undo at the end of the day', () => {
+    page();
+    fireEvent.click(screen.getByRole('button', { name: removeFromLabel('Conditioning', 6) }));
+    expect(slotNames(6)).toEqual(['MorningMorning habits', 'After lunchHeavy B', WEEK_COPY.undo]);
+  });
+
+  it('↓ moves a slot down; at either end the bar says so and nothing is sent', async () => {
+    const { all } = page();
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('down', 'Conditioning', 6) }));
+    await waitFor(() => expect(status()).toBe(EDITOR_COPY.alreadyLast));
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Morning habits', 6) }));
+    await waitFor(() => expect(status()).toBe(EDITOR_COPY.alreadyFirst));
+    expect(all.saveWeek).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('down', 'Morning habits', 6) }));
+    expect(slotNames(6)).toEqual([
+      'After lunchHeavy B',
+      'MorningMorning habits',
+      'EveningConditioning',
+    ]);
+  });
+
+  it('Add with no workout chosen says so on the select, and sends nothing', () => {
+    const { all } = page();
+    fireEvent.click(screen.getByRole('button', { name: addOnLabel(1) }));
+    const form = screen.getByRole('form', { name: addOnLabel(1) });
+    fireEvent.click(within(form).getByRole('button', { name: WEEK_COPY.addButton }));
+    const select = within(form).getByLabelText(WEEK_COPY.workout);
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(select.getAttribute('aria-describedby')!)!.textContent).toBe(
+      WEEK_COPY.chooseWorkout,
+    );
+    expect(all.saveWeek).not.toHaveBeenCalled();
+  });
+
+  it('a label the endpoint would refuse is said on the field, and costs nothing', () => {
+    const { all } = page();
+    fireEvent.click(
+      within(day(6)).getAllByRole('button', { name: new RegExp(`^${WEEK_COPY.editLabel}`) })[1]!,
+    );
+    const field = within(day(6)).getByLabelText(/^Label/) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'Dawn\tpatrol' } });
+    fireEvent.click(within(day(6)).getByRole('button', { name: BUILDER_COPY.save }));
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(within(day(6)).getByText(WEEK_COPY.labelInvalid)).toBeTruthy();
+    expect(all.saveWeek).not.toHaveBeenCalled();
+  });
+
+  it('Escape closes the label editor; an unchanged label sends nothing', () => {
+    const { all } = page();
+    const text = () =>
+      within(day(6)).getAllByRole('button', { name: new RegExp(`^${WEEK_COPY.editLabel}`) })[1]!;
+    fireEvent.click(text());
+    fireEvent.keyDown(within(day(6)).getByLabelText(/^Label/), { key: 'Escape' });
+    expect(within(day(6)).queryByLabelText(/^Label/)).toBeNull();
+    expect(document.activeElement).toBe(text());
+    fireEvent.click(text());
+    fireEvent.click(within(day(6)).getByRole('button', { name: BUILDER_COPY.save }));
+    expect(all.saveWeek).not.toHaveBeenCalled();
+  });
+
+  it('the status bar says that changes save as they are made, until a message', () => {
+    page();
+    expect(screen.getByText(BUILDER_COPY.savesAsYouGo)).toBeTruthy();
   });
 });

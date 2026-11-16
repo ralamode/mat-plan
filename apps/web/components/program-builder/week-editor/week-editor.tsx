@@ -3,12 +3,15 @@
 import {
   localWeekday,
   MONDAY_FIRST,
-  SLOT_LABEL_MAX,
+  PROGRAM_REFUSAL,
+  slotLabelSchema,
   type ProgramActions,
+  type ProgramResult,
   type ProgramView,
   type Weekday,
 } from '@mat-plan/shared';
-import { Fragment, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Fragment, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
@@ -20,9 +23,11 @@ import {
   addOnLabel,
   BUILDER_COPY,
   EDITOR_COPY,
+  isStaleWeek,
   labelSetText,
   moveOnLabel,
   movedOnText,
+  type MoveDirection,
   PENDING_CLASS,
   removedFromText,
   removedRowText,
@@ -33,81 +38,90 @@ import {
   weekdayName,
   weekRefusal,
 } from '../builder-text';
-import { NameField } from '../name-field';
 import type { StatusTone } from '../status-line';
-import { DOUBLE_TAP_MS } from '../use-attempt';
+import { focusField, holdUnderThumb, isSameTap } from '../use-attempt';
 import { AddForm, addWorkoutId } from './add-form';
-import { LabelSuggestions } from './days-label-fields';
-import { addToDays, moveSlot, removeSlot, setLabel, type Week } from './week-draft';
+import { SlotLabelField } from './days-label-fields';
+import {
+  addToDays,
+  insertSlot,
+  moveSlot,
+  removeSlot,
+  setLabel,
+  type Slot,
+  type Week,
+} from './week-draft';
 
 const HEADING_ID = 'program-week';
 const labelFieldId = (day: Weekday, workout: string) => `week-label-${day}-${workout}`;
 
 /** A slot's control, keyed by the day and the workout (a workout is on a day at most once). */
-type Control = 'up' | 'down' | 'remove' | 'text' | 'undo';
+type Control = MoveDirection | 'remove' | 'text' | 'undo';
 const controlKey = (day: Weekday, workout: string, control: Control) =>
   `${day}:${workout}:${control}`;
 
 /**
  * A program's week, edited in place (FAM-1 step 10; plan §8 "Program page"; the prototype's Week
  * section). Each day: its workouts in order, each with ↑ ↓ ✕ and its label; "+ Add" opens a form
- * under the day.
- *
- * - **Every change saves at once** (no Save on this page), sending the whole week (`saveWeek`).
- *   The change shows at once; one save is in flight at a time, and a change made meanwhile is sent
- *   when it returns (only the newest week matters on a full-state contract). A refused save puts
- *   the week back as the server last had it and says why.
- * - **It renders the page's week**, holding its own copy only while a save is in flight: a week
- *   another write changed (10b's Copy, another parent) is what shows next. **The last change wins**
- *   _(maintainer, 2026-11-16)_: there is no version check, and a refusal that can only mean a
- *   stale page (`once_per_day`, `not_found`) says "This week changed. Reload".
- * - **Remove leaves "… removed · Undo" in its place** until the next change _(maintainer,
- *   2026-11-16)_: a removal reaches every athlete at once and this page has no Cancel. Nothing
- *   slides under the thumb.
- * - **A slot's label is edited by tapping its text** _(maintainer, 2026-11-16)_.
- * - Messages go to the page's status bar, which stays in view (`program-screen.tsx`).
+ * under the day. Its rules are the guide's invariant 17 (`docs/features/program-builder.md`).
  */
 export function WeekEditor({
   program,
   saveWeek,
   onStatus,
+  barRef,
 }: {
   program: ProgramView;
   saveWeek: ProgramActions['saveWeek'];
   onStatus: (message: string, tone?: StatusTone) => void;
+  /** The page's status bar: a moved control is kept clear of it. */
+  barRef?: RefObject<HTMLElement | null>;
 }) {
-  const [overlay, setOverlay] = useState<Week | null>(null);
+  const router = useRouter();
+  /**
+   * The editor's own week, and the page's week it was made on. It shows while a save is out, and
+   * after, until the page's week changes: a week another write changed (10b's Copy, a refresh) is
+   * what shows next, even one that arrived while the save was out.
+   */
+  const [overlay, setOverlay] = useState<{ week: Week; base: Week } | null>(null);
   const [saving, setSaving] = useState(false);
-  // A new week from the page replaces the editor's own copy, unless a save is still out.
-  const [seen, setSeen] = useState(program.week);
-  if (program.week !== seen) {
-    setSeen(program.week);
-    if (!saving) setOverlay(null);
-  }
-  const week = overlay ?? program.week;
+  const week = overlay && (saving || overlay.base === program.week) ? overlay.week : program.week;
 
   const [openDay, setOpenDay] = useState<Weekday | null>(null);
+  // What Undo puts back: the slot, where it was. Not the week before it, which would undo a
+  // change that arrived since.
   const [removed, setRemoved] = useState<{
     day: Weekday;
     index: number;
-    workout: string;
-    before: Week;
+    slot: Slot;
     at: number;
   } | null>(null);
-  const [editing, setEditing] = useState<{ day: Weekday; workout: string; value: string } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<{
+    day: Weekday;
+    workout: string;
+    value: string;
+    error: string | null;
+  } | null>(null);
   const inFlight = useRef(false);
   const queued = useRef<Week | null>(null);
   const controls = useRef(new Map<string, HTMLElement>());
   const addButtons = useRef(new Map<Weekday, HTMLButtonElement>());
-  const lastRemoveAt = useRef(0);
+  const lastRemoveAt = useRef<number | undefined>(undefined);
 
   const names = new Map(program.workouts.map((w) => [w.workoutPublicId, w.name]));
   const nameOf = (workout: string) => names.get(workout) ?? '';
   const today = localWeekday(program.today) as Weekday;
   const control = (day: Weekday, workout: string, which: Control) =>
     controls.current.get(controlKey(day, workout, which));
+
+  /** A save that throws (a dropped connection) is a `retry`, never a stuck queue. */
+  async function attempt(days: Week): Promise<ProgramResult> {
+    try {
+      return await saveWeek({ programPublicId: program.programPublicId, days });
+    } catch {
+      return { ok: false, reason: PROGRAM_REFUSAL.retry };
+    }
+  }
 
   async function send(next: Week) {
     if (inFlight.current) {
@@ -118,14 +132,17 @@ export function WeekEditor({
     setSaving(true);
     let toSend: Week | null = next;
     while (toSend) {
-      const result = await saveWeek({ programPublicId: program.programPublicId, days: toSend });
+      const result = await attempt(toSend);
       if (!result.ok) {
+        // A change made on top of the refused week is dropped with it.
         queued.current = null;
         inFlight.current = false;
         setSaving(false);
         setOverlay(null);
         setRemoved(null);
         onStatus(weekRefusal(result.reason), 'alert');
+        // The page's week is the stale one: fetch the latest, as the message says.
+        if (isStaleWeek(result.reason)) router.refresh();
         return;
       }
       toSend = queued.current;
@@ -135,57 +152,64 @@ export function WeekEditor({
     setSaving(false);
   }
 
-  /** Shows `next` at once, says `message`, and saves it. Any other change ends a pending Undo. */
-  function change(next: Week, message: string, keepRemoved = false) {
-    flushSync(() => {
-      setOverlay(next);
-      if (!keepRemoved) setRemoved(null);
-    });
+  /** Puts `next` on screen. Any change but a removal ends a pending Undo. */
+  function show(next: Week, keepRemoved = false) {
+    setOverlay({ week: next, base: program.week });
+    if (!keepRemoved) setRemoved(null);
+  }
+
+  /** Says `message` and saves `next`, which is already on screen. */
+  function commit(next: Week, message: string) {
     onStatus(message);
     void send(next);
   }
 
-  function move(day: Weekday, index: number, direction: 'up' | 'down') {
+  function change(next: Week, message: string) {
+    flushSync(() => show(next));
+    commit(next, message);
+  }
+
+  function move(day: Weekday, index: number, direction: MoveDirection) {
     const slot = week[day][index]!;
     const at = direction === 'up' ? index === 0 : index === week[day].length - 1;
     if (at)
       return onStatus(direction === 'up' ? EDITOR_COPY.alreadyFirst : EDITOR_COPY.alreadyLast);
-    // The same button, held where the thumb is, so a second tap moves it again.
-    const before = control(day, slot.workoutPublicId, direction)?.getBoundingClientRect().top ?? 0;
-    change(
-      moveSlot(week, day, index, direction),
-      movedOnText(nameOf(slot.workoutPublicId), direction, day),
+    const next = moveSlot(week, day, index, direction);
+    holdUnderThumb(
+      () => control(day, slot.workoutPublicId, direction),
+      () => show(next),
+      barRef?.current,
     );
-    const button = control(day, slot.workoutPublicId, direction);
-    button?.focus({ preventScroll: true });
-    const after = button?.getBoundingClientRect().top ?? before;
-    if (after !== before) window.scrollBy(0, after - before);
+    commit(next, movedOnText(nameOf(slot.workoutPublicId), direction, day));
   }
 
   function remove(day: Weekday, index: number, at: number) {
-    if (lastRemoveAt.current && at - lastRemoveAt.current < DOUBLE_TAP_MS) return;
+    if (isSameTap(lastRemoveAt.current, at)) return;
     lastRemoveAt.current = at;
     const slot = week[day][index]!;
-    const before = week;
-    flushSync(() => setRemoved({ day, index, workout: slot.workoutPublicId, before, at }));
-    change(removeSlot(week, day, index), removedFromText(nameOf(slot.workoutPublicId), day), true);
+    const next = removeSlot(week, day, index);
+    flushSync(() => {
+      setRemoved({ day, index, slot, at });
+      show(next, true);
+    });
+    commit(next, removedFromText(nameOf(slot.workoutPublicId), day));
     control(day, slot.workoutPublicId, 'undo')?.focus();
   }
 
   function undo(at: number) {
     if (!removed) return;
     // The ✕ sat where Undo is: a double tap on ✕ is not an Undo.
-    if (at - removed.at < DOUBLE_TAP_MS) return;
+    if (isSameTap(removed.at, at)) return;
     // Nor is a double tap on Undo a removal: the restored ✕ sits where Undo was.
     lastRemoveAt.current = at;
-    const { day, workout, before } = removed;
-    change(before, restoredText(nameOf(workout), day));
-    control(day, workout, 'text')?.focus();
+    const { day, index, slot } = removed;
+    change(insertSlot(week, day, index, slot), restoredText(nameOf(slot.workoutPublicId), day));
+    control(day, slot.workoutPublicId, 'text')?.focus();
   }
 
   /** Opens a slot's label under it, focused in the same tap so a phone raises its keyboard. */
   function openLabel(day: Weekday, workout: string, label: string | null) {
-    flushSync(() => setEditing({ day, workout, value: label ?? '' }));
+    flushSync(() => setEditing({ day, workout, value: label ?? '', error: null }));
     const field = document.getElementById(labelFieldId(day, workout)) as HTMLInputElement | null;
     field?.focus();
     field?.select();
@@ -204,8 +228,14 @@ export function WeekEditor({
   function saveLabel() {
     if (!editing) return;
     const { day, workout, value } = editing;
+    // The endpoint's own rule, so a label it would refuse never costs the week.
+    const parsed = slotLabelSchema.safeParse(value);
+    if (!parsed.success) {
+      flushSync(() => setEditing({ ...editing, error: WEEK_COPY.labelInvalid }));
+      return focusField(document.getElementById(labelFieldId(day, workout)));
+    }
     const index = week[day].findIndex((slot) => slot.workoutPublicId === workout);
-    const label = value.trim() || null;
+    const label = parsed.data;
     flushSync(() => setEditing(null));
     if (index >= 0 && week[day][index]!.label !== label) {
       change(setLabel(week, day, index, label), labelSetText(nameOf(workout), day, label));
@@ -275,9 +305,9 @@ export function WeekEditor({
                         {/* A slot removed from this place leaves its Undo row here. */}
                         {pendingUndo?.index === index ? (
                           <UndoRow
-                            name={nameOf(pendingUndo.workout)}
+                            name={nameOf(pendingUndo.slot.workoutPublicId)}
                             day={day}
-                            undoRef={ref(controlKey(day, pendingUndo.workout, 'undo'))}
+                            undoRef={ref(controlKey(day, pendingUndo.slot.workoutPublicId, 'undo'))}
                             onUndo={undo}
                           />
                         ) : null}
@@ -346,7 +376,8 @@ export function WeekEditor({
                             <LabelEditor
                               id={labelFieldId(day, slot.workoutPublicId)}
                               value={editing.value}
-                              onChange={(value) => setEditing({ ...editing, value })}
+                              error={editing.error}
+                              onChange={(value) => setEditing({ ...editing, value, error: null })}
                               onSave={saveLabel}
                               onCancel={cancelLabel}
                             />
@@ -357,9 +388,9 @@ export function WeekEditor({
                   })}
                   {pendingUndo && pendingUndo.index >= slots.length ? (
                     <UndoRow
-                      name={nameOf(pendingUndo.workout)}
+                      name={nameOf(pendingUndo.slot.workoutPublicId)}
                       day={day}
-                      undoRef={ref(controlKey(day, pendingUndo.workout, 'undo'))}
+                      undoRef={ref(controlKey(day, pendingUndo.slot.workoutPublicId, 'undo'))}
                       onUndo={undo}
                     />
                   ) : null}
@@ -412,6 +443,10 @@ function UndoRow({
         type="button"
         variant="outline"
         aria-label={undoLabel(name, day)}
+        // A held Enter on ✕ lands here: its repeats are not an Undo.
+        onKeyDown={(event) => {
+          if (event.repeat && event.key === 'Enter') event.preventDefault();
+        }}
         onClick={(event) => onUndo(event.timeStamp)}
       >
         {WEEK_COPY.undo}
@@ -424,12 +459,14 @@ function UndoRow({
 function LabelEditor({
   id,
   value,
+  error,
   onChange,
   onSave,
   onCancel,
 }: {
   id: string;
   value: string;
+  error: string | null;
   onChange: (value: string) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -448,24 +485,13 @@ function LabelEditor({
         }
       }}
     >
-      <NameField
-        id={id}
-        label={WEEK_COPY.label}
-        hint={WEEK_COPY.labelHint}
-        value={value}
-        max={SLOT_LABEL_MAX}
-        placeholder="e.g. Morning"
-        onChange={onChange}
-        error={null}
-        optional
-      />
-      <LabelSuggestions label={value} onLabel={onChange} />
+      <SlotLabelField id={id} label={value} onLabel={onChange} error={error} />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>
           {BUILDER_COPY.cancel}
         </Button>
         <Button type="button" onClick={onSave}>
-          {WEEK_COPY.save}
+          {BUILDER_COPY.save}
         </Button>
       </div>
     </div>
