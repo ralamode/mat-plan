@@ -173,9 +173,9 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     from the fake's Programs list by the draft's `programPublicId`, as the real page will load it
     (7b). The screen's prop is optional; the harness always supplies it.
 13. **An added set is a row only while it is logged**, in the fake as in the contract
-    (`dayItemSchema.rows`, `rowWriteSchema`). ✓ on a set at most one past the highest set shown adds
-    its row; a set further on is `bad_value`; un-ticking an added set takes the row away (the numbers
-    may then have a gap, which can be logged again) and ticking it back returns it. ⚠️ A set that was
+    (`dayItemSchema.rows`, `rowWriteSchema`). ✓ on any set number with no logged row adds
+    its row, and only that row (a type without set rows has no set past 1: `bad_value`); un-ticking an
+    added set takes the row away, so the numbers may have a gap, and ticking it back returns it. ⚠️ A set that was
     already past the prescription in a fixture stays a row when un-ticked: a `DayItem` does not carry
     the prescribed set count, so the fake cannot tell it from a prescribed one.
 

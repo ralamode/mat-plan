@@ -7,6 +7,8 @@
   **Also, from lane C's review of step 13b:** the day fake no longer keeps an un-ticked added set as
   a row, and no longer makes rows for sets nobody logged (it filled every set up to the one written,
   counting from the row count, which duplicated a set number once a row was missing). The rule is
-  now written on `rowWriteSchema`: a set is prescribed, or at most one past the highest set shown.
-  And `isWholeNumber` joins `isPlainDecimal` in `@mat-plan/shared` (`units.ts`), the reps pattern
-  three files each had.
+  now written on `rowWriteSchema`: any set number with no logged row may be logged, because the
+  screen's numbers can run ahead of the rows the read lists (a first version required "at most one
+  past the highest set", which review showed would refuse a valid ✓ after two un-ticks).
+  And `isWholeNumber` joins `isPlainDecimal` in `@mat-plan/shared` (`units.ts`): the reps pattern
+  the workout editor and the contract's `wholeReps` each wrote, which `wholeReps` now uses.

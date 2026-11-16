@@ -176,11 +176,12 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * `bad_value` where the prescription has no number to give. So an empty ✓ on a prescribed row sends
  * `{ quantities: [] }`, and the result's `values` says what was written.
  *
- * **`set` is a prescribed set, or an added one: at most ONE past the highest set the item shows.** A
- * set further on would need a row nobody logged, and the read lists an added set only while it is
- * logged (`dayItemSchema.rows`), so the writer answers it `bad_value`. An un-ticked added set leaves
- * a gap in the numbers; that number may be logged again. Only a type with set rows
- * (`hasSetRows`) has a set past 1.
+ * **`set` is any set number (`setNumberSchema`) that has no logged row: a prescribed set, or an
+ * added one.** The writer does not require an added set to be the next number. The screen numbers
+ * an added set one past the highest it SHOWS, and it keeps an un-ticked row for the page visit, so
+ * its numbers can run ahead of the rows the read lists; refusing those would refuse a valid ✓. A
+ * set whose row is logged answers `slot_taken`. Only a type with set rows (`hasSetRows`) has a set
+ * past 1: on any other type that is `bad_value`.
  */
 export const rowWriteSchema = z.object({
   clientId: uuidSchema,

@@ -236,7 +236,7 @@ export function isPlainDecimal(text: string): boolean {
 /**
  * Whether `text` is a whole number as a person types reps: digits only (`8`, `12`, `007`). Not `8.0`,
  * `-8`, `1e2`, `8 reps` or `''`. Beside {@link isPlainDecimal} because a row's fields are checked by
- * one or the other, and the day screen, the editor and the preview's fake each had this pattern.
+ * one or the other. The contract's `wholeReps` uses it; the workout editor wrote the same pattern.
  *
  * ⚠️ **The shape only**, as `isPlainDecimal` is: it does not trim, and it sets no range. Reps are
  * 1..1000 (`repsSchema`), so `0` matches here and is refused there.

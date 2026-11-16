@@ -216,14 +216,12 @@ export function createFakeDayActions(
         if (!values) return refuse(ROW_REFUSAL.bad_value);
 
         if (!row) {
-          // "+ Add set": only a type logged set by set has a second row. An added set is at most ONE
-          // past the highest set the item shows (not `rows.length + 1`: an un-ticked added set leaves
-          // a gap, and the count would then name a set that exists). A gap may be logged again. No
-          // row is made for a set nobody logged, because the contract lists an extra set only while
-          // it is logged (`dayItemSchema.rows`, `rowWriteSchema`).
+          // "+ Add set": only a type logged set by set has a second row. Any set number the schema
+          // allows may be logged if it has no logged row: the screen numbers an added set past the
+          // highest it SHOWS, and it keeps an un-ticked row for the page visit, so its numbers can
+          // run ahead of the rows listed here. The row is made because it is being logged; none is
+          // made for a set nobody logged (`dayItemSchema.rows`), so the numbers may have gaps.
           if (!hasSetRows(item.trackingType)) return refuse(ROW_REFUSAL.bad_value);
-          const highest = Math.max(0, ...item.rows.map((r) => r.set));
-          if (write.set > highest + 1) return refuse(ROW_REFUSAL.bad_value);
           row = { set: write.set, previous: null, logged: null };
           added.add(row);
           insertBySet(item.rows, row);

@@ -281,10 +281,23 @@ describe('isWholeNumber: reps as a person types them', () => {
   it.each(['8', '12', '007', '0', '1000'])('accepts %s', (text) => {
     expect(isWholeNumber(text)).toBe(true);
   });
-  it.each(['', ' ', '8.0', '8.', '.8', '-8', '+8', '1e2', '0x10', '8 reps', ' 8', '8 ', '٨'])(
-    'refuses %j',
-    (text) => {
-      expect(isWholeNumber(text)).toBe(false);
-    },
-  );
+  it.each([
+    '',
+    ' ',
+    '8.0',
+    '8.',
+    '.8',
+    '-8',
+    '+8',
+    '1e2',
+    '0x10',
+    '8 reps',
+    ' 8',
+    '8 ',
+    '8\n',
+    '٨',
+    '８',
+  ])('refuses %j', (text) => {
+    expect(isWholeNumber(text)).toBe(false);
+  });
 });
