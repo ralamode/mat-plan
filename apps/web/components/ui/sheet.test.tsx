@@ -29,7 +29,6 @@ function Harness({
   status,
   withLink,
   consumerClose,
-  compactBelow,
   onReturned,
 }: {
   variant?: 'sheet' | 'dialog';
@@ -37,7 +36,6 @@ function Harness({
   status?: string;
   withLink?: boolean;
   consumerClose?: boolean;
-  compactBelow?: number;
   onReturned?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -69,7 +67,6 @@ function Harness({
           )
         }
         status={status}
-        compactBelow={compactBelow}
         onReturned={onReturned}
       >
         <p>Body</p>
@@ -445,13 +442,6 @@ describe('Sheet — the keyboard geometry', () => {
     render(<Harness footer={<button type="button">Add</button>} />);
     openAndCapture();
     expect(scrollsWithBody(screen.getByRole('button', { name: 'Add' }))).toBe(false);
-  });
-
-  it('`compactBelow` raises the threshold for a taller footer: at 520px it scrolls with the body', () => {
-    withVisualViewport(520);
-    render(<Harness compactBelow={580} footer={<button type="button">Add</button>} />);
-    openAndCapture();
-    expect(scrollsWithBody(screen.getByRole('button', { name: 'Add' }))).toBe(true);
   });
 
   /**

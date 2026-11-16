@@ -102,14 +102,6 @@ export type SheetProps = {
    */
   initialFocus?: RefObject<HTMLElement | null>;
   /**
-   * Below this `visualViewport.height` (CSS px) the footer stops pinning and scrolls at the end of the
-   * body, so the list keeps room. Defaults to `COMPACT_VIEWPORT_HEIGHT` (480), which was sized for a
-   * one-button footer (~77px). A taller footer needs a higher threshold: the item picker's footer
-   * (picks summary, Add, Close) is ~157–177px, which at 480–560px with the keyboard up leaves about
-   * one row of matches.
-   */
-  compactBelow?: number;
-  /**
    * Runs once per close, after focus has been returned: to `returnFocusTo`, or the `main` fallback
    * when the trigger is gone. On a page with no `main` at all there is nowhere to return focus, so it
    * runs with focus on `<body>`. The safe moment for a page-level announcement such as "3 items
@@ -209,7 +201,7 @@ const FOOTER_CLASS =
  * ref through `useState` re-renders when the node arrives, so the node itself is a dependency.
  * `e2e/a11y.spec.ts` now asserts the property is non-empty, which is the only tier that can.
  */
-function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow: number): boolean {
+function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
@@ -224,7 +216,7 @@ function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow
       // one element each either way, so a flip re-mounts nothing and keeps the scroll offset.
       // `setState` with the same boolean is a no-op in React, so this does not re-render on every
       // scroll frame — only when the flag actually flips.
-      setCompact(vv.height < compactBelow);
+      setCompact(vv.height < COMPACT_VIEWPORT_HEIGHT);
     };
 
     write();
@@ -234,7 +226,7 @@ function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow
       vv.removeEventListener('resize', write);
       vv.removeEventListener('scroll', write);
     };
-  }, [open, node, compactBelow]);
+  }, [open, node]);
 
   // A closed sheet has no geometry; reset so the next open starts from the pinned layout.
   return open && compact;
@@ -398,7 +390,6 @@ export function Sheet({
   footer,
   status,
   initialFocus,
-  compactBelow = COMPACT_VIEWPORT_HEIGHT,
   onReturned,
   dataTokens,
 }: SheetProps) {
@@ -409,7 +400,7 @@ export function Sheet({
   // no effect needs to re-run when it mounts.
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  const compact = useVisualViewport(open, content, compactBelow);
+  const compact = useVisualViewport(open, content);
   // The footer's measured height, for the scroller's `scroll-padding-bottom` (see the render).
   const [footerNode, setFooterNode] = useState<HTMLDivElement | null>(null);
   useFooterHeight(footerNode);
