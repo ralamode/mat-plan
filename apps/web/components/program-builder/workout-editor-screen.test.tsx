@@ -29,7 +29,8 @@ import {
   usedByText,
 } from './builder-text';
 import { programPath } from './routes';
-import { DOUBLE_TAP_MS, WorkoutEditorScreen } from './workout-editor-screen';
+import { DOUBLE_TAP_MS } from './use-attempt';
+import { WorkoutEditorScreen } from './workout-editor-screen';
 
 afterEach(cleanup);
 beforeEach(() => push.mockReset());
