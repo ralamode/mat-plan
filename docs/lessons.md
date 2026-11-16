@@ -520,6 +520,15 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Vitest / RTL (component tests)
 
+- **A test that taps twice "straight after" in real time fails on a busy machine.** → A double-tap
+  guard compares the taps' `event.timeStamp`s, so "within 500ms" in a test depends on how loaded the
+  machine is: with three suites at once, two consecutive `fireEvent.click`s were more than 500ms apart.
+  → Tap at stated times (`components/program-builder/test-taps.ts`, `tapAt` / `tapClock`), never sleep
+  to get past a window. Diagnosis: run two or three full `vitest run`s at once; a contention failure
+  shows across many files at once (tests at 5–8s), a timing bug in one test fails fast.
+  ⚠️ Plain contention (a render chain slower than `waitFor`'s 1s) is not fixed per test by padding a
+  timeout; take it to the suite's configuration.
+
 - **A whole feature shipped INERT with every gate green — an action parsed a field and then forgot to
   forward it.** → GAP-1 P0-1 validated `dayRole` and omitted it from the `logStrengthSession({…})`
   call, so `sessions.day_role` was never written from the app. Three gates missed it independently:
