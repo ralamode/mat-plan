@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0022_fam1_3_tracking_types.sql b/packages/db/migrations/0022_fam1_3_tracking_types.sql
+--- a/packages/db/migrations/0022_fam1_3_tracking_types.sql
++++ b/packages/db/migrations/0022_fam1_3_tracking_types.sql
+@@ -42,7 +42,7 @@ ALTER TABLE "movements" ADD COLUMN "tracking_type" text DEFAULT 'weight_reps' NO
+ -- squawk-ignore constraint-missing-not-valid
+ ALTER TABLE "movements" ADD CONSTRAINT "movements_tracking_type_check" CHECK ("movements"."tracking_type" in ('check', 'count', 'reps', 'weight_reps', 'duration', 'time_sets', 'distance'));--> statement-breakpoint
+ -- fam-1-3:typing (db:verify reads the statement after this marker; keep it one statement)
+-UPDATE "movements" AS m SET "tracking_type" = v.tracking_type, "updated_at" = now() FROM (VALUES ('box_jump', 'reps'), ('pull-up', 'reps'), ('nordic_ham_curl', 'reps'), ('pallof_press', 'reps'), ('dips', 'reps'), ('med-ball_slam', 'reps'), ('ab_rollout', 'reps'), ('push-ups', 'reps'), ('leg_raises', 'reps'), ('v-sit_crunches', 'reps'), ('inverted_rows', 'reps'), ('single-leg_hip_thrusts', 'reps'), ('hollow-body_hold', 'time_sets'), ('broad_jump', 'distance')) AS v(slug, tracking_type) WHERE m.slug = v.slug AND m.household_id IS NULL AND m.tracking_type = 'weight_reps';--> statement-breakpoint
++UPDATE "movements" AS m SET "tracking_type" = v.tracking_type, "updated_at" = now() FROM (VALUES ('box_jump', 'reps'), ('pull-up', 'reps'), ('nordic_ham_curl', 'reps'), ('pallof_press', 'reps'), ('dips', 'reps'), ('med-ball_slam', 'reps'), ('ab_rollout', 'reps'), ('push-ups', 'reps'), ('leg_raises', 'reps'), ('v-sit_crunches', 'reps'), ('inverted_rows', 'reps'), ('single-leg_hip_thrusts', 'reps'), ('hollow-body_hold', 'time_sets'), ('broad_jump', 'distance')) AS v(slug, tracking_type) WHERE m.slug = v.slug AND m.household_id IS NULL;--> statement-breakpoint
+ ALTER TABLE "sessions" DROP CONSTRAINT "sessions_session_type_check";--> statement-breakpoint
+ -- Small table, locked above; a strict superset of the CHECK just dropped, so every row passes.
+ -- squawk-ignore constraint-missing-not-valid

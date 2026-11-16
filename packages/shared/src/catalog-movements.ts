@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { seedPublicId } from './catalog-seed';
-import { movementPatternSchema, movementSlug } from './movements';
+import { movementPatternSchema, movementSlug, trackingTypeSchema } from './movements';
 import { unitSchema } from './units';
 
 /**
@@ -27,6 +27,14 @@ export const movementSeedRowSchema = z.object({
   pattern: movementPatternSchema,
   unitDefault: unitSchema.nullable(),
   isBodyweight: z.boolean(),
+  /**
+   * How the item is logged (FAM-1 plan D1, §2). ⚠️ **Set once, never by editing this line.** A fresh
+   * database takes it from here; production took it from migration 0022's one-time typing, which
+   * lists the same slugs (db:verify proves the two agree). The seed's `ON CONFLICT DO NOTHING` never
+   * retypes an existing row, so changing a type here later changes nothing in production: a retype
+   * needs its own migration (D25).
+   */
+  trackingType: trackingTypeSchema,
 });
 
 export type MovementSeedRow = z.infer<typeof movementSeedRowSchema>;
@@ -40,6 +48,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'jump',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('051'),
@@ -48,6 +57,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'squat',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('052'),
@@ -56,6 +66,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'squat',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('053'),
@@ -64,6 +75,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'vertical_pull',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('054'),
@@ -72,6 +84,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_push',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('055'),
@@ -80,6 +93,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('056'),
@@ -88,6 +102,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'core',
     unitDefault: null,
     isBodyweight: false,
+    trackingType: 'reps',
   },
   // ── Ray's real Push/Pull/Legs program (docs/movement-templates.md) ───────────────
   // "Squats" reuses back_squat (…052); "Pull-ups/Chin-ups" reuses pull-up (…053) — not re-listed.
@@ -99,6 +114,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_push',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('058'),
@@ -107,6 +123,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'vertical_push',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('059'),
@@ -115,6 +132,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_push',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('05a'),
@@ -123,6 +141,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'isolation',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('05b'),
@@ -131,6 +150,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'isolation',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   // Pull:
   {
@@ -140,6 +160,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_pull',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('05d'),
@@ -148,6 +169,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'isolation',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('05e'),
@@ -156,6 +178,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'isolation',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('05f'),
@@ -164,6 +187,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'isolation',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   // Legs:
   {
@@ -173,6 +197,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('061'),
@@ -181,6 +206,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'lunge',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('062'),
@@ -189,6 +215,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'lunge',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('063'),
@@ -197,6 +224,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'isolation',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('064'),
@@ -205,6 +233,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'carry',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   // ── V1-10: movements from Ray's Kids S&C Foundation block (docs/plans/v1-10-two-week-program-source.md).
   //    Pull-Up / Weighted
@@ -217,6 +246,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: null,
     isBodyweight: false,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('066'),
@@ -225,6 +255,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('067'),
@@ -233,6 +264,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_pull',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('068'),
@@ -241,6 +273,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'core',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('069'),
@@ -249,6 +282,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'jump',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'distance',
   },
   {
     publicId: seedPublicId('06a'),
@@ -257,6 +291,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('06b'),
@@ -265,6 +300,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'carry',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     publicId: seedPublicId('06c'),
@@ -273,6 +309,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'core',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'time_sets',
   },
 
   // ── Youth daily A/B program (2026-09-24) ────────────────────────────────────────
@@ -286,6 +323,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_push',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('071'),
@@ -294,6 +332,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'core',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('072'),
@@ -302,6 +341,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'core',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     publicId: seedPublicId('073'),
@@ -310,6 +350,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'horizontal_pull',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
   {
     // The ONE Day-B movement with a required load — the spec marks bell weight required, not optional.
@@ -319,6 +360,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: 'lb',
     isBodyweight: false,
+    trackingType: 'weight_reps',
   },
   {
     // Ray (2026-09-24): hip thrusts are a REP MOVEMENT. The paper sheet's three completion
@@ -329,6 +371,7 @@ export const MOVEMENT_SEED_ROWS = [
     pattern: 'hinge',
     unitDefault: null,
     isBodyweight: true,
+    trackingType: 'reps',
   },
 ] as const satisfies readonly MovementSeedRow[];
 

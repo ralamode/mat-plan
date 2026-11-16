@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/movement-catalog.ts b/packages/db/src/writers/movement-catalog.ts
 --- a/packages/db/src/writers/movement-catalog.ts
 +++ b/packages/db/src/writers/movement-catalog.ts
-@@ -65,7 +65,7 @@
-   scope: HouseholdScope,
+@@ -106,7 +106,7 @@ export async function findOrCreateTypedMovement(
    name: string,
- ): Promise<number> {
+   trackingType?: TrackingType,
+ ): Promise<ResolvedMovementRef> {
 -  const slug = movementSlug(name);
 +  const slug = name;
  
-   /** One shape for all four lookups, so none can forget `limit(1)` or the id pluck. */
-   const movementIdWhere = async (where: SQL | undefined): Promise<number | undefined> => {
+   /** One shape for all four lookups, so none can forget `limit(1)` or the id and type pluck. */
+   const movementWhere = async (
