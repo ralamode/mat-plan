@@ -866,7 +866,28 @@ describe('a quantity needs its unit (C16)', () => {
     expect(select.getAttribute('aria-invalid')).toBe('true');
     fireEvent.change(select, { target: { value: 'lb' } });
     expect(select.getAttribute('aria-invalid')).toBeNull();
+    expect(
+      within(card)
+        .getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`))
+        .getAttribute('aria-invalid'),
+    ).toBeNull();
     save();
     await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
+  });
+
+  it('the bar counts the fields to fix', async () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const bare = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) => (item === bench ? { ...item, quantities: [] } : item)),
+    };
+    editor({}, bare);
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    fireEvent.change(within(card).getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`)), {
+      target: { value: 'abc' },
+    });
+    save();
+    // The contract-pinned sentence, once.
+    await waitFor(() => expect(alerts()).toEqual(['2 fields need fixing before saving.']));
   });
 });

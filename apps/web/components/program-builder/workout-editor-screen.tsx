@@ -409,8 +409,10 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
   function changeUnit(card: EditorCard, unit: Unit) {
     const typed = card.value.trim();
     updateCard(card.item.prescriptionClientId, { unit });
-    clearError(card.item.prescriptionClientId, 'value');
-    clearError(card.item.prescriptionClientId, 'unit');
+    // One write: the unit's refusal goes, and the number's too (its ceiling was the old unit's);
+    // Save reads the number again under the new unit.
+    const id = card.item.prescriptionClientId;
+    clearErrors((e) => !(e.card === id && (e.field === 'value' || e.field === 'unit')));
     quiet();
     if (typed && card.unit && card.unit !== unit && Number.isFinite(Number(typed))) {
       report(unitChangedText(card.item.itemName, Number(typed), card.unit, unit));

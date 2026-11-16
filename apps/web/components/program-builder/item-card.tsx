@@ -109,7 +109,10 @@ export function ItemCard({
   errors: readonly EditorError[];
   controlRef: (control: CardControl, node: HTMLButtonElement | null) => void;
   /** The card's typed fields; the rest has its own `onRest`, since it lives on the item. */
-  onChange: (field: Exclude<EditorField, 'name' | 'description' | 'rest'>, value: string) => void;
+  onChange: (
+    field: Exclude<EditorField, 'name' | 'description' | 'rest' | 'unit'>,
+    value: string,
+  ) => void;
   onUnit: (unit: Unit) => void;
   onMove: (direction: MoveDirection) => void;
   /** With the tap's `event.timeStamp`, so the screen can tell a double tap. */

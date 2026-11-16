@@ -106,6 +106,15 @@ describe('the editor’s draft', () => {
         readDraft(bare, { name: 'Bare', description: '', cards: [{ ...count, value: '5' }] }),
       ),
     ).toEqual([['unit', EDITOR_ERRORS.unit(quantityLabel('count')!)]]);
+    // Not a number and no unit: the unit first, so Save focuses the select.
+    expect(
+      errorsOf(
+        readDraft(bare, { name: 'Bare', description: '', cards: [{ ...count, value: 'abc' }] }),
+      ),
+    ).toEqual([
+      ['unit', EDITOR_ERRORS.unit(quantityLabel('count')!)],
+      ['value', EDITOR_ERRORS.value(quantityLabel('count')!)],
+    ]);
   });
 
   it('a new workout needs a name, and saves with no items', () => {

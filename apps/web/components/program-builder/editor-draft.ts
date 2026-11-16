@@ -131,7 +131,8 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
 }
 
 /**
- * What Save sends, or every refusal in screen order. The writer refuses the same things
+ * What Save sends, or every refusal in screen order, except that a card's unit refusal comes
+ * before its number's, so Save focuses the select (the number's keypad would cover it). The writer refuses the same things
  * (`invalid`), so a refusal here is what keeps `invalid` from being the normal path. The result is
  * parsed by `saveWorkoutSchema` last: a draft the contract would refuse is never sent, and comes
  * back with no field to blame (`errors: []`).
