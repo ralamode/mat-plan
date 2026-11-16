@@ -1,0 +1,11 @@
+diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
+--- a/packages/db/src/queries/program-day.ts
++++ b/packages/db/src/queries/program-day.ts
+@@ -205,7 +205,6 @@ export async function householdHasProgram(
+     .where(
+       and(
+         programBlockInHousehold(args.scope),
+-        programBlockIsLegacy(),
+         isNull(schema.programBlocks.deletedAt),
+       ),
+     )

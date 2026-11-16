@@ -18,20 +18,21 @@ says the same thing; if these two ever disagree, the inventory is right. [ADR 00
 [the plan](../plans/v1-9b-delete-and-restore.md) holds the decisions and their alternatives.
 
 🔴 **Read this before touching anything that reads `entries`.** The invariants here live _between_
-files — one writer, one tombstone-returning reader, and every other query in the repo obliged to
+files — one writer, one tombstone-returning reader (plus the clear's day-only pre-read), and every other query in the repo obliged to
 filter. None of them can be checked by looking at a single file.
 
 ## The file map
 
-| File                                                                | What it is                                                                                                                                                                       |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/hide.ts`                                       | The wire contract: `HIDE_ROW_MAX`, `hideEntriesSchema`, `restoreHiddenSchema`, the token's format, and `RESTORE_REASONS`. ⚠️ No `N` and no `expired` — the window is `PRIV-3`'s. |
-| `packages/db/src/writers/hide.ts`                                   | **The only module that writes `entries.deleted_at`.** `hideEntries` and `restoreHidden`.                                                                                         |
-| `packages/db/src/queries/hidden-entries.ts`                         | **The only read that returns tombstones.** `hiddenEntriesForDay`, `hiddenDayCounts`.                                                                                             |
-| `packages/db/src/writers/bodyweight.ts`                             | `bodyweightSlot` — the day-slot predicate, shared with `restoreHidden`'s holder lookup so the two cannot disagree about what "the slot" is.                                      |
-| `packages/db/scripts/verify.ts`                                     | § `V1-9b B1-1b`, the proofs, including the reader audit.                                                                                                                         |
-| _(B1-2)_ `app/p/[profileId]/entry-actions.ts`, `lib/dal/entries.ts` | The actions and the DAL wrapper. Not yet built.                                                                                                                                  |
-| _(B1-3)_ `app/p/[profileId]/hidden/`                                | The screen. Not yet built.                                                                                                                                                       |
+| File                                                                | What it is                                                                                                                                                                                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/hide.ts`                                       | The wire contract: `HIDE_ROW_MAX`, `hideEntriesSchema`, `restoreHiddenSchema`, the token's format, and `RESTORE_REASONS`. ⚠️ No `N` and no `expired` — the window is `PRIV-3`'s.                                        |
+| `packages/db/src/writers/hide.ts`                                   | **The only module that writes `entries.deleted_at`.** `hideEntries` and `restoreHidden`.                                                                                                                                |
+| `packages/db/src/queries/hidden-entries.ts`                         | **The only read that returns a tombstone's VALUES.** `hiddenEntriesForDay`, `hiddenDayCounts`. (`writers/single-value.ts`'s pre-read sees a hidden row too, but returns only its day: below.)                           |
+| `packages/db/src/writers/single-value.ts`                           | **The app's first route to `hideEntries`** (V1-24 3b-bw): `clearBodyweight` hides one weigh-in on a blank Save. Its pre-read `bodyweightRowForAmend` sees a hidden row, but returns only its day (reader table, below). |
+| `packages/db/src/writers/bodyweight.ts`                             | `bodyweightSlot` — the day-slot predicate, shared with `restoreHidden`'s holder lookup so the two cannot disagree about what "the slot" is.                                                                             |
+| `packages/db/scripts/verify.ts`                                     | § `V1-9b B1-1b`, the proofs, including the reader audit.                                                                                                                                                                |
+| _(B1-2)_ `app/p/[profileId]/entry-actions.ts`, `lib/dal/entries.ts` | The actions and the DAL wrapper. Not yet built.                                                                                                                                                                         |
+| _(B1-3)_ `app/p/[profileId]/hidden/`                                | The screen. Cut from Beta 0 (#412).                                                                                                                                                                                     |
 
 ## Invariants that live between files
 
@@ -39,11 +40,11 @@ filter. None of them can be checked by looking at a single file.
 a finite claim — but the unqualified version ("the only writer") is **false**, and a privacy lens
 caught it. There are three:
 
-| Writer                                                | Reachable by                | Production       |
-| ----------------------------------------------------- | --------------------------- | ---------------- |
-| `writers/hide.ts`                                     | the app, from `B1-2` on     | not yet          |
-| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run | **has been run** |
-| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB   | no               |
+| Writer                                                | Reachable by                                                                                                                                                    | Production       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `writers/hide.ts`                                     | the app: a blank Save clears a weigh-in from V1-24 3b-bw (`writers/single-value.ts`); the next caller is B2's Clear this day, and Beta 0 has no per-item Delete | from 3b-bw       |
+| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run                                                                                                                                     | **has been run** |
+| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB                                                                                                                                       | no               |
 
 🔴 **The consequence `B1-3` has to decide, so it is written down here rather than discovered:**
 `hiddenEntriesForDay` does **not** distinguish a row the person hid from a row the _correction_ hid.
@@ -70,14 +71,16 @@ hard-delete only, so hiding an entry leaves its `entry_sets` and `entry_set_quan
 `deleted_at IS NULL` — **live children of a dead parent**. A reader that filters only its own table
 still returns them, which is why each one reaches ownership through the parent.
 
-| Reader                                                       | How it filters                                                     | Proof                                                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `listEntriesForDay` (`lib/dal/entries.ts`)                   | entries; sets through live entry ids; quantities through live sets | B1-2's emitted-SQL test, B1-3's e2e                                                     |
-| `strengthMonthRows` / `bodyweightMonthRows` / `loggedMonths` | `queries/export-month.ts`                                          | `verify.ts` § B1-1b, incl. deep-equal restore                                           |
-| `weeklyAdherence`                                            | entries                                                            | `verify.ts` § B1-1b                                                                     |
-| `ownedEntryIds` → both amends                                | entries                                                            | amending a hidden entry answers `notFound`                                              |
-| `insertBodyweightEntry` branch (b)                           | `bodyweightSlot` + `deleted_at IS NULL`                            | `verify.ts` V1-24 1d                                                                    |
-| `movement-ownership.ts`                                      | **deliberately none**                                              | asserted unchanged — a tombstone still holds its FK and still blocks a household delete |
+| Reader                                                       | How it filters                                                                                                                                                                                    | Proof                                                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `listEntriesForDay` (`lib/dal/entries.ts`)                   | entries; sets through live entry ids; quantities through live sets                                                                                                                                | `lib/dal/entries.test.ts`'s emitted-SQL test; `e2e/bodyweight-receipt.spec.ts` (a cleared weigh-in leaves the page) |
+| `strengthMonthRows` / `bodyweightMonthRows` / `loggedMonths` | `queries/export-month.ts`                                                                                                                                                                         | `verify.ts` § B1-1b, incl. deep-equal restore                                                                       |
+| `weeklyAdherence`                                            | entries                                                                                                                                                                                           | `verify.ts` § B1-1b                                                                                                 |
+| `ownedEntryIds` → both amends                                | entries                                                                                                                                                                                           | amending a hidden entry answers `notFound`                                                                          |
+| `insertBodyweightEntry` branch (b)                           | `bodyweightSlot` + `deleted_at IS NULL`                                                                                                                                                           | `verify.ts` V1-24 1d                                                                                                |
+| `lastBodyweightBefore` (`queries/last-bodyweight.ts`)        | entries (`deleted_at IS NULL`): a cleared weigh-in is never "Last time"                                                                                                                           | `verify/single-values.ts` § 3b-bw; mutation **61**                                                                  |
+| `bodyweightRowForAmend` (`writers/single-value.ts`)          | **deliberately none**: it returns a row's DAY and nothing else, so a replayed clear reaches `clearBodyweight` (which answers it under its own lock) and the write is bounded by the row's own day | `verify/single-values.ts` § 3b-bw                                                                                   |
+| `movement-ownership.ts`                                      | **deliberately none**                                                                                                                                                                             | asserted unchanged — a tombstone still holds its FK and still blocks a household delete                             |
 
 **4 · A hide is all-or-nothing, and a replay is `ok` — including a MIXED one.** ⚠️ If some named ids
 are already hidden and some are live, the call mints a new event for the live ones and returns **that**
@@ -107,8 +110,10 @@ commit the holder's hide.
 - **A hidden row HOLDS its `client_id`** (non-partial since B0), so a replay of a hidden write
   conflicts rather than twinning. `writers/checkin.ts` reports that as `own_hidden`; the strength and
   bodyweight paths still throw (Decision 7), and B1-2 maps it.
-- **Don't add `includeHidden` to a live reader.** A second consumer of tombstones belongs in
-  `queries/hidden-entries.ts`. A flag is how a deleted set reaches the CSV the export exists for.
+- **Don't add `includeHidden` to a live reader.** A read of a tombstone's VALUES belongs in
+  `queries/hidden-entries.ts`; a write path that must see a hidden row to answer a replay (the clear's
+  pre-read, `writers/single-value.ts`) returns the day and nothing more. A flag on a live reader is how
+  a deleted set reaches the CSV the export exists for.
 - **`activity_date` is a plain `DATE`.** `hiddenDayCounts` returns it as text; mapping it through a
   `Date` gives a calendar day a timezone it never had (V1-6c).
 - **A session's `feel` note outlives its entries.** Hiding every entry of a session leaves the

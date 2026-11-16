@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/last-bodyweight.ts b/packages/db/src/queries/last-bodyweight.ts
+index 70138848..89190bcf 100644
+--- a/packages/db/src/queries/last-bodyweight.ts
++++ b/packages/db/src/queries/last-bodyweight.ts
+@@ -40,7 +40,6 @@ export async function lastBodyweightBefore(
+         eq(schema.entries.status, ENTRY_STATUS.done),
+         isNotNull(schema.entries.valueNum),
+         isNull(schema.entries.valueText),
+-        isNull(schema.entries.deletedAt),
+         lt(schema.entries.activityDate, args.day),
+       ),
+     )

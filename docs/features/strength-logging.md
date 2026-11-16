@@ -495,10 +495,11 @@ Real ones, each with the file to look at.
   1px, so the actionability check fails. Click the **label** — which is what a person taps anyway, and
   what `targetOf` measures for the tap-target bar.
 
-- **`packages/db` is typechecked, but only since DX-7 — and `shared`/`engine` still are not directly.**
-  `pnpm typecheck` now runs `apps/web` **and** `packages/db` (its own `tsconfig.json`, covering
-  `scripts/**` where the `db:verify` proofs live). `packages/shared` is still checked only
-  _transitively_, through the app's imports, so a file in it that nothing imports is unchecked. A stale
+- **`packages/db` is typechecked, but only since DX-7 — and `engine` still is not directly.**
+  `pnpm typecheck` runs `apps/web`, `packages/db` (its own `tsconfig.json`, covering `scripts/**`
+  where the `db:verify` proofs live), `packages/evals` and `packages/shared` (tests included).
+  `packages/engine` is still checked only _transitively_, through the app's imports, so a file in it
+  that nothing imports is unchecked. A stale
   reference in `writers/` or `verify.ts` used to surface only as a runtime crash in `db:verify`; it is
   now a compile error. Run `pnpm verify`.
 

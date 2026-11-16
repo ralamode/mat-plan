@@ -38,7 +38,7 @@ import type { TokenSet } from './token-sets';
  * `buttonVariants.destructive` (`bg-destructive/10 text-destructive`) measures **4.39:1** in light
  * mode and 3.04:1 in dark on a card, and `text-muted-foreground` on `bg-muted` measures **4.34:1** in
  * light — all under AA, all in the palette shipping TODAY, and all invisible to CI because no route
- * renders them (`variant="destructive"` has zero call sites). Rendering them here would redden the
+ * renders them (`variant="destructive"`'s one call site, the bodyweight Clear, overrides the fill). Rendering them here would redden the
  * a11y gate over a pre-existing defect this PR cannot fix without changing the live app's appearance,
  * which UI-4 promised not to do. So they are pinned with their measured ratios in
  * `token-sets.test.ts` and handed to UI-3 as inputs. The destructive *state* is still shown, the way

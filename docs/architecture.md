@@ -368,6 +368,12 @@ milliseconds). And `ON DELETE CASCADE` is **hard-delete only**, so a hidden entr
 children**: every reader must reach ownership through the parent, or it returns the sets of a row
 the person deleted.
 
+**The app's first caller (V1-24 3b-bw).** A blank Save on a weigh-in reaches `writers/hide.ts`
+through `writers/single-value.ts`'s `clearBodyweight`: it opens the transaction, locks the one row
+`FOR UPDATE OF entries`, compares unit and seen-value after the lock (a concurrent amend answers
+`stale`), and calls `hideEntries` for that row on its own day. The diagram below is the general shape;
+the clear is one item, with no restore offered for it.
+
 ```mermaid
 sequenceDiagram
   participant P as Person

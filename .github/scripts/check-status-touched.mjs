@@ -41,13 +41,14 @@
  * merge-gates". In CI's `quality` it gets STATUS_BRANCH from the PR's head ref (DX-5(b)).
  *
  * Usage:
- *   node .github/scripts/check-status-touched.mjs [baseRef]   # default: origin/main
+ *   node .github/scripts/check-status-touched.mjs [baseRef]   # default: a stacked PR's base, else origin/main
  * Fetch first (`git fetch origin`): a stale base counts main's own commits and edits as this
  * branch's, which gives both false failures and false passes. ship-pr step 1 already does.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { defaultBase } from './default-base.mjs';
 
 const STATUS_FILE = 'docs/status.md';
 const CHANGELOG_DIR = 'docs/changelog';
@@ -73,7 +74,7 @@ const SKIP_LABEL = 'docs-skip-changelog';
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const lines = (s) => s.split('\n').filter(Boolean);
 
-const base = process.argv[2] ?? 'origin/main';
+const base = defaultBase(process.argv[2]);
 let mergeBase;
 try {
   mergeBase = git('merge-base', base, 'HEAD');

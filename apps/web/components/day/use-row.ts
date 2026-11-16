@@ -1,24 +1,29 @@
 'use client';
 
 import {
+  hasSetRows,
   newId,
   ROW_REFUSAL,
+  type DayItem,
+  type DayRow,
+  type DayWorkout,
   type RowRefusal,
   type RowResult,
   type RowValues,
+  type Unit,
 } from '@mat-plan/shared';
 import { useEffect, useState } from 'react';
 
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import {
-  hasQuantityField,
+  EMPTY_TEXT,
+  fieldsOf,
   readTyped,
   sameValues,
   textOf,
-  type DayItem,
-  type DayRow,
-  type DayWorkout,
+  type RowField,
+  type RowText,
   type RowWriteKind,
 } from './row-values';
 
@@ -54,7 +59,14 @@ type Override =
  * - `invalid`: the number is the problem, so the field is marked and takes focus; never for
  *   "Couldn't save".
  */
-type RowError = { message: string; reload: boolean; counts: boolean; invalid: boolean };
+type RowError = {
+  message: string;
+  reload: boolean;
+  counts: boolean;
+  invalid: boolean;
+  /** The field a refused number is in, so that field is the one marked and focused. */
+  field?: RowField;
+};
 
 const RETRY: RowResult = { ok: false, reason: ROW_REFUSAL.retry };
 
@@ -64,6 +76,25 @@ async function settle(write: () => Promise<RowResult>): Promise<RowResult> {
   } catch {
     return RETRY;
   }
+}
+
+/**
+ * Whether a row can be written (`canWrite`: ✓, un-tick, re-tick) and logged anew (`canLog`: a new
+ * entry needs both ids, so a row whose prescription was removed can only be ticked back). One rule,
+ * read by every row and by the set table's "+ Add set".
+ */
+export function rowAccess(readOnly: boolean, workout: DayWorkout, item: DayItem) {
+  const canWrite = !readOnly && workout.scheduled;
+  const canLog = canWrite && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
+  return { canWrite, canLog };
+}
+
+/**
+ * The row's name in sentences and labels: the item, and the set where it is one of several, so a
+ * screen reader hears which set was logged.
+ */
+export function rowName(item: DayItem, row: DayRow): string {
+  return hasSetRows(item.trackingType) ? DAY_COPY.setLabel(item.name, row.set) : item.name;
 }
 
 /**
@@ -93,7 +124,17 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   const day = useDay();
   const rowKey = rowKeyOf(workoutKey, item, row);
 
-  const [text, setTextState] = useState('');
+  const [text, setTextState] = useState<RowText>(EMPTY_TEXT);
+  /**
+   * The unit an un-tick filled the quantity field in. 🔴 If the item's unit changes after that, the
+   * number is cleared: the field is in the item's unit, and `27.5` filled from lb must never go out
+   * as 27.5 kg (a load in the wrong unit is an injury risk).
+   */
+  const [filledUnit, setFilledUnit] = useState<Unit | null>(null);
+  if (filledUnit !== null && filledUnit !== item.unit) {
+    setFilledUnit(null);
+    setTextState((was) => ({ ...was, quantity: '' }));
+  }
   const [error, setError] = useState<RowError | null>(null);
   const [pending, setPending] = useState<
     { write: 'tick'; shown: RowValues } | { write: 'untick' } | null
@@ -131,10 +172,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
         ? null
         : (settled?.values ?? null);
 
-  const canWrite = !day.readOnly && workout.scheduled;
-  /** A new entry needs both ids; a row whose prescription was removed can only be ticked back. */
-  const canLog = canWrite && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
-  const hasField = canLog && hasQuantityField(item);
+  const { canWrite, canLog } = rowAccess(day.readOnly, workout, item);
+  const hasField = canLog && fieldsOf(item).length > 0;
   /** A read-only day shows no message: there is nothing left to retry. */
   const shownError = canWrite ? error : null;
   const notSaved = shownError?.counts === true;
@@ -149,14 +188,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   }, [notSaved, rowKey, setRowFailed]);
 
   /** Typing over a refused number clears the refusal: the field is being fixed. */
-  function setText(next: string) {
-    setTextState(next);
+  function setText(field: RowField, next: string) {
+    setTextState((was) => ({ ...was, [field]: next }));
+    // A number typed now is in the item's unit as it is now.
+    if (field === 'quantity') setFilledUnit(null);
     if (error?.invalid) setError(null);
   }
 
   function showError(next: RowError) {
     setError(next);
-    day.announce(DAY_COPY.announce.failed(item.name, next.message));
+    day.announce(DAY_COPY.announce.failed(rowName(item, row), next.message));
   }
 
   function fail(reason: RowRefusal, write: RowWriteKind) {
@@ -203,8 +244,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setPending(null);
     if (result.ok) {
       setAttempt(null);
-      setTextState('');
-      succeed(loggedFrom(result), DAY_COPY.announce.logged(item.name));
+      setTextState(EMPTY_TEXT);
+      succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
     // A `clientId` held by a hidden entry answers `own_hidden` forever: the next try is a new one.
@@ -224,8 +265,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     );
     setPending(null);
     if (result.ok) {
-      setTextState('');
-      succeed(loggedFrom(result), DAY_COPY.announce.logged(item.name));
+      setTextState(EMPTY_TEXT);
+      succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
     // The token is gone (a reload would show the row empty): log it as a new ✓ instead.
@@ -247,7 +288,9 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     );
     setPending(null);
     if (result.ok) {
-      setTextState(textOf(item, result.values));
+      const kept = textOf(item, result.values);
+      setTextState(kept);
+      setFilledUnit(kept.quantity === '' ? null : item.unit);
       setAttempt(null);
       succeed(
         {
@@ -256,7 +299,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
           values: result.values,
           hiddenAt: result.hiddenAt ?? null,
         },
-        DAY_COPY.announce.unticked(item.name),
+        DAY_COPY.announce.unticked(rowName(item, row)),
       );
       return;
     }
@@ -270,7 +313,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     if (unticked?.hiddenAt) {
       // Re-tick when nothing new was typed: no field (a Check, a removed prescription), the field
       // untouched since the un-tick, or the same number typed again in the same unit.
-      const untouched = !hasField || text === textOf(item, unticked.values);
+      const kept = textOf(item, unticked.values);
+      const untouched = !hasField || (text.quantity === kept.quantity && text.reps === kept.reps);
       const read = hasField ? readTyped(item, text) : null;
       const same = read?.ok && !read.empty && sameValues(read.values, unticked.values);
       if (untouched || same) return retick(unticked, unticked.hiddenAt);
@@ -283,6 +327,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
         reload: false,
         counts: false,
         invalid: true,
+        field: read.field,
       });
       return;
     }

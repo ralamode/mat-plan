@@ -2,6 +2,7 @@
 
 import {
   FREE_TEXT_NOTE_MAX,
+  SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   TRACKING_TYPE_LABELS,
   UNIT_DIMENSION_BY_CODE,
@@ -11,16 +12,21 @@ import {
   type UnitDimension,
 } from '@mat-plan/shared';
 
+import { Link2, Unlink2 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import {
   EDITOR_COPY,
+  linkLabel,
+  linkText,
   moveLabel,
   PENDING_CLASS,
   quantityLabel,
   removeLabel,
+  restForLabel,
   supersetSpoken,
   UNIT_GROUP_LABELS,
   type MoveDirection,
@@ -36,7 +42,15 @@ import { FieldLabel } from './field-label';
 import { FIELD_CLASS, NameField } from './name-field';
 
 /** A card's controls the screen refocuses after a move or a remove. */
-export type CardControl = MoveDirection | 'remove';
+export type CardControl = MoveDirection | 'remove' | 'link';
+
+/** A card's link to the next card: whether they are linked, and what a link would join. */
+export type CardLink = {
+  linked: boolean;
+  /** The two letters, when linking would join two supersets. */
+  joins: readonly [string, string] | null;
+  next: string;
+};
 
 /** The units the select offers (`unitsForTrackingType`), grouped by dimension for a Count. */
 function unitGroups(type: Parameters<typeof unitsForTrackingType>[0]) {
@@ -57,17 +71,18 @@ const unitOptions = (units: readonly Unit[]) =>
 
 /**
  * One item's card in the workout editor (FAM-1 step 8; the prototype's `.ed-card`): its name and
- * type, its fields by type (`TRACKING_TYPE_FIELDS`), its instructions, and Up, Down, Remove.
+ * type, its fields by type (`TRACKING_TYPE_FIELDS`), its instructions, and Up, Down, Remove; in its
+ * foot, the link to the next card and, on a superset's last card, the group's rest (8b).
  *
  * - **The fields sit two to a row on a phone.** At 360px a card's content box is about 300px: four
  *   fields in one row leave 43px of text, so a weight and its unit select don't fit (guide
  *   invariant 14). From `sm` they sit in one row, as the prototype's.
- * - Everything under the card's heading is one group named by it, so five "Instructions" fields
- *   are told apart.
+ * - The item's fields are one group named by its heading, so five "Instructions" fields are told
+ *   apart.
  * - The ends are `aria-disabled`, never `disabled`, so focus stays on the button (the routine
  *   editor's rule). The screen says "Already first." instead.
- * - The tools are two groups, reorder left and Remove right, so 8b's superset control can go
- *   between cards without wrapping Remove under the arrows.
+ * - The tools are two groups, reorder left and Remove right; the superset control has its own row
+ *   in the foot, so nothing wraps Remove under the arrows.
  */
 export function ItemCard({
   card,
@@ -80,6 +95,10 @@ export function ItemCard({
   onUnit,
   onMove,
   onRemove,
+  link,
+  onLink,
+  restLetter,
+  onRest,
 }: {
   card: EditorCard;
   /** The superset letter (A1), or `null`. */
@@ -88,11 +107,19 @@ export function ItemCard({
   isLast: boolean;
   errors: readonly EditorError[];
   controlRef: (control: CardControl, node: HTMLButtonElement | null) => void;
-  onChange: (field: Exclude<EditorField, 'name' | 'description'>, value: string) => void;
+  /** The card's typed fields; the rest has its own `onRest`, since it lives on the item. */
+  onChange: (field: Exclude<EditorField, 'name' | 'description' | 'rest'>, value: string) => void;
   onUnit: (unit: Unit) => void;
   onMove: (direction: MoveDirection) => void;
   /** With the tap's `event.timeStamp`, so the screen can tell a double tap. */
   onRemove: (at: number) => void;
+  /** `null` on the last card. */
+  link: CardLink | null;
+  /** With the tap's `event.timeStamp`, as Remove. */
+  onLink: (at: number) => void;
+  /** The superset's letter when this card is its last, where the group's rest is edited. */
+  restLetter: string | null;
+  onRest: (value: string) => void;
 }) {
   const { item } = card;
   const id = item.prescriptionClientId;
@@ -137,7 +164,9 @@ export function ItemCard({
     <li
       className={cn(
         'flex flex-col gap-3 rounded-lg border p-3',
-        label && 'border-l-primary border-l-4',
+        // The 4px rule takes 3px more than a plain border: the padding gives them back, so the
+        // fields do not shift sideways on a link.
+        label && 'border-l-primary border-l-4 pl-[9px]',
       )}
     >
       <div className="flex flex-wrap items-baseline gap-x-2">
@@ -212,12 +241,6 @@ export function ItemCard({
           multiline
           announce={false}
         />
-
-        {item.restAfter ? (
-          <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-            {EDITOR_COPY.rest} {item.restAfter}
-          </p>
-        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
@@ -252,6 +275,55 @@ export function ItemCard({
           {EDITOR_COPY.remove}
         </Button>
       </div>
+
+      {link || restLetter ? (
+        // The card's foot: what joins it to the next card. A rule sets it apart from the item's
+        // own tools above.
+        <div className="flex flex-col gap-3 border-t pt-3">
+          {link ? (
+            <div>
+              <Button
+                ref={(node) => controlRef('link', node)}
+                type="button"
+                variant="ghost"
+                className="min-w-11"
+                aria-label={linkLabel(linkText(link), item.itemName, link.next)}
+                onKeyDown={(event) => {
+                  if (event.repeat && event.key === 'Enter') event.preventDefault();
+                }}
+                onClick={(event) => onLink(event.timeStamp)}
+              >
+                {link.linked ? <Unlink2 aria-hidden /> : <Link2 aria-hidden />}
+                {linkText(link)}
+              </Button>
+            </div>
+          ) : null}
+
+          {/* The group's rest, last in the card: what moves in and out of a card on a link sits
+          below the tapped control, so the control never moves under the thumb. */}
+          {restLetter ? (
+            <NameField
+              id={fieldId(id, 'rest')}
+              label={
+                <>
+                  {EDITOR_COPY.rest}
+                  <span className="text-muted-foreground font-normal">
+                    {' '}
+                    {restForLabel(restLetter)}
+                  </span>
+                </>
+              }
+              value={item.restAfter ?? ''}
+              max={SLOT_LABEL_MAX}
+              placeholder={EDITOR_COPY.restPlaceholder}
+              onChange={onRest}
+              error={errorOf('rest')?.message ?? null}
+              optional
+              announce={false}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </li>
   );
 }

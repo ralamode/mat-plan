@@ -32,6 +32,19 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   it is the first migration after that. Owner: the Platform thread.
 - **Severity:** low.
 
+### A failed query's params reach Vercel's runtime logs (found 2026-11-16, #447 privacy review)
+
+- **What & why it's debt:** drizzle wraps a failed statement in a `DrizzleQueryError` whose message
+  is `Failed query: …\nparams: …`. `apps/web/lib/sentry-scrub.ts` strips it before Sentry, but Next
+  writes the error with `console.error` to Vercel's runtime logs (24 hours), so the row's values (a
+  weigh-in, a note, how a session felt) land there. Any DB failure does this; a migration's deploy
+  window makes it predictable (FAM-1's `0024` fails every log insert until applied).
+- **Impact:** medium on privacy, low on likelihood today: FAM-1 merges migrations when nobody is
+  logging, and the inventory (§8, Vercel row) and runbook say so.
+- **Fix:** strip `params` (and a 23514's `detail`, the CHECK-violation row) from errors before Next
+  logs them, at the one place they are thrown up to `error.tsx`; with a test.
+- **Severity:** medium.
+
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit
@@ -604,7 +617,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   keeps explaining it.
 - **Severity:** low. It holds nothing today; the cost is the explaining.
 
-### Four copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
+### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
 
 - **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
@@ -621,7 +634,29 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ⚠️ **The count is still four.** a-r is the component's first consumer and converted none of them, so
   this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b
   are the next consumers.
+  ✅ **Down to three (V1-24 3b-bw, 2026-11-16).** `bodyweight-amend.tsx`'s own region is gone: the
+  bodyweight row reports to `single-value-live.tsx`, which renders `Announcer` once (with a
+  `messageKey`, so a repeated message re-announces) and owns a single-use focus claim. 3b-life moves
+  the Life row onto it and retires `saved-announcer.tsx`'s last consumer, leaving `editable-set.tsx`
+  and the `StrengthForm` island.
+  ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
+  `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
+  `messageKey` when that lane next touches it.
 - **Severity:** low.
+
+### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)
+
+- **What & why:** `INPUT_CLASS` (`lib/constants.ts`) and `Button` (`components/ui/button.tsx`) draw
+  focus with `ring-ring/50`. A reviewer measured it at about **1.54:1** on the page background (and
+  about 1.48:1 light / 1.67:1 dark on the done tint), under WCAG 2.2's 3:1 for a focus indicator
+  (SC 1.4.11 / 2.4.13). Not measured by any gate: axe does not check focus styles.
+- **Impact:** a keyboard or switch user cannot reliably see where focus is. The day page now hands
+  focus to Change or the field after every log, save and clear (V1-24 3b-bw), so the ring is the only
+  "where am I" cue on the screen it was built for.
+- **Proposed fix:** a stronger ring token (`ring-foreground`, or a solid `ring` at full opacity) in
+  the two shared places, with a contrast pin in `app/done-tokens.test.ts`'s style; its own PR, since
+  it changes every focusable control.
+- **Severity:** medium (accessibility, every screen).
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
 

@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0024_fam1_4a_ii_log_side.sql b/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
+--- a/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
++++ b/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
+@@ -69,7 +69,7 @@ ALTER TABLE "entries" ADD CONSTRAINT "entries_prescription_set_check" CHECK ("en
+ ALTER TABLE "entries" ADD CONSTRAINT "entries_prescription_needs_set_check" CHECK ("entries"."prescription_id" is null or "entries"."prescription_set" is not null);--> statement-breakpoint
+ -- Every row holds NULL in the new column(s), which this CHECK accepts; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+-ALTER TABLE "entries" ADD CONSTRAINT "entries_prescription_needs_session_check" CHECK ("entries"."prescription_id" is null or "entries"."session_id" is not null);--> statement-breakpoint
++SELECT 1;--> statement-breakpoint
+ -- Every row holds NULL in the new column(s), which this CHECK accepts; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+ ALTER TABLE "sessions" ADD CONSTRAINT "sessions_workout_name_length_check" CHECK ("sessions"."workout_name" is null or (char_length(btrim("sessions"."workout_name")) >= 1 and char_length("sessions"."workout_name") <= 30));--> statement-breakpoint
