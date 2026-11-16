@@ -374,6 +374,10 @@ describe('ProgramLine and the Program order dialog', () => {
     view.rerender(<ProgramLine plan={elsewhere} actions={withReorder(elsewhere, reorder)} />);
     await answer(0, { ok: false, reason: PROGRAM_REFUSAL.retry });
     expect(items()).toEqual(numbered([THIRD, SECOND, FIRST]));
+    // And it is now the order to fall back to: a second refusal does not bring the old one back.
+    fireEvent.click(arrow('up', FIRST.name));
+    await answer(1, { ok: false, reason: PROGRAM_REFUSAL.retry });
+    expect(items()).toEqual(numbered([THIRD, SECOND, FIRST]));
   });
 
   it('a re-read of the page does not pull focus back to the arrow', async () => {
