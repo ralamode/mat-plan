@@ -1,0 +1,3 @@
+# A PR behind `main` only by unrelated commits can merge without another CI run
+
+review-pr §8 now has a "Merging a PR that is behind `main`" rule _(maintainer, 2026-11-16)_. If none of the commits a PR is behind share a file with it, it merges as-is: the squash takes in `main`, and `main`'s CI runs on the result. If they share any file, or the PR adds a migration or touches a high-stakes area (contract shapes, schema, the write path, auth, privacy), the author merges `main` and waits for CI again. After either kind of merge, `main`'s CI on the merge commit is checked. AGENTS.md's branch-workflow bullet points to the rule.

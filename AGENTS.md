@@ -222,7 +222,9 @@ Deletion: [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone
 - **Keep the branch up to date with `main` before merge** — by convention only: branch protection is
   off, so GitHub neither blocks nor flags a behind PR (the `keep-mergeable` skill checks with git).
   Rebase **before the first push**; **once on the remote, merge `main` in and never rebase** (a
-  rebase then needs a force-push; the squash keeps `main` linear either way).
+  rebase then needs a force-push; the squash keeps `main` linear either way). A PR **behind only by
+  commits that share none of its files** may merge as-is, unless it adds a migration or touches a
+  high-stakes area ([review-pr](./.claude/skills/review-pr/SKILL.md) → "Merging a PR that is behind").
 - **Merge = squash.** PR title is a Conventional Commit → one commit per PR on `main`. Delete the
   branch on merge.
 - **A stacked PR is retargeted to `main` BEFORE its parent merges** — a child merged after its

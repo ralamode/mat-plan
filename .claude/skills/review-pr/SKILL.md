@@ -289,11 +289,30 @@ these hold:
 - a **fresh** second-pass review confirms it: an agent that didn't write the fixes
 - CI is green on the current head, and the PR is **MERGEABLE** and up to date with `main`, checked with
   git (`git fetch origin && git merge-base --is-ancestor origin/main origin/<branch>`): with branch
-  protection off, GitHub shows a behind PR as `clean`
+  protection off, GitHub shows a behind PR as `clean`. **Behind only by unrelated commits is
+  allowed** _(maintainer, 2026-11-16)_; see "Merging a PR that is behind" below.
 
 The comment lists what changed since the review, the merge order if other approved PRs overlap, and
 the **`Models:` line** for every pass that led to it: high-stakes or not, and the model each lens and
 the second pass ran on ([the policy](../README.md#when-a-lens-runs-on-fable)).
+
+### Merging a PR that is behind `main`
+
+With several lanes merging, `main` often moves between a PR's green CI and its merge, and
+re-running CI for an unrelated commit buys nothing. So whoever merges checks the commits the PR is
+behind, and:
+
+- **Merges as-is when they share no file with the PR.** Check it with
+  `git diff --name-only $(git merge-base origin/<branch> origin/main) origin/main` against the PR's
+  own file list; the intersection must be empty. The squash takes in `main` either way, and `main`'s
+  CI runs on the result. The shipit names the head CI went green on and says it is behind by
+  unrelated commits.
+- **Asks the author to merge `main` and wait for CI again** when they share any file, or when the PR
+  adds a **migration** (the journal is shared, and `0NNN` must be regenerated on top), or touches a
+  **high-stakes area** in [the table](../README.md#when-a-lens-runs-on-fable): a contract shape or a
+  writer can break a disjoint caller without sharing a file with it.
+
+Then check `main`'s CI on the merge commit. A red one is fixed before the next merge.
 
 **Posting it makes you responsible for keeping the PR mergeable until it lands.** When `main` moves
 and the PR goes CONFLICTING or behind `main`, fix it without being asked:
