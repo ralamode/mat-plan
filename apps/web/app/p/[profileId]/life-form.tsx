@@ -1,24 +1,21 @@
 'use client';
 
-import { ACTIVITY_TYPE_KEYS, newId, PRACTICE_UNIT, practiceMinutesProblem } from '@mat-plan/shared';
+import {
+  ACTIVITY_TYPE_KEYS,
+  isBlankEntry,
+  newId,
+  PRACTICE_UNIT,
+  practiceMinutesProblem,
+} from '@mat-plan/shared';
 import { useActionState, useId, useRef, useState } from 'react';
 
-import { INPUT_CLASS, PRACTICE_COPY } from '@/lib/constants';
+import { INPUT_CLASS, PRACTICE_COPY, PRACTICE_PROBLEM_COPY } from '@/lib/constants';
 
 import { type ActionState, INITIAL_ACTION_STATE } from './action-state';
 import { logLifeActivitiesAction } from './actions';
 import { DayField } from './day-field';
 import { LogTick, TickedCopy } from './log-tick';
 import { useSingleValueLive } from './single-value-live';
-
-/** The browser's message for a typed entry, from the one classifier the action uses too. */
-function problemMessage(text: string): string | null {
-  const problem = practiceMinutesProblem(text);
-  if (problem === 'blank') return PRACTICE_COPY.blankLog;
-  if (problem === 'hours') return PRACTICE_COPY.hoursNotMinutes;
-  if (problem === 'range') return PRACTICE_COPY.outOfRange;
-  return null;
-}
 
 /**
  * The unlogged practice row (V1-24 3b-life-b B1–B5): `Wrestling practice` (a real label, the row's
@@ -43,9 +40,19 @@ export function PracticeForm({ profileId, day }: { profileId: string; day: strin
       const result = await logLifeActivitiesAction(prev, formData);
       if (result.ok) {
         live.report({ message: PRACTICE_COPY.announcedLogged, tone: 'sr', focus: ['change'] });
-      } else if (!result.fieldErrors && result.error) {
+      } else if (result.fieldErrors) {
+        // A refusal under the field (the server's own check): the tap blurred it, so hand it back.
+        live.claimFocus(['field']);
+      } else if (result.error) {
         // `day_taken` replaces this form with the other phone's row: focus goes to its Change.
-        live.report({ message: result.error, tone: 'alert', focus: ['field', 'change'] });
+        live.report({
+          message: result.error,
+          tone: 'alert',
+          focus: ['field', 'change'],
+          // "Tap ✓ to try again." is read as "Tap Log wrestling practice to try again."
+          tickLabel: PRACTICE_COPY.logLabel,
+          keepOnOpen: result.dayTaken,
+        });
       }
       return result;
     },
@@ -65,13 +72,17 @@ export function PracticeForm({ profileId, day }: { profileId: string; day: strin
   const ids = { value: useId(), error: useId() };
   const minutesErr = refused ?? state.fieldErrors?.minutes?.[0];
   const describedBy =
-    [minutesErr ? ids.error : null, live.statusId].filter(Boolean).join(' ') || undefined;
+    // The island's shown alert and status too: a refusal that leaves this field mounted is read with
+    // it when focus arrives, and so is the "cleared" line.
+    [minutesErr ? ids.error : null, live.alertId, live.statusId].filter(Boolean).join(' ') ||
+    undefined;
 
   return (
     <form
       action={formAction}
       onSubmit={(e) => {
-        const message = problemMessage(minutes);
+        const problem = practiceMinutesProblem(minutes);
+        const message = problem ? PRACTICE_PROBLEM_COPY[problem](minutes) : null;
         if (message) {
           e.preventDefault();
           setRefused(message);
@@ -90,9 +101,13 @@ export function PracticeForm({ profileId, day }: { profileId: string; day: strin
         readOnly
       />
       <div className="flex items-center gap-2">
-        <label htmlFor={ids.value} className="min-w-0 flex-1 text-base font-medium">
+        {/* Stretched to the row's 44px, so the words are a full-height tap target (B1). */}
+        <label
+          htmlFor={ids.value}
+          className="flex min-h-11 min-w-0 flex-1 items-center self-stretch text-base font-medium"
+        >
           {PRACTICE_COPY.label}
-          <span className="sr-only"> minutes</span>
+          <span className="sr-only">{PRACTICE_COPY.fieldLabelSuffix}</span>
         </label>
         <input
           ref={(node) => {
@@ -116,7 +131,7 @@ export function PracticeForm({ profileId, day }: { profileId: string; day: strin
         <span aria-hidden="true" className="text-base">
           {PRACTICE_UNIT}
         </span>
-        <LogTick label={PRACTICE_COPY.logLabel} pending={pending} ready={minutes.trim() !== ''} />
+        <LogTick label={PRACTICE_COPY.logLabel} pending={pending} ready={!isBlankEntry(minutes)} />
       </div>
       {minutesErr ? (
         <p id={ids.error} role="alert" className="text-destructive text-sm">

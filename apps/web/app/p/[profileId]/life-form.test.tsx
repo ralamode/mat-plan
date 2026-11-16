@@ -24,7 +24,7 @@ const renderForm = () =>
       <PracticeForm profileId="019826b4-0000-7000-8000-000000000001" day={DAY} />
     </SingleValueLive>,
   );
-const field = () => screen.getByLabelText(`${PRACTICE_COPY.label} minutes`) as HTMLInputElement;
+const field = () => screen.getByLabelText(PRACTICE_COPY.fieldLabel) as HTMLInputElement;
 const tick = () => screen.getByRole('button', { name: PRACTICE_COPY.logLabel });
 const submit = async () => {
   await act(async () => {
@@ -43,9 +43,9 @@ describe('PracticeForm — the typed row (3b-life-b)', () => {
   });
 
   it.each([
-    ['empty', '', `Enter the minutes, then ✓${PRACTICE_COPY.logLabel}.`],
-    ['an hours-shaped 2', '2', PRACTICE_COPY.hoursNotMinutes],
-    ['a decimal 1.5', '1.5', PRACTICE_COPY.hoursNotMinutes],
+    ['empty', '', PRACTICE_COPY.blankLog.replace('✓', `✓${PRACTICE_COPY.logLabel}`)],
+    ['an hours-shaped 2', '2', PRACTICE_COPY.hoursNotMinutes('2')],
+    ['a decimal 1.5', '1.5', PRACTICE_COPY.hoursNotMinutes('1.5')],
     ['above the ceiling', '301', PRACTICE_COPY.outOfRange],
   ])('refuses %s before any request, with focus on the field', async (_what, typed, message) => {
     renderForm();
@@ -76,7 +76,9 @@ describe('PracticeForm — the typed row (3b-life-b)', () => {
     await submit();
     const sent = vi.mocked(logLifeActivitiesAction).mock.calls[0]![1] as FormData;
     expect(sent.get('minutes')).toBe('45');
-    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.notSaved);
+    expect(screen.getByRole('alert').textContent).toBe(
+      PRACTICE_COPY.notSaved.replace('✓', `✓${PRACTICE_COPY.logLabel}`),
+    );
     await submit();
     expect(postedClientId(1)).not.toBe(postedClientId(0));
   });

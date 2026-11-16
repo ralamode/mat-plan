@@ -88,7 +88,12 @@ export function BodyweightForm({
   const valueErr = blank ? BODYWEIGHT_COPY.blankLog : state.fieldErrors?.value?.[0];
   // The island's status is in it too: after a clear, focus lands here, and arriving focus reads
   // "Bodyweight cleared. It was 84.5 lb." even if it pre-empted the live region's announcement.
-  const describedBy = [lastTime ? ids.hint : null, valueErr ? ids.error : null, live.statusId]
+  const describedBy = [
+    lastTime ? ids.hint : null,
+    valueErr ? ids.error : null,
+    live.alertId,
+    live.statusId,
+  ]
     .filter(Boolean)
     .join(' ');
 

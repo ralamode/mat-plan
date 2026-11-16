@@ -51,7 +51,7 @@ import {
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
-import { logPractice, SEED_PROFILE_ROUTE } from '../e2e/steps';
+import { logPractice, SEED_PROFILE_ROUTE, PRACTICE_MINUTES } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -1459,12 +1459,12 @@ function practiceSection(page: Page) {
   return page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
 }
 
-/** Tap the one-tap practice ✓ unless the row is already logged (the three widths share one day). */
+/** Type the practice minutes and tap ✓ unless the row is already logged (the three widths share one day). */
 async function logPracticeOnce(page: Page): Promise<void> {
   const life = practiceSection(page);
   const tick = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   if ((await tick.count()) > 0) {
-    await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('90');
+    await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill(String(PRACTICE_MINUTES));
     await tick.click();
   }
   await life.getByRole('button', { name: PRACTICE_CHANGE }).waitFor();

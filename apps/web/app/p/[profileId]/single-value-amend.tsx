@@ -163,8 +163,9 @@ export function SingleValueAmend({
           setValue(String(logged.value));
           setStateAtOpen(state);
           setBlankRefused(false);
-          // A refusal from an earlier try is about a value this editor no longer shows.
-          live.dismiss();
+          // A refusal from an earlier try is about a value this editor no longer shows, except an
+          // "already logged" one, which names the number to enter here (`keepOnOpen`).
+          live.dismissOnOpen();
           setEditing(true);
         }}
         aria-label={changeLabel(changeSubject, shown)}

@@ -214,6 +214,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
+                  "text": "Wrestling practice"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — how many minutes, and the day. Typed by whoever logs it."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
                   "text": "How a session felt"
                 }
               ]

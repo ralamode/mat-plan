@@ -31,6 +31,7 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Bodyweight** — a number, a unit, a date, and whether it was morning or another time.
 - **Training** — the movements, how many sets, how many reps, the weight on the bar, whether the set
   was bodyweight or banded, and what day of the program it was.
+- **Wrestling practice** — how many minutes, and the day. Typed by whoever logs it.
 - **How a session felt** — a free-text box.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.

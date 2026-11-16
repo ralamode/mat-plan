@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ACTIVITY_TYPE_KEYS } from './catalog-activity-types';
 import { METRIC_DEFINITION_SEED_ROWS, METRIC_KEYS } from './catalog-metrics';
 import { keyBySelf } from './enums';
 import { uuidSchema } from './id';
@@ -50,20 +51,22 @@ export function isPracticeMinutesInRange(minutes: number): boolean {
  * B2). One classifier, so the form's message before the request and the action's refusal agree.
  *
  * - `blank`: nothing typed.
- * - `hours`: a number that reads as HOURS: 1 to 9 (the floor's reason), or a decimal or a `h:mm`.
+ * - `hours`: a number that reads as HOURS: a whole 1 to 9 (the floor's reason), or a decimal or a
+ *   `h:mm` whose whole part is under 10 _(maintainer, 2026-11-16: `90.5` is plainly minutes)_.
  * - `range`: anything else that is not whole minutes from 10 to 300.
  */
 export type PracticeMinutesProblem = 'blank' | 'hours' | 'range';
 
 export function practiceMinutesProblem(text: string): PracticeMinutesProblem | null {
+  if (isBlankEntry(text)) return 'blank';
   const trimmed = text.trim();
-  if (trimmed === '') return 'blank';
   const minutes = parsePracticeMinutes(trimmed);
   if (minutes !== null) {
     if (isPracticeMinutesInRange(minutes)) return null;
     return minutes >= 1 && minutes < PRACTICE_MINUTES_MIN ? 'hours' : 'range';
   }
-  return /^\d+([.,:]\d+)?$/.test(trimmed) ? 'hours' : 'range';
+  const decimal = /^(\d+)[.,:]\d+$/.exec(trimmed);
+  return decimal && Number(decimal[1]) < PRACTICE_MINUTES_MIN ? 'hours' : 'range';
 }
 
 /** Whole minutes in range, from text: the one rule the form and the action both apply. */
@@ -105,6 +108,11 @@ export type EditPracticeInput = z.input<typeof editPracticeSchema>;
  * action bounds (`resolveDeclaredDay`), so it stays a string here.
  */
 export const logPracticeSchema = z.object({
+  /**
+   * The trust boundary (B6): only practice is loggable here, so a crafted Wake (or any other key) is
+   * refused by the schema rather than accepted and written as minutes.
+   */
+  activityKey: z.literal(ACTIVITY_TYPE_KEYS.wrestling_practice),
   profileId: uuidSchema,
   clientId: uuidSchema,
   day: z.string(),

@@ -7,6 +7,7 @@ import {
   editBodyweightSchema,
   editPracticeSchema,
   logPracticeSchema,
+  type LogPracticeInput,
   practiceMinutesProblem,
   PRACTICE_AMEND_REFUSAL,
   TRANSPORT_REFUSALS,
@@ -31,6 +32,7 @@ import {
   NO_PROFILE_LOG,
   NO_PROFILE_SAVE,
   PRACTICE_COPY,
+  PRACTICE_PROBLEM_COPY,
   athletePath,
   athleteRoutinePath,
 } from '@/lib/constants';
@@ -62,7 +64,6 @@ import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import type { ActionState } from './action-state';
 import { enterMutation } from '@/app/p/mutation-entry';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
-import { LOGGABLE_LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 // The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
 // export ONLY async functions — the Server Actions compiler registers every export as an action
@@ -422,8 +423,8 @@ export async function logStrengthSessionAction(
 /**
  * Server Action: log a wrestling practice, in typed minutes (V1-7; typed since V1-24 3b-life-b).
  *
- * - **Practice only** (B6): `activityKey` must be in `LOGGABLE_LIFE_ACTIVITY_KEYS`, so a crafted Wake
- *   POST is refused. Wake is not loggable: the tap time is not the wake time.
+ * - **Practice only** (B6): `activityKey` must be wrestling practice (`logPracticeSchema`), so a
+ *   crafted Wake POST is refused. Wake is not loggable: the tap time is not the wake time.
  * - **The minutes are the shared rule** (`logPracticeSchema`, 10–300 whole): the form checks the same
  *   rule before the request (`practiceMinutesProblem`), so this refusal is the backstop.
  * - It rides the shared `logCheckinEntries` write path (per-item `ON CONFLICT`, the practice day index).
@@ -440,32 +441,26 @@ export async function logLifeActivitiesAction(
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
     const entry = await enterMutation(NO_PROFILE_LOG);
     if (!entry.ok) return entry;
-    const activityKey = formData.get('activityKey');
-    // Trust boundary: only what the day page can log (practice). Wake and anything else refused here.
-    if (
-      typeof activityKey !== 'string' ||
-      !(LOGGABLE_LIFE_ACTIVITY_KEYS as readonly string[]).includes(activityKey)
-    ) {
-      return { ok: false, error: "That isn't a life activity we can log." };
-    }
-    // A tab still on the one-tap bundle posts no minutes at all: a reload brings the field.
-    const minutesText = formData.get('minutes');
-    if (typeof minutesText !== 'string') return { ok: false, error: PRACTICE_COPY.reloadToLog };
-    const parsed = logPracticeSchema.safeParse({
+    const input: Record<keyof LogPracticeInput, FormDataEntryValue | null> = {
+      activityKey: formData.get('activityKey'),
       profileId: formData.get('profileId'),
       clientId: formData.get('clientId'),
       day: formData.get('day'),
-      minutes: minutesText,
-    });
+      minutes: formData.get('minutes'),
+    };
+    // Trust boundary (B6): only practice is loggable here; Wake and anything else are refused.
+    if (input.activityKey !== ACTIVITY_TYPE_KEYS.wrestling_practice) {
+      return { ok: false, error: "That isn't a life activity we can log." };
+    }
+    // A tab still on the one-tap bundle posts no minutes at all: a reload brings the field.
+    if (typeof input.minutes !== 'string') return { ok: false, error: PRACTICE_COPY.reloadToLog };
+    const parsed = logPracticeSchema.safeParse(input);
     if (!parsed.success) {
-      const problem = practiceMinutesProblem(minutesText);
-      if (problem === null) return { ok: false, error: 'Please fix the errors below.' };
-      const message =
-        problem === 'blank'
-          ? PRACTICE_COPY.blankLog
-          : problem === 'hours'
-            ? PRACTICE_COPY.hoursNotMinutes
-            : PRACTICE_COPY.outOfRange;
+      const problem = practiceMinutesProblem(input.minutes);
+      // The minutes are fine, so the id or the day is malformed: a stale or crafted page. Nothing is
+      // "below" to fix; a reload is the true answer.
+      if (problem === null) return { ok: false, error: PRACTICE_COPY.reloadToLog };
+      const message = PRACTICE_PROBLEM_COPY[problem](input.minutes);
       return { ok: false, error: message, fieldErrors: { minutes: [message] } };
     }
 
@@ -489,17 +484,23 @@ export async function logLifeActivitiesAction(
     });
     revalidatePath(athletePath(profile.id));
 
-    switch (result?.outcome) {
+    // Exhaustive by type: a new writer outcome is a compile error here until it has an answer.
+    const outcome = result?.outcome;
+    switch (outcome) {
       case 'created':
       case 'replay':
         return { ok: true, error: null };
       case 'day_taken':
-        return { ok: false, error: PRACTICE_COPY.dayTaken(minutes) };
+        return { ok: false, error: PRACTICE_COPY.dayTaken(minutes), dayTaken: true as const };
       case 'own_hidden':
         return { ok: false, error: PRACTICE_COPY.clearedEarlier };
-      default:
-        // `conflict` (another row holds this id) and a missing result alike: nothing was written.
+      case 'conflict': // another row holds this id: a crafted reuse
+      case undefined: // no result for the one item sent: nothing is known to be written
         return { ok: false, error: PRACTICE_COPY.notSaved };
+      default: {
+        const unhandled: never = outcome;
+        throw new Error(`logLifeActivitiesAction: unhandled outcome ${String(unhandled)}`);
+      }
     }
   });
 }

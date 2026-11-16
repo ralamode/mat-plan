@@ -1282,7 +1282,7 @@ const loggedItem = () => vi.mocked(logCheckinEntries).mock.calls[0]![0].items[0]
 describe('logLifeActivitiesAction — boundary', () => {
   it.each([
     ['Wake (not loggable: the tap time is not the wake time)', ACTIVITY_TYPE_KEYS.wake],
-    ['a real activity that is not a life one', 'sc_lift'],
+    ['a real activity that is not a life one', ACTIVITY_TYPE_KEYS.sc_lift],
   ])('refuses %s, never trusting the body', async (_what, activityKey) => {
     const res = await logLifeActivitiesAction(initial, lifeForm({ activityKey }));
     expect(res.ok).toBe(false);
@@ -1308,8 +1308,8 @@ describe('logLifeActivitiesAction — boundary', () => {
 
   it.each([
     ['blank', '  ', (): string => PRACTICE_COPY.blankLog],
-    ['an hours-shaped 2', '2', (): string => PRACTICE_COPY.hoursNotMinutes],
-    ['a decimal 1.5', '1.5', (): string => PRACTICE_COPY.hoursNotMinutes],
+    ['an hours-shaped 2', '2', (): string => PRACTICE_COPY.hoursNotMinutes('2')],
+    ['a decimal 1.5', '1.5', (): string => PRACTICE_COPY.hoursNotMinutes('1.5')],
     ['above the ceiling', String(PRACTICE_MINUTES_MAX + 1), (): string => PRACTICE_COPY.outOfRange],
     ['text', 'abc', (): string => PRACTICE_COPY.outOfRange],
   ])('refuses %s minutes on the field, with no write', async (_what, minutes, copy) => {
@@ -1355,6 +1355,29 @@ describe('logLifeActivitiesAction — the minutes and the outcomes (3b-life-b B5
     }
   });
 
+  it('passes the posted client id, the declared day (±1) and the resolved profile, then revalidates', async () => {
+    // The idempotency key and the day reach the writer untouched: a minted id would break "one write
+    // per replay", a fixed day would file yesterday's practice under another (the Wake test covered
+    // these on main; they are practice's own now).
+    const clientId = newId();
+    const day = localDay(-1);
+    await logLifeActivitiesAction(initial, lifeForm({ clientId, day }));
+    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0]).toMatchObject({
+      profilePublicId: PROFILE_ID,
+      day,
+      items: [{ clientId, value: 45 }],
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+
+  it('no result for the one item sent is "not saved", never ok', async () => {
+    vi.mocked(logCheckinEntries).mockResolvedValueOnce([]);
+    expect(await logLifeActivitiesAction(initial, lifeForm({}))).toEqual({
+      ok: false,
+      error: PRACTICE_COPY.notSaved,
+    });
+  });
+
   it('a replay of the same write is ok', async () => {
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
       { clientId: 'x', id: 'p', created: false, outcome: 'replay' },
@@ -1370,9 +1393,11 @@ describe('logLifeActivitiesAction — the minutes and the outcomes (3b-life-b B5
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
       { clientId: 'x', id: null, created: false, outcome },
     ]);
-    expect(await logLifeActivitiesAction(initial, lifeForm({ minutes: '45' }))).toEqual({
+    // ' 045 ' so the copy is built from the PARSED minutes, not the raw text.
+    expect(await logLifeActivitiesAction(initial, lifeForm({ minutes: ' 045 ' }))).toEqual({
       ok: false,
       error: copy(),
+      ...(outcome === 'day_taken' ? { dayTaken: true } : {}),
     });
   });
 });

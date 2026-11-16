@@ -49,6 +49,8 @@ export function LogTick({
  * name is read in its place, so a screen reader hears "then Log wrestling practice".
  */
 export function TickedCopy({ text, buttonLabel }: { text: string; buttonLabel: string }) {
+  // Copy that does not name the ✓ is rendered as it is: never a glyph it did not contain.
+  if (!text.includes('✓')) return <>{text}</>;
   const [before, after] = text.split('✓');
   return (
     <>

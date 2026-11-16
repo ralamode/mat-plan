@@ -242,12 +242,52 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     expect(screen.getByRole('alert').textContent).toBe(copy());
   });
 
-  it("a refused log is the island's alert, with focus kept in the island", async () => {
-    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({ ok: false, error: 'Not saved.' });
+  it("a refused log is the island's alert, read as the ✓'s name, and describes the field", async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.notSaved,
+    });
     render(section());
-    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '90' } });
+    const minutesField = screen.getByLabelText(PRACTICE_COPY.fieldLabel);
+    fireEvent.change(minutesField, { target: { value: '90' } });
     await submit(PRACTICE_COPY.logLabel);
-    expect(screen.getByRole('alert').textContent).toBe('Not saved.');
+    const alert = screen.getByRole('alert');
+    // "Tap ✓ to try again." reads as the button's name in place of the hidden glyph.
+    expect(alert.textContent).toBe(
+      PRACTICE_COPY.notSaved.replace('✓', `✓${PRACTICE_COPY.logLabel}`),
+    );
+    expect(minutesField.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
+    expect(document.activeElement).toBe(minutesField);
+  });
+
+  it('day_taken: the form is replaced by the other row, and focus reaches its Change', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.dayTaken(60),
+      dayTaken: true,
+    });
+    const { rerender } = render(section());
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '60' } });
+    await submit(PRACTICE_COPY.logLabel);
+    rerender(section({ logged: [practice(90)] }));
+    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.dayTaken(60));
+    expect(document.activeElement).toBe(changeButton(90));
+    // The editor opens on the OTHER number (90), so the alert naming 60 stays while it is open
+    // (maintainer, 2026-11-16); Cancel drops it.
+    open(90);
+    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.dayTaken(60));
+    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('any other refusal is dropped when Change opens: it no longer describes the screen', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({ ok: false, error: 'Not saved.' });
+    const { rerender } = render(section());
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '60' } });
+    await submit(PRACTICE_COPY.logLabel);
+    rerender(section({ logged: [practice(90)] }));
+    open(90);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('a practice row with no value, or in another unit, shows no Change (the endpoint would refuse it)', () => {

@@ -80,7 +80,7 @@ export function resolveProfileRoutine(raw: unknown): RoutineConfig {
 
 /**
  * A render block: one existing form + the collapsed BARE catalog keys it covers. A CONTIGUOUS run of
- * `checkin:*` (or `life:*`) keys collapses into ONE block, so `CheckinForm`/`LifeForm` are called once per
+ * `checkin:*` (or `life:*`) keys collapses into ONE block, so `CheckinForm`/`PracticeForm` are called once per
  * run — preserving the batch submit + a single hydration island (`DEFAULT_ROUTINE`, all check-ins
  * contiguous, = today's single `CheckinForm`). A scattered routine yields multiple blocks (the honest
  * consequence). `strength` is a singleton block; unknown namespaces (`finisher:*`, already stripped by
@@ -141,7 +141,7 @@ export function checkinFieldsForKeys(keys: readonly string[]): CheckinField[] {
 }
 
 /** The life twin of `checkinFieldsForKeys` — bare keys → live `LIFE_ACTIVITIES` objects, in routine order
- *  (unknown keys dropped). Single-sources the resolution the `LifeForm` subset uses (no inline re-implement). */
+ *  (unknown keys dropped). Single-sources the resolution the Life section's subset uses (no inline re-implement). */
 export function lifeActivitiesForKeys(keys: readonly string[]): LifeActivity[] {
   return keys
     .map((k) => LIFE_ACTIVITY_BY_KEY.get(k))
