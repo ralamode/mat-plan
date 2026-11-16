@@ -1,4 +1,10 @@
-import { PROGRAM_REFUSAL, WEEKDAYS, type ProgramRefusal, type ProgramView } from '@mat-plan/shared';
+import {
+  PROGRAM_REFUSAL,
+  WEEKDAYS,
+  type ProgramRefusal,
+  type ProgramView,
+  type TrackingType,
+} from '@mat-plan/shared';
 
 import { formatDayShort } from '@/lib/date';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -136,4 +142,93 @@ export function workoutSummary(itemCount: number, usedOn: readonly number[]): st
 /** Where a copied workout came from: the program's name as it was on the day of the copy. */
 export function copiedFromText(from: { programName: string; on: string }): string {
   return `Copied from ${from.programName} · ${formatDayShort(from.on)}`;
+}
+
+/** The workout editor's words (FAM-1 step 8; the prototype's `vWorkout`). */
+export const EDITOR_COPY = {
+  backToProgram: '← Program',
+  editWorkout: 'Edit workout',
+  newWorkout: 'New workout',
+  workoutName: 'Name',
+  workoutNamePlaceholder: 'e.g. Heavy A',
+  description: 'Description',
+  items: 'Items',
+  noItems: 'No items yet.',
+  checkHint: 'Checked off in one tap.',
+  sets: 'Sets',
+  reps: 'Reps',
+  unit: 'Unit',
+  instructions: 'Instructions',
+  instructionsPlaceholder: 'Shown with the item, every time',
+  rest: 'Then rest:',
+  up: 'Up',
+  down: 'Down',
+  remove: 'Remove',
+  save: 'Save workout',
+  cancel: 'Cancel',
+  discardQuestion: 'Discard your changes to this workout?',
+  discard: 'Discard',
+  keepEditing: 'Keep editing',
+  alreadyFirst: 'Already first.',
+  alreadyLast: 'Already last.',
+  nameTaken: 'A workout with this name is already in this program.',
+} as const;
+
+/** What a card's quantity field is called, by the item's type. */
+export const QUANTITY_LABELS: Record<TrackingType, string | null> = {
+  check: null,
+  reps: null,
+  weight_reps: 'Weight',
+  time_sets: 'Seconds',
+  distance: 'Distance',
+  duration: 'Minutes',
+  count: 'Target',
+};
+
+/** Names that tell a card's buttons apart; the visible word comes first (WCAG 2.5.3). */
+export const moveLabel = (direction: 'up' | 'down', item: string) =>
+  `${direction === 'up' ? EDITOR_COPY.up : EDITOR_COPY.down}: ${item}`;
+export const removeLabel = (item: string) => `${EDITOR_COPY.remove} ${item}`;
+
+/** A superset's letter, read out: "A1" is "Superset A, item 1". */
+export function supersetSpoken(label: string): string {
+  return `Superset ${label[0]}, item ${label.slice(1)}`;
+}
+
+export function movedText(item: string, direction: 'up' | 'down', ended: number): string {
+  const moved = `${item} moved ${direction}.`;
+  return ended
+    ? `${moved} ${plural(ended, { one: 'A superset ended', other: `${ended} supersets ended` })}, and its rest with it.`
+    : moved;
+}
+
+export function removedText(item: string, ended: number): string {
+  const removed = `${item} removed. Cancel undoes all changes.`;
+  return ended ? `${removed} Its superset ended, and its rest with it.` : removed;
+}
+
+/** A unit changed under a typed number: say what the number now means. */
+export function unitChangedText(item: string, value: string, from: string, to: string): string {
+  return `${item}: now ${value} ${to} (was ${value} ${from}).`;
+}
+
+export function fieldsToFixText(count: number): string {
+  return plural(count, {
+    one: 'One field to fix before saving.',
+    other: `${count} fields to fix before saving.`,
+  });
+}
+
+/** What a refused Save says in the save bar. `name_taken` is said under the name instead. */
+export function saveRefusal(reason: ProgramRefusal): string {
+  switch (reason) {
+    case PROGRAM_REFUSAL.name_taken:
+      return EDITOR_COPY.nameTaken;
+    case PROGRAM_REFUSAL.invalid:
+      return 'Couldn’t save: part of this workout wasn’t accepted. Check it and try again.';
+    case PROGRAM_REFUSAL.not_found:
+      return 'This workout no longer exists.';
+    default:
+      return 'Couldn’t save. Try again.';
+  }
 }
