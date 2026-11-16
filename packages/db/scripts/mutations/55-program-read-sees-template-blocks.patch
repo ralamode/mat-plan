@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
 --- a/packages/db/src/queries/program-day.ts
 +++ b/packages/db/src/queries/program-day.ts
-@@ -107,7 +107,6 @@ export function programDayRows(
+@@ -104,7 +104,6 @@ export function programDayRows(
          // Guarding the latter consumers separately would be copies, and
          // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
          eq(schema.profiles.kind, PROGRAM_READ_KIND),
--        isLegacyBlock(),
+-        programBlockIsLegacy(),
          isNull(schema.programBlocks.deletedAt),
        ),
      )
