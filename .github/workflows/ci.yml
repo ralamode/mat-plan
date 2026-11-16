@@ -134,6 +134,16 @@ jobs:
           # `prevId === id`, a self-reference. Checked here so the class cannot recur, and
           # checked on EVERY PR (not just ones touching migrations) because the break is
           # introduced by one PR and only surfaces in a later, unrelated one.
+          # drizzle's migrator applies a migration only when its journal `when` is LATER than the
+          # newest one already applied (`created_at < folderMillis`, drizzle-orm pg-core/dialect.js).
+          # A migration generated before another one merged, and merged after it, appends an entry
+          # with an OLDER `when` and is skipped on prod with no error. So every entry's `when` must
+          # be strictly greater than the one before it.
+          ORDER_BAD=$(git show "HEAD:$JOURNAL" | jq -r '.entries as $e
+            | [range(1; $e | length) | select($e[.].when <= $e[. - 1].when)
+            | "  \($e[.].tag): when=\($e[.].when), not after \($e[. - 1].tag) (\($e[. - 1].when))"]
+            | join("\n")')
+
           CHAIN_BAD=''
           PREV_ID=''
           for SNAP in $(ls "$MIG"/meta/[0-9]*_snapshot.json 2>/dev/null | sort); do
@@ -148,8 +158,8 @@ jobs:
             PREV_ID="$SNAP_ID"
           done
 
-          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ] && [ -z "$CHAIN_BAD" ]; then
-            echo "Forward-only guard OK — no applied migration modified, snapshot chain intact."
+          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ] && [ -z "$CHAIN_BAD" ] && [ -z "$ORDER_BAD" ]; then
+            echo "Forward-only guard OK — no applied migration modified, snapshot chain intact, journal in time order."
             exit 0
           fi
 
@@ -163,6 +173,16 @@ jobs:
           id of the snapshot before it — the snapshot files are NOT applied to prod and
           are safe to repair.
           CHAINMSG
+          fi
+
+          if [ -n "$ORDER_BAD" ]; then
+            printf 'Journal entries out of time order (drizzle would SKIP these on prod, silently):\n%s\n' "$ORDER_BAD"
+            cat <<'ORDERMSG'
+
+          The migration was generated before another one merged. Regenerate it on top of
+          current main: merge main in, delete your NEW migration's .sql, snapshot and journal
+          entry, then `pnpm --filter @mat-plan/db db:generate`. Never edit a `when` by hand.
+          ORDERMSG
           fi
 
           if [ -n "$CHANGED" ]; then
@@ -188,7 +208,7 @@ jobs:
           (meta/*_snapshot.json excepted — see the comment on the check).
           MSG
           fi
-          echo '::error::Forward-only / snapshot-chain violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
+          echo '::error::Forward-only / snapshot-chain / journal-order violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
           exit 1
 
       # ── Squawk: lint NEW migrations ────────────────────────────────────────

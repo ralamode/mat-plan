@@ -98,9 +98,15 @@ pnpm verify                                                       # includes db:
 npx squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/NNNN_*.sql
 ```
 
-CI adds: the **forward-only guard** (migrations may only be ADDED; `_journal.json` append-only; the
-snapshot `prevId` chain), **Squawk** on added `.sql`, and the **drift guard**. There is **no
+CI adds: the **forward-only guard** (migrations may only be ADDED; `_journal.json` append-only and in
+time order; the snapshot `prevId` chain), **Squawk** on added `.sql`, and the **drift guard**. There is **no
 Neon-branch apply** yet (tech-debt.md), so don't cite one.
+
+⚠️ **Generate on top of the newest migration on main, never before it.** drizzle's migrator applies a
+migration only when its journal `when` is later than the newest one already applied, so a migration
+generated before another merged, and merged after it, is **skipped on prod without an error**. If
+another migration lands while yours is open, merge main in, delete your new `.sql`, its snapshot and
+its journal entry, and run `db:generate` again. The guard fails a journal out of time order.
 
 ## 6. Ship and deploy order
 
