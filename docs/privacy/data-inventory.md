@@ -427,7 +427,8 @@ everything they do in a day on a phone/iPad"_; `AGENTS.md` — _"the kids log on
 `prescriptions.notes` (`FREE_TEXT_NOTE_MAX`), `rest_after` and `superset_label` (`SLOT_LABEL_MAX`) and
 a template row's `target_reps` (`TARGET_REPS_MAX`); and their copies on the log side,
 `sessions.workout_name` and `supersets.prescription_group`. Since FAM-1 6a-i and 6a-ii, lane P's
-writers store `program_blocks.name`, `workouts.name` and `description`, and each item's `notes`,
+writers store `program_blocks.name` (and its `slug`, derived from it and re-derived on a rename),
+`workouts.name` and `description`, and each item's `notes`,
 `rest_after`, `superset_label` and `target_reps`, but no screen reaches them until step 7a. The week's
 labels (6b), `copied_from_program_name` (6a-iii) and the log-side copies (lane E) are not written yet
 (§1a); each is bounded by a length CHECK pinned to its shared const. Lane P's
