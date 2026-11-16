@@ -5,6 +5,7 @@ import {
   hasStarted,
   LOGGABLE_DIMENSION_LABELS,
   MAX_WORKOUT_ITEMS,
+  MONDAY_FIRST,
   MAX_SETS_PER_MOVEMENT,
   PROGRAM_REFUSAL,
   SLOT_LABEL_MAX,
@@ -15,6 +16,7 @@ import {
   type TrackingType,
   type Unit,
   type UnitDimension,
+  type Weekday,
 } from '@mat-plan/shared';
 
 import { itemCountText } from '@/lib/constants';
@@ -446,3 +448,74 @@ export function newItemRefusal(reason: ProgramRefusal): {
 /** Made or found, but not ticked: the workout is full. */
 export const notTickedText = (name: string) =>
   `${name} is in the list, not ticked. ${capText(MAX_WORKOUT_ITEMS)}`;
+
+/** The week editor's words (FAM-1 step 10; the prototype's Week section). */
+export const WEEK_COPY = {
+  intro: 'Each day runs its workouts in this order. A day with none is a rest day.',
+  savesAsYouGo: 'Changes save as you make them.',
+  today: 'today',
+  add: '+ Add',
+  workout: 'Workout',
+  chooseWorkout: 'Choose a workout',
+  label: 'Label',
+  labelHint: 'Shown above the workout on the day. It doesn’t change the order; use ↑ ↓.',
+  days: 'Days',
+  hasIt: 'has it',
+  oncePerDay: 'A workout runs at most once a day; days that already have it are skipped.',
+  pickADay: 'Pick at least one day that doesn’t have it yet.',
+  addButton: 'Add',
+  save: 'Save',
+  undo: 'Undo',
+  editLabel: 'Edit label',
+  noWorkouts: 'Make a workout first, then add it to days.',
+  stale: 'This week changed. Reload the page to see it.',
+  failed: 'Couldn’t save that change. The week is back as it was. Try again.',
+} as const;
+
+/** "Heavy A (already on Monday)": an option already on the day the form opened from. */
+export const alreadyOnText = (workout: string, day: number) =>
+  `${workout} (already on ${weekdayName(day)})`;
+
+/** "Add a workout on Monday". */
+export const addOnLabel = (day: number) => `Add a workout on ${weekdayName(day)}`;
+export const moveOnLabel = (direction: 'up' | 'down', workout: string, day: number) =>
+  `Move ${workout} ${direction} on ${weekdayName(day)}`;
+export const removeFromLabel = (workout: string, day: number) =>
+  `Remove ${workout} from ${weekdayName(day)}`;
+
+/** "Heavy A added on Mon, Wed and Fri. Already on Tue, so skipped." */
+export function addedOnText(workout: string, added: readonly number[], skipped: readonly number[]) {
+  // Monday first, whatever order the days were ticked in.
+  const short = (days: readonly number[]) =>
+    formatList(
+      [...days]
+        .sort((a, b) => MONDAY_FIRST.indexOf(a as Weekday) - MONDAY_FIRST.indexOf(b as Weekday))
+        .map((day) => weekdayName(day, 'short')),
+    );
+  return [
+    added.length ? `${workout} added on ${short(added)}.` : '',
+    skipped.length ? `Already on ${short(skipped)}, so skipped.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+export const removedFromText = (workout: string, day: number) =>
+  `${workout} removed from ${weekdayName(day)}.`;
+/** The row left where a removed slot was. */
+export const removedRowText = (workout: string) => `${workout} removed`;
+export const restoredText = (workout: string, day: number) =>
+  `${workout} is back on ${weekdayName(day)}.`;
+export const movedOnText = (workout: string, direction: 'up' | 'down', day: number) =>
+  `${workout} moved ${direction} on ${weekdayName(day)}.`;
+export const labelSetText = (workout: string, day: number, label: string | null) =>
+  label
+    ? `${workout} on ${weekdayName(day)} is labelled ${quote(label)}.`
+    : `${workout} on ${weekdayName(day)} has no label.`;
+
+/** What a refused week says: a stale page (the editor never sends a repeat), or a failure. */
+export function weekRefusal(reason: ProgramRefusal): string {
+  return reason === PROGRAM_REFUSAL.once_per_day || reason === PROGRAM_REFUSAL.not_found
+    ? WEEK_COPY.stale
+    : WEEK_COPY.failed;
+}

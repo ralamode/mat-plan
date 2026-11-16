@@ -3,12 +3,13 @@
 import type { ProgramActions, ProgramView } from '@mat-plan/shared';
 import Link from 'next/link';
 import { NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 import { BUILDER_COPY, usedByText } from './builder-text';
 import { ProgramHeader } from './program-header';
 import { PROGRAMS_PATH } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
-import { WeekShell } from './week-shell';
+import { WeekEditor } from './week-editor/week-editor';
 import { WhosOnIt } from './whos-on-it';
 import { WorkoutsList } from './workouts-list';
 
@@ -20,9 +21,11 @@ import { WorkoutsList } from './workouts-list';
  * **The screen is the page.** Its route is thin, so the screen renders the page's `<h1>`, its
  * top-level blocks and "← Programs", inside the shell's one `<main>`. It adds no landmark of its own.
  *
- * A client component because it holds the page's one status line: Rename and Take off both report
- * there. The line sits under the "Used by" sentence, where the prototype puts its banner, and is
- * mounted empty, so a message is announced; it takes the prototype's banner look once it has one.
+ * A client component because it holds the page's one status line: Rename, Take off and the week
+ * editor all report there. **It is a bar pinned to the bottom of the screen** _(maintainer,
+ * 2026-11-16)_, not a line under "Used by": on a phone the week sits about 650px below the top, and
+ * a message about Thursday's ✕ landed off screen. It is mounted empty, so a message is announced,
+ * and takes no room until it has one.
  *
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
  * hides its control (plan §6). `takeOff` arrives that way, at step 15.
@@ -32,7 +35,8 @@ export type ProgramScreenProps = { program: ProgramView; actions: ProgramActions
 export function ProgramScreen({ program, actions }: ProgramScreenProps) {
   const { status, report } = useStatusLine();
   return (
-    <div className="flex flex-col gap-6">
+    // Controls scroll clear of the status bar when focused near the bottom.
+    <div className="flex flex-col gap-6 [&_:is(input,select,textarea,button,a)]:scroll-mb-24">
       <div className="flex flex-col gap-2">
         <Link href={PROGRAMS_PATH} className={NAV_LINK_CLASS}>
           {BUILDER_COPY.backToPrograms}
@@ -46,11 +50,19 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
         <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
           {usedByText(program.athletes.map((athlete) => athlete.name))}
         </p>
-        <StatusLine status={status} />
       </div>
       <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={report} />
       <WorkoutsList program={program} />
-      <WeekShell program={program} />
+      <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} />
+      {/* The page's one status bar, in view wherever the change was made. */}
+      <div
+        className={cn(
+          'bg-background sticky bottom-0',
+          status.message && 'border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        )}
+      >
+        <StatusLine status={status} className="flex flex-col" />
+      </div>
     </div>
   );
 }
