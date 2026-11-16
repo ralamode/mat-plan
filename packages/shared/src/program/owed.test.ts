@@ -28,5 +28,7 @@ describe('DayPlan: owed by its consumers', () => {
 
 describe('the constants: owed by their consumers', () => {
   // 4a-i proved its half (workouts' and week slots' text CHECKs, verify/schema.ts → FAM-1 4a-i).
+  // `program_blocks.name` stays unbounded in the schema on purpose: the column predates FAM-1 and
+  // holds the seeded block's name; a template block's name is bounded by PROGRAM_NAME_MAX in zod.
   it.todo('4b: the prescription text columns are bounded by the same constants');
 });

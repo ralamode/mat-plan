@@ -18,7 +18,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { DEFAULT_TRACKING_TYPE, type RoutineConfig } from '@mat-plan/shared';
+import { DEFAULT_TRACKING_TYPE, PROGRAM_BLOCK_KIND, type RoutineConfig } from '@mat-plan/shared';
 
 /**
  * Schema — v0 thin slice (units + profiles + entries + entry_sets) plus the V1-1a
@@ -943,7 +943,7 @@ export const programBlocks = pgTable(
     // FAM-1 4a-i (ADR 0007 A2 §1): mirrors shared PROGRAM_BLOCK_KINDS (pinned by db:verify). `legacy`
     // is today's day_role block, the default, which the seed's insert omits; `template` is a block a
     // household builds, set EXPLICITLY by `insertProgramBlockOwnedBy`, never by default.
-    kind: text('kind').notNull().default('legacy'),
+    kind: text('kind').notNull().default(PROGRAM_BLOCK_KIND.legacy),
     // FAM-1 4a-i (A2 §5): a template block's offline identity. NULL on the seeded/legacy blocks, which
     // a server-side creator (the seed) writes with no client. Scoped to the household, never global.
     clientId: uuid('client_id'),
@@ -955,6 +955,11 @@ export const programBlocks = pgTable(
       .on(t.householdId, t.slug)
       .where(sql`${t.deletedAt} is null`),
     check('program_blocks_kind_check', sql`${t.kind} in ('legacy', 'template')`),
+    // A template block is always built by a device, so it always carries the id a replay matches on.
+    check(
+      'program_blocks_template_client_id_check',
+      sql`${t.kind} <> 'template' or ${t.clientId} is not null`,
+    ),
     // NON-partial (ADR 0008 3.4): a hidden block still owns its client_id, so a replay from a device
     // that never saw the hide is recognised instead of twinned. Household-scoped, so one household
     // cannot probe another's ids (A2 §2).
@@ -964,14 +969,16 @@ export const programBlocks = pgTable(
 
 /**
  * workout — one named workout in a TEMPLATE block (FAM-1 4a-i; ADR 0007 Amendment 2 §2). Only
- * template blocks own workouts (`insertWorkoutOwnedBy` refuses any other, and `db:verify` flags one).
+ * template blocks own workouts (`insertWorkoutOwnedBy` refuses any other; `db:verify` proves its audit
+ * query finds a planted violation).
  * Its items are prescriptions with `workout_id` set (step 4b); the week places it on weekdays
  * (`block_day_workouts`).
  *
  * - `client_id`: NOT NULL, unique within its block, non-partial: a workout has no natural key, and a
  *   hidden workout keeps its id so a replayed save is recognised (ADR 0008 3.4).
  * - Copy provenance (step 10b): `copied_from_workout_id` is identity, `ON DELETE SET NULL`, and must
- *   name a workout in the SAME household (writer, plus `db:verify`'s audit). `copied_from_program_name`
+ *   name a workout in the SAME household (writer; the runbook's pre-flight (e) checks real rows, and
+ *   `db:verify` proves that query). `copied_from_program_name`
  *   is the source program's name FROZEN at copy time, so a rename or purge of the source never
  *   changes "Copied from …". The id never outlives the name (the CHECK below); the name may outlive
  *   the id, which is what a purge leaves.

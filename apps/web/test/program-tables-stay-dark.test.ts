@@ -30,7 +30,16 @@ describe('the program tables stay dark (FAM-1 4a-i)', () => {
     ),
     'relational query': new RegExp(`\\.query\\.(?:${TABLES})\\b`),
     'column-less returning': new RegExp(
-      `\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b[\\s\\S]{0,400}?\\.returning\\(\\s*\\)`,
+      `\\.(?:insert|update|delete)\\(\\s*(?:schema\\.)?(?:${TABLES})\\b[\\s\\S]{0,400}?\\.returning\\(\\s*\\)`,
+    ),
+    // A bare or whole-table select that reaches a program table through a join, or names the table
+    // itself as a selected field: both list every column.
+    'bare select through a join': new RegExp(
+      `\\.select(?:Distinct)?\\(\\s*\\)[\\s\\S]{0,300}?\\.(?:inner|left|right|full)Join\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`,
+    ),
+    'whole table as a field': new RegExp(`:\\s*(?:schema\\.)?(?:${TABLES})\\s*[,}]`),
+    'bare selectDistinct': new RegExp(
+      `\\.selectDistinct\\(\\s*\\)[\\s\\S]{0,200}?\\.from\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`,
     ),
   };
   const ALLOWED = [
@@ -78,6 +87,26 @@ describe('the program tables stay dark (FAM-1 4a-i)', () => {
         'tx.insert(workouts).values(v).returning({ id: workouts.id })',
       ),
     ).toBe(false);
+    expect(
+      PATTERNS['column-less returning']!.test('tx.update(schema.workouts).set(v).returning()'),
+    ).toBe(true);
+    expect(
+      PATTERNS['column-less returning']!.test('tx.delete(schema.workouts).where(w).returning()'),
+    ).toBe(true);
+    expect(
+      PATTERNS['bare select through a join']!.test(
+        'db.select().from(schema.sessions).innerJoin(schema.programBlocks, on)',
+      ),
+    ).toBe(true);
+    expect(
+      PATTERNS['whole table as a field']!.test('db.select({ b: schema.programBlocks }).from(x)'),
+    ).toBe(true);
+    expect(
+      PATTERNS['whole table as a field']!.test('db.select({ b: schema.programBlocks.id })'),
+    ).toBe(false);
+    expect(PATTERNS['bare selectDistinct']!.test('db.selectDistinct().from(schema.workouts)')).toBe(
+      true,
+    );
   });
 
   it('apps/web calls none of the ownership helpers yet', () => {

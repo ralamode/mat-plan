@@ -581,7 +581,10 @@ export async function seedProgram(
         ),
       );
     if (!blockRow)
-      throw new Error(`seedProgram: block "${block.slug}" failed to resolve after upsert`);
+      throw new Error(
+        `seedProgram: block "${block.slug}" failed to resolve after upsert — no live LEGACY block ` +
+          'holds that slug; a household-built (template) block under the same slug would cause this',
+      );
 
     for (const p of block.prescriptions) {
       await db

@@ -1322,7 +1322,8 @@ child:
 --         JOIN workouts src      ON src.id = w.copied_from_workout_id
 --         JOIN program_blocks sb ON sb.id = src.block_id
 --        WHERE sb.household_id = (SELECT id FROM h) AND b.household_id <> sb.household_id
---       (`db:verify` runs the same join for every household, `verify/schema.ts` → FAM-1 4a-i.)
+--       (`db:verify` proves this join finds a planted row, `verify/schema.ts` → FAM-1 4a-i; it runs on
+--       PGlite, never on production, so THIS is the check against real rows.)
 ```
 
 🔴 **Why (d) exists, and why it STAYS although `TEN-2c` closed the writer that minted it.** `TEN-2a`
@@ -1377,8 +1378,9 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write all three out against the same CTEs and read the numbers. (a)–(c) must be zero. For (d), follow
-the repoint above rather than stopping — it is the one pre-flight with a documented remedy.
+Write them all out against the same CTEs and read the numbers. (a)–(c) and (e) must be zero. For (d),
+follow the repoint above rather than stopping; for (e), STOP and clear the other household's provenance
+with a correction first, as (e) says.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 

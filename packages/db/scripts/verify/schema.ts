@@ -359,7 +359,8 @@ const astral = (n: number) => '😀'.repeat(n);
 
 /**
  * Workouts whose block is not a TEMPLATE block. No constraint stops one (A2 §2: "writer, plus
- * `db:verify`"); this is the "flagged" half, and docs/runbooks.md's pre-flight runs the same query.
+ * `db:verify`"); this is the "flagged" half. It runs here, on PGlite: against production the same query
+ * is run by hand (safe, read-only).
  */
 async function workoutsOnNonTemplateBlocks(tx: VerifyTx): Promise<number[]> {
   const rows = await tx
@@ -441,11 +442,33 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
     );
     assert.deepEqual(await programBlockByClientId(exec, A_SCOPE, blockClient), made);
 
-    // The same id in ANOTHER household is accepted: the key is scoped.
-    await insertProgramBlockOwnedBy(exec, B_SCOPE, block);
-    assert.ok(
+    // The read is scoped: a block only A holds is not found under B's scope.
+    assert.equal(
       await programBlockByClientId(exec, B_SCOPE, blockClient),
-      'FAM-1 4a-i: same client_id, other household',
+      null,
+      "FAM-1 4a-i: another household's block is not found by its client_id",
+    );
+    // The same id in ANOTHER household is accepted (the key is scoped), and is B's own row.
+    await insertProgramBlockOwnedBy(exec, B_SCOPE, block);
+    const bMade = await programBlockByClientId(exec, B_SCOPE, blockClient);
+    assert.ok(bMade, 'FAM-1 4a-i: same client_id, other household');
+    assert.notEqual(bMade.id, made!.id, "FAM-1 4a-i: B's block is its own row, not A's");
+    // A template block with no client_id is refused: a replay could never be matched.
+    const [{ householdId: aHh }] = await tx
+      .select({ householdId: schema.programBlocks.householdId })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.id, made!.id));
+    await expectRejectedBy(
+      'program_blocks_template_client_id_check',
+      () =>
+        tx.insert(schema.programBlocks).values({
+          publicId: newId(),
+          householdId: aHh,
+          kind: PROGRAM_BLOCK_KIND.template,
+          slug: 'fam-1-4a-i-no-client',
+          name: 'No client',
+        }),
+      tx,
     );
 
     // A twin in the SAME household (fresh slug and public_id, so only client_id can refuse it) is
@@ -518,10 +541,15 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
     const w1Client = newId();
     const w1 = await insertWorkoutOwnedBy(exec, A_SCOPE, workout(aBlock, w1Client));
     assert.ok(w1, "FAM-1 4a-i: a workout in this household's live template block is written");
+    assert.deepEqual(
+      { created: w1.created, deleted: w1.deleted },
+      { created: true, deleted: false },
+      'FAM-1 4a-i: a first write reports created, and live',
+    );
     const count = await countOf(tx, 'workouts');
     assert.deepEqual(
       await insertWorkoutOwnedBy(exec, A_SCOPE, { ...workout(aBlock, w1Client), name: 'Renamed' }),
-      w1,
+      { ...w1, created: false },
       'FAM-1 4a-i: a replayed workout returns the FIRST row, not a refusal',
     );
     assert.equal(await countOf(tx, 'workouts'), count, 'FAM-1 4a-i: a replay writes nothing');
@@ -589,6 +617,26 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
       'workouts_copied_from_program_name_length_check',
       () => raw({ copiedFromProgramName: astral(PROGRAM_NAME_MAX + 1) }),
       tx,
+    );
+    // A replay is answered before any check: a hidden workout comes back flagged, and a replay
+    // after its block was hidden still returns the row (never a refusal).
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.workouts.id, w1.id));
+    assert.deepEqual(
+      await insertWorkoutOwnedBy(exec, A_SCOPE, workout(aBlock, w1Client)),
+      { ...w1, created: false, deleted: true },
+      'FAM-1 4a-i: a replay onto a hidden workout returns it, flagged deleted',
+    );
+    await tx
+      .update(schema.programBlocks)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.programBlocks.id, aBlock));
+    assert.equal(
+      (await insertWorkoutOwnedBy(exec, A_SCOPE, workout(aBlock, w1Client)))?.id,
+      w1.id,
+      'FAM-1 4a-i: a replay after its block was hidden is still a replay, not a refusal',
     );
     await expectRejectedBy(
       'workouts_copied_from_pairing_check',

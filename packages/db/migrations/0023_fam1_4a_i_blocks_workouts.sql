@@ -7,7 +7,8 @@
 --      PROGRAM_BLOCK_KINDS by db:verify. A constant default is metadata-only (PG 11+), so every existing
 --      block becomes `legacy` with no backfill and no rewrite.
 --   2. program_blocks.client_id uuid NULL + uq_program_blocks_household_client_id, NON-partial (ADR 0008
---      3.4) and household-scoped (A2 §2). NULL on the seeded/legacy blocks, which have no client.
+--      3.4) and household-scoped (A2 §2). NULL on the seeded/legacy blocks, which have no client;
+--      program_blocks_template_client_id_check requires it on every template block.
 --   3. workouts (A2 §2): UNIQUE (id, block_id) as a CONSTRAINT, because the week's composite FK targets
 --      it and Postgres needs the key before the FK (docs/lessons.md, 0011); UNIQUE (block_id, client_id),
 --      non-partial; the copy self-FK ON DELETE SET NULL; length CHECKs pinned to the shared consts.
@@ -16,9 +17,9 @@
 --      as IN (0..6) so db:verify can pin it to WEEKDAYS as a set (a BETWEEN shows only its endpoints).
 --
 -- LOCKS: program_blocks is the only existing table touched, and it is tiny (production holds the one
--- seeded block). It is locked ACCESS EXCLUSIVE up front: the two new tables' FKs take SHARE ROW
--- EXCLUSIVE on it, and the ADD COLUMNs after them would otherwise upgrade that lock mid-file (0021's
--- precedent). The kind CHECK takes the small-table route: every row holds the default, which it
+-- seeded block). It is locked ACCESS EXCLUSIVE up front, before any DDL, so the whole file runs under
+-- one lock taken once and fails fast on lock_timeout rather than part-way (0021's precedent); the
+-- ADD COLUMNs, the two new tables' FKs to it and its CHECKs then need nothing more. The kind CHECK takes the small-table route: every row holds the default, which it
 -- accepts, and a NOT VALID -> VALIDATE split in one file buys nothing (0013's header). The new indexes
 -- are built without CONCURRENTLY: the new tables are empty, and every program_blocks.client_id is NULL
 -- at creation, so the unique index has nothing to collide on and its build is one pass over one row.
@@ -80,4 +81,7 @@ CREATE INDEX "idx_workouts_copied_from_workout" ON "workouts" USING btree ("copi
 CREATE UNIQUE INDEX "uq_program_blocks_household_client_id" ON "program_blocks" USING btree ("household_id","client_id");--> statement-breakpoint
 -- Small table, locked above; every row holds the default 'legacy', which the CHECK accepts.
 -- squawk-ignore constraint-missing-not-valid
-ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_kind_check" CHECK ("program_blocks"."kind" in ('legacy', 'template'));
+ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_kind_check" CHECK ("program_blocks"."kind" in ('legacy', 'template'));--> statement-breakpoint
+-- Small table, locked above; every row is legacy, which the CHECK accepts.
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_template_client_id_check" CHECK ("program_blocks"."kind" <> 'template' or "program_blocks"."client_id" is not null);
