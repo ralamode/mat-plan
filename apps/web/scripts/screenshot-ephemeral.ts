@@ -41,7 +41,9 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import {
   APP_HOME_PATH,
+  AMEND_COPY,
   ATHLETE_FORM_COPY,
+  BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
   STRENGTH_COPY,
 } from '../lib/constants';
@@ -410,6 +412,17 @@ const STATES = {
   // A closed day WITH a weight (the receipt, recovery line, no form) and one WITHOUT
   // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
   'bodyweight-closed': seedClosedDays,
+  // V1-24 3b-bw — today's ✓ row under a "Last time" line: the closed-day fixture leaves an earlier
+  // weigh-in and an empty today, so the line names its weekday or date.
+  'bodyweight-last-time': seedClosedDays,
+  // V1-24 3b-bw — the editor with its field emptied (Save reads Clear), and the row after the clear.
+  // Interaction states on top of the already-logged fixture.
+  'bodyweight-clear-armed': seedAlreadyLogged,
+  'bodyweight-cleared': seedAlreadyLogged,
+  // V1-24 3b-bw — the open editor under a value the bound refuses: the row drops its tint there.
+  'bodyweight-editing-refused': seedAlreadyLogged,
+  // V1-24 3b-bw — an empty ✓, refused in the browser. Interaction-only.
+  'bodyweight-empty-tick': null,
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
   'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
@@ -625,7 +638,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     const section = page.getByRole('region', { name: 'Bodyweight' });
     await section.getByLabel('Unit').selectOption('kg');
     await section.getByLabel('Weight', { exact: true }).fill('845');
-    await section.getByRole('button', { name: 'Log weight' }).click();
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
     await section.getByRole('alert').waitFor();
   },
   // V1-19 — the whole point of the reviewed design is what the form looks like AFTER the tap:
@@ -718,6 +731,36 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       );
     }
     await change.click();
+  },
+  'bodyweight-clear-armed': async (page) => {
+    await page.getByRole('button', { name: /^Change weight/ }).click();
+    await page.getByLabel(/^Weight \(/).fill('');
+    await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).waitFor();
+    // Save → Clear is a colour transition (`transition-all`); shoot it settled, not mid-fade.
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  },
+  'bodyweight-cleared': async (page) => {
+    // Retry-safe across the three widths: only the first finds a Change to clear.
+    const change = page.getByRole('button', { name: /^Change weight/ });
+    if ((await change.count()) > 0) {
+      await change.click();
+      await page.getByLabel(/^Weight \(/).fill('');
+      await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).click();
+    }
+    await page.getByLabel('Weight', { exact: true }).waitFor();
+  },
+  'bodyweight-editing-refused': async (page) => {
+    const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
+    await section.getByRole('button', { name: /^Change weight/ }).click();
+    await section.getByLabel(/^Weight \(/).fill('845');
+    await section.getByRole('button', { name: AMEND_COPY.save }).click();
+    await section.getByRole('alert').waitFor();
+  },
+  'bodyweight-empty-tick': async (page) => {
+    // Scoped to the section: Next's route announcer is a page-level `role="alert"` too.
+    const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
+    await section.getByRole('alert').waitFor();
   },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();

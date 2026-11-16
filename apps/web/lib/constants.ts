@@ -654,6 +654,27 @@ export const SAVED_STATE_COPY = {
   checkinLogged: 'Already logged today',
 } as const;
 
+/** A read-only day with nothing logged, in every single-value section (v12): one string, so they agree. */
+export const NOTHING_LOGGED = 'Nothing logged.';
+
+/**
+ * The prefix of the muted hint over an unlogged single value (`Last time 72.5 lb`, V1-24 3b-bw). Its
+ * own const so a test can match "any Last time line" without re-typing the words.
+ * ⚠️ lane C's `components/day/day-copy.ts` carries the same words for the program rows; the two
+ * should become one when that lane next touches it.
+ */
+export const LAST_TIME_PREFIX = 'Last time';
+
+/**
+ * A logged single value's row (V1-24 3b-bw): the done edge and tint, from `docs/design.md`'s done
+ * tokens. ⚠️ `has-[form]:` drops the tint while the Change editor is open: its field, its error, its
+ * hint, Clear and their focus rings are all designed for a plain surface, and on the tint the error
+ * text is 4.30:1 (`app/done-tokens.test.ts` pins that pair as one the tint must never carry). Lane C's
+ * `components/day/item-card.tsx` carries the same classes and the same "no tint under a message" rule.
+ */
+export const LOGGED_ROW_CLASS =
+  'border-done bg-done-surface text-card-foreground has-[form]:bg-background';
+
 /**
  * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day: the
  * one-tap button writes minutes nobody typed, so the row is where a person first sees them.
@@ -663,14 +684,14 @@ export const LIFE_COPY = {
   /** `Wrestling practice · 90 min`; the label alone when the entry carries no value. */
   logged: (label: string, value: string | null) => (value === null ? label : `${label} · ${value}`),
   /** A read-only day with nothing logged; otherwise the section is a bare heading. */
-  noneOnClosedDay: 'Nothing logged.',
+  noneOnClosedDay: NOTHING_LOGGED,
   /** What the status region announces after a log. */
   announced: (label: string) => `${label} logged`,
 } as const;
 
 /**
- * The ring on an element focused by script after a save (`SavedAnnouncer`), never by Tab: the
- * bodyweight receipt and the Life rows. With `tabIndex={-1}` at the use site.
+ * The ring on an element focused by script after a save (`SavedAnnouncer`), never by Tab: the Life
+ * rows (the bodyweight row hands focus to Change instead since V1-24 3b-bw). With `tabIndex={-1}` at the use site.
  */
 export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus-visible:ring-3';
 
@@ -688,26 +709,48 @@ export const VALUE_JOINER = ', ';
  */
 export const BODYWEIGHT_COPY = {
   /** A second weigh-in refused by V1-24 1d's one-per-day index (two phones, or a stale tab). The
-   *  page revalidates on refresh and shows the one that landed; the amend corrects its value. */
+   *  page revalidates and shows the one that landed; the amend corrects its value. */
   dayTaken: 'A weight is already logged for this day.',
-  /** The section heading in EVERY state — a noun that is true over a form, a receipt, or nothing. */
+  /** The section heading in EVERY state — a noun that is true over a form, a row, or nothing. */
   heading: 'Bodyweight',
-  /** One saved value: `Saved: 84.5 lb`. */
-  saved: (value: string) => `Saved: ${value}`,
+  /** The ✓'s accessible name (V1-24 3b-bw): the glyph alone says nothing to a screen reader. */
+  logLabel: 'Log bodyweight',
+  /** An empty ✓, refused in the browser before any request (plan W3). */
+  blankLog: 'Enter your bodyweight, then ✓.',
+  /** An archived athlete's empty Save (plan W5): their page has no empty field to re-enter into. */
+  blankSave: 'Enter your bodyweight, then Save.',
+  /** The sr-only word beside a logged row's tick, so it reads "Logged 84.5 lb". */
+  logged: 'Logged',
+  /**
+   * The muted hint over the unlogged row (plan W10): `Last time 72.5 lb`, with the day when it was not
+   * yesterday (`· Tue`, or `· Nov 3` from a week back). Never a placeholder or a prefill.
+   */
+  lastTime: (value: string, when: string | null) =>
+    when ? `${LAST_TIME_PREFIX} ${value} · ${when}` : `${LAST_TIME_PREFIX} ${value}`,
+  /** Save's label while the editor's field is empty (plan W5), and its accessible name. */
+  clear: 'Clear',
+  clearLabel: 'Clear bodyweight',
+  /** Clear's pending label: it names the act, as `SAVING_LABEL` and `adding` do for theirs. */
+  clearing: 'Clearing…',
+  /**
+   * Always under the open editor (plan W5), so a blank Save is never a surprise. "Clear", not
+   * "remove": the row is hidden, not erased, until `PRIV-3` (delete-and-restore.md's trap).
+   */
+  clearHint: 'To clear this weigh-in, leave the field empty.',
   /**
    * More than one live row (the pre-1c duplicates, or a two-phone race): `2 weights logged: 84.5 lb,
-   * 845 lb`. The receipt never silently picks one — a hidden duplicate is uncorrectable twice over.
+   * 845 lb`. The row never silently picks one — a hidden duplicate is uncorrectable twice over.
    */
   several: (values: readonly string[]) =>
     `${values.length} weights logged: ${values.join(VALUE_JOINER)}`,
   /**
-   * The ONE line under a duplicates headline, replacing `onePerDay` (rounds 2–3 on
-   * #180). Two different situations, so two different asks:
+   * The ONE line under a duplicates headline (rounds 2–3 on #180). Two different situations, so two
+   * different asks:
    * - **All the same value** (a double submit): the extra row(s) are the problem.
    * - **Different values** (e.g. two phones): someone has to decide which weight is right, and
    *   "remove the extra" would invite a guess that corrupts the trend.
    * Both say it **can’t be fixed in the app yet**, so a parent doesn't hunt for a delete control that
-   * doesn't exist; the fix is `db:correct` until 1b/1c.
+   * doesn't exist; the fix is `db:correct`.
    */
   duplicates: (values: readonly string[]) => {
     const n = values.length;
@@ -718,19 +761,14 @@ export const BODYWEIGHT_COPY = {
     }
     return 'The weights differ — ask a parent which is right; it can’t be fixed in the app yet.';
   },
-  /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
-  onePerDay: 'One weigh-in per day.',
-  /** A closed day with nothing logged — otherwise the section is a bare heading. */
-  noneOnClosedDay: 'No weight logged.',
-  /** What the status region announces on a save — the FACT, with the value (acceptance 6). */
-  announced: (value: string) => `Bodyweight saved: ${value}.`,
+  /** A read-only day with nothing logged (v12, and Life's) — otherwise the section is a bare heading. */
+  noneOnClosedDay: NOTHING_LOGGED,
+  /** What the live region says after each action (v12's handlers; plan W6). */
+  announcedLogged: LIFE_COPY.announced('Bodyweight'),
+  announcedChanged: (value: string) => `Bodyweight changed to ${value}`,
+  /** Shown as well as spoken: a clear leaves nothing else on screen to show it happened. */
+  announcedCleared: (value: string) => `Bodyweight cleared. It was ${value}.`,
 } as const;
-
-/**
- * The receipt's element id — the focus target after a save (`SavedAnnouncer`), and what the e2e
- * asserts focus landed on. One id: a page renders one weigh-in section.
- */
-export const BODYWEIGHT_RECEIPT_ID = 'bodyweight-receipt';
 
 /**
  * The accessible name for an amend control — `Change weight — 84.5 lb` (V1-24 PR 1b).
@@ -1345,6 +1383,12 @@ export const AMEND_ERROR_COPY = {
    * that does not exist, and a kid mid-session would simply tap Save again.
    */
   staleWrite: 'That was changed on another device — the latest is showing now.',
+  /**
+   * A change or a clear of a value on a day the page no longer offers (V1-24 3b-bw, plan W8). Not
+   * the logging copy ("no longer open for logging. Reload the page."): nothing was being logged, and
+   * the action has already revalidated the page, whose read-only notice gives the reason.
+   */
+  dayReadOnly: (subject: string) => `That day is read-only now, so the ${subject} wasn't changed.`,
 } as const;
 
 /**

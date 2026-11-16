@@ -169,6 +169,13 @@
       "when": 1794804257211,
       "tag": "0023_fam1_4a_i_blocks_workouts",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794805118217,
+      "tag": "0024_fam1_4a_ii_log_side",
+      "breakpoints": true
     }
   ]
 }

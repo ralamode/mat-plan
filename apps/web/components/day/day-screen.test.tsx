@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-import {
-  QUANTITY_SLOT,
-  ROW_REFUSAL,
-  type DayActions,
-  type DayPlan,
-  type RowResult,
-} from '@mat-plan/shared';
+import { ROW_REFUSAL, type DayPlan, type RowResult } from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
   DAY_PLAN_FIXTURES,
@@ -14,15 +8,27 @@ import {
   workoutLeftTheWeek,
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { useState } from 'react';
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
-import { DayScreen } from './day-screen';
-import { LOGGED_CARD_CLASS, TINT_CLASS } from './item-card';
+import {
+  card,
+  field,
+  held,
+  isTick,
+  lb,
+  press,
+  status,
+  tick,
+  makeMount,
+  workout,
+} from './day-test-utils';
+import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
+
+const { mount, show } = makeMount(createFakeDayActions);
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -31,87 +37,6 @@ afterEach(() => {
   cleanup();
   refresh.mockReset();
 });
-
-type Actions = Required<DayActions>;
-/** Every action, as a spy over the fake (or over what `wrap` put in its place). */
-type Spies = { [K in keyof Actions]: Mock<Actions[K]> };
-
-/**
- * The screen as the preview route mounts it: the fake's change comes back as new props. `wrap`
- * replaces any action, to answer what the fake never does (a rejection, a stale page, a write held
- * in flight). Every action is a spy, so a test can read what the screen sent.
- */
-function mount(
-  fixture: DayPlan,
-  options: { failNext?: boolean; wrap?: (actions: Actions) => Partial<DayActions> } = {},
-) {
-  const control: { plan: DayPlan; setPlan: (plan: DayPlan) => void; actions: Spies } = {
-    plan: fixture,
-    setPlan: () => {},
-    actions: undefined as unknown as Spies,
-  };
-  function Harness() {
-    const [plan, setPlan] = useState(fixture);
-    control.plan = plan;
-    control.setPlan = setPlan;
-    const [actions] = useState(() => {
-      const fake = createFakeDayActions(fixture, setPlan);
-      if (options.failNext) fake.failNext();
-      const wrapped = { ...fake.actions, ...options.wrap?.(fake.actions) };
-      control.actions = {
-        logRow: vi.fn(wrapped.logRow),
-        untickRow: vi.fn(wrapped.untickRow),
-        retickRow: vi.fn(wrapped.retickRow),
-        amendRow: vi.fn(wrapped.amendRow),
-        reorderPrograms: vi.fn(wrapped.reorderPrograms),
-      };
-      // The screen gets what step 13's routes have: no Change, no Program order.
-      const { logRow, untickRow, retickRow } = control.actions;
-      return { logRow, untickRow, retickRow };
-    });
-    return <DayScreen plan={plan} actions={actions} />;
-  }
-  render(<Harness />);
-  return control;
-}
-
-/** A plan rendered once, with the fake's actions: for what the screen shows, not what it does. */
-function show(plan: DayPlan) {
-  return render(<DayScreen plan={plan} actions={createFakeDayActions(plan).actions} />);
-}
-
-/** A workout's section, by its heading. */
-const workout = (name: string) => screen.getByRole('region', { name });
-
-/** The item card (an `<li>`) named `itemName` within a workout. */
-function card(workoutName: string, itemName: string) {
-  const heading = within(workout(workoutName)).getByRole('heading', { level: 4, name: itemName });
-  return heading.closest('li')!;
-}
-const LOG_PREFIX = DAY_COPY.logLabel('');
-const isTick = (name: string) => name.startsWith(LOG_PREFIX);
-const tick = (el: HTMLElement) => within(el).getByRole('button', { name: isTick });
-const field = (el: HTMLElement) => within(el).getByRole<HTMLInputElement>('textbox');
-const status = () => screen.getByRole('status').textContent?.replace(/ $/, '');
-
-async function press(button: HTMLElement) {
-  await act(async () => {
-    button.focus();
-    fireEvent.click(button);
-  });
-}
-
-/** A write that stays in flight until the test resolves it. */
-function held() {
-  let resolve!: () => void;
-  const gate = new Promise<void>((r) => (resolve = r));
-  return {
-    resolve: () => act(async () => resolve()),
-    after: <T,>(write: () => Promise<T>) => gate.then(write),
-  };
-}
-
-const lb = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'lb' as const, value });
 
 describe('DayScreen: a section of the day page', () => {
   it('is an <h2> region, never the page’s <h1>', () => {
@@ -577,23 +502,10 @@ describe('a day that cannot be written', () => {
     expect(within(splits).getByText(DAY_COPY.logged)).toBeTruthy();
   });
 
-  it('a set-type item says how many sets are logged, until 13b shows its rows', () => {
-    show(closedDayLoggedOnly);
-    expect(
-      within(card('Morning habits', 'Neck bridge')).getByText(DAY_COPY.setsLogged(3)),
-    ).toBeTruthy();
-    cleanup();
-    show(todayTwoPrograms);
-    expect(
-      within(card('Morning habits', 'Neck bridge')).queryByText(DAY_COPY.setsLogged(0)),
-    ).toBeNull();
-  });
-
   it('a set-type card looks done only when every set is logged', () => {
     show(yesterdayHalfDone);
     // DB bench press: 2 of 4 logged. Neck bridge: 3 of 3.
     const half = card('Heavy A', 'DB bench press');
-    expect(within(half).getByText(DAY_COPY.setsLogged(2))).toBeTruthy();
     expect(half.classList.contains(LOGGED_CARD_CLASS)).toBe(false);
     expect(half.classList.contains(TINT_CLASS)).toBe(false);
     const full = card('Morning habits', 'Neck bridge');

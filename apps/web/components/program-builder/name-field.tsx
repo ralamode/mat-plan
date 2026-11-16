@@ -1,6 +1,6 @@
 'use client';
 
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import { INPUT_CLASS } from '@/lib/constants';
 
@@ -38,7 +38,7 @@ export function NameField({
 }: {
   ref?: Ref<HTMLInputElement>;
   id: string;
-  label: string;
+  label: ReactNode;
   value: string;
   max: number;
   onChange: (value: string) => void;

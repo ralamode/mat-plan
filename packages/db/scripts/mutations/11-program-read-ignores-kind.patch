@@ -1,5 +1,4 @@
 diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
-index a79e447..507746f 100644
 --- a/packages/db/src/queries/program-day.ts
 +++ b/packages/db/src/queries/program-day.ts
 @@ -1,4 +1,4 @@
@@ -8,11 +7,11 @@ index a79e447..507746f 100644
  import { and, asc, desc, eq, isNull } from 'drizzle-orm';
  import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
  
-@@ -94,7 +94,6 @@ export function programDayRows(
+@@ -103,7 +103,6 @@ export function programDayRows(
          // concerns, not display ones** — what they decide is recorded, not merely shown.
          // Guarding the latter consumers separately would be copies, and
          // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
 -        eq(schema.profiles.kind, PROGRAM_READ_KIND),
+         programBlockIsLegacy(),
          isNull(schema.programBlocks.deletedAt),
        ),
-     )

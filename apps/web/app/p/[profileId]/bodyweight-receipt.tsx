@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, FOCUS_TARGET_CLASS } from '@/lib/constants';
+import { BODYWEIGHT_COPY, LOGGED_ROW_CLASS } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 
@@ -10,45 +10,35 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
 }
 
 /**
- * The day's bodyweight, shown where the empty input used to be (V1-24 PR 1a). The copy is the
- * plan's §"The 1a receipt, exactly", verbatim, from `BODYWEIGHT_COPY`.
+ * The day's logged bodyweight, where the empty field was (V1-24 PR 1a; the prototype's logged row
+ * since 3b-bw, plan W4).
  *
- * ## Why a receipt and not a checkmark
+ * ## A tick now, and why that no longer contradicts 1a
  *
- * A checkmark asserts *finished* — finality. On a value that can still be corrected that is a lie;
- * and an inert field you **cannot** correct is the V1-24 data-loss bug in nicer clothes. So the
- * completeness signal is **the value itself, sitting where the input was**. See
- * docs/plans/v1-24-form-is-the-day.md.
+ * 1a's "a receipt, not a checkmark" held while a logged weight could not be corrected: a tick on an
+ * uncorrectable value asserted a finality the app could not back. Since 1b it has Change, and since
+ * 3b-bw a blank Save clears it, so the filled `done` tick says only "logged", which is true. This
+ * supersedes 1a's rule (`docs/plans/v1-24-3b-logs-in-place.md`, W4).
  *
  * ## Its states
  *
- * - **One value:** `Saved: 84.5 lb`, the Change control beside it (PR 1b), then `One weigh-in per
- *   day.` on a writable day, where it is the reason there is no form.
- * - **Several values** (the pre-1c duplicates, or a two-phone race — PR 1d's index does not exist yet):
- *   `2 weights logged: 84.5 lb, 845 lb`, never silently one of them, then ONE line from
- *   `BODYWEIGHT_COPY.duplicates` in place of the one-per-day line, and no Change control: "the extra can’t be
- *   removed in the app yet" for one value repeated, "ask a parent which is right" when they differ.
- * - **None, on a closed day:** `No weight logged.` — a bare heading reads as broken. (None on a
- *   WRITABLE day is the form, not this.)
- *
- * On a closed day there is no second line: the page's notice already says the day is read-only.
+ * - **One value:** `✓ 84.5 lb` (the tick in the filled done style, with `sr-only` "Logged"), and the
+ *   Change control beside it on today and yesterday. No time: nothing records when a weight was taken.
+ * - **Several values** (a pre-1d day, or V1-32's slots): `2 weights logged: 84.5 lb, 845 lb`, never
+ *   silently one of them, then ONE line from `BODYWEIGHT_COPY.duplicates`, and no Change control.
+ * - **None, on a read-only day:** `Nothing logged.` (None on a writable day is the form, not this.)
  *
  * ## ⚠️ A SERVER component, and that is load-bearing
  *
- * 1. **The receipt is READ state.** `BodyweightForm` is mounted only when the day is writable (the
- *    V1-15 ±1 window). Rendering the value inside it would hide the day's state on exactly the
- *    history days V1-15 shipped — the screen this row was reported from.
- * 2. **Zero client JS.** The announcement and focus live in the sibling `SavedAnnouncer` island;
- *    this renders the `id` + `tabIndex={-1}` it focuses. The section passes a `'use client'` Change
- *    control into `control` on today and yesterday; a day before that is read-only (V1-24 3b-page).
+ * The row is READ state, shown on every day including read-only ones, with zero client JS. The
+ * section passes a `'use client'` Change control into `control`; the live region and the focus
+ * hand-off are the section's `SingleValueLive`, not this.
  */
 export function BodyweightReceipt({
   logged,
-  writable,
   control,
 }: {
   logged: readonly LoggedBodyweight[];
-  writable: boolean;
   /** The amend affordance (PR 1b), beside the value. Absent on a read-only day. */
   control?: ReactNode;
 }) {
@@ -58,32 +48,37 @@ export function BodyweightReceipt({
 
   const values = formatLoggedWeights(logged);
   return (
+    // The done tint marks ONE logged weight (and drops while the editor is open: LOGGED_ROW_CLASS).
+    // Duplicates are a problem to resolve, not a done row.
     <div
-      id={BODYWEIGHT_RECEIPT_ID}
-      // Focusable by script only (never in the tab order): `SavedAnnouncer` moves focus here after a
-      // save, because the submit button that HAD focus has just unmounted and focus would otherwise
-      // drop to <body>.
-      tabIndex={-1}
-      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${FOCUS_TARGET_CLASS}`}
+      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${values.length === 1 ? LOGGED_ROW_CLASS : ''}`}
     >
       {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value,
           deterministically — load-bearing at 360px (why: `bodyweight-amend.tsx`). Keeping the saved
-          value visible above it shows what you are changing FROM while you type. */}
+          value visible above it shows what you are changing FROM while you type. `min-h-11` is the
+          one row height the Life row shares (plan W13). */}
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
-        {/* `tabular-nums` so a value changing under an amend doesn't shift the row's width. */}
-        <p className="text-base font-medium tabular-nums">
-          {values.length === 1
-            ? BODYWEIGHT_COPY.saved(values[0]!)
-            : BODYWEIGHT_COPY.several(values)}
-        </p>
+        {values.length === 1 ? (
+          <p className="flex items-center gap-2 text-base font-medium tabular-nums">
+            <span
+              aria-hidden="true"
+              className="bg-done text-done-foreground inline-flex size-6 items-center justify-center rounded-full text-sm"
+            >
+              ✓
+            </span>
+            <span className="sr-only">{BODYWEIGHT_COPY.logged} </span>
+            {/* Its own element, so the value is findable on its own (`e2e/steps.ts`). */}
+            <span>{values[0]}</span>
+          </p>
+        ) : (
+          // `tabular-nums` so a value changing under an amend doesn't shift the row's width.
+          <p className="text-base font-medium tabular-nums">{BODYWEIGHT_COPY.several(values)}</p>
+        )}
         {control ?? null}
       </div>
-      {/* Their OWN lines, never a suffix: at 360px the card has ~294px, and the value plus the
-          Change control already fills a row. */}
+      {/* Its OWN line, never a suffix: at 360px the row has ~294px, and the values already fill it. */}
       {values.length > 1 ? (
         <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values)}</p>
-      ) : writable ? (
-        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.onePerDay}</p>
       ) : null}
     </div>
   );

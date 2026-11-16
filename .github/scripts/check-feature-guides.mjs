@@ -12,11 +12,13 @@
  * and a guide that lies is worse than none — it gets TRUSTED instead of researched.
  *
  * Usage:
- *   node .github/scripts/check-feature-guides.mjs [baseRef]   # default: origin/main
+ *   node .github/scripts/check-feature-guides.mjs [baseRef]   # default: a stacked PR's base, else origin/main
  */
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { defaultBase } from './default-base.mjs';
 
 const GUIDE_DIR = 'docs/features';
 const SKIP_LABEL = 'docs-skip-feature-map';
@@ -285,7 +287,7 @@ const guides = readdirSync(GUIDE_DIR)
 
 checkLanes(guides);
 
-const base = process.argv[2] ?? 'origin/main';
+const base = defaultBase(process.argv[2]);
 let mergeBase;
 try {
   mergeBase = git('merge-base', base, 'HEAD');
