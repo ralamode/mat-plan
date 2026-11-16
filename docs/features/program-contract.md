@@ -189,13 +189,18 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     Neither list gains a "signed out" or "forbidden" member (ADR 0006). A fake calls no
     transport, so it never answers either word for these two reasons.
 
-15. **`newItem` never makes a second item for a name or an alias that already names one, and it
-    answers with the item's own name.** A typed name that `existingItem` matches selects that item
+15. **`newItem` makes no second item for a name or an alias that already names one in the
+    household's list, and it answers with the item's own name.** A typed name that `existingItem` matches selects that item
     (`existed: true`); it is not a refusal. The picker withholds "add as new" for the same two cases
     (`matchMovementOptions`' `exact` and `aliasHit`), so the client's guard and the server's answer
     are one rule: the guard saves a round trip, the server holds when the page is stale or the call
     did not come from the picker. `name` is on every success (the stored name, which is not always
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
+    Three limits, each on purpose: the options passed must carry `isCatalog` (the picker's
+    tie-break, so the type requires it); a name whose key is empty (`S`) is refused by
+    `newItemSchema`, since it could be matched to nothing; and the check is a read before the
+    insert, so two calls in the same moment with names that share a key but not a slug can both
+    insert (plan D25).
 
 ## Traps
 

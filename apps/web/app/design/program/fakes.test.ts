@@ -711,8 +711,9 @@ describe('the fake ProgramActions: workouts and the week', () => {
 describe('the fake ProgramActions: items and athletes', () => {
   it('a new item joins the picker; an existing name selects that item, with its own type', async () => {
     const { actions, state } = builder();
+    // Typed with spaces round it: the answer and the stored item hold the name without them.
     const made = await actions.newItem({
-      name: 'Bear crawl',
+      name: '  Bear crawl ',
       trackingType: TRACKING_TYPE.distance,
     });
     expect(made).toMatchObject({
@@ -769,6 +770,48 @@ describe('the fake ProgramActions: items and athletes', () => {
     expect(
       await actions.newItem({ name: 'RDL pause', trackingType: TRACKING_TYPE.weight_reps }),
     ).toMatchObject({ ok: true, name: 'RDL pause', existed: false });
+  });
+
+  it('a household item named after an alias does not take the alias from the catalog item', async () => {
+    // The picker ranks a catalog item before a household one, so its guard offers Romanian
+    // Deadlift for "rdl"; the answer must be the same item, whichever order the list is in.
+    const catalog: MovementOptionDTO = {
+      publicId: '019826b4-0000-7000-8000-0000000000d1',
+      name: 'Romanian Deadlift',
+      trackingType: TRACKING_TYPE.weight_reps,
+      owner: 'catalog',
+      group: 'legs',
+      aliases: ['RDL'],
+      unitDefault: null,
+      isBodyweight: false,
+    };
+    const stray: MovementOptionDTO = {
+      publicId: '019826b4-0000-7000-8000-0000000000d2',
+      name: 'RDL',
+      trackingType: TRACKING_TYPE.check,
+      owner: 'household',
+      unitDefault: null,
+      isBodyweight: false,
+    };
+    for (const items of [
+      [stray, catalog],
+      [catalog, stray],
+    ]) {
+      const { actions } = builder({ items });
+      expect(
+        await actions.newItem({ name: 'rdl', trackingType: TRACKING_TYPE.check }),
+      ).toMatchObject({ itemPublicId: catalog.publicId, name: 'Romanian Deadlift', existed: true });
+    }
+  });
+
+  it('a name with nothing to match on is refused, so it cannot be added twice', async () => {
+    const { actions, state } = builder();
+    for (const name of ['S', "S's", 's s']) {
+      expect(await actions.newItem({ name, trackingType: TRACKING_TYPE.check }), name).toEqual(
+        refusal('invalid'),
+      );
+    }
+    expect(state().items).toHaveLength(pickerOptions.length);
   });
 
   it('take off ends a program after today: family-program-after-take-off', async () => {

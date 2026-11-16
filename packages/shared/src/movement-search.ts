@@ -11,10 +11,15 @@ import { foldName } from './text';
  * What is movement-specific is **plurals and punctuation**: `Pull-Ups`, `pull ups` and `pullups` are
  * one movement to a person, and `press` must not become `pres`.
  *
- * ⚠️ **None of this runs on the server before a write.** `findOrCreateMovement` still keys on
- * `movementSlug`, and auto-correcting a typed name server-side is a thing `PICK-2`'s backlog row
- * forbids (`docs/plan.md` → PICK-1/PICK-2) and would change that function's pinned contract. These
- * helpers decide what the PICKER offers; the server decides what a name resolves to.
+ * ⚠️ **None of this runs on the server before a LOGGING write.** `findOrCreateMovement` still keys
+ * on `movementSlug`, and auto-correcting a typed name server-side is a thing `PICK-2`'s backlog row
+ * forbids (`docs/plan.md` → PICK-1/PICK-2) and would change that function's pinned contract. There
+ * these helpers decide what the PICKER offers; the server decides what a name resolves to.
+ * **One server reader, since FAM-1 contract change C8: the program builder's `newItem`.** It asks
+ * `existingItem` (`program/pieces.ts`), which is `matchMovementOptions`' `exact` or `aliasHit`,
+ * whether a typed name already names an item, and selects that item if so. That corrects nothing a
+ * person typed: it is the same two cases in which the picker withholds "use as typed", held on the
+ * server for a stale page or a call that did not come from the picker.
  */
 
 /** A word is only de-pluralised when at least this many letters precede the trailing `s`. */

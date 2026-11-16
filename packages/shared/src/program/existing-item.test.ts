@@ -4,16 +4,17 @@ import { MOVEMENT_PICKER_ALIASES } from '../movement-picker-catalog';
 import { matchMovementOptions } from '../movement-search';
 
 import { existingItem } from './pieces';
+import { newItemSchema } from './program-shapes';
 
 /**
  * `existingItem`: what `newItem` treats as "this item already exists" (FAM-1 contract change C8).
- * The real writer (plan step 6a) and the preview's fake both call it, so a typed name selects the
+ * The preview's fake calls it and the real writer will (plan step 6a), so a typed name selects the
  * same item on the preview route and in production.
  */
 const OPTIONS = [
   { id: 'rdl', name: 'Romanian Deadlift', isCatalog: true, aliases: ['RDL'] },
   { id: 'pushups', name: 'Push-ups', isCatalog: true, aliases: [] },
-  { id: 'crawl', name: 'Bear crawl' },
+  { id: 'crawl', name: 'Bear crawl', isCatalog: false },
   { id: 'deadlift', name: 'Deadlift', isCatalog: true },
 ] as const;
 
@@ -39,15 +40,31 @@ describe('existingItem: the item a typed name already names', () => {
     },
   );
 
-  it('a name with nothing to key on names no item', () => {
+  it('a name with nothing to key on names no item, even one that is itself in the list', () => {
     for (const typed of ['', '   ', '--', '’'])
       expect(existingItem(OPTIONS, typed)).toBeUndefined();
+    // `S` has a letter but the fold drops a lone `s`: its key is empty, so it matches nothing, not
+    // even an item of the same name. `newItemSchema` refuses such a name for that reason.
+    const withS = [...OPTIONS, { id: 's', name: 'S', isCatalog: false }];
+    for (const typed of ['S', "S's", 's s']) {
+      expect(existingItem(withS, typed), typed).toBeUndefined();
+      expect(newItemSchema.safeParse({ name: typed, trackingType: 'check' }).success, typed).toBe(
+        false,
+      );
+    }
+    expect(newItemSchema.safeParse({ name: 'Ss', trackingType: 'check' }).success).toBe(true);
+  });
+
+  it('an option list without the catalog flag does not compile', () => {
+    // @ts-expect-error — `isCatalog` is required: without it the tie-break is by name alone
+    existingItem([{ id: 'x', name: 'Deadlift' }], 'deadlift');
+    expect(true).toBe(true);
   });
 
   it('when two items qualify, the catalog one is the answer', () => {
     // A household item named after the alias, made before the rule; the alias still means the
     // catalog's item, whichever order the rows arrive in.
-    const stray = { id: 'stray', name: 'RDL' };
+    const stray = { id: 'stray', name: 'RDL', isCatalog: false };
     expect(existingItem([stray, ...OPTIONS], 'rdl')?.id).toBe('rdl');
     expect(existingItem([...OPTIONS, stray], 'rdl')?.id).toBe('rdl');
   });

@@ -7,5 +7,5 @@
   aliases (`RDL` is Romanian Deadlift). Either selects that item and adds nothing; it is not a
   refusal. It is the same two cases in which the picker already withholds "add as new", so the
   server and the picker cannot disagree. The preview's fake uses it; the real writer (step 6a) and
-  the picker's guard (step 9) are held to it by the plan. Preview route only; no production screen,
+  the picker's guard (step 9) are held to it by the plan. A name the rule cannot match on at all (`S`: the fold drops a lone `s`) is refused as `invalid`, since it could otherwise be added twice. Preview route only; no production screen,
   schema or stored data changes; no new dependency.
