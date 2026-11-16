@@ -748,8 +748,12 @@ describe('the item picker (FAM-1 9)', () => {
       openForm();
       typeReps();
       pressCreate();
-      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.creating }));
+      const creating = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.creating });
+      creating.focus();
+      fireEvent.click(creating);
       expect(newItem).toHaveBeenCalledTimes(1);
+      // Nothing is missing while it creates: focus stays put.
+      expect(document.activeElement).toBe(creating);
     });
 
     it('a missing type is marked, and an empty name says why', () => {
