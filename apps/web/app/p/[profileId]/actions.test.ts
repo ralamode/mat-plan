@@ -1386,6 +1386,19 @@ describe('logLifeActivitiesAction — happy path', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe(HIDE_COPY.loggedThenDeleted);
   });
+
+  // V1-24 3b-0 Z5: another phone's practice holds the day. While the ✓ writes a constant, that row
+  // already says what this tap meant, so it is `ok`; 3b-life turns this into a refusal.
+  it('a practice on a day another phone already logged is ok until 3b-life', async () => {
+    vi.mocked(logCheckinEntries).mockResolvedValueOnce([
+      { clientId: 'x', id: null, created: false, outcome: 'day_taken' },
+    ]);
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice }),
+    );
+    expect(res).toEqual({ ok: true, error: null });
+  });
 });
 
 describe('logCheckinsAction — own_hidden is reported per field (V1-9b B1-2)', () => {

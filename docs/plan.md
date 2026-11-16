@@ -2951,7 +2951,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   strength entries and the `Strength` heading rename).
   - **Re-scoped 2026-11-15 to the new day page** (the maintainer, against Beta 0's accepted
     prototype). **2 is not built**: 2a is cut (no Check-ins section remains), 2b is FAM-1 13b. 📋
-    [PR 3b plan](./plans/v1-24-3b-logs-in-place.md): **3b-0** one practice per day in the database ·
+    [PR 3b plan](./plans/v1-24-3b-logs-in-place.md): **3b-0** ✅ #461 one practice per day in the database ·
     **3b-page** ✅ #418 the old Check-ins and Strength forms, the "Logged entries" list and the
     "Calisthenics today" card leave the page; a logged practice shows its minutes · **3b-bw** ✅ #442 bodyweight logs with ✓ under a "Last time" hint, and a blank Save on Change clears it ·
     **3b-life** practice is an empty minutes field, entered once then changed; no Wake. Earlier entries
