@@ -33,10 +33,14 @@ export const movementPatternSchema = z.enum(MOVEMENT_PATTERNS);
  * On the ITEM (`movements.tracking_type`), never on the prescription, so an item's history means one
  * thing: the same item cannot log as reps in one workout and as seconds in another.
  *
- * ⚠️ **No column or CHECK exists yet.** FAM-1 step 0a adds the vocabulary so the lanes can build
- * against it; step 3 adds `movements.tracking_type` and pins its CHECK to this array with
- * `assertCheckCoversConst`. Until then nothing stores a type, so changing a member here is free. After
- * step 3 it is a migration.
+ * 🔴 **This array is stored data since FAM-1 step 3** (migration `0022`): `movements.tracking_type`
+ * is `text NOT NULL`, CHECK-pinned to exactly these members (`db:verify` holds the CHECK to this array
+ * with `assertCheckCoversConst`), and every built-in item is typed (`catalog-movements.ts`). So
+ * adding, renaming or removing a member is a migration, never an edit here alone.
+ *
+ * **An item's type is set once and nothing retypes it** (plan D25): a built-in by the migration's
+ * typing, a new item when it is made (`findOrCreateTypedMovement`, which returns an existing item
+ * with the type it already has). An item made with no type named gets `DEFAULT_TRACKING_TYPE`.
  */
 export const TRACKING_TYPES = [
   'check',
@@ -54,6 +58,16 @@ export const trackingTypeSchema = z.enum(TRACKING_TYPES);
 
 /** Branch on a NAMED member (`TRACKING_TYPE.check`), never a bare string (constants convention). */
 export const TRACKING_TYPE = keyBySelf(TRACKING_TYPES);
+
+/**
+ * The type an item has when none is named: the `movements.tracking_type` column's default, and so
+ * what an item made in the old strength form gets (a loaded lift is what that form logs).
+ *
+ * ⚠️ **It mirrors a column default, so changing it is a migration.** `packages/db/src/schema.ts`
+ * declares the default and `db:verify` pins the column to it; `packages/db/src/tracking-type-default.test.ts`
+ * fails if this const and the schema's default ever differ.
+ */
+export const DEFAULT_TRACKING_TYPE: TrackingType = TRACKING_TYPE.weight_reps;
 
 /** What the item picker and the workout editor call each type (FAM-1 plan §2, the accepted prototype). */
 export const TRACKING_TYPE_LABELS: Record<TrackingType, string> = {

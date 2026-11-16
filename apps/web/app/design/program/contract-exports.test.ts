@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TRACKING_TYPE,
   hasStarted,
   MONDAY_FIRST,
   QUANTITY_SLOT,
@@ -9,11 +10,14 @@ import {
   type DayPlan,
   type DayRow,
   type DayWorkout,
+  type ProgramList,
+  type ProgramListEntry,
   type ProgramView,
   type RowValues,
+  type TrackingType,
   type Weekday,
 } from '@mat-plan/shared';
-import { everyTypeOnce, familyProgram } from '@mat-plan/shared/program/fixtures';
+import { everyTypeOnce, familyProgram, programsList } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 /**
@@ -39,6 +43,21 @@ describe('the day’s row types', () => {
     const row: DayRow | undefined = item.rows[0];
     expect(workout.items).toContain(item);
     expect(row === undefined || item.rows.includes(row)).toBe(true);
+  });
+});
+
+describe('the builder’s named types and constants', () => {
+  it('names one entry of the Programs list as the type the list holds', () => {
+    expectTypeOf<ProgramListEntry>().toEqualTypeOf<ProgramList[number]>();
+    // A screen handed one program takes an entry of the fixture as it is.
+    const program: ProgramListEntry = programsList[0];
+    expect(programsList).toContain(program);
+    expect(Object.keys(program).sort()).toEqual(['athletes', 'name', 'programPublicId']);
+  });
+
+  it('types the default tracking type as a tracking type, not a string', () => {
+    expectTypeOf(DEFAULT_TRACKING_TYPE).toEqualTypeOf<TrackingType>();
+    expect(DEFAULT_TRACKING_TYPE).toBe(TRACKING_TYPE.weight_reps);
   });
 });
 

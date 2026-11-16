@@ -19,3 +19,20 @@
   `fakes.ts`, and the fixture builder (which had a third copy of the day types and of the
   Monday-first order). The lanes swap their copies for these in their next steps. No schema change,
   no migration, no change to production behaviour.
+- **2026-11-16** — **FAM-1 contract change C2: four more shared names, and `saveWorkoutSchema`
+  holds a set count to the item's tracking type** ([guide](../features/program-contract.md) →
+  "Helpers the lanes import" and "The sets rule on save"). `DEFAULT_TRACKING_TYPE`
+  (`packages/shared/src/movements.ts`, `weight_reps`) names the type an item gets when none is
+  given, which was a bare literal in the schema's column default;
+  `packages/db/src/tracking-type-default.test.ts` holds the const and that default equal, and the
+  tracking-type docblock, stale since step 3, now says the array is stored data and a change is a
+  migration. `rolledBack(fn)` is exported from `packages/db/scripts/verify/harness.ts` for every
+  proof module (lane A's private copy in `verify/schema.ts` is untouched; it swaps in its next
+  step). `ProgramListEntry` names one program of a `ProgramList`. **The one rule added:**
+  `saveWorkoutSchema` refuses an item logged set by set that has no set count, and a set count on
+  a Check, Count or Duration; `workoutDraftSchema`, which the editor loads, is as tolerant as
+  before. Every `WorkoutDraft` fixture and every workout in the prototype's world already kept
+  the rule, so no fixture changed, and the preview's fake refuses the same drafts because it
+  parses with the same schema. `prescribed-text.ts`'s note now says what is true: it is kept out
+  of the root barrel, and a client component may import its subpath. No schema change, no
+  migration, no change to production behaviour.

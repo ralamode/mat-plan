@@ -9,6 +9,7 @@ import { MAX_WORKOUT_ITEMS } from '../programming';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import {
   athleteLabelSchema,
+  hasSetRows,
   nullableNoteSchema,
   prescribedQuantitiesSchema,
   programNameSchema,
@@ -34,8 +35,9 @@ const distinct = <T>(values: readonly T[]) => new Set(values).size === values.le
  * from the item the id names.
  *
  * Which fields a type uses is `TRACKING_TYPE_FIELDS` (`./pieces`): `sets` for the set-based types,
- * `targetReps` where a row has reps, one quantity in the type's slot. The schema does not enforce
- * the pairing; the writer does, and answers `invalid`.
+ * `targetReps` where a row has reps, one quantity in the type's slot. This schema does not enforce
+ * the pairing: `saveWorkoutSchema` enforces the `sets` half on save, and the writer the rest, and
+ * answers `invalid`.
  */
 export const workoutDraftItemSchema = z.object({
   /**
@@ -84,8 +86,36 @@ export const workoutDraftSchema = z.object({
 });
 export type WorkoutDraft = z.infer<typeof workoutDraftSchema>;
 
-/** `saveWorkout`'s input: the same draft, with a name. An empty name is refused here. */
-export const saveWorkoutSchema = workoutDraftSchema.extend({ name: workoutNameSchema });
+/**
+ * `saveWorkout`'s input: the same draft, held to two rules a loaded draft is not.
+ *
+ * - **A name.** An empty name is refused here.
+ * - **The sets rule.** Each item's `sets` is a whole number from 1 to `MAX_SETS_PER_MOVEMENT` when
+ *   its tracking type is logged set by set (`TRACKING_TYPE_FIELDS[type].sets`: Reps, Weight × reps,
+ *   Time per set, Distance), and `null` when it is not (Check, Count, Duration). A set-based item
+ *   with no set count, or a set count on an item that has one row, is refused, with the issue on
+ *   that item's `sets` (`['items', index, 'sets']`).
+ *
+ * `workoutDraftSchema` stays tolerant of both, because the editor loads a draft mid-edit: a card
+ * whose type was just chosen has no set count yet. The rule is checked against the `trackingType`
+ * the draft carries, which is display; the writer still re-reads the item's real type and answers
+ * `invalid` if the two disagree.
+ */
+export const saveWorkoutSchema = workoutDraftSchema
+  .extend({ name: workoutNameSchema })
+  .superRefine((draft, ctx) => {
+    draft.items.forEach((item, index) => {
+      const setBased = hasSetRows(item.trackingType);
+      if (setBased === (item.sets !== null)) return;
+      ctx.addIssue({
+        code: 'custom',
+        path: ['items', index, 'sets'],
+        message: setBased
+          ? 'an item logged set by set needs a set count'
+          : 'an item logged as one row has no set count',
+      });
+    });
+  });
 
 /** One slot of a weekday: a workout and its optional label. */
 const weekSlotSchema = z.object({
@@ -127,6 +157,8 @@ export const programListSchema = z.array(
   }),
 );
 export type ProgramList = z.infer<typeof programListSchema>;
+/** One program of the Programs list: what a screen is handed when it is given a single entry. */
+export type ProgramListEntry = ProgramList[number];
 
 /** The program page, and the data its two dialogs (Put someone on, Copy to…) open with. */
 export const programViewSchema = z

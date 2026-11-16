@@ -75,17 +75,20 @@ flowchart LR
 
 Small rules and names that more than one lane needs. 🔴 **Import these from `@mat-plan/shared`; do
 not write your own.** A lane's own copy is a second definition that drifts (the first lane PRs each
-wrote some of these, which is why they are here). All of them are in the root barrel and safe in a
-`'use client'` component. If a lane needs one that is missing, it asks the contract owner
-(invariant 1).
+wrote some of these, which is why they are here). All but `rolledBack` are in the root barrel and
+safe in a `'use client'` component; `rolledBack` is the proof modules' and comes from the
+`db:verify` harness. If a lane needs one that is missing, it asks the contract owner (invariant 1).
 
-| Export                            | Where                                           | What it is                                                                                                                                                        |
-| --------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quantityText(value, unit)`       | `packages/shared/src/program/quantity-text.ts`  | One quantity as text: `25 lb`, `30 s`, `7` for the plain `count`. The spelling `prescribedText` is built from, so a logged value and its prescription read alike. |
-| `slotQuantity(item, quantities)`  | `packages/shared/src/program/pieces.ts`         | The tracking type's quantity out of a list (`TRACKING_TYPE_FIELDS[type].slot`), or `null`. `item` is anything with a `trackingType`.                              |
-| `DayWorkout`, `DayItem`, `DayRow` | `packages/shared/src/program/day-shapes.ts`     | The parts of a `DayPlan`, by name.                                                                                                                                |
-| `hasStarted(athlete, today)`      | `packages/shared/src/program/program-shapes.ts` | An athlete has started on a program when `since <= today`.                                                                                                        |
-| `MONDAY_FIRST`                    | `packages/shared/src/day.ts`                    | The weekdays in the order a week is shown (1, 2, … 6, 0). Each member is still a `Weekday` (0 = Sunday).                                                          |
+| Export                            | Where                                           | What it is                                                                                                                                                                                                            |
+| --------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quantityText(value, unit)`       | `packages/shared/src/program/quantity-text.ts`  | One quantity as text: `25 lb`, `30 s`, `7` for the plain `count`. The spelling `prescribedText` is built from, so a logged value and its prescription read alike.                                                     |
+| `slotQuantity(item, quantities)`  | `packages/shared/src/program/pieces.ts`         | The tracking type's quantity out of a list (`TRACKING_TYPE_FIELDS[type].slot`), or `null`. `item` is anything with a `trackingType`.                                                                                  |
+| `DayWorkout`, `DayItem`, `DayRow` | `packages/shared/src/program/day-shapes.ts`     | The parts of a `DayPlan`, by name.                                                                                                                                                                                    |
+| `hasStarted(athlete, today)`      | `packages/shared/src/program/program-shapes.ts` | An athlete has started on a program when `since <= today`.                                                                                                                                                            |
+| `MONDAY_FIRST`                    | `packages/shared/src/day.ts`                    | The weekdays in the order a week is shown (1, 2, … 6, 0). Each member is still a `Weekday` (0 = Sunday).                                                                                                              |
+| `ProgramListEntry`                | `packages/shared/src/program/program-shapes.ts` | One program of a `ProgramList` (`ProgramList[number]`), by name.                                                                                                                                                      |
+| `DEFAULT_TRACKING_TYPE`           | `packages/shared/src/movements.ts`              | The type an item gets when none is named: `weight_reps`, the `movements.tracking_type` column's default. `packages/db/src/tracking-type-default.test.ts` holds the const and the schema's default equal.              |
+| `rolledBack(fn)`                  | `packages/db/scripts/verify/harness.ts`         | For `db:verify` proof modules, not the app: runs a proof's writes in a transaction that is always rolled back, and rethrows the proof's own failure. Imported from `./harness`, beside `asTx` and `expectRejectedBy`. |
 
 `quantityText` is client-safe because it reads its two primitives (`formatNumeric`, and seconds
 spelled `s`) from `packages/shared/src/quantity-spelling.ts`, which imports nothing; `csv/value.ts`
@@ -98,6 +101,22 @@ barrel adds `uuid`), so a `node:` builtin, `server-only` or `@mat-plan/shared/cs
 
 `quantityText` is for stored quantities: 0 to `MAX_STORABLE_QUANTITY` (99999.999), at most
 `QUANTITY_DECIMALS` (3) decimals. Outside that range `formatNumeric` is not defined.
+
+### The sets rule on save
+
+`saveWorkoutSchema` refuses a draft whose items break this rule; `workoutDraftSchema`, which the
+editor loads, does not (a card mid-edit may have no set count yet).
+
+- An item whose tracking type is logged set by set (`TRACKING_TYPE_FIELDS[type].sets`: Reps,
+  Weight × reps, Time per set, Distance) has `sets`, a whole number from 1 to
+  `MAX_SETS_PER_MOVEMENT`.
+- Every other item (Check, Count, Duration) has `sets: null`.
+
+The issue is on the item's field (`['items', index, 'sets']`), so an editor can point at the card.
+The fake's `saveWorkout` parses with the same schema and answers `invalid`, so the preview route
+refuses what the real action will. Every `WorkoutDraft` fixture and every workout in the
+prototype's world already keeps the rule (`save-workout.test.ts` holds that). The rule reads the
+`trackingType` the draft carries; the writer still checks the item's real type.
 
 ## Invariants
 
@@ -141,7 +160,9 @@ barrel adds `uuid`), so a `node:` builtin, `server-only` or `@mat-plan/shared/cs
 
 - **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are
   the `/program/fixtures` and `/program/prescribed-text` subpaths, because `'use client'`
-  components import the barrel.
+  components import the barrel. That is a rule about the barrel: `prescribed-text.ts` is pure, so a
+  client component may import its subpath directly for a whole prescription's line. For one
+  quantity, `quantityText` is in the barrel.
 - **`packages/shared` has no typecheck project of its own** ([AGENTS.md](../../AGENTS.md) → "Local
   hooks vs CI merge-gates"). Its files are checked through what `apps/web` and `packages/db` import.
 - **The fixtures are deep-frozen.** Clone one before changing it (`structuredClone`); the fakes do.

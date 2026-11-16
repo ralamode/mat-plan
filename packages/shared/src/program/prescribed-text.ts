@@ -15,16 +15,20 @@ import { quantityText } from './quantity-text';
  * The format is the accepted prototype's: `4 × 8 @ 25 lb`, `3 × 10`, `3 × 30 s`, `6 × 40 yd`,
  * `5 min`, `10 lb`, and `''` for a Check.
  *
- * 🔴 **The `@mat-plan/shared/program/prescribed-text` subpath, not the root barrel.** It builds on
- * `formatPrescribedForExport` (`../csv/prescribed`), and `csv/` is kept out of the barrel that
- * `'use client'` components import. Its callers are the DAL, the writers and the export.
+ * 🔴 **Kept out of the ROOT BARREL, because it builds on `formatPrescribedForExport`
+ * (`../csv/prescribed`)**, and `csv/` stays out of the barrel every `'use client'` component
+ * imports. It is the `@mat-plan/shared/program/prescribed-text` subpath instead. That is a rule
+ * about the barrel, not about the server: this module is pure (no I/O, no `server-only`), so a
+ * client component MAY import the subpath directly when it needs a whole prescription's line. Its
+ * callers today are the DAL, the writers and the export.
  *
- * That function composes the per-set part and the `@ load`. Its own `3x10` spelling is bytes that
- * exist in every exported month and is pinned by its test, so the multiplication sign is the one
- * part written here.
+ * `formatPrescribedForExport` composes the per-set part and the `@ load`. Its own `3x10` spelling
+ * is bytes that exist in every exported month and is pinned by its test, so the multiplication
+ * sign is the one part written here.
  *
- * **A quantity is spelled by `quantityText` (`./quantity-text`), which IS in the root barrel**: the
- * day screen writes a logged value with it, so a logged `30 s` and a prescribed `3 × 30 s` agree.
+ * **A single quantity is spelled by `quantityText` (`./quantity-text`), the root-barrel spelling**:
+ * the day screen writes a logged value with it, so a logged `30 s` and a prescribed `3 × 30 s`
+ * agree.
  */
 
 /** The fields of a prescription the text is made from. A `WorkoutDraft` item fits as it is. */

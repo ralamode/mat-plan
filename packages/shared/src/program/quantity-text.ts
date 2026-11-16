@@ -17,8 +17,9 @@ import type { Unit } from '../units';
  * not defined (a very large or very small number prints in exponent form).
  *
  * 🔴 **Client-safe: in the root barrel, and nothing it imports may reach `csv/`**
- * (`quantity-text.test.ts` scans its imports, relative and by package name). `prescribedText` stays a server-only subpath because
- * it also builds on the CSV's renderer; this does not.
+ * (`quantity-text.test.ts` scans its imports, relative and by package name). `prescribedText` is
+ * kept out of the barrel, on its own subpath, because it also builds on the CSV's renderer; this
+ * does not.
  *
  * ⚠️ **These are the bytes a logged row is frozen against** (through `prescribedText`). A "tidier"
  * spelling here changes what every later ✓ stores, while earlier rows keep the old bytes.
