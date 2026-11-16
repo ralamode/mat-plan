@@ -104,9 +104,8 @@ describe('the week editor (FAM-1 10)', () => {
 
   it('↑ moves a slot up within its day, saves the whole week, and keeps focus on the button', async () => {
     const { all } = page();
-    const up = screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) });
-    up.focus();
-    fireEvent.click(up);
+    // Nothing focused, as Safari leaves it after a tap: the editor must put focus on the button.
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
     expect(slotNames(6)).toEqual([
       'After lunchHeavy B',
       'MorningMorning habits',
@@ -205,10 +204,19 @@ describe('the week editor (FAM-1 10)', () => {
     expect(screen.getAllByText(WEEK_COPY.noWorkouts)).toHaveLength(1);
   });
 
-  it('a new week from the page replaces the editor’s copy', () => {
+  it('a new week from the page replaces the editor’s own copy, once its save is back', async () => {
     const { all, view } = page();
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    await waitFor(() => expect(all.saveWeek).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
     const week = { ...familyProgram.week, 0: [{ workoutPublicId: HEAVY_A, label: 'Copied' }] };
     view.rerender(<ProgramScreen program={{ ...familyProgram, week }} actions={all} />);
     expect(slotNames(0)).toEqual(['CopiedHeavy A']);
+    // The page's week, not the editor's copy: Saturday as the page has it.
+    expect(slotNames(6)).toEqual([
+      'MorningMorning habits',
+      'After lunchHeavy B',
+      'EveningConditioning',
+    ]);
   });
 });
