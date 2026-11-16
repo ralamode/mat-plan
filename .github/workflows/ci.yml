@@ -137,7 +137,7 @@ jobs:
           ORDER_BAD=$(jq -r '.entries as $e
             | [range(1; $e | length)
               | select(($e[.].when | type) != "number" or $e[.].when <= $e[. - 1].when)
-              | "  \($e[.].tag): when=\($e[.].when), not after \($e[. - 1].tag) (\($e[. - 1].when))"]
+              | "  \($e[.].tag): when=\($e[.].when)\(if ($e[.].when | type) != "number" then " (not a number)" else "" end), not after \($e[. - 1].tag) (\($e[. - 1].when))"]
             | join("\n")' <<<"$HEAD_JOURNAL")
 
           # ── Snapshot chain integrity ────────────────────────────────────────
@@ -187,11 +187,13 @@ jobs:
             cat <<'ORDERMSG'
 
           The migration was generated before another one that merged first. Regenerate it on
-          top of current main: merge main in, delete your NEW migration's .sql, snapshot and
-          journal entry, then `pnpm --filter @mat-plan/db db:generate --name <id>_<slug>` and
-          re-apply its hand-hardening (db-migration skill). A hand-written migration with no
-          schema change: `drizzle-kit generate --custom --name <id>_<slug>` and paste the SQL
-          back. Never edit a `when` by hand.
+          top of current main: merge main in, take main's meta/ as it is
+          (`git checkout origin/main -- packages/db/migrations/meta`; a snapshot of the same
+          number is MAIN's, so never delete it), delete only your own .sql, then
+          `pnpm --filter @mat-plan/db db:generate --name <id>_<slug>` and re-apply its
+          hand-hardening (db-migration skill). A hand-written migration with no schema change:
+          `pnpm --filter @mat-plan/db db:generate --custom --name <id>_<slug>`, then paste the
+          SQL back. Never edit a `when` by hand.
           ORDERMSG
           fi
 
