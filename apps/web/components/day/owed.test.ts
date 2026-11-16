@@ -17,7 +17,6 @@ import { describe, it } from 'vitest';
  */
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
-  it.todo('13d: the Program order dialog lists today-two-programs’ programs in order');
   it.todo('15c: two programs on one day, reordered (e2e)');
 });
 
@@ -28,7 +27,6 @@ describe('DayPlan: owed by its consumers', () => {
   it.todo('13b: superset letters are ordinal: group b reads A1, A2 when group a is gone');
   it.todo('13b: yesterday-edited-after-logging renders the kept, extra, removed and edited rows');
   it.todo('13b: future-preview renders read-only cards');
-  it.todo('13d: no-program, not-on-a-program-that-day and the rest-day notices');
   it.todo('12c: an older day and a future day are read-only (e2e)');
 });
 

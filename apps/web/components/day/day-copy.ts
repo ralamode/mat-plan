@@ -1,6 +1,6 @@
 import { ROW_REFUSAL, type RowRefusal } from '@mat-plan/shared';
 
-import { CLOSED_DAY_NOTICE } from '@/lib/constants';
+import { CLOSED_DAY_NOTICE, VALUE_JOINER } from '@/lib/constants';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
 
@@ -35,6 +35,52 @@ export const DAY_COPY = {
     failed: (name: string, message: string) => `${name}: ${message}`,
   },
 } as const;
+
+/** "A", "A and B", "A, B and C". */
+export function listOf(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+/** A weekday's plural name for a bare calendar day, read in UTC so no zone shifts it (`localWeekday`). */
+function weekdaysOf(day: string): string {
+  const name = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(
+    Date.parse(`${day}T00:00:00Z`),
+  );
+  return `${name}s`;
+}
+
+/**
+ * The words of step 13d's parts: the program line, Program order, the athlete switcher and the
+ * notices. v12's wording, except where the maintainer chose otherwise (2026-11-16): the switcher
+ * shows first names, and "Programs ›" is not offered until the program pages exist.
+ */
+export const PROGRAM_COPY = {
+  line: (names: readonly string[]) =>
+    `${names.length === 1 ? 'Program' : 'Programs'}: ${names.join(VALUE_JOINER)}`,
+  order: 'Program order',
+  orderTitle: (athlete: string) => `${athlete}’s programs`,
+  orderExplainer:
+    'The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week.',
+  moveUp: (program: string) => `Move ${program} up`,
+  moveDown: (program: string) => `Move ${program} down`,
+  moved: (program: string, place: number, of: number) => `${program} moved to ${place} of ${of}`,
+  orderFailed: 'Couldn’t save. Try again.',
+  done: 'Done',
+  switcher: 'Switch athlete',
+  notYet: 'Not on a program yet. Bodyweight and practice log here.',
+  notYetPutOn: (athlete: string) => `Put ${athlete} on a program to see their workouts.`,
+  programs: 'Programs',
+  notThisDay: 'Not on a program on this day.',
+  /** Every program the athlete is on rests this day. */
+  restAll: (day: string) => `Rest day. Nothing is scheduled on ${weekdaysOf(day)}.`,
+  /** Some programs rest, on a day with two or more. */
+  restSome: (programs: readonly string[]) => `Rest day on ${listOf(programs)}.`,
+} as const;
+
+/** The page's notice style (a dashed, muted box), for the notices this lane adds. */
+export const NOTICE_CLASS =
+  'border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm';
 
 /** What the field says when a typed value cannot be sent. The field takes focus. */
 export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
