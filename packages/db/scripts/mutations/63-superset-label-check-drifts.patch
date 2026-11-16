@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -104,7 +104,7 @@
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_rest_after_length_check" CHECK ("prescriptions"."rest_after" is null or (char_length(btrim("prescriptions"."rest_after")) >= 1 and char_length("prescriptions"."rest_after") <= 30));--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+-ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_superset_label_length_check" CHECK ("prescriptions"."superset_label" is null or (char_length(btrim("prescriptions"."superset_label")) >= 1 and char_length("prescriptions"."superset_label") <= 30));--> statement-breakpoint
++ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_superset_label_length_check" CHECK ("prescriptions"."superset_label" is null or (char_length(btrim("prescriptions"."superset_label")) >= 0 and char_length("prescriptions"."superset_label") <= 30));--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_superset_order_check" CHECK ("prescriptions"."superset_order" is null or ("prescriptions"."superset_order" >= 1 and "prescriptions"."superset_order" <= 30));--> statement-breakpoint

@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -82,7 +82,7 @@
+ -- above (0024 was the repo's first adding-foreign-key-constraint ignore).
+ -- squawk-ignore adding-foreign-key-constraint, constraint-missing-not-valid
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_workout_block_fkey" FOREIGN KEY ("workout_id","block_id") REFERENCES "public"."workouts"("id","block_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-CREATE UNIQUE INDEX "uq_prescriptions_workout_client_id" ON "prescriptions" USING btree ("workout_id","client_id");--> statement-breakpoint
++CREATE UNIQUE INDEX "uq_prescriptions_workout_client_id" ON "prescriptions" USING btree ("workout_id","client_id") WHERE "prescriptions"."deleted_at" is null;--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_prescriptions_workout_idx" ON "prescriptions" USING btree ("workout_id","idx") WHERE "prescriptions"."workout_id" is not null and "prescriptions"."deleted_at" is null;--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
