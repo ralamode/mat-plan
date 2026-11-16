@@ -212,10 +212,17 @@ describe('readAmend (Change, 13b-ii)', () => {
     });
   });
 
-  it('🔴 never sends what the amend writer refuses, whoever calls it: a row in another unit', () => {
-    const inKg = { quantities: [{ slot: primary, unit: 'kg' as const, value: 27.5 }], reps: 8 };
-    // Only reps typed: the kg load would go out untouched, under an item that logs in lb.
-    expect(readAmend(bench, { quantity: '27.5', reps: '10' }, inKg).send).toBeNull();
+  it('🔴 never sends what the amend writer refuses, whoever calls it: a number the type has no field for', () => {
+    // A second quantity, in a slot weight × reps does not have: readAmend carries the row's other
+    // quantities over untouched, so only the writer's rule stops it going out.
+    const extra = {
+      quantities: [
+        ...logged.quantities,
+        { slot: QUANTITY_SLOT.distance, unit: 'yd' as const, value: 40 },
+      ],
+      reps: 8,
+    };
+    expect(readAmend(bench, { quantity: '30', reps: '8' }, extra).send).toBeNull();
   });
 
   it('a load over the unit’s ceiling is kept, not sent', () => {
