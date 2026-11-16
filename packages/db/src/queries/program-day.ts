@@ -96,8 +96,8 @@ export function programDayRows(
         // this subquery joined, so the kind conjunct narrows THAT row: an adult resolves no
         // `blockId`, the query returns `[]`, and that is the same "nothing programmed" shape the DAL
         // already handles. ⚠️ **Guarded HERE, not in the page or the DAL**, because this one query
-        // feeds FOUR consumers — the day card, the scaffold/prefill via `getProgramDay`, the
-        // export's live fallback (`liveMatchesFor`), and, since V1-22 chunk 2,
+        // feeds every consumer — today the export's live fallback (`liveMatchesFor`) and, since
+        // V1-22 chunk 2 (the day card and the scaffold/prefill via `getProgramDay` were its others),
         // `prescribedSnapshotsFor`, which FREEZES this query's answer onto the entry permanently.
         // 🔴 **So the `id DESC LIMIT 1` block rule and the kind conjunct are now write-path
         // concerns, not display ones** — what they decide is recorded, not merely shown.

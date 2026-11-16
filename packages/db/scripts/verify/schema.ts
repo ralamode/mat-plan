@@ -959,7 +959,6 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
         ),
       )
       .orderBy(schema.prescriptions.id)
-      .innerJoin(schema.profiles, eq(schema.profiles.householdId, schema.programBlocks.householdId))
       .limit(1);
     assert.ok(legacy, 'FAM-1 5b: a legacy prescription with a target exists');
     const [kid] = await tx
@@ -1001,6 +1000,7 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
           sql`, `,
         )})`,
       )
+      .orderBy(schema.movements.id)
       .limit(1);
     await tx.insert(schema.prescriptions).values({
       publicId: newId(),
