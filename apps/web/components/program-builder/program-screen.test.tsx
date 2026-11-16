@@ -97,9 +97,10 @@ describe('ProgramScreen (FAM-1 8a)', () => {
         .getAllByRole('listitem')
         .map((li) => li.querySelector('button')!.textContent),
     ).toEqual([
-      `${WEEK_COPY.editLabel}: MorningMorning habits`,
-      `${WEEK_COPY.editLabel}: After lunchHeavy B`,
-      `${WEEK_COPY.editLabel}: EveningConditioning`,
+      // The text, ✎ included; it is aria-hidden, so not part of the button's name.
+      `${WEEK_COPY.editLabel}: Morning✎Morning habits`,
+      `${WEEK_COPY.editLabel}: After lunch✎Heavy B`,
+      `${WEEK_COPY.editLabel}: Evening✎Conditioning`,
     ]);
     const sunday = week.getByRole('heading', { name: 'Sunday' }).parentElement!.parentElement!;
     expect(within(sunday).queryByRole('list')).toBeNull();

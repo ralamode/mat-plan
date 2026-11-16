@@ -516,11 +516,11 @@ export const labelSetText = (workout: string, day: number, label: string | null)
     ? `${workout} on ${weekdayName(day)} is labelled ${quote(label)}.`
     : `${workout} on ${weekdayName(day)} has no label.`;
 
-/** What a refused week says: a stale page (the editor never sends a repeat), or a failure. */
 /** A refusal that can only mean the page's week is stale: the editor refreshes the page. */
 export const isStaleWeek = (reason: ProgramRefusal) =>
   reason === PROGRAM_REFUSAL.once_per_day || reason === PROGRAM_REFUSAL.not_found;
 
+/** What a refused week says: a stale page (the editor never sends a repeat), or a failure. */
 export function weekRefusal(reason: ProgramRefusal): string {
   return isStaleWeek(reason) ? WEEK_COPY.stale : WEEK_COPY.failed;
 }

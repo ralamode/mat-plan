@@ -11,7 +11,7 @@ import {
   type Weekday,
 } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
-import { Fragment, useRef, useState, type RefObject } from 'react';
+import { Fragment, useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,8 @@ import {
 } from './week-draft';
 
 const HEADING_ID = 'program-week';
+/** A week's content, to tell the editor's own saves from another write's week. */
+const weekKey = (week: Week) => JSON.stringify(MONDAY_FIRST.map((day) => week[day]));
 const labelFieldId = (day: Weekday, workout: string) => `week-label-${day}-${workout}`;
 
 /** A slot's control, keyed by the day and the workout (a workout is on a day at most once). */
@@ -106,7 +108,16 @@ export function WeekEditor({
   const queued = useRef<Week | null>(null);
   const controls = useRef(new Map<string, HTMLElement>());
   const addButtons = useRef(new Map<Weekday, HTMLButtonElement>());
-  const lastRemoveAt = useRef<number | undefined>(undefined);
+  // A tap on ✕ straight after Undo is the same tap: the restored ✕ sits where Undo was. (Two ✕ in
+  // a row need no guard: the Undo row takes the removed slot's place.)
+  const lastUndoAt = useRef<number | undefined>(undefined);
+  // The slot whose Undo had focus, if a refused save takes its row away.
+  const lastRemoved = useRef<{ day: Weekday; workout: string } | null>(null);
+  // The page's latest week, for re-basing the editor's own week when its saves are all back.
+  const pageWeek = useRef(program.week);
+  useEffect(() => {
+    pageWeek.current = program.week;
+  });
 
   const names = new Map(program.workouts.map((w) => [w.workoutPublicId, w.name]));
   const nameOf = (workout: string) => names.get(workout) ?? '';
@@ -131,15 +142,24 @@ export function WeekEditor({
     inFlight.current = true;
     setSaving(true);
     let toSend: Week | null = next;
+    const sentWeeks = new Set<string>();
     while (toSend) {
+      sentWeeks.add(weekKey(toSend));
       const result = await attempt(toSend);
       if (!result.ok) {
         // A change made on top of the refused week is dropped with it.
         queued.current = null;
         inFlight.current = false;
-        setSaving(false);
-        setOverlay(null);
-        setRemoved(null);
+        flushSync(() => {
+          setSaving(false);
+          setOverlay(null);
+          setRemoved(null);
+        });
+        // The focused Undo row went with the refusal: focus the slot it put back.
+        const lost = lastRemoved.current;
+        if (lost && (!document.activeElement || document.activeElement === document.body)) {
+          control(lost.day, lost.workout, 'text')?.focus();
+        }
         onStatus(weekRefusal(result.reason), 'alert');
         // The page's week is the stale one: fetch the latest, as the message says.
         if (isStaleWeek(result.reason)) router.refresh();
@@ -149,6 +169,12 @@ export function WeekEditor({
       queued.current = null;
     }
     inFlight.current = false;
+    // Every save is back. A week the page brought meanwhile that is one of the editor's OWN saves
+    // (an earlier save's refresh) does not replace the newer change: re-base on it. Any other week
+    // (10b's Copy, another parent) is left to show.
+    if (sentWeeks.has(weekKey(pageWeek.current))) {
+      setOverlay((current) => current && { ...current, base: pageWeek.current });
+    }
     setSaving(false);
   }
 
@@ -184,10 +210,10 @@ export function WeekEditor({
   }
 
   function remove(day: Weekday, index: number, at: number) {
-    if (isSameTap(lastRemoveAt.current, at)) return;
-    lastRemoveAt.current = at;
+    if (isSameTap(lastUndoAt.current, at)) return;
     const slot = week[day][index]!;
     const next = removeSlot(week, day, index);
+    lastRemoved.current = { day, workout: slot.workoutPublicId };
     flushSync(() => {
       setRemoved({ day, index, slot, at });
       show(next, true);
@@ -201,7 +227,7 @@ export function WeekEditor({
     // The ✕ sat where Undo is: a double tap on ✕ is not an Undo.
     if (isSameTap(removed.at, at)) return;
     // Nor is a double tap on Undo a removal: the restored ✕ sits where Undo was.
-    lastRemoveAt.current = at;
+    lastUndoAt.current = at;
     const { day, index, slot } = removed;
     change(insertSlot(week, day, index, slot), restoredText(nameOf(slot.workoutPublicId), day));
     control(day, slot.workoutPublicId, 'text')?.focus();
@@ -326,12 +352,15 @@ export function WeekEditor({
                               {/* Its name keeps the visible words; the action is said first. */}
                               <span className="sr-only">{WEEK_COPY.editLabel}: </span>
                               {/* The label, or where one goes: what says the text can be tapped. The
-                                  pencil is drawn, not text, so the name stays the visible words. */}
+                                  pencil is hidden from the button's name. */}
                               {slot.label ? (
                                 <span
-                                  className={`text-muted-foreground text-xs font-semibold tracking-wide uppercase ${NAME_WRAP_CLASS} after:ml-1 after:content-['✎']`}
+                                  className={`text-muted-foreground text-xs font-semibold tracking-wide uppercase ${NAME_WRAP_CLASS}`}
                                 >
                                   {slot.label}
+                                  <span aria-hidden className="ml-1">
+                                    ✎
+                                  </span>
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground text-xs">

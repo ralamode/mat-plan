@@ -56,7 +56,12 @@ const day = (weekday: number) =>
 const slotNames = (weekday: number) =>
   within(day(weekday))
     .queryAllByRole('listitem')
-    .map((li) => li.querySelector('button')?.textContent?.replace(`${WEEK_COPY.editLabel}: `, ''));
+    .map((li) =>
+      li
+        .querySelector('button')
+        ?.textContent?.replace(`${WEEK_COPY.editLabel}: `, '')
+        .replace('✎', ''),
+    );
 const sent = (all: ProgramActions, call = 0) => vi.mocked(all.saveWeek).mock.calls[call]![0].days;
 const status = () => screen.getByRole('status').textContent;
 const alerts = () =>
@@ -193,6 +198,13 @@ describe('the week editor (FAM-1 10)', () => {
     await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.stale]));
     // The page's week is the stale one: the latest is fetched, as the message says.
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('a not_found refusal is a stale page too', async () => {
+    page({ saveWeek: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.not_found }) });
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.stale]));
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(slotNames(6)).toEqual([
       'MorningMorning habits',
       'After lunchHeavy B',
@@ -265,6 +277,7 @@ describe('the week editor (FAM-1 10)', () => {
     fireEvent.click(screen.getByRole('button', { name: moveOnLabel('down', 'Morning habits', 3) }));
     expect(saveWeek).toHaveBeenCalledTimes(2);
     expect(sent(all, 1)[6]).toEqual(familyProgram.week[6]);
+    expect(sent(all, 1)[3][1]!.workoutPublicId).toBe(familyProgram.week[3][0]!.workoutPublicId);
     // When it is back, the dropped change is not sent after it.
     answers[1]!({ ok: true });
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -356,8 +369,75 @@ describe('the week editor (FAM-1 10)', () => {
     expect(all.saveWeek).not.toHaveBeenCalled();
   });
 
-  it('the status bar says that changes save as they are made, until a message', () => {
+  it('the status bar says that changes save as they are made', () => {
     page();
     expect(screen.getByText(BUILDER_COPY.savesAsYouGo)).toBeTruthy();
+  });
+
+  it('a queued change stays on screen when the first save’s week arrives before it is back', async () => {
+    const { saveWeek, answers } = held();
+    const { all, view } = page({ saveWeek });
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy A', 1) }));
+    answers[0]!({ ok: true });
+    await waitFor(() => expect(saveWeek).toHaveBeenCalledTimes(2));
+    // The first save's week, as the page refreshes it, while the second is out.
+    view.rerender(
+      <ProgramScreen program={{ ...familyProgram, week: sent(all, 0) }} actions={all} />,
+    );
+    answers[1]!({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(slotNames(1)[0]).toBe('After schoolHeavy A');
+  });
+
+  it('a refused removal puts focus on the slot it puts back, not the page', async () => {
+    page({ saveWeek: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+    fireEvent.click(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
+    await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.failed]));
+    expect(document.activeElement?.textContent).toContain('Heavy B');
+  });
+
+  it('with one workout not on the day, the form chooses it; its label is checked too', () => {
+    const week = {
+      ...familyProgram.week,
+      1: familyProgram.workouts
+        .slice(0, 3)
+        .map((w) => ({ workoutPublicId: w.workoutPublicId, label: null })),
+    };
+    const { all } = page({}, { ...familyProgram, week });
+    fireEvent.click(screen.getByRole('button', { name: addOnLabel(1) }));
+    const form = screen.getByRole('form', { name: addOnLabel(1) });
+    expect((within(form).getByLabelText(WEEK_COPY.workout) as HTMLSelectElement).value).toBe(
+      familyProgram.workouts[3]!.workoutPublicId,
+    );
+    const label = within(form).getByLabelText(/^Label/);
+    fireEvent.change(label, { target: { value: 'Late\tnight' } });
+    fireEvent.click(within(form).getByRole('button', { name: WEEK_COPY.addButton }));
+    expect(label.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(label);
+    expect(all.saveWeek).not.toHaveBeenCalled();
+  });
+
+  it('Cancel and Escape close the add form and return focus to its + Add', () => {
+    page();
+    const add = () => screen.getByRole('button', { name: addOnLabel(1) });
+    fireEvent.click(add());
+    fireEvent.click(
+      within(screen.getByRole('form', { name: addOnLabel(1) })).getByRole('button', {
+        name: BUILDER_COPY.cancel,
+      }),
+    );
+    expect(document.activeElement).toBe(add());
+    fireEvent.click(add());
+    fireEvent.keyDown(screen.getByRole('form', { name: addOnLabel(1) }), { key: 'Escape' });
+    expect(screen.queryByRole('form', { name: addOnLabel(1) })).toBeNull();
+    expect(document.activeElement).toBe(add());
+  });
+
+  it('the bar’s idle line gives way to a message', async () => {
+    page();
+    fireEvent.click(screen.getByRole('button', { name: moveOnLabel('up', 'Heavy B', 6) }));
+    await waitFor(() => expect(status()).not.toBe(''));
+    expect(screen.queryByText(BUILDER_COPY.savesAsYouGo)).toBeNull();
   });
 });
