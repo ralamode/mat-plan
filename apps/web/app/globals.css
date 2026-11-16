@@ -45,6 +45,10 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-done: var(--done);
+  --color-done-foreground: var(--done-foreground);
+  --color-done-surface: var(--done-surface);
+  --color-done-muted-foreground: var(--done-muted-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -85,6 +89,12 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  /* A logged row (FAM-1): the ✓'s fill, the glyph on it, the row's tint, and secondary text on the
+     tint (muted-foreground is 4.27:1 there). Pinned in done-tokens.test.ts; docs/design.md → Tokens. */
+  --done: oklch(0.52 0.14 150);
+  --done-foreground: oklch(1 0 0);
+  --done-surface: oklch(0.96 0.04 150);
+  --done-muted-foreground: oklch(0.5 0.02 150);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -120,6 +130,10 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --done: oklch(0.75 0.15 150);
+  --done-foreground: oklch(0.205 0 0);
+  --done-surface: oklch(0.28 0.05 150);
+  --done-muted-foreground: oklch(0.708 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);

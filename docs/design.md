@@ -58,23 +58,45 @@ Tailwind via `@theme inline`. Colors are **OKLCH**.
 
 ### Semantic colors (use the Tailwind classes, e.g. `bg-background`, `text-muted-foreground`)
 
-| Token                                | Role                                     |
-| ------------------------------------ | ---------------------------------------- |
-| `background` / `foreground`          | page surface / default text              |
-| `card` / `card-foreground`           | card surface / text on card              |
-| `popover` / `popover-foreground`     | overlays                                 |
-| `primary` / `primary-foreground`     | primary actions/emphasis                 |
-| `secondary` / `secondary-foreground` | secondary actions                        |
-| `muted` / `muted-foreground`         | subdued surfaces / secondary text        |
-| `accent` / `accent-foreground`       | hover/selected accents                   |
-| `destructive`                        | destructive actions/errors               |
-| `border` · `input` · `ring`          | hairlines · field borders · focus ring   |
-| `chart-1..5`                         | data-viz series (grayscale ramp for now) |
-| `brand`                              | the mark's orange — **the mark ONLY**    |
+| Token                                | Role                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------- |
+| `background` / `foreground`          | page surface / default text                                                   |
+| `card` / `card-foreground`           | card surface / text on card                                                   |
+| `popover` / `popover-foreground`     | overlays                                                                      |
+| `primary` / `primary-foreground`     | primary actions/emphasis                                                      |
+| `secondary` / `secondary-foreground` | secondary actions                                                             |
+| `muted` / `muted-foreground`         | subdued surfaces / secondary text                                             |
+| `accent` / `accent-foreground`       | hover/selected accents                                                        |
+| `destructive`                        | destructive actions/errors                                                    |
+| `done` / `done-foreground`           | a ticked ✓'s fill and a done card's edge / the glyph on the fill              |
+| `done-surface`                       | a logged row's tint; text on it is `card-foreground`, never `done-foreground` |
+| `done-muted-foreground`              | secondary text on `done-surface` (hints, PREVIOUS, "Last time")               |
+| `border` · `input` · `ring`          | hairlines · field borders · focus ring                                        |
+| `chart-1..5`                         | data-viz series (grayscale ramp for now)                                      |
+| `brand`                              | the mark's orange — **the mark ONLY**                                         |
 
 `brand` (OSS-2) is 3.5:1 on white: enough for a graphic, not for text. Never use it as a text or button
 colour; a brand-coloured control would need its own, darker token. It needs no `.dark` value (about 6:1
 on the dark background).
+
+`done` (FAM-1) is the app's only success colour, and it means **logged** and nothing else: a
+selected item in a picker uses `primary` or `accent`. The rules a logged row follows, each pinned in
+`app/done-tokens.test.ts` in both themes:
+
+- **The fill carries the state, not the hue.** A ticked ✓ is filled with `done` and is at least 3:1
+  against the un-ticked control (`muted`), so it reads in greyscale and to a red-green colour-blind
+  eye. It also sets `aria-pressed` and keeps its accessible name. Under `forced-colors` the fill
+  disappears, so a ticked ✓ needs a second cue there (a thicker border or a different glyph).
+- **The tint is decoration.** `done-surface` is about 1.1:1 against a card. A done card keeps a
+  `border-done` edge, which is what shows the row's boundary.
+- **Text on the tint** is `card-foreground`, or `done-muted-foreground` for secondary text:
+  `muted-foreground` is 4.27:1 there, under AA. `done` is never text on its own; a word or the ✓
+  goes with it ("Done ✓").
+- **Focus on a ✓** uses a full-opacity `ring-foreground`: `ring` is 2.3:1 on the tint and 2:1 on the
+  fill.
+
+The prototype's light fill was 3.7:1 under white, so the app's is darker. A reskin (UI-3) re-measures
+these pairs, since the candidate sets don't declare them.
 
 ### Scales
 
