@@ -81,15 +81,22 @@ export default defineConfig({
       ],
       allowExternal: true,
       /**
-       * Both entries are load-bearing; nothing else is listed, because an exclusion that can never
+       * Every entry is load-bearing; nothing else is listed, because an exclusion that can never
        * match reads as a decision while doing nothing.
        *
        * `recording-db.ts` is **test-support code living in a production directory** — its own
        * docblock says "TEST SUPPORT ONLY; nothing in the app imports it". `lib/**` would otherwise
        * count a file the app never executes and the tests exercise thoroughly, inflating the number
        * by precisely the amount an honest denominator exists to prevent.
+       *
+       * `day-test-utils.tsx` is the same case in `components/**`: the day page's test fixtures and
+       * render helpers (vitest's `vi`, testing-library), imported only by the day `*.test.tsx` files.
        */
-      exclude: ['**/*.test.{ts,tsx}', 'lib/dal/recording-db.ts'],
+      exclude: [
+        '**/*.test.{ts,tsx}',
+        'lib/dal/recording-db.ts',
+        'components/day/day-test-utils.tsx',
+      ],
       /**
        * `text-summary` → stdout, which `metrics.yml` tees into the job summary.
        * `json-summary` → `coverage/coverage-summary.json`, which that workflow asserts against.
