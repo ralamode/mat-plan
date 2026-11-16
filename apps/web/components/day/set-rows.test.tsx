@@ -14,7 +14,7 @@ import {
   yesterdayEditedAfterLogging,
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
@@ -22,7 +22,7 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { card, isTick, lb, makeMount, press, status, workout } from './day-test-utils';
 import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
-import { formatRowValues } from './row-values';
+import { formatRowValues, unitSpoken, unitSuffix, valueParts } from './row-values';
 
 const { mount, show } = makeMount(createFakeDayActions);
 
@@ -41,6 +41,8 @@ const headers = (el: HTMLElement) =>
   within(table(el))
     .getAllByRole('columnheader')
     .map((h) => h.textContent);
+/** The words a field's name ends with: the unit spoken, or "reps". */
+const SPOKEN = { sec: unitSpoken('sec'), lb: unitSpoken('lb'), reps: DAY_COPY.reps.toLowerCase() };
 const setTick = (el: HTMLElement, name: string, set: number) =>
   within(el).getByRole('button', { name: DAY_COPY.logLabel(DAY_COPY.setLabel(name, set)) });
 const setField = (el: HTMLElement, name: string, set: number, spoken: string) =>
@@ -60,14 +62,19 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
   it('a set item is a table: Set, Previous, a column per field, ✓; one row per set', () => {
     show(todayTwoPrograms);
     const neck = card('Morning habits', 'Neck bridge');
-    expect(headers(neck)).toEqual([DAY_COPY.set, DAY_COPY.previous, 'Sec', `✓${DAY_COPY.logged}`]);
+    expect(headers(neck)).toEqual([
+      DAY_COPY.set,
+      DAY_COPY.previous,
+      DAY_COPY.secHeader,
+      `✓${DAY_COPY.logged}`,
+    ]);
     const plan = item(todayTwoPrograms, 'Morning habits', 'Neck bridge');
     expect(bodyRows(neck)).toHaveLength(plan.rows.length);
     // PREVIOUS: the same item and set number last time, per set.
     plan.rows.forEach((row, i) => {
       expect(bodyRows(neck)[i]!.textContent).toContain(formatRowValues(row.previous!));
     });
-    expect(setField(neck, 'Neck bridge', 1, 'seconds').getAttribute('placeholder')).toBe('30');
+    expect(setField(neck, 'Neck bridge', 1, SPOKEN.sec).getAttribute('placeholder')).toBe('30');
   });
 
   it('a weight × reps set has a load and a reps field, in that order', () => {
@@ -76,11 +83,11 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
     expect(headers(press)).toEqual([
       DAY_COPY.set,
       DAY_COPY.previous,
-      'lb',
+      unitSuffix('lb'),
       DAY_COPY.reps,
       `✓${DAY_COPY.logged}`,
     ]);
-    expect(setField(press, 'Push press', 1, 'reps').getAttribute('inputmode')).toBe('numeric');
+    expect(setField(press, 'Push press', 1, SPOKEN.reps).getAttribute('inputmode')).toBe('numeric');
   });
 
   it('an empty ✓ on a set sends nothing typed and shows the prescription, for that set', async () => {
@@ -102,8 +109,8 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
   it('a typed load and reps are both sent', async () => {
     const control = mount(todayTwoPrograms);
     const press_ = card('Heavy B', 'Push press');
-    fireEvent.change(setField(press_, 'Push press', 1, 'pounds'), { target: { value: '22.5' } });
-    fireEvent.change(setField(press_, 'Push press', 1, 'reps'), { target: { value: '5' } });
+    fireEvent.change(setField(press_, 'Push press', 1, SPOKEN.lb), { target: { value: '22.5' } });
+    fireEvent.change(setField(press_, 'Push press', 1, SPOKEN.reps), { target: { value: '5' } });
     await press(setTick(press_, 'Push press', 1));
     expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({
       set: 1,
@@ -114,10 +121,10 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
   it('a bad number of reps is refused by the reps field, which takes focus', async () => {
     const control = mount(todayTwoPrograms);
     const pushUps = card('Morning habits', 'Push-ups');
-    fireEvent.change(setField(pushUps, 'Push-ups', 1, 'reps'), { target: { value: '6.5' } });
+    fireEvent.change(setField(pushUps, 'Push-ups', 1, SPOKEN.reps), { target: { value: '6.5' } });
     await press(setTick(pushUps, 'Push-ups', 1));
     expect(within(pushUps).getByText(TYPED_PROBLEM_COPY.not_a_number)).toBeTruthy();
-    expect(document.activeElement).toBe(setField(pushUps, 'Push-ups', 1, 'reps'));
+    expect(document.activeElement).toBe(setField(pushUps, 'Push-ups', 1, SPOKEN.reps));
     expect(control.actions.logRow).not.toHaveBeenCalled();
   });
 
@@ -125,13 +132,15 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
     const control = mount(todayTwoPrograms);
     const pushUps = () => card('Morning habits', 'Push-ups');
     const sets = item(todayTwoPrograms, 'Morning habits', 'Push-ups').rows.length;
-    await press(within(pushUps()).getByRole('button', { name: DAY_COPY.addSet }));
+    await press(within(pushUps()).getByRole('button', { name: DAY_COPY.addSetTo('Push-ups') }));
     expect(bodyRows(pushUps())).toHaveLength(sets + 1);
-    expect(document.activeElement).toBe(setField(pushUps(), 'Push-ups', sets + 1, 'reps'));
-    expect(within(pushUps()).queryByRole('button', { name: DAY_COPY.addSet })).toBeNull();
+    expect(document.activeElement).toBe(setField(pushUps(), 'Push-ups', sets + 1, SPOKEN.reps));
+    expect(
+      within(pushUps()).queryByRole('button', { name: DAY_COPY.addSetTo('Push-ups') }),
+    ).toBeNull();
     expect(status()).toBe(DAY_COPY.setAdded('Push-ups'));
 
-    fireEvent.change(setField(pushUps(), 'Push-ups', sets + 1, 'reps'), {
+    fireEvent.change(setField(pushUps(), 'Push-ups', sets + 1, SPOKEN.reps), {
       target: { value: '12' },
     });
     await press(setTick(pushUps(), 'Push-ups', sets + 1));
@@ -139,17 +148,28 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
       set: sets + 1,
       values: { reps: 12 },
     });
-    expect(within(pushUps()).getByRole('button', { name: DAY_COPY.addSet })).toBeTruthy();
+    expect(
+      within(pushUps()).getByRole('button', { name: DAY_COPY.addSetTo('Push-ups') }),
+    ).toBeTruthy();
   });
 
   it('"+ Add set" numbers the new set past the highest shown, even with a gap', async () => {
     const gap = structuredClone(todayTwoPrograms);
     const pushUps = gap.workouts[0]!.items.find((i) => i.name === 'Push-ups')!;
     pushUps.rows = [pushUps.rows[0]!, { ...pushUps.rows[1]!, set: 5 }];
-    const control = mount(gap);
+    // The answer is the test's: the preview's fake assumes rows without a gap (fakes.ts).
+    const control = mount(gap, {
+      wrap: () => ({
+        logRow: async (input) => ({
+          ok: true,
+          entryPublicId: '00000000-0000-7000-8000-0000000000d6',
+          values: { quantities: [], reps: input.values.reps },
+        }),
+      }),
+    });
     const el = () => card('Morning habits', 'Push-ups');
-    await press(within(el()).getByRole('button', { name: DAY_COPY.addSet }));
-    fireEvent.change(setField(el(), 'Push-ups', 6, 'reps'), { target: { value: '10' } });
+    await press(within(el()).getByRole('button', { name: DAY_COPY.addSetTo('Push-ups') }));
+    fireEvent.change(setField(el(), 'Push-ups', 6, SPOKEN.reps), { target: { value: '10' } });
     await press(setTick(el(), 'Push-ups', 6));
     expect(control.actions.logRow.mock.calls[0]![0]).toMatchObject({ set: 6 });
   });
@@ -164,6 +184,94 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
     expect(neck().classList.contains(TINT_CLASS)).toBe(false);
   });
 
+  it('a refused reps number is marked and focused in the reps field, not the load', async () => {
+    const control = mount(todayTwoPrograms);
+    const el = card('Heavy B', 'Push press');
+    fireEvent.change(setField(el, 'Push press', 1, SPOKEN.lb), { target: { value: '25' } });
+    fireEvent.change(setField(el, 'Push press', 1, SPOKEN.reps), { target: { value: '6.5' } });
+    await press(setTick(el, 'Push press', 1));
+    expect(document.activeElement).toBe(setField(el, 'Push press', 1, SPOKEN.reps));
+    expect(setField(el, 'Push press', 1, SPOKEN.reps).getAttribute('aria-invalid')).toBe('true');
+    expect(setField(el, 'Push press', 1, SPOKEN.lb).getAttribute('aria-invalid')).toBeNull();
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+  });
+
+  it('Enter on the load moves to the reps; Enter on the reps is the ✓', async () => {
+    const control = mount(todayTwoPrograms);
+    const el = card('Heavy B', 'Push press');
+    const load = setField(el, 'Push press', 2, SPOKEN.lb);
+    expect(load.getAttribute('enterkeyhint')).toBe('next');
+    load.focus();
+    fireEvent.keyDown(load, { key: 'Enter' });
+    expect(document.activeElement).toBe(setField(el, 'Push press', 2, SPOKEN.reps));
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.keyDown(setField(el, 'Push press', 2, SPOKEN.reps), { key: 'Enter' });
+    });
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a set’s sentences name the set', async () => {
+    mount(todayTwoPrograms);
+    await press(setTick(card('Morning habits', 'Neck bridge'), 'Neck bridge', 2));
+    expect(status()).toBe(DAY_COPY.announce.logged(DAY_COPY.setLabel('Neck bridge', 2)));
+  });
+
+  it('after an un-tick, both fields untouched re-tick; a cleared reps field logs anew', async () => {
+    const control = mount(yesterdayHalfDone);
+    const el = () => card('Heavy A', 'DB bench press');
+    await press(setTick(el(), 'DB bench press', 1));
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+    await press(setTick(el(), 'DB bench press', 1));
+    fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '' } });
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('an extra set un-ticked keeps its row for the visit, after the page drops it, and ticks back', async () => {
+    const control = mount(yesterdayEditedAfterLogging);
+    const el = () => card('Morning habits', 'Push-ups');
+    const last = item(yesterdayEditedAfterLogging, 'Morning habits', 'Push-ups').rows.at(-1)!.set;
+    await press(setTick(el(), 'Push-ups', last));
+    // The page's data, as the contract has it: a writable day lists only the extra sets logged.
+    const next = structuredClone(control.plan);
+    const pushUps = item(next, 'Morning habits', 'Push-ups');
+    pushUps.rows = pushUps.rows.filter((r) => r.set !== last);
+    await act(async () => control.setPlan(next));
+    expect(setTick(el(), 'Push-ups', last).getAttribute('aria-pressed')).toBe('false');
+    expect(within(el()).queryByRole('button', { name: DAY_COPY.addSetTo('Push-ups') })).toBeNull();
+    await press(setTick(el(), 'Push-ups', last));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('Previous is two unbreakable parts, with the line free to break only between them', () => {
+    show(todayTwoPrograms);
+    const row = bodyRows(card('Heavy B', 'Push press'))[0]!;
+    const previous = item(todayTwoPrograms, 'Heavy B', 'Push press').rows[0]!.previous!;
+    const parts = [...row.querySelectorAll('.whitespace-nowrap')].map((n) => n.textContent);
+    expect(parts).toEqual(valueParts(previous));
+    expect(parts).toHaveLength(2);
+  });
+
+  it('"+ Add set" is offered one below the set limit', () => {
+    const almost = structuredClone(todayTwoPrograms);
+    const pushUps = almost.workouts[0]!.items.find((i) => i.name === 'Push-ups')!;
+    pushUps.rows = Array.from({ length: MAX_SETS_PER_MOVEMENT - 1 }, (_, i) => ({
+      set: i + 1,
+      previous: null,
+      logged: null,
+    }));
+    show(almost);
+    expect(
+      within(card('Morning habits', 'Push-ups')).getByRole('button', {
+        name: DAY_COPY.addSetTo('Push-ups'),
+      }),
+    ).toBeTruthy();
+  });
+
   it('no "+ Add set" at the set limit', () => {
     const full = structuredClone(todayTwoPrograms);
     const pushUps = full.workouts[0]!.items.find((i) => i.name === 'Push-ups')!;
@@ -174,7 +282,9 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
     }));
     show(full);
     expect(
-      within(card('Morning habits', 'Push-ups')).queryByRole('button', { name: DAY_COPY.addSet }),
+      within(card('Morning habits', 'Push-ups')).queryByRole('button', {
+        name: DAY_COPY.addSetTo('Push-ups'),
+      }),
     ).toBeNull();
   });
 });
@@ -183,7 +293,7 @@ describe('a day that cannot be written', () => {
   it('a closed day: what was logged, with no Previous column, field, ✓ or Add set (D33)', () => {
     show(closedDayLoggedOnly);
     const neck = card('Morning habits', 'Neck bridge');
-    expect(headers(neck)).toEqual([DAY_COPY.set, 'Sec', `✓${DAY_COPY.logged}`]);
+    expect(headers(neck)).toEqual([DAY_COPY.set, DAY_COPY.secHeader, `✓${DAY_COPY.logged}`]);
     expect(within(neck).queryAllByRole('textbox')).toHaveLength(0);
     expect(within(neck).queryAllByRole('button')).toHaveLength(0);
     const logged = item(closedDayLoggedOnly, 'Morning habits', 'Neck bridge').rows;
@@ -281,10 +391,37 @@ describe('after the program was edited (D7)', () => {
     const el = card('Heavy A', 'Pull-up');
     expect(within(el).getByText(DAY_COPY.removed)).toBeTruthy();
     expect(within(el).queryAllByRole('textbox')).toHaveLength(0);
-    expect(within(el).queryByRole('button', { name: DAY_COPY.addSet })).toBeNull();
+    expect(within(el).queryByRole('button', { name: DAY_COPY.addSetTo('Pull-up') })).toBeNull();
     // Previous is for choosing what to log; a removed item cannot be logged again.
     expect(headers(el)).not.toContain(DAY_COPY.previous);
     expect(bodyRows(el)).toHaveLength(pull.rows.length);
     expect(setTick(el, 'Pull-up', 1).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('a removed item’s set un-ticks to its kept numbers, and ticks back the same entry', async () => {
+    const control = mount(plan);
+    const el = () => card('Heavy A', 'Pull-up');
+    const logged = item(plan, 'Heavy A', 'Pull-up').rows[0]!.logged!;
+    await press(setTick(el(), 'Pull-up', 1));
+    expect(setTick(el(), 'Pull-up', 1).getAttribute('aria-pressed')).toBe('false');
+    expect(within(bodyRows(el())[0]!).getByText(String(logged.values.reps))).toBeTruthy();
+    await press(setTick(el(), 'Pull-up', 1));
+    expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+  });
+
+  it('a load logged in another unit than the item’s now keeps its unit (D7)', () => {
+    const changed = structuredClone(yesterdayHalfDone);
+    const bench = changed.workouts
+      .find((w) => w.name === 'Heavy A')!
+      .items.find((i) => i.name === 'DB bench press')!;
+    bench.unit = 'kg';
+    show(changed);
+    const logged = bench.rows[0]!.logged!.values.quantities[0]!;
+    expect(
+      within(bodyRows(card('Heavy A', 'DB bench press'))[0]!).getByText(
+        quantityText(logged.value, logged.unit),
+      ),
+    ).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  hasSetRows,
   newId,
   ROW_REFUSAL,
   type DayItem,
@@ -77,6 +78,25 @@ async function settle(write: () => Promise<RowResult>): Promise<RowResult> {
 }
 
 /**
+ * Whether a row can be written (`canWrite`: ✓, un-tick, re-tick) and logged anew (`canLog`: a new
+ * entry needs both ids, so a row whose prescription was removed can only be ticked back). One rule,
+ * read by every row and by the set table's "+ Add set".
+ */
+export function rowAccess(readOnly: boolean, workout: DayWorkout, item: DayItem) {
+  const canWrite = !readOnly && workout.scheduled;
+  const canLog = canWrite && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
+  return { canWrite, canLog };
+}
+
+/**
+ * The row's name in sentences and labels: the item, and the set where it is one of several, so a
+ * screen reader hears which set was logged.
+ */
+export function rowName(item: DayItem, row: DayRow): string {
+  return hasSetRows(item.trackingType) ? DAY_COPY.setLabel(item.name, row.set) : item.name;
+}
+
+/**
  * A workout's identity on the screen. Once the workout is purged it has no id, so its place in the
  * day and its frozen name stand in (two purged workouts may share a name).
  */
@@ -141,9 +161,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
         ? null
         : (settled?.values ?? null);
 
-  const canWrite = !day.readOnly && workout.scheduled;
-  /** A new entry needs both ids; a row whose prescription was removed can only be ticked back. */
-  const canLog = canWrite && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
+  const { canWrite, canLog } = rowAccess(day.readOnly, workout, item);
   const hasField = canLog && fieldsOf(item).length > 0;
   /** A read-only day shows no message: there is nothing left to retry. */
   const shownError = canWrite ? error : null;
@@ -166,7 +184,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
 
   function showError(next: RowError) {
     setError(next);
-    day.announce(DAY_COPY.announce.failed(item.name, next.message));
+    day.announce(DAY_COPY.announce.failed(rowName(item, row), next.message));
   }
 
   function fail(reason: RowRefusal, write: RowWriteKind) {
@@ -214,7 +232,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     if (result.ok) {
       setAttempt(null);
       setTextState(EMPTY_TEXT);
-      succeed(loggedFrom(result), DAY_COPY.announce.logged(item.name));
+      succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
     // A `clientId` held by a hidden entry answers `own_hidden` forever: the next try is a new one.
@@ -235,7 +253,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setPending(null);
     if (result.ok) {
       setTextState(EMPTY_TEXT);
-      succeed(loggedFrom(result), DAY_COPY.announce.logged(item.name));
+      succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
     // The token is gone (a reload would show the row empty): log it as a new ✓ instead.
@@ -266,7 +284,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
           values: result.values,
           hiddenAt: result.hiddenAt ?? null,
         },
-        DAY_COPY.announce.unticked(item.name),
+        DAY_COPY.announce.unticked(rowName(item, row)),
       );
       return;
     }

@@ -114,7 +114,12 @@ export function Tick({
       <button
         ref={tickRef}
         type="button"
-        onClick={r.press}
+        // Safari does not focus a tapped button: focus it here, or a field the ✓ replaces would
+        // take focus with it to the page.
+        onClick={() => {
+          tickRef.current?.focus();
+          void r.press();
+        }}
         aria-pressed={r.logged !== null}
         aria-label={DAY_COPY.logLabel(label)}
         aria-disabled={r.pending || undefined}
@@ -203,6 +208,7 @@ export function RowInput({
   tickRef,
   inputRef,
   className,
+  last = true,
 }: {
   r: ReturnType<typeof useRow>;
   item: DayItem;
@@ -212,6 +218,8 @@ export function RowInput({
   tickRef: React.RefObject<HTMLButtonElement | null>;
   inputRef: (el: HTMLInputElement | null) => void;
   className: string;
+  /** The row's last field: the phone's key says "done" (Enter is the ✓); before it, "next". */
+  last?: boolean;
 }) {
   const invalid = r.error?.invalid === true && (r.error.field ?? field) === field;
   const spoken = field === 'reps' ? DAY_COPY.reps.toLowerCase() : unitSpoken(item.unit!);
@@ -220,14 +228,22 @@ export function RowInput({
       ref={inputRef}
       type="text"
       inputMode={field === 'reps' ? 'numeric' : 'decimal'}
-      enterKeyHint="done"
+      enterKeyHint={last ? 'done' : 'next'}
       autoComplete="off"
       value={r.text[field]}
       onChange={(e) => r.setText(field, e.target.value)}
-      // The field goes while the ✓ is in flight, so focus moves to the ✓ first, as Reload's does;
-      // a refused number brings it back to the field.
+      // Enter on the last field is the ✓. The field goes while the ✓ is in flight, so focus moves to
+      // the ✓ first, as Reload's does; a refused number brings it back to the field. Enter on an
+      // earlier field moves to the next one ("next" on a phone's keyboard).
       onKeyDown={(e) => {
         if (e.key !== 'Enter') return;
+        if (!last) {
+          e.preventDefault();
+          const row = e.currentTarget.closest('tr');
+          const inputs = row ? [...row.querySelectorAll('input')] : [];
+          inputs[inputs.indexOf(e.currentTarget) + 1]?.focus();
+          return;
+        }
         tickRef.current?.focus();
         void r.press();
       }}
@@ -243,5 +259,6 @@ export function RowInput({
 
 export function fieldHeader(item: DayItem, field: RowField): string {
   if (field === 'reps' || !item.unit) return DAY_COPY.reps;
-  return item.unit === 'sec' ? 'Sec' : item.unit === 'min' ? 'Min' : unitSuffix(item.unit);
+  if (item.unit === 'sec') return DAY_COPY.secHeader;
+  return item.unit === 'min' ? DAY_COPY.minHeader : unitSuffix(item.unit);
 }

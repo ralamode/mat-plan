@@ -26,14 +26,15 @@ the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b
 
 ## The map
 
-| Step | Adds                                                                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------- |
-| 13   | Workout cards and single rows, the optimistic ✓ and its failure state, in `day-screen.tsx` and its parts.         |
-| 13b  | Set rows, PREVIOUS, "+ Add set", linked supersets, the read-only look-ahead.                                      |
-| 13d  | `components/day/{program-line,program-order-dialog,athlete-switcher}.tsx`; the "not on a program" notices.        |
-| 12b  | `apps/web/app/p/[profileId]/row-actions.ts` (log, un-tick, re-tick) with its registry file; `lib/dal/day/day.ts`. |
-| 12c  | The screen joins `apps/web/app/p/[profileId]/page.tsx`. A seam, shared with lane S, in the plan's §6 order.       |
-| 12d  | Change. 15c: program order. 12f: the old forms' code goes.                                                        |
+| Step   | Adds                                                                                                              |
+| ------ | ----------------------------------------------------------------------------------------------------------------- |
+| 13     | Workout cards and single rows, the optimistic ✓ and its failure state, in `day-screen.tsx` and its parts.         |
+| 13b    | Set rows, PREVIOUS, "+ Add set", linked supersets, the read-only look-ahead (`set-table.tsx`, `row-parts.tsx`).   |
+| 13b-ii | Change: a logged number edited in place, for set rows and single rows (the maintainer split 13b, 2026-11-16).     |
+| 13d    | `components/day/{program-line,program-order-dialog,athlete-switcher}.tsx`; the "not on a program" notices.        |
+| 12b    | `apps/web/app/p/[profileId]/row-actions.ts` (log, un-tick, re-tick) with its registry file; `lib/dal/day/day.ts`. |
+| 12c    | The screen joins `apps/web/app/p/[profileId]/page.tsx`. A seam, shared with lane S, in the plan's §6 order.       |
+| 12d    | Change. 15c: program order. 12f: the old forms' code goes.                                                        |
 
 ## Files
 
@@ -42,15 +43,18 @@ the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b
 | `apps/web/components/day/day-screen.tsx`           | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`.                                                                                                                 |
 | `apps/web/components/day/day-context.tsx`          | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                                                                                                       |
 | `apps/web/components/day/workout-card.tsx`         | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                                                                                                             |
-| `apps/web/components/day/item-card.tsx`            | One item: its heading (with its superset label, and what logged rows were against), and either its single row (field, "Last time", ✓) or its set table (Set, Previous, a column per field, ✓; "+ Add set").                                                      |     |
-| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick, for a single row or one set: optimistic display, `clientId` per attempt, refusals. Its text is a row's fields (`RowText`).                                                                                                     |     |
-| `apps/web/components/day/row-values.ts`            | Pure: a row's fields (`fieldsOf`: a load and/or reps), reading what was typed (D13's empty ✓, whole reps), comparing and formatting a row's values in the contract's spelling (`quantityText`).                                                                  |     |
+| `apps/web/components/day/item-card.tsx`            | One item: an empty card on a look-ahead day, its single row (field, "Last time", ✓), or its set table.                                                                                                                                                           |
+| `apps/web/components/day/set-table.tsx`            | A set-by-set item's table: Set, Previous, a column per field, ✓; "+ Add set"; every row shown this visit stays for the visit.                                                                                                                                    |
+| `apps/web/components/day/row-parts.tsx`            | What both rows share: the card's classes and tint, the heading (superset label, what logged rows were against), the ✓, a row's message, a number field.                                                                                                          |
+| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick, for a single row or one set: optimistic display, `clientId` per attempt, refusals. Its text is a row's fields (`RowText`).                                                                                                     |
+| `apps/web/components/day/row-values.ts`            | Pure: a row's fields (`fieldsOf`: a load and/or reps), reading what was typed (D13's empty ✓, whole reps), comparing and formatting a row's values in the contract's spelling (`quantityText`).                                                                  |
 | `apps/web/components/day/athlete-switcher.tsx`     | The household's athletes as first-name pills under the `<h1>`; a switch opens that athlete's today. Server-safe (no state).                                                                                                                                      |
-| `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                     |     |
-| `apps/web/components/day/program-order-dialog.tsx` | `ProgramOrderButton` and the dialog (client code): ↑ ↓ per program; each tap saves the whole order; taps during a save are sent together, and the page's older order cannot undo them; a failure restores the last saved order; focus stays on the arrow tapped. |     |
+| `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                     |
+| `apps/web/components/day/program-order-dialog.tsx` | `ProgramOrderButton` and the dialog (client code): ↑ ↓ per program; each tap saves the whole order; taps during a save are sent together, and the page's older order cannot undo them; a failure restores the last saved order; focus stays on the arrow tapped. |
 | `apps/web/components/day/not-on-a-program.tsx`     | "Not on a program yet" / "on this day". No link until the Programs page exists (`programsHref`).                                                                                                                                                                 |
 | `apps/web/components/day/day-copy.ts`              | Every sentence the screen says, and each refusal's copy.                                                                                                                                                                                                         |
 | `apps/web/components/day/*.test.ts(x)`             | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                                                                                                                                          |
+| `apps/web/components/day/day-test-utils.tsx`       | The tests' shared harness (mount, queries). It holds no fake: a test file passes `createFakeDayActions` to `makeMount`, since only `*.test.ts(x)` may import the preview's fakes.                                                                                |
 | `apps/web/components/day/owed.test.ts`             | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                             |
 | `apps/web/lib/dal/day/index.ts`                    | A placeholder so the directory exists.                                                                                                                                                                                                                           |
 
@@ -72,7 +76,9 @@ the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b
    (in `ProgramLine`, which hides it the same way) at 15c.
 4. 🔴 **No production file imports a fixture or a fake.** They are preview and test data
    ([program-contract.md](./program-contract.md) invariant 4, held by a source scan). A screen's
-   own `*.test.tsx` may.
+   own `*.test.tsx` may. The tests'
+   shared harness (`day-test-utils.tsx`) holds none either: each test file hands it the fake's
+   factory, and mocks `next/navigation` for the screen's Reload.
 5. **A ✓ is optimistic, and one attempt has one `clientId`** (plan D24, §4). If the write fails
    the row un-ticks, keeps what was typed and says so. When the retry reuses the `clientId`, and
    when a ✓ mints a new one, is invariant 11. `/design/program?screen=day&fixture=today-two-programs&fail=next`
@@ -122,7 +128,7 @@ the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b
 
 - The program name is plain text, because the program page is not wired. As in v12, it shows only
   on a day with two programs.
-- A logged number shows as text until Change arrives at 12d.
+- A logged number shows as text until Change arrives at 13b-ii (wired at 12d).
 - An empty ✓ that fails leaves the field empty rather than filling in the target.
 - A set-type card looks done (edge and tint) only when every set shown is logged, as v12's does.
 

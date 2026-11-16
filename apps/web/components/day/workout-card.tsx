@@ -92,10 +92,14 @@ export const WorkoutCard = memo(function WorkoutCard({
           // A group of one (only one of its items shown, on a closed day) keeps its container and
           // its rest line, as v12 does, so its label is never unexplained.
           if (!superset) return cards;
-          const letter = (labels[group[0]!.index] ?? '').replace(/\d+$/, '');
+          const letter = supersetLetterOf(labels[group[0]!.index] ?? '');
           const rest = workout.restAfter[superset.group];
           return (
-            <li key={`superset:${superset.group}`} className="border-primary border-l-2 pl-3">
+            // Keyed by its place too: a group whose items are not neighbours shows as two runs.
+            <li
+              key={`superset:${superset.group}:${group[0]!.index}`}
+              className="border-primary border-l-2 pl-3"
+            >
               <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
                 {DAY_COPY.superset(letter)}
               </p>
@@ -125,4 +129,9 @@ function groupsOf(items: readonly DayItem[]): Array<Array<{ item: DayItem; index
     else out.push([{ item, index }]);
   });
   return out;
+}
+
+/** A superset label's letter: `A` of `A1`, `AB` of `AB2` (the contract's labels, `supersetLabels`). */
+export function supersetLetterOf(label: string): string {
+  return label.replace(/\d+$/, '');
 }

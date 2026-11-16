@@ -145,13 +145,30 @@ export function textOf(item: DayItem, values: RowValues): RowText {
 }
 
 /**
- * One field of a row's values, as the bare number its column shows (`27.5`, `30`, `8`), since the
- * column's header names the unit; `''` when absent.
+ * One field of a row's values, as its column shows it: the bare number (`27.5`, `30`, `8`), since
+ * the column's header names the unit; **with its unit when it was logged in another one** (the
+ * item's unit changed since, D7), so `27.5 lb` never reads as kg. `''` when absent.
  */
 export function fieldText(item: DayItem, values: RowValues, field: RowField): string {
   if (field === 'reps') return values.reps === undefined ? '' : String(values.reps);
   const quantity = slotQuantity(item, values.quantities);
-  return quantity ? String(quantity.value) : '';
+  if (!quantity) return '';
+  return quantity.unit === item.unit
+    ? String(quantity.value)
+    : quantityText(quantity.value, quantity.unit);
+}
+
+/**
+ * A row's values as parts: the quantities, then the reps as `× 6` where there is a quantity before
+ * them. Each part is unbreakable text, so Previous wraps between them and never inside one.
+ */
+export function valueParts(values: RowValues): string[] {
+  const quantities = values.quantities.map((q) => quantityText(q.value, q.unit));
+  const parts = quantities.length ? [quantities.join(VALUE_JOINER)] : [];
+  if (values.reps !== undefined) {
+    parts.push(parts.length ? `× ${values.reps}` : String(values.reps));
+  }
+  return parts;
 }
 
 /**
@@ -159,11 +176,7 @@ export function fieldText(item: DayItem, values: RowValues, field: RowField): st
  * `20 lb × 6`, `15`, or `''` for a Check. Also PREVIOUS's text.
  */
 export function formatRowValues(values: RowValues): string {
-  const quantities = values.quantities.map((q) => quantityText(q.value, q.unit));
-  if (values.reps === undefined) return quantities.join(VALUE_JOINER);
-  return quantities.length
-    ? `${quantities.join(VALUE_JOINER)} × ${values.reps}`
-    : String(values.reps);
+  return valueParts(values).join(' ');
 }
 
 /** The visible label beside a field: the unit's code, none for a plain count. */

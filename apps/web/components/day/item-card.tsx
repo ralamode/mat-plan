@@ -46,17 +46,17 @@ export const ItemCard = memo(function ItemCard({
   item: DayItem;
   label: string | null;
 }) {
-  if (hasSetRows(item.trackingType)) {
-    return <SetItem workout={workout} workoutKey={workoutKey} item={item} label={label} />;
-  }
   const row = item.rows[0];
   if (!row) {
-    // A look-ahead day: the item, with no row to log.
+    // A look-ahead day: the item, with no row to log (for a single row and a set table alike).
     return (
       <li className={CARD_CLASS}>
         <ItemHeading item={item} label={label} onTint={false} />
       </li>
     );
+  }
+  if (hasSetRows(item.trackingType)) {
+    return <SetItem workout={workout} workoutKey={workoutKey} item={item} label={label} />;
   }
   return (
     <SingleItem workout={workout} workoutKey={workoutKey} item={item} row={row} label={label} />

@@ -6,15 +6,15 @@ import {
   type DayRow,
   type DayWorkout,
 } from '@mat-plan/shared';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
 import { DAY_COPY } from './day-copy';
-import { fieldsOf, fieldText, formatRowValues, type RowField } from './row-values';
-import { useRow } from './use-row';
+import { fieldsOf, fieldText, valueParts, type RowField } from './row-values';
+import { rowAccess, rowName, useRow } from './use-row';
 import {
   CARD_CLASS,
   fieldHeader,
@@ -33,9 +33,13 @@ import {
  * a table with headers"): Set, Previous, a column per field, ✓.
  *
  * - **Previous is left out on a day that cannot be written** (D33), column and all.
- * - **"+ Add set"** adds one empty row past the last, kept until it is ticked; while it is there
- *   the button is gone, so there is never a gap of unlogged sets (maintainer, 2026-11-16). An added
- *   row that is never ticked is gone on reload, as typed text is.
+ * - **"+ Add set"** adds one empty row past the highest, kept until it is ticked; while an unlogged
+ *   row beyond the page's data is there the button is gone, so there is never a gap of unlogged
+ *   sets (maintainer, 2026-11-16). An added row that is never ticked is gone on reload, as typed
+ *   text is.
+ * - **A row shown this visit stays for the visit** (D20): the page's data lists a writable day's
+ *   prescribed sets plus those *logged* beyond them, so un-ticking an extra set drops it from the
+ *   data; it keeps its row here, un-ticked, so it can be ticked back.
  * - **A row whose prescription was removed** (D7) has no fields: it shows what was logged, and can
  *   be un-ticked and ticked back.
  * - The card looks done only when every set shown is logged, as v12's does.
@@ -56,11 +60,11 @@ export function SetItem({
   label: string | null;
 }) {
   const day = useDay();
-  const [added, setAdded] = useState<number | null>(null);
   const addedFocus = useRef<HTMLInputElement | null>(null);
+  /** Set when "+ Add set" is pressed: the added row's first field takes focus once it is shown. */
+  const focusAdded = useRef(false);
   const fields = fieldsOf(item);
-  const writable = !day.readOnly && workout.scheduled;
-  const canLog = writable && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
+  const { canWrite: writable, canLog } = rowAccess(day.readOnly, workout, item);
 
   const [withMessage, setWithMessage] = useState<ReadonlySet<number>>(() => new Set());
   // Stable, since each row's effect depends on it.
@@ -75,14 +79,23 @@ export function SetItem({
       }),
     [],
   );
-  const rows: DayRow[] = [...item.rows];
-  if (added !== null && !rows.some((r) => r.set === added)) {
-    rows.push({ set: added, previous: null, logged: null });
+  // Every set number shown this visit: the page's rows, and any added or un-ticked since.
+  const [shown, setShown] = useState<ReadonlySet<number>>(
+    () => new Set(item.rows.map((r) => r.set)),
+  );
+  if (item.rows.some((r) => !shown.has(r.set))) {
+    setShown(new Set([...shown, ...item.rows.map((r) => r.set)]));
   }
-  const pendingAdd = added !== null && !item.rows.some((r) => r.set === added);
+  const fromPage = new Map(item.rows.map((r) => [r.set, r]));
+  const rows: DayRow[] = [...new Set([...shown, ...fromPage.keys()])]
+    .sort((a, b) => a - b)
+    .map((set) => fromPage.get(set) ?? { set, previous: null, logged: null });
+  // A row beyond the page's data that is not logged: an added set not ticked yet, or an extra
+  // set un-ticked. One at a time, so Add set waits for it.
+  const pendingExtra = rows.some((r) => !fromPage.has(r.set));
   // The next set past the highest shown: the rows need not run without a gap.
   const nextSet = Math.max(0, ...rows.map((r) => r.set)) + 1;
-  const canAdd = canLog && !pendingAdd && nextSet <= MAX_SETS_PER_MOVEMENT;
+  const canAdd = canLog && !pendingExtra && nextSet <= MAX_SETS_PER_MOVEMENT;
   const allDone = rows.length > 0 && rows.every((r) => r.logged);
   // No tint while a row shows a message: `destructive` is under AA on it (see `TINT_CLASS`).
   const onTint = allDone && withMessage.size === 0;
@@ -90,31 +103,26 @@ export function SetItem({
   // a removed item, which cannot be logged again (its `previous` is always null).
   const showPrevious = writable && item.prescriptionPublicId !== null;
 
-  // The added row's first field takes focus once it is on screen.
+  // The added row's first field takes focus once it is on screen, and only then.
   useEffect(() => {
-    if (pendingAdd) addedFocus.current?.focus();
-  }, [pendingAdd]);
-
-  if (rows.length === 0) {
-    // A look-ahead day: the item, with no rows to log.
-    return (
-      <li className={CARD_CLASS}>
-        <ItemHeading item={item} label={label} onTint={false} />
-      </li>
-    );
-  }
+    if (!focusAdded.current) return;
+    focusAdded.current = false;
+    addedFocus.current?.focus();
+  }, [rows.length]);
 
   return (
     <li className={cn(CARD_CLASS, allDone && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}>
       <ItemHeading item={item} label={label} onTint={onTint} />
       <table className="mt-2 w-full table-fixed border-collapse text-sm">
+        <caption className="sr-only">{item.name}</caption>
         <colgroup>
           <col className="w-7" />
           {showPrevious ? <col /> : null}
           {fields.map((field) => (
             <col key={field} className={canLog ? 'w-14' : showPrevious ? 'w-16' : undefined} />
           ))}
-          <col className="w-12" />
+          {/* A wider ✓ column keeps the ✓ clear of the last field: an empty ✓ logs a set (D13). */}
+          <col className="w-14" />
         </colgroup>
         <thead>
           <tr className={secondaryText(onTint)}>
@@ -149,7 +157,7 @@ export function SetItem({
               showPrevious={showPrevious}
               onTint={onTint}
               onMessage={reportMessage}
-              focusRef={row.set === added ? addedFocus : undefined}
+              focusRef={row.set === nextSet - 1 && !fromPage.has(row.set) ? addedFocus : undefined}
             />
           ))}
         </tbody>
@@ -159,8 +167,10 @@ export function SetItem({
           type="button"
           variant="ghost"
           className="mt-1 px-2"
+          aria-label={DAY_COPY.addSetTo(item.name)}
           onClick={() => {
-            setAdded(nextSet);
+            focusAdded.current = true;
+            setShown(new Set([...shown, nextSet]));
             day.announce(DAY_COPY.setAdded(item.name));
           }}
         >
@@ -198,7 +208,7 @@ function SetRow({
   const tickRef = useRef<HTMLButtonElement>(null);
   const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
-  const name = DAY_COPY.setLabel(item.name, row.set);
+  const name = rowName(item, row);
   useFocusRefusedField(r, inputs, fields[0]);
   const hasMessage = r.error !== null;
   const { set } = row;
@@ -208,8 +218,7 @@ function SetRow({
     return () => onMessage(set, false);
   }, [hasMessage, onMessage, set]);
   const shownValues = r.logged ?? r.kept;
-  const previous = row.previous ? formatRowValues(row.previous) : null;
-  const [lead, ...rest] = previous ? previous.split(' × ') : [];
+  const previous = row.previous ? valueParts(row.previous) : null;
 
   return (
     <>
@@ -220,12 +229,13 @@ function SetRow({
         {showPrevious ? (
           <td className={cn('py-1 pr-1 tabular-nums', secondaryText(onTint))}>
             {previous ? (
-              <>
-                <span className="whitespace-nowrap">{lead}</span>{' '}
-                {rest.length ? (
-                  <span className="whitespace-nowrap">× {rest.join(' × ')}</span>
-                ) : null}
-              </>
+              previous.map((part, index) => (
+                // The space sits between the parts, outside each: the line may break there only.
+                <Fragment key={part}>
+                  {index > 0 ? ' ' : null}
+                  <span className="whitespace-nowrap">{part}</span>
+                </Fragment>
+              ))
             ) : (
               <>
                 <span aria-hidden="true">—</span>
@@ -257,7 +267,9 @@ function SetRow({
                   inputs.current[field] = el;
                   if (index === 0 && focusRef) focusRef.current = el;
                 }}
-                className="w-full px-1 text-center tabular-nums"
+                last={index === fields.length - 1}
+                // `px-0.5`: a six-character load (`1012.5`) fits the 56px column.
+                className="w-full px-0.5 text-center tabular-nums"
               />
             )}
           </td>

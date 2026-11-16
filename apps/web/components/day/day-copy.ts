@@ -27,6 +27,11 @@ export const DAY_COPY = {
   reps: 'Reps',
   noPrevious: 'none',
   addSet: '+ Add set',
+  /** "+ Add set" for a screen reader, which hears several on one page: which item it adds to. */
+  addSetTo: (name: string) => `Add set to ${name}`,
+  /** Column headers for a time quantity: v12's `Sec` and `Min`; other units show their code. */
+  secHeader: 'Sec',
+  minHeader: 'Min',
   setAdded: (name: string) => `${name}: set added`,
   setLabel: (name: string, set: number) => `${name} set ${set}`,
   /** A row logged against a prescription the program has since changed (D7; v12's wording). */
