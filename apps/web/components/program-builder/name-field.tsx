@@ -35,6 +35,7 @@ export function NameField({
   multiline = false,
   announce = true,
   hint,
+  autoCapitalize,
 }: {
   ref?: Ref<HTMLInputElement>;
   id: string;
@@ -55,6 +56,8 @@ export function NameField({
   announce?: boolean;
   /** A sentence that says what the field is for, read with it (never only a placeholder). */
   hint?: string;
+  /** `words` for a name that becomes a permanent item, as the movement picker's search does. */
+  autoCapitalize?: 'words';
 }) {
   const counterId = `${id}-count`;
   const errorId = `${id}-error`;
@@ -87,6 +90,9 @@ export function NameField({
           id={id}
           type="text"
           autoComplete="off"
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCapitalize ? 'off' : undefined}
+          spellCheck={autoCapitalize ? false : undefined}
           {...common}
           className={FIELD_CLASS}
         />

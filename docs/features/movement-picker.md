@@ -28,6 +28,8 @@ path and **creating** the deliberate one.
   label. [write-path.md](./write-path.md) invariant 14 is the rule.
 - **PR 3** — this guide's files: the fold and the search, the browse groups and aliases, the DTOs, the
   copy, and the component itself. **Unmounted** — nothing renders it yet.
+- **FAM-1 step 9** — a multi-select mode (`multiple`), mounted by the program builder's item
+  picker ([program-builder.md](./program-builder.md)). The single-pick mode is unchanged.
 - **PR 4** — mounts it in the log form, adds Decision 5's two reads, and owes a UX panel plus
   three-width screenshots.
 
@@ -118,6 +120,21 @@ path and **creating** the deliberate one.
     key-set test fails until someone chooses a group. That is what makes "no `other` group" true by
     construction rather than by a test that happens to pass, and it is why `CAT-2` cannot add a
     movement without deciding where it lives.
+
+12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
+    union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
+    - a row is a `button role="checkbox"` with `aria-checked`, in two columns (name and its meta
+      line, then a fixed box), so ticks line up at 360px; no `aria-current`;
+    - a tap toggles and the sheet stays open; Enter selects the one unambiguous match (never
+      deselects, never creates) and clears the search;
+    - "create" is the caller's: the button sits at the TOP of the body (with the keyboard up, the
+      footer is about 110 rows down), is withheld on an exact or alias hit as before (invariant 4),
+      and hands the typed text to `onCreate`. The component still never writes (invariant 2);
+    - every caller-specific word comes in through the props, so this file holds none of the
+      builder's copy;
+    - the caller's `footerAction` sits above the picker's own Close, which stays last;
+    - `notice` takes the status region; `takeover` replaces the search and the list (the caller's
+      form), and coming back from it clears the search.
 
 ## Traps
 

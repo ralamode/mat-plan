@@ -6,8 +6,10 @@ import {
   saveWorkoutSchema,
   SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
+  unitsForTrackingType,
   wholeReps,
   workoutDraftItemSchema,
+  type TrackingType,
   type Unit,
   type WorkoutDraft,
   type WorkoutDraftItem,
@@ -163,3 +165,39 @@ export const fieldId = (card: string | null, field: EditorField) =>
 
 /** The id of a card's unit select. */
 export const unitFieldId = (card: string) => `${fieldId(card, 'value')}-unit`;
+
+/**
+ * A new card for an item picked in the item picker (FAM-1 step 9): a fresh `prescriptionClientId`
+ * (D19: the editor mints it), and **no numbers** (the machine never authors a load). Its unit is the
+ * type's fixed one, else the item's own declared unit when the type allows it, else none until the
+ * person chooses _(maintainer, 2026-11-16)_.
+ */
+export function newCard(
+  option: { publicId: string; name: string; trackingType: TrackingType; unitDefault: Unit | null },
+  prescriptionClientId: string,
+): EditorCard {
+  const fields = TRACKING_TYPE_FIELDS[option.trackingType];
+  const declared =
+    option.unitDefault && unitsForTrackingType(option.trackingType).includes(option.unitDefault)
+      ? option.unitDefault
+      : null;
+  return {
+    item: {
+      prescriptionClientId,
+      itemPublicId: option.publicId,
+      itemName: option.name,
+      trackingType: option.trackingType,
+      sets: null,
+      targetReps: null,
+      quantities: [],
+      notes: null,
+      superset: null,
+      restAfter: null,
+    },
+    sets: '',
+    reps: '',
+    value: '',
+    unit: fields.slot ? (fields.unit ?? declared) : null,
+    notes: '',
+  };
+}

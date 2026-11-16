@@ -6,7 +6,15 @@ import {
   matchMovementOptions,
   movementNameSchema,
 } from '@mat-plan/shared';
-import { useDeferredValue, useId, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  useDeferredValue,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
@@ -46,6 +54,34 @@ export type TodaysProgramForPicker = {
   readonly onFormIds: ReadonlySet<string>;
 };
 
+/**
+ * Multi-select (FAM-1 step 9: the program builder's item picker). The picker still never writes:
+ * rows toggle through `onToggle`, and "create" hands the typed text to `onCreate`, which the caller
+ * turns into its own form. Every word specific to the caller comes in through these props.
+ */
+export type MultiPick = {
+  /** Selected option ids, in the order they were picked. */
+  readonly selected: readonly string[];
+  onToggle: (option: MovementOptionDTO) => void;
+  /** The typed text, trimmed (`''` from the plain "+ New item"). Never fired from Enter. */
+  onCreate: (typed: string) => void;
+  /** The create button's words: `''` gives the plain one, a name gives "New item: “Bear Crawl”". */
+  createLabel: (typed: string) => string;
+  /** Shown under the create button when nothing matches at all. */
+  noMatchHint: string;
+  /** The line under each row's name (what it tracks). */
+  describe: (option: MovementOptionDTO) => string;
+  /** The caller's action, rendered above the picker's own Close ("Add 3 items"). */
+  footerAction: ReactNode;
+  /** A message for the sheet's status region, in place of the count while it is set. */
+  notice?: string;
+  /**
+   * The caller's own body and footer in place of the search and the list (the new-item form). The
+   * list, the selection and the query are kept underneath.
+   */
+  takeover?: { body: ReactNode; footer: ReactNode } | null;
+};
+
 export type MovementPickerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,13 +94,28 @@ export type MovementPickerProps = {
   /** The card's current movement, marked `aria-current`. */
   currentId?: string;
   returnFocusTo: RefObject<HTMLElement | null>;
-  onPick: (
-    picked: { kind: 'existing'; option: MovementOptionDTO } | { kind: 'typed'; name: string },
-  ) => void;
-};
+} & (
+  | {
+      onPick: (
+        picked: { kind: 'existing'; option: MovementOptionDTO } | { kind: 'typed'; name: string },
+      ) => void;
+      multiple?: never;
+    }
+  | { multiple: MultiPick; onPick?: never }
+);
 
 /** A row, plus the single tag it earns. One tag per row, by precedence (panel 2 · 5). */
 type Row = { option: MovementOptionDTO; tag: string | null };
+
+/** How a row behaves: a pick (single), or a checkbox with its meta line (multi). */
+type RowMode =
+  | { kind: 'single'; currentId?: string; onPick: (option: MovementOptionDTO) => void }
+  | {
+      kind: 'multi';
+      selected: ReadonlySet<string>;
+      describe: (option: MovementOptionDTO) => string;
+      onPick: (option: MovementOptionDTO) => void;
+    };
 
 /**
  * Ids → options, in the given order, **dropping what the map does not have.**
@@ -90,6 +141,7 @@ export function MovementPicker({
   currentId,
   returnFocusTo,
   onPick,
+  multiple,
 }: MovementPickerProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -107,6 +159,15 @@ export function MovementPicker({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) setQuery('');
+  }
+
+  // Multi: back from the caller's takeover (the new-item form), the list starts unfiltered, so the
+  // item just made or selected is in view. Adjusted during render, as above.
+  const inTakeover = !!multiple?.takeover;
+  const [wasTakeover, setWasTakeover] = useState(inTakeover);
+  if (inTakeover !== wasTakeover) {
+    setWasTakeover(inTakeover);
+    if (!inTakeover) setQuery('');
   }
 
   // 🔴 **The search box takes focus only when there is no on-screen keyboard to raise** (criterion
@@ -234,9 +295,16 @@ export function MovementPicker({
   })();
 
   const pickExisting = (option: MovementOptionDTO) => {
+    // Multi: a row toggles and the sheet stays open.
+    if (multiple) return multiple.onToggle(option);
     onPick({ kind: 'existing', option });
     onOpenChange(false);
   };
+
+  const selectedSet = useMemo(() => new Set(multiple?.selected ?? []), [multiple?.selected]);
+  const mode: RowMode = multiple
+    ? { kind: 'multi', selected: selectedSet, describe: multiple.describe, onPick: pickExisting }
+    : { kind: 'single', currentId, onPick: pickExisting };
 
   // Empty groups are omitted, so `wrestling` simply does not render until `C3` seeds it. The DTO
   // carries the group the DAL read out of `MOVEMENT_PICKER_ENTRIES`, so this trusts the DTO rather
@@ -253,8 +321,7 @@ export function MovementPicker({
     .map(({ group, rows }) => (
       <Section
         key={group}
-        currentId={currentId}
-        onPick={pickExisting}
+        mode={mode}
         id={`${headingId}-${group}`}
         heading={COPY.groupLabel(group)}
         rows={rows}
@@ -268,149 +335,232 @@ export function MovementPicker({
       onOpenChange={onOpenChange}
       title={title}
       returnFocusTo={returnFocusTo}
-      initialFocus={prefersKeyboardFocus ? searchRef : undefined}
-      status={status}
+      initialFocus={prefersKeyboardFocus && !multiple?.takeover ? searchRef : undefined}
+      status={multiple?.notice || status}
       headerExtra={
-        <div>
-          <label className="sr-only" htmlFor={SEARCH_ID}>
-            {COPY.searchLabel}
-          </label>
-          <input
-            ref={searchRef}
-            id={SEARCH_ID}
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter picks only when unambiguous, and NEVER fires "use as typed" (UX3 N8).
-              if (e.key !== 'Enter') return;
-              e.preventDefault();
-              if (enterTarget) pickExisting(enterTarget);
-            }}
-            maxLength={MOVEMENT_NAME_MAX}
-            autoComplete="off"
-            // ⚠️ `autoCorrect` stays OFF — `rdl` → `roll` would be actively worse than no help.
-            autoCorrect="off"
-            // 🔴 **`words`, NOT `off`, and the reason is the CREATE half of this field.** Decision 8
-            // chose `autocapitalize off` for a search box; this box also creates. With it off, a kid
-            // typing `zercher squat` on a phone and tapping the footer puts **`zercher squat`** in
-            // the household's list, next to `Back Squat`, permanently — no rename until `MOV-1`, no
-            // delete until `V1-9b` — and the hint asks them to "check the spelling", which case is
-            // not. Capitalising costs matching NOTHING: every comparison goes through `foldName`,
-            // so `Rdl` still alias-hits `RDL` (probed). Found by the UX review of the built
-            // component; neither earlier panel weighed the create side.
-            autoCapitalize="words"
-            spellCheck={false}
-            enterKeyHint="search"
-            placeholder={COPY.searchPlaceholder}
-            aria-describedby={sheetStatusId(SHEET_ID)}
-            className={cn(INPUT_CLASS, 'w-full')}
-          />
-        </div>
+        multiple?.takeover ? undefined : (
+          <div>
+            <label className="sr-only" htmlFor={SEARCH_ID}>
+              {COPY.searchLabel}
+            </label>
+            <input
+              ref={searchRef}
+              id={SEARCH_ID}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter picks only when unambiguous, and NEVER fires "use as typed" (UX3 N8).
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                if (!enterTarget) return;
+                if (!multiple) return pickExisting(enterTarget);
+                // Multi: Enter SELECTS (never deselects, never creates), then clears for the next.
+                if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget);
+                setQuery('');
+                if (!prefersKeyboardFocus) e.currentTarget.blur();
+              }}
+              maxLength={MOVEMENT_NAME_MAX}
+              autoComplete="off"
+              // ⚠️ `autoCorrect` stays OFF — `rdl` → `roll` would be actively worse than no help.
+              autoCorrect="off"
+              // 🔴 **`words`, NOT `off`, and the reason is the CREATE half of this field.** Decision 8
+              // chose `autocapitalize off` for a search box; this box also creates. With it off, a kid
+              // typing `zercher squat` on a phone and tapping the footer puts **`zercher squat`** in
+              // the household's list, next to `Back Squat`, permanently — no rename until `MOV-1`, no
+              // delete until `V1-9b` — and the hint asks them to "check the spelling", which case is
+              // not. Capitalising costs matching NOTHING: every comparison goes through `foldName`,
+              // so `Rdl` still alias-hits `RDL` (probed). Found by the UX review of the built
+              // component; neither earlier panel weighed the create side.
+              autoCapitalize="words"
+              spellCheck={false}
+              enterKeyHint="search"
+              placeholder={COPY.searchPlaceholder}
+              aria-describedby={sheetStatusId(SHEET_ID)}
+              className={cn(INPUT_CLASS, 'w-full')}
+            />
+          </div>
+        )
       }
       footer={
-        // 🔴 **ALWAYS a footer, and Close is ALWAYS its last child** (panel 2 · 7). U0 renders a
-        // full-width outline Close when no footer is passed, so a conditional footer made the slot
-        // swap Close for an outline "Use as typed" at the same thumb position two keystrokes apart —
-        // and that button mints a household movement with no in-app undo until V1-9b.
-        <div className="flex flex-col gap-2">
-          {offersTyped ? (
-            <>
-              <Button
-                type="button"
-                // Quiet with candidates above, loud with none (UX2 B1). `someWords` counts as
-                // candidates (panel 2 · 8): UX3 6 exists to steer toward them.
-                variant={matches.length > 0 || someWords.length > 0 ? 'ghost' : 'outline'}
-                size="lg"
-                aria-disabled={typedNameIssue !== null}
-                aria-describedby={TYPED_HINT_ID}
-                onClick={() => {
-                  // focusable but inert, with the reason in the hint
-                  if (typedNameIssue) return;
-                  onPick({ kind: 'typed', name: deferredTrimmed });
-                  onOpenChange(false);
-                }}
-                // `button.tsx` is `whitespace-nowrap`; a long typed name must wrap, not clip.
-                // ⚠️ **`aria-disabled:` styles, because `Button` only styles `disabled:`.** Round 1
-                // chose `aria-disabled` so a keyboard user could REACH the reason, not so a sighted
-                // user would lose the inert cue — without these the button looks live, the tap does
-                // nothing, and the only signal is a `text-xs` line underneath.
-                className="h-auto min-h-11 w-full whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-              >
-                {COPY.asTyped(deferredTrimmed)}
-              </Button>
-              <p id={TYPED_HINT_ID} className="text-muted-foreground text-xs">
-                {typedNameIssue ?? COPY.asTypedHint(deferredTrimmed)}
-              </p>
-            </>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full text-base"
-            onClick={() => onOpenChange(false)}
-          >
-            {SHEET_COPY.close}
-          </Button>
-        </div>
+        multiple?.takeover ? (
+          multiple.takeover.footer
+        ) : multiple ? (
+          // The caller's action above the picker's own Close, which stays LAST (panel 2 · 7).
+          <div className="flex flex-col gap-2">
+            {multiple.footerAction}
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full text-base"
+              onClick={() => onOpenChange(false)}
+            >
+              {SHEET_COPY.close}
+            </Button>
+          </div>
+        ) : (
+          // 🔴 **ALWAYS a footer, and Close is ALWAYS its last child** (panel 2 · 7). U0 renders a
+          // full-width outline Close when no footer is passed, so a conditional footer made the slot
+          // swap Close for an outline "Use as typed" at the same thumb position two keystrokes apart —
+          // and that button mints a household movement with no in-app undo until V1-9b.
+          <div className="flex flex-col gap-2">
+            {offersTyped ? (
+              <>
+                <Button
+                  type="button"
+                  // Quiet with candidates above, loud with none (UX2 B1). `someWords` counts as
+                  // candidates (panel 2 · 8): UX3 6 exists to steer toward them.
+                  variant={matches.length > 0 || someWords.length > 0 ? 'ghost' : 'outline'}
+                  size="lg"
+                  aria-disabled={typedNameIssue !== null}
+                  aria-describedby={TYPED_HINT_ID}
+                  onClick={() => {
+                    // focusable but inert, with the reason in the hint
+                    if (typedNameIssue) return;
+                    onPick({ kind: 'typed', name: deferredTrimmed });
+                    onOpenChange(false);
+                  }}
+                  // `button.tsx` is `whitespace-nowrap`; a long typed name must wrap, not clip.
+                  // ⚠️ **`aria-disabled:` styles, because `Button` only styles `disabled:`.** Round 1
+                  // chose `aria-disabled` so a keyboard user could REACH the reason, not so a sighted
+                  // user would lose the inert cue — without these the button looks live, the tap does
+                  // nothing, and the only signal is a `text-xs` line underneath.
+                  className="h-auto min-h-11 w-full whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                >
+                  {COPY.asTyped(deferredTrimmed)}
+                </Button>
+                <p id={TYPED_HINT_ID} className="text-muted-foreground text-xs">
+                  {typedNameIssue ?? COPY.asTypedHint(deferredTrimmed)}
+                </p>
+              </>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full text-base"
+              onClick={() => onOpenChange(false)}
+            >
+              {SHEET_COPY.close}
+            </Button>
+          </div>
+        )
       }
     >
-      {deferredTrimmed === '' ? (
-        <>
-          {data.recentIds && data.recentIds.length > 0 ? (
-            <Section
-              currentId={currentId}
-              onPick={pickExisting}
-              id={`${headingId}-recent`}
-              heading={COPY.recent}
-              rows={rowsFrom(resolveOptions(data.recentIds, byId))}
-            />
-          ) : null}
-          {todaysProgram && !alreadyIn ? (
-            <TodaysProgram
-              headingId={`${headingId}-program`}
-              program={todaysProgram}
-              byId={byId}
-              rowsFrom={rowsFrom}
-              currentId={currentId}
-              onPick={pickExisting}
-            />
-          ) : null}
-          {browseGroups}
-          <Section
-            currentId={currentId}
-            onPick={pickExisting}
-            id={`${headingId}-household`}
-            heading={COPY.household}
-            rows={rowsFrom(
-              data.options.filter((o) => o.owner === 'household'),
-              { underHouseholdHeading: true },
-            )}
-          />
-        </>
-      ) : matches.length > 0 ? (
-        <Section
-          currentId={currentId}
-          onPick={pickExisting}
-          id={`${headingId}-matches`}
-          heading={COPY.matches}
-          rows={rowsFrom(matches, { inSearchResults: true })}
-        />
-      ) : someWords.length > 0 ? (
-        <Section
-          currentId={currentId}
-          onPick={pickExisting}
-          id={`${headingId}-some`}
-          heading={COPY.someWords}
-          rows={rowsFrom(someWords, { inSearchResults: true })}
-        />
+      {multiple?.takeover ? (
+        multiple.takeover.body
       ) : (
-        // No matches at all: the browse list stays reachable under the "No matches" status, so the
-        // sheet is never a dead end.
-        <>{browseGroups}</>
+        <>
+          {multiple ? (
+            <CreateTop
+              multiple={multiple}
+              typed={deferredTrimmed}
+              offersTyped={offersTyped}
+              issue={typedNameIssue}
+              loud={matches.length === 0 && someWords.length === 0}
+              noMatch={deferredTrimmed !== '' && matches.length === 0 && someWords.length === 0}
+            />
+          ) : null}
+          {deferredTrimmed === '' ? (
+            <>
+              {data.recentIds && data.recentIds.length > 0 ? (
+                <Section
+                  mode={mode}
+                  id={`${headingId}-recent`}
+                  heading={COPY.recent}
+                  rows={rowsFrom(resolveOptions(data.recentIds, byId))}
+                />
+              ) : null}
+              {todaysProgram && !alreadyIn ? (
+                <TodaysProgram
+                  headingId={`${headingId}-program`}
+                  program={todaysProgram}
+                  byId={byId}
+                  rowsFrom={rowsFrom}
+                  mode={mode}
+                />
+              ) : null}
+              {browseGroups}
+              <Section
+                mode={mode}
+                id={`${headingId}-household`}
+                heading={COPY.household}
+                rows={rowsFrom(
+                  data.options.filter((o) => o.owner === 'household'),
+                  { underHouseholdHeading: true },
+                )}
+              />
+            </>
+          ) : matches.length > 0 ? (
+            <Section
+              mode={mode}
+              id={`${headingId}-matches`}
+              heading={COPY.matches}
+              rows={rowsFrom(matches, { inSearchResults: true })}
+            />
+          ) : someWords.length > 0 ? (
+            <Section
+              mode={mode}
+              id={`${headingId}-some`}
+              heading={COPY.someWords}
+              rows={rowsFrom(someWords, { inSearchResults: true })}
+            />
+          ) : (
+            // No matches at all: the browse list stays reachable under the "No matches" status, so the
+            // sheet is never a dead end.
+            <>{browseGroups}</>
+          )}
+        </>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * Multi mode's create control, at the TOP of the body (FAM-1 step 9): with the keyboard up the
+ * footer scrolls to the end of a long list, so a create button there is about 110 rows away. Quiet
+ * with candidates, loud with none (UX2 B1); withheld on an exact or alias hit, where the status says
+ * what is already listed; a plain "+ New item" when the query is empty. Never fired from Enter.
+ */
+function CreateTop({
+  multiple,
+  typed,
+  offersTyped,
+  issue,
+  loud,
+  noMatch,
+}: {
+  multiple: MultiPick;
+  typed: string;
+  offersTyped: boolean;
+  issue: string | null;
+  loud: boolean;
+  noMatch: boolean;
+}) {
+  if (typed !== '' && !offersTyped) return null;
+  return (
+    <div className="mb-4 flex flex-col gap-1">
+      <Button
+        type="button"
+        variant={typed === '' || !loud ? 'ghost' : 'outline'}
+        size="lg"
+        aria-disabled={issue !== null || undefined}
+        aria-describedby={issue || noMatch ? TYPED_HINT_ID : undefined}
+        onClick={() => {
+          if (issue) return;
+          multiple.onCreate(typed);
+        }}
+        className="h-auto min-h-11 w-full justify-start whitespace-normal break-words text-base aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+      >
+        {multiple.createLabel(typed)}
+      </Button>
+      {issue || noMatch ? (
+        <p id={TYPED_HINT_ID} className="text-muted-foreground text-sm">
+          {issue ?? multiple.noMatchHint}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -419,15 +569,13 @@ function TodaysProgram({
   program,
   byId,
   rowsFrom,
-  currentId,
-  onPick,
+  mode,
 }: {
   headingId: string;
   program: TodaysProgramForPicker;
   byId: Map<string, MovementOptionDTO>;
   rowsFrom: (options: readonly MovementOptionDTO[]) => Row[];
-  currentId?: string;
-  onPick: (option: MovementOptionDTO) => void;
+  mode: RowMode;
 }) {
   // ⚠️ A prescribed id with no option is DROPPED before the open/closed decision (panel 2 · 6) —
   // otherwise the `<details>` opens over a row it cannot render. It happens when a prescription names
@@ -452,21 +600,58 @@ function TodaysProgram({
             {allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
           </h3>
         </summary>
-        <OptionList rows={rowsFrom(options)} currentId={currentId} onPick={onPick} />
+        <OptionList rows={rowsFrom(options)} mode={mode} />
       </details>
     </section>
   );
 }
 
-function OptionList({
-  rows,
-  currentId,
-  onPick,
-}: {
-  rows: Row[];
-  currentId?: string;
-  onPick: (option: MovementOptionDTO) => void;
-}) {
+function OptionList({ rows, mode }: { rows: Row[]; mode: RowMode }) {
+  if (mode.kind === 'multi') {
+    return (
+      <ul className="flex flex-col gap-1">
+        {rows.map(({ option, tag }) => {
+          const checked = mode.selected.has(option.publicId);
+          return (
+            <li key={option.publicId}>
+              {/*
+                A checkbox row (FAM-1 step 9): one target that carries its state, so VoiceOver
+                reads "Bear Crawl, Reps, checkbox, checked". Two columns: the name and its meta
+                line wrap in the first; the box keeps its own column, so ticks line up at 360px.
+              */}
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                onClick={() => mode.onPick(option)}
+                className={cn(
+                  'focus-visible:ring-ring hover:bg-accent grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:ring-3',
+                  checked && 'bg-accent',
+                )}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-base wrap-anywhere">{option.name}</span>
+                  <span className="text-muted-foreground text-sm">
+                    {[mode.describe(option), tag].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    'flex size-6 items-center justify-center rounded border text-sm',
+                    checked && 'border-primary bg-primary text-primary-foreground',
+                  )}
+                >
+                  {checked ? '✓' : ''}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+  const { currentId, onPick } = mode;
   return (
     <ul className="flex flex-col gap-1">
       {rows.map(({ option, tag }) => (
@@ -510,14 +695,12 @@ function Section({
   id,
   heading,
   rows,
-  currentId,
-  onPick,
+  mode,
 }: {
   id: string;
   heading: string;
   rows: Row[];
-  currentId?: string;
-  onPick: (option: MovementOptionDTO) => void;
+  mode: RowMode;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -525,7 +708,7 @@ function Section({
       <h3 id={id} className="text-muted-foreground mb-1 text-sm font-semibold">
         {heading}
       </h3>
-      <OptionList rows={rows} currentId={currentId} onPick={onPick} />
+      <OptionList rows={rows} mode={mode} />
     </section>
   );
 }

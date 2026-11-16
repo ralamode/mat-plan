@@ -15,7 +15,7 @@ import {
 import { Link2, Unlink2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import {
@@ -175,7 +175,12 @@ export function ItemCard({
             {label}
           </span>
         ) : null}
-        <h3 id={headingId} className={`font-semibold ${NAME_WRAP_CLASS}`}>
+        {/* Focusable, so the item picker can hand focus to the first card it added. */}
+        <h3
+          id={headingId}
+          tabIndex={-1}
+          className={`scroll-mb-40 rounded-sm font-semibold ${NAME_WRAP_CLASS} ${FOCUS_TARGET_CLASS}`}
+        >
           {label ? <span className="sr-only">{supersetSpoken(label)}: </span> : null}
           {item.itemName}
         </h3>

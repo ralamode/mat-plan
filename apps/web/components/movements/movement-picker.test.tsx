@@ -73,7 +73,9 @@ function Harness({
   todaysProgram?: TodaysProgramForPicker;
   alreadyIn?: { ids: ReadonlySet<string>; label: string };
   currentId?: string;
-  onPick?: (p: Parameters<React.ComponentProps<typeof MovementPicker>['onPick']>[0]) => void;
+  onPick?: (
+    p: Parameters<NonNullable<React.ComponentProps<typeof MovementPicker>['onPick']>>[0],
+  ) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -589,5 +591,127 @@ describe('the rest of the contract', () => {
     for (const group of Object.values(MOVEMENT_PICKER_ENTRIES).map((e) => e.group)) {
       expect(typeof COPY.groupLabel(group as MovementPickerGroup)).toBe('string');
     }
+  });
+});
+
+// ── Multi-select (FAM-1 step 9: the program builder's item picker) ────────────────────────────────
+describe('multi-select', () => {
+  function MultiHarness({
+    data,
+    takeover = null,
+    notice,
+    onCreate = vi.fn(),
+  }: {
+    data: MovementPickerData;
+    takeover?: { body: React.ReactNode; footer: React.ReactNode } | null;
+    notice?: string;
+    onCreate?: (typed: string) => void;
+  }) {
+    const [open, setOpen] = useState(false);
+    const [selected, setSelected] = useState<string[]>([]);
+    const ref = useRef<HTMLButtonElement>(null);
+    return (
+      <main>
+        <button ref={ref} type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        <MovementPicker
+          open={open}
+          onOpenChange={setOpen}
+          title="Add items"
+          data={data}
+          returnFocusTo={ref}
+          multiple={{
+            selected,
+            onToggle: (option) =>
+              setSelected((all) =>
+                all.includes(option.publicId)
+                  ? all.filter((id) => id !== option.publicId)
+                  : [...all, option.publicId],
+              ),
+            onCreate,
+            createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+            noMatchHint: 'No item matches.',
+            describe: () => 'Weight × reps',
+            footerAction: <button type="button">Add {selected.length}</button>,
+            notice,
+            takeover,
+          }}
+        />
+      </main>
+    );
+  }
+  const data = { options: ALL_CATALOG };
+  const box = (name: string) => screen.getByRole('checkbox', { name: new RegExp(`^${name}`) });
+
+  it('a row is a checkbox that toggles and keeps the sheet open', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    fireEvent.click(box('Romanian Deadlift'));
+    expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent.click(box('Romanian Deadlift'));
+    expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('Enter selects the one match (never deselects, never creates) and clears the search', () => {
+    const onCreate = vi.fn();
+    render(<MultiHarness data={data} onCreate={onCreate} />);
+    open();
+    type('rdl');
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect((search() as HTMLInputElement).value).toBe('');
+    expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
+    type('rdl');
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it('an alias hit offers no create: "RDL" is Romanian Deadlift', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('RDL');
+    expect(screen.queryByRole('button', { name: /^New item/ })).toBeNull();
+    expect(status()).toContain(COPY.statusAlreadyListed('Romanian Deadlift'));
+  });
+
+  it('create sits at the top of the list, names the text, and hands it over', () => {
+    const onCreate = vi.fn();
+    render(<MultiHarness data={data} onCreate={onCreate} />);
+    open();
+    expect(screen.getByRole('button', { name: '+ New item' })).toBeTruthy();
+    type('Bear crawl');
+    expect(screen.getByText('No item matches.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'New item: Bear crawl' }));
+    expect(onCreate).toHaveBeenCalledWith('Bear crawl');
+  });
+
+  it('the caller’s action sits above Close, which stays last', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    const footerButtons = [
+      ...screen
+        .getByRole('button', { name: 'Add 0' })
+        .closest('div')!
+        .parentElement!.querySelectorAll('button'),
+    ].map((b) => b.textContent);
+    expect(footerButtons.at(-1)).toBe('Close');
+    expect(footerButtons).toContain('Add 0');
+  });
+
+  it('a notice takes the status region; a takeover replaces search and list', () => {
+    render(
+      <MultiHarness
+        data={data}
+        notice="Bear crawl created and selected."
+        takeover={{ body: <p>the form</p>, footer: <button type="button">Create</button> }}
+      />,
+    );
+    open();
+    expect(status()).toBe('Bear crawl created and selected.');
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    expect(screen.getByText('the form')).toBeTruthy();
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
 });

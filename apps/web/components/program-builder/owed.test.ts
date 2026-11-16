@@ -20,10 +20,7 @@ describe('WorkoutDraft: owed by its consumers', () => {
   it.todo(
     '7b: the workout pages pass program; the editor names it and says who a change applies to',
   );
-  it.todo('9: items picked together are added in the order they were picked');
-  it.todo('9: a new item is made with its type; an existing name selects that item');
   it.todo('7a: saveWorkout and newItem pass the inherited action matrix');
-  it.todo('9: the picker renders picker-options (step 0b’s fixture), and its no-match state');
   it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
   it.todo('7b: every path in routes.ts has its page.tsx under app/programs/');
 });

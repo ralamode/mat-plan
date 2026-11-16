@@ -2,6 +2,8 @@
 
 import {
   FREE_TEXT_NOTE_MAX,
+  MAX_WORKOUT_ITEMS,
+  newId,
   PROGRAM_REFUSAL,
   WORKOUT_NAME_MAX,
   type ProgramActions,
@@ -17,13 +19,21 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
-import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS, NAV_LINK_CLASS, SAVING_LABEL } from '@/lib/constants';
-import type { MovementPickerData } from '@/lib/movements/movement-option';
+import {
+  CTA_CLASS,
+  FOCUS_TARGET_CLASS,
+  NAME_WRAP_CLASS,
+  NAV_LINK_CLASS,
+  SAVING_LABEL,
+} from '@/lib/constants';
+import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { moveDown, moveUp } from '@/lib/routine/editor';
 
 import {
+  addedText,
   BUILDER_COPY,
   EDITOR_COPY,
+  ITEM_PICKER_COPY,
   fieldsToFixText,
   movedText,
   PENDING_CLASS,
@@ -41,12 +51,14 @@ import {
 import {
   fieldId,
   readDraft,
+  newCard,
   toCards,
   type EditorCard,
   type EditorError,
   type EditorField,
 } from './editor-draft';
 import { ItemCard, type CardControl, type CardLink } from './item-card';
+import { ItemPicker } from './item-picker/item-picker';
 import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
@@ -110,7 +122,7 @@ const snapshot = (name: string, description: string, cards: readonly EditorCard[
   return JSON.stringify([name, description, plain]);
 };
 
-export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorScreenProps) {
+export function WorkoutEditorScreen({ draft, picker, actions, program }: WorkoutEditorScreenProps) {
   const router = useRouter();
   // The draft as opened, held for the life of the screen.
   const [loaded] = useState(() => {
@@ -147,6 +159,17 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   /** What asked "Discard?": Keep editing returns there. */
   const leftFrom = useRef<HTMLElement | null>(null);
   const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // ── The item picker (step 9) ─────────────────────────────────────────────────────────────────────
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Ticked items, in pick order. Kept across a Close until Add _(maintainer, 2026-11-16)_. */
+  const [picked, setPicked] = useState<string[]>([]);
+  /** Items made in the picker, so a reopened picker lists them. */
+  const [made, setMade] = useState<MovementOptionDTO[]>([]);
+  const addItemsRef = useRef<HTMLButtonElement>(null);
+  /** Where focus goes when the picker closes: "+ Add items", or the first card it added. */
+  const pickerReturn = useRef<HTMLElement | null>(null);
+  const pickerOptions = [...picker.options, ...made];
 
   const back = programPath(loaded.draft.programPublicId);
   const dirty = snapshot(name, description, cards) !== loaded.snapshot;
@@ -319,6 +342,29 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const withItems = (out: readonly WorkoutDraftItem[]) =>
     cards.map((card, i) => ({ ...card, item: out[i]! }));
 
+  /**
+   * Adds a card per ticked item, in pick order, with no numbers (`newCard`), and closes the picker
+   * with focus on the first new card's heading.
+   */
+  function addPicked() {
+    const byId = new Map(pickerOptions.map((option) => [option.publicId, option] as const));
+    const added = picked.flatMap((id) => {
+      const option = byId.get(id);
+      return option ? [newCard(option, newId())] : [];
+    });
+    if (!added.length) return;
+    flushSync(() => {
+      setCards((all) => [...all, ...added]);
+      setPicked([]);
+    });
+    pickerReturn.current = document.getElementById(
+      `card-${added[0]!.item.prescriptionClientId}-heading`,
+    );
+    setPickerOpen(false);
+    quiet();
+    report(addedText(added.length));
+  }
+
   /** The group's rest, typed on its last card. */
   function changeRest(id: string, value: string) {
     setCards((all) =>
@@ -427,180 +473,216 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   };
 
   return (
-    <form
-      className="flex flex-col gap-6 [&_:is(input,select,textarea,button,a)]:scroll-mb-40"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-      onKeyDown={holdEnter}
-      noValidate
-    >
-      <div className="flex flex-col gap-2">
-        <Link
-          href={back}
-          className={NAV_LINK_CLASS}
-          onClick={(event) => {
-            // A new tab (cmd, ctrl or shift) leaves this one as it is.
-            if (!dirty || event.metaKey || event.ctrlKey || event.shiftKey) return;
-            event.preventDefault();
-            leave(event.currentTarget);
-          }}
-        >
+    <>
+      <form
+        className="flex flex-col gap-6 [&_:is(input,select,textarea,button,a)]:scroll-mb-40"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+        onKeyDown={holdEnter}
+        noValidate
+      >
+        <div className="flex flex-col gap-2">
+          <Link
+            href={back}
+            className={NAV_LINK_CLASS}
+            onClick={(event) => {
+              // A new tab (cmd, ctrl or shift) leaves this one as it is.
+              if (!dirty || event.metaKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              leave(event.currentTarget);
+            }}
+          >
+            {program ? (
+              <>
+                <span aria-hidden>← </span>
+                <span className={NAME_WRAP_CLASS}>{program.name}</span>
+              </>
+            ) : (
+              EDITOR_COPY.backToProgram
+            )}
+          </Link>
+          <h1 id={HEADING_ID} className="text-2xl font-semibold tracking-tight">
+            {loaded.draft.workoutPublicId ? EDITOR_COPY.editWorkout : EDITOR_COPY.newWorkout}
+          </h1>
           {program ? (
-            <>
-              <span aria-hidden>← </span>
-              <span className={NAME_WRAP_CLASS}>{program.name}</span>
-            </>
+            <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+              {usedByText(program.athletes)}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <NameField
+            id={fieldId(null, 'name')}
+            label={EDITOR_COPY.workoutName}
+            value={name}
+            max={WORKOUT_NAME_MAX}
+            placeholder={EDITOR_COPY.workoutNamePlaceholder}
+            error={errorOn('name')}
+            announce={false}
+            onChange={(value) => {
+              setName(value);
+              quiet();
+              clearError(null, 'name');
+            }}
+          />
+          <NameField
+            id={fieldId(null, 'description')}
+            label={EDITOR_COPY.description}
+            value={description}
+            max={FREE_TEXT_NOTE_MAX}
+            error={errorOn('description')}
+            announce={false}
+            optional
+            multiline
+            onChange={(value) => {
+              setDescription(value);
+              quiet();
+              clearError(null, 'description');
+            }}
+          />
+        </div>
+
+        <section aria-labelledby={ITEMS_HEADING_ID} className="flex flex-col gap-3">
+          <h2
+            id={ITEMS_HEADING_ID}
+            ref={itemsHeadingRef}
+            tabIndex={-1}
+            className={`rounded-sm text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
+          >
+            {EDITOR_COPY.items}
+          </h2>
+          {cards.length > 1 ? (
+            <p className="text-muted-foreground text-sm">{EDITOR_COPY.supersetIntro}</p>
+          ) : null}
+          {cards.length ? (
+            <ol className="flex flex-col gap-3">
+              {cards.map((card, index) => {
+                const id = card.item.prescriptionClientId;
+                return (
+                  <ItemCard
+                    key={id}
+                    card={card}
+                    label={labels[index] ?? null}
+                    isFirst={index === 0}
+                    isLast={index === cards.length - 1}
+                    errors={errorsOf(id)}
+                    controlRef={(which, node) => {
+                      if (node) controls.current.set(`${id}:${which}`, node);
+                      else controls.current.delete(`${id}:${which}`);
+                    }}
+                    onChange={(field, value) => {
+                      updateCard(id, { [field]: value });
+                      quiet();
+                      clearError(id, field);
+                    }}
+                    onUnit={(unit) => changeUnit(card, unit)}
+                    onMove={(direction) => move(index, direction)}
+                    onRemove={(at) => remove(index, at)}
+                    link={linkOf(index)}
+                    onLink={(at) => toggleLink(index, at)}
+                    restLetter={restLetterOf(index)}
+                    onRest={(value) => changeRest(id, value)}
+                  />
+                );
+              })}
+            </ol>
           ) : (
-            EDITOR_COPY.backToProgram
+            <p className="text-muted-foreground">{EDITOR_COPY.noItems}</p>
           )}
-        </Link>
-        <h1 id={HEADING_ID} className="text-2xl font-semibold tracking-tight">
-          {loaded.draft.workoutPublicId ? EDITOR_COPY.editWorkout : EDITOR_COPY.newWorkout}
-        </h1>
-        {program ? (
-          <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-            {usedByText(program.athletes)}
-          </p>
-        ) : null}
-      </div>
+          {/* One instance after both branches, so the picker's return target never detaches. */}
+          <Button
+            ref={addItemsRef}
+            type="button"
+            variant={cards.length ? 'ghost' : 'outline'}
+            className={CTA_CLASS}
+            onClick={() => {
+              pickerReturn.current = addItemsRef.current;
+              setPickerOpen(true);
+            }}
+          >
+            {ITEM_PICKER_COPY.open}
+          </Button>
+        </section>
 
-      <div className="flex flex-col gap-4">
-        <NameField
-          id={fieldId(null, 'name')}
-          label={EDITOR_COPY.workoutName}
-          value={name}
-          max={WORKOUT_NAME_MAX}
-          placeholder={EDITOR_COPY.workoutNamePlaceholder}
-          error={errorOn('name')}
-          announce={false}
-          onChange={(value) => {
-            setName(value);
-            quiet();
-            clearError(null, 'name');
-          }}
-        />
-        <NameField
-          id={fieldId(null, 'description')}
-          label={EDITOR_COPY.description}
-          value={description}
-          max={FREE_TEXT_NOTE_MAX}
-          error={errorOn('description')}
-          announce={false}
-          optional
-          multiline
-          onChange={(value) => {
-            setDescription(value);
-            quiet();
-            clearError(null, 'description');
-          }}
-        />
-      </div>
-
-      <section aria-labelledby={ITEMS_HEADING_ID} className="flex flex-col gap-3">
-        <h2
-          id={ITEMS_HEADING_ID}
-          ref={itemsHeadingRef}
-          tabIndex={-1}
-          className={`rounded-sm text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
-        >
-          {EDITOR_COPY.items}
-        </h2>
-        {cards.length > 1 ? (
-          <p className="text-muted-foreground text-sm">{EDITOR_COPY.supersetIntro}</p>
-        ) : null}
-        {cards.length ? (
-          <ol className="flex flex-col gap-3">
-            {cards.map((card, index) => {
-              const id = card.item.prescriptionClientId;
-              return (
-                <ItemCard
-                  key={id}
-                  card={card}
-                  label={labels[index] ?? null}
-                  isFirst={index === 0}
-                  isLast={index === cards.length - 1}
-                  errors={errorsOf(id)}
-                  controlRef={(which, node) => {
-                    if (node) controls.current.set(`${id}:${which}`, node);
-                    else controls.current.delete(`${id}:${which}`);
-                  }}
-                  onChange={(field, value) => {
-                    updateCard(id, { [field]: value });
-                    quiet();
-                    clearError(id, field);
-                  }}
-                  onUnit={(unit) => changeUnit(card, unit)}
-                  onMove={(direction) => move(index, direction)}
-                  onRemove={(at) => remove(index, at)}
-                  link={linkOf(index)}
-                  onLink={(at) => toggleLink(index, at)}
-                  restLetter={restLetterOf(index)}
-                  onRest={(value) => changeRest(id, value)}
-                />
-              );
-            })}
-          </ol>
-        ) : (
-          <p className="text-muted-foreground">{EDITOR_COPY.noItems}</p>
-        )}
-      </section>
-
-      {/* The save bar: always in view on a phone, where Save and what it says are. The status
+        {/* The save bar: always in view on a phone, where Save and what it says are. The status
           line keeps two lines' height, which a link or unlink message never passes, so one
           does not push the bar up over a card. */}
-      <div
-        ref={barRef}
-        className="bg-background sticky bottom-0 flex flex-col gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-      >
-        <StatusLine status={status} alertId={SAVE_ALERT_ID} className="min-h-14 justify-end" />
-        {leaving ? (
-          <div role="group" aria-labelledby={DISCARD_QUESTION_ID} className="flex flex-col gap-2">
-            <p id={DISCARD_QUESTION_ID} className="text-sm font-medium">
-              {EDITOR_COPY.discardQuestion}
-            </p>
+        <div
+          ref={barRef}
+          className="bg-background sticky bottom-0 flex flex-col gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        >
+          <StatusLine status={status} alertId={SAVE_ALERT_ID} className="min-h-14 justify-end" />
+          {leaving ? (
+            <div role="group" aria-labelledby={DISCARD_QUESTION_ID} className="flex flex-col gap-2">
+              <p id={DISCARD_QUESTION_ID} className="text-sm font-medium">
+                {EDITOR_COPY.discardQuestion}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  ref={keepEditingRef}
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={keepEditing}
+                >
+                  {EDITOR_COPY.keepEditing}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-destructive flex-1"
+                  onClick={() => router.push(back)}
+                >
+                  {EDITOR_COPY.discard}
+                </Button>
+              </div>
+            </div>
+          ) : (
             <div className="flex gap-2">
               <Button
-                ref={keepEditingRef}
+                ref={cancelRef}
                 type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={keepEditing}
+                variant="ghost"
+                onClick={(event) => leave(event.currentTarget)}
               >
-                {EDITOR_COPY.keepEditing}
+                {BUILDER_COPY.cancel}
               </Button>
               <Button
-                type="button"
-                variant="outline"
-                className="text-destructive flex-1"
-                onClick={() => router.push(back)}
+                type="submit"
+                className={`flex-1 ${PENDING_CLASS}`}
+                aria-disabled={pending || undefined}
+                aria-describedby={SAVE_ALERT_ID}
               >
-                {EDITOR_COPY.discard}
+                {pending ? SAVING_LABEL : EDITOR_COPY.save}
               </Button>
             </div>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <Button
-              ref={cancelRef}
-              type="button"
-              variant="ghost"
-              onClick={(event) => leave(event.currentTarget)}
-            >
-              {BUILDER_COPY.cancel}
-            </Button>
-            <Button
-              type="submit"
-              className={`flex-1 ${PENDING_CLASS}`}
-              aria-disabled={pending || undefined}
-              aria-describedby={SAVE_ALERT_ID}
-            >
-              {pending ? SAVING_LABEL : EDITOR_COPY.save}
-            </Button>
-          </div>
-        )}
-      </div>
-    </form>
+          )}
+        </div>
+      </form>
+      {/* Outside the form: a portal's events bubble to React ancestors, and the picker's own form
+        must not submit the workout. */}
+      <ItemPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        returnFocusTo={pickerReturn}
+        options={pickerOptions}
+        selected={picked}
+        onToggle={(option) =>
+          setPicked((all) =>
+            all.includes(option.publicId)
+              ? all.filter((id) => id !== option.publicId)
+              : [...all, option.publicId],
+          )
+        }
+        inWorkout={new Set(cards.map((card) => card.item.itemPublicId))}
+        room={MAX_WORKOUT_ITEMS - cards.length}
+        newItem={actions.newItem}
+        onCreated={(option) => setMade((all) => [...all, option])}
+        onAdd={addPicked}
+      />
+    </>
   );
 }
