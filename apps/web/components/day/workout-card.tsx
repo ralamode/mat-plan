@@ -156,5 +156,10 @@ function useItemsShownThisVisit(workout: DayWorkout): DayItem[] {
   }
   if (readOnly || !workout.scheduled) return workout.items;
   const listed = new Set(workout.items.map(itemKeyOf));
-  return [...workout.items, ...[...removed.values()].filter((i) => !listed.has(itemKeyOf(i)))];
+  // A dropped item is no longer logged: its rows say so, so it neither looks done nor shows a
+  // pressed ✓. Rows this visit un-ticked keep their numbers and re-tick through the row's own state.
+  const dropped = [...removed.values()]
+    .filter((i) => !listed.has(itemKeyOf(i)))
+    .map((i) => ({ ...i, rows: i.rows.map((r) => ({ ...r, logged: null })) }));
+  return [...workout.items, ...dropped];
 }

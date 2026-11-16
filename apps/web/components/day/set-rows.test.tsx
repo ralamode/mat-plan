@@ -542,6 +542,18 @@ describe('after the program was edited (D7)', () => {
     expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
   });
 
+  it('a removed item dropped by the page while still logged here neither looks done nor pressed', async () => {
+    const control = mount(plan);
+    const next = structuredClone(control.plan);
+    const heavyA = next.workouts.find((w) => w.name === 'Heavy A')!;
+    heavyA.items = heavyA.items.filter((i) => i.name !== 'Pull-up');
+    await act(async () => control.setPlan(next));
+    const el = card('Heavy A', 'Pull-up');
+    expect(el.classList.contains(LOGGED_CARD_CLASS)).toBe(false);
+    expect(el.classList.contains(TINT_CLASS)).toBe(false);
+    expect(setTick(el, 'Pull-up', 1).getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('a load logged in another unit than the item’s now keeps its unit (D7)', () => {
     const changed = structuredClone(yesterdayHalfDone);
     const bench = changed.workouts
