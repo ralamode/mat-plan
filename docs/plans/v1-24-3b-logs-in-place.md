@@ -431,7 +431,8 @@ inserted is classified in this order:
    pin `bodyweight.ts:240-256` has; today's lookup has neither, `checkin.ts:119, 142`);
 2. **`day_taken`**: the item is `practice_minutes` and a live row holds `practiceSlot(profileId, day)`;
 3. **`own_hidden`**: a hidden row of this profile holds the `client_id` and the day is free;
-4. **conflict**: another profile's row holds it;
+4. **conflict**: another profile's row holds it, or this profile's live row holds it for another
+   metric or day;
 5. otherwise the existing throw.
 
 `practiceSlot` is exported from `checkin.ts` (not `single-value.ts`, which imports `hide.ts`), for
@@ -469,7 +470,8 @@ rejected at today's traffic.
 - Writer: same `client_id` → `replay`, same id; another `client_id` → `day_taken`, one live row, its
   value untouched; a habit plus a taken practice in one batch → `created` and `day_taken`; after a
   hide, a new insert → `created`; a hidden `client_id` holder with a free day → `own_hidden`; a
-  non-practice no-op with no holder throws; a `client_id` replayed under another metric is not a replay.
+  non-insert with no holder and no taken day throws (driven by a reused `public_id`, the one way
+  PGlite reaches it); a `client_id` reused under another metric, and on another day, is not a replay.
 - Restore: a habit plus a re-entered practice → `ok` and `slot_taken` in one call; the hidden practice
   restores once the live one is hidden.
 - Mutation patches (with `.expect`): the index loses `deleted_at is null`; the insert's `client_id`
@@ -480,15 +482,46 @@ rejected at today's traffic.
   on `e2e:local`'s embedded Postgres, recorded in the PR (3b-bw's precedent).
 
 **Z9 — Files.** `schema.ts`, the generated migration, `writers/checkin.ts`, `writers/hide.ts`,
-`apps/web/lib/dal/entries.ts` (the type), `apps/web/app/p/[profileId]/actions.ts` (+ test),
+`apps/web/app/p/[profileId]/actions.ts` (+ test),
 `verify/single-values.ts`, the mutation patches and README, `docs/features/write-path.md` (invariant 6;
 the bodyweight and strength inserts cannot hit the new index), `docs/features/delete-and-restore.md`
-(owns `hide.ts`; the reader audit gains the slot lookup), `docs/runbooks.md` (Z2), `docs/architecture.md`
-(the new arbiter), the changelog fragment.
+(owns `hide.ts`; the reader audit gains the slot lookup), `docs/runbooks.md` (Z2), `docs/privacy/data-inventory.md` (the arbiter count), the changelog
+fragment. _(As shipped: `lib/dal/entries.ts` needs no edit, since its type derives
+`CheckinWriteResult['outcome']`; `docs/architecture.md` lists no `entries` index, and `write-path.md` is
+their home.)_
 
 **Not in 3b-0:** any copy, any screen, the practice amend and clear (3b-life).
 
+**Owed by 3b-life, found in 3b-0's review:** (1) the classifier's final throw becomes reachable by a
+race once the practice clear ships (a skipping practice hidden before the held-day lookup), so the
+insert retries once on that shape before throwing; (2) `day_taken` gets its first reader, so the
+outcomes become a `packages/shared` const array (`CHECKIN_OUTCOMES`, the `RESTORE_REASONS` shape) and
+the two `actions.ts` comparisons use it; (3) `logLifeActivitiesAction` still answers `conflict` as `ok`
+(#387), so a crafted reuse of another row's `client_id` gets "saved" from the action even though the
+writer no longer calls it a replay. A wake retried across midnight is also a `conflict` now, so the
+fix needs its own decision.
+
 ## Review-response log (adversarial panel)
+
+### 3b-0 — the PR review: correctness, DB-safety and reuse lenses (2026-11-16, #461)
+
+| #   | Lens               | Finding (short)                                                                                                                  | Verdict      | Resolution                                                                                             |
+| --- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------ |
+| R1  | correctness, reuse | **P1:** `practiceSlot` had no caller; the held-day lookup re-typed it, and its profile and metric conjuncts were unproved        | **fixed**    | The lookup is built from `practiceSlot`; a sibling's practice and a habit on the day; mutations 81, 82 |
+| R2  | correctness        | **P1:** the replay's day pin could be deleted with everything green                                                              | **fixed**    | A day-only assertion; patch 79 split into 79 (day) and 80 (metric)                                     |
+| R3  | correctness        | **P1:** Z8's throw had no proof                                                                                                  | **fixed**    | `assert.rejects` on a reused `public_id`                                                               |
+| R4  | DB-safety          | **P0:** CI never ran (the PR conflicted with main)                                                                               | **fixed**    | Main merged in; CI ran                                                                                 |
+| R5  | DB-safety          | **P1:** the production read has no recorded result                                                                               | **open**     | The maintainer's; it gates the merge                                                                   |
+| R6  | correctness, DB    | The throw is reachable by a race once a practice can be hidden                                                                   | **deferred** | Comment corrected; 3b-life owes the retry (above)                                                      |
+| R7  | correctness        | Nothing asserted the migration's lock or statement order                                                                         | **fixed**    | The statement heads are asserted in order                                                              |
+| R8  | reuse              | The restore list claimed completeness, was named for days, and was exported with no importer                                     | **fixed**    | `RESTORE_SLOT_INDEXES`, private; the superset-order exclusion is named                                 |
+| R9  | reuse              | Each proof message typed twice                                                                                                   | **fixed**    | `expectOutcomes`                                                                                       |
+| R10 | reuse              | Activity keys re-typed in the proofs                                                                                             | **fixed**    | `ACTIVITY_TYPE_KEYS`                                                                                   |
+| R11 | reuse              | Three spellings of "the place is held"; outcomes a hand-typed union                                                              | **deferred** | 3b-life, where `day_taken` gets a reader (above)                                                       |
+| R12 | DB-safety          | `0025` named in the changelog and README                                                                                         | **fixed**    | "the 3b-0 migration"; patch 74 is re-pointed when the file is regenerated as 0026                      |
+| R13 | DB-safety          | The 3b-life gate and the preview estate were only in the PR body                                                                 | **fixed**    | Runbook: the index check before 3b-life, the preview reset, a group drill-down                         |
+| R14 | all                | Stale text: the catch comment, `slot_taken`'s definition, the inventory's count, write-path's caveat and B1-2 clause, Z4, Z8, Z9 | **fixed**    | Each corrected                                                                                         |
+| R15 | correctness        | Found outside the diff: the life action answers `conflict` as `ok` (#387)                                                        | **deferred** | 3b-life, with its own decision (above); the PR body no longer says the hole is closed                  |
 
 ### 3b-0 — a DB-safety and a correctness lens, before implementation (2026-11-16)
 

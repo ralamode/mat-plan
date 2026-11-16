@@ -8,7 +8,8 @@
 -- THE KEY: (profile_id, activity_date), live practice rows only. Practice has no slot, so unlike the
 -- bodyweight index (0012) there is no coalesce(context). Live rows only, so a cleared day can be logged
 -- again. The metric is a literal on purpose (drizzle-kit renders an interpolated const as `$1` in DDL).
--- A partial index over practice rows only; `entries` is small.
+-- A partial index over practice rows only (the 13th index on `entries`, past AGENTS.md's ~5-10; each is
+-- partial or a key, and `entries` is small).
 --
 -- NOT CONCURRENTLY: drizzle-kit migrate wraps the file in a transaction, and the table is small
 -- (`require-concurrent-index-creation` is excluded in .squawk.toml for that reason). No IF NOT EXISTS:
@@ -22,8 +23,9 @@
 --
 -- DEPLOY ORDER (Z7): the new writer is safe before the index (its insert is target-less and names no
 -- index). The index before the new writer is not: the old writer's ON CONFLICT (client_id) turns a
--- second same-day practice into a bare 23505. Merge when nobody is logging; a Vercel rollback past
--- this PR re-exposes that 23505.
+-- second same-day practice into a bare 23505. Merge when nobody is logging; confirm migrate.yml green
+-- and pg_indexes.indexdef before 3b-life merges (docs/runbooks.md); a Vercel rollback past this PR
+-- re-exposes that 23505.
 
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint

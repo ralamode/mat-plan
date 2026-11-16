@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index eacb662f..601de66d 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -45,7 +45,6 @@ import type { Executor } from './executor';
+  */
+ export function practiceSlot(profileId: number, day: string) {
+   return and(
+-    eq(schema.entries.profileId, profileId),
+     eq(schema.entries.activityDate, day),
+     eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
+   );

@@ -520,15 +520,16 @@ addressable, so restoring its export path needs no migration.
 🔴 **`client_id` is no longer in the freed set at all, as of `V1-9b` B0 (2026-11-12).** All five
 remaining arbiters — `sessions`, `supersets`, `entries`, `entry_sets`, `entry_set_quantities` — went
 non-partial, so a hide frees a **slot** (an ordinal, a day, a position) and never an **offline
-identity**. **Fifteen** arbiters stay partial on `deleted_at`: superset order, weigh-in day, set ordinal,
+identity**. **Sixteen** arbiters stay partial on `deleted_at`: superset order, weigh-in day, set ordinal,
 quantity slot, readiness day, ramp week, block slug, prescription slot, target pair, and since FAM-1
 4a-i the week's two slot keys (`uq_block_day_workouts_slot`, `uq_block_day_workouts_once_per_day`, so
 restoring a hidden slot can fail where a live one took its place), and since FAM-1 4a-ii the three log-side
 arbiters (one session per profile, day and workout; one superset per session and group; one row per
 session, prescription and set; each partial on its link being set, so restoring a hidden one can fail
-too) — and
+too), and since V1-24 3b-0 the practice day (one live practice per profile and day, so a cleared
+practice frees its day and restoring it can fail where a re-entry took it) — and
 `uq_household_members_clerk_user`, one live membership per Clerk account, which is a constraint
-rather than a slot. ⚠️ **Counted off `0024_snapshot.json`, not off a plan** (superset order's predicate also gained `prescription_set IS NULL` at 0024) (ten at `0021`; the plan once said
+rather than a slot. ⚠️ **Counted off `0024_snapshot.json`, not off a plan, plus 3b-0's one** (superset order's predicate also gained `prescription_set IS NULL` at 0024) (ten at `0021`; the plan once said
 nine because it predates the membership index); two further partial uniques key on `movements.household_id` rather
 than `deleted_at` and are untouched by any of this.
 **What a reader is owed, stated plainly:** a `client_id` can never be reused for a different row,

@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
-index b9b32f92..8b9ea6fb 100644
+index eacb662f..16060152 100644
 --- a/packages/db/src/writers/checkin.ts
 +++ b/packages/db/src/writers/checkin.ts
-@@ -199,7 +199,7 @@ export async function writeCheckinEntries(
+@@ -200,7 +200,7 @@ export async function writeCheckinEntries(
        return { clientId: v.clientId, outcome: 'replay' as const, publicId: holder.publicId };
      }
      // 2 · day_taken: a practice whose day a live practice already holds.

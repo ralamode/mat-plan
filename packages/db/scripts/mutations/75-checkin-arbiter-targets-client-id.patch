@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
-index b9b32f92..c249aac6 100644
+index eacb662f..41c24b98 100644
 --- a/packages/db/src/writers/checkin.ts
 +++ b/packages/db/src/writers/checkin.ts
-@@ -118,7 +118,7 @@ export async function writeCheckinEntries(
+@@ -120,7 +120,7 @@ export async function writeCheckinEntries(
      // to the practice index. The cost is that a non-insert no longer says WHY; the classifier below
      // re-asks, in a fixed order. `bodyweight.ts` made the same trade at 1e. `write-path.md`
      // invariant 6.
