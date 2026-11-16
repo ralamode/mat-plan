@@ -9,6 +9,7 @@ import {
   PROGRAM_BLOCK_KIND,
   PROGRAM_BLOCK_KINDS,
   PROGRAM_NAME_MAX,
+  PROGRAM_READ_KIND,
   SLOT_LABEL_MAX,
   WEEKDAYS,
   WORKOUT_NAME_MAX,
@@ -38,6 +39,7 @@ import {
   movementInHousehold,
   movementIsGlobal,
   programBlockByClientId,
+  programBlockInHousehold,
 } from '../../src/writers/ownership';
 import {
   asTx,
@@ -951,8 +953,12 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
       .from(schema.prescriptions)
       .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
       .where(
-        sql`${schema.programBlocks.kind} = ${PROGRAM_BLOCK_KIND.legacy} and ${schema.programBlocks.deletedAt} is null and ${schema.prescriptions.deletedAt} is null and ${schema.prescriptions.sets} is not null`,
+        and(
+          programBlockInHousehold(A_SCOPE),
+          sql`${schema.programBlocks.kind} = ${PROGRAM_BLOCK_KIND.legacy} and ${schema.programBlocks.deletedAt} is null and ${schema.prescriptions.deletedAt} is null and ${schema.prescriptions.sets} is not null`,
+        ),
       )
+      .orderBy(schema.prescriptions.id)
       .innerJoin(schema.profiles, eq(schema.profiles.householdId, schema.programBlocks.householdId))
       .limit(1);
     assert.ok(legacy, 'FAM-1 5b: a legacy prescription with a target exists');
@@ -960,8 +966,9 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
       .select({ publicId: schema.profiles.publicId })
       .from(schema.profiles)
       .where(
-        sql`${schema.profiles.householdId} = ${legacy.householdId} and ${schema.profiles.kind} = 'kid' and ${schema.profiles.deletedAt} is null`,
+        sql`${schema.profiles.householdId} = ${legacy.householdId} and ${schema.profiles.kind} = ${PROGRAM_READ_KIND} and ${schema.profiles.deletedAt} is null`,
       )
+      .orderBy(schema.profiles.id)
       .limit(1);
     assert.ok(kid, 'FAM-1 5b: a kid reads that program');
     const dayRole = legacy.dayRole as Parameters<typeof programDayRows>[1]['dayRole'];

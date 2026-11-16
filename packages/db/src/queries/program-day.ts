@@ -1,22 +1,19 @@
-import { PROGRAM_BLOCK_KIND, PROGRAM_READ_KIND, type DayRole } from '@mat-plan/shared';
+import { PROGRAM_READ_KIND, type DayRole } from '@mat-plan/shared';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
-import { isLiveProfile, programBlockInHousehold } from '../writers/ownership';
+import { isLiveProfile, programBlockInHousehold, programBlockIsLegacy } from '../writers/ownership';
 
 /**
- * 🔴 **The legacy-read guard (FAM-1 5b; ADR 0007 A2 §1): `program_blocks.kind = 'legacy'`.** A block a
+ * 🔴 **The legacy-read guard (FAM-1 5b; ADR 0007 A2 §1): `programBlockIsLegacy()`, `kind = 'legacy'`.** A block a
  * household builds in the app (`template`) is reached only through an assignment, never through these
  * newest-block reads, so neither read below may see one. ⚠️ **It is the REAL guard, not a second one:**
  * step 4b's `num_nonnulls(day_role, workout_id) = 1` cannot see a block's kind, so a template block's
  * prescription with a `day_role` stays legal in the database and only the writer refuses it. Do not
  * delete this as redundant (mutations 55 and 56).
  */
-function isLegacyBlock() {
-  return eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy);
-}
 
 /**
  * The programmed movements for ONE kid on ONE `day_role` (V1-10 slice 2), single-sourced here so the app
@@ -107,7 +104,7 @@ export function programDayRows(
         // Guarding the latter consumers separately would be copies, and
         // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
         eq(schema.profiles.kind, PROGRAM_READ_KIND),
-        isLegacyBlock(),
+        programBlockIsLegacy(),
         isNull(schema.programBlocks.deletedAt),
       ),
     )
@@ -194,16 +191,9 @@ export type ProgramDayRow = Awaited<ReturnType<typeof programDayRows>>[number];
  * athlete through an assignment, not through the kid-default read this explains.) Its one caller today
  * is the add-athlete form (`apps/web/app/p/new/page.tsx`), which words the Child option by it.
  *
- * 🔴 **It exists to tell two states apart that `programDayRows` renders identically** — both return
- * `[]`:
- *  - the household programs nothing yet, so there is nothing to explain; and
- *  - the household DOES program, but this athlete is an adult, so none of it is theirs.
- *
- * The day page shows its muted explanation only in the second case. Without this read an adult sees
- * an empty strength card with no reason given, which reads as a bug rather than a policy.
- *
- * ⚠️ **Not day-scoped on purpose.** "Does the household program at all" is the question; narrowing to
- * the requested `day_role` would hide the line on a rest day, when the explanation is just as true.
+ * It tells "this household has a live legacy (kid-default) program" from "it has none", which
+ * `programDayRows` cannot (both return `[]` for an adult). ⚠️ **Not day-scoped on purpose:** the
+ * question is about the household, not one day's role.
  */
 export async function householdHasProgram(
   db: NodePgDatabase<typeof schema>,
@@ -215,7 +205,7 @@ export async function householdHasProgram(
     .where(
       and(
         programBlockInHousehold(args.scope),
-        isLegacyBlock(),
+        programBlockIsLegacy(),
         isNull(schema.programBlocks.deletedAt),
       ),
     )

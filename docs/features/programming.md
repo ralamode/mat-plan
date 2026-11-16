@@ -99,7 +99,7 @@ scans the card in **both** states) **fails the build**. Two more things not to r
 3. **`programDayRows` returns ONE block by design.** It is not a bug that a second block does not
    appear. Anything wanting multiple concurrent programs is SCHED-1, a different model.
 
-   🔴 **Both newest-block reads are LEGACY-only since FAM-1 5b** (`isLegacyBlock()` in
+   🔴 **Both newest-block reads are LEGACY-only since FAM-1 5b** (`programBlockIsLegacy()` from `writers/ownership.ts`, used in
    `queries/program-day.ts`; ADR 0007 A2 §1): `programDayRows` and `householdHasProgram` never see a
    block a household built in the app (`kind = 'template'`), which reaches an athlete only through an
    assignment. It is the REAL guard, not a belt-and-braces one: 4b's `day_role`/`workout_id` CHECK
