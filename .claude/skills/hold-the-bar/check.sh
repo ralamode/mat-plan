@@ -10,7 +10,7 @@
 # constraint-driven-development "floor guard"; the bar itself lives in AGENTS.md + the DoD.
 set -euo pipefail
 
-base_ref="${1:-origin/main}"
+base_ref="${1:-$(node "$(dirname "$0")/../../../.github/scripts/default-base.mjs")}"
 base="$(git merge-base "$base_ref" HEAD)"
 findings=0
 

@@ -250,7 +250,7 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## The schedule: in a row, and in lanes
 
-The same 45 PRs drawn twice: one after another, and in the lanes of
+The same 46 PRs drawn twice: one after another, and in the lanes of
 [the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
 PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
 Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
@@ -268,9 +268,9 @@ gantt
   Lane P's 4 PRs               :r2, 12, 16
   Lane E's 5 PRs               :r3, 16, 21
   Lane B's 9 PRs               :r4, 21, 30
-  Lane C's 8 PRs               :r5, 30, 38
-  Lane S's 7 PRs               :r6, 38, 45
-  All 45 PRs merged            :milestone, rm, 45, 45
+  Lane C's 9 PRs               :r5, 30, 39
+  Lane S's 7 PRs               :r6, 39, 46
+  All 46 PRs merged            :milestone, rm, 46, 46
 
   section Contract
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
@@ -307,7 +307,8 @@ gantt
 
   section C · day page
   13 rows and ✓                :c1, 1, 2
-  13b Change, supersets        :c2, 2, 3
+  13b set rows, supersets      :c2, 2, 3
+  13b-ii Change                :c2b, 3, 4
   13d look ahead, closed days  :c3, 3, 4
   12b first real ✓             :crit, c4, 8, 9
   12c on the day page          :crit, c5, 9, 10
@@ -330,7 +331,7 @@ gantt
 
 **What it shows**
 
-- **In a row, 45 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
+- **In a row, 46 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
