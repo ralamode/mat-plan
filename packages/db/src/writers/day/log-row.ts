@@ -16,13 +16,13 @@ import {
   type RowValues,
   type RowWrite,
   SESSION_TYPE,
-  slotQuantity,
   TRACKING_TYPE_FIELDS,
   type TrackingType,
   trackingTypeSchema,
   type Unit,
   unitSchema,
   unitsForTrackingType,
+  itemUnit,
 } from '@mat-plan/shared';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -429,10 +429,8 @@ export async function logRow(
     // 10 — the values: the prescription fits its type, then the one fill rule.
     if (!fitsItsType(trackingType, quantities)) refuse(ROW_REFUSAL.bad_value);
     const fields = TRACKING_TYPE_FIELDS[trackingType];
-    // The unit the item logs in: the type's FIXED unit first (a Duration is `min` whatever the row
-    // says), else its slot's prescribed unit. A local copy of contract step C13's `itemUnit`, in its
-    // order, so swapping in the import changes nothing. ⚠️ 12a's `DayItem.unit` must be this rule.
-    const unit = fields.unit ?? slotQuantity({ trackingType }, quantities)?.unit ?? null;
+    // The unit the item logs in: `itemUnit`, the one rule 12a's `DayItem.unit` also reads.
+    const unit = itemUnit(trackingType, quantities);
     const target = prescribedTarget(prescription.targetReps, quantities);
     const values = fillRowValues({ trackingType, unit }, write.values, target);
     if (!values) refuse(ROW_REFUSAL.bad_value);

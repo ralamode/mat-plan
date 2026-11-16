@@ -25,15 +25,14 @@ import {
 } from '@mat-plan/shared';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import { schema, type Schema } from '../../src/client';
+import { schema } from '../../src/client';
 import { readRowValues } from '../../src/queries/day/stored-row-values';
 import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/log-row';
 import { hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
-import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import { asDb, asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import {
   entriesOnAnotherWorkoutsPrescriptions,
   entriesOnForeignPrescriptions,
@@ -87,9 +86,6 @@ const YESTERDAY = addDays(DAY, -1);
 const MONDAY = 1;
 const SUNDAY = 0;
 const TUESDAY = 2;
-
-/** The writers take a database handle; inside `rolledBack` that is the transaction (a savepoint). */
-const asDb = (tx: VerifyTx) => tx as unknown as NodePgDatabase<Schema>;
 
 /** A writer's answer, or what it threw, so a patch that makes it throw fails on a named assertion. */
 type Settled = RowResult | { threw: string };

@@ -116,8 +116,9 @@ same way, except:
   so 40.12345 answers 40.123, where the fake answers what was typed.
 - Until step 5, the writer has no "on the program that day" check (`OWED(step 5)`); the fake reads
   it from the fixture.
-- ⚠️ **The item's unit is one rule**: the slot's prescribed unit (`slotQuantity`), else the type's
-  fixed one. 12a's `DayItem.unit` must use the same rule, or a row's placeholder and its ✓ disagree.
+- ⚠️ **The item's unit is one rule**, `itemUnit` (`@mat-plan/shared`, C13): the type's fixed unit
+  first, else the slot's prescribed unit. 12a's `DayItem.unit` must call it for a live prescription
+  (a removed one takes the unit its entry was stored in), or a row's placeholder and its ✓ disagree.
 
 ## Changing it
 
