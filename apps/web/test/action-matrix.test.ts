@@ -1,3 +1,9 @@
+import {
+  TRANSPORT_REFUSALS,
+  type ProgramResult,
+  type RowResult,
+  type RowWrite,
+} from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import { ACTION_SCOPE, type ActionRegistry } from '@/app/p/[profileId]/mutating-actions';
@@ -7,6 +13,7 @@ import { ACTION_SCOPE, type ActionRegistry } from '@/app/p/[profileId]/mutating-
 import type {
   ActionBindings,
   ActionFn,
+  ContractActionFn,
   ValidBodies,
   Writer,
   describeActionMatrices,
@@ -33,6 +40,9 @@ const REGISTRY = {
   profileAction: { refusal: 'x', scope: ACTION_SCOPE.profile },
   householdAction: { refusal: 'y', scope: ACTION_SCOPE.household },
   excludedAction: { excluded: { reason: 'r', provenBy: 'p' } },
+  // Two actions that speak the FAM-1 contract (contract change C7), one of each addressing.
+  contractProfileAction: { refusal: TRANSPORT_REFUSALS, scope: ACTION_SCOPE.profile },
+  contractHouseholdAction: { refusal: TRANSPORT_REFUSALS, scope: ACTION_SCOPE.household },
 } as const satisfies ActionRegistry;
 
 type Bindings = ActionBindings<typeof REGISTRY>;
@@ -43,12 +53,54 @@ const write: Writer = () => undefined;
 const scopeMiss = { scopeMiss: () => undefined };
 const body = () => new FormData();
 
+// The contract's own action signatures, so the pins below are about the shapes a lane will bind.
+const rowFn = async (_input: RowWrite): Promise<RowResult> => ({ ok: false, reason: 'retry' });
+const programFn = async (_input: { name: string }): Promise<ProgramResult> => ({ ok: true });
+const input = () => ({});
+
 /** The shapes that MUST be accepted — so the pins below cannot pass by rejecting everything. */
 const accepted: Bindings = {
   profileAction: { fn, writers: [write] },
   householdAction: { fn, writers: [write], ...scopeMiss },
+  contractProfileAction: { fn: rowFn, writers: [write] },
+  contractHouseholdAction: { fn: programFn, writers: [write], ...scopeMiss },
 };
-const acceptedBodies: Bodies = { profileAction: body, householdAction: body };
+const acceptedBodies: Bodies = {
+  profileAction: body,
+  householdAction: body,
+  contractProfileAction: input,
+  contractHouseholdAction: input,
+};
+
+// A `RowResult` action and a `ProgramResult` action are both contract actions.
+const _rowIsContract: ContractActionFn = rowFn;
+const _programIsContract: ContractActionFn = programFn;
+void [_rowIsContract, _programIsContract];
+
+// @ts-expect-error — an entry that speaks the contract cannot be bound to a form action
+const _contractBoundToForm: Bindings['contractProfileAction'] = { fn, writers: [write] };
+void _contractBoundToForm;
+
+// @ts-expect-error — and a form entry cannot be bound to an action that speaks the contract
+const _formBoundToContract: Bindings['profileAction'] = { fn: rowFn, writers: [write] };
+void _formBoundToContract;
+
+// @ts-expect-error — the scope rule holds for a contract action too: household needs `scopeMiss`
+const _contractHouseholdWithoutMiss: Bindings['contractHouseholdAction'] = {
+  fn: programFn,
+  writers: [write],
+};
+void _contractHouseholdWithoutMiss;
+
+// @ts-expect-error — a form action's valid body is its FormData, not an object
+const _formBodyIsFormData: Bodies['profileAction'] = input;
+void _formBodyIsFormData;
+
+const _registryRefusalIsClosed = {
+  // @ts-expect-error — a registry cannot invent its own transport refusals
+  made: { refusal: { noSession: 'forbidden', rateLimited: 'retry' }, scope: ACTION_SCOPE.profile },
+} as const satisfies ActionRegistry;
+void _registryRefusalIsClosed;
 
 // @ts-expect-error — a matrix action with no binding (`householdAction` is missing)
 const _missingBinding: Bindings = { profileAction: accepted.profileAction };
@@ -93,7 +145,12 @@ const callAccepted: CallOptions['bindings'] = accepted;
 
 describe('the action-matrix types hold a module to its registry', () => {
   it('accepts a binding and a body for each matrix action, and nothing for an excluded one', () => {
-    const matrixNames = ['profileAction', 'householdAction'];
+    const matrixNames = [
+      'profileAction',
+      'householdAction',
+      'contractProfileAction',
+      'contractHouseholdAction',
+    ];
     expect(Object.keys(accepted)).toEqual(matrixNames);
     expect(Object.keys(acceptedBodies)).toEqual(matrixNames);
     expect(Object.keys(callAccepted)).toEqual(matrixNames);
