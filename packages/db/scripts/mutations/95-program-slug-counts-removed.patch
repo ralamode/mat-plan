@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/program-name.ts b/packages/db/src/writers/program/program-name.ts
+index 4f29af00..820ff6c1 100644
+--- a/packages/db/src/writers/program/program-name.ts
++++ b/packages/db/src/writers/program/program-name.ts
+@@ -96,7 +96,6 @@ export async function freeProgramSlug(
+     .where(
+       and(
+         programBlockInHousehold(scope),
+-        isNull(schema.programBlocks.deletedAt),
+         options.exceptPublicId === undefined
+           ? undefined
+           : ne(schema.programBlocks.publicId, options.exceptPublicId),
