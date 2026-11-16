@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 
-import { BODYWEIGHT_COPY, LOGGED_ROW_CLASS } from '@/lib/constants';
+import { BODYWEIGHT_COPY } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
+
+import { LoggedValueRow } from './logged-value-row';
 
 /** The day's logged weights as display strings (`84.5 lb`), in the DAL's oldest-first order. */
 export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string[] {
@@ -47,39 +49,23 @@ export function BodyweightReceipt({
   }
 
   const values = formatLoggedWeights(logged);
+  if (values.length === 1) {
+    return (
+      <LoggedValueRow control={control}>
+        {/* Its own element, so the value is findable on its own (`e2e/steps.ts`). */}
+        <span>{values[0]}</span>
+      </LoggedValueRow>
+    );
+  }
+  // Duplicates are a problem to resolve, not a done row: no tint, no Change.
   return (
-    // The done tint marks ONE logged weight (and drops while the editor is open: LOGGED_ROW_CLASS).
-    // Duplicates are a problem to resolve, not a done row.
-    <div
-      className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${values.length === 1 ? LOGGED_ROW_CLASS : ''}`}
-    >
-      {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value,
-          deterministically — load-bearing at 360px (why: `bodyweight-amend.tsx`). Keeping the saved
-          value visible above it shows what you are changing FROM while you type. `min-h-11` is the
-          one row height the Life row shares (plan W13). */}
-      <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
-        {values.length === 1 ? (
-          <p className="flex items-center gap-2 text-base font-medium tabular-nums">
-            <span
-              aria-hidden="true"
-              className="bg-done text-done-foreground inline-flex size-6 items-center justify-center rounded-full text-sm"
-            >
-              ✓
-            </span>
-            <span className="sr-only">{BODYWEIGHT_COPY.logged} </span>
-            {/* Its own element, so the value is findable on its own (`e2e/steps.ts`). */}
-            <span>{values[0]}</span>
-          </p>
-        ) : (
-          // `tabular-nums` so a value changing under an amend doesn't shift the row's width.
-          <p className="text-base font-medium tabular-nums">{BODYWEIGHT_COPY.several(values)}</p>
-        )}
-        {control ?? null}
+    <div className="flex flex-col gap-1 rounded-lg border px-4 py-3">
+      <div className="flex min-h-11 items-center">
+        {/* `tabular-nums` so a value changing under an amend doesn't shift the row's width. */}
+        <p className="text-base font-medium tabular-nums">{BODYWEIGHT_COPY.several(values)}</p>
       </div>
       {/* Its OWN line, never a suffix: at 360px the row has ~294px, and the values already fill it. */}
-      {values.length > 1 ? (
-        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values)}</p>
-      ) : null}
+      <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values)}</p>
     </div>
   );
 }

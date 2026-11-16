@@ -11,6 +11,10 @@ import {
   modeNotApplicableMessage,
   newId,
   ROUTINE_VERSION,
+  PRACTICE_AMEND_REFUSAL,
+  PRACTICE_MINUTES_MAX,
+  PRACTICE_MINUTES_MIN,
+  type EditPracticeInput,
 } from '@mat-plan/shared';
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -55,6 +59,11 @@ vi.mock('@/lib/dal/entries', () => ({
   // V1-24 3b-bw. Default: the row is today's and live, and a clear hides it.
   bodyweightRowDay: vi.fn(async () => ({ day: localDayIso(DEFAULT_TIME_ZONE) })),
   clearBodyweightEntry: vi.fn(async () => ({ cleared: true })),
+  // V1-24 3b-life. Default: the practice is today's and live; an amend matches; a clear hides it.
+  practiceRowDay: vi.fn(async () => ({ day: localDayIso(DEFAULT_TIME_ZONE) })),
+  editPractice: vi.fn(async () => ({ entryId: 'pr-pub-id' })),
+  ownedPracticeMinutes: vi.fn(async () => null),
+  clearPracticeEntry: vi.fn(async () => ({ cleared: true })),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
@@ -94,12 +103,16 @@ import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkin
 import {
   bodyweightRowDay,
   clearBodyweightEntry,
+  clearPracticeEntry,
   editBodyweight,
+  editPractice,
   editStrengthSet,
   logBodyweight,
   logCheckinEntries,
   logStrengthSession,
   ownedBodyweightValue,
+  ownedPracticeMinutes,
+  practiceRowDay,
 } from '@/lib/dal/entries';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
@@ -125,6 +138,7 @@ import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
+  editPracticeAction,
   editRoutineAction,
   editStrengthSetAction,
   logBodyweightAction,
@@ -204,6 +218,7 @@ describeActionMatrices({
       fn: editBodyweightAction,
       writers: [editBodyweight, clearBodyweightEntry],
     },
+    editPracticeAction: { fn: editPracticeAction, writers: [editPractice, clearPracticeEntry] },
     editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
   },
   // ⚠️ Thunks, so each may use a form helper declared further down this file.
@@ -221,6 +236,7 @@ describeActionMatrices({
     editStrengthSetAction: () =>
       editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
     editBodyweightAction: () => amendForm(),
+    editPracticeAction: () => practiceInput(),
     editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
   },
 });
@@ -1951,6 +1967,139 @@ describe('the registry matches every Server Action module on disk (WP-1)', () =>
       expect("import { describeActionMatrices } from '@/test/action-matrix';").not.toMatch(
         MATRIX_CALL,
       );
+    });
+  });
+});
+
+// ── V1-24 3b-life A5: editPracticeAction, the FAM-1 contract's shape ──────────────────────────────
+const PRACTICE_ENTRY_ID = '019826b4-0000-7000-8000-0000000000ab';
+const practiceInput = (over: Partial<EditPracticeInput> = {}): EditPracticeInput => ({
+  profilePublicId: PROFILE_ID,
+  entryId: PRACTICE_ENTRY_ID,
+  value: '45',
+  seenValue: 90,
+  ...over,
+});
+
+describe('editPracticeAction — the typed refusals', () => {
+  it('saves a whole number in range through the guarded UPDATE', async () => {
+    // The DAL gets the profile RESOLVED by ownership, not the one posted: the resolver answers a
+    // different id here, so passing the posted one through would fail this.
+    const RESOLVED = '019826b4-0000-7000-8000-0000000000ac';
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({
+      ...(await getProfileByPublicId(PROFILE_ID))!,
+      id: RESOLVED,
+    });
+    expect(await editPracticeAction(practiceInput())).toEqual({ ok: true });
+    expect(vi.mocked(editPractice).mock.calls[0]![0]).toMatchObject({
+      profilePublicId: RESOLVED,
+      entryId: PRACTICE_ENTRY_ID,
+      minutes: 45,
+      seenValue: 90,
+    });
+    expect(clearPracticeEntry).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['below the floor', { value: String(PRACTICE_MINUTES_MIN - 1) }],
+    ['above the ceiling', { value: String(PRACTICE_MINUTES_MAX + 1) }],
+    ['a decimal', { value: '45.5' }],
+    ['text', { value: 'abc' }],
+    ['a non-UUID entry', { entryId: 'not-a-uuid' }],
+  ])('refuses %s as invalid, touching nothing', async (_name, over) => {
+    expect(await editPracticeAction(practiceInput(over))).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.bad_value,
+    });
+    expect(practiceRowDay).not.toHaveBeenCalled();
+    expect(editPractice).not.toHaveBeenCalled();
+    expect(clearPracticeEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses an absent value: a crafted call cannot clear by omission', async () => {
+    const withoutValue: Partial<EditPracticeInput> = practiceInput();
+    delete withoutValue.value;
+    const res = await editPracticeAction(withoutValue as EditPracticeInput);
+    expect(res).toEqual({ ok: false, reason: PRACTICE_AMEND_REFUSAL.bad_value });
+    expect(clearPracticeEntry).not.toHaveBeenCalled();
+  });
+
+  it('a blank clears through clearPracticeEntry, never the UPDATE', async () => {
+    expect(await editPracticeAction(practiceInput({ value: '  ' }))).toEqual({ ok: true });
+    expect(vi.mocked(clearPracticeEntry).mock.calls[0]![0]).toMatchObject({
+      profilePublicId: PROFILE_ID,
+      entryId: PRACTICE_ENTRY_ID,
+      seenValue: 90,
+    });
+    expect(editPractice).not.toHaveBeenCalled();
+  });
+
+  it('an archived athlete cannot clear', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({
+      ...(await getProfileByPublicId(PROFILE_ID))!,
+      archived: true,
+    });
+    expect(await editPracticeAction(practiceInput({ value: '' }))).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.archived_blank,
+    });
+    expect(clearPracticeEntry).not.toHaveBeenCalled();
+  });
+
+  it('a clear of a row that is gone is not_found', async () => {
+    vi.mocked(clearPracticeEntry).mockResolvedValueOnce({ notFound: true });
+    expect(await editPracticeAction(practiceInput({ value: '' }))).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.not_found,
+    });
+  });
+
+  it('a stale clear refuses', async () => {
+    vi.mocked(clearPracticeEntry).mockResolvedValueOnce({ stale: true });
+    expect(await editPracticeAction(practiceInput({ value: '' }))).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.stale,
+    });
+  });
+
+  it('a row that is not theirs, or not a practice, is not_found, with no write', async () => {
+    vi.mocked(practiceRowDay).mockResolvedValueOnce(null);
+    expect(await editPracticeAction(practiceInput())).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.not_found,
+    });
+    expect(editPractice).not.toHaveBeenCalled();
+  });
+
+  it("a practice on a day before yesterday is read-only: the row's day bounds it, never a posted one", async () => {
+    for (const value of ['45', '']) {
+      vi.mocked(practiceRowDay).mockResolvedValueOnce({ day: localDay(-2) });
+      // A crafted call posting TODAY is ignored: the schema has no day, and the row's day bounds it.
+      const forged = { ...practiceInput({ value }), day: localDay(0) } as EditPracticeInput;
+      expect(await editPracticeAction(forged)).toEqual({
+        ok: false,
+        reason: PRACTICE_AMEND_REFUSAL.closed_day,
+      });
+    }
+    expect(editPractice).not.toHaveBeenCalled();
+    expect(clearPracticeEntry).not.toHaveBeenCalled();
+  });
+
+  it('the three-way branch: gone → not_found; already holds it → replay ok; else stale', async () => {
+    vi.mocked(editPractice).mockResolvedValueOnce(null);
+    vi.mocked(ownedPracticeMinutes).mockResolvedValueOnce(null);
+    expect(await editPracticeAction(practiceInput())).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.not_found,
+    });
+    vi.mocked(editPractice).mockResolvedValueOnce(null);
+    vi.mocked(ownedPracticeMinutes).mockResolvedValueOnce({ minutes: 45 });
+    expect(await editPracticeAction(practiceInput())).toEqual({ ok: true });
+    vi.mocked(editPractice).mockResolvedValueOnce(null);
+    vi.mocked(ownedPracticeMinutes).mockResolvedValueOnce({ minutes: 60 });
+    expect(await editPracticeAction(practiceInput())).toEqual({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.stale,
     });
   });
 });

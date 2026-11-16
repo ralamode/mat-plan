@@ -157,3 +157,13 @@ export function foldName(value: string): string {
       .toLowerCase()
   );
 }
+
+/**
+ * Whether a single value's typed field is empty (V1-24 3b-bw W5/W7; shared with practice at 3b-life).
+ * **One predicate for every side**: the Change editor reads `Clear` while it holds, the editor reports
+ * a clear, and each edit schema turns it into `null`. ⚠️ **Only a string** counts: an absent field,
+ * `null` or a `File` is not blank, so a crafted request cannot clear by omission.
+ */
+export function isBlankEntry(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() === '';
+}
