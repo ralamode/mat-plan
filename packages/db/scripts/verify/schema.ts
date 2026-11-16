@@ -2535,7 +2535,8 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     // Off and on again THE SAME DAY, case 1 (it started today too): the closed row holds the start key.
     await close(first, '2026-11-02');
     await expectRejectedBy(ASSIGNMENT_START_UNIQUE_INDEX, () => assign({ idx: 2 }), tx);
-    // Back on from the NEXT day: a new row, the closed one kept as history (D15).
+    // A new row starting the NEXT day: the closed one kept as history. (Amendment 4's writer reopens on
+    // the take-off day instead; this is the shape the keys allow for any later day.)
     const backOn = await accepted('FAM-1 5: back on from the next day is a new row', {
       idx: 2,
       activeFrom: '2026-11-03',

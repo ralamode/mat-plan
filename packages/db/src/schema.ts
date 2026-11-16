@@ -1469,11 +1469,11 @@ export const prescriptionTargets = pgTable(
  *   today, and is no longer open. `queries/program-assignments.ts` → `assignmentOnDay` is the ONE
  *   spelling; due adds a live weekday row for `localWeekday(D)` (`assignmentDueOn`).
  * - **current as of T**: live and (`active_to IS NULL` or `T <= active_to`): on today, or starting later
- *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: taken off today and
- *   back on from tomorrow leaves two current rows for one program (the closed one through today, the new
- *   one from tomorrow). `DayPlan.currentPrograms` and `ProgramOrder` list each program ONCE (the schema
- *   refuses a repeat), placed by its open or upcoming row's `idx`, or by the closed row's when it has no
- *   other; a reorder writes the place onto that row. Readers order by `(idx, id)` (A2 §7): on the
+ *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: `DayPlan.currentPrograms`
+ *   and `ProgramOrder` list each program ONCE (the schema refuses a repeat), placed by its open or
+ *   upcoming row's `idx`, or by the closed row's when it has no other; a reorder writes the place onto
+ *   that row. Amendment 4's writers leave at most one current row per program (a same-day put-on
+ *   reopens), so "once" is defensive: the schema itself allows two (`db:verify` shows the shape). Readers order by `(idx, id)` (A2 §7): on the
  *   take-off day a closed row and another program's open row may share an `idx`, because the order key
  *   covers open rows only.
  *

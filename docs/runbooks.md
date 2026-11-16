@@ -1821,10 +1821,10 @@ UNION ALL SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_fro
 ```
 
 On a non-zero, tell the household and skip that block. Otherwise, after step 11, delete for those
-blocks: `prescription_targets` (any left) → `prescription_quantities` → `prescriptions` →
+blocks: `prescription_targets` (a count that must read 0 by now) → `prescription_quantities` → `prescriptions` →
 `block_day_workouts` → `workouts` → `program_blocks`, counting each first and re-counting to 0.
-`db:verify` → FAM-1 5 proves the report (this household only) and this pre-flight
-(`othersOnTheseBlocks`); this sub-order is the household delete's own (steps 8–10).
+`db:verify` → FAM-1 5 proves equivalent queries for the report (this household only) and this
+pre-flight (`othersOnTheseBlocks`); this sub-order is the household delete's own (steps 8–10).
 
 Then re-run step 3's counts: **every row reads 0**, and the household's other athletes' counts and its
 program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise. `db:verify` → FAM-1 5

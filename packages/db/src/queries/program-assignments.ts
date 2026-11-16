@@ -28,11 +28,12 @@ export function assignmentOnDay(day: string) {
 
 /**
  * "Current as of T": live and not past its last day (on T, or starting later). `DayPlan.currentPrograms`
- * and `ProgramOrder` are built from these rows. ⚠️ **Several rows of ONE program can be current at
- * once**: taken off today and back on from tomorrow leaves the closed row (through today) and the new
- * one (from tomorrow). A reader lists each PROGRAM once, placed by its open or upcoming row's `idx`,
- * or by the closed row's when it has no other (`schema.ts` → `programAssignments`). The same live
- * parent and scope rule as `assignmentOnDay` applies.
+ * and `ProgramOrder` are built from these rows. A reader lists each PROGRAM once, placed by its open or
+ * upcoming row's `idx`, or by the closed row's when it has no other (`schema.ts` → `programAssignments`).
+ * Under ADR 0007 Amendment 4 the writers leave at most one current row per program (a put-on the day of a
+ * take-off reopens that row), so "once" is a defensive rule: it is what keeps a writer bug, or ASSIGN-1's
+ * later shapes, from listing a program twice. The same live parent and scope rule as `assignmentOnDay`
+ * applies.
  */
 export function assignmentCurrentAsOf(today: string) {
   const a = schema.programAssignments;
