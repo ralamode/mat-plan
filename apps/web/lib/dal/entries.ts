@@ -598,13 +598,14 @@ export async function clearBodyweightEntry(args: {
   return clearBodyweight(db, { ...args, scope });
 }
 
+/** The latest live weigh-in before a day, as the "Last time" hint shows it. */
+export type LastBodyweightDTO = { value: number; unit: BodyweightUnit; day: string };
+
 /**
  * The "Last time 72.5 lb" hint over the unlogged bodyweight row (V1-24 3b-bw, plan W10): the latest
  * live weigh-in strictly before `day`. Not a new reader of the data: the athlete's own page shows the
  * same weight on its own day.
  */
-export type LastBodyweightDTO = { value: number; unit: BodyweightUnit; day: string };
-
 export async function lastBodyweight(
   profilePublicId: string,
   day: string,

@@ -383,7 +383,7 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   await section.getByRole('button', { name: /^Change weight/ }).click();
   await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
   await expectNoAxeViolations(page, 'weigh-in (editing)');
-  // V1-24 3b-bw: emptied, Save reads Clear in the destructive style, on the logged row's tint.
+  // V1-24 3b-bw: emptied, Save reads Clear in the destructive style (the row drops its tint while editing).
   const editorField = section.getByLabel(/^Weight \(/);
   await editorField.fill('');
   const clear = section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel });

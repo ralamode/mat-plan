@@ -163,7 +163,7 @@ describe('both schemas read a typed weight the same way (V1-24 3b-bw, plan W3)',
   });
 
   it('refuses text that is not a weight on the log path, with the bound’s own copy', () => {
-    for (const bad of ['84..5', 'abc', '1e2', '0x50', '']) {
+    for (const bad of ['84..5', 'abc', '1e2', '0x50', '', '84.5555']) {
       expect(valueErrors(bad, LB), bad).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
     }
   });

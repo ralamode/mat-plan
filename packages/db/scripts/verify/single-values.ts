@@ -132,12 +132,13 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       unit: otherMetric.unit,
     });
     const siblingBw = await weighInRow(sibling.id, DAY, 60);
-    // A weigh-in of the WRONG SHAPE holding the value the form would post: non-`done`. Without the
-    // status pin it would be found and cleared. (A text-valued weigh-in cannot be inserted at all:
-    // the entries CHECKs refuse it, so the `value_text IS NULL` pin is unproven here and harmless.)
+    // Two weigh-ins of the WRONG SHAPE, each holding the value the form would post: a non-`done` one,
+    // and one carrying a text value beside its number (the shape `verify.ts`'s proof (h) inserts).
+    // Without the shape pins either would be found (and cleared), so each refusal proves its pin.
     const skippedBw = await weighInRow(athlete.id, '2026-10-11', 84.5, {
       status: ENTRY_STATUS.skipped,
     });
+    const textBw = await weighInRow(athlete.id, '2026-10-12', 84.5, { valueText: 'x' });
     const clear = (entryId: string, over: Partial<{ unit: string; seenValue: number }> = {}) =>
       clearBodyweight(exec, { ...asAthlete, entryId, unit: 'lb', seenValue: 84.5, ...over });
 
@@ -146,7 +147,10 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       { notFound: true },
       "3b-bw: clearBodyweight refuses another metric's entry — the metric is pinned, not posted",
     );
-    for (const [id, why] of [[skippedBw, 'a non-done weigh-in']] as const) {
+    for (const [id, why] of [
+      [skippedBw, 'a non-done weigh-in'],
+      [textBw, 'a text-valued weigh-in'],
+    ] as const) {
       assert.deepEqual(
         await clear(id),
         { notFound: true },
@@ -265,6 +269,7 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
       [relog.id, B_SCOPE, 'another household'],
       [other, S_SCOPE, 'another metric'],
       [skippedBw, S_SCOPE, 'a non-done weigh-in'],
+      [textBw, S_SCOPE, 'a text-valued weigh-in'],
     ] as const) {
       assert.equal(
         await bodyweightRowForAmend(exec, { profilePublicId: ATHLETE_PUBLIC_ID, scope, entryId }),
@@ -279,12 +284,13 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
     const cleared = await weighInRow(athlete.id, '2026-10-19', 72);
     await clearBodyweight(exec, { ...asAthlete, entryId: cleared, unit: 'lb', seenValue: 72 });
     await weighInRow(athlete.id, '2026-10-18', 99, { status: ENTRY_STATUS.skipped });
+    await weighInRow(athlete.id, '2026-10-17', 98, { valueText: 'x' });
     await weighInRow(athlete.id, D, 73);
     await weighInRow(athlete.id, '2026-10-21', 74);
     assert.deepEqual(
       await lastBodyweightBefore(exec, { ...asAthlete, day: D }),
       { value: 70, unit: 'lb', day: '2026-10-15' },
-      '3b-bw: "Last time" is the latest LIVE done weigh-in strictly before the day — a cleared one, a non-done one, the day itself and a later day are all skipped',
+      '3b-bw: "Last time" is the latest LIVE done weigh-in strictly before the day — a cleared one, a non-done one, a text one, the day itself and a later day are all skipped',
     );
     assert.equal(
       await lastBodyweightBefore(exec, {

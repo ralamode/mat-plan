@@ -41,6 +41,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import {
   APP_HOME_PATH,
+  AMEND_COPY,
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
@@ -418,6 +419,8 @@ const STATES = {
   // Interaction states on top of the already-logged fixture.
   'bodyweight-clear-armed': seedAlreadyLogged,
   'bodyweight-cleared': seedAlreadyLogged,
+  // V1-24 3b-bw — the open editor under a value the bound refuses: the row drops its tint there.
+  'bodyweight-editing-refused': seedAlreadyLogged,
   // V1-24 3b-bw — an empty ✓, refused in the browser. Interaction-only.
   'bodyweight-empty-tick': null,
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
@@ -745,6 +748,13 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).click();
     }
     await page.getByLabel('Weight', { exact: true }).waitFor();
+  },
+  'bodyweight-editing-refused': async (page) => {
+    const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
+    await section.getByRole('button', { name: /^Change weight/ }).click();
+    await section.getByLabel(/^Weight \(/).fill('845');
+    await section.getByRole('button', { name: AMEND_COPY.save }).click();
+    await section.getByRole('alert').waitFor();
   },
   'bodyweight-empty-tick': async (page) => {
     // Scoped to the section: Next's route announcer is a page-level `role="alert"` too.

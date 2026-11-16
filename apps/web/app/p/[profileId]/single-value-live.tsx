@@ -40,8 +40,12 @@ type Live = {
   focusRef: (target: FocusTarget) => (node: HTMLElement | null) => (() => void) | void;
   /** Drop a shown refusal: the editor reopened or was cancelled, so it no longer describes the screen. */
   dismiss: () => void;
-  /** The status line's id, for a field to list in `aria-describedby` (read when focus arrives). */
-  statusId: string;
+  /**
+   * The status line's id while it is SHOWN (a clear), for the field to list in `aria-describedby` so
+   * arriving focus reads it. `undefined` otherwise: a spoken-only "Bodyweight logged" left in the
+   * region must not describe a field that a different event emptied.
+   */
+  statusId: string | undefined;
 };
 
 const LiveContext = createContext<Live | null>(null);
@@ -174,7 +178,13 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
   }, []);
 
   const dismiss = useCallback(() => setAlert(null), []);
-  const live: Live = { report, claimFocus: take, focusRef, dismiss, statusId };
+  const live: Live = {
+    report,
+    claimFocus: take,
+    focusRef,
+    dismiss,
+    statusId: status.visible ? statusId : undefined,
+  };
 
   return (
     <LiveContext.Provider value={live}>

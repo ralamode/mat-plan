@@ -198,6 +198,9 @@ describe('BodyweightSection — the ✓ (plan W3, W6)', () => {
     });
     rerender(section({ logged: [weight(85)] }));
     expect(screen.getByRole('alert').textContent).toBe(BODYWEIGHT_COPY.dayTaken);
+    // Opening Change dismisses it: it was about a log, not the value now being changed.
+    fireEvent.click(screen.getByRole('button', { name: changeLabel('weight', shown(weight(85))) }));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('does NOT announce when paging from an empty day to a logged one (not a save)', () => {
@@ -319,7 +322,9 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
       fireEvent.click(screen.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }));
     });
     rerender(section({ logged: [] }));
-    expect(field().getAttribute('aria-describedby')).toContain(screen.getByRole('status').id);
+    const statusId = screen.getByRole('status').id;
+    expect(statusId).not.toBe('');
+    expect(field().getAttribute('aria-describedby')?.split(' ')).toContain(statusId);
   });
 
   it('a day change drops an open editor and its typed value', () => {

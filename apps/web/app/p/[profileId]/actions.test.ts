@@ -1747,7 +1747,7 @@ describe('editBodyweightAction — a blank clears, bounded by the row’s own da
     expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound('weight') });
   });
 
-  it('a replayed clear succeeds again: the writer answers it, never the amend’s re-read', async () => {
+  it('a clear never consults the amend’s re-read (the writer answers its own replay)', async () => {
     vi.mocked(clearBodyweightEntry).mockResolvedValueOnce({ cleared: true });
     const res = await editBodyweightAction(initial, amendForm({ value: '' }));
     expect(res).toEqual({ ok: true, error: null });

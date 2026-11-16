@@ -575,8 +575,8 @@ export async function editStrengthSetAction(
  * the live-only `ownedBodyweightValue`, AFTER the UPDATE: the pre-read's day is not a value, and a
  * value read before the UPDATE would turn a retry's race into "changed on another device".
  *
- * **Every refusal past the profile check revalidates** (the archived blank refuses before anything
- * is read, so there is nothing new to show), so the page shows what is true; the day page's live
+ * **Every refusal past the profile check revalidates** (the archived blank refuses before any
+ * write, so there is nothing new to show), so the page shows what is true; the day page's live
  * region carries the message after the form that sent it has unmounted.
  */
 export async function editBodyweightAction(

@@ -223,8 +223,9 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
  * ⚠️ This is a **characterization test, not an endorsement.** AGENTS.md's rule for this PR was
  * "report a contrast failure, do not loosen the test", and the honest report is a number that fails
  * loudly if anyone changes it. Neither pair is rendered by any route today, which is the only reason
- * `e2e/a11y.spec.ts` has been green: the `destructive` button variant has zero call sites
- * (`grep -rn 'variant="destructive"'` → nothing), and no screen puts `text-muted-foreground` on
+ * `e2e/a11y.spec.ts` has been green: the `destructive` button variant's one call site (V1-24 3b-bw,
+ * `bodyweight-amend.tsx`'s Clear) overrides its fill to `bg-transparent`, so the failing pair is not
+ * rendered, and no screen puts `text-muted-foreground` on
  * `bg-muted`. The preview page deliberately does NOT render either pair — rendering them would
  * redden the gate over a pre-existing defect this PR is not allowed to fix (changing `--destructive`
  * or `--muted` would change the live app's appearance, which UI-4 promised not to do).
