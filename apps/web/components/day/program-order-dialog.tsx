@@ -93,6 +93,11 @@ export function ProgramOrderDialog({
   const queued = useRef<{ order: Program[]; moved: Program } | null>(null);
   const arrows = useRef(new Map<string, HTMLButtonElement>());
   const lastTapped = useRef<string | null>(null);
+  /** Set by a move or a revert: the next list render puts focus back on the last arrow tapped. */
+  const refocus = useRef(false);
+  /** The page's latest order, and whether one arrived while a save was in flight. */
+  const latest = useRef<Program[]>(plan.currentPrograms);
+  const arrivedMidSave = useRef(false);
 
   // Opening starts clean: an old failure or announcement no longer describes the list.
   const [wasOpen, setWasOpen] = useState(open);
@@ -119,11 +124,16 @@ export function ProgramOrderDialog({
   }
   const settle = () => setPage((was) => ({ ...was, adopted: was.seen }));
   useEffect(() => {
-    if (!inFlight.current) saved.current = plan.currentPrograms;
+    latest.current = plan.currentPrograms;
+    if (inFlight.current) arrivedMidSave.current = true;
+    else saved.current = plan.currentPrograms;
   }, [plan.currentPrograms]);
 
-  // After the list re-renders, the arrow last tapped keeps focus.
+  // After a move or a revert, the arrow last tapped keeps focus. Only then: a re-read of the page
+  // that happens to re-render the list must not pull focus from wherever it is now.
   useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
     const key = lastTapped.current;
     if (open && key) arrows.current.get(key)?.focus();
   }, [order, open]);
@@ -151,8 +161,12 @@ export function ProgramOrderDialog({
     const waiting = queued.current;
     queued.current = null;
     if (!result.ok) {
-      settle();
+      // An order the page re-read during the save is the server's, so it is what to put back; and
+      // it is not marked as accounted for, so the list adopts it.
+      if (arrivedMidSave.current) saved.current = latest.current;
+      arrivedMidSave.current = false;
       setPending(false);
+      refocus.current = true;
       setOrder(saved.current);
       if (STALE_REFUSALS.includes(result.reason)) {
         setError(PROGRAM_COPY.orderStale);
@@ -163,6 +177,7 @@ export function ProgramOrderDialog({
       return;
     }
     saved.current = next;
+    arrivedMidSave.current = false;
     setError('');
     if (waiting) {
       await save(waiting.order, waiting.moved);
@@ -177,6 +192,7 @@ export function ProgramOrderDialog({
     const from = order.indexOf(program);
     const next = by === -1 ? moveUp(order, from) : moveDown(order, from);
     if (next.every((p, i) => p === order[i])) return;
+    refocus.current = true;
     setOrder(next);
     setError('');
     void save(next, program);

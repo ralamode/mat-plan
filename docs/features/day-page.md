@@ -59,7 +59,8 @@ adds its files and invariants here.
    the maintainer for 13d, 2026-11-16; the plan's amendment, D34, is the roadmap thread's). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
    once, at step 12c, after Bodyweight and Life. v12 puts three things above those sections, so
    they are their own components, given the **same `plan`** (and the same `actions` where they
-   write): `AthleteSwitcher({ plan, hrefFor })` under the `<h1>`, then
+   write): `AthleteSwitcher({ plan, hrefFor, className: 'lg:hidden' })` under the `<h1>` (the
+   nav rail lists the athletes from `lg`), then
    `ProgramLine({ plan, actions })` and `NotOnAProgram({ plan, programsHref? })`. Everything else a
    later step adds lives inside the screen. The preview harness is the contract owner's: it wires the three parts
    around `DayScreen` in the page's order after 13d merges, and 12c places them on the page. Their

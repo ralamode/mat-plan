@@ -338,17 +338,56 @@ describe('ProgramLine and the Program order dialog', () => {
     expect(screen.getByText(PROGRAM_COPY.orderFailed)).toBeTruthy();
   });
 
-  it('a refusal meaning the programs changed elsewhere re-reads the page instead of "try again"', async () => {
-    mountLine(
-      todayTwoPrograms,
-      withReorder(todayTwoPrograms, async () => ({ ok: false, reason: PROGRAM_REFUSAL.invalid })),
-    );
+  it.each([PROGRAM_REFUSAL.invalid, PROGRAM_REFUSAL.not_found])(
+    'a refusal meaning the programs changed elsewhere (%s) re-reads the page instead of "try again"',
+    async (reason) => {
+      mountLine(
+        todayTwoPrograms,
+        withReorder(todayTwoPrograms, async () => ({ ok: false, reason })),
+      );
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', FIRST.name));
+      });
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+    },
+  );
+
+  it('an order the page re-reads while nothing is pending is adopted', () => {
+    const view = mountLine(todayTwoPrograms);
+    fireEvent.click(orderButton());
+    const reordered = { ...todayTwoPrograms, currentPrograms: [SECOND, FIRST] };
+    view.rerender(<ProgramLine plan={reordered} actions={withReorder(reordered, vi.fn())} />);
+    expect(items()).toEqual(numbered([SECOND, FIRST]));
+  });
+
+  it('a refused save puts back the order the page re-read during it: the server’s, not the old one', async () => {
+    const THIRD = { programPublicId: '00000000-0000-7000-8000-0000000000c3', name: 'Third' };
+    const three = { ...todayTwoPrograms, currentPrograms: [FIRST, SECOND, THIRD] };
+    const { reorder, answer } = deferredReorder();
+    const view = mountLine(three, withReorder(three, reorder));
+    fireEvent.click(orderButton());
+    fireEvent.click(arrow('down', FIRST.name)); // in flight: [second, first, third]
+    // Another phone reorders meanwhile, and the page re-reads it.
+    const elsewhere = { ...three, currentPrograms: [THIRD, SECOND, FIRST] };
+    view.rerender(<ProgramLine plan={elsewhere} actions={withReorder(elsewhere, reorder)} />);
+    await answer(0, { ok: false, reason: PROGRAM_REFUSAL.retry });
+    expect(items()).toEqual(numbered([THIRD, SECOND, FIRST]));
+  });
+
+  it('a re-read of the page does not pull focus back to the arrow', async () => {
+    const view = mountLine(todayTwoPrograms);
     fireEvent.click(orderButton());
     await act(async () => {
       fireEvent.click(arrow('down', FIRST.name));
     });
-    expect(refresh).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+    const done = screen.getByRole('button', { name: PROGRAM_COPY.done });
+    done.focus();
+    // The same order, as a new array: what every re-read of the page hands back.
+    const again = { ...todayTwoPrograms, currentPrograms: [SECOND, FIRST] };
+    view.rerender(<ProgramLine plan={again} actions={withReorder(again, vi.fn())} />);
+    expect(document.activeElement).toBe(done);
   });
 
   it('a failed save says so; closing and opening again starts clean', async () => {
