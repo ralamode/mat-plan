@@ -806,8 +806,8 @@ describe('the fake ProgramActions: items and athletes', () => {
   });
 
   it('an option list without the catalog flag is a type error, not a silent tie-break by name', () => {
-    // ⚠️ Pinned HERE, not beside `existingItem`: `pnpm typecheck` covers this app's tests and not
-    // the shared package's, so the same directive there would never be checked.
+    // Pinned here because this is the caller that holds `MovementOptionDTO`s. (When it was written
+    // `pnpm typecheck` did not read the shared package's tests at all; #457 fixed that.)
     // @ts-expect-error — `MovementOptionDTO` has `owner`, not `isCatalog`; the caller maps it
     expect(existingItem([...pickerOptions], 'Push-ups')?.name).toBe('Push-ups');
   });
