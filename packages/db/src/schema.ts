@@ -276,7 +276,7 @@ export const profiles = pgTable(
  * The bodyweight one-per-day unique index (V1-24 PR 1d, migration 0012), named once for the schema
  * below. The insert does NOT name it: since 1e its arbiter is target-less (every unique index
  * arbitrates; see `writers/bodyweight.ts`). The one runtime match is `hide.ts`'s restore, which reads
- * a `23505`'s constraint name against `DAY_SLOT_INDEXES`. Renaming it means a new migration too.
+ * a `23505`'s constraint name against `RESTORE_SLOT_INDEXES`. Renaming it means a new migration too.
  */
 export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
 

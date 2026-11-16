@@ -105,7 +105,7 @@ holder, then discover the item moved — loses a live weigh-in for nothing. The 
 commit the holder's hide.
 
 **7 · A restore that lands on a held place answers `slot_taken`, through a list of index names**
-(`DAY_SLOT_INDEXES` in `hide.ts`, _maintainer, 2026-11-16_). Bodyweight has a holder lookup and the
+(`RESTORE_SLOT_INDEXES` in `hide.ts`, _maintainer, 2026-11-16_). Bodyweight has a holder lookup and the
 swap first; **practice (V1-24 3b-0) has neither**: its restore meets `uq_entries_profile_day_practice`
 and the catch answers `slot_taken` without `heldBy`, and `keepInsteadOf` never applies to it. That keeps
 the list provable on PGlite's one connection (mutation **78**); for bodyweight the catch is reached

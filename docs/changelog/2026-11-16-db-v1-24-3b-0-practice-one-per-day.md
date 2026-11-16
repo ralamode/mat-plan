@@ -9,7 +9,7 @@
     classified in a fixed order: replay (now only for the same metric and day), `day_taken`,
     `own_hidden`, conflict. Until 3b-life the life action answers `day_taken` as saved, because the ✓
     still writes a fixed 90 minutes.
-  - **Restore:** its duplicate catch is a list of index names (`DAY_SLOT_INDEXES`), which FAM-1 11b
+  - **Restore:** its duplicate catch is a list of index names (`RESTORE_SLOT_INDEXES`), which FAM-1 11b
     extends. Restore all into a day whose practice was re-entered answers `slot_taken` for that item
     and restores the rest.
   - **Proofs:** `verify/single-values.ts` § 3b-0; mutation patches 74–79, and patch 40 regenerated.

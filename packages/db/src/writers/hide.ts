@@ -249,7 +249,9 @@ export async function restoreHidden(
         results.push(error.result);
         continue;
       }
-      // 🔴 **The slot can be taken between the holder lookup and the restore, and the plan said so.**
+      // 🔴 **A restore can land on a place another live row now holds** (`RESTORE_SLOT_INDEXES`).
+      // Two ways: a practice (V1-24 3b-0) has no holder lookup, so a re-entered day reaches here
+      // every time, proved in `verify/single-values.ts` § 3b-0 (mutation 78); and for a weigh-in,
       // `restoreOne` reads the holder without locking a row that may not exist yet, so another device
       // inserting a weigh-in for the same (profile, day, slot) in that window makes the restore's
       // `deleted_at = NULL` hit `BODYWEIGHT_DAY_UNIQUE_INDEX`. The savepoint has already rolled back,
@@ -257,11 +259,11 @@ export async function restoreHidden(
       // call and surface as `error.tsx`. The plan's file table promised this mapping and the first
       // implementation silently dropped it; a db-safety lens and a correctness lens both caught it.
       //
-      // ⚠️ **Verified by READING the drivers, not by a test.** The error shape was traced through
-      // drizzle's `DrizzleQueryError` (`cause`), node-postgres' `DatabaseError` (`code`,
-      // `constraint`) and PGlite's equivalent — all three carry what this matches. It has no
-      // `db:verify` case because the race needs two connections and PGlite has one.
-      if (isDaySlotConflict(error)) {
+      // ⚠️ The weigh-in race needs two connections, which PGlite does not have, so that path was
+      // verified by reading drizzle's `DrizzleQueryError` (`cause`) and node-postgres' `DatabaseError`
+      // (`code`, `constraint`), and by 3b-0's two-connection probe on embedded Postgres (recorded in
+      // its PR). The practice path runs the same match on PGlite.
+      if (isRestoreSlotConflict(error)) {
         results.push({ entryPublicId, reason: RESTORE_REASON.slot_taken });
         continue;
       }
@@ -276,16 +278,18 @@ export async function restoreHidden(
  * The unique indexes whose violation, during a restore, means **"something else now holds this
  * item's place"**, so the item answers `slot_taken` rather than throwing.
  *
- * 🔴 **A list of index names, by decision** _(maintainer, 2026-11-16)_: each one-per-day or
- * one-per-slot rule on `entries` that a hidden row can collide with on its way back is named here,
- * once. V1-24 3b-0 added practice; FAM-1 11b appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. (#447's
- * other two arbiters are on `sessions` and `supersets`, which a restore never writes.)
+ * 🔴 **A list of index names, by decision** _(maintainer, 2026-11-16)_: the live-only uniques on
+ * `entries` whose collision has a meaningful answer for a person. V1-24 3b-0 added practice; FAM-1
+ * 11b appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. (#447's other two arbiters are on `sessions` and
+ * `supersets`, which a restore never writes.) ⚠️ Not every live-only unique on `entries` is here:
+ * `uq_entries_superset_order` is not, because a row's position in a superset is not a place a person
+ * chose, and a collision there is a bug that should propagate.
  *
  * ⚠️ **Practice reaches its entry ONLY through this catch** — it has no pre-check in `restoreOne`, so
  * `db:verify` proves its name here on one connection. Bodyweight keeps its pre-check and swap, so its
  * name here is reached only by the two-connection race (see the catch).
  */
-export const DAY_SLOT_INDEXES: readonly string[] = [
+const RESTORE_SLOT_INDEXES: readonly string[] = [
   BODYWEIGHT_DAY_UNIQUE_INDEX,
   PRACTICE_DAY_UNIQUE_INDEX,
 ];
@@ -293,14 +297,14 @@ export const DAY_SLOT_INDEXES: readonly string[] = [
 /**
  * Did this error come from a restore landing on a place another live row now holds?
  *
- * ⚠️ Narrow on purpose: it matches only `DAY_SLOT_INDEXES`, the constraints whose violation has a
+ * ⚠️ Narrow on purpose: it matches only `RESTORE_SLOT_INDEXES`, the constraints whose violation has a
  * meaningful answer. Any other `23505` is a genuine surprise and keeps propagating, because turning
  * every unique violation into `slot_taken` would tell a person the wrong story about a bug.
  */
-function isDaySlotConflict(error: unknown): boolean {
+function isRestoreSlotConflict(error: unknown): boolean {
   const cause = (error as { cause?: unknown })?.cause ?? error;
   const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
-  return code === '23505' && constraint !== undefined && DAY_SLOT_INDEXES.includes(constraint);
+  return code === '23505' && constraint !== undefined && RESTORE_SLOT_INDEXES.includes(constraint);
 }
 
 /**

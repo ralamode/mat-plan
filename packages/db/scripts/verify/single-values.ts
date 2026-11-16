@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 
 import {
+  ACTIVITY_TYPE_KEYS,
   ENTRY_KIND,
   ENTRY_STATUS,
   METRIC_KEYS,
@@ -372,6 +373,25 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     .map((part) => part.trim())
     .find((part) => part.startsWith('DO $$'));
   assert.ok(doBlock, '3b-0: the migration ships its duplicate pre-check');
+  // The order is the safety argument (Z2): the timeouts, then the SHARE lock, then the count, then
+  // the build, so the count and the build judge the same rows.
+  const statementHeads = readFileSync(new URL(migrationFile, migrationsDir), 'utf8')
+    .split('--> statement-breakpoint')
+    .map((part) =>
+      part
+        .split('\n')
+        .filter((line) => line.trim() !== '' && !line.trim().startsWith('--'))
+        .join(' ')
+        .trim()
+        .split(' ')
+        .slice(0, 2)
+        .join(' '),
+    );
+  assert.deepEqual(
+    statementHeads,
+    ['SET lock_timeout', 'SET statement_timeout', 'LOCK TABLE', 'DO $$', 'CREATE UNIQUE'],
+    '3b-0: the migration sets its timeouts, locks, pre-checks, then builds, in that order',
+  );
 
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
@@ -418,8 +438,8 @@ async function verifyPracticeOnePerDay(): Promise<void> {
           .from(schema.activityTypes)
           .where(eq(schema.activityTypes.key, key))
       )[0]?.id;
-    const practiceTypeId = await typeId('wrestling_practice');
-    const habitTypeId = await typeId('brush_teeth');
+    const practiceTypeId = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
+    const habitTypeId = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
     const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
     assert.ok(
       practiceTypeId && habitTypeId && weighInTypeId,
@@ -459,6 +479,14 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       (await orFail(what, () => writeCheckinEntries(exec, { profileId, values }))).map(
         (r) => r.outcome,
       );
+    // One message per proof, typed once: the mutation gate's `.expect` files match on it, whether the
+    // mutation makes the writer throw or mis-classify.
+    const expectOutcomes = async (
+      profileId: number,
+      values: CheckinInsertValue[],
+      expected: readonly string[],
+      what: string,
+    ) => assert.deepEqual(await outcomes(profileId, values, what), expected, what);
     const livePractices = async (profileId: number, day: string) =>
       tx
         .select({ publicId: schema.entries.publicId, valueNum: schema.entries.valueNum })
@@ -498,11 +526,7 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     // (c) The insert's classifier, in its order (plan Z4).
     const D1 = '2026-10-01';
     const first = practice(D1);
-    assert.deepEqual(
-      await outcomes(athlete.id, [first], '3b-0: a first practice is created'),
-      ['created'],
-      '3b-0: a first practice is created',
-    );
+    await expectOutcomes(athlete.id, [first], ['created'], '3b-0: a first practice is created');
     const replayed = await orFail(
       '3b-0: the same client_id again is a replay of the same row',
       () =>
@@ -524,12 +548,9 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     );
     // Another phone, same day: refused as `day_taken`, the first row untouched, still one live row.
     const secondPhone = { ...practice(D1), valueNum: '45' };
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [secondPhone],
-        "3b-0: another phone's practice on a held day is day_taken, not a second row",
-      ),
+    await expectOutcomes(
+      athlete.id,
+      [secondPhone],
       ['day_taken'],
       "3b-0: another phone's practice on a held day is day_taken, not a second row",
     );
@@ -539,12 +560,9 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       '3b-0: day_taken leaves exactly one live practice, its value untouched',
     );
     // One batch: a habit beside a taken practice still inserts (target-less skips per row).
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [habit(D1), practice(D1)],
-        '3b-0: a habit in the same batch as a taken practice still inserts',
-      ),
+    await expectOutcomes(
+      athlete.id,
+      [habit(D1), practice(D1)],
       ['created', 'day_taken'],
       '3b-0: a habit in the same batch as a taken practice still inserts',
     );
@@ -562,53 +580,61 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     });
     assert.ok('hiddenAt' in hid, '3b-0: the practice hides');
     // The hidden row still holds its client_id: a replay of it, with the day free, is own_hidden.
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [{ ...toHide, publicId: newId() }],
-        "3b-0: a hidden row's client_id with the day free is own_hidden (the slot lookup is live-only)",
-      ),
+    // The day is "free" of THIS athlete's live practice only: a sibling's practice and this
+    // athlete's habit on the same day are there, so a lookup that lost its profile or metric
+    // conjunct would read the day as taken.
+    await raw(sibling.id, practice(D2));
+    await raw(athlete.id, habit(D2));
+    await expectOutcomes(
+      athlete.id,
+      [{ ...toHide, publicId: newId() }],
       ['own_hidden'],
       "3b-0: a hidden row's client_id with the day free is own_hidden (the slot lookup is live-only)",
     );
     const reentered = practice(D2);
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [reentered],
-        '3b-0: after a hide, a new practice on that day is created',
-      ),
+    await expectOutcomes(
+      athlete.id,
+      [reentered],
       ['created'],
       '3b-0: after a hide, a new practice on that day is created',
     );
     // Now the hidden row's id AND a held day: the day decides (Z4: day_taken before own_hidden).
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [{ ...toHide, publicId: newId() }],
-        '3b-0: a hidden client_id on a re-entered day is day_taken',
-      ),
+    await expectOutcomes(
+      athlete.id,
+      [{ ...toHide, publicId: newId() }],
       ['day_taken'],
       '3b-0: a hidden client_id on a re-entered day is day_taken',
     );
-    // A client_id reused under another metric or day is not a replay of it (the pin, Z4 step 1).
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [{ ...habit('2026-10-03'), clientId: first.clientId }],
-        "3b-0: a practice's client_id reused for a habit is a conflict, never a replay",
-      ),
+    // The metric pin alone: the practice's client_id reused for a habit on the SAME day is not a
+    // replay of it (Z4 step 1).
+    await expectOutcomes(
+      athlete.id,
+      [{ ...habit(D1), clientId: first.clientId }],
       ['conflict'],
       "3b-0: a practice's client_id reused for a habit is a conflict, never a replay",
     );
+    // The day pin alone: the same practice's client_id on ANOTHER day is not a replay of it.
+    await expectOutcomes(
+      athlete.id,
+      [{ ...practice('2026-10-05'), clientId: first.clientId }],
+      ['conflict'],
+      "3b-0: a practice's client_id reused on another day is a conflict, never a replay",
+    );
+    // No insert, no holder, no taken day: the throw (Z4 step 5). A reused public_id is skipped by the
+    // target-less insert and no row holds the client_id. The throw is in JS, so the transaction lives.
+    await assert.rejects(
+      writeCheckinEntries(exec, {
+        profileId: athlete.id,
+        values: [{ ...habit(D1), publicId: hiddenRow.publicId }],
+      }),
+      /neither inserted nor held/,
+      '3b-0: a non-insert with no holder and no taken day throws rather than inventing an outcome',
+    );
     // Only a practice can be day_taken: a habit that did not insert, in a batch with a practice on a
     // held day, is still classified by its own holder (here a live row of another metric: conflict).
-    assert.deepEqual(
-      await outcomes(
-        athlete.id,
-        [{ ...habit(D1), clientId: first.clientId }, practice(D1)],
-        '3b-0: only a practice can be day_taken',
-      ),
+    await expectOutcomes(
+      athlete.id,
+      [{ ...habit(D1), clientId: first.clientId }, practice(D1)],
       ['conflict', 'day_taken'],
       '3b-0: only a practice can be day_taken',
     );
@@ -715,7 +741,7 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     );
 
     console.log(
-      '✓ V1-24 3b-0: one live practice per (profile, day): the index refuses by name and frees a hidden day; the insert answers replay (metric and day pinned), day_taken, own_hidden and conflict in order, per row in a batch; Restore all into a re-entered day answers slot_taken for the practice alone; the migration pre-checks atomically',
+      '✓ V1-24 3b-0: one live practice per (profile, day): the index refuses by name and frees a hidden day; the insert answers replay (metric and day pinned), day_taken, own_hidden and conflict in order, per row in a batch; Restore all into a re-entered day answers slot_taken for the practice alone; the migration sets its timeouts, locks, pre-checks and builds in that order',
     );
   });
 }

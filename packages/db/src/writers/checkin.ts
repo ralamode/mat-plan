@@ -1,5 +1,5 @@
 import { METRIC_KEYS } from '@mat-plan/shared';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { Executor } from './executor';
@@ -111,6 +111,8 @@ export async function writeCheckinEntries(
   const inserted = await exec
     .insert(schema.entries)
     .values(args.values.map((v) => ({ ...v, profileId: args.profileId })))
+    // ⚠️ READ COMMITTED autocommit only (`logCheckinEntries`): under REPEATABLE READ a target-less
+    // DO NOTHING against a row the snapshot cannot see raises 40001 (write-path.md's caveats).
     // 🔴 **Target-less since V1-24 3b-0: EVERY unique index arbitrates**, the `client_id` one and
     // `PRACTICE_DAY_UNIQUE_INDEX` alike, so a second live practice on a day is skipped like a replay
     // instead of raising a bare `23505`. Target-less also skips PER ROW: a habit in the same batch
@@ -152,7 +154,8 @@ export async function writeCheckinEntries(
   const holderByClientId = new Map(holders.map((r) => [r.clientId, r]));
 
   // The days a LIVE practice already holds, for the unresolved practice items only. One query, not
-  // one per item; `practiceSlot` keeps it the index's own key.
+  // one per item, built from `practiceSlot` so it is the index's own key (a submit carries one day,
+  // so the `or` has one arm in practice).
   const practiceDays = [
     ...new Set(
       args.values
@@ -171,9 +174,7 @@ export async function writeCheckinEntries(
             .from(schema.entries)
             .where(
               and(
-                eq(schema.entries.profileId, args.profileId),
-                eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
-                inArray(schema.entries.activityDate, practiceDays),
+                or(...practiceDays.map((day) => practiceSlot(args.profileId, day))),
                 isNull(schema.entries.deletedAt),
               ),
             )
@@ -211,9 +212,13 @@ export async function writeCheckinEntries(
     if (holder !== undefined) {
       return { clientId: v.clientId, outcome: 'conflict' as const };
     }
-    // No insert, no holder and no taken day is not a shape the database can produce: the insert
-    // either wrote the row or conflicted with one that exists. Rather than invent an outcome, say
-    // so — the same judgement `reselectLiveByClientId` makes about its own impossible branch.
+    // No insert, no holder and no taken day. Two ways to get here, neither an outcome to invent:
+    // - the insert collided on another unique (a reused `public_id`), which no app path sends;
+    // - since 3b-0, a RACE: the live practice that skipped this insert was hidden before the
+    //   held-day lookup ran (three autocommit statements, READ COMMITTED). Unreachable until an app
+    //   path hides a practice; 3b-life, which ships the practice clear, owes the retry.
+    // Either way, say so rather than guess — `reselectLiveByClientId`'s judgement about its own
+    // impossible branch.
     throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);
   });
 }
