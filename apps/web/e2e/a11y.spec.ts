@@ -714,12 +714,29 @@ test.describe('U0 — the sheet, open', () => {
         const footer = b.closest('.sticky');
         return footer ? footer.getBoundingClientRect().top : Infinity;
       });
-    const controls = dialog.locator('.grow a, .grow button');
+    // ⚠️ The demo's own controls all sit ABOVE the fold, so focusing them can never reach the
+    // footer — a first version of this test passed with the fix removed (probe: GREEN). A real
+    // consumer's list (the item picker's rows) runs under it, so stand one in: 30 buttons, the
+    // shape a long result list has.
+    await dialog.locator('.grow').evaluate((body) => {
+      for (let i = 0; i < 30; i += 1) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = `Row ${i}`;
+        b.setAttribute('data-probe-row', '');
+        b.style.display = 'block';
+        b.style.minHeight = '44px';
+        body.appendChild(b);
+      }
+    });
+    const controls = dialog.locator('[data-probe-row]');
     const count = await controls.count();
-    expect(count, 'the demo body has focusable controls').toBeGreaterThan(0);
     for (let i = 0; i < count; i += 1) {
       const control = controls.nth(i);
-      await control.focus();
+      // Tab, not `.focus()`: the browser's own focus-scroll is the behaviour under test.
+      if (i === 0) await control.focus();
+      else await page.keyboard.press('Tab');
+      await expect(control).toBeFocused();
       const bottom = await control.evaluate((el) => el.getBoundingClientRect().bottom);
       expect(bottom, `control ${i} clears the footer`).toBeLessThanOrEqual(
         (await footerTop()) + 0.5,
