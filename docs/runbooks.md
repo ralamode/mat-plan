@@ -244,6 +244,38 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
   the pre-check's message above, nothing is wrong with the data: re-run `migrate.yml` via
   `workflow_dispatch`, and the freeze is the same until it goes green.
 
+**If 3b-0's migration refuses** (V1-24 3b-0, one live practice per athlete and day; the error names
+this section: _"V1-24 3b-0: N (profile, day) group(s) hold more than one live practice"_), it is the
+same wedge as 1d's above, with the same freeze and the same exceptions. What differs:
+
+- **A group may be two real sessions, not a duplicate.** `practice_minutes` sums, so two rows on one
+  day may be a morning and an evening practice. Read the groups (aggregate first, inside
+  `BEGIN READ ONLY`, the query in [the plan](./plans/v1-24-3b-logs-in-place.md) → Z3), and the
+  maintainer decides each: **merge** (one row holds the day's total) or **hide** the duplicate. No
+  practice correction exists yet; write one in `corrections/registry.ts`, guarded and dry-run first
+  (the `data-correction` skill), and never commit a profile, a date or a value.
+- **The app keeps logging meanwhile.** The new writer's insert is target-less and names no index, so
+  it works with or without it; until the index exists, nothing refuses a second same-day practice.
+- **Reading the groups.** Z3's query returns only a count. To decide each group, list its sizes and
+  minutes without naming anyone: `SELECT count(*), array_agg(value_num) FROM entries WHERE deleted_at
+IS NULL AND metric_key = 'practice_minutes' GROUP BY profile_id, activity_date HAVING count(*) > 1;`
+  inside `BEGIN READ ONLY`. Read the profile and the date only on the operator's screen, never into a
+  file, a PR or a chat.
+- **The preview database refuses too** if it holds a duplicate (`migrate-preview.yml` runs the same
+  file). Seed-only data needs no correction: "Standing: reset the preview database" below clears it.
+  After a clean apply, an open branch that has not merged main still runs the old `client_id`-target
+  writer against the shared preview database, so a second same-day practice there is an error page
+  until that branch merges main.
+
+**3b-life merges only after 3b-0's index is live in prod.** Check both, as for 1e above:
+
+- `gh run list --workflow migrate.yml --branch main -L 3` shows **success** on 3b-0's merge SHA;
+- in prod, `SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_entries_profile_day_practice';`
+  returns the `CREATE UNIQUE INDEX` line of the `_v1_24_3b0_practice_one_per_day.sql` migration.
+
+A Vercel rollback past 3b-0 puts the old `client_id`-target writer back against the index, so a
+second same-day practice becomes an error page until the rollback is undone.
+
 ---
 
 ## Enable `pg_stat_statements` on prod (slow-query insight) — do this ONCE

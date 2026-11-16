@@ -32,6 +32,18 @@ export default defineConfig({
     // Playwright owns e2e/ (its specs are *.spec.ts, already outside `include`);
     // exclude the dir too so a stray *.test.ts there never leaks into Vitest.
     exclude: ['**/e2e/**', '**/node_modules/**', '**/dist/**', '**/.next/**'],
+    /**
+     * Half the machine's cores, not vitest's default of all but one.
+     *
+     * Several sessions run `pnpm test` (pre-push, `verify`) on one machine at once. With each suite
+     * taking every core, three at a time left React Testing Library's render chains outrunning
+     * `waitFor`'s 1s, and 4–5 component tests failed per run across lanes and files: contention,
+     * not a bug in any test (lane B's attribution, 2026-11-16). Capping workers leaves room for the
+     * other suites. ⚠️ **This is deliberately not a longer `asyncUtilTimeout`**: a slow render
+     * still fails at 1s, so a real timing bug stays visible. CI's runners have few cores, so this
+     * changes little there.
+     */
+    maxWorkers: '50%',
     // Valid values so modules that import lib/env.ts don't fail boot validation
     // under test. Individual tests override/mock as needed.
     // ⚠️ `ACCESS_GATE_PASSWORD` was here until AUTH-1 1d, for boot validation only — `lib/env.ts` no
