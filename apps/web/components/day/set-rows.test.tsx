@@ -247,6 +247,42 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
     expect(control.actions.retickRow).toHaveBeenCalledTimes(1);
   });
 
+  it('a set that arrives later (logged on another phone) also keeps its row once un-ticked', async () => {
+    // The fake never saw that entry, so the un-tick is the test's: it succeeds, as the server's would.
+    const control = mount(todayTwoPrograms, {
+      wrap: () => ({
+        untickRow: async (input) => ({
+          ok: true,
+          entryPublicId: input.entryPublicId,
+          values: { quantities: [], reps: 12 },
+          hiddenAt: '2026-11-16T12:00:00.000000Z',
+        }),
+      }),
+    });
+    const el = () => card('Morning habits', 'Push-ups');
+    const before = item(todayTwoPrograms, 'Morning habits', 'Push-ups').rows.length;
+    const extra = before + 1;
+    const arrived = structuredClone(control.plan);
+    item(arrived, 'Morning habits', 'Push-ups').rows.push({
+      set: extra,
+      previous: null,
+      logged: {
+        entryPublicId: '00000000-0000-7000-8000-0000000000e1',
+        values: { quantities: [], reps: 12 },
+        prescribedText: '3 × 15',
+      },
+    });
+    await act(async () => control.setPlan(arrived));
+    await press(setTick(el(), 'Push-ups', extra));
+    const dropped = structuredClone(control.plan);
+    const rows = item(dropped, 'Morning habits', 'Push-ups');
+    rows.rows = rows.rows.filter((r) => r.set !== extra);
+    await act(async () => control.setPlan(dropped));
+    expect(control.actions.untickRow).toHaveBeenCalledTimes(1);
+    expect(setTick(el(), 'Push-ups', extra).getAttribute('aria-pressed')).toBe('false');
+    expect(within(el()).queryByText(DAY_COPY.reload)).toBeNull();
+  });
+
   it('Previous is two unbreakable parts, with the line free to break only between them', () => {
     show(todayTwoPrograms);
     const row = bodyRows(card('Heavy B', 'Push press'))[0]!;
