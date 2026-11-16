@@ -2,7 +2,7 @@
 
 import type { DayActions, DayPlan } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
-import { useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 
@@ -40,6 +40,25 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [closed, setClosed] = useState(false);
   const [message, setMessage] = useState('');
+  const closedRef = useRef<HTMLParagraphElement>(null);
+
+  // A row's effect depends on this, so it keeps one identity for the life of the day.
+  const setRowFailed = useCallback(
+    (rowKey: string, isFailed: boolean) =>
+      setFailed((was) => {
+        if (was.has(rowKey) === isFailed) return was;
+        const next = new Set(was);
+        if (isFailed) next.add(rowKey);
+        else next.delete(rowKey);
+        return next;
+      }),
+    [],
+  );
+
+  // The ✓ that met `closed_day` is gone, so focus would drop to the page: it goes to the notice.
+  useEffect(() => {
+    if (closed) closedRef.current?.focus();
+  }, [closed]);
 
   const day: DayContextValue = {
     profilePublicId: plan.profilePublicId,
@@ -49,14 +68,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
     // A live region announces a change: the same sentence twice in a row would be silent, so the
     // second one carries an invisible difference.
     announce: (next) => setMessage((was) => (was === next ? `${next} ` : next)),
-    setRowFailed: (rowKey, isFailed) =>
-      setFailed((was) => {
-        if (was.has(rowKey) === isFailed) return was;
-        const next = new Set(was);
-        if (isFailed) next.add(rowKey);
-        else next.delete(rowKey);
-        return next;
-      }),
+    setRowFailed,
     closeDay: () => {
       setClosed(true);
       setMessage(DAY_COPY.closed);
@@ -76,13 +88,18 @@ function DayBody({ plan, actions }: DayScreenProps) {
         <h2 id={headingId} className="sr-only">
           {DAY_COPY.heading}
         </h2>
-        {closed ? <p className="rounded-lg border p-3 text-sm">{DAY_COPY.closed}</p> : null}
+        {closed ? (
+          <p ref={closedRef} tabIndex={-1} className="rounded-lg border p-3 text-sm outline-none">
+            {DAY_COPY.closed}
+          </p>
+        ) : null}
         {plan.workouts.map((workout, index) => {
-          const key = workoutKeyOf(workout);
+          const key = workoutKeyOf(workout, index);
           return (
             <WorkoutCard
               key={key}
               workout={workout}
+              workoutKey={key}
               headingId={`${headingId}-w${index}`}
               programName={programName(workout.programPublicId)}
               notSaved={notSavedIn(key)}

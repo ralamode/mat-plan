@@ -89,7 +89,10 @@ adds its files and invariants here.
     `logRow`, because a re-tick restores the old numbers. A retry with different numbers mints a
     new `clientId`, or the server would answer with the first attempt's.
 12. **Read-only is `!writable`, a workout that left the week, or a `closed_day` already seen.** Such
-    rows show what was logged as text, with no ✓, field or "Last time" (D33).
+    rows show what was logged as text, with no ✓, field or "Last time" (D33). A read-only row shows no
+    message and no longer counts as "not saved": there is nothing left to retry. The count is an
+    effect of the row's own failure, so a row that succeeds, reloads or leaves the page stops
+    counting.
 13. **A new Server Action module brings its own registry and test files**, so the lane edits no
     shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
 
@@ -100,7 +103,8 @@ primary ✓), not green, until a "done" colour token exists; "N not saved" besid
 while a save has failed; a Reload button on a refusal that means the page is out of date. Also: the
 program name is plain text (the program page is not wired), shown only on a day with two programs as
 v12 does; a logged number shows as text until Change arrives at 12d; an empty ✓ that fails leaves
-the field empty rather than filling in the target.
+the field empty rather than filling in the target. Until 13b, a set-type item shows "N logged" under its
+heading, so a closed day does not look empty.
 
 ## Changing it
 

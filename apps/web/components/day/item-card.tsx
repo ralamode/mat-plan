@@ -1,7 +1,7 @@
 'use client';
 
 import { hasSetRows, TRACKING_TYPE, type DayPlan } from '@mat-plan/shared';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
@@ -24,27 +24,41 @@ type Row = DayItem['rows'][number];
  * One item of a workout, as a card in the workout's list (FAM-1 step 13).
  *
  * A Check, Duration or Count is one row, built here. An item logged set by set shows its heading
- * only: step 13b adds its set rows, PREVIOUS, "+ Add set" and supersets.
+ * and how many of its sets are logged: step 13b adds its set rows, PREVIOUS, "+ Add set" and
+ * supersets. The count keeps a closed day honest until then (UX panel, second pass).
  */
-export function ItemCard({ workout, item }: { workout: Workout; item: DayItem }) {
+export function ItemCard({
+  workout,
+  workoutKey,
+  item,
+}: {
+  workout: Workout;
+  workoutKey: string;
+  item: DayItem;
+}) {
   const row = item.rows[0];
   if (hasSetRows(item.trackingType) || !row) {
+    const logged = item.rows.filter((r) => r.logged).length;
     return (
-      <li className="rounded-xl border p-3">
+      <li className={cn('rounded-xl border p-3', logged > 0 && 'border-primary')}>
         <ItemHeading item={item} />
+        {logged > 0 ? (
+          <p className="text-muted-foreground mt-2 text-sm">{DAY_COPY.setsLogged(logged)}</p>
+        ) : null}
       </li>
     );
   }
-  return <SingleItem workout={workout} item={item} row={row} />;
+  return <SingleItem workout={workout} workoutKey={workoutKey} item={item} row={row} />;
 }
 
 function ItemHeading({ item }: { item: DayItem }) {
   return (
     <>
-      <div className="flex items-baseline justify-between gap-3">
+      {/* Wraps, as v12's card heading does: a long prescription goes under the name. */}
+      <div className="flex flex-wrap items-baseline gap-x-3">
         <h4 className={cn('font-semibold', NAME_WRAP_CLASS)}>{item.name}</h4>
         {item.prescribedText ? (
-          <span className="text-muted-foreground shrink-0 text-sm">{item.prescribedText}</span>
+          <span className="text-muted-foreground ml-auto text-sm">{item.prescribedText}</span>
         ) : null}
       </div>
       {item.notes ? <p className="text-muted-foreground mt-1 text-sm">{item.notes}</p> : null}
@@ -61,10 +75,20 @@ function ItemHeading({ item }: { item: DayItem }) {
  * The ✓ is the same element in every state, so focus stays on it after a ✓ or an un-tick; while a
  * write is in flight it is `aria-disabled`, never `disabled`, which would drop focus.
  */
-function SingleItem({ workout, item, row }: { workout: Workout; item: DayItem; row: Row }) {
+function SingleItem({
+  workout,
+  workoutKey,
+  item,
+  row,
+}: {
+  workout: Workout;
+  workoutKey: string;
+  item: DayItem;
+  row: Row;
+}) {
   const fieldRef = useRef<HTMLInputElement>(null);
-  const r = useRow(workout, item, row, fieldRef);
-  const errorId = `${r.rowKey}-error`;
+  const r = useRow(workout, workoutKey, item, row, fieldRef);
+  const errorId = useId();
   const isCheck = item.trackingType === TRACKING_TYPE.check;
   const unit = item.unit ? unitSuffix(item.unit) : '';
   const previous = row.previous?.quantities[0];
@@ -89,6 +113,10 @@ function SingleItem({ workout, item, row }: { workout: Workout; item: DayItem; r
               {formatRowValues(r.logged)}
             </span>
           )
+        ) : r.kept ? (
+          <span className="text-muted-foreground shrink-0 text-base tabular-nums">
+            {formatRowValues(r.kept)}
+          </span>
         ) : r.hasField ? (
           <>
             <input
@@ -101,7 +129,7 @@ function SingleItem({ workout, item, row }: { workout: Workout; item: DayItem; r
               // The prescription's number: an empty ✓ logs it (plan D13).
               placeholder={target ? String(target.value) : undefined}
               aria-label={DAY_COPY.fieldLabel(item.name, unit)}
-              aria-invalid={r.error ? true : undefined}
+              aria-invalid={r.error?.invalid || undefined}
               aria-describedby={r.error ? errorId : undefined}
               className={cn(INPUT_CLASS, 'w-20 shrink-0 text-right tabular-nums')}
             />
@@ -118,7 +146,10 @@ function SingleItem({ workout, item, row }: { workout: Workout; item: DayItem; r
             aria-describedby={r.error ? errorId : undefined}
             className={cn(
               'focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg outline-none focus-visible:ring-3',
-              r.logged ? 'bg-primary text-primary-foreground border-primary' : 'bg-background',
+              // Un-pressed reads as not done: a muted glyph, as v12's is.
+              r.logged
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground',
             )}
           >
             <span aria-hidden="true">✓</span>

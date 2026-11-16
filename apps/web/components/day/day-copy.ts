@@ -17,6 +17,8 @@ export const DAY_COPY = {
   lastTime: 'Last time',
   logged: 'Logged',
   reload: 'Reload',
+  /** A set-type item before 13b gives it rows: how many of its sets are logged. */
+  setsLogged: (count: number) => `${count} logged`,
   /** A row whose prescription left the workout after it was logged (v12, `index.html:2432`). */
   removed: 'No longer in this workout. What was logged stays.',
   /** The whole screen turns read-only after the first `closed_day`. */

@@ -8,7 +8,7 @@ import {
   type RowResult,
   type RowValues,
 } from '@mat-plan/shared';
-import { useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
@@ -38,7 +38,11 @@ type Row = DayItem['rows'][number];
 type Logged = { entryPublicId: string; values: RowValues };
 type Override =
   ({ kind: 'logged' } & Logged) | ({ kind: 'unticked'; hiddenAt: string | null } & Logged);
-type RowError = { message: string; reload: boolean };
+/**
+ * A row's message. `write` says what failed, so only a failed ✓ counts as "not saved"; `invalid`
+ * marks the field wrong only when the number is the problem, never for "Couldn't save".
+ */
+type RowError = { message: string; reload: boolean; write: 'tick' | 'untick'; invalid: boolean };
 
 const RETRY: RowResult = { ok: false, reason: ROW_REFUSAL.retry };
 
@@ -50,9 +54,12 @@ async function settle(write: () => Promise<RowResult>): Promise<RowResult> {
   }
 }
 
-/** A workout's identity on the screen; its frozen name once the workout is purged. */
-export function workoutKeyOf(workout: Workout): string {
-  return workout.workoutPublicId ?? `name:${workout.name}`;
+/**
+ * A workout's identity on the screen. Once the workout is purged it has no id, so its place in the
+ * day and its frozen name stand in (two purged workouts may share a name).
+ */
+export function workoutKeyOf(workout: Workout, index: number): string {
+  return workout.workoutPublicId ?? `purged:${index}:${workout.name}`;
 }
 
 /** An item's identity in its workout: the prescription, or the item once that was removed. */
@@ -61,19 +68,20 @@ export function itemKeyOf(item: DayItem): string {
 }
 
 /** A row's identity on the screen: workout, prescription (or item), set. */
-export function rowKeyOf(workout: Workout, item: DayItem, row: Row): string {
-  return `${workoutKeyOf(workout)}/${itemKeyOf(item)}/${row.set}`;
+export function rowKeyOf(workoutKey: string, item: DayItem, row: Row): string {
+  return `${workoutKey}/${itemKeyOf(item)}/${row.set}`;
 }
 
 /** `fieldRef` is the row's number field, which a refusal focuses; the caller owns it. */
 export function useRow(
   workout: Workout,
+  workoutKey: string,
   item: DayItem,
   row: Row,
   fieldRef: RefObject<HTMLInputElement | null>,
 ) {
   const day = useDay();
-  const rowKey = rowKeyOf(workout, item, row);
+  const rowKey = rowKeyOf(workoutKey, item, row);
 
   const [text, setText] = useState('');
   const [error, setError] = useState<RowError | null>(null);
@@ -84,6 +92,13 @@ export function useRow(
   const [attempt, setAttempt] = useState<{ clientId: string; values: RowValues } | null>(null);
 
   const fromPlan = row.logged;
+  // When the page's data changes this row (a reload, another phone), an old message no longer
+  // describes it.
+  const [seenEntry, setSeenEntry] = useState(fromPlan?.entryPublicId ?? null);
+  if ((fromPlan?.entryPublicId ?? null) !== seenEntry) {
+    setSeenEntry(fromPlan?.entryPublicId ?? null);
+    setError(null);
+  }
   // Once the page's data shows the entry this visit logged, the data is the truth again.
   if (override?.kind === 'logged' && fromPlan?.entryPublicId === override.entryPublicId) {
     setOverride(null);
@@ -110,6 +125,18 @@ export function useRow(
   /** A new entry needs both ids; a row whose prescription was removed can only be ticked back. */
   const canLog = canWrite && workout.workoutPublicId !== null && item.prescriptionPublicId !== null;
   const hasField = canLog && hasQuantityField(item);
+  /** A read-only day shows no message: there is nothing left to retry. */
+  const shownError = canWrite ? error : null;
+  const notSaved = shownError?.write === 'tick';
+
+  // The workout's "N not saved" counts this row while its ✓ has failed, and stops when the row
+  // succeeds, is reloaded, goes read-only or leaves the page.
+  const { setRowFailed } = day;
+  useEffect(() => {
+    if (!notSaved) return;
+    setRowFailed(rowKey, true);
+    return () => setRowFailed(rowKey, false);
+  }, [notSaved, rowKey, setRowFailed]);
 
   function fail(reason: RowRefusal, write: 'tick' | 'untick') {
     if (reason === ROW_REFUSAL.closed_day) {
@@ -118,8 +145,7 @@ export function useRow(
       return;
     }
     const copy = refusalCopy(reason, write);
-    setError({ message: copy.message, reload: copy.reload });
-    if (write === 'tick') day.setRowFailed(rowKey, true);
+    setError({ message: copy.message, reload: copy.reload, write, invalid: copy.focusField });
     day.announce(DAY_COPY.announce.failed(item.name, copy.message));
     if (copy.focusField) fieldRef.current?.focus();
   }
@@ -127,7 +153,6 @@ export function useRow(
   function succeed(next: Override | null, message: string) {
     setOverride(next);
     setError(null);
-    day.setRowFailed(rowKey, false);
     day.announce(message);
   }
 
@@ -228,7 +253,12 @@ export function useRow(
     if (!canLog) return;
     const read = readTyped(item, text);
     if (!read.ok) {
-      setError({ message: TYPED_PROBLEM_COPY[read.problem], reload: false });
+      setError({
+        message: TYPED_PROBLEM_COPY[read.problem],
+        reload: false,
+        write: 'tick',
+        invalid: true,
+      });
       fieldRef.current?.focus();
       return;
     }
@@ -237,15 +267,20 @@ export function useRow(
   }
 
   return {
-    rowKey,
     text,
     setText,
-    error,
+    error: shownError,
     logged,
+    /** An un-ticked row with no field (a Check, a removed prescription) still shows what it held. */
+    kept: !hasField && !logged && unticked ? unticked.values : null,
     pending: pending !== null,
     canWrite,
     hasField,
     press,
-    reload: day.reload,
+    /** Reload clears this row's message: the page's data is about to say what is true. */
+    reload: () => {
+      setError(null);
+      day.reload();
+    },
   };
 }

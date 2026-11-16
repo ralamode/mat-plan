@@ -22,11 +22,13 @@ type Workout = DayPlan['workouts'][number];
  */
 export function WorkoutCard({
   workout,
+  workoutKey,
   headingId,
   programName,
   notSaved,
 }: {
   workout: Workout;
+  workoutKey: string;
   headingId: string;
   programName: string | null;
   notSaved: number;
@@ -59,7 +61,7 @@ export function WorkoutCard({
       ) : null}
       <ul className="flex flex-col gap-3">
         {workout.items.map((item) => (
-          <ItemCard key={itemKeyOf(item)} workout={workout} item={item} />
+          <ItemCard key={itemKeyOf(item)} workout={workout} workoutKey={workoutKey} item={item} />
         ))}
       </ul>
     </section>

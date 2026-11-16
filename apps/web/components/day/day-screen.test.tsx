@@ -205,6 +205,43 @@ describe('a single row: ✓, un-tick and re-tick', () => {
   });
 });
 
+describe('a row whose prescription was removed', () => {
+  /** Vest weight, logged, then taken out of the workout: it keeps its logged row only. */
+  function removedVest(): DayPlan {
+    const plan = structuredClone(todayTwoPrograms) as DayPlan;
+    const vest = plan.workouts[0]!.items.find((i) => i.name === 'Vest weight')!;
+    vest.prescriptionPublicId = null;
+    vest.target = { reps: null, quantities: [] };
+    vest.rows[0] = {
+      ...vest.rows[0]!,
+      previous: null,
+      logged: {
+        entryPublicId: '00000000-0000-7000-8000-0000000000aa',
+        values: { quantities: [{ slot: 'primary', unit: 'lb', value: 10 }] },
+        prescribedText: '10 lb',
+      },
+    };
+    return plan;
+  }
+
+  it('un-ticks to its kept number, with no field, and ticks back the same entry', async () => {
+    const plan = removedVest();
+    const actions = createFakeDayActions(plan).actions;
+    const spy = { ...actions, logRow: vi.fn(actions.logRow), retickRow: vi.fn(actions.retickRow) };
+    render(<DayScreen plan={plan} actions={spy} />);
+    const vest = card('Morning habits', 'Vest weight');
+    expect(within(vest).getByText(DAY_COPY.removed)).toBeTruthy();
+    await press(tick(vest));
+    expect(tick(vest).getAttribute('aria-pressed')).toBe('false');
+    expect(within(vest).queryByRole('textbox')).toBeNull();
+    // The frozen prescription, and the kept number where the logged one was.
+    expect(within(vest).getAllByText('10 lb')).toHaveLength(2);
+    await press(tick(vest));
+    expect(spy.retickRow).toHaveBeenCalledTimes(1);
+    expect(spy.logRow).not.toHaveBeenCalled();
+  });
+});
+
 describe('a ✓ that fails', () => {
   it('un-ticks, keeps what was typed, says it could not save, and the retry reuses the clientId', async () => {
     const seen: string[] = [];
@@ -306,6 +343,36 @@ describe('inline refusals', () => {
     );
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(field(vest).value).toBe('11');
+    // Reload clears that row's message and its "not saved": the data is about to say what is true.
+    const splits = card('Morning habits', 'Splits stretch');
+    expect(
+      within(splits).queryByText(refusalCopy(ROW_REFUSAL.program_changed, 'tick').message),
+    ).toBeNull();
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+
+  it('a failed row that leaves the page stops counting as not saved', async () => {
+    const control = mount(todayTwoPrograms, { failNext: true });
+    await press(tick(card('Morning habits', 'Splits stretch')));
+    expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    const [morning, ...rest] = todayTwoPrograms.workouts;
+    const without = {
+      ...todayTwoPrograms,
+      workouts: [
+        { ...morning!, items: morning!.items.filter((i) => i.name !== 'Splits stretch') },
+        ...rest,
+      ],
+    };
+    act(() => control.setPlan!(without));
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+
+  it('"Couldn’t save" does not mark the number wrong; a refused number does', async () => {
+    mount(todayTwoPrograms, { failNext: true });
+    const vest = card('Morning habits', 'Vest weight');
+    fireEvent.change(field(vest), { target: { value: '12' } });
+    await press(tick(vest));
+    expect(field(vest).getAttribute('aria-invalid')).toBeNull();
   });
 
   it('the first closed_day turns the whole screen read-only', async () => {
@@ -315,6 +382,24 @@ describe('inline refusals', () => {
     expect(screen.getAllByText(DAY_COPY.closed).length).toBeGreaterThan(0);
     expect(screen.queryAllByRole('button', { name: /^Log / })).toHaveLength(0);
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    expect(document.activeElement?.textContent).toBe(DAY_COPY.closed);
+  });
+
+  it('after closed_day, an earlier failure no longer counts or shows: nothing is left to retry', async () => {
+    const closed: RowResult = { ok: false, reason: ROW_REFUSAL.closed_day };
+    let calls = 0;
+    mount(todayTwoPrograms, {
+      failNext: true,
+      wrap: (a) => ({
+        ...a,
+        logRow: (input) => (++calls === 1 ? a.logRow(input) : Promise.resolve(closed)),
+      }),
+    });
+    await press(tick(card('Morning habits', 'Splits stretch')));
+    expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    await press(tick(card('Evening stretch', 'Hamstring stretch')));
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+    expect(screen.queryByText(refusalCopy(ROW_REFUSAL.retry, 'tick').message)).toBeNull();
   });
 });
 
@@ -353,6 +438,26 @@ describe('a day that cannot be written', () => {
     expect(within(splits).getAllByText('5 min')).toHaveLength(2);
     expect(within(splits).getByText(DAY_COPY.logged)).toBeTruthy();
     expect(within(splits).queryByText(new RegExp(DAY_COPY.lastTime))).toBeNull();
+  });
+
+  it('a set-type item says how many sets are logged, until 13b shows its rows', () => {
+    render(
+      <DayScreen
+        plan={closedDayLoggedOnly}
+        actions={createFakeDayActions(closedDayLoggedOnly).actions}
+      />,
+    );
+    expect(
+      within(card('Morning habits', 'Neck bridge')).getByText(DAY_COPY.setsLogged(3)),
+    ).toBeTruthy();
+    cleanup();
+    render(
+      <DayScreen
+        plan={todayTwoPrograms}
+        actions={createFakeDayActions(todayTwoPrograms).actions}
+      />,
+    );
+    expect(within(card('Morning habits', 'Neck bridge')).queryByText(/ logged$/)).toBeNull();
   });
 
   it('a workout that left the week is read-only on a writable day', () => {
