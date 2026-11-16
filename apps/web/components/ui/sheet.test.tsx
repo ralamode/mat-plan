@@ -3,6 +3,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createRef, useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { NAME_WRAP_CLASS } from '@/lib/constants';
+
 import { Sheet, sheetStatusId } from './sheet';
 
 afterEach(() => {
@@ -116,6 +118,14 @@ describe('Sheet — the frame', () => {
     expect(dialog().getAttribute('aria-labelledby')).toBeTruthy();
     const titleId = dialog().getAttribute('aria-labelledby')!;
     expect(document.getElementById(titleId)?.textContent).toBe('Pick a movement');
+  });
+
+  it('lets a long unbroken title wrap, so a name cannot push Close off a narrow screen', () => {
+    render(<Harness />);
+    openAndCapture();
+    const titleId = dialog().getAttribute('aria-labelledby')!;
+    const title = document.getElementById(titleId)!;
+    for (const cls of NAME_WRAP_CLASS.split(' ')) expect(title.className).toContain(cls);
   });
 
   it('focuses what `initialFocus` names', () => {
@@ -352,6 +362,10 @@ describe('Sheet — the keyboard geometry', () => {
     });
     expect(dialog().style.getPropertyValue('--sheet-vvh')).toBe('190px');
     expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(true);
+    // Compact still truncates the title: tailwind-merge keeps `truncate` beside NAME_WRAP_CLASS,
+    // and `nowrap` wins, so a long name stays on one line while the keyboard is up.
+    const title = document.getElementById(dialog().getAttribute('aria-labelledby')!)!;
+    expect(title.className).toContain('truncate');
   });
 
   /**

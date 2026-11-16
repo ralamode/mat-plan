@@ -39,7 +39,7 @@ table (it is the one source for which shapes auto-resolve), then `git add <files
 
 ```bash
 pnpm verify              # format:check → lint → typecheck → test → db:verify → … → audit:check (~35s)
-pnpm guides:check        # feature guide touched with every owned file it covers
+pnpm guides:check        # feature guide touched with every owned file it covers (a stacked PR compares with its base branch, as CI does)
 bash .claude/skills/hold-the-bar/check.sh   # the diff did not quietly lower the bar
 ```
 
