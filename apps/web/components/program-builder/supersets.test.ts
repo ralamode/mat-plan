@@ -2,7 +2,13 @@ import { SLOT_LABEL_MAX } from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
-import { normalizeSupersets, type SupersetMember } from './supersets';
+import {
+  linkWithNext,
+  mintGroupKey,
+  normalizeSupersets,
+  unlinkFromNext,
+  type SupersetMember,
+} from './supersets';
 
 const items = heavyADraft.items;
 const names = (list: readonly { itemName: string }[]) => list.map((item) => item.itemName);
@@ -111,5 +117,70 @@ describe('normalizeSupersets', () => {
         .fill(SLOT_LABEL_MAX)
         .map((n, i) => (i === 2 || i === 3 ? 1 : n)),
     );
+  });
+});
+
+describe('linkWithNext and unlinkFromNext (step 8b)', () => {
+  it('two items on their own become a superset under a fresh key', () => {
+    const out = linkWithNext([m('X', null), m('Y', null)], 0);
+    expect(shape(out.items)).toEqual([
+      ['g1', 1, null],
+      ['g1', 2, null],
+    ]);
+    expect(out).toMatchObject({ merged: false, droppedRest: null });
+  });
+
+  it('a third item joins the group, and the group keeps its rest on its new last item', () => {
+    const out = linkWithNext([m('A1', 'a'), m('A2', 'a', '90 s'), m('X', null)], 1);
+    expect(shape(out.items)).toEqual([
+      ['a', 1, null],
+      ['a', 2, null],
+      ['a', 3, '90 s'],
+    ]);
+  });
+
+  it('joining two groups keeps the later rest and names the earlier one dropped', () => {
+    const out = linkWithNext(
+      [m('A1', 'a'), m('A2', 'a', '90 s'), m('B1', 'b'), m('B2', 'b', '60 s')],
+      1,
+    );
+    expect(shape(out.items).map(([group, , rest]) => [group, rest])).toEqual([
+      ['a', null],
+      ['a', null],
+      ['a', null],
+      ['a', '60 s'],
+    ]);
+    expect(out).toMatchObject({ merged: true, droppedRest: '90 s' });
+    const same = linkWithNext(
+      [m('A1', 'a'), m('A2', 'a', '90 s'), m('B1', 'b'), m('B2', 'b', '90 s')],
+      1,
+    );
+    expect(same.droppedRest).toBeNull();
+  });
+
+  it('unlinking a group of three in the middle copies the rest to the side that stays a superset', () => {
+    const out = unlinkFromNext([m('A1', 'a'), m('A2', 'a'), m('A3', 'a', '90 s')], 1);
+    expect(shape(out.items)).toEqual([
+      ['a', 1, null],
+      ['a', 2, '90 s'],
+      [null, null, null],
+    ]);
+    expect(out).toMatchObject({ ended: false, droppedRest: null });
+  });
+
+  it('unlinking a pair ends it, and says its rest went with it', () => {
+    const out = unlinkFromNext([m('A1', 'a'), m('A2', 'a', '90 s')], 0);
+    expect(shape(out.items)).toEqual(Array(2).fill([null, null, null]));
+    expect(out).toMatchObject({ ended: true, droppedRest: '90 s' });
+  });
+
+  it('unlink then link again gives back the same group of three', () => {
+    const three = normalizeSupersets([m('A1', 'a'), m('A2', 'a'), m('A3', 'a', '90 s')]).items;
+    const apart = unlinkFromNext(three, 1).items;
+    expect(linkWithNext(apart, 1).items).toEqual(three);
+  });
+
+  it('a fresh key is one the workout does not use', () => {
+    expect(mintGroupKey([m('1', 'g1'), m('2', 'g1'), m('3', 'g2')])).toBe('g3');
   });
 });

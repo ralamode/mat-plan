@@ -2,6 +2,7 @@
 
 import {
   FREE_TEXT_NOTE_MAX,
+  SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   TRACKING_TYPE_LABELS,
   UNIT_DIMENSION_BY_CODE,
@@ -17,10 +18,13 @@ import { cn } from '@/lib/utils';
 
 import {
   EDITOR_COPY,
+  linkLabel,
+  linkText,
   moveLabel,
   PENDING_CLASS,
   quantityLabel,
   removeLabel,
+  restForLabel,
   supersetSpoken,
   UNIT_GROUP_LABELS,
   type MoveDirection,
@@ -36,7 +40,15 @@ import { FieldLabel } from './field-label';
 import { FIELD_CLASS, NameField } from './name-field';
 
 /** A card's controls the screen refocuses after a move or a remove. */
-export type CardControl = MoveDirection | 'remove';
+export type CardControl = MoveDirection | 'remove' | 'link';
+
+/** A card's link to the next card: whether they are linked, and what a link would join. */
+export type CardLink = {
+  linked: boolean;
+  /** The two letters, when linking would join two supersets. */
+  joins: readonly [string, string] | null;
+  next: string;
+};
 
 /** The units the select offers (`unitsForTrackingType`), grouped by dimension for a Count. */
 function unitGroups(type: Parameters<typeof unitsForTrackingType>[0]) {
@@ -80,6 +92,10 @@ export function ItemCard({
   onUnit,
   onMove,
   onRemove,
+  link,
+  onLink,
+  restLetter,
+  onRest,
 }: {
   card: EditorCard;
   /** The superset letter (A1), or `null`. */
@@ -93,6 +109,13 @@ export function ItemCard({
   onMove: (direction: MoveDirection) => void;
   /** With the tap's `event.timeStamp`, so the screen can tell a double tap. */
   onRemove: (at: number) => void;
+  /** `null` on the last card. */
+  link: CardLink | null;
+  /** With the tap's `event.timeStamp`, as Remove. */
+  onLink: (at: number) => void;
+  /** The superset's letter when this card is its last, where the group's rest is edited. */
+  restLetter: string | null;
+  onRest: (value: string) => void;
 }) {
   const { item } = card;
   const id = item.prescriptionClientId;
@@ -212,12 +235,6 @@ export function ItemCard({
           multiline
           announce={false}
         />
-
-        {item.restAfter ? (
-          <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-            {EDITOR_COPY.rest} {item.restAfter}
-          </p>
-        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
@@ -252,6 +269,45 @@ export function ItemCard({
           {EDITOR_COPY.remove}
         </Button>
       </div>
+
+      {link ? (
+        <div>
+          <Button
+            ref={(node) => controlRef('link', node)}
+            type="button"
+            variant="outline"
+            className="min-w-11"
+            aria-label={linkLabel(linkText(link), link.next)}
+            onKeyDown={(event) => {
+              if (event.repeat && event.key === 'Enter') event.preventDefault();
+            }}
+            onClick={(event) => onLink(event.timeStamp)}
+          >
+            {linkText(link)}
+          </Button>
+        </div>
+      ) : null}
+
+      {/* The group's rest, last in the card: what moves in and out of a card on a link sits
+          below the tapped control, so the control never moves under the thumb. */}
+      {restLetter ? (
+        <NameField
+          id={fieldId(id, 'rest')}
+          label={
+            <>
+              {EDITOR_COPY.rest}
+              <span className="sr-only"> {restForLabel(restLetter)}</span>
+            </>
+          }
+          value={item.restAfter ?? ''}
+          max={SLOT_LABEL_MAX}
+          placeholder={EDITOR_COPY.restPlaceholder}
+          onChange={onRest}
+          error={errorOf('rest')?.message ?? null}
+          optional
+          announce={false}
+        />
+      ) : null}
     </li>
   );
 }

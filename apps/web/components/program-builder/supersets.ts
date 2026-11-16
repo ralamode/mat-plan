@@ -98,3 +98,78 @@ function freshKey(key: string, used: Set<string>): string {
   used.add(candidate);
   return candidate;
 }
+
+/** A group key no item in `items` uses: `g1`, `g2`… (short, within `SLOT_LABEL_MAX`). */
+export function mintGroupKey(items: readonly SupersetMember[]): string {
+  const used = new Set(items.flatMap((item) => (item.superset ? [item.superset.group] : [])));
+  let n = 1;
+  while (used.has(`g${n}`)) n += 1;
+  return `g${n}`;
+}
+
+/** The rest of the group keyed `group`, wherever in it it sits. */
+const restOf = (items: readonly SupersetMember[], group: string | null) =>
+  group === null
+    ? null
+    : (items.find((item) => item.superset?.group === group && item.restAfter)?.restAfter ?? null);
+
+/**
+ * Link the item at `index` with the next one (FAM-1 step 8b; the prototype's `ss-link`).
+ *
+ * The pair joins whichever group either is in; two groups become one, under the earlier one's key
+ * (so unlink-then-relink gives back the same draft). **The later group's rest is kept**, being on
+ * the last item already, and a different earlier rest is dropped and returned so the screen can
+ * name it _(maintainer, 2026-11-16)_.
+ */
+export function linkWithNext<T extends SupersetMember>(
+  items: readonly T[],
+  index: number,
+): { items: T[]; merged: boolean; droppedRest: string | null } {
+  const a = items[index]!.superset?.group ?? null;
+  const b = items[index + 1]!.superset?.group ?? null;
+  const key = a ?? b ?? mintGroupKey(items);
+  const restA = restOf(items, a);
+  const restB = restOf(items, b);
+  const kept = restB ?? restA;
+  const joined = items.map((item, i) => {
+    const group = item.superset?.group ?? null;
+    const inside =
+      i === index || i === index + 1 || (group !== null && (group === a || group === b));
+    return inside ? { ...item, superset: { group: key, order: 1 }, restAfter: null } : item;
+  });
+  joined[index + 1] = { ...joined[index + 1]!, restAfter: kept };
+  return {
+    items: normalizeSupersets(joined).items,
+    merged: a !== null && b !== null && a !== b,
+    droppedRest: restA && restB && restA !== restB ? restA : null,
+  };
+}
+
+/**
+ * Unlink the item at `index` from the next one: the group splits between them, and a side of one
+ * item dissolves. **The rest is copied to both sides** _(maintainer, 2026-11-16)_, so unlinking
+ * never loses it while a side survives. `ended` and `droppedRest` say when neither side does.
+ */
+export function unlinkFromNext<T extends SupersetMember>(
+  items: readonly T[],
+  index: number,
+): { items: T[]; ended: boolean; droppedRest: string | null } {
+  const key = items[index]!.superset!.group;
+  const rest = restOf(items, key);
+  const later = mintGroupKey(items);
+  let end = index + 1;
+  while (items[end]?.superset?.group === key) end += 1;
+  const split = items.map((item, i) => {
+    if (item.superset?.group !== key) return item;
+    const side = i > index && i < end ? later : key;
+    // One copy of the rest per side, on its first item; normalize moves it to the side's last.
+    const first = i === index + 1 || (i < index + 1 && items[i - 1]?.superset?.group !== key);
+    return { ...item, superset: { group: side, order: 1 }, restAfter: first ? rest : null };
+  });
+  const { items: out } = normalizeSupersets(split);
+  // Whether either side of the old group is still a superset.
+  const survivors = out.filter(
+    (item, i) => item.superset && items[i]!.superset?.group === key,
+  ).length;
+  return { items: out, ended: survivors === 0, droppedRest: survivors === 0 ? rest : null };
+}

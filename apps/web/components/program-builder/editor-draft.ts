@@ -3,6 +3,7 @@ import {
   isPlainDecimal,
   quantityCeiling,
   saveWorkoutSchema,
+  SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   wholeReps,
   workoutDraftItemSchema,
@@ -34,7 +35,7 @@ export type EditorCard = {
 };
 
 /** A field of a card, or of the workout, that can be refused. */
-export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | 'notes';
+export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | 'notes' | 'rest';
 
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
@@ -118,7 +119,11 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   const notes = cleanNote(card.notes);
   if (notes && notes.length > FREE_TEXT_NOTE_MAX) refuse('notes', EDITOR_ERRORS.tooLong);
 
-  return { item: { ...card.item, sets, targetReps, quantities, notes }, errors };
+  // The group's rest, cleaned as notes are; only a superset's last item holds one.
+  const restAfter = card.item.superset ? cleanNote(card.item.restAfter ?? '') : null;
+  if (restAfter && restAfter.length > SLOT_LABEL_MAX) refuse('rest', EDITOR_ERRORS.rest);
+
+  return { item: { ...card.item, sets, targetReps, quantities, notes, restAfter }, errors };
 }
 
 /**

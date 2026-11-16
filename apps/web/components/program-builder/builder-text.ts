@@ -5,6 +5,7 @@ import {
   LOGGABLE_DIMENSION_LABELS,
   MAX_SETS_PER_MOVEMENT,
   PROGRAM_REFUSAL,
+  SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   UNIT_LABELS,
   type ProgramRefusal,
@@ -166,7 +167,11 @@ export const EDITOR_COPY = {
   chooseUnit: 'Choose…',
   instructions: 'Instructions',
   instructionsHint: 'Shown with the item, every time.',
-  rest: 'Then rest:',
+  rest: 'Rest',
+  restPlaceholder: 'e.g. 90 s after each round',
+  supersetIntro: 'Link items done back to back into a superset.',
+  linkNext: 'Superset with next',
+  unlinkNext: 'Unlink from next',
   up: 'Up',
   down: 'Down',
   remove: 'Remove',
@@ -191,6 +196,7 @@ export const EDITOR_ERRORS = {
     `${label}: at most ${formatValueUnit(ceiling, unit)}.`,
   unit: (label: string) => `${label}: choose a unit.`,
   tooLong: `At most ${FREE_TEXT_NOTE_MAX} characters.`,
+  rest: `Rest: at most ${SLOT_LABEL_MAX} characters.`,
 } as const;
 
 /** The words a type's quantity field is called by, where the type does not fix its unit. */
@@ -283,4 +289,51 @@ export function saveRefusal(reason: ProgramRefusal): string {
     default:
       return SAVE_FAILED;
   }
+}
+
+/**
+ * The link control's visible words: joining two supersets says so before the tap (a merge can drop
+ * a rest); otherwise "Superset with next" or "Unlink from next". Never the item's name, which may
+ * be 100 characters at 360px; the next card's heading is right below it.
+ */
+export function linkText(link: {
+  linked: boolean;
+  joins: readonly [string, string] | null;
+}): string {
+  if (link.linked) return EDITOR_COPY.unlinkNext;
+  return link.joins ? `Join supersets ${link.joins[0]} and ${link.joins[1]}` : EDITOR_COPY.linkNext;
+}
+
+/** The control's accessible name: its visible words first, then the next item (WCAG 2.5.3). */
+export const linkLabel = (visible: string, next: string) => `${visible}: ${next}`;
+
+/** A rest field's name, told apart from the others by its superset's letter. */
+export const restForLabel = (letter: string) => `of superset ${letter}`;
+
+/** What a link did, for the status line. */
+export function linkedText(
+  first: string,
+  second: string,
+  how: { joined: 'pair' | 'one' | 'groups'; droppedRest: string | null },
+): string {
+  const done =
+    how.joined === 'groups'
+      ? 'Two supersets are now one.'
+      : how.joined === 'one'
+        ? `${second} joined ${first}’s superset.`
+        : `${first} and ${second} are a superset.`;
+  return how.droppedRest ? `${done} The rest “${how.droppedRest}” was dropped.` : done;
+}
+
+/** What an unlink did. */
+export function unlinkedText(
+  first: string,
+  second: string,
+  ended: { droppedRest: string | null } | null,
+): string {
+  const done = `${first} and ${second} are no longer linked.`;
+  if (!ended) return done;
+  return ended.droppedRest
+    ? `${done} The superset ended, and its rest “${ended.droppedRest}” with it.`
+    : `${done} The superset ended.`;
 }

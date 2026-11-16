@@ -19,9 +19,9 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 8.** The Programs list, the program page and the workout editor are real
-screens on the preview route; the editor links no supersets yet (8b) and adds no items (9). Each
-step below adds its files and its invariants here.
+🚧 **Built through step 8b.** The Programs list, the program page and the workout editor, with
+its supersets, are real screens on the preview route; the editor adds no items yet (9). Each step
+below adds its files and its invariants here.
 
 ## The map
 
@@ -69,7 +69,7 @@ flowchart LR
 | `apps/web/components/program-builder/use-attempt.ts`            | `useAttempt()` (one write's attempt; a late answer is dropped) and `focusField`, shared by the name forms and the editor's Save. |
 | `apps/web/components/program-builder/field-label.tsx`           | A field's label with "(optional)".                                                                                               |
 | `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions, program? })`: the cards, one Save, and the save bar with its status line.         |
-| `apps/web/components/program-builder/item-card.tsx`             | One item's card: fields by type (`TRACKING_TYPE_FIELDS`), a unit select, instructions, Up, Down, Remove.                         |
+| `apps/web/components/program-builder/item-card.tsx`             | One item's card: fields by type, a unit select, instructions, Up, Down, Remove; the link to the next card; the group's rest.     |
 | `apps/web/components/program-builder/editor-draft.ts`           | The editor's typed draft (`toCards`) and `readDraft`: every refusal the writer would make, per field, before Save calls.         |
 | `apps/web/components/program-builder/supersets.ts`              | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                |
 | `apps/web/components/program-builder/*.test.ts(x)`              | Each screen's and module's tests, beside it.                                                                                     |
@@ -118,8 +118,14 @@ flowchart LR
     of one dissolves (D14), `order` runs 1..n, and the rest is on the last item. **The rest is the
     group's**: it stays with the run that held it, passes to the group's surviving run, and is
     dropped only when no run of the group survives (a Remove of the rest's holder hands it on
-    first). The status line says when a group ends, an item leaves one, or a rest goes. 8b adds
-    linking and the rest field on top of it.
+    first). The status line says when a group ends, an item leaves one, or a rest goes.
+    **Linking (8b, `linkWithNext` / `unlinkFromNext`)** _(maintainer, 2026-11-16)_: a link joins the
+    pair to whichever group either is in, and two groups become one under the earlier key; **the
+    later group's rest is kept** and a different earlier one is named as dropped. An unlink splits
+    the group between the two cards and **copies the rest to both sides**, so it is lost only when
+    neither side stays a superset. Unlink then link gives back the same draft (the earlier key is
+    reused), so Cancel does not ask. The rest is edited on the group's last card, labelled "Rest"
+    (the day page prints "Rest " before it), and cleaned at Save like a note.
 13. **The editor refuses on the client what the writer refuses**, field by field (`readDraft`), so
     `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
     whole number or blank _(maintainer, 2026-11-16)_, a quantity a plain decimal under its unit's
@@ -134,8 +140,11 @@ flowchart LR
     the route passes `program` (the preview does not; 7b does); "(optional)" on the fields a blank
     is allowed in; a superset shows its letter and a rule, not the prototype's tinted pill; "type
     locked, it has logs" is not shown (the draft carries no logs). Remove has no undo but Cancel,
-    as the prototype; a second Remove within `REMOVE_DEBOUNCE_MS` is taken as the same tap. **7b must
-    pass `program`** (`owed.test.ts`).
+    as the prototype; a second Remove or link within `DOUBLE_TAP_MS` is taken as the same tap. The
+    link control reads "Superset with next", "Unlink from next" or "Join supersets A and B", never
+    the next item's name (up to 100 characters at 360px); its accessible name adds it. It sits in
+    its own row below the tools, and the rest field last in the card, so what a link moves is
+    always below the tapped control. **7b must pass `program`** (`owed.test.ts`).
 15. **Leaving with changes asks first, from Cancel and the back link only.** A reload asks too
     (`beforeunload`). The phone's back gesture and Android Back do not: the App Router has no hook
     for a history navigation, so a swipe back discards the draft. Recorded, not built.

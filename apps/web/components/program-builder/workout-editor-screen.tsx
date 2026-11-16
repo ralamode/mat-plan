@@ -9,6 +9,7 @@ import {
   supersetLabels,
   type Unit,
   type WorkoutDraft,
+  type WorkoutDraftItem,
 } from '@mat-plan/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -26,8 +27,10 @@ import {
   fieldsToFixText,
   movedText,
   PENDING_CLASS,
+  linkedText,
   removedText,
   saveRefusal,
+  unlinkedText,
   unitChangedText,
   usedByText,
   type MoveDirection,
@@ -41,11 +44,11 @@ import {
   type EditorError,
   type EditorField,
 } from './editor-draft';
-import { ItemCard, type CardControl } from './item-card';
+import { ItemCard, type CardControl, type CardLink } from './item-card';
 import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
-import { normalizeSupersets } from './supersets';
+import { linkWithNext, normalizeSupersets, unlinkFromNext } from './supersets';
 import { focusField, useAttempt } from './use-attempt';
 
 /**
@@ -80,8 +83,11 @@ const HEADING_ID = 'workout-editor-heading';
 const ITEMS_HEADING_ID = 'workout-items';
 const SAVE_ALERT_ID = 'workout-save-alert';
 const DISCARD_QUESTION_ID = 'workout-discard-question';
-/** How soon after a Remove a second one is taken as the same tap. */
-export const REMOVE_DEBOUNCE_MS = 500;
+/**
+ * How soon after a Remove or a link a second one is taken as the same tap: the next card's Remove
+ * slides up under the thumb, and the link control flips to its opposite in place.
+ */
+export const DOUBLE_TAP_MS = 500;
 
 /** Everything typed, as one comparable value: the screen is "changed" when it differs. */
 const snapshot = (name: string, description: string, cards: readonly EditorCard[]) =>
@@ -104,6 +110,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const { begin, isCurrent } = useAttempt();
 
   const lastRemoveAt = useRef(0);
+  const lastLinkAt = useRef(0);
   const controls = useRef(new Map<string, HTMLButtonElement>());
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -114,6 +121,23 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const back = programPath(loaded.draft.programPublicId);
   const dirty = snapshot(name, description, cards) !== loaded.snapshot;
   const labels = supersetLabels(cards.map((card) => card.item));
+  const groupOf = (index: number) => cards[index]?.item.superset?.group ?? null;
+  /** The card's link to the next one, or `null` on the last card. */
+  const linkOf = (index: number): CardLink | null => {
+    const next = cards[index + 1];
+    if (!next) return null;
+    const [a, b] = [groupOf(index), groupOf(index + 1)];
+    const joins =
+      a !== null && b !== null && a !== b
+        ? ([labels[index]![0]!, labels[index + 1]![0]!] as const)
+        : null;
+    return { linked: a !== null && a === b, joins, next: next.item.itemName };
+  };
+  /** The superset's letter, on its last card only: where the group's rest is edited. */
+  const restLetterOf = (index: number) => {
+    const group = groupOf(index);
+    return group !== null && groupOf(index + 1) !== group ? (labels[index]?.[0] ?? null) : null;
+  };
 
   // The browser's own "leave this page?" while there are changes. The App Router has no hook for
   // its own navigations, so Cancel and the back link ask inline instead (guide invariant 15).
@@ -162,24 +186,79 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
       report(direction === 'up' ? EDITOR_COPY.alreadyFirst : EDITOR_COPY.alreadyLast);
       return;
     }
-    const id = card.item.prescriptionClientId;
-    const before = control(id, direction)?.getBoundingClientRect().top ?? 0;
     const { settled, change } = settle(
       direction === 'up' ? moveUp(cards, index) : moveDown(cards, index),
     );
-    flushSync(() => setCards(settled));
-    // The same button on the moved card, held where the thumb is: a second tap moves it again.
-    const button = control(id, direction);
+    holdUnderThumb(card.item.prescriptionClientId, direction, settled);
+    report(movedText(card.item.itemName, direction, change));
+  }
+
+  /**
+   * Puts `next` on screen and keeps the tapped control focused and where the thumb is, so a second
+   * tap lands on the same control.
+   */
+  function holdUnderThumb(id: string, which: CardControl, next: EditorCard[]) {
+    const before = control(id, which)?.getBoundingClientRect().top ?? 0;
+    flushSync(() => setCards(next));
+    const button = control(id, which);
     button?.focus({ preventScroll: true });
     const after = button?.getBoundingClientRect().top ?? before;
     if (after !== before) window.scrollBy(0, after - before);
-    report(movedText(card.item.itemName, direction, change));
+  }
+
+  /** Links the card at `index` with the next, or unlinks them. `at` is the tap's time. */
+  function toggleLink(index: number, at: number) {
+    if (lastLinkAt.current && at - lastLinkAt.current < DOUBLE_TAP_MS) return;
+    lastLinkAt.current = at;
+    const first = cards[index]!;
+    const second = cards[index + 1]!;
+    const items = cards.map((card) => card.item);
+    const a = first.item.superset?.group ?? null;
+    const b = second.item.superset?.group ?? null;
+    const withItems = (out: WorkoutDraftItem[]) =>
+      cards.map((card, i) => ({ ...card, item: out[i]! }));
+    if (a !== null && a === b) {
+      const result = unlinkFromNext(items, index);
+      holdUnderThumb(first.item.prescriptionClientId, 'link', withItems(result.items));
+      report(
+        unlinkedText(
+          first.item.itemName,
+          second.item.itemName,
+          result.ended ? { droppedRest: result.droppedRest } : null,
+        ),
+      );
+      return;
+    }
+    const result = linkWithNext(items, index);
+    holdUnderThumb(first.item.prescriptionClientId, 'link', withItems(result.items));
+    const how = {
+      joined: result.merged ? 'groups' : a || b ? 'one' : 'pair',
+      droppedRest: result.droppedRest,
+    } as const;
+    // "X joined Y's superset": the one that was alone joins the one in a group.
+    report(
+      a === null && b !== null
+        ? linkedText(second.item.itemName, first.item.itemName, how)
+        : linkedText(first.item.itemName, second.item.itemName, how),
+    );
+  }
+
+  /** The group's rest, typed on its last card. */
+  function changeRest(id: string, value: string) {
+    setCards((all) =>
+      all.map((card) =>
+        card.item.prescriptionClientId === id
+          ? { ...card, item: { ...card.item, restAfter: value } }
+          : card,
+      ),
+    );
+    clearError(id, 'rest');
   }
 
   /** `at` is the tap's `event.timeStamp`. */
   function remove(index: number, at: number) {
     // A double tap lands on the next card's Remove, which slides up under the thumb.
-    if (lastRemoveAt.current && at - lastRemoveAt.current < REMOVE_DEBOUNCE_MS) return;
+    if (lastRemoveAt.current && at - lastRemoveAt.current < DOUBLE_TAP_MS) return;
     lastRemoveAt.current = at;
     const card = cards[index]!;
     const neighbour = cards[index + 1] ?? cards[index - 1];
@@ -348,6 +427,9 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
         >
           {EDITOR_COPY.items}
         </h2>
+        {cards.length > 1 ? (
+          <p className="text-muted-foreground text-sm">{EDITOR_COPY.supersetIntro}</p>
+        ) : null}
         {cards.length ? (
           <ol className="flex flex-col gap-3">
             {cards.map((card, index) => {
@@ -371,6 +453,10 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
                   onUnit={(unit) => changeUnit(card, unit)}
                   onMove={(direction) => move(index, direction)}
                   onRemove={(at) => remove(index, at)}
+                  link={linkOf(index)}
+                  onLink={(at) => toggleLink(index, at)}
+                  restLetter={restLetterOf(index)}
+                  onRest={(value) => changeRest(id, value)}
                 />
               );
             })}

@@ -20,13 +20,14 @@ import {
   EDITOR_COPY,
   EDITOR_ERRORS,
   fieldsToFixText,
+  linkLabel,
   moveLabel,
   removeLabel,
   saveRefusal,
   usedByText,
 } from './builder-text';
 import { programPath } from './routes';
-import { REMOVE_DEBOUNCE_MS, WorkoutEditorScreen } from './workout-editor-screen';
+import { DOUBLE_TAP_MS, WorkoutEditorScreen } from './workout-editor-screen';
 
 afterEach(cleanup);
 beforeEach(() => push.mockReset());
@@ -47,6 +48,9 @@ const family = programsList.find((p) => p.programPublicId === heavyADraft.progra
 const BACK = programPath(heavyADraft.programPublicId);
 const cards = () => within(screen.getByRole('list')).getAllByRole('listitem');
 const cardNames = () => cards().map((card) => within(card).getByRole('heading').textContent);
+/** The rest field's value on a superset's last card. */
+const restIn = (card: HTMLElement) =>
+  (within(card).getByLabelText(/^Rest/) as HTMLInputElement).value;
 const frames = () => new Promise((resolve) => setTimeout(resolve, 60));
 const alerts = () =>
   screen
@@ -74,7 +78,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       'Superset B, item 2: Sprawls',
       'Hollow-body hold',
     ]);
-    expect(within(cards()[1]!).getByText(/90 s after each round/)).toBeTruthy();
+    expect(restIn(cards()[1]!)).toBe('90 s after each round');
     expect(screen.getByRole('link', { name: EDITOR_COPY.backToProgram }).getAttribute('href')).toBe(
       BACK,
     );
@@ -255,7 +259,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       'Superset A, item 2: DB bench press',
     ]);
     // The group's rest moved with its last place.
-    expect(within(cards()[1]!).getByText(/90 s after each round/)).toBeTruthy();
+    expect(restIn(cards()[1]!)).toBe('90 s after each round');
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: moveLabel('down', 'DB bench press') }),
     );
@@ -300,7 +304,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     ]) {
       fireEvent.click(screen.getByRole('button', { name: removeLabel(name) }));
       // Past the double-tap window, so each Remove is its own tap.
-      await new Promise((resolve) => setTimeout(resolve, REMOVE_DEBOUNCE_MS + 20));
+      await new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
     }
     expect(screen.getByText(EDITOR_COPY.noItems)).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: EDITOR_COPY.items }));
@@ -444,7 +448,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     };
     const all = editor({}, three);
     fireEvent.click(screen.getByRole('button', { name: removeLabel('Goblet squat') }));
-    expect(within(cards()[1]!).getByText(/90 s after each round/)).toBeTruthy();
+    expect(restIn(cards()[1]!)).toBe('90 s after each round');
     save();
     await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
     const sent = vi.mocked(all.saveWorkout).mock.calls[0]![0].items;
@@ -489,5 +493,128 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     save();
     await waitFor(() => expect(alerts()).toEqual([saveRefusal(PROGRAM_REFUSAL.invalid)]));
     expect(all.saveWorkout).not.toHaveBeenCalled();
+  });
+
+  describe('supersets: link, unlink and the rest (8b)', () => {
+    const linkButton = (item: string) =>
+      screen.getByRole('button', {
+        name: new RegExp(
+          `^(${EDITOR_COPY.linkNext}|${EDITOR_COPY.unlinkNext}|Join supersets [A-Z]+ and [A-Z]+): ${item}$`,
+        ),
+      });
+
+    it('each card but the last says what a link would do, with the next item in its name', () => {
+      editor();
+      expect(linkButton('Pull-up').textContent).toBe(EDITOR_COPY.unlinkNext);
+      expect(linkButton('Goblet squat').textContent).toBe('Join supersets A and B');
+      expect(linkButton('Hollow-body hold').textContent).toBe(EDITOR_COPY.linkNext);
+      expect(linkButton('Pull-up').getAttribute('aria-label')).toBe(
+        linkLabel(EDITOR_COPY.unlinkNext, 'Pull-up'),
+      );
+      expect(within(cards()[4]!).queryByRole('button', { name: /next/ })).toBeNull();
+    });
+
+    it('the rest is edited on a superset’s last card only, and its field names the superset', () => {
+      editor();
+      expect(restIn(cards()[1]!)).toBe('90 s after each round');
+      expect(restIn(cards()[3]!)).toBe('60 s after each round');
+      for (const i of [0, 2, 4]) expect(within(cards()[i]!).queryByLabelText(/^Rest/)).toBeNull();
+      expect(within(cards()[1]!).getByLabelText(/^Rest/).getAttribute('id')).toBeTruthy();
+      expect(screen.getByLabelText('Rest of superset A (optional)')).toBeTruthy();
+    });
+
+    it('a new rest is saved on the group’s last item', async () => {
+      const all = editor();
+      fireEvent.change(within(cards()[1]!).getByLabelText(/^Rest/), { target: { value: '2 min' } });
+      save();
+      await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
+      expect(vi.mocked(all.saveWorkout).mock.calls[0]![0].items[1]!.restAfter).toBe('2 min');
+    });
+
+    it('a rest over the limit is refused on its field', async () => {
+      const all = editor();
+      const field = within(cards()[1]!).getByLabelText(/^Rest/);
+      fireEvent.change(field, { target: { value: 'x'.repeat(31) } });
+      save();
+      expect(all.saveWorkout).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(field);
+      expect(within(cards()[1]!).getByText(EDITOR_ERRORS.rest)).toBeTruthy();
+    });
+
+    it('linking keeps focus on the button, which now offers the opposite', async () => {
+      editor();
+      fireEvent.click(linkButton('Hollow-body hold'));
+      const button = linkButton('Hollow-body hold');
+      expect(button.textContent).toBe(EDITOR_COPY.unlinkNext);
+      expect(document.activeElement).toBe(button);
+      expect(cardNames()[4]).toBe('Superset B, item 3: Hollow-body hold');
+      expect(restIn(cards()[4]!)).toBe('60 s after each round');
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toBe(
+          'Hollow-body hold joined Sprawls’s superset.',
+        ),
+      );
+    });
+
+    it('joining two supersets says which rest was dropped', async () => {
+      editor();
+      fireEvent.click(linkButton('Goblet squat'));
+      expect(
+        cardNames()
+          .slice(0, 4)
+          .every((name) => name!.startsWith('Superset A')),
+      ).toBe(true);
+      expect(restIn(cards()[3]!)).toBe('60 s after each round');
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toBe(
+          'Two supersets are now one. The rest “90 s after each round” was dropped.',
+        ),
+      );
+    });
+
+    it('unlinking a pair ends it and says so', async () => {
+      editor();
+      fireEvent.click(linkButton('Pull-up'));
+      expect(cardNames().slice(0, 2)).toEqual(['DB bench press', 'Pull-up']);
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toBe(
+          'DB bench press and Pull-up are no longer linked. The superset ended, and its rest “90 s after each round” with it.',
+        ),
+      );
+    });
+
+    it('a second tap on the link straight after the first is the same tap', () => {
+      editor();
+      fireEvent.click(linkButton('Hollow-body hold'));
+      fireEvent.click(linkButton('Hollow-body hold'));
+      expect(linkButton('Hollow-body hold').textContent).toBe(EDITOR_COPY.unlinkNext);
+    });
+
+    it('a held Enter on the link control is held back', () => {
+      editor();
+      expect(fireEvent.keyDown(linkButton('Pull-up'), { key: 'Enter', repeat: true })).toBe(false);
+    });
+
+    it('unlink then link again leaves nothing changed: Cancel goes straight back', async () => {
+      // A group of three, unlinked in the middle: the first two stay a superset.
+      const [bench, pullUp, goblet] = heavyADraft.items;
+      editor(
+        {},
+        {
+          ...heavyADraft,
+          items: [
+            { ...bench!, superset: { group: 'a', order: 1 }, restAfter: null },
+            { ...pullUp!, superset: { group: 'a', order: 2 }, restAfter: null },
+            { ...goblet!, superset: { group: 'a', order: 3 }, restAfter: '90 s after each round' },
+          ],
+        },
+      );
+      fireEvent.click(linkButton('Goblet squat'));
+      expect(restIn(cards()[1]!)).toBe('90 s after each round');
+      await new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
+      fireEvent.click(linkButton('Goblet squat'));
+      fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+      expect(push).toHaveBeenCalledWith(BACK);
+    });
   });
 });
