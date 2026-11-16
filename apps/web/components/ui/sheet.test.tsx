@@ -359,10 +359,12 @@ describe('Sheet — criterion 46, the live region', () => {
  * prevent. A stub cannot catch a wrong `calc()`; it catches the hook not running at all, which is
  * what happened. The real geometry is `e2e/a11y.spec.ts`.
  */
-/** Whether `el` scrolls together with the sheet's body (compact), rather than sitting pinned below it. */
+/**
+ * Whether `el` scrolls with the list (compact) rather than staying pinned at the sheet's bottom.
+ * One scroller holds both either way; pinned is the footer being `sticky bottom-0`.
+ */
 function scrollsWithBody(el: HTMLElement): boolean {
-  const scroller = el.closest('.overflow-y-auto');
-  return scroller !== null && scroller.contains(dialog().querySelector('p'));
+  return !el.closest('.sticky');
 }
 
 describe('Sheet — the keyboard geometry', () => {
@@ -418,6 +420,23 @@ describe('Sheet — the keyboard geometry', () => {
       });
       expect(create.isConnected).toBe(true);
       expect(document.activeElement).toBe(create);
+    }
+  });
+
+  it('keeps the list’s scroll position when the keyboard opens and closes (one scroller)', () => {
+    const vv = withVisualViewport(640);
+    render(<Harness footer={<button type="button">Add</button>} />);
+    openAndCapture();
+    const scroller = dialog().querySelector('.overflow-y-auto')!;
+    scroller.scrollTop = 600;
+    for (const height of [300, 640]) {
+      act(() => {
+        Object.assign(vv, { height });
+        vv.dispatchEvent(new Event('resize'));
+      });
+      // The SAME scroller, so the offset it holds is the one the user scrolled to.
+      expect(dialog().querySelector('.overflow-y-auto')).toBe(scroller);
+      expect(scroller.scrollTop).toBe(600);
     }
   });
 

@@ -650,6 +650,54 @@ test.describe('U0 — the sheet, open', () => {
   });
 
   /**
+   * 🔴 **Compact — the keyboard-up layout, below 480px of visual viewport.** Nothing else opens a
+   * sheet that short, so the compact branch was audited by no browser at all (review of #476).
+   * Two shapes: a short phone with the keyboard up, and landscape. In each: axe, no sideways
+   * overflow, and the footer action is reachable by scrolling the one scroller.
+   */
+  for (const viewport of [
+    { width: 360, height: 400 },
+    { width: 844, height: 390 },
+  ]) {
+    test(`compact at ${viewport.width}×${viewport.height}: axe, no overflow, footer reachable`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openSheet(page);
+      await expectNoAxeViolations(page, `sheet (compact ${viewport.width}×${viewport.height})`);
+      const overflows = await dialog.evaluate((d) => d.scrollWidth > d.clientWidth);
+      expect(overflows, 'the compact sheet must not scroll sideways').toBe(false);
+      const action = dialog.getByRole('button', { name: 'Use as typed' });
+      await action.scrollIntoViewIfNeeded();
+      await expect(action).toBeInViewport();
+    });
+  }
+
+  /**
+   * 🔴 **A compact flip keeps the scroll offset and the footer element** (#476). The footer used to
+   * re-mount on each flip (focus lost), and the first fix moved the scroller instead (offset lost).
+   * One scroller, one footer: resizing across the 480px line must change neither.
+   */
+  test('a compact flip keeps the scroll offset and the same footer button', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const dialog = await openSheet(page);
+    const scroller = dialog.locator('.overflow-y-auto').first();
+    const action = dialog.getByRole('button', { name: 'Use as typed' });
+    await action.evaluate((b) => b.setAttribute('data-probe', 'same'));
+    await action.focus();
+    const before = await scroller.evaluate((el) => {
+      el.scrollTop = Math.min(40, el.scrollHeight - el.clientHeight);
+      return el.scrollTop;
+    });
+    await page.setViewportSize({ width: 360, height: 400 });
+    await expect(dialog.locator('[data-probe=same]')).toHaveCount(1);
+    await expect(action).toBeFocused();
+    expect(await scroller.evaluate((el) => el.scrollTop), 'the offset survives the flip').toBe(
+      before,
+    );
+  });
+
+  /**
    * 🔴 **Above 1040px the dialog variant drifted right** — `inset-0` leaves `right: 0` set, so a
    * width plus `left: 1/2` plus `margin-inline: auto` is over-constrained with AUTO margins, and
    * CSS solves the margins inside the 50%→100% band instead of ignoring `right`. Centring is a
