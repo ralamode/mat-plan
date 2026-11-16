@@ -118,6 +118,7 @@ Anything to decide before implementation (empty once resolved).
 
 > Panel cost: <lens>: <tokens> · <duration>, … (from the task notifications; records cost only —
 > it can never show what a cheaper lens missed)
+> Models: high-stakes <area | no> · <lens>: <model>, … ([the policy](../../.claude/skills/README.md#when-a-lens-runs-on-fable))
 
 Per critique: reviewer/lens → **accepted** (what changed in the plan) or **rejected** (why). Blocking
 concerns must be resolved before implementation.
