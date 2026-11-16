@@ -7,5 +7,5 @@
   twin a row, and un-ticking frees its place. `uq_entries_superset_order` now covers only rows with
   no prescription set, so two sets of one superset member, and a purge of their prescription, both
   commit. `db:verify` proves each arbiter, the one-way CHECKs, the purge, and three audits for the
-  pointers no constraint holds; mutations 52–54 prove the proofs can fail. The household delete's
+  pointers no constraint holds; mutations 52–54 and 57 prove the proofs can fail. The household delete's
   pre-flight gains (f) and (g), with their remedies. Nothing writes the new columns until step 11b.
