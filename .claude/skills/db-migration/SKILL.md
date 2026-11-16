@@ -53,7 +53,8 @@ ALTER TABLE "x" ADD COLUMN IF NOT EXISTS "y" text;--> statement-breakpoint
   (bounded) → `SET NOT NULL`. A new constraint on existing data: `NOT VALID` now, `VALIDATE` in a
   **separate PR**, applied before the next merges (in one transaction they'd share the lock, and NOT
   VALID buys nothing). ⚠️ drizzle's migrator runs **every pending file in one transaction**, not one
-  per file, so it's the one-unapplied-migration-at-a-time queue that keeps them apart, not the files.
+  per file, so it's the queue (AGENTS.md → Database / migration PR rules, "Queue") that keeps them
+  apart, not the files.
 - **Destructive changes are expand→contract across deploys.** Add the new column, then ship code
   that writes both and reads the new one, backfill, and drop the old column in a later PR. Only
   collapse the steps with evidence (0011 had 0 prod rows) written in the header.

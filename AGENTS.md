@@ -417,8 +417,11 @@ Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (
 Workflow: edit schema → drizzle-kit generate → COMMIT the generated .sql (the reviewed artifact) → PR.
   NEVER drizzle-kit push to prod. Prod only runs `migrate`. Forward-only: never modify a migration
   already on main (CI-enforced since PR 1a). One migration/PR — EXCEPT `NOT VALID` + `VALIDATE`,
-  which Squawk requires be SPLIT across PRs (in one file they share a transaction and the NOT VALID
-  buys nothing — 0009's own comment reaches the same conclusion).
+  which Squawk requires be SPLIT across PRs (applied together they share one transaction and the NOT
+  VALID buys nothing — 0009's own comment reaches the same conclusion).
+Queue: ONE unapplied migration on main at a time. Merge the next only after migrate.yml has applied
+  the last (its run's SHA contains the migration's commit). migrate.yml's concurrency group keeps one
+  PENDING run and drops older pending ones, so two quick merges apply together, in one transaction.
 Where it runs: GitHub Actions is the SINGLE migrator, on merge to main, against the DIRECT/unpooled
   Neon string. NEVER in the Vercel build (concurrent preview builds would race / DDL the wrong DB).
 CI gates: `generate` leaves a clean tree (drift guard) + `db:verify` on PGlite +
@@ -436,7 +439,7 @@ Rollback: fix-forward by default (expand-contract is reversible-by-omission); cu
   branch pre-migration before any destructive/backfill step.
 GOTCHA: drizzle's migrate() runs ALL pending files in ONE transaction (drizzle-orm 0.45.4,
   pg-core/dialect.js), not one per file. So CREATE INDEX CONCURRENTLY cannot run through it at all,
-  and the one-unapplied-migration-at-a-time queue is what keeps a NOT VALID and its VALIDATE apart.
+  and the Queue line above is what keeps a NOT VALID and its VALIDATE apart.
 Deploy order: expand/additive migrations run BEFORE the new app deploys; destructive contract AFTER.
 ```
 
