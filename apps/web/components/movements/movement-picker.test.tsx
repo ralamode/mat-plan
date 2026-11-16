@@ -636,6 +636,7 @@ describe('multi-select', () => {
             searchPlaceholder: 'Search items',
             describe: () => 'Weight × reps',
             footerAction: <button type="button">Add {selected.length}</button>,
+            footerNote: <p>the picks so far</p>,
             notice,
             takeover,
           }}
@@ -689,17 +690,17 @@ describe('multi-select', () => {
     expect(onCreate).toHaveBeenCalledWith('Bear crawl');
   });
 
-  it('the caller’s action sits above Close, which stays last', () => {
+  it('the caller’s action sits beside Close, which stays last, with its note above both', () => {
     render(<MultiHarness data={data} />);
     open();
-    const footerButtons = [
-      ...screen
-        .getByRole('button', { name: 'Add 0' })
-        .closest('div')!
-        .parentElement!.querySelectorAll('button'),
-    ].map((b) => b.textContent);
-    expect(footerButtons.at(-1)).toBe('Close');
-    expect(footerButtons).toContain('Add 0');
+    const row = screen.getByRole('button', { name: 'Add 0' }).parentElement!;
+    // One row: the caller's action, then Close.
+    expect([...row.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Add 0',
+      'Close',
+    ]);
+    const note = screen.getByText('the picks so far');
+    expect(note.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('a notice takes the status region; a takeover replaces search and list', () => {
