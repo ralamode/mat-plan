@@ -37,11 +37,24 @@ fake_gh 'feat/parent' 0
 check 'an explicit base wins, and gh is not asked'           'origin/other' '' 'origin/other'
 [ ! -e "$tmp/gh-calls" ] && printf '✓ %s\n' 'gh not called when a base is given' || { printf '✗ gh was called\n'; fails=$((fails + 1)); }
 check 'a stacked PR compares with its base branch'          '' '' 'origin/feat/parent'
-check 'in CI, never gh: origin/main'                        '' 'true' 'origin/main'
+# In CI with no base: exit 2 and never ask gh (CI always passes one).
+fake_gh 'feat/parent' 0
+out="$(cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_ACTIONS=true node --input-type=module \
+  -e "import { defaultBase } from '$helper'; defaultBase(undefined);" 2>&1)"; code=$?
+if [ "$code" -eq 2 ] && [ ! -e "$tmp/gh-calls" ]; then printf '✓ %s\n' 'in CI with no base: exit 2, gh never called'
+else printf '✗ in CI with no base: exit %s, gh-calls %s\n%s\n' "$code" "$([ -e "$tmp/gh-calls" ] && echo yes || echo no)" "$out"; fails=$((fails + 1)); fi
+# The CLI form hold-the-bar uses.
+fake_gh 'feat/parent' 0
+got="$(cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_ACTIONS= node "$helper" 2>/dev/null)"
+[ "$got" = 'origin/feat/parent' ] && printf '✓ %s\n' 'the CLI prints the base' || { printf '✗ CLI printed %s\n' "$got"; fails=$((fails + 1)); }
+if grep -q 'default-base.mjs' "$here/../../.claude/skills/hold-the-bar/check.sh"; then printf '✓ %s\n' 'hold-the-bar uses it'
+else printf '✗ hold-the-bar does not use it\n'; fails=$((fails + 1)); fi
 fake_gh 'main' 0
 check 'a PR into main: origin/main'                         '' '' 'origin/main'
 fake_gh '' 1
 check 'no PR, or gh fails: origin/main'                     '' '' 'origin/main'
+fake_gh '' 0
+check 'only a merged or closed PR (gh filters it out): origin/main' '' '' 'origin/main'
 fake_gh 'feat/not-fetched' 0
 check 'a base that is not fetched: origin/main'             '' '' 'origin/main'
 

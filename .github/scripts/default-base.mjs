@@ -28,10 +28,24 @@ const run = (cmd, args) =>
 /** The explicit base if one was passed, else the stacked PR's base, else `origin/main`. */
 export function defaultBase(explicit) {
   if (explicit) return explicit;
-  if (process.env.GITHUB_ACTIONS) return FALLBACK;
+  // CI always passes its base (resolve-pr-base.sh). An empty one there is a wiring fault, not a
+  // reason to guess: it used to exit 2 in the guards, so it still does.
+  if (process.env.GITHUB_ACTIONS) {
+    console.error("No base passed in CI; the workflow must pass resolve-pr-base.sh's output.");
+    process.exit(2);
+  }
   let prBase = '';
   try {
-    prBase = run('gh', ['pr', 'view', '--json', 'baseRefName', '-q', '.baseRefName']);
+    // OPEN only: `gh pr view` also returns a merged or closed PR, so a reused branch name would
+    // otherwise pick up an old parent.
+    prBase = run('gh', [
+      'pr',
+      'view',
+      '--json',
+      'baseRefName,state',
+      '-q',
+      'select(.state == "OPEN") | .baseRefName',
+    ]);
   } catch {
     return FALLBACK; // no gh, no PR for this branch, or offline
   }
@@ -48,3 +62,8 @@ export function defaultBase(explicit) {
   console.error(`(base: this branch is a stacked PR into '${prBase}', so comparing with ${ref})`);
   return ref;
 }
+
+// `node .github/scripts/default-base.mjs [base]` prints the base, for the bash guards
+// (hold-the-bar's check.sh).
+if (import.meta.url === `file://${process.argv[1]}`)
+  process.stdout.write(defaultBase(process.argv[2]));
