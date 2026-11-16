@@ -61,13 +61,24 @@ the two files beside it are the shortest example. An action added to an EXISTING
 in that module's registry and a binding and a valid body in that module's test. Either way the
 compiler and `actions.test.ts` say what is missing.
 
-⚠️ **A NEW mutation follows AGENTS.md → Server conventions → "Contract" and "Time" (`SCALE-1`),
-which changes steps 1, 3, 4 and 8 below.** It takes the object its `packages/shared` zod schema
-parses, not `(prev, formData)`; it returns that contract's `{ ok:true,… } | { ok:false, reason }`,
-not `ActionState`; and it resolves the day and time zone in the action and passes them to the
-writer. The shape to copy is `packages/shared/src/program/actions.ts` (`ProgramActions`,
-`DayActions`). Steps 2, 5, 6 and 7 are unchanged. The steps as written describe the legacy forms,
-which FAM-1 step 12f removes. Once the first real contract action merges, it replaces them here.
+⚠️ **A NEW mutation follows AGENTS.md → Server conventions → "Contract" and "Time" (`SCALE-1`).**
+Steps 1, 3, 4, 5, 6 and 8 below, §4 (`useActionState`) and the Done-when `ActionState` item describe
+the **legacy forms**, which FAM-1 step 12f removes. Steps 2 and 7 still apply. For a new mutation:
+
+- **Shape.** It takes the object its `packages/shared` zod schema parses, not `(prev, formData)`. It
+  returns the contract's `{ ok:true,… } | { ok:false, reason }`, never `ActionState`. Copy
+  `packages/shared/src/program/actions.ts` (`ProgramActions`, `DayActions`). `rowResultSchema`
+  (`day-shapes.ts`) is the response-schema example. `ProgramResult` is still a bare TS type, so give
+  it a schema with its first real action.
+- **Refusals (proposed in SCALE-1's review; the FAM-1 contract owner confirms):** no session and
+  wrong household both answer **`not_found`**, indistinguishably (ADR 0006's 404-never-403, which
+  `enterMutation` already enforces); rate-limited answers **`retry`**.
+- **Time.** The action resolves the day and the time zone and passes them to the writer.
+- 🔴 **Not supported yet.** `enterMutation` (`apps/web/app/p/mutation-entry.ts`) returns an
+  `ActionState`. `ActionFn` (`apps/web/test/action-matrix.ts:66`) is
+  `(ActionState, FormData) => ActionState`. Neither can drive a contract action, so it cannot get its
+  mandatory boundary tests from them. **The first real contract action (FAM-1 7a or 12b, whichever
+  opens first) teaches both the contract shape**, and replaces these legacy steps here.
 
 Copy the shape of `logBodyweightAction` (plain form) or `editRoutineAction` (JSON payload):
 
@@ -133,7 +144,7 @@ verified**, never "instrumented".
 ## Done when
 
 - [ ] The input schema lives in `packages/shared`, and the action validates with it before anything else.
-- [ ] The action re-checks the session and ownership itself, is wrapped in `withServerActionInstrumentation`, and returns the `ActionState` envelope.
+- [ ] The action re-checks the session and ownership itself, is wrapped in `withServerActionInstrumentation`, and returns the `ActionState` envelope (legacy forms) or the contract's typed result (a new mutation, §3's ⚠️).
 - [ ] Every write carries the client's `client_id`; a replay returns success with one effect.
 - [ ] The action is in its module's registry, with a binding and a valid body in that module's `describeActionMatrices` call.
 - [ ] The module's test covers bad body, unknown profile, wrong owner or stale id, replay, and the happy path with `toMatchObject`.
