@@ -110,9 +110,10 @@ export type SheetProps = {
    */
   compactBelow?: number;
   /**
-   * Runs once focus has been returned after a close (to `returnFocusTo`, or the `main` fallback).
-   * The safe moment for a page-level announcement such as "3 items added." — see "What consumers
-   * owe". It does not run on open, and runs once per close.
+   * Runs once per close, after focus has been returned: to `returnFocusTo`, or the `main` fallback
+   * when the trigger is gone. On a page with no `main` at all there is nowhere to return focus, so it
+   * runs with focus on `<body>`. The safe moment for a page-level announcement such as "3 items
+   * added." — see "What consumers owe". It does not run on open.
    */
   onReturned?: () => void;
   /**

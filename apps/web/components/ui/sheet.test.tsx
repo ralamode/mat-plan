@@ -289,6 +289,12 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
     const detached = { current: stale } as React.RefObject<HTMLElement | null>;
     stale.remove();
     expect(stale.isConnected).toBe(false);
+    // The pick path `onReturned` exists for: the trigger card is gone, focus goes to `main`, and the
+    // announcement must still run, after that focus.
+    let focusedAtCall: Element | null = null;
+    const onReturned = vi.fn(() => {
+      focusedAtCall = document.activeElement;
+    });
 
     function Detached() {
       const [open, setOpen] = useState(true);
@@ -309,6 +315,7 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
             onOpenChange={setOpen}
             title="T"
             returnFocusTo={detached}
+            onReturned={onReturned}
           >
             <p>Body</p>
           </Sheet>
@@ -320,6 +327,8 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement?.tagName).toBe('MAIN');
     expect((document.activeElement as HTMLElement).tabIndex).toBe(-1);
+    expect(onReturned).toHaveBeenCalledTimes(1);
+    expect((focusedAtCall as Element | null)?.tagName).toBe('MAIN');
   });
 });
 
