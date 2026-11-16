@@ -1,4 +1,10 @@
-import { movementSlug, newId, type SessionMovementInput } from '@mat-plan/shared';
+import {
+  movementSlug,
+  newId,
+  type SessionMovementInput,
+  type TrackingType,
+  trackingTypeSchema,
+} from '@mat-plan/shared';
 import { and, eq, type SQL } from 'drizzle-orm';
 
 import { schema } from '../client';
@@ -22,7 +28,8 @@ import type { ResolvedSessionMovement } from './strength-session';
  * 3. otherwise **insert into this household's own** namespace.
  *
  * ⚠️ **Not household-first, and that is not a style choice.** This function can only ever author
- * `{publicId, slug, name, isBodyweight: false}` — never `pattern`, never `unit_default`. So a
+ * `{publicId, slug, name, isBodyweight: false}` (plus a `tracking_type`, since FAM-1 step 3) — never
+ * `pattern`, never `unit_default`. So a
  * household row is always a **strictly worse** version of a curated one, and household-first would
  * let free text shadow the seeded `box_jump` (`is_bodyweight: true`) with a row declaring it
  * loaded-with-no-unit, which `queries/program-day.ts` reads as *"the MOVEMENT's declaration"*.
@@ -71,27 +78,61 @@ export async function findOrCreateMovement(
   scope: HouseholdScope,
   name: string,
 ): Promise<number> {
+  return (await findOrCreateTypedMovement(exec, scope, name)).id;
+}
+
+/** A movement the resolver found or made, with the type it ACTUALLY has (which may not be the one asked for). */
+export interface ResolvedMovementRef {
+  id: number;
+  trackingType: TrackingType;
+}
+
+/**
+ * {@link findOrCreateMovement}, for a caller that names the new item's tracking type (FAM-1 step 3,
+ * plan §2 and D25), and gets back the type the row has.
+ *
+ * 🔴 **`trackingType` is written ONLY when this call INSERTS the row.** A name that matches an
+ * existing item (global first, then this household's own) returns that item **unchanged, with its own
+ * type**, whatever was asked: nothing retypes a row (D25), and the caller shows the type it got back
+ * ("a new item whose name matches an existing one selects that item and shows its type"). That branch
+ * is silent on purpose: no throw, no log, because the name is household free text (see above).
+ *
+ * Omitting `trackingType` inserts at the column default (`weight_reps`), which is what an item made in
+ * the old strength form gets.
+ */
+export async function findOrCreateTypedMovement(
+  exec: Executor,
+  scope: HouseholdScope,
+  name: string,
+  trackingType?: TrackingType,
+): Promise<ResolvedMovementRef> {
   const slug = movementSlug(name);
 
-  /** One shape for all four lookups, so none can forget `limit(1)` or the id pluck. */
-  const movementIdWhere = async (where: SQL | undefined): Promise<number | undefined> => {
+  /** One shape for all four lookups, so none can forget `limit(1)` or the id and type pluck. */
+  const movementWhere = async (
+    where: SQL | undefined,
+  ): Promise<ResolvedMovementRef | undefined> => {
     const [row] = await exec
-      .select({ id: schema.movements.id })
+      .select({ id: schema.movements.id, trackingType: schema.movements.trackingType })
       .from(schema.movements)
       .where(where)
       .limit(1);
-    return row?.id;
+    // The column is CHECK-pinned to TRACKING_TYPES; parsing narrows it without a cast. ⚠️ This is a
+    // throw site on the legacy strength path too: it fires only if a row holds a type this code does
+    // not know (an eighth type written by newer code before this deploy is replaced). Add a type by
+    // deploying the const before any writer can store it.
+    return row && { id: row.id, trackingType: trackingTypeSchema.parse(row.trackingType) };
   };
 
   // (1) GLOBAL FIRST — a curated row wins over anything this function could author.
-  const globalId = await movementIdWhere(and(eq(schema.movements.slug, slug), movementIsGlobal()));
-  if (globalId !== undefined) return globalId;
+  const globalRow = await movementWhere(and(eq(schema.movements.slug, slug), movementIsGlobal()));
+  if (globalRow !== undefined) return globalRow;
 
   // (2) …then this household's own namespace.
-  const ownId = await movementIdWhere(
+  const ownRow = await movementWhere(
     and(eq(schema.movements.slug, slug), movementInHousehold(scope)),
   );
-  if (ownId !== undefined) return ownId;
+  if (ownRow !== undefined) return ownRow;
 
   // (3) …then insert into it. The arbiter is `uq_movements_household_slug`, whose predicate the
   // insert repeats literally — see `insertMovementOwnedBy`.
@@ -100,13 +141,14 @@ export async function findOrCreateMovement(
     slug,
     name,
     isBodyweight: false,
+    ...(trackingType === undefined ? {} : { trackingType }),
   });
 
-  const id = await movementIdWhere(
+  const created = await movementWhere(
     and(eq(schema.movements.slug, slug), movementInHousehold(scope)),
   );
-  if (id === undefined) throw new Error('movement not found after upsert');
-  return id;
+  if (created === undefined) throw new Error('movement not found after upsert');
+  return created;
 }
 
 /**

@@ -1089,12 +1089,13 @@ console.log('✓ V1-5: shape CHECK rejects a kind-less check-in missing value_nu
     QUANTITY_SLOT_ROWS.length,
     'quantity_slots is idempotent across two seed runs',
   );
-  // `primary` at three dimensions is the whole point of the composite PK: a back squat's mass, a broad
-  // jump's length and a hold's duration are all "the thing this movement measures".
+  // `primary` at several dimensions is the whole point of the composite PK: a back squat's mass, a broad
+  // jump's length and a hold's duration are all "the thing this movement measures" — and, since FAM-1
+  // step 3, a Count item's plain number.
   assert.equal(
     slots.filter((r) => r.code === QUANTITY_SLOT.primary).length,
-    3,
-    'primary is legal at mass, length AND time (the panel finding that killed a mass-pinned primary)',
+    4,
+    'primary is legal at mass, length, time AND count (the panel finding that killed a mass-pinned primary; count since FAM-1 step 3)',
   );
   console.log('✓ GAP-3: quantity_slots seeded from the shared const, idempotent');
 }
@@ -2570,9 +2571,10 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   await expectRejectedBy('entry_set_quantities_slot_dimension_fkey', () =>
     insertQty('torso', UNIT_DIMENSION.mass, 'lb'),
   );
-  // `primary` is legal at mass/length/time but NOT at count — a slot is bounded by its declared set.
+  // `primary` is legal at mass/length/time/count (count since FAM-1 step 3, whose proof is in
+  // verify/schema.ts) but NOT at instant — a slot is bounded by its declared set.
   await expectRejectedBy('entry_set_quantities_slot_dimension_fkey', () =>
-    insertQty(QUANTITY_SLOT.primary, UNIT_DIMENSION.count, 'count'),
+    insertQty(QUANTITY_SLOT.primary, UNIT_DIMENSION.instant, 'timing'),
   );
   // `weight_num` never had a non-negative CHECK (parseLoad enforced it); the typed column does.
   await expectRejectedBy('entry_set_quantities_value_num_check', () =>

@@ -8,8 +8,9 @@ import {
   PROGRAM_SEED,
   prescriptionSeedRowSchema,
   programBlockSeedRowSchema,
+  LEGACY_SESSION_TYPES,
+  SESSION_TYPE,
   SESSION_TYPE_LABELS,
-  SESSION_TYPES,
   sessionTypeSchema,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
@@ -17,9 +18,9 @@ import { describe, expect, it } from 'vitest';
 // V1-10 shared programming contract. Lives in the WEB test tree (like routine/contract.test.ts): the shared
 // package has no vitest runner — its logic is proven from apps/web's suite, which CI runs.
 
-describe('DAY_ROLES — a superset of SESSION_TYPES plus the strength split', () => {
-  it('contains every SESSION_TYPE and the two split strength days', () => {
-    for (const s of SESSION_TYPES) expect(DAY_ROLES).toContain(s);
+describe('DAY_ROLES — a superset of LEGACY_SESSION_TYPES plus the strength split', () => {
+  it('contains every legacy session type and the two split strength days', () => {
+    for (const s of LEGACY_SESSION_TYPES) expect(DAY_ROLES).toContain(s);
     expect(DAY_ROLES).toContain('strength_a');
     expect(DAY_ROLES).toContain('strength_b');
   });
@@ -43,7 +44,7 @@ describe('DAY_ROLE_TO_SESSION_TYPE — every day role maps to a valid session ty
   it('folds the split strength days to strength; other roles map 1:1', () => {
     expect(DAY_ROLE_TO_SESSION_TYPE.strength_a).toBe('strength');
     expect(DAY_ROLE_TO_SESSION_TYPE.strength_b).toBe('strength');
-    for (const s of SESSION_TYPES) expect(DAY_ROLE_TO_SESSION_TYPE[s]).toBe(s);
+    for (const s of LEGACY_SESSION_TYPES) expect(DAY_ROLE_TO_SESSION_TYPE[s]).toBe(s);
   });
 });
 
@@ -62,7 +63,15 @@ describe('DAY_ROLE_LABELS — derived from SESSION_TYPE_LABELS, never re-typed',
   });
 
   it('is the session-type label verbatim for a 1:1 role', () => {
-    for (const s of SESSION_TYPES) expect(DAY_ROLE_LABELS[s]).toBe(SESSION_TYPE_LABELS[s]);
+    for (const s of LEGACY_SESSION_TYPES) expect(DAY_ROLE_LABELS[s]).toBe(SESSION_TYPE_LABELS[s]);
+  });
+
+  // FAM-1 D6: a template workout's session type is not a day role, so neither day_role CHECK widens.
+  it("has no 'workout' role, although 'workout' is a session type with a label", () => {
+    expect(sessionTypeSchema.safeParse(SESSION_TYPE.workout).success).toBe(true);
+    expect(SESSION_TYPE_LABELS.workout).toBe('Workout');
+    expect(dayRoleSchema.safeParse(SESSION_TYPE.workout).success).toBe(false);
+    expect(Object.keys(DAY_ROLE_LABELS).sort()).toEqual([...DAY_ROLES].sort());
   });
 });
 

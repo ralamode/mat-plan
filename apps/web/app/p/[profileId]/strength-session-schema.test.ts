@@ -411,9 +411,12 @@ describe('logStrengthSessionSchema — the per-unit ceiling (V1-30b-ii)', () => 
     // not a LOGGABLE unit, so `loggableUnitSchema` refuses it long before the ceiling loop runs, and
     // the test passed for the wrong reason (swapping the guard for `?? Infinity` left it green).
     //
-    // So the branch is unreachable by construction, behind two guards that ARE tested:
-    expect(quantityCeiling('count' as Unit)).toBeUndefined(); // 1. no cap is declared for it
-    expect(withSet('count' as Unit, 5).success).toBe(false); // 2. and the unit never parses anyway
+    // So the branch is unreachable by construction, behind two guards that ARE tested. Since FAM-1
+    // step 3 `count` HAS a cap (a Count item's plain number is bounded), so the probe is `bool`, which
+    // has none; `count` is kept out of this path by the loggable enum alone, and still refused:
+    expect(quantityCeiling('bool' as Unit)).toBeUndefined(); // 1. no cap is declared for it
+    expect(withSet('bool' as Unit, 5).success).toBe(false); // 2. and the unit never parses anyway
+    expect(withSet('count' as Unit, 5).success).toBe(false); // count: not a loggable unit here
     // …plus the completeness test below, which is what actually keeps the branch unreachable. The
     // `ceiling === undefined` check stays as defence in depth: `n > undefined` is false, so the
     // tempting `?? Infinity` spelling would silently disable the bound for a future unit that slips

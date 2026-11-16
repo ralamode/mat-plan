@@ -48,4 +48,6 @@ export const ACTIVITY_METRIC_MAP: Record<ActivityTypeKey, readonly MetricKey[]> 
   [ACTIVITY_TYPE_KEYS.splits]: [],
   [ACTIVITY_TYPE_KEYS.shots]: [METRIC_KEYS.shot],
   [ACTIVITY_TYPE_KEYS.conditioning]: [METRIC_KEYS.sprint_reps, METRIC_KEYS.aerobic_minutes],
+  // FAM-1: a template workout's row records a MOVEMENT (an item), never a metric — like sc_lift.
+  [ACTIVITY_TYPE_KEYS.workout_item]: [],
 };

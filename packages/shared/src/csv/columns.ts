@@ -29,7 +29,7 @@ export function csvMovement(slug: string): string {
  * `sessions.day_role` (falling back to `session_type`) → the `session_type` column.
  *
  * ⚠️ **Read from `day_role`, not `session_type`.** `strength_a` is not a `SessionType` at all — the
- * CHECK on `sessions.session_type` is `strength|conditioning|skill|push|pull|legs|core`, and A/B/C
+ * CHECK on `sessions.session_type` is `SESSION_TYPES` (`workout` included since FAM-1 step 3), and A/B/C
  * live only in `DAY_ROLES`. Reading the obviously-named column collapses every A/B/C day into
  * `strength` and destroys the distinction all 14 current legacy rows are built on.
  *

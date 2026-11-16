@@ -6,7 +6,12 @@ import {
   SEED_PROFILE_PUBLIC_ID,
 } from './seed-ids';
 import { PROFILE_KIND, type ProfileKind } from './enums';
-import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions';
+import {
+  LEGACY_SESSION_TYPE_LABELS,
+  LEGACY_SESSION_TYPES,
+  SESSION_TYPE_LABELS,
+  type SessionType,
+} from './sessions';
 
 /**
  * Programming contract (V1-10) — the shared grammar for `program_block` → `prescription` →
@@ -18,7 +23,7 @@ import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions
  */
 
 /**
- * The day roles a prescription can be filed under. A SUPERSET of `SESSION_TYPES` (spread, not re-listed) plus
+ * The day roles a prescription can be filed under. A SUPERSET of `LEGACY_SESSION_TYPES` (spread, not re-listed) plus
  * the split strength days (`strength_a`/`strength_b`) that `SESSION_TYPES` can't express — spec.md §4's
  * `sc_lift → session(strength_a)` needs them, and the prescriptions natural key `(block, day_role, idx)`
  * REQUIRES them (two strength days must be distinguishable or their `idx=0` rows collide). Deliberately its
@@ -51,7 +56,12 @@ export function readsHouseholdProgram(kind: ProfileKind): boolean {
   return kind === PROGRAM_READ_KIND;
 }
 
-export const DAY_ROLES = [...SESSION_TYPES, 'strength_a', 'strength_b', 'strength_c'] as const;
+export const DAY_ROLES = [
+  ...LEGACY_SESSION_TYPES,
+  'strength_a',
+  'strength_b',
+  'strength_c',
+] as const;
 export type DayRole = (typeof DAY_ROLES)[number];
 export const dayRoleSchema = z.enum(DAY_ROLES);
 
@@ -98,7 +108,8 @@ export const STRENGTH_DAY_ROLES = DAY_ROLES.filter(
 
 /**
  * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card
- * header. The 1:1 roles SPREAD `SESSION_TYPE_LABELS` (never re-typed); only the split strength days,
+ * header. The 1:1 roles SPREAD `LEGACY_SESSION_TYPE_LABELS` (never re-typed; not the full map, which
+ * has `workout` since FAM-1 step 3); only the split strength days,
  * which `SESSION_TYPE_LABELS` collapses to a single "Strength", add their letter — and they take the
  * "Strength" noun from that same map. An annotated object literal, NOT a computed `Object.fromEntries`
  * + cast: this way TypeScript actually enforces exhaustiveness over `DayRole` (a cast would assert the
@@ -106,7 +117,7 @@ export const STRENGTH_DAY_ROLES = DAY_ROLES.filter(
  * string-surgery on the role name, which would silently collide the day a `conditioning_a` appears.
  */
 export const DAY_ROLE_LABELS: Record<DayRole, string> = {
-  ...SESSION_TYPE_LABELS,
+  ...LEGACY_SESSION_TYPE_LABELS,
   strength_a: `${SESSION_TYPE_LABELS.strength} A`,
   strength_b: `${SESSION_TYPE_LABELS.strength} B`,
   strength_c: `${SESSION_TYPE_LABELS.strength} C`,
