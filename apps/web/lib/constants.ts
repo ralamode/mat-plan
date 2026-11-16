@@ -680,8 +680,8 @@ export const LOGGED_ROW_CLASS =
   'border-done bg-done-surface text-card-foreground has-[form]:bg-background';
 
 /**
- * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day: the
- * one-tap button writes minutes nobody typed, so the row is where a person first sees them.
+ * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day (typed since
+ * 3b-life-b; the practice row's own copy is `PRACTICE_COPY`).
  */
 export const LIFE_COPY = {
   heading: 'Life',
@@ -819,8 +819,27 @@ export const PRACTICE_COPY = {
       'To clear this practice, leave the field empty. Two practices that day? Enter the total.',
     blankSave: 'Enter the minutes, then Save.',
   }),
-  /** A refused amend (`bad_value`): the one rule, its range from the shared consts. */
+  /** A refused amend or log (`bad_value`): the one rule, its range from the shared consts. */
   outOfRange: `Enter whole minutes, ${PRACTICE_MINUTES_MIN} to ${PRACTICE_MINUTES_MAX}.`,
+  // ── Logging (V1-24 3b-life-b B1, B2, B5) ────────────────────────────────────────────────────────
+  /** The ✓'s accessible name. */
+  logLabel: `Log ${PRACTICE_LABEL.toLowerCase()}`,
+  /** An empty ✓, refused in the browser before any request. */
+  blankLog: 'Enter the minutes, then ✓.',
+  /** A number that reads as hours (1–9, a decimal, `1:30`): the floor's reason, said plainly. */
+  hoursNotMinutes: 'Minutes, not hours: 1½ hours is 90.',
+  /** A tab still on the one-tap bundle posts no minutes; a reload brings the field. */
+  reloadToLog: 'Reload the page to log practice.',
+  /**
+   * A practice already holds the day (3b-0's index): say what happened to THIS number, and how to make
+   * it count. No claim about "another phone": a second tab on the same phone gets this too.
+   */
+  dayTaken: (minutes: number) =>
+    `A practice is already logged for this day, so your ${minutes} min wasn't saved. Tap Change if ${minutes} is right.`,
+  /** The id is held by a different row (a crafted reuse): nothing saved; the form mints a new id. */
+  notSaved: "That wasn't saved. Tap ✓ to try again.",
+  /** This athlete's own CLEARED practice holds the id: nothing logged; the form mints a new id. */
+  clearedEarlier: 'That practice was cleared earlier, so nothing was logged. Tap ✓ to log it now.',
 } as const;
 
 /**

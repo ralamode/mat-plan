@@ -5,6 +5,8 @@ import {
   editPracticeSchema,
   isPracticeMinutesInRange,
   parsePracticeMinutes,
+  practiceMinutesProblem,
+  logPracticeSchema,
   PRACTICE_AMEND_REFUSALS,
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
@@ -52,6 +54,23 @@ describe('practice-shapes — the contract (V1-24 3b-life)', () => {
     for (const shared of ['bad_value', 'closed_day', 'not_found'] as const) {
       expect(ROW_REFUSALS).toContain(shared);
       expect(PRACTICE_AMEND_REFUSALS).toContain(shared);
+    }
+  });
+
+  it('classifies a typed entry the same way for the form and the action (3b-life-b B2)', () => {
+    expect(practiceMinutesProblem('  ')).toBe('blank');
+    for (const t of ['1', '2', '9', '1.5', '1,5', '1:30'])
+      expect(practiceMinutesProblem(t)).toBe('hours');
+    for (const t of ['0', '301', 'abc', '-45', '1e2'])
+      expect(practiceMinutesProblem(t)).toBe('range');
+    for (const t of ['10', ' 90 ', '300']) expect(practiceMinutesProblem(t)).toBeNull();
+  });
+
+  it('the log schema takes whole minutes in range and refuses the rest', () => {
+    const base = { profileId: ID, clientId: ID, day: '2026-11-16' };
+    expect(logPracticeSchema.parse({ ...base, minutes: '45' }).minutes).toBe(45);
+    for (const minutes of ['', '9', '301', undefined, 45]) {
+      expect(logPracticeSchema.safeParse({ ...base, minutes }).success).toBe(false);
     }
   });
 });

@@ -429,6 +429,8 @@ const STATES = {
   // V1-24 3b-life-a — the logged practice's open editor, its editor with Clear armed, and the row after
   // the clear (`practice-logged`, below, is the logged row). Interaction-only.
   'practice-editing': null,
+  'practice-ready': null,
+  'practice-hours': null,
   'practice-clear-armed': null,
   'practice-cleared': null,
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
@@ -788,7 +790,19 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       await life.getByLabel(PRACTICE_COPY.fieldLabel).fill('');
       await life.getByRole('button', { name: PRACTICE_COPY.clearLabel }).click();
     }
-    await life.getByRole('button', { name: PRACTICE_COPY.label, exact: true }).waitFor();
+    await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).waitFor();
+  },
+  // V1-24 3b-life-b: the typed row, ready (a value waits: the ✓ fills), and an hours-shaped value
+  // refused in the browser.
+  'practice-ready': async (page) => {
+    await practiceSection(page).getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('45');
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  },
+  'practice-hours': async (page) => {
+    const life = practiceSection(page);
+    await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('2');
+    await life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true }).click();
+    await life.getByRole('alert').waitFor();
   },
   'bodyweight-empty-tick': async (page) => {
     // Scoped to the section: Next's route announcer is a page-level `role="alert"` too.
@@ -1448,7 +1462,10 @@ function practiceSection(page: Page) {
 /** Tap the one-tap practice ✓ unless the row is already logged (the three widths share one day). */
 async function logPracticeOnce(page: Page): Promise<void> {
   const life = practiceSection(page);
-  const button = life.getByRole('button', { name: PRACTICE_COPY.label, exact: true });
-  if ((await button.count()) > 0) await button.click();
+  const tick = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
+  if ((await tick.count()) > 0) {
+    await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('90');
+    await tick.click();
+  }
   await life.getByRole('button', { name: PRACTICE_CHANGE }).waitFor();
 }

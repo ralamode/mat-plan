@@ -1,16 +1,15 @@
 import { ACTIVITY_TYPE_KEYS } from '@mat-plan/shared';
 
 /**
- * V1-7 life activities — logged one-tap on the Today view. Deliberately NOT a registry (the two
- * activities are heterogeneous and hard-coded; a `checkin-fields.ts`-style derived source earns
- * nothing for N=2). Just the two things the feature needs single-sourced:
+ * V1-7 life activities. Deliberately NOT a registry (the activities are hard-coded; a
+ * `checkin-fields.ts`-style derived source earns nothing for N=2). Two things single-sourced:
  *
- *  - the TRUST-BOUNDARY set the action validates a submitted `activityKey` against (never trust
- *    the body) — `wake` (a `timing` event) + `wrestling_practice` (a one-tap duration);
- *  - the default practice duration for the one-tap log.
+ *  - `LIFE_ACTIVITIES`, the routine catalog's source (`wake`, `wrestling_practice`);
+ *  - `LOGGABLE_LIFE_ACTIVITY_KEYS`, the action's TRUST-BOUNDARY set (never trust the body): practice
+ *    only, typed in minutes since V1-24 3b-life-b.
  */
 /**
- * The life activities + their one-tap button labels — the single source the UI maps over AND the
+ * The life activities + their labels — the single source the routine catalog maps over AND the
  * action's trust set derives from, so adding one renders a button and is accepted server-side without
  * re-hardcoding the pair in two places. (The action still needs a per-key item-building arm, since the
  * shapes are heterogeneous — wake=timing event, wrestling=duration metric — and that dispatch is
@@ -21,12 +20,14 @@ export const LIFE_ACTIVITIES = [
   { key: ACTIVITY_TYPE_KEYS.wrestling_practice, label: 'Wrestling practice' },
 ] as const;
 
-/** The trust-boundary set the action validates a submitted `activityKey` against (derived — one source). */
+/** Every life activity's key, derived (one source): the routine catalog reads it (`catalog.ts`). */
 export const LIFE_ACTIVITY_KEYS: readonly string[] = LIFE_ACTIVITIES.map((a) => a.key);
 
 /**
- * Default wrestling-practice duration (minutes) for a one-tap log. The club runs ~90-minute
- * sessions; variable durations / other clubs are why a minutes-override is a deferred refinement.
- * Named once (a one-line change if it moves).
+ * The life activities the day page can LOG (V1-24 3b-life-b B6): wrestling practice only, typed in
+ * minutes (the one-tap `DEFAULT_PRACTICE_MINUTES = 90` is gone). A separate trust set, because
+ * `LIFE_ACTIVITIES` is also the routine catalog's source, and taking Wake out of it would strip a
+ * stored `life:wake` from routines (FAM-1 12f owns that, D28). Wake is not loggable: the tap time is
+ * not the wake time.
  */
-export const DEFAULT_PRACTICE_MINUTES = 90;
+export const LOGGABLE_LIFE_ACTIVITY_KEYS = [ACTIVITY_TYPE_KEYS.wrestling_practice] as const;

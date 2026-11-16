@@ -1,10 +1,5 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import {
-  ACTIVITY_TYPE_KEYS,
-  addDays,
-  DEFAULT_BODYWEIGHT_UNIT,
-  PRACTICE_UNIT,
-} from '@mat-plan/shared';
+import { addDays, DEFAULT_BODYWEIGHT_UNIT, PRACTICE_UNIT } from '@mat-plan/shared';
 import { expect, type Page } from '@playwright/test';
 
 import {
@@ -17,7 +12,6 @@ import {
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
-import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITIES } from '../lib/life/life-activities';
 
 /**
  * The seeded profile's Today route. Single-sourced here (V1-12) because three callers need it — the
@@ -128,11 +122,9 @@ export async function logBodyweight(
   await expect(saved).toBeVisible(opts);
 }
 
-/** The practice button's label and its logged row's value, from the app's own sources. */
-export const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
-  (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
-)!.label;
-export const PRACTICE_SHOWN = formatValueUnit(DEFAULT_PRACTICE_MINUTES, PRACTICE_UNIT);
+/** The minutes the specs log (a typical session; the app has no default since 3b-life-b). */
+export const PRACTICE_MINUTES = 90;
+export const PRACTICE_SHOWN = formatValueUnit(PRACTICE_MINUTES, PRACTICE_UNIT);
 
 /** The logged practice's Change, named by `changeLabel` as the app names it (3b-life A1). */
 export function practiceChange(page: Page, value: string = PRACTICE_SHOWN) {
@@ -142,18 +134,23 @@ export function practiceChange(page: Page, value: string = PRACTICE_SHOWN) {
   });
 }
 
+/** The unlogged practice row's minutes field and its ✓ (V1-24 3b-life-b). */
+export function practiceLogField(page: Page) {
+  return lifeSection(page).getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
+}
+
 /**
- * Tap the one-tap **Wrestling practice** button and assert the Life section's logged row: the label
- * and its minutes, and its Change (V1-24 3b-page; Change since 3b-life-a). Retry-safe: a logged
- * activity has no button (the row replaced it), so a Playwright retry on the reused DB skips the tap
- * and asserts the end state.
+ * Type the practice minutes, tap ✓, and assert the Life section's logged row: the label and its
+ * minutes, and its Change (V1-24 3b-page; Change since 3b-life-a; typed since 3b-life-b). Retry-safe:
+ * a logged practice has no field (the row replaced it), so a Playwright retry on the reused DB skips
+ * the log and asserts the end state.
  *
- * On a fresh log it also asserts focus moved to the row's Change: the button that had focus has
- * unmounted, and the section's island hands focus on rather than letting it drop to `<body>`.
+ * On a fresh log it also asserts focus moved to the row's Change: the ✓ that had focus has unmounted,
+ * and the section's island hands focus on rather than letting it drop to `<body>`.
  */
 export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
-  const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
+  const button = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   const change = practiceChange(page);
   // A retry after a failed change left another value on the row: clear it, so the tap below runs.
   const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
@@ -169,6 +166,7 @@ export async function logPractice(page: Page): Promise<void> {
     await clearPractice(page, shown);
   }
   if ((await button.count()) > 0) {
+    await practiceLogField(page).fill(String(PRACTICE_MINUTES));
     await button.click();
     await expect(change).toBeVisible({ timeout: 15_000 });
     await expect(change).toBeFocused();
@@ -191,13 +189,12 @@ export async function changePractice(page: Page, from: string, minutes: string):
 }
 
 /** Clear the logged practice shown as `from`: empty the field, Save reads Clear; the cleared line is
- * shown and focus lands on the Wrestling practice button that comes back (V1-24 3b-life-a A3, A4). */
+ * shown and focus lands on the empty minutes field that comes back (V1-24 3b-life A3, A4). */
 export async function clearPractice(page: Page, from: string): Promise<void> {
   const life = lifeSection(page);
   await practiceChange(page, from).click();
   await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('');
   await life.getByRole('button', { name: PRACTICE_COPY.clearLabel, exact: true }).click();
-  const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
-  await expect(button).toBeFocused({ timeout: 15_000 });
+  await expect(practiceLogField(page)).toBeFocused({ timeout: 15_000 });
   await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedCleared(from));
 }

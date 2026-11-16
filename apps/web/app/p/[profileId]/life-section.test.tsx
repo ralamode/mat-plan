@@ -65,7 +65,8 @@ describe('LifeSection — its states', () => {
   it('writable and nothing logged: the practice button, and no Wake', () => {
     render(section());
     expect(screen.getByRole('heading', { name: LIFE_COPY.heading })).toBeTruthy();
-    expect(screen.getByRole('button', { name: practiceLabel })).toBeTruthy();
+    expect(screen.getByRole('button', { name: PRACTICE_COPY.logLabel })).toBeTruthy();
+    expect(screen.getByLabelText(PRACTICE_COPY.fieldLabel)).toBeTruthy();
     expect(screen.queryByRole('button', { name: wakeLabel })).toBeNull();
     expect(screen.queryByText(LIFE_COPY.noneOnClosedDay)).toBeNull();
   });
@@ -77,7 +78,7 @@ describe('LifeSection — its states', () => {
     // Two lines (plan A1): siblings in one column, never one run of text.
     expect(label.parentElement).toBe(value.parentElement);
     expect(label.parentElement!.className).toContain('flex-col');
-    expect(screen.queryByRole('button', { name: practiceLabel })).toBeNull();
+    expect(screen.queryByRole('button', { name: PRACTICE_COPY.logLabel })).toBeNull();
     expect(screen.queryByText(LIFE_COPY.noneOnClosedDay)).toBeNull();
   });
 
@@ -137,7 +138,8 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
 
   it("a log is announced from the action's result and hands focus to the row's Change", async () => {
     const { rerender } = render(section());
-    await submit(practiceLabel);
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '90' } });
+    await submit(PRACTICE_COPY.logLabel);
     expect(logLifeActivitiesAction).toHaveBeenCalledOnce();
     expect(screen.getByRole('status').textContent).toBe(LIFE_COPY.announced(practiceLabel));
     rerender(section({ logged: [practice(90)] }));
@@ -176,7 +178,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     );
   });
 
-  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning button', async () => {
+  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning field', async () => {
     const { rerender } = render(section({ logged: [practice(90)] }));
     open(90);
     fireEvent.change(field(), { target: { value: '' } });
@@ -186,7 +188,8 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     const status = screen.getByRole('status');
     expect(status.textContent).toBe(PRACTICE_COPY.announcedCleared(minutes(90)));
     expect(status.className).not.toContain('sr-only');
-    const returning = screen.getByRole('button', { name: practiceLabel });
+    // The typed field returns, takes focus, and is described by the shown line.
+    const returning = screen.getByLabelText(PRACTICE_COPY.fieldLabel);
     expect(document.activeElement).toBe(returning);
     // …and it is described by the shown line, so arriving focus reads what was cleared.
     expect(returning.getAttribute('aria-describedby')).toBe(status.id);
@@ -242,7 +245,8 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
   it("a refused log is the island's alert, with focus kept in the island", async () => {
     vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({ ok: false, error: 'Not saved.' });
     render(section());
-    await submit(practiceLabel);
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '90' } });
+    await submit(PRACTICE_COPY.logLabel);
     expect(screen.getByRole('alert').textContent).toBe('Not saved.');
   });
 

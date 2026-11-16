@@ -45,6 +45,27 @@ export function isPracticeMinutesInRange(minutes: number): boolean {
   return minutes >= PRACTICE_MINUTES_MIN && minutes <= PRACTICE_MINUTES_MAX;
 }
 
+/**
+ * What is wrong with a typed practice entry, or `null` if it is whole minutes in range (V1-24 3b-life-b
+ * B2). One classifier, so the form's message before the request and the action's refusal agree.
+ *
+ * - `blank`: nothing typed.
+ * - `hours`: a number that reads as HOURS: 1 to 9 (the floor's reason), or a decimal or a `h:mm`.
+ * - `range`: anything else that is not whole minutes from 10 to 300.
+ */
+export type PracticeMinutesProblem = 'blank' | 'hours' | 'range';
+
+export function practiceMinutesProblem(text: string): PracticeMinutesProblem | null {
+  const trimmed = text.trim();
+  if (trimmed === '') return 'blank';
+  const minutes = parsePracticeMinutes(trimmed);
+  if (minutes !== null) {
+    if (isPracticeMinutesInRange(minutes)) return null;
+    return minutes >= 1 && minutes < PRACTICE_MINUTES_MIN ? 'hours' : 'range';
+  }
+  return /^\d+([.,:]\d+)?$/.test(trimmed) ? 'hours' : 'range';
+}
+
 /** Whole minutes in range, from text: the one rule the form and the action both apply. */
 const practiceMinutesText = z.string().transform((s, ctx) => {
   const minutes = parsePracticeMinutes(s);
@@ -77,6 +98,20 @@ export const editPracticeSchema = z.object({
 });
 
 export type EditPracticeInput = z.input<typeof editPracticeSchema>;
+
+/**
+ * Logging a practice (V1-24 3b-life-b): the existing life form action's input, now with the minutes.
+ * The action builds this from FormData at its edge and parses it here. `day` is the declared day the
+ * action bounds (`resolveDeclaredDay`), so it stays a string here.
+ */
+export const logPracticeSchema = z.object({
+  profileId: uuidSchema,
+  clientId: uuidSchema,
+  day: z.string(),
+  minutes: practiceMinutesText,
+});
+
+export type LogPracticeInput = z.input<typeof logPracticeSchema>;
 
 /**
  * Why a practice amend did not happen. Each maps to copy on the client. The words are the FAM-1 row

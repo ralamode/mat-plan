@@ -47,9 +47,10 @@ export const ROUTINE_CATALOG: readonly string[] = [
  *    double-count adherence (CAT-1, whose trap (2) says "the default needs the criterion too") — and
  *    ONB-2's Daily Five prescribes push-ups and pull-ups, so keeping them here would hand every new
  *    household the same work loggable two ways on day one;
- *  - `life:wrestling_practice`'s one tap writes `DEFAULT_PRACTICE_MINUTES = 90` — the maintainer's
- *    club's session length — with no number on the button and no in-app undo. docs/plan.md's standing
- *    ruling names THIS row as the owner of that distinction.
+ *  - `life:wrestling_practice` was a one tap that wrote 90, the maintainer's club's session length,
+ *    with no number on the button. Since V1-24 3b-life it is typed minutes with Change and Clear, so
+ *    that reason is gone; whether a new household sees it by default is still this row's call
+ *    (docs/plan.md's standing ruling), and it stays out until that is decided.
  * Everything excluded stays fully authorable in the shipped editor, which Today links to.
  *
  * ⚠️ READ-TIME FALLBACK, NEVER WRITTEN. `routine_config = NULL` *is* the representation of "the neutral
