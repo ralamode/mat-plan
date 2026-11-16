@@ -319,4 +319,35 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     );
     expect(document.activeElement).toBe(field);
   });
+
+  it('a Take off that kept focus on its button moves it to the row (a real tap focuses)', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: true });
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    const button = screen.getByRole('button', { name: takeOffLabel('Athlete Two') });
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        takenOffText('Athlete Two', familyProgram.name, true),
+      ),
+    );
+    expect(document.activeElement).toBe(screen.getByText('Athlete Two').parentElement);
+  });
+
+  it('a failed Take off that lands while Rename is open leaves focus in the name field', async () => {
+    let answer!: (result: { ok: false; reason: 'retry' }) => void;
+    const takeOff = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    render(
+      <ProgramScreen
+        program={familyProgram}
+        actions={actions({ takeOff: takeOff as ProgramActions['takeOff'] })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete Two') }));
+    fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
+    const field = screen.getByLabelText(BUILDER_COPY.programName);
+    answer({ ok: false, reason: PROGRAM_REFUSAL.retry });
+    await waitFor(() => expect(alerts()).toEqual([takeOffFailedText('Athlete Two')]));
+    expect(document.activeElement).toBe(field);
+  });
 });

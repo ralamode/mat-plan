@@ -109,6 +109,10 @@ flowchart LR
 
 ## Traps
 
+- **A name form assumes leaving the screen unmounts it.** `useNameForm` ends the attempt in an
+  effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in
+  `<Activity>` instead of unmounting it, so a create answered while hidden would be dropped and
+  the form would come back stuck on "Creating…". Revisit this if that flag is turned on.
 - **Until 7b, the preview route never reaches `networkidle`.** The screens link to `/programs/...`
   pages that do not exist yet; Next prefetches each link, the 404 answers, and the response body
   stays open. `pnpm --filter web screenshot:ephemeral` waits for `networkidle`, so it times out on
