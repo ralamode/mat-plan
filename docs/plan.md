@@ -368,7 +368,8 @@ now and dearer once FAM-1's lanes have written their actions and reads, or once 
   the consoles, not from the setup docs' advice. **Why:** nothing in the tree pins a region today,
   and a Neon project's region cannot be changed after creation. Owes the privacy lens ("a change to
   who receives data, or where, updates the inventory in the same PR"). Confirm the region in the
-  Vercel dashboard at the phone run-through. _(Beta 0; a manual-step row like `DX-5(a)`.)_
+  Vercel dashboard at the phone run-through (✅ `iad1` only, the maintainer's read, 2026-11-16).
+  _(Beta 0; a manual-step row like `DX-5(a)`.)_
 - <a id="scale-3"></a>**SCALE-3 — a statement timeout on the runtime pool.**
   `packages/db/src/client.ts` creates the pool with a connect timeout only. Bound a statement at
   about 10–15 s so a runaway query cannot hold a pooled connection. ⚠️ **Prove the mechanism against

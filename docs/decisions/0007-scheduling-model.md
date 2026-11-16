@@ -1,7 +1,7 @@
 # ADR 0007 — The scheduling model
 
-**Status:** **Accepted** with Amendments 1 and 2, signed by the maintainer by merging PR #402 (2026-11-14); **Amendment 3** proposed by the FAM-1 plan (d2) and signed by merging it ·
-**Date:** 2026-10-07, amended 2026-11-13 and 2026-11-14 · **Scope:** Beta 0's last milestone (FAM-1) and later ·
+**Status:** **Accepted** with Amendments 1 and 2, signed by the maintainer by merging PR #402 (2026-11-14); **Amendment 3** proposed by the FAM-1 plan (d2) and signed by merging it; **Amendment 4** signed by the maintainer on 2026-11-16 ·
+**Date:** 2026-10-07, amended 2026-11-13, 2026-11-14, 2026-11-15 and 2026-11-16 · **Scope:** Beta 0's last milestone (FAM-1) and later ·
 **Continues:** [ADR 0005](./0005-programming-model.md), whose "What this does not settle" is this
 document's charter · **Relates:** [ADR 0002](./0002-calisthenics-ramp-targets.md) (the one
 materialized-plan table this repo already has)
@@ -193,6 +193,7 @@ prescription_group IS NOT NULL AND deleted_at IS NULL`. Entries need no arbiter,
   - Inserts, reopens and reorders all go through **one shifted-band writer**, the design in V1-22 W1
     (`docs/plans/v1-22-program-editor.md`), shared with §3's and §4's slot keys. It isn't built yet.
   - Take off frees the `idx` on the program's last day, so Today orders by `(idx, id)`.
+- ⚠️ _Amendment 4 adds two cases to the next paragraph: a start dated today, and reopening._
 - **Take off** sets `active_to` to today, ending the program after today. `active_to` is the
   **inclusive last day** (the prototype stores the exclusive day after; the meaning is the same). An assignment that hasn't
   started is soft-deleted instead. Logged days keep their frozen workout.
@@ -309,10 +310,29 @@ IS NULL AND prescription_set IS NULL`. Today it allows one live entry per place 
 **Where it lands:** FAM-1 step 4a-ii, with the log side's other columns. The lock and route follow
 §4b's small-table route (`entries` is small); the header says so.
 
+### Amendment 4 (2026-11-16): same-day Put on and Take off
+
+Decided by the maintainer on 2026-11-16, from the review of FAM-1's Copy and Put-on dialogs; the
+plan carries it in rows 6c and 6d, and the contract in `takeOffSchema` and `assignDraftSchema`
+(`packages/shared/src/program/program-shapes.ts`). It changes Amendment 2's "Take off" paragraph.
+
+- **Take off also removes a start dated today**, when that athlete has no live row logged today in a
+  workout of the program. A row ticked and un-ticked does not count. Before, only a start that had
+  not begun was removed.
+- **Put on reopens an assignment whose last day is today**: `active_to` is cleared on the same row,
+  so the athlete has one stretch with no gap. The row takes its place in the athlete's program order
+  again through the same writer that inserts and reorders use, because Take off freed that place and
+  another Put on may have taken it since.
+- **Unchanged:** `active_to` is the inclusive last day; logged days keep their frozen workout; at
+  most one open assignment per athlete and program.
+
 ### Signature
 
 **Signed by the maintainer by merging PR #402**, with Amendments 1 and 2. FAM-1 steps 4a, 4b and 5
 may now be planned and built against them.
+
+**Amendment 4 was signed by the maintainer on 2026-11-16**, having read its three points as written
+above.
 
 > **This is the second draft.** The first decided the same five questions and then **authorized five
 > new tables and a `DROP COLUMN` on live data** on the strength of them. A five-lens panel found that
