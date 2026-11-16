@@ -660,5 +660,19 @@ describe('the item picker (FAM-1 9)', () => {
         alreadyListedText('Pull-up', TRACKING_TYPE_LABELS.reps),
       );
     });
+
+    it('a create answered after a plain Cancel ticks nothing and says nothing', async () => {
+      let answer!: (value: unknown) => void;
+      editor({ newItem: vi.fn(() => new Promise((resolve) => (answer = resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
+      search('Bear');
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
+    });
   });
 });
