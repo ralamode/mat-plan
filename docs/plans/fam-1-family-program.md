@@ -353,6 +353,10 @@ in the shapes as planned. Both are fixed in the code, with the smaller changes b
 - `TRACKING_TYPE_FIELDS`: §2's table as data (per type: sets, reps, slot, unit dimensions, fixed
   unit), with `unitsForTrackingType`, `hasSetRows` and `wholeReps` (D13's rule). Use these; do not
   re-derive the table.
+- **Added after the lanes started (contract change C1):** `quantityText` (one client-safe spelling of
+  a quantity; `prescribedText` uses it), `slotQuantity`, the types `DayWorkout`, `DayItem` and `DayRow`,
+  `hasStarted`, and `MONDAY_FIRST`. `docs/features/program-contract.md` lists them; import these,
+  do not write your own.
 - Schemas for the inline action inputs (`createProgramSchema`, `renameProgramSchema`,
   `newItemSchema`) and `saveWorkoutSchema`: `WorkoutDraft.name` may be `''` while a new workout is
   being named; saving requires 1..`WORKOUT_NAME_MAX`.
@@ -724,14 +728,15 @@ step named owns the same proof against the real thing.
 **Recorded differences from v12** (each lane's guide holds its own list in full; these are the ones
 a second lane or the maintainer needs to know):
 
-| Where                  | v12 shows                                   | Built                                                                                                                                            | Decided by                          |
-| ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| A read-only day        | the Previous column, filled                 | no Previous column (D33)                                                                                                                         | maintainer, 2026-11-15              |
-| A ✓ that fails         | the row's own message only                  | also "N not saved" beside the workout's progress, so a failure that scrolled away is still seen                                                  | maintainer, 2026-11-15 (step 13)    |
-| A stale page           | nothing (the prototype has one user)        | `program_changed`, `not_found`, `slot_taken` and `not_scheduled` show an inline **Reload**, which refreshes and keeps the other rows' typed text | maintainer, 2026-11-15 (step 13)    |
-| A day that just closed | nothing (the prototype's clock never moves) | the first `closed_day` answer makes the whole screen read-only, with "Only today and yesterday can be changed."                                  | step 13's review                    |
-| Set-type items         | their rows                                  | between 13 and 13b only: the heading and "N logged", no rows. No household sees it: nobody is on a program until 15, which waits for 13b         | step order (13 before 13b)          |
-| A logged row's colour  | green                                       | the `done` tokens (#424, `docs/design.md` → Tokens); whether step 13 or 13b adopts them is the maintainer's answer in lane C's chat              | maintainer, pending at this writing |
+| Where                  | v12 shows                                   | Built                                                                                                                                            | Decided by                                    |
+| ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| A read-only day        | the Previous column, filled                 | no Previous column (D33)                                                                                                                         | maintainer, 2026-11-15                        |
+| A ✓ that fails         | the row's own message only                  | also "N not saved" beside the workout's progress, so a failure that scrolled away is still seen                                                  | maintainer, 2026-11-15 (step 13)              |
+| A stale page           | nothing (the prototype has one user)        | `program_changed`, `not_found`, `slot_taken` and `not_scheduled` show an inline **Reload**, which refreshes and keeps the other rows' typed text | maintainer, 2026-11-15 (step 13)              |
+| A day that just closed | nothing (the prototype's clock never moves) | the first `closed_day` answer makes the whole screen read-only, with "Only today and yesterday can be changed."                                  | step 13's review                              |
+| Set-type items         | their rows                                  | between 13 and 13b only: the heading and "N logged", no rows. No household sees it: nobody is on a program until 15, which waits for 13b         | step order (13 before 13b)                    |
+| A logged row's colour  | green                                       | green, through the `done` tokens (#424, `docs/design.md` → Tokens); step 13 merged with them (#425), so this is no longer a difference           | maintainer, 2026-11-15 (#425 merged as built) |
+| A Count item's unit    | `30 sec`, `7 count`                         | `30 s`, and a bare `7`: one spelling of a unit everywhere (`quantityText`, the contract), the same as a Duration's `30 s`                        | contract review (#417, C1)                    |
 
 **What the prototype does not show**, decided here so no lane invents it (gate 5): loading (a
 skeleton of the cards, as `loading.tsx` does today); two parents saving one workout (the last Save
