@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 70db7436..6ed8853f 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -421,9 +421,6 @@ export async function logRow(
+ 
+     // 8 — the athlete is on this program on this day (step 5's assignment) → else `program_changed`,
+     //     which is how the fake answers a workout missing from the athlete's day.
+-    if (!(await isOnProgramThatDay(tx, profileId, workout.blockId, write.day))) {
+-      refuse(ROW_REFUSAL.program_changed);
+-    }
+ 
+     // 9 — a set past 1 only on a type with set rows.
+     if (write.set > 1 && !hasSetRows(trackingType)) refuse(ROW_REFUSAL.bad_value);

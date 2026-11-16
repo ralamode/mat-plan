@@ -157,9 +157,10 @@ profiles.household_id`, column to column, so pre-flight (f) holds whatever a sco
    `writeStrengthSession` does (`writers/strength-session.ts:252-280`) → else `not_found`. **P7.**
 7. **Scheduled.** `scheduledOn(blockId, workoutId, day)`, a conjunct exported from
    `queries/day/scheduled.ts` (12a's `scheduled` flag uses it too) → else `not_scheduled`. **P8.**
-8. **On the program that day** (M7, step 5). The assignment conjunct, added to `scheduled.ts` →
-   else `program_changed`, which is how the fake answers a workout missing from the athlete's day.
-   **P20:** drop it → proof 6d goes red.
+8. **On the program that day** (M7, step 5). `isOnProgramThatDay` in `scheduled.ts`, on step 5's
+   `assignmentOnDay` → else `program_changed`, which is how the fake answers a workout missing from
+   the athlete's day. _As built:_ **182** drops the check, **183** its block, **184** its dates; proof
+   6d's three athletes (on no program, taken off yesterday, on another program) each redden one.
 9. **Set.** `set > 1` on a type without set rows (`hasSetRows`) → `bad_value`. **P9.**
 10. **Values.** First, the prescription's type and unit are re-checked against `TRACKING_TYPE_FIELDS`
     (`dimensions`, the fixed `min`/`sec`); a malformed prescription → `bad_value`, not an FK 500
@@ -284,7 +285,7 @@ the (f), (g) and mismatched-pair detectors read `[]`; (f′) deletes its planted
 | 6a    | `not_scheduled`: a workout not on that weekday                                                                                                                                                                     | P8                                                                                               |
 | 6b    | `program_changed`: a hidden prescription; a hidden workout; a hidden block                                                                                                                                         | P19                                                                                              |
 | 6c    | `not_found`: B's profile; B's workout (fully valid); B's hidden workout; a mismatched pair; a foreign movement on a prescription                                                                                   | P5, P7                                                                                           |
-| 6d    | `program_changed`: an athlete of H not on the block that day                                                                                                                                                       | P20                                                                                              |
+| 6d    | `program_changed`: an athlete of H on no program; taken off yesterday; on another program                                                                                                                          | 182, 183, 184                                                                                    |
 | (f)   | B's live profile under `B_SCOPE` + H's workout and prescription → `not_found`; no session, superset or entry rows                                                                                                  | (end to end; 4d is the patch's proof)                                                            |
 | (f′)  | A planted B session naming H's workout; H's tick writes into H's own session                                                                                                                                       | P11                                                                                              |
 | 7     | Set 5 on a 3-set Weight × Reps → `ok`; set 2 on a Check → `bad_value`                                                                                                                                              | P9                                                                                               |

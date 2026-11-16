@@ -34,15 +34,15 @@ their files, diagrams and invariants here. The row writer's sequence diagram is
 
 ## Files
 
-| File                                               | What it is for                                                                                                                                                                                                                                                                       |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/db/src/writers/day/index.ts`             | The directory's exports: `logRow`, `untickRow`, `retickRow`, re-exported from the package index for step 12b's actions.                                                                                                                                                              |
-| `packages/db/src/writers/day/log-row.ts`           | **The row writer** (11b): the three writers, `classifyRowHolder`, `rowWorkout`, `RowRefused`, and the conjuncts `programRowOf`, `workoutSessionSlot`, `workoutSupersetSlot`, `programRowSlot`.                                                                                       |
-| `packages/db/src/queries/day/scheduled.ts`         | `scheduledOn(blockId, workoutId, day)`: a live week slot on the day's weekday (`localWeekday`), as a conjunct; `isScheduledOn(exec, …)` asks it as a boolean (the ✓ and the un-tick). One rule for the writer, 12a's `scheduled` and 11c. **OWED(step 5)**: the assignment conjunct. |
-| `packages/db/src/queries/day/stored-row-values.ts` | `readRowValues`: a logged row's live set and its live quantities, as `RowValues`. Throws on two live sets (D3). A second copy of the DAL's read (`docs/tech-debt.md`).                                                                                                               |
-| `packages/db/src/writers/day/owed.test.ts`         | The lane's `it.todo` list: the tests steps 11b, 12a, 11c and 14 still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                |
-| `packages/db/src/queries/day/index.ts`             | The directory's exports. Not re-exported from the package index yet; 12a decides.                                                                                                                                                                                                    |
-| `packages/db/scripts/verify/day.ts`                | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                        |
+| File                                               | What it is for                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/day/index.ts`             | The directory's exports: `logRow`, `untickRow`, `retickRow`, re-exported from the package index for step 12b's actions.                                                                                                                                                                                                                                                                                                                        |
+| `packages/db/src/writers/day/log-row.ts`           | **The row writer** (11b): the three writers, `classifyRowHolder`, `rowWorkout`, `RowRefused`, and the conjuncts `programRowOf`, `workoutSessionSlot`, `workoutSupersetSlot`, `programRowSlot`.                                                                                                                                                                                                                                                 |
+| `packages/db/src/queries/day/scheduled.ts`         | `scheduledOn(blockId, workoutId, day)`: a live week slot on the day's weekday (`localWeekday`), as a conjunct; `isScheduledOn(exec, …)` asks it as a boolean (the ✓ and the un-tick). One rule for the writer, 12a's `scheduled` and 11c. `isOnProgramThatDay(exec, profileId, blockId, day)`: step 8, "the athlete is on this program on this day", on step 5's `assignmentOnDay` (on the program, not due on the weekday; see its docblock). |
+| `packages/db/src/queries/day/stored-row-values.ts` | `readRowValues`: a logged row's live set and its live quantities, as `RowValues`. Throws on two live sets (D3). A second copy of the DAL's read (`docs/tech-debt.md`).                                                                                                                                                                                                                                                                         |
+| `packages/db/src/writers/day/owed.test.ts`         | The lane's `it.todo` list: the tests steps 11b, 12a, 11c and 14 still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                          |
+| `packages/db/src/queries/day/index.ts`             | The directory's exports. Not re-exported from the package index yet; 12a decides.                                                                                                                                                                                                                                                                                                                                                              |
+| `packages/db/scripts/verify/day.ts`                | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                                                                                                                                  |
 
 ## Invariants
 
@@ -72,9 +72,9 @@ their files, diagrams and invariants here. The row writer's sequence diagram is
 
 8. 🔴 **The row writer's check order is the contract**: profile (archived → `closed_day`) → window
    (`inWritableWindow`, D32) → replay → workout → prescription → movement → scheduled → set →
-   values → writes. Every step has a proof in `verify/day.ts`, and every one but three has a
-   mutation that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–181; 120 is unused). The three:
-   step 8 (the step-5 assignment check) is owed; the quantity's derived `dimension` in
+   values → writes. Every step has a proof in `verify/day.ts`, and every one but two has a
+   mutation that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–184; 120 is unused). The two:
+   the quantity's derived `dimension` in
    `insertEntrySetRows` has no patch of its own, because hard-coding it reddens `verify.ts`'s GAP-3
    hold proof first; and the replay pin's `prescription_set IS NOT NULL` (3d) is implied by
    `prescription_set = write.set`. Reorder nothing without moving its proof.
@@ -114,8 +114,8 @@ same way, except:
   in that workout) and `not_found` in the writer (plan M2).
 - The writer answers the values **as stored**: `numeric(8,3)` rounds a quantity to three decimals,
   so 40.12345 answers 40.123, where the fake answers what was typed.
-- Until step 5, the writer has no "on the program that day" check (`OWED(step 5)`); the fake reads
-  it from the fixture.
+- The writer's "on the program that day" check (step 8) reads `program_assignments` through
+  `assignmentOnDay`; the fake reads it from the fixture. 12a must use the same predicate.
 - ⚠️ **The item's unit is one rule**, `itemUnit` (`@mat-plan/shared`, C13): the type's fixed unit
   first, else the slot's prescribed unit. 12a's `DayItem.unit` must call it for a live prescription
   (a removed one takes the unit its entry was stored in), or a row's placeholder and its ✓ disagree.
