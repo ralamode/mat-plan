@@ -79,6 +79,23 @@ export function previewEntries(): PreviewSelection[] {
   ]);
 }
 
+/**
+ * Where the day preview's athlete switcher goes for one athlete: the first day fixture that is that
+ * athlete's, or `current` when the fixtures hold none for them. Built from the contract's fixture
+ * list, never from a request, so every link the switcher shows is a state this route lists.
+ *
+ * The real page's `hrefFor` opens the athlete's today; the preview has no "today" page, so it opens
+ * the first state it has for them.
+ */
+export function dayPreviewHrefFor(current: PreviewSelection): (profilePublicId: string) => string {
+  return (profilePublicId) => {
+    const fixture = Object.entries(DAY_PLAN_FIXTURES).find(
+      ([, plan]) => plan.profilePublicId === profilePublicId,
+    )?.[0];
+    return previewHref(fixture ? { screen: 'day', fixture, failNext: false } : current);
+  };
+}
+
 /** A short name for one state: `day · today-two-programs · the next write fails`. */
 export function previewLabel({ screen, fixture, failNext }: PreviewSelection): string {
   return `${screen} · ${fixture}${failNext ? ' · the next write fails' : ''}`;
