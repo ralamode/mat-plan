@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isoDaySchema } from '../date';
 import { WEEKDAYS, weekdaySchema } from '../day';
 import { uuidSchema } from '../id';
+import { movementNameKey } from '../movement-search';
 import { movementLabelSchema, movementNameSchema, trackingTypeSchema } from '../movements';
 import { MAX_HOUSEHOLD_ATHLETES } from '../profiles';
 import { MAX_WORKOUT_ITEMS } from '../programming';
@@ -255,11 +256,25 @@ export type RenameProgram = z.infer<typeof renameProgramSchema>;
  * `movementNameSchema` refuses a comma and a line break but not the other control characters, and a
  * NUL that reaches Postgres makes the action throw instead of answering `invalid`; so this refuses
  * them too (`control-chars.test.ts` holds every typed text in the write schemas to that).
+ *
+ * **A name must have a key** (`movementNameKey`, the "same movement" rule): `S` and `s s` have a
+ * letter, so `movementNameSchema` takes them, but the fold drops a lone `s` and their key is empty.
+ * A name with no key can be matched to no item (`existingItem`), so nothing in this contract would
+ * stop it being added twice; it answers `invalid` instead (contract change C8).
  */
+/**
+ * What `newItemSchema` says about a name, where `movementNameSchema`'s own messages do not cover
+ * it. A form shows a schema's message under the field, so these are sentences for a person.
+ */
+export const NEW_ITEM_NAME_MESSAGES = {
+  /** The name has no key (`S`): nothing the "same movement" rule can match on. */
+  noKey: 'Give the item a name with a letter or a number in it.',
+} as const;
+
 export const newItemSchema = z.object({
-  name: movementNameSchema.refine((v) => !hasControlChar(v), {
-    message: 'a name has no control characters',
-  }),
+  name: movementNameSchema
+    .refine((v) => !hasControlChar(v), { message: 'a name has no control characters' })
+    .refine((v) => movementNameKey(v) !== '', { message: NEW_ITEM_NAME_MESSAGES.noKey }),
   trackingType: trackingTypeSchema,
 });
 export type NewItem = z.infer<typeof newItemSchema>;

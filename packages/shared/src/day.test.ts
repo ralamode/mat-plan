@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { addDays, localWeekday, MONDAY_FIRST, WEEKDAYS, weekdaySchema } from './day';
+import {
+  addDays,
+  localWeekday,
+  MONDAY_FIRST,
+  WEEKDAYS,
+  weekdaySchema,
+  inWritableWindow,
+  WRITABLE_DAY_RADIUS,
+} from './day';
 
 describe('localWeekday (V1-10 — the weekday of a bare calendar date)', () => {
   it.each([
@@ -78,5 +86,31 @@ describe('MONDAY_FIRST (the order a week is shown in)', () => {
   it('is exported from the root barrel', async () => {
     const barrel = await import('./index');
     expect(barrel.MONDAY_FIRST).toBe(MONDAY_FIRST);
+  });
+});
+
+describe('inWritableWindow: today and yesterday, never a day after today (FAM-1 D20, D32)', () => {
+  const TODAY = '2026-09-30';
+
+  it('accepts today and each of the radius days before it', () => {
+    expect(inWritableWindow(TODAY, TODAY)).toBe(true);
+    expect(inWritableWindow('2026-09-29', TODAY)).toBe(true);
+    expect(WRITABLE_DAY_RADIUS).toBe(1);
+  });
+
+  it('refuses the day before yesterday, and anything older', () => {
+    expect(inWritableWindow('2026-09-28', TODAY)).toBe(false);
+    expect(inWritableWindow('2025-09-30', TODAY)).toBe(false);
+  });
+
+  it('refuses tomorrow, which the older forms accept', () => {
+    expect(inWritableWindow('2026-10-01', TODAY)).toBe(false);
+    expect(inWritableWindow('2026-10-02', TODAY)).toBe(false);
+  });
+
+  it('holds across a month and a year boundary', () => {
+    expect(inWritableWindow('2026-12-31', '2027-01-01')).toBe(true);
+    expect(inWritableWindow('2027-01-01', '2026-12-31')).toBe(false);
+    expect(inWritableWindow('2026-02-28', '2026-03-01')).toBe(true);
   });
 });
