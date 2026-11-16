@@ -1,4 +1,4 @@
-import { keyBySelf } from '@mat-plan/shared';
+import { keyBySelf, type TRANSPORT_REFUSALS } from '@mat-plan/shared';
 
 /**
  * **The contract for "which Server Actions does this app expose, and what does each refuse with":
@@ -16,6 +16,10 @@ import { keyBySelf } from '@mat-plan/shared';
  *
  * 1. **`x-actions.ts`** — the `'use server'` module. Only `export async function`s; each opens with
  *    `await enterMutation(refusal)` and returns its refusal.
+ *    **An action that speaks the FAM-1 contract** (a typed input, a `ProgramResult` or a
+ *    `RowResult`) opens the same way with `await enterMutation(TRANSPORT_REFUSALS)`, or
+ *    `enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT)` for a row write, and its registry
+ *    entry carries `refusal: TRANSPORT_REFUSALS` (see `MatrixEntry`).
  * 2. **`x-actions.registry.ts`** — `export const ACTION_REGISTRY = { … } as const satisfies
  *    ActionRegistry`, one entry per exported action. Not in the module itself, on the
  *    `action-state.ts` precedent: a `'use server'` module may only export async functions, and
@@ -85,12 +89,31 @@ export const ACTION_SCOPE = keyBySelf(ACTION_SCOPES);
  * direction — leaving only the runtime `excludedActionNames()` pin to catch it, which is the shape
  * the claim said it had replaced. The plan's own Risks row said "prose and review, not a type"
  * before a later round claimed otherwise.
+ *
+ * 🔴 **`refusal` is what the action hands `enterMutation`, and it says which envelope the action
+ * speaks (FAM-1 contract change C7).**
+ *
+ * - A **string** (a const from `@/lib/constants`): a form action, `(state, formData) =>
+ *   ActionState`. The matrices expect `{ ok: false, error: <that string> }` for every not-found
+ *   class of refusal and `RATE_LIMITED` for the limit.
+ * - **`TRANSPORT_REFUSALS`** (`@mat-plan/shared`): an action that speaks the FAM-1 contract,
+ *   `(input) => ProgramResult | RowResult`. The matrices expect `{ ok: false, reason: 'not_found' }`
+ *   and `{ ok: false, reason: 'retry' }`.
+ *
+ * One field, so an entry cannot say one thing here and pass `enterMutation` another: the unauth row
+ * is red for an action whose registry and whose call disagree.
  */
 export type MatrixEntry = {
-  readonly refusal: string;
+  readonly refusal: string | typeof TRANSPORT_REFUSALS;
   readonly scope: ActionScope;
   readonly excluded?: never;
 };
+
+/** Whether a matrix entry is an action that speaks the FAM-1 contract (see `MatrixEntry`). */
+export const speaksContract = (
+  entry: MatrixEntry,
+): entry is MatrixEntry & { refusal: typeof TRANSPORT_REFUSALS } =>
+  typeof entry.refusal !== 'string';
 
 /**
  * An action deliberately outside the matrices, with the reason and the file that covers it instead.

@@ -52,7 +52,7 @@ draft from its answers, including its "claimed but not wired" section.
 
 ## 2. Run the panel: lenses in parallel, one named agent each
 
-The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each (each pins its own `model`/`effort` in frontmatter — DX-11), so the
+The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each (each pins its own `model`/`effort` in frontmatter — DX-11; **pass `model: "fable"` when the plan is high-stakes** per [the table](../README.md#when-a-lens-runs-on-fable), otherwise leave the frontmatter's `opus`), so the
 ≥3 independent reviewers AGENTS.md and `docs/plans/README.md` require stay independent. Each carries
 its own checklist and follows the shared
 [reporting contract](../review-pr/reporting-contract.md). Send them **in one message** so they run
@@ -91,6 +91,7 @@ reason**. Record the result in the plan's `## Review-response log`:
 ### Engineering panel (round 1)
 
 > Panel cost: correctness 81k · 4m30s, scope 73k · 4m29s, …
+> Models: high-stakes schema and migrations · correctness: fable, scope: fable, …
 
 | #   | Lens        | Critique (short)                              | Verdict      | Resolution                                                               |
 | --- | ----------- | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |

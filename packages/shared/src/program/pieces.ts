@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { matchMovementOptions, type MatchableMovement } from '../movement-search';
 import { TRACKING_TYPES, type TrackingType } from '../movements';
 import { PROFILE_NAME_MAX } from '../profiles';
 import {
@@ -21,6 +22,7 @@ import { FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text'
 import {
   isWholeNumber,
   MAX_STORABLE_QUANTITY,
+  quantityCeiling,
   type Unit,
   UNIT_DIMENSION,
   type UnitDimension,
@@ -321,4 +323,156 @@ export const SET_TRACKING_TYPES = TRACKING_TYPES.filter((type) => TRACKING_TYPE_
 
 export function hasSetRows(type: TrackingType): boolean {
   return TRACKING_TYPE_FIELDS[type].sets;
+}
+
+/**
+ * The item a typed name already names, or `undefined`: **the one definition of "this item exists"
+ * for `newItem`**. The preview's fake reads it, and the real writer will (plan step 6a).
+ *
+ * It is the picker's own rule (`matchMovementOptions`), not a second one: the name's key equals an
+ * item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups` are one item), or equals the
+ * key of one of an item's aliases (`RDL`, `rdl`). Those are exactly the two cases in which the
+ * picker withholds "add as new", so the server and the picker cannot disagree about a duplicate.
+ *
+ * When more than one item qualifies (a household item named `RDL` made before this rule, beside
+ * the catalog's Romanian Deadlift), the first in the picker's order is the answer: a catalog item
+ * before a household one, then by name. 🔴 **So `isCatalog` is required here**, where the picker's
+ * own type leaves it optional: an option list passed without it would compile and silently pick by
+ * name alone, and the server would then select a different item than the picker offers. A caller
+ * holding `MovementOptionDTO`s maps `owner === 'catalog'` to it, as the picker does.
+ *
+ * ⚠️ `options` must be every item the household can pick, with each catalog item's `aliases`. An
+ * item left out can be duplicated; an alias left out is not honoured.
+ *
+ * ⚠️ A name whose key is empty (`S`, `s s`: the fold drops a lone `s`) matches nothing, here and in
+ * the picker. `newItemSchema` refuses such a name, so `newItem` never reaches this with one.
+ */
+export function existingItem<T extends MatchableMovement & { readonly isCatalog: boolean }>(
+  options: readonly T[],
+  name: string,
+): T | undefined {
+  const { matches, exact, aliasHit } = matchMovementOptions(options, name);
+  return exact || aliasHit !== null ? matches[0] : undefined;
+}
+
+/** The prescribed numbers of one item, as a `DayItem` carries them in `target`. */
+export type PrescribedTarget = {
+  reps: number | null;
+  quantities: z.infer<typeof prescribedQuantitiesSchema>;
+};
+
+/**
+ * A prescription's numbers as a row can use them: the one way `DayItem.target` is built (contract
+ * change C10). The day's read builds each item's `target` with it and the row writer builds the
+ * target an empty ✓ is filled from, so the placeholder a row shows and the number an empty ✓
+ * stores cannot differ.
+ *
+ * - `reps` is the prescription's reps when they are a whole number (`wholeReps`), else `null`: the
+ *   row then asks for reps.
+ * - **A range has no number to accept.** A quantity whose `valueMax` is set becomes `value: null`,
+ *   the same as "log in this unit, no target": the row shows no number and an empty ✓ answers
+ *   `bad_value`. Any `valueMax` makes it a range, one equal to `value` included: the rule reads the
+ *   column, not the arithmetic. No FAM-1 screen can write a range (`saveWorkoutSchema` holds one value); the rule
+ *   is here so a row that has one is not logged at its low end without anyone typing it.
+ *
+ * Numbers, not the database's numeric strings: the caller converts.
+ */
+export function prescribedTarget(
+  targetReps: string | null,
+  quantities: readonly {
+    slot: QuantitySlot;
+    unit: Unit;
+    value: number | null;
+    valueMax?: number | null;
+  }[],
+): PrescribedTarget {
+  return {
+    reps: wholeReps(targetReps),
+    quantities: quantities.map(({ slot, unit, value, valueMax }) => ({
+      slot,
+      unit,
+      value: valueMax === null || valueMax === undefined ? value : null,
+    })),
+  };
+}
+
+/**
+ * What a row stores, for an item of this type: **the one value-fill rule** (contract change C10),
+ * for the row writer, the amend writer and the preview's fake. `null` means `bad_value`.
+ *
+ * The reps where the type has them and the one quantity in the type's slot, each as typed, else
+ * from `target` (plan D13: an empty ✓ on a prescribed row logs the prescription). An amend passes
+ * `target: null`, so nothing is filled and a field left out is refused.
+ *
+ * Refused, never dropped or repaired:
+ * - a number the type has no field for (reps on a Duration, a distance on a weight);
+ * - **a slot named twice** in what was typed (which of the two to keep is not ours to choose);
+ * - a number that is missing and that `target` cannot supply;
+ * - a quantity in another unit than the item logs in (`item.unit`);
+ * - **a value over the unit's ceiling** (`quantityCeiling`), or in a unit that has none.
+ *
+ * It does not check that `typed` is well formed: parse with `rowWriteSchema` or `rowAmendSchema`
+ * first (reps and each value are then numbers in the storable range).
+ */
+export function fillRowValues(
+  item: { trackingType: TrackingType; unit: Unit | null },
+  typed: RowValues,
+  target: PrescribedTarget | null,
+): RowValues | null {
+  const fields = TRACKING_TYPE_FIELDS[item.trackingType];
+  if (typed.reps !== undefined && !fields.reps) return null;
+  if (typed.quantities.some((q) => q.slot !== fields.slot)) return null;
+  if (typed.quantities.length > 1) return null; // every one is in the type's slot: a repeat
+  const values: RowValues = { quantities: [] };
+  if (fields.reps) {
+    const reps = typed.reps ?? target?.reps ?? null;
+    if (reps === null) return null;
+    values.reps = reps;
+  }
+  if (fields.slot) {
+    const prescribed = target ? slotQuantity(item, target.quantities) : null;
+    const quantity =
+      slotQuantity(item, typed.quantities) ??
+      (prescribed && prescribed.value !== null ? { ...prescribed, value: prescribed.value } : null);
+    if (!quantity || quantity.unit !== item.unit) return null;
+    // ⚠️ `undefined` is "no ceiling known", which refuses: `n > undefined` is false in JS.
+    const ceiling = quantityCeiling(quantity.unit);
+    if (ceiling === undefined || quantity.value > ceiling) return null;
+    values.quantities.push(quantity);
+  }
+  return values;
+}
+
+/**
+ * The unit an entry is stored under when its type has no quantity of its own (plan §2, the
+ * `entries.unit` column of the seven types): a Check is done or not, Reps are a count.
+ */
+export const ENTRY_UNIT_WITHOUT_QUANTITY = {
+  check: 'bool',
+  reps: 'count',
+} as const satisfies Partial<Record<TrackingType, Unit>>;
+
+/**
+ * The unit a logged row's entry stores (`entries.unit`), as plan §2's table has it: `bool` for a
+ * Check and `count` for Reps; the type's fixed unit where it has one (`min` for a Duration, `sec`
+ * for Time per set: `TRACKING_TYPE_FIELDS[type].unit`); else the unit the item is prescribed in.
+ * One rule for the row writer and for the export (contract change C10).
+ *
+ * A type whose unit is fixed ignores the unit it is handed, so the answer is the table's whatever
+ * the caller passes. It throws for a type whose unit comes from the prescription when none is
+ * given: that is a caller's bug (every such item has a unit, `DayItem.unit`), not something to
+ * answer a person with.
+ */
+export function entryUnitFor(trackingType: TrackingType, prescribedUnit: Unit | null): Unit {
+  if (Object.hasOwn(ENTRY_UNIT_WITHOUT_QUANTITY, trackingType)) {
+    return ENTRY_UNIT_WITHOUT_QUANTITY[trackingType as keyof typeof ENTRY_UNIT_WITHOUT_QUANTITY];
+  }
+  const fixed = TRACKING_TYPE_FIELDS[trackingType].unit;
+  if (fixed) return fixed;
+  if (prescribedUnit === null) {
+    throw new Error(
+      `a ${trackingType} item has a quantity, so its entry needs the prescribed unit`,
+    );
+  }
+  return prescribedUnit;
 }

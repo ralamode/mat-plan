@@ -57,9 +57,46 @@ CI merge-gates".
 `effort`, read by Claude Code on every spawn, by any session. Print it with
 `grep -H '^model:\|^effort:' .claude/agents/*.md`; the rationale and starting values are in
 [the DX-11 plan](../../docs/plans/dx-11-agent-model-effort.md) (frozen — the frontmatter is the living
-source). Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL`
-env var and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. The main session is never governed by this policy —
-it stays whatever `/model` picks.
+source).
+
+Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL` env
+var and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. The main session is never governed by this policy — it
+stays whatever `/model` picks.
+
+### When a lens runs on Fable
+
+🔴 **Reviewers are pinned to `opus`. Fable is asked for at spawn time (`model: "fable"`, which beats
+the frontmatter) only when the work is high-stakes** _(maintainer, 2026-11-16)_: a mistake that is expensive to undo or quiet
+enough that the gates miss it. That applies to a **plan** (`plan-with-panel`) and to a **PR review**
+(`review-pr`'s fan-out) alike. Everything else, including re-review passes after fixes, `doubt-check`,
+UX panels, screens, copy, refactors, docs and DX tooling, runs on Opus.
+
+High-stakes means the plan or diff touches any of these:
+
+| Area                              | Paths (any match)                                                                                                                                                    | Why it earns Fable                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Contract and shared shapes        | `packages/shared/src/program/**`, `packages/shared/src/**/*-shapes.ts`, `apps/web/app/**/*actions*.ts` (incl. the registries; 12b's `row-actions.ts` when it exists) | Several lanes build against it at once; a wrong shape is rework everywhere |
+| Schema and migrations             | `packages/db/migrations/**`, `packages/db/src/schema.ts`                                                                                                             | Forward-only: an applied migration cannot be edited                        |
+| The write path                    | `packages/db/src/writers/**`, `docs/features/write-path.md`                                                                                                          | Idempotency, arbiters, hide/restore: silent double-writes or lost logs     |
+| Authorization and household scope | `apps/web/lib/dal/**`, `apps/web/app/p/mutation-entry.ts`, `packages/db/src/writers/ownership.ts`, anything `ID-1` covers                                            | One family's data reaching another                                         |
+| Privacy                           | `docs/privacy/**`, an export, a deletion or erasure path, a new third party                                                                                          | Minors' health data in a public repo; some mistakes cannot be taken back   |
+| Loads                             | prescriptions' targets, `packages/engine/**`                                                                                                                         | The one inviolable product rule: the LLM never authors loads               |
+
+A plan that fixes a milestone's order or split also earns it. **When unsure, it is not
+high-stakes:** run Opus, and escalate a single lens if a finding turns out to need depth.
+
+**Record the call, every time** _(maintainer, 2026-11-16)_, so this table can be tuned from
+evidence: every review report, every `## shipit` comment and every panel log carries one line:
+
+> Models: high-stakes <area from the table | no> · <lens>: <model>, … · second pass: <model>
+
+A single-pass review with no lens agents names the reviewing session's own model. Do not leave it out
+when the answer is "opus, not high-stakes": that is the data point that shows where the line sits.
+
+Why this exists: DX-11 had pinned all eight reviewers to `fable`, so every review of everything ran on
+it, and with several lanes fanning out on every PR that spent the account's monthly Fable budget
+(2026-11-16). `skills:check` refuses a reviewer whose frontmatter pins `fable`, so the default cannot
+drift back.
 
 ## Backlog, in priority order
 

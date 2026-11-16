@@ -2,7 +2,7 @@
 name: architecture-reviewer
 description: Adversarial architecture & consistency reviewer for a mat-plan plan or PR — does it fight AGENTS.md or docs/spec.md, paint later PRs into a corner, or break the repo's seams and naming? One of the four standing panel lenses (docs/plans/README.md).
 tools: Read, Grep, Glob, Bash
-model: fable
+model: opus
 effort: high
 ---
 

@@ -1,6 +1,8 @@
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { TRANSPORT_REFUSALS } from '@mat-plan/shared';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +11,7 @@ import { INITIAL_ACTION_STATE, type ActionState } from '@/app/p/[profileId]/acti
 import {
   ACTION_SCOPE,
   matrixEntry,
+  speaksContract,
   type ActionRegistry,
   type ActionScope,
   type MatrixActionName,
@@ -66,6 +69,24 @@ import { code, exportedActionNames, USE_SERVER_RE, WEB_DIR } from './source-scan
 export type ActionFn = (s: ActionState, f: FormData) => Promise<ActionState>;
 
 /**
+ * What an action that speaks the FAM-1 contract resolves to, as far as the matrices read it: every
+ * `ProgramResult` and `RowResult` is one of these (`@mat-plan/shared` → `program/actions.ts`).
+ */
+export type ContractResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * An action that speaks the FAM-1 contract (contract change C7): one typed input, a typed result,
+ * no `FormData` and no previous state. `never` is the parameter every such function accepts being
+ * read as (parameters are contravariant), so `logRow(input: RowWrite)` and
+ * `saveWeek(draft: WeekDraft)` are both one of these, and a form action, which takes two
+ * parameters, is not.
+ */
+export type ContractActionFn = (input: never) => Promise<ContractResult>;
+
+/** Either envelope, for the rows that only compare what came back. */
+type AnyResult = ActionState | ContractResult;
+
+/**
  * ⚠️ `Writer` is deliberately loose, not `Mock`. These are the REAL DAL imports — `vi.mock` replaces
  * them at runtime but their static types stay the originals, so annotating `Mock` does not compile.
  * `(...a: never[]) => unknown` accepts any of them contravariantly while keeping the part that
@@ -86,8 +107,8 @@ export type Writer = (...a: never[]) => unknown;
  * is still owed, by `PROF-1` a-1."* Until then the only matrix rows reaching a household action would
  * have been unauth and rate-limit — no wrong-owner proof at all, which AGENTS.md calls mandatory.
  */
-type BindingBase = {
-  readonly fn: ActionFn;
+type BindingBase<Fn = ActionFn, Result = ActionState> = {
+  readonly fn: Fn;
   readonly writers: readonly [Writer, ...Writer[]];
   /**
    * Assert what a SUCCESSFUL call did, beyond `result.ok`. Optional; when absent the suite asserts
@@ -95,7 +116,7 @@ type BindingBase = {
    * `addAthleteAction` needs it because its success is a `redirect`, which throws and therefore
    * returns no envelope to inspect.
    */
-  readonly succeeded?: (result: ActionState) => void;
+  readonly succeeded?: (result: Result) => void;
   /**
    * The rate-limit policy this action enters with, when it is not the default (FAM-1 D23). Absent
    * means `MUTATION_RATE_LIMIT`, and the limiter row asserts exactly that, so an action that passes
@@ -116,11 +137,24 @@ type BindingBase = {
  * the requirement survived the move: a household entry without `scopeMiss`, and a registry entry
  * with no binding at all, are still compile errors.
  */
-export type BindingFor<R extends ActionRegistry, N extends MatrixActionName<R>> = R[N] extends {
-  scope: typeof ACTION_SCOPE.household;
-}
-  ? BindingBase & { readonly scopeMiss: () => void }
-  : BindingBase & { readonly scopeMiss?: never };
+export type BindingFor<R extends ActionRegistry, N extends MatrixActionName<R>> = ShapeBinding<
+  R[N]
+> &
+  (R[N] extends { scope: typeof ACTION_SCOPE.household }
+    ? { readonly scopeMiss: () => void }
+    : { readonly scopeMiss?: never });
+
+/**
+ * The half of a binding that depends on which envelope the action speaks (contract change C7): a
+ * registry entry whose `refusal` is a string is a form action; one whose `refusal` is
+ * `TRANSPORT_REFUSALS` speaks the FAM-1 contract, so its `fn` takes one typed input and its
+ * `succeeded` reads a contract result. The registry is `as const`, so this is decided per name at
+ * the type level: binding a form action to a contract entry, or the reverse, does not compile
+ * (pinned in `test/action-matrix.test.ts`).
+ */
+type ShapeBinding<Entry> = Entry extends { refusal: string }
+  ? BindingBase
+  : BindingBase<ContractActionFn, ContractResult>;
 
 /**
  * AUTH-1 1b-bis: the NAMES and the refusal copy come from the registry, so this table cannot
@@ -145,15 +179,38 @@ export type ActionBindings<R extends ActionRegistry> = {
  * reaches the ownership check, so its refusal row would prove nothing while looking identical in the
  * report. Keyed by `MatrixActionName` since FAM-1 step 0b, so a missing body is a type error; it was
  * a `Record<string, …>` read with `!`.
+ *
+ * A form action's body is its `FormData`. An action that speaks the FAM-1 contract takes its typed
+ * input, so its body is that object. ⚠️ The type cannot tie the object to the action's own
+ * parameter (the two tables are separate), so the proof that it is the right one is the row that
+ * requires it to succeed.
  */
 export type ValidBodies<R extends ActionRegistry> = {
-  readonly [N in MatrixActionName<R>]: () => FormData;
+  readonly [N in MatrixActionName<R>]: R[N] extends { refusal: string }
+    ? () => FormData
+    : () => object;
 };
 
-/** A binding with its scope-dependent half widened, for iterating a registry of unknown names. */
-type AnyBinding = BindingBase & { readonly scopeMiss?: () => void };
+/** A binding with its scope- and shape-dependent halves widened, for iterating by string. */
+type AnyBinding = BindingBase<ActionFn | ContractActionFn, never> & {
+  readonly scopeMiss?: () => void;
+};
 
-type Row = [name: string, action: ActionFn, refusal: string];
+/**
+ * One action as the rows drive it. `action` takes the body alone and calls the bound function the
+ * way its envelope is called; `notFound` is the whole refusal a not-found class of caller gets, in
+ * that envelope.
+ */
+type Row = [name: string, action: (body: unknown) => Promise<AnyResult>, notFound: AnyResult];
+
+/** What `describeActionMatrices` is given, less the path it derives the module from. */
+type MatrixOptions<R extends ActionRegistry> = {
+  readonly registry: R;
+  readonly bindings: NoInfer<ActionBindings<R>>;
+  readonly validBody: NoInfer<ValidBodies<R>>;
+  readonly profileId: string;
+  readonly principal: string;
+};
 
 /**
  * Run every refusal matrix over one Server Action module.
@@ -167,29 +224,101 @@ type Row = [name: string, action: ActionFn, refusal: string];
  *   ownership lookup was made with it.
  * @param opts.principal the user id the calling file's session mock answers with.
  */
-export function describeActionMatrices<R extends ActionRegistry>(opts: {
-  readonly testFile: string;
-  readonly registry: R;
-  readonly bindings: NoInfer<ActionBindings<R>>;
-  readonly validBody: NoInfer<ValidBodies<R>>;
-  readonly profileId: string;
-  readonly principal: string;
-}): void {
-  const { registry, profileId, principal } = opts;
+export function describeActionMatrices<R extends ActionRegistry>(
+  opts: MatrixOptions<R> & { readonly testFile: string },
+): void {
+  const { registry } = opts;
   const moduleFile = fileURLToPath(opts.testFile).replace(/\.test\.tsx?$/, '.ts');
   const moduleRel = relative(WEB_DIR, moduleFile);
+
+  describeMatrixRows(opts, moduleRel, () => {
+    it('runs beside a real Server Action module', () => {
+      expect(USE_SERVER_RE.test(code(moduleFile)), `${moduleRel} carries 'use server'`).toBe(true);
+    });
+
+    it('drives the registry that sits beside the module, not a copy of it', async () => {
+      expect(await loadActionRegistry(registryFileFor(moduleFile))).toBe(registry);
+    });
+
+    /**
+     * The per-module half of "the registry matches the actions on disk". An action exported here
+     * and missing from this registry is red in the module's own test, by name; the merged form
+     * of the same equality is in `actions.test.ts`.
+     */
+    it('the registry names exactly the actions the module exports', () => {
+      expect(Object.keys(registry).sort()).toEqual(exportedActionNames(moduleFile).sort());
+    });
+  });
+}
+
+/**
+ * The rows themselves, without the three checks that tie them to a module on disk.
+ *
+ * 🔴 **A Server Action module's test calls `describeActionMatrices`, never this.** The on-disk guard
+ * (`actions.test.ts` → "the registry matches every Server Action module on disk") looks for that
+ * name, so a module tested through this one is red there. It is exported for
+ * `test/action-matrix.contract.test.ts` alone, which runs the rows over actions defined in the test file:
+ * the only way to prove the rows drive an action that speaks the FAM-1 contract before one exists
+ * (a `'use server'` fixture would be a real public endpoint, and would have to be added to the
+ * pinned list of this app's action modules).
+ *
+ * @param label what the outer describe is named after: the module's path.
+ * @param moduleChecks registers the `it`s that need the module file.
+ */
+export function describeMatrixRows<R extends ActionRegistry>(
+  opts: MatrixOptions<R>,
+  label: string,
+  moduleChecks: () => void,
+): void {
+  const { registry, profileId, principal } = opts;
 
   // The mapped types are keyed by this registry's literal names. Iteration is by string, so the two
   // tables are widened once, here; the call site is where the per-name types are checked.
   const bindings = opts.bindings as Readonly<Record<string, AnyBinding>>;
-  const validBody = opts.validBody as Readonly<Record<string, () => FormData>>;
+  const validBody = opts.validBody as Readonly<Record<string, () => FormData | object>>;
 
   const MATRIX_NAMES = Object.keys(bindings);
 
   /** The registry entry for a bound name. The cast is the widening above, undone for one lookup. */
   const entryOf = (name: string) => matrixEntry(registry, name as MatrixActionName<R>);
 
-  const rowFor = (name: string): Row => [name, bindings[name]!.fn, entryOf(name).refusal];
+  /**
+   * Call the bound function the way its envelope is called (contract change C7): a form action
+   * with the initial state and its `FormData`, an action that speaks the FAM-1 contract with its
+   * typed input alone. The casts undo the widening above for one call; `BindingFor` is what holds
+   * each `fn` to its entry's shape.
+   */
+  const callerOf = (name: string): Row[1] => {
+    const { fn } = bindings[name]!;
+    return speaksContract(entryOf(name))
+      ? (body) => (fn as (input: unknown) => Promise<ContractResult>)(body)
+      : (body) => (fn as ActionFn)(INITIAL_ACTION_STATE, body as FormData);
+  };
+
+  /**
+   * The whole refusal a not-found class of caller gets from this action, in its envelope. The
+   * contract's words come from the shared const, not from the registry entry, so an entry cast past
+   * its type cannot make the rows agree with a wrong word.
+   */
+  const notFoundOf = (name: string): AnyResult => {
+    const { refusal } = entryOf(name);
+    return typeof refusal === 'string'
+      ? { ok: false, error: refusal }
+      : { ok: false, reason: TRANSPORT_REFUSALS.noSession };
+  };
+
+  /**
+   * What a rate-limited caller gets. ⚠️ Never the not-found answer: a form action says
+   * `RATE_LIMITED`, an action that speaks the contract says `retry`.
+   */
+  const limitedOf = (name: string): AnyResult => {
+    const { refusal } = entryOf(name);
+    return typeof refusal === 'string'
+      ? { ok: false, error: RATE_LIMITED }
+      : { ok: false, reason: TRANSPORT_REFUSALS.rateLimited };
+  };
+
+  const rowFor = (name: string): Row => [name, callerOf(name), notFoundOf(name)];
 
   const ALL_ACTIONS: Row[] = MATRIX_NAMES.map(rowFor);
 
@@ -221,7 +350,14 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
     return fd;
   };
 
-  describe(`${moduleRel} — the boundary matrices`, () => {
+  /**
+   * The body for those three rows, per action. An action that speaks the FAM-1 contract has no
+   * field every input shares, so it is handed its own valid input.
+   */
+  const earlyBody = (name: string): FormData | object =>
+    speaksContract(entryOf(name)) ? validBody[name]!() : bareBody();
+
+  describe(`${label} — the boundary matrices`, () => {
     beforeEach(() => vi.clearAllMocks());
 
     describe('the matrices are wired to this module (FAM-1 step 0b)', () => {
@@ -243,24 +379,7 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
         }
       });
 
-      it('runs beside a real Server Action module', () => {
-        expect(USE_SERVER_RE.test(code(moduleFile)), `${moduleRel} carries 'use server'`).toBe(
-          true,
-        );
-      });
-
-      it('drives the registry that sits beside the module, not a copy of it', async () => {
-        expect(await loadActionRegistry(registryFileFor(moduleFile))).toBe(registry);
-      });
-
-      /**
-       * The per-module half of "the registry matches the actions on disk". An action exported here
-       * and missing from this registry is red in the module's own test, by name; the merged form
-       * of the same equality is in `actions.test.ts`.
-       */
-      it('the registry names exactly the actions the module exports', () => {
-        expect(Object.keys(registry).sort()).toEqual(exportedActionNames(moduleFile).sort());
-      });
+      moduleChecks();
 
       /**
        * The type already says this (`ActionBindings`, `ValidBodies`). Asserted at runtime too, so a
@@ -334,12 +453,12 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
     describe('every Server Action — unauth → reject before any DAL call (SEC-1, AUTH-1 1c-3b)', () => {
       it.each(ALL_ACTIONS)(
         '%s refuses a caller with no session',
-        async (_name, action, notFound) => {
+        async (name, action, notFound) => {
           vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
-          const res = await action(INITIAL_ACTION_STATE, bareBody());
+          const res = await action(earlyBody(name));
           // 🔴 The SAME bytes as every other refusal, deliberately: a caller must not be able to tell
           // "no session" from "another household" from "no such profile". ADR 0006's 404-never-403.
-          expect(res).toEqual({ ok: false, error: notFound });
+          expect(res).toEqual(notFound);
           expect(getProfileByPublicId).not.toHaveBeenCalled();
           for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
           expect(revalidatePath).not.toHaveBeenCalled();
@@ -355,20 +474,28 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
      * the only cases that can distinguish "the limiter is wired" from "the limiter is imported".
      */
     describe('every Server Action — rate limited → reject before any DAL call (AUTH-1 1c-3b)', () => {
-      it.each(ALL_ACTIONS)('%s refuses when the limiter says so', async (_name, action) => {
-        vi.mocked(checkMutationLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });
-        const res = await action(INITIAL_ACTION_STATE, bareBody());
-        // ⚠️ NOT the not-found copy. A rate limit is the one refusal with something to do about it,
-        // and borrowing `NO_PROFILE_*` would both lie to the user and blur the 404-never-403
-        // argument above.
-        expect(res).toEqual({ ok: false, error: RATE_LIMITED });
-        expect(getProfileByPublicId).not.toHaveBeenCalled();
-        for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
-        expect(revalidatePath).not.toHaveBeenCalled();
-      });
+      it.each(ALL_ACTIONS)(
+        '%s refuses when the limiter says so',
+        async (name, action, notFound) => {
+          vi.mocked(checkMutationLimit).mockResolvedValueOnce({
+            allowed: false,
+            reason: 'limited',
+          });
+          const res = await action(earlyBody(name));
+          // ⚠️ NOT the not-found copy. A rate limit is the one refusal with something to do about it,
+          // and borrowing `NO_PROFILE_*` would both lie to the user and blur the 404-never-403
+          // argument above. (`RATE_LIMITED` for a form action, `retry` for one that speaks the
+          // contract.)
+          expect(res).toEqual(limitedOf(name));
+          expect(res).not.toEqual(notFound);
+          expect(getProfileByPublicId).not.toHaveBeenCalled();
+          for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
+          expect(revalidatePath).not.toHaveBeenCalled();
+        },
+      );
 
       it.each(ALL_ACTIONS)('%s keys the limiter on the principal', async (name, action) => {
-        await action(INITIAL_ACTION_STATE, bareBody());
+        await action(earlyBody(name));
         // The id comes from `auth()`, never from the request — so it cannot be forged or enumerated.
         // 🔴 The POLICY is asserted with it since FAM-1 step 0b, when `enterMutation` gained the
         // parameter: an action is counted against the default budget unless its binding declares
@@ -417,7 +544,7 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
         // rate-limited, and `addAthleteAction` is the one that grows a table without bound.
         for (const [name, action] of PROFILE_ACTIONS) {
           vi.clearAllMocks();
-          const res = await action(INITIAL_ACTION_STATE, validBody[name]!());
+          const res = await action(validBody[name]!());
           expect(
             res.ok,
             `${name}: the valid body must succeed, or its refusal case proves nothing`,
@@ -429,8 +556,8 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
         '%s refuses a profile outside the request’s household',
         async (name, action, notFound) => {
           vi.mocked(getProfileByPublicId).mockResolvedValue(null);
-          const res = await action(INITIAL_ACTION_STATE, validBody[name]!());
-          expect(res).toEqual({ ok: false, error: notFound });
+          const res = await action(validBody[name]!());
+          expect(res).toEqual(notFound);
           // The session passed and the profile WAS looked up — the authZ refusal, not the authN one.
           // ⚠️ Switched from `hasGateAccess` at 1d: the point is that the EARLIER conjunct ran and
           // passed, so this must track whichever check is first, not be dropped.
@@ -449,18 +576,18 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
         for (const [name, action, notFound] of PROFILE_ACTIONS) {
           vi.clearAllMocks();
           vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
-          const unauthed = await action(INITIAL_ACTION_STATE, validBody[name]!());
+          const unauthed = await action(validBody[name]!());
 
           vi.clearAllMocks();
           vi.mocked(getProfileByPublicId).mockResolvedValue(null);
-          const foreign = await action(INITIAL_ACTION_STATE, validBody[name]!());
+          const foreign = await action(validBody[name]!());
           vi.mocked(getProfileByPublicId).mockReset();
 
           expect(
             foreign,
             `${name}: foreign-household and unauthed must be indistinguishable`,
           ).toEqual(unauthed);
-          expect(foreign.error).toBe(notFound);
+          expect(foreign).toEqual(notFound);
         }
       });
     });
@@ -488,25 +615,25 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
         '%s succeeds on the happy path, or its refusal case proves nothing',
         async (name, action) => {
           vi.clearAllMocks();
-          const res = await action(INITIAL_ACTION_STATE, validBody[name]!()).catch((e: Error) => e);
+          const res = await action(validBody[name]!()).catch((e: Error) => e);
           // ⚠️ **The default is real, not documentation.** `succeeded?.(…)` alone meant a binding
           // without one asserted NOTHING here — and `.catch` has already swallowed any throw, so the
           // row would pass for an action that failed outright. Today's single entry defines
           // `succeeded`; the next one that does not must still be held to `ok`.
           const binding = bindings[name]!;
-          if (binding.succeeded) binding.succeeded(res as ActionState);
+          if (binding.succeeded) binding.succeeded(res as never);
           else expect(res, `${name}: a valid body must succeed`).toMatchObject({ ok: true });
         },
       );
 
       it.each(HOUSEHOLD_ACTIONS)(
         '%s refuses a scope miss with the not-found bytes, and writes nothing',
-        async (name, action, refusal) => {
+        async (name, action, notFound) => {
           vi.clearAllMocks();
           bindings[name]!.scopeMiss?.();
-          const res = await action(INITIAL_ACTION_STATE, validBody[name]!());
+          const res = await action(validBody[name]!());
 
-          expect(res).toEqual({ ok: false, error: refusal });
+          expect(res).toEqual(notFound);
           // 🔴 Nothing navigated and nothing was revalidated — a refusal that redirected would put
           // the caller on a page they have no business seeing, and one that revalidated would churn
           // caches for a write that never happened.
@@ -516,20 +643,20 @@ export function describeActionMatrices<R extends ActionRegistry>(opts: {
       );
 
       it('the scope-miss refusal is byte-identical to the no-session one, for every action', async () => {
-        for (const [name, action, refusal] of HOUSEHOLD_ACTIONS) {
+        for (const [name, action, notFound] of HOUSEHOLD_ACTIONS) {
           vi.clearAllMocks();
           bindings[name]!.scopeMiss?.();
-          const missed = await action(INITIAL_ACTION_STATE, validBody[name]!());
+          const missed = await action(validBody[name]!());
 
           vi.clearAllMocks();
           vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
-          const unauthed = await action(INITIAL_ACTION_STATE, validBody[name]!());
+          const unauthed = await action(validBody[name]!());
 
           expect(
             missed,
             `${name}: a signed-in caller with no household and an unauthenticated one must be indistinguishable`,
           ).toEqual(unauthed);
-          expect(unauthed).toEqual({ ok: false, error: refusal });
+          expect(unauthed).toEqual(notFound);
         }
       });
     });

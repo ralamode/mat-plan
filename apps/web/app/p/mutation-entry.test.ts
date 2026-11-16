@@ -1,3 +1,4 @@
+import { TRANSPORT_REFUSALS, type ProgramResult, type RowResult } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NO_PROFILE_LOG, NO_PROFILE_SAVE, RATE_LIMITED } from '@/lib/constants';
@@ -134,5 +135,61 @@ describe('enterMutation — the branches the action suites cannot reach', () => 
     checkMutationLimit.mockResolvedValue({ allowed: false, reason: 'limited' });
     expect(await enterMutation(NO_PROFILE_LOG)).toEqual({ ok: false, error: RATE_LIMITED });
     expect(RATE_LIMITED).not.toBe(NO_PROFILE_LOG);
+  });
+});
+
+/**
+ * FAM-1 contract change C7: an action that speaks the contract enters through the SAME function and
+ * is refused in the contract's words. The words are literals here on purpose: this is where they
+ * are pinned from the transport's side (the contract pins them from its own, `shapes.test.ts`).
+ */
+describe('enterMutation — for an action that speaks the FAM-1 contract', () => {
+  it('no session answers `not_found`, in the contract envelope, before the limiter is asked', async () => {
+    sessionUserOrNull.mockResolvedValue(null);
+    expect(await enterMutation(TRANSPORT_REFUSALS)).toEqual({ ok: false, reason: 'not_found' });
+    expect(checkMutationLimit).not.toHaveBeenCalled();
+  });
+
+  it('over the limit answers `retry`, never `not_found`', async () => {
+    checkMutationLimit.mockResolvedValue({ allowed: false, reason: 'limited' });
+    expect(await enterMutation(TRANSPORT_REFUSALS)).toEqual({ ok: false, reason: 'retry' });
+  });
+
+  it('a caller that passes is told who it is, exactly as a form action is', async () => {
+    expect(await enterMutation(TRANSPORT_REFUSALS)).toEqual({ ok: true, userId: USER_ID });
+    expect(checkMutationLimit).toHaveBeenCalledWith(USER_ID, MUTATION_RATE_LIMIT);
+    expect(checkMutationLimit.mock.calls[0]![1]).toBe(MUTATION_RATE_LIMIT);
+  });
+
+  it('a row write is counted against the row-write policy, and refused with `retry` over it', async () => {
+    checkMutationLimit.mockResolvedValue({ allowed: false, reason: 'limited' });
+    expect(await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT)).toEqual({
+      ok: false,
+      reason: 'retry',
+    });
+    expect(checkMutationLimit.mock.calls[0]![1]).toBe(ROW_WRITE_RATE_LIMIT);
+  });
+
+  it('a dead limiter still lets the write through and leaves its breadcrumb', async () => {
+    checkMutationLimit.mockResolvedValue({ allowed: true, reason: 'limiter-error' });
+    expect(await enterMutation(TRANSPORT_REFUSALS)).toEqual({ ok: true, userId: USER_ID });
+    expect(addBreadcrumb).toHaveBeenCalledTimes(1);
+  });
+
+  it('the refusal is a `ProgramResult` and a `RowResult` as it stands, and carries no copy', async () => {
+    sessionUserOrNull.mockResolvedValue(null);
+    const entry = await enterMutation(TRANSPORT_REFUSALS);
+    if (entry.ok) throw new Error('expected a refusal');
+    // The proof is that these two lines compile: an action returns `entry` untouched.
+    const asProgram: ProgramResult<{ programPublicId: string }> = entry;
+    const asRow: RowResult = entry;
+    expect(asProgram).toBe(asRow);
+    // No `error` string: a contract action's words are the screen's, chosen from `reason`.
+    expect(Object.keys(entry).sort()).toEqual(['ok', 'reason']);
+  });
+
+  it('a form action is unchanged: a string still answers with copy, never a `reason`', async () => {
+    sessionUserOrNull.mockResolvedValue(null);
+    expect(await enterMutation(NO_PROFILE_LOG)).toEqual({ ok: false, error: NO_PROFILE_LOG });
   });
 });
