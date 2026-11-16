@@ -71,9 +71,9 @@ their files, diagrams and invariants here. The row writer's sequence diagram is
    `ON CONFLICT` (5).
 
 8. 🔴 **The row writer's check order is the contract**: profile (archived → `closed_day`) → window
-   (`inWritableWindow`, D32) → replay → workout → prescription → movement → scheduled → set →
-   values → writes. Every step has a proof in `verify/day.ts`, and every one but two has a
-   mutation that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–184; 120 is unused). The two:
+   (`inWritableWindow`, D32) → replay → workout → prescription → movement → scheduled → on the
+   program that day → set → values → writes. Every step has a proof in `verify/day.ts`, and every one but two has a
+   mutation that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–186; 120 is unused). The two:
    the quantity's derived `dimension` in
    `insertEntrySetRows` has no patch of its own, because hard-coding it reddens `verify.ts`'s GAP-3
    hold proof first; and the replay pin's `prescription_set IS NOT NULL` (3d) is implied by

@@ -148,6 +148,7 @@ async function fixture(tx: VerifyTx) {
   const unassigned = await profile(h.id, 'Verify 11b Unassigned');
   const takenOff = await profile(h.id, 'Verify 11b Taken Off');
   const elsewhere = await profile(h.id, 'Verify 11b Elsewhere');
+  const startsToday = await profile(h.id, 'Verify 11b Starts Today');
 
   const movement = async (householdId: number, trackingType: TrackingType, slug: string) => {
     const [row] = await tx
@@ -338,6 +339,7 @@ async function fixture(tx: VerifyTx) {
   await assign(takenOff.id, block, LONG_AGO, YESTERDAY); // its last day was yesterday
   const otherBlock = await mkTemplateBlock(exec, H_SCOPE, 'verify-11b-h-other');
   await assign(elsewhere.id, otherBlock, LONG_AGO, null); // on a program, but not this one
+  await assign(startsToday.id, block, DAY, null); // put on today: not on it yesterday
 
   const [activity] = await tx
     .select({ id: schema.activityTypes.id })
@@ -460,6 +462,7 @@ async function fixture(tx: VerifyTx) {
     unassigned,
     takenOff,
     elsewhere,
+    startsToday,
     moves,
     w1,
     w2,
@@ -1073,6 +1076,25 @@ async function verifyRowWriter(): Promise<void> {
       );
       assert.equal(await f.countEntries(who.id), 0, `FAM-1 11b 6d: nothing was written for ${why}`);
     }
+    // The check asks about the ROW's day, never today: an athlete whose last day was yesterday can
+    // still log yesterday (the range is inclusive), and one put on today cannot log yesterday.
+    expectOk(
+      await f.tick({
+        profilePublicId: f.takenOff.publicId,
+        day: YESTERDAY,
+        prescriptionPublicId: f.p.check.publicId,
+      }),
+      'FAM-1 11b 6d: an athlete taken off yesterday can still log yesterday',
+    );
+    expectRefused(
+      await f.tick({
+        profilePublicId: f.startsToday.publicId,
+        day: YESTERDAY,
+        prescriptionPublicId: f.p.check.publicId,
+      }),
+      ROW_REFUSAL.program_changed,
+      'FAM-1 11b 6d: an athlete put on today cannot log yesterday',
+    );
   });
 
   // ── (f) · F's profile under F's scope, naming H's workout → not_found, nothing written ───────────

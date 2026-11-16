@@ -57,7 +57,7 @@ import { insertEntrySetRows } from '../session-rows';
  *   (the session) commits nothing that write began.
  * - **The check order is the contract**, and `db:verify` proves each step with its own mutation
  *   (`verify/day.ts`): profile → window → replay (pinned) → workout → prescription → movement →
- *   scheduled → set → values → writes.
+ *   scheduled → on the program that day → set → values → writes.
  * - The caller supplies `today` (the athlete's active-timezone day) and the `workout_item` activity
  *   type id (resolved app-side, before the transaction), as SCALE-1 requires; nothing here reads a
  *   clock.
