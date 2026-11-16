@@ -608,7 +608,9 @@ describe('Change: review fixes', () => {
     await leave(load());
     const kept = DAY_COPY.change.kept.out_of_range('27.5 lb', over);
     expect(within(bench()).getByText(kept)).toBeTruthy();
-    type(load(), '3');
+    // Typed back to the stored number, so the row is not dirty: only the clear can hide the line.
+    type(load(), '2');
+    fireEvent.change(load(), { target: { value: '27.5' } });
     expect(within(bench()).queryByText(kept)).toBeNull();
   });
 
