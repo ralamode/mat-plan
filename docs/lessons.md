@@ -120,9 +120,10 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   checking them: a stale column reference surfaced only as a runtime crash in `db:verify`. →
   **Fixed in DX-7**: `packages/db/tsconfig.json` exists and `pnpm typecheck` runs both projects
   (`pnpm --filter web typecheck && pnpm --filter @mat-plan/db typecheck`), so this is a compile error
-  now. It found 12 real ones on the first run. ⚠️ **Still true for `packages/shared` and
-  `packages/engine`**: they have no tsconfig and are checked only _transitively_ through the app's
-  imports, so a file nothing imports is checked by nothing. Linting still stops at `apps/web`
+  now. It found 12 real ones on the first run. ⚠️ **Still true for `packages/engine`**:
+  it has no tsconfig and is checked only _transitively_ through the app's imports, so a file nothing
+  imports is checked by nothing. `packages/shared` got its own project on 2026-11-16, after a
+  `@ts-expect-error` pin in a shared test was shown to be inert (nothing imports a test file). Linting still stops at `apps/web`
   entirely. Keep running `pnpm verify` before believing a package-level refactor is done.
 
 - **A `-- squawk-ignore <rule>` comment has NO effect and Squawk still fails the build.** → The ignore

@@ -1,0 +1,25 @@
+{
+  // `packages/shared` had no tsconfig, so its source was type-checked only transitively, through the
+  // files apps/web and packages/db import, and its `*.test.ts` files by NOTHING: no project imports
+  // them, and vitest strips types without checking. Every `@ts-expect-error` pin and every "this
+  // compiles" proof in a shared test was inert. This project is the missing gate; the root
+  // `typecheck` script runs it alongside the others.
+  //
+  // Options mirror packages/db/tsconfig.json (ES2022, Node types, `bundler` resolution for the
+  // extensionless relative imports), with no `allowJs`: the package holds no JavaScript.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}
