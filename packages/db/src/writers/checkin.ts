@@ -1,4 +1,5 @@
-import { inArray, isNull } from 'drizzle-orm';
+import { METRIC_KEYS } from '@mat-plan/shared';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { Executor } from './executor';
@@ -34,22 +35,50 @@ import type { Executor } from './executor';
  */
 
 /**
+ * The practice day predicate: **the natural key of `PRACTICE_DAY_UNIQUE_INDEX`, as a reusable
+ * conjunct** (V1-24 3b-0), the twin of `bodyweightSlot`. Here rather than in `single-value.ts`, which
+ * imports `hide.ts`: 3b-life's clear and this writer's `day_taken` both read it, and a copy would be
+ * free to drift from the index it mirrors.
+ *
+ * ⚠️ Like `bodyweightSlot`, it does **not** include `deleted_at IS NULL`. Callers add it: only a LIVE
+ * row holds the day.
+ */
+export function practiceSlot(profileId: number, day: string) {
+  return and(
+    eq(schema.entries.profileId, profileId),
+    eq(schema.entries.activityDate, day),
+    eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
+  );
+}
+
+/**
  * What happened to ONE submitted check-in item.
  *
- * 🔴 **Four outcomes, because a non-insert has four meanings and the old boolean had one.** The
+ * 🔴 **Five outcomes, because a non-insert has several meanings and the old boolean had one.** The
  * distinction that matters to a person is `own_hidden`: their own deleted row is holding this
  * `client_id`, so the write did not happen and **must never be reported as `ok`** (V1-9b criterion
  * 9). `B1-2` maps these to copy; this file only has to tell them apart.
  *
  * - `created` — the row was inserted. The only outcome that wrote anything.
- * - `replay` — this profile's own LIVE row already holds the id. Idempotent, and genuinely fine.
+ * - `replay` — this profile's own LIVE row already holds the id, **for the same metric and day**.
+ *   Idempotent, and genuinely fine. (Pinned since 3b-0: an id reused under another metric or day is
+ *   not this write, the hole `bodyweight.ts` closed for its own path.)
+ * - `day_taken` — a practice, and another live practice already holds this athlete's day
+ *   (`PRACTICE_DAY_UNIQUE_INDEX`, V1-24 3b-0). Nothing was written.
  * - `own_hidden` — this profile's own HIDDEN row holds the id. Not fine, not `ok`, not a twin.
- * - `conflict` — another profile's row holds the id. A client-id collision across profiles, which
- *   should not happen with UUIDv7 and is therefore worth a distinct answer rather than a shrug.
+ * - `conflict` — another profile's row holds the id, or this profile's live row holds it for another
+ *   metric or day. A client-id collision, which should not happen with UUIDv7 and is therefore worth
+ *   a distinct answer rather than a shrug.
+ *
+ * ⚠️ **The order is the contract** (plan 3b-0 Z4), proved in `verify/single-values.ts`: replay, then
+ * `day_taken`, then `own_hidden`, then `conflict`. The day decides before `own_hidden`, as the
+ * bodyweight writer's slot does: a hidden row holding the id cannot be restored into a day that is
+ * held, so "the day is taken" is the true answer.
  */
 export type CheckinWriteResult =
   | { clientId: string; outcome: 'created'; publicId: string }
   | { clientId: string; outcome: 'replay'; publicId: string }
+  | { clientId: string; outcome: 'day_taken' }
   | { clientId: string; outcome: 'own_hidden' }
   | { clientId: string; outcome: 'conflict' };
 
@@ -82,14 +111,14 @@ export async function writeCheckinEntries(
   const inserted = await exec
     .insert(schema.entries)
     .values(args.values.map((v) => ({ ...v, profileId: args.profileId })))
-    // ⚠️ The `client_id` UNIQUE is NON-partial since V1-9b B0; the predicate is kept here for
-    // deploy-order safety (a supplied predicate still infers against a non-partial index, so the
-    // index and the arbiter can change in either order). Do not tidy it — `write-path.md`
+    // 🔴 **Target-less since V1-24 3b-0: EVERY unique index arbitrates**, the `client_id` one and
+    // `PRACTICE_DAY_UNIQUE_INDEX` alike, so a second live practice on a day is skipped like a replay
+    // instead of raising a bare `23505`. Target-less also skips PER ROW: a habit in the same batch
+    // as a taken practice still inserts, where a `client_id` target would lose the whole statement
+    // to the practice index. The cost is that a non-insert no longer says WHY; the classifier below
+    // re-asks, in a fixed order. `bodyweight.ts` made the same trade at 1e. `write-path.md`
     // invariant 6.
-    .onConflictDoNothing({
-      target: schema.entries.clientId,
-      where: isNull(schema.entries.deletedAt),
-    })
+    .onConflictDoNothing()
     .returning({ publicId: schema.entries.publicId, clientId: schema.entries.clientId });
 
   const createdByClientId = new Map(inserted.map((r) => [r.clientId, r.publicId]));
@@ -113,12 +142,43 @@ export async function writeCheckinEntries(
             clientId: schema.entries.clientId,
             publicId: schema.entries.publicId,
             profileId: schema.entries.profileId,
+            metricKey: schema.entries.metricKey,
+            activityDate: schema.entries.activityDate,
             deletedAt: schema.entries.deletedAt,
           })
           .from(schema.entries)
           .where(inArray(schema.entries.clientId, unresolved));
 
   const holderByClientId = new Map(holders.map((r) => [r.clientId, r]));
+
+  // The days a LIVE practice already holds, for the unresolved practice items only. One query, not
+  // one per item; `practiceSlot` keeps it the index's own key.
+  const practiceDays = [
+    ...new Set(
+      args.values
+        .filter(
+          (v) => !createdByClientId.has(v.clientId) && v.metricKey === METRIC_KEYS.practice_minutes,
+        )
+        .map((v) => v.activityDate),
+    ),
+  ];
+  const takenDays = new Set(
+    practiceDays.length === 0
+      ? []
+      : (
+          await exec
+            .select({ day: schema.entries.activityDate })
+            .from(schema.entries)
+            .where(
+              and(
+                eq(schema.entries.profileId, args.profileId),
+                eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
+                inArray(schema.entries.activityDate, practiceDays),
+                isNull(schema.entries.deletedAt),
+              ),
+            )
+        ).map((r) => r.day),
+  );
 
   return args.values.map((v) => {
     const createdId = createdByClientId.get(v.clientId);
@@ -127,18 +187,33 @@ export async function writeCheckinEntries(
     }
 
     const holder = holderByClientId.get(v.clientId);
-    // No insert and no holder is not a shape the database can produce: the insert either wrote the
-    // row or conflicted with one that exists. Rather than invent an outcome, say so — the same
-    // judgement `reselectLiveByClientId` makes about its own impossible branch.
-    if (!holder) {
-      throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);
+    const own = holder !== undefined && holder.profileId === args.profileId;
+
+    // 1 · replay: this profile's LIVE row holds the id, for the same metric and day.
+    if (
+      own &&
+      holder.deletedAt === null &&
+      holder.metricKey === v.metricKey &&
+      holder.activityDate === v.activityDate
+    ) {
+      return { clientId: v.clientId, outcome: 'replay' as const, publicId: holder.publicId };
     }
-    if (holder.profileId !== args.profileId) {
-      return { clientId: v.clientId, outcome: 'conflict' as const };
+    // 2 · day_taken: a practice whose day a live practice already holds.
+    if (v.metricKey === METRIC_KEYS.practice_minutes && takenDays.has(v.activityDate)) {
+      return { clientId: v.clientId, outcome: 'day_taken' as const };
     }
-    if (holder.deletedAt !== null) {
+    // 3 · own_hidden: this profile's HIDDEN row holds the id, and the day is free.
+    if (own && holder.deletedAt !== null) {
       return { clientId: v.clientId, outcome: 'own_hidden' as const };
     }
-    return { clientId: v.clientId, outcome: 'replay' as const, publicId: holder.publicId };
+    // 4 · conflict: another profile's row holds the id, or this profile's live row holds it for
+    //     another metric or day.
+    if (holder !== undefined) {
+      return { clientId: v.clientId, outcome: 'conflict' as const };
+    }
+    // No insert, no holder and no taken day is not a shape the database can produce: the insert
+    // either wrote the row or conflicted with one that exists. Rather than invent an outcome, say
+    // so — the same judgement `reselectLiveByClientId` makes about its own impossible branch.
+    throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);
   });
 }

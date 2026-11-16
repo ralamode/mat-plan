@@ -3,7 +3,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
-import { BODYWEIGHT_DAY_UNIQUE_INDEX } from '../schema';
+import { BODYWEIGHT_DAY_UNIQUE_INDEX, PRACTICE_DAY_UNIQUE_INDEX } from '../schema';
 import { bodyweightSlot } from './bodyweight';
 import type { Executor } from './executor';
 import { isLiveProfile } from './ownership';
@@ -207,7 +207,9 @@ export type RestoreItemResult = {
  *    discovering the item moved would hide a live weigh-in for nothing.
  * 4. Only then, for a bodyweight item whose slot is taken: either refuse with `slot_taken`, or — if
  *    `keepInsteadOf` names that holder — hide the holder.
- * 5. Restore the item.
+ * 5. Restore the item. An item of any other one-per-day metric (practice, V1-24 3b-0) whose day is
+ *    held fails here on its index, and the catch below answers `slot_taken` — without `heldBy`, and
+ *    `keepInsteadOf` never applies to it (plan 3b-0 Z6).
  */
 export async function restoreHidden(
   exec: Executor,
@@ -259,7 +261,7 @@ export async function restoreHidden(
       // drizzle's `DrizzleQueryError` (`cause`), node-postgres' `DatabaseError` (`code`,
       // `constraint`) and PGlite's equivalent — all three carry what this matches. It has no
       // `db:verify` case because the race needs two connections and PGlite has one.
-      if (isBodyweightSlotConflict(error)) {
+      if (isDaySlotConflict(error)) {
         results.push({ entryPublicId, reason: RESTORE_REASON.slot_taken });
         continue;
       }
@@ -271,16 +273,34 @@ export async function restoreHidden(
 }
 
 /**
- * Did this error come from the day's weigh-in slot being taken while we were restoring into it?
+ * The unique indexes whose violation, during a restore, means **"something else now holds this
+ * item's place"**, so the item answers `slot_taken` rather than throwing.
  *
- * ⚠️ Narrow on purpose: it matches the ONE constraint whose violation has a meaningful answer. Any
- * other `23505` is a genuine surprise and keeps propagating, because turning every unique violation
- * into `slot_taken` would tell a person the wrong story about a bug.
+ * 🔴 **A list of index names, by decision** _(maintainer, 2026-11-16)_: each one-per-day or
+ * one-per-slot rule on `entries` that a hidden row can collide with on its way back is named here,
+ * once. V1-24 3b-0 added practice; FAM-1 11b appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. (#447's
+ * other two arbiters are on `sessions` and `supersets`, which a restore never writes.)
+ *
+ * ⚠️ **Practice reaches its entry ONLY through this catch** — it has no pre-check in `restoreOne`, so
+ * `db:verify` proves its name here on one connection. Bodyweight keeps its pre-check and swap, so its
+ * name here is reached only by the two-connection race (see the catch).
  */
-function isBodyweightSlotConflict(error: unknown): boolean {
+export const DAY_SLOT_INDEXES: readonly string[] = [
+  BODYWEIGHT_DAY_UNIQUE_INDEX,
+  PRACTICE_DAY_UNIQUE_INDEX,
+];
+
+/**
+ * Did this error come from a restore landing on a place another live row now holds?
+ *
+ * ⚠️ Narrow on purpose: it matches only `DAY_SLOT_INDEXES`, the constraints whose violation has a
+ * meaningful answer. Any other `23505` is a genuine surprise and keeps propagating, because turning
+ * every unique violation into `slot_taken` would tell a person the wrong story about a bug.
+ */
+function isDaySlotConflict(error: unknown): boolean {
   const cause = (error as { cause?: unknown })?.cause ?? error;
   const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
-  return code === '23505' && constraint === BODYWEIGHT_DAY_UNIQUE_INDEX;
+  return code === '23505' && constraint !== undefined && DAY_SLOT_INDEXES.includes(constraint);
 }
 
 /**

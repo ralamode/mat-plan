@@ -1,21 +1,27 @@
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import {
   ENTRY_KIND,
   ENTRY_STATUS,
+  METRIC_KEYS,
   newId,
   PROFILE_KIND,
+  RESTORE_REASON,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
+import { PRACTICE_DAY_UNIQUE_INDEX } from '../../src/schema';
+import { writeCheckinEntries, type CheckinInsertValue } from '../../src/writers/checkin';
+import { hideEntries, restoreHidden } from '../../src/writers/hide';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
 import { insertBodyweightEntry } from '../../src/writers/bodyweight';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { bodyweightRowForAmend, clearBodyweight } from '../../src/writers/single-value';
-import { asTx, rolledBack, type VerifyContext } from './harness';
+import { asTx, expectRejectedBy, rolledBack, type VerifyContext } from './harness';
 
 /**
  * `db:verify` proofs for SINGLE VALUES (bodyweight, practice) and Clear this day.
@@ -34,6 +40,7 @@ import { asTx, rolledBack, type VerifyContext } from './harness';
  */
 export async function verifySingleValues(ctx: VerifyContext): Promise<void> {
   await verifyBodyweightClear(ctx);
+  await verifyPracticeOnePerDay();
 }
 
 const HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b000';
@@ -343,6 +350,326 @@ async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> 
 
     console.log(
       '✓ V1-24 3b-bw: clearBodyweight hides exactly one owned weigh-in (metric, unit, seenValue, profile and household pinned; a replay is a replay unless the day was re-entered); the pre-read sees a hidden row and returns only its day; "Last time" skips cleared, non-done, same-day and later rows',
+    );
+  });
+}
+
+const PRACTICE_HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0a0';
+const PRACTICE_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0a1';
+const PRACTICE_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0a2';
+
+// ── V1-24 3b-0 — one live practice per day: the index, the insert's outcomes, restore (plan Z1–Z8) ──
+async function verifyPracticeOnePerDay(): Promise<void> {
+  // The migration's own pre-check, read from disk by its SLUG (the number is fixed at merge, so it is
+  // not named here). Read before the transaction: nothing here touches the database.
+  const migrationsDir = new URL('../../migrations/', import.meta.url);
+  const migrationFile = readdirSync(migrationsDir).find((f) =>
+    f.endsWith('_v1_24_3b0_practice_one_per_day.sql'),
+  );
+  assert.ok(migrationFile, '3b-0: the practice migration ships');
+  const doBlock = readFileSync(new URL(migrationFile, migrationsDir), 'utf8')
+    .split('--> statement-breakpoint')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('DO $$'));
+  assert.ok(doBlock, '3b-0: the migration ships its duplicate pre-check');
+
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+
+    // (a) The shipped definition, as Postgres prints it: the key, the live-only filter and the metric
+    //     literal, pinned against the shared const (the literal in schema.ts cannot import it).
+    const [def] = (
+      await tx.execute(
+        sql`select indexdef from pg_indexes where indexname = ${PRACTICE_DAY_UNIQUE_INDEX}`,
+      )
+    ).rows as { indexdef: string }[];
+    assert.equal(
+      def?.indexdef,
+      `CREATE UNIQUE INDEX ${PRACTICE_DAY_UNIQUE_INDEX} ON public.entries USING btree (profile_id, activity_date) WHERE ((deleted_at IS NULL) AND (metric_key = '${METRIC_KEYS.practice_minutes}'::text))`,
+      '3b-0: the practice index is (profile, day), live practice rows only',
+    );
+
+    const [hh] = await tx
+      .insert(schema.households)
+      .values({ publicId: PRACTICE_HH_PUBLIC_ID, name: 'Verify 3b-0 HH' })
+      .returning({ id: schema.households.id });
+    const SCOPE = householdScopeForScript(hh.id);
+    const [athlete, sibling] = await tx
+      .insert(schema.profiles)
+      .values([
+        {
+          publicId: PRACTICE_ATHLETE_PUBLIC_ID,
+          name: 'Verify 3b-0 Athlete',
+          kind: PROFILE_KIND.kid,
+          householdId: hh.id,
+        },
+        {
+          publicId: PRACTICE_SIBLING_PUBLIC_ID,
+          name: 'Verify 3b-0 Sibling',
+          kind: PROFILE_KIND.kid,
+          householdId: hh.id,
+        },
+      ])
+      .returning({ id: schema.profiles.id });
+    const typeId = async (key: string) =>
+      (
+        await tx
+          .select({ id: schema.activityTypes.id })
+          .from(schema.activityTypes)
+          .where(eq(schema.activityTypes.key, key))
+      )[0]?.id;
+    const practiceTypeId = await typeId('wrestling_practice');
+    const habitTypeId = await typeId('brush_teeth');
+    const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+    assert.ok(
+      practiceTypeId && habitTypeId && weighInTypeId,
+      '3b-0: the activity types are seeded',
+    );
+
+    const practice = (day: string, clientId = newId()): CheckinInsertValue => ({
+      publicId: newId(),
+      clientId,
+      activityDate: day,
+      unit: 'min',
+      valueNum: '90',
+      activityTypeId: practiceTypeId,
+      metricKey: METRIC_KEYS.practice_minutes,
+      status: ENTRY_STATUS.done,
+    });
+    const habit = (day: string, clientId = newId()): CheckinInsertValue => ({
+      publicId: newId(),
+      clientId,
+      activityDate: day,
+      unit: 'count',
+      valueNum: '1',
+      activityTypeId: habitTypeId,
+      metricKey: null,
+      status: ENTRY_STATUS.done,
+    });
+    const write = (profileId: number, values: CheckinInsertValue[]) =>
+      writeCheckinEntries(exec, { profileId, values });
+    const livePractices = async (profileId: number, day: string) =>
+      tx
+        .select({ publicId: schema.entries.publicId, valueNum: schema.entries.valueNum })
+        .from(schema.entries)
+        .where(
+          and(
+            eq(schema.entries.profileId, profileId),
+            eq(schema.entries.activityDate, day),
+            eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
+            isNull(schema.entries.deletedAt),
+          ),
+        );
+
+    // (b) The index itself, on raw inserts: a second live practice on one day is refused BY NAME;
+    //     a hidden one, another day, another profile, and a weigh-in on the same day are allowed.
+    const DAY = '2026-10-20';
+    const raw = (profileId: number, v: CheckinInsertValue, deletedAt: Date | null = null) =>
+      tx.insert(schema.entries).values({ ...v, profileId, deletedAt });
+    await raw(athlete.id, practice(DAY));
+    await expectRejectedBy(PRACTICE_DAY_UNIQUE_INDEX, () => raw(athlete.id, practice(DAY)), tx);
+    await raw(athlete.id, practice(DAY), new Date('2026-10-20T12:00:00Z'));
+    await raw(athlete.id, practice('2026-10-21'));
+    await raw(sibling.id, practice(DAY));
+    await tx.insert(schema.entries).values({
+      publicId: newId(),
+      clientId: newId(),
+      profileId: athlete.id,
+      activityDate: DAY,
+      kind: ENTRY_KIND.bodyweight,
+      unit: 'lb',
+      valueNum: '84',
+      activityTypeId: weighInTypeId,
+      metricKey: SEED_METRIC_KEYS.bodyweight,
+      status: ENTRY_STATUS.done,
+    });
+
+    // (c) The insert's classifier, in its order (plan Z4).
+    const D1 = '2026-10-01';
+    const first = practice(D1);
+    assert.deepEqual(
+      (await write(athlete.id, [first])).map((r) => r.outcome),
+      ['created'],
+      '3b-0: a first practice is created',
+    );
+    const replayed = await write(athlete.id, [{ ...first, publicId: newId() }]);
+    assert.deepEqual(
+      replayed,
+      [
+        {
+          clientId: first.clientId,
+          outcome: 'replay',
+          publicId: (await livePractices(athlete.id, D1))[0]!.publicId,
+        },
+      ],
+      '3b-0: the same client_id again is a replay of the same row',
+    );
+    // Another phone, same day: refused as `day_taken`, the first row untouched, still one live row.
+    const secondPhone = { ...practice(D1), valueNum: '45' };
+    assert.deepEqual(
+      (await write(athlete.id, [secondPhone])).map((r) => r.outcome),
+      ['day_taken'],
+      "3b-0: another phone's practice on a held day is day_taken, not a second row",
+    );
+    assert.deepEqual(
+      (await livePractices(athlete.id, D1)).map((r) => Number(r.valueNum)),
+      [90],
+      '3b-0: day_taken leaves exactly one live practice, its value untouched',
+    );
+    // One batch: a habit beside a taken practice still inserts (target-less skips per row).
+    assert.deepEqual(
+      (await write(athlete.id, [habit(D1), practice(D1)])).map((r) => r.outcome),
+      ['created', 'day_taken'],
+      '3b-0: a habit in the same batch as a taken practice still inserts',
+    );
+
+    // After a hide, the day is free again: a new practice is created.
+    const D2 = '2026-10-02';
+    const toHide = practice(D2);
+    await write(athlete.id, [toHide]);
+    const hiddenRow = (await livePractices(athlete.id, D2))[0]!;
+    const hid = await hideEntries(exec, {
+      profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
+      scope: SCOPE,
+      day: D2,
+      entryPublicIds: [hiddenRow.publicId],
+    });
+    assert.ok('hiddenAt' in hid, '3b-0: the practice hides');
+    // The hidden row still holds its client_id: a replay of it, with the day free, is own_hidden.
+    assert.deepEqual(
+      (await write(athlete.id, [{ ...toHide, publicId: newId() }])).map((r) => r.outcome),
+      ['own_hidden'],
+      "3b-0: a hidden row's client_id with the day free is own_hidden (the slot lookup is live-only)",
+    );
+    const reentered = practice(D2);
+    assert.deepEqual(
+      (await write(athlete.id, [reentered])).map((r) => r.outcome),
+      ['created'],
+      '3b-0: after a hide, a new practice on that day is created',
+    );
+    // Now the hidden row's id AND a held day: the day decides (Z4: day_taken before own_hidden).
+    assert.deepEqual(
+      (await write(athlete.id, [{ ...toHide, publicId: newId() }])).map((r) => r.outcome),
+      ['day_taken'],
+      '3b-0: a hidden client_id on a re-entered day is day_taken',
+    );
+    // A client_id reused under another metric or day is not a replay of it (the pin, Z4 step 1).
+    assert.deepEqual(
+      (await write(athlete.id, [{ ...habit('2026-10-03'), clientId: first.clientId }])).map(
+        (r) => r.outcome,
+      ),
+      ['conflict'],
+      "3b-0: a practice's client_id reused for a habit is a conflict, never a replay",
+    );
+    // A non-practice that did not insert and has no holder is not a shape the database produces;
+    // with the metric pin on day_taken, a habit on a practice-held day is still created.
+    assert.deepEqual(
+      (await write(athlete.id, [habit(D2)])).map((r) => r.outcome),
+      ['created'],
+      '3b-0: only a practice can be day_taken',
+    );
+
+    // (d) Restore all into a re-entered day: the practice answers slot_taken, a habit hidden by the
+    //     same event restores, and the hidden practice restores once the live one is hidden.
+    const D3 = '2026-10-04';
+    const morningHabit = habit(D3);
+    await write(athlete.id, [practice(D3), morningHabit]);
+    const ids = (
+      await tx
+        .select({ publicId: schema.entries.publicId, metricKey: schema.entries.metricKey })
+        .from(schema.entries)
+        .where(and(eq(schema.entries.profileId, athlete.id), eq(schema.entries.activityDate, D3)))
+    ).map((r) => r.publicId);
+    const clearDay = await hideEntries(exec, {
+      profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
+      scope: SCOPE,
+      day: D3,
+      entryPublicIds: ids,
+    });
+    assert.ok('hiddenAt' in clearDay, '3b-0: the day clears as one event');
+    const clearedPractice = (
+      await tx
+        .select({ publicId: schema.entries.publicId })
+        .from(schema.entries)
+        .where(
+          and(
+            eq(schema.entries.profileId, athlete.id),
+            eq(schema.entries.activityDate, D3),
+            eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
+          ),
+        )
+    )[0]!.publicId;
+    await write(athlete.id, [practice(D3)]); // re-entered after the clear
+    const restored = await restoreHidden(exec, {
+      profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
+      scope: SCOPE,
+      day: D3,
+      hiddenAt: clearDay.hiddenAt,
+      entryPublicIds: ids,
+    });
+    assert.deepEqual(
+      Object.fromEntries(restored.map((r) => [r.entryPublicId, r])),
+      Object.fromEntries(
+        ids.map((id) => [
+          id,
+          {
+            entryPublicId: id,
+            reason: id === clearedPractice ? RESTORE_REASON.slot_taken : RESTORE_REASON.ok,
+          },
+        ]),
+      ),
+      '3b-0: Restore all into a re-entered day: the practice is slot_taken (no heldBy), the habit restores',
+    );
+    const live = (await livePractices(athlete.id, D3))[0]!;
+    const hideLive = await hideEntries(exec, {
+      profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
+      scope: SCOPE,
+      day: D3,
+      entryPublicIds: [live.publicId],
+    });
+    assert.ok('hiddenAt' in hideLive, '3b-0: the re-entered practice hides');
+    assert.deepEqual(
+      (
+        await restoreHidden(exec, {
+          profilePublicId: PRACTICE_ATHLETE_PUBLIC_ID,
+          scope: SCOPE,
+          day: D3,
+          hiddenAt: clearDay.hiddenAt,
+          entryPublicIds: [clearedPractice],
+        })
+      ).map((r) => r.reason),
+      [RESTORE_REASON.ok],
+      '3b-0: the cleared practice restores once the day is free',
+    );
+
+    // (e) The migration's pre-check refuses a duplicate, with the index dropped inside a savepoint.
+    //     The fixture makes a key without profile_id count differently: two profiles' single
+    //     practices share 2026-09-02, so a day-only key would report 2 groups, not 1.
+    let refusal = '';
+    try {
+      await tx.transaction(async (sp) => {
+        await sp.execute(sql`DROP INDEX ${sql.identifier(PRACTICE_DAY_UNIQUE_INDEX)}`);
+        await sp.insert(schema.entries).values([
+          { ...practice('2026-09-01'), profileId: athlete.id },
+          { ...practice('2026-09-01'), profileId: athlete.id },
+          { ...practice('2026-09-02'), profileId: athlete.id },
+          { ...practice('2026-09-02'), profileId: sibling.id },
+        ]);
+        await sp.execute(doBlock); // the migration's own text, verbatim, not interpolated input
+      });
+    } catch (e) {
+      refusal = String(
+        (e as { cause?: { message?: string } })?.cause?.message ?? (e as Error).message,
+      );
+    }
+    assert.match(
+      refusal,
+      /V1-24 3b-0: 1 \(profile, day\) group/,
+      '3b-0: the migration refuses a live duplicate practice, counted per (profile, day)',
+    );
+
+    console.log(
+      '✓ V1-24 3b-0: one live practice per (profile, day): the index refuses by name and frees a hidden day; the insert answers replay (metric and day pinned), day_taken, own_hidden and conflict in order, per row in a batch; Restore all into a re-entered day answers slot_taken for the practice alone; the migration pre-checks atomically',
     );
   });
 }

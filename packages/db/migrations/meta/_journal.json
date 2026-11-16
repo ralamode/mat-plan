@@ -176,6 +176,13 @@
       "when": 1794805118217,
       "tag": "0024_fam1_4a_ii_log_side",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794842399803,
+      "tag": "0025_v1_24_3b0_practice_one_per_day",
+      "breakpoints": true
     }
   ]
 }

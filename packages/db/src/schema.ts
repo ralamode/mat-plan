@@ -274,11 +274,18 @@ export const profiles = pgTable(
 
 /**
  * The bodyweight one-per-day unique index (V1-24 PR 1d, migration 0012), named once for the schema
- * below. The write path does NOT name it: since 1e the insert's arbiter is target-less (every unique
- * index arbitrates; see `writers/bodyweight.ts`), so nothing matches on this name at runtime.
- * Renaming it means a new migration too.
+ * below. The insert does NOT name it: since 1e its arbiter is target-less (every unique index
+ * arbitrates; see `writers/bodyweight.ts`). The one runtime match is `hide.ts`'s restore, which reads
+ * a `23505`'s constraint name against `DAY_SLOT_INDEXES`. Renaming it means a new migration too.
  */
 export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
+
+/**
+ * The practice one-per-day unique index (V1-24 3b-0), the bodyweight index's twin without a slot.
+ * Like it, the insert never names it (`writers/checkin.ts` is target-less since 3b-0) and restore
+ * matches it by name. Renaming it means a new migration too.
+ */
+export const PRACTICE_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_practice';
 
 /**
  * FAM-1 4a-ii's three arbiters (ADR 0007 A2 §6, A3), named once so step 11b's writer and `hide.ts`'s
@@ -433,6 +440,13 @@ export const entries = pgTable(
     uniqueIndex(BODYWEIGHT_DAY_UNIQUE_INDEX)
       .on(t.profileId, t.activityDate, sql`coalesce(${t.context}, 'morning')`)
       .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'bodyweight'`),
+    // V1-24 3b-0: ONE live wrestling practice per (profile, day), so a second phone's ✓ cannot double
+    // the day's minutes (`practice_minutes` aggregates by sum). No slot, so no `coalesce(context)`.
+    // The metric is a SQL LITERAL for the reason above; `verify/single-values.ts` pins it against
+    // `METRIC_KEYS.practice_minutes`. Live rows only, so a cleared day can be logged again.
+    uniqueIndex(PRACTICE_DAY_UNIQUE_INDEX)
+      .on(t.profileId, t.activityDate)
+      .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'practice_minutes'`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
     // Legacy tagged-union shape guard (V0): bodyweight carries value_num (no movement); strength
