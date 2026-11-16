@@ -204,14 +204,21 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
 
 16. **A slot holds at most one entry** (plan D35, maintainer, 2026-11-16; a slot is one athlete,
     day, prescription and set). Program rows only: bodyweight and practice are not slots in this
-    sense and keep "re-entry is a new row". A new ✓ on a set whose entry was un-ticked, or hidden by Clear day,
-    brings that entry back with the new numbers: same `entryPublicId`, no second entry, however
-    many times a row is un-ticked and ticked. The rules that follow from it, all in the fake and on
-    `rowWriteSchema`: the entry answers to the reviving ✓'s `clientId` from then on; the `clientId`
-    it was first logged under answers `slot_taken`; a replayed `clientId` whose own entry is hidden
-    still answers `own_hidden` and revives nothing; a re-tick that arrives after the revive answers
-    with the live entry. The real writer gets this at step 11c; 11b is built before it and refuses
-    nothing differently, it only inserts where 11c will revive.
+    sense and keep "re-entry is a new row". A new ✓ on a set whose entry was un-ticked, or hidden by
+    Clear day, brings that entry back: same `entryPublicId`, no second entry, however many times a
+    row is un-ticked and ticked. The revived entry is what a new ✓ would have made but for its id:
+    this ✓'s numbers and the prescription's text as it reads now. The rules are on `rowWriteSchema`
+    (and, for a late re-tick, `rowRetickSchema`) and in the fake: the entry answers to the reviving
+    ✓'s `clientId`; that id never revives its own hidden entry (`own_hidden`); a refused ✓ leaves the
+    hidden entry untouched; a re-tick that arrives after the revive answers with the live entry.
+    ⚠️ **One known limit:** the entry stores one `clientId`, so an id a revive replaced is forgotten.
+    Replayed after the set is un-ticked again, it revives the entry with that old attempt's numbers
+    (`fakes.test.ts` pins it). No screen re-sends such an attempt and there is no offline queue;
+    closing it means keeping the replaced ids, which is a table. The real writer gets all of this at
+    step 11c. Until then 11b inserts where 11c will revive, so two answers differ between the two
+    steps: a re-tick after a new ✓ (`slot_taken` under 11b), and a replay of the first ✓'s id while
+    its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
+    is the limit above).
 
 ## Traps
 

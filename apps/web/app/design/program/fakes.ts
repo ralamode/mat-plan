@@ -82,8 +82,15 @@ function insertBySet(rows: DayRow[], row: DayRow): void {
   rows.splice(at === -1 ? rows.length : at, 0, row);
 }
 
-/** A hide token in `hiddenAtSchema`'s format: UTC text with six fractional digits. */
-const hideToken = () => new Date().toISOString().replace('Z', '000Z');
+/**
+ * A hide token in `hiddenAtSchema`'s format: UTC text with six fractional digits. The last three
+ * count the tokens made, so two un-ticks in the same millisecond never share one (the real token
+ * is a transaction's microsecond start time). Shared a token, the first un-tick's would have
+ * restored an entry the second un-tick hid.
+ */
+let tokensMade = 0;
+const hideToken = () =>
+  new Date().toISOString().replace('Z', `${String(tokensMade++ % 1000).padStart(3, '0')}Z`);
 
 /**
  * What a row stores, for an item of this type: the reps where the type has them and the one
@@ -131,7 +138,9 @@ export type FakeDay = {
  * - Un-tick leaves no tomb: the row is simply not logged, and the answer carries the `hiddenAt`
  *   token. Re-tick under that token puts the same entry back.
  * - **A slot holds at most one entry** (plan D35): a new ✓ on a set whose entry was un-ticked brings
- *   THAT entry back with the new numbers, and the entry answers to the new `clientId` from then on.
+ *   THAT entry back, as a new ✓ would have made it but for its id, and the entry answers to the new
+ *   `clientId` from then on. A `clientId` an earlier revive replaced is forgotten, as the real
+ *   writer forgets it (the entry stores one): see `rowWriteSchema` for what a replay of one does.
  *   So a re-tick that arrives afterwards finds its entry live and answers with it. (`slot_taken` on
  *   a re-tick is the real writer's answer for a slot another entry holds, which the fake, starting
  *   from a fixture with no hidden entries, cannot reach.)
@@ -244,9 +253,13 @@ export function createFakeDayActions(
             if (entry === revived.logged.entryPublicId) attempts.delete(clientId);
           }
         }
-        row.logged = revived
-          ? { ...revived.logged, values }
-          : { entryPublicId: newId(), values, prescribedText: item.prescribedText };
+        // A revived entry is what a new ✓ would have made, numbers and the text it is frozen
+        // against, with one difference: it keeps its id.
+        row.logged = {
+          entryPublicId: revived ? revived.logged.entryPublicId : newId(),
+          values,
+          prescribedText: item.prescribedText,
+        };
         count(workout, item, 1);
         attempts.set(write.clientId, row.logged.entryPublicId);
         changed();

@@ -169,7 +169,7 @@ export type DayRow = z.infer<typeof dayRowSchema>;
 
 /**
  * ✓ on a row. **`clientId` is one ✓ attempt**: a retry reuses it; a ✓ after an un-tick mints a new
- * one, because the old one answers `own_hidden` forever.
+ * one, because the old one answers `own_hidden` while its entry is hidden.
  *
  * **`values` holds what was typed. An absent `reps`, or a slot with no quantity, means "the
  * prescription's"** (plan D13): the writer fills it from the row's prescription, and answers
@@ -187,12 +187,23 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * set). Program rows only: bodyweight and practice are single values with their own writers,
  * and a re-entry there is a new row. A ✓ under a NEW `clientId`, on a set with no logged row whose entry the athlete un-ticked
  * (or that Clear day hid), does not add a second entry: the writer brings that entry back and
- * writes this ✓'s numbers on it, in one transaction, and answers with ITS `entryPublicId`. The
- * numbers are this ✓'s, filled from the prescription as for any ✓. From then on the entry answers
- * to this `clientId` (a retry answers as the first call did), and the `clientId` it was first
- * logged under names nothing: replayed, it is a ✓ on a logged set (`slot_taken`).
- * **A replay never revives.** A `clientId` whose own entry is hidden still answers `own_hidden` and
- * writes nothing: only a new attempt, which is a person ticking again, brings an entry back.
+ * writes this ✓ on it, in one transaction, and answers with ITS `entryPublicId`. **The entry is
+ * then exactly what a new ✓ would have made, but for its id**: this ✓'s numbers, filled from the
+ * prescription as for any ✓, and the prescription's text as it reads now (`prescribedText` is
+ * frozen again at the revive, since the prescription may have been edited since the first ✓). A ✓
+ * that is refused (`closed_day`, `not_scheduled`, `program_changed`, `bad_value`) leaves the hidden
+ * entry hidden and untouched.
+ *
+ * **What a replay does, by which `clientId` it carries.** The entry stores one `clientId`, and a
+ * revive replaces it with the reviving ✓'s.
+ * - The entry's CURRENT `clientId`: a retry answers as the first call did while the entry is live,
+ *   and `own_hidden` while it is hidden. It never revives.
+ * - A `clientId` a revive replaced is not remembered anywhere. Replayed while the set is logged it
+ *   is a ✓ on a logged set (`slot_taken`). ⚠️ Replayed after the set has been un-ticked AGAIN it
+ *   cannot be told from a new ✓, and revives the entry with that old attempt's numbers. This is a
+ *   known limit (plan D35): the day screen never re-sends an attempt after a later action on its
+ *   row and there is no offline queue; a transport that can replay old attempts must first keep
+ *   the replaced ids.
  */
 export const rowWriteSchema = z.object({
   clientId: uuidSchema,

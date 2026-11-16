@@ -371,6 +371,138 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged).toBeNull();
   });
 
+  it('a revived entry is what a new ✓ would have made: the numbers and the text of the prescription as it is now', async () => {
+    // "Yesterday, after the program was edited": the bench press was logged as 4 × 8 @ 25 lb and
+    // the prescription now reads 3 × 8 @ 30 lb.
+    const { actions, plan } = day(yesterdayEditedAfterLogging);
+    const { item } = itemOf(yesterdayEditedAfterLogging, 'DB bench press');
+    const old = item.rows.find((r) => r.logged)!;
+    expect(old.logged!.prescribedText).not.toBe(item.prescribedText);
+    const address = {
+      profilePublicId: yesterdayEditedAfterLogging.profilePublicId,
+      day: yesterdayEditedAfterLogging.day,
+    };
+    succeeded(await actions.untickRow({ ...address, entryPublicId: old.logged!.entryPublicId }));
+
+    // An empty ✓: the numbers come from the prescription as it is now, and so does the text.
+    const fresh = succeeded(
+      await actions.logRow({
+        ...tick(itemOnly(yesterdayEditedAfterLogging, 'DB bench press'), 'DB bench press'),
+        set: old.set,
+      }),
+    );
+    expect(fresh.entryPublicId).toBe(old.logged!.entryPublicId);
+    const row = itemOf(plan(), 'DB bench press').item.rows.find((r) => r.set === old.set)!;
+    expect(row.logged).toEqual({
+      entryPublicId: old.logged!.entryPublicId,
+      values: { reps: item.target.reps, quantities: item.target.quantities },
+      prescribedText: item.prescribedText,
+    });
+  });
+
+  it('a ✓ that is refused leaves the un-ticked entry hidden and untouched', async () => {
+    const { actions, plan } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(write));
+    const hidden = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }),
+    );
+
+    // A number the type cannot hold, then a write that fails outright.
+    expect(
+      await actions.logRow({
+        ...write,
+        clientId: newId(),
+        values: { reps: 8, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 5 }] },
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+    expect(
+      itemOf(plan(), 'DB bench press').item.rows.find((r) => r.set === write.set)?.logged,
+    ).toBeNull();
+    // Still restorable under its token, with the numbers it had.
+    expect(
+      await actions.retickRow({
+        ...address,
+        entryPublicId: made.entryPublicId,
+        hiddenAt: hidden.hiddenAt!,
+      }),
+    ).toEqual({ ok: true, entryPublicId: made.entryPublicId, values: made.values });
+  });
+
+  it('a clientId a revive replaced is forgotten: the known limit, pinned so closing it is deliberate', async () => {
+    // The entry stores one `clientId`. After ✓(c1), un-tick, ✓(c2), the entry answers to c2 and
+    // nothing remembers c1.
+    const { actions, plan } = day(heavyASupersets);
+    const c1 = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(c1));
+    succeeded(await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }));
+    const c2 = { ...c1, clientId: newId(), values: { reps: 9, quantities: [lb(30)] } };
+    succeeded(await actions.logRow(c2));
+
+    // While the set is logged, c1 replayed is a ✓ on a logged set.
+    expect(await actions.logRow(c1)).toEqual({ ok: false, reason: ROW_REFUSAL.slot_taken });
+
+    // Un-ticked again: c2, the entry's current id, never revives...
+    succeeded(await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }));
+    expect(await actions.logRow(c2)).toEqual({ ok: false, reason: ROW_REFUSAL.own_hidden });
+    // ...but c1 cannot be told from a new ✓, and brings the entry back with its old numbers.
+    // ⚠️ This is the limit `rowWriteSchema` records (plan D35), not a wanted behaviour: the real
+    // writer has nowhere to remember c1 either. If replaced ids are ever kept, this becomes
+    // `own_hidden` and this test changes with it.
+    expect(await actions.logRow(c1)).toEqual({
+      ok: true,
+      entryPublicId: made.entryPublicId,
+      values: { reps: 8, quantities: [lb(25)] },
+    });
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.values).toEqual({
+      reps: 8,
+      quantities: [lb(25)],
+    });
+  });
+
+  it('two un-ticks in the same instant get different tokens', async () => {
+    const { actions } = day(heavyASupersets);
+    const write = tick(heavyASupersets, 'DB bench press');
+    const address = {
+      profilePublicId: heavyASupersets.profilePublicId,
+      day: heavyASupersets.day,
+    };
+    const made = succeeded(await actions.logRow(write));
+    const first = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }),
+    );
+    succeeded(await actions.logRow({ ...write, clientId: newId() }));
+    const second = succeeded(
+      await actions.untickRow({ ...address, entryPublicId: made.entryPublicId }),
+    );
+    expect(second.hiddenAt).not.toBe(first.hiddenAt);
+    // The first un-tick's token is dead: it must not restore what the second un-tick hid.
+    expect(
+      await actions.retickRow({
+        ...address,
+        entryPublicId: made.entryPublicId,
+        hiddenAt: first.hiddenAt!,
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.not_found });
+    expect(
+      (
+        await actions.retickRow({
+          ...address,
+          entryPublicId: made.entryPublicId,
+          hiddenAt: second.hiddenAt!,
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
   it('a ✓ brings back only the entry of its own set', async () => {
     const { actions } = day(heavyASupersets);
     const write = tick(heavyASupersets, 'DB bench press');
@@ -398,7 +530,7 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(otherItem.entryPublicId).not.toBe(one.entryPublicId);
   });
 
-  it('the ✓ that made an un-ticked row answers own_hidden from then on', async () => {
+  it('the ✓ that made an un-ticked row answers own_hidden while its entry is hidden', async () => {
     const { actions } = day(heavyASupersets);
     const write = tick(heavyASupersets, 'DB bench press');
     const { entryPublicId } = succeeded(await actions.logRow(write));
