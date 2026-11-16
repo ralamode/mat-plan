@@ -81,6 +81,10 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   // The armed Clear, on the editor's plain surface.
   await change.click();
   await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('');
+  await expect(life.getByRole('button', { name: PRACTICE_COPY.clearLabel })).toBeVisible();
+  // Save → Clear is a colour transition (`transition-all`): scan it settled, not mid-fade, as the
+  // bodyweight scan does (`a11y.spec.ts`). Mid-fade the text briefly fails contrast.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   await expectNoAxeViolations(page, 'the practice editor with Clear armed');
   await life.getByRole('button', { name: AMEND_COPY.cancel, exact: true }).click();
 
