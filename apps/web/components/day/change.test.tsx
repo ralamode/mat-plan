@@ -193,6 +193,20 @@ describe('Change: saving', () => {
     expect([load().selectionStart, load().selectionEnd]).toEqual([0, '27.5'.length]);
   });
 
+  it('🔴 a keystroke right after focus is never selected over (iOS’s late select)', () => {
+    vi.useFakeTimers();
+    try {
+      mount(yesterdayHalfDone, { change: true });
+      act(() => load().focus());
+      fireEvent.change(load(), { target: { value: '3' } });
+      load().setSelectionRange(1, 1); // the caret after the "3", as typing leaves it
+      act(() => vi.runAllTimers()); // the late select-all fires now
+      expect([load().selectionStart, load().selectionEnd]).toEqual([1, 1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a single row (a Duration) changes the same way', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
     const splits = card('Morning habits', 'Splits stretch');

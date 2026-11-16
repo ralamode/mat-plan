@@ -64,10 +64,15 @@ export function ChangeInput({
       onChange={(e) => change.setText(field, e.target.value)}
       onFocus={(e) => {
         const el = e.currentTarget;
+        const atFocus = el.value;
         el.select();
-        // iOS places the caret where the tap landed after focus, undoing a select made in `focus`.
+        // iOS places the caret where the tap landed after focus, undoing a select made in `focus`,
+        // so select again once the tap is done. 🔴 Only if nothing was typed since: selecting after
+        // a first keystroke would let the next one replace it ("30" typed fast became "0").
         setTimeout(() => {
-          if (document.activeElement === el) el.setSelectionRange(0, el.value.length);
+          if (document.activeElement === el && el.value === atFocus) {
+            el.setSelectionRange(0, el.value.length);
+          }
         }, 0);
       }}
       onBlur={change.onFieldBlur}
