@@ -1,15 +1,16 @@
 import {
   addDays,
+  inWritableWindow,
   localWeekday,
   MONDAY_FIRST,
+  type Weekday,
   WEEKDAYS,
   weekdaySchema,
-  type Weekday,
 } from '../../day';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
 import type { DayItem, DayPlan, DayWorkout } from '../day-shapes';
-import { TRACKING_TYPE_FIELDS, wholeReps, type RowValues } from '../pieces';
+import { prescribedTarget, TRACKING_TYPE_FIELDS, type RowValues } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import type { ProgramList, ProgramView, WorkoutDraft, WorkoutDraftItem } from '../program-shapes';
 import { fixtureIds, type FixtureItemKey } from './ids';
@@ -69,9 +70,9 @@ function weekdayOf(day: string): Weekday {
   return weekdaySchema.parse(localWeekday(day));
 }
 
-/** Today and yesterday (plan D32). */
+/** Today and yesterday (plan D32): the contract's own rule. */
 function isWritable(world: ProtoWorld, day: string): boolean {
-  return day === world.today || day === addDays(world.today, -1);
+  return inWritableWindow(day, world.today);
 }
 
 /** The unit an item logs in: fixed by its type, or the one its prescription names. */
@@ -254,7 +255,7 @@ function dayWorkout(
       name: draft.itemName,
       trackingType: draft.trackingType,
       prescribedText: loggedAgainst ?? live,
-      target: { reps: wholeReps(draft.targetReps), quantities: draft.quantities },
+      target: prescribedTarget(draft.targetReps, draft.quantities),
       notes: draft.notes,
       unit: unitOf(world, item),
       superset: draft.superset,
