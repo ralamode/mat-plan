@@ -10,5 +10,5 @@
   a quantity slot, with a `count` ceiling equal to the rep cap. The old strength form still offers
   mass, length and time only. `findOrCreateTypedMovement` writes a type only when it creates an item,
   and returns an existing one with its own type. `db:verify` runs the migration's typing statement
-  from its file against rows at the default; mutation patches 42 and 43 prove those proofs can fail.
+  from its file against rows at the default; mutation patches 42, 43 and 44 prove those proofs can fail.
   Production behaviour is unchanged until a screen writes a type.
