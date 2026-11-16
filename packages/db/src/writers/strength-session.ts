@@ -172,7 +172,7 @@ async function writeSessionStrengthEntry(
     sessionId: number;
     movementId: number;
     movementName: string;
-    unit: Unit; // GAP-3: narrowed from `string` — it now indexes UNIT_DIMENSION_BY_CODE
+    unit: Unit; // GAP-3: narrowed from `string` — `insertEntrySetRows` indexes UNIT_DIMENSION_BY_CODE with it
     activityTypeId: number;
     day: string;
     clientId: string;

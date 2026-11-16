@@ -21,15 +21,20 @@ export type EntrySetRowInput = Omit<StrengthSetInput, 'weight'> & { weight?: num
 
 /**
  * Write an entry's `entry_sets` rows (1-based `idx`) and one PRIMARY `entry_set_quantities` row for
- * each set that carries a magnitude. The unit is the movement's, and the quantity's `dimension` is
+ * each set that carries a magnitude. The unit is the caller's, and the quantity's `dimension` is
  * derived from it, which is what the `units(code, dimension)` composite FK checks. Columns a set
  * does not set are OMITTED, so Postgres applies its own defaults and a `done` set writes a
  * byte-identical row.
  *
  * Called by `writeSessionStrengthEntry` only when it created the entry, never on a replay, so a
- * retry never doubles the sets. The FAM-1 row writer (11b) is the intended second caller: D3 writes
- * one `entry_sets` row and its quantities per ✓. A caller that adds a quantity slot other than
- * `primary` extends this function rather than writing a second copy.
+ * retry never doubles the sets. It is its only caller today.
+ *
+ * ⚠️ **What 11b must change before calling it** (the FAM-1 row writer, which writes one
+ * `entry_sets` row and its quantities per ✓, D3): `reps` is required here, so it cannot take a
+ * Check, Count, Duration, Time-per-set or Distance row, and only the `primary` slot is reachable,
+ * so Distance cannot be written. 11b widens `reps` to optional and takes its quantities with their
+ * slots, in this function, rather than writing a second copy. Never satisfy the type with a
+ * placeholder `reps`: the column has no CHECK, and an invented number reads as reps done.
  */
 export async function insertEntrySetRows(
   exec: Executor,
