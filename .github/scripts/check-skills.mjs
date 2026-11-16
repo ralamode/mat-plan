@@ -435,8 +435,9 @@ export function latestMergedPr(subjects) {
 /**
  * Agent definitions that pin a model the policy forbids in frontmatter (DX-11 follow-up, 2026-11-16).
  *
- * Fable is for plan panels only, and `plan-with-panel` asks for it at spawn time (`model: "fable"`),
- * which beats frontmatter. A reviewer PINNED to fable runs every `review-pr` fan-out, doubt-check and
+ * Fable is for high-stakes plans and reviews only, and `plan-with-panel` / `review-pr` ask for it at
+ * spawn time (`model: "fable"`, which beats frontmatter) when the work touches an area in
+ * `.claude/skills/README.md` → "When a lens runs on Fable". A reviewer PINNED to fable runs every `review-pr` fan-out, doubt-check and
  * ad-hoc spawn on it too. That is how DX-11's pin spent the account's monthly Fable budget on PR
  * reviews across six lanes (2026-11-16), so a pin is refused here rather than remembered.
  *
@@ -451,8 +452,8 @@ export function checkAgentModels(agents) {
     return model &&
       FORBIDDEN_AGENT_MODELS.some((m) => model === m || model.startsWith(`claude-${m}`))
       ? [
-          `${file}: frontmatter pins \`model: ${model}\`. Reviewer agents default to opus; only ` +
-            'plan-with-panel passes `model: "fable"` at spawn time (.claude/skills/README.md → Model & effort policy)',
+          `${file}: frontmatter pins \`model: ${model}\`. Reviewer agents default to opus; a high-stakes ` +
+            'plan or review passes `model: "fable"` at spawn time (.claude/skills/README.md → When a lens runs on Fable)',
         ]
       : [];
   });
