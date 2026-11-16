@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -1564,7 +1564,7 @@
+     SELECT e.id FROM entries e
+       JOIN sessions s ON s.id = e.session_id
+       JOIN prescriptions pr ON pr.id = e.prescription_id
+-     WHERE pr.workout_id IS NULL OR pr.workout_id IS DISTINCT FROM s.workout_id
++     WHERE pr.workout_id IS NULL OR pr.workout_id <> s.workout_id
+      ORDER BY e.id`);
+   return (res as unknown as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+ }

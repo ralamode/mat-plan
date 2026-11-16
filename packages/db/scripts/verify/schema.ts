@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   DEFAULT_TRACKING_TYPE,
   MAX_SETS_PER_MOVEMENT,
+  MAX_WORKOUT_ITEMS,
   FREE_TEXT_NOTE_MAX,
   MOVEMENT_SEED_ROWS,
   newId,
@@ -12,6 +13,10 @@ import {
   PROGRAM_NAME_MAX,
   PROGRAM_READ_KIND,
   SLOT_LABEL_MAX,
+  TARGET_REPS_MAX,
+  TRACKING_TYPE_FIELDS,
+  UNIT_DIMENSION_BY_CODE,
+  unitsForTrackingType,
   WEEKDAYS,
   WORKOUT_NAME_MAX,
   PROGRAM_SEED,
@@ -33,6 +38,9 @@ import { householdScopeForScript } from '../../src/writers/household-scope-scrip
 import { prescribedSnapshotsFor } from '../../src/writers/prescribed-snapshot';
 import {
   ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX,
+  PRESCRIPTION_QUANTITY_SLOT_UNIQUE_INDEX,
+  PRESCRIPTION_WORKOUT_CLIENT_ID_UNIQUE_INDEX,
+  PRESCRIPTION_WORKOUT_SLOT_UNIQUE_INDEX,
   SESSION_WORKOUT_DAY_UNIQUE_INDEX,
   SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX,
 } from '../../src/schema';
@@ -89,6 +97,7 @@ export async function verifySchema(ctx: VerifyContext): Promise<void> {
   await verifyStep4ai(ctx);
   await verifyStep5b(ctx);
   await verifyStep4aii(ctx);
+  await verifyStep4b(ctx);
   await verifyStep1();
 }
 
@@ -1212,20 +1221,23 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
     // the wrong boundary.
     assert.equal(entryHousehold, aHousehold, "FAM-1 4a-ii: the probe entry is in A's household");
 
-    const prescription = async (blockId: number, idx: number) => {
+    // A TEMPLATE row (FAM-1 4b): its workout and a client_id, no day_role, so a probe row is itself
+    // a legal one and never trips 4b's audits.
+    const prescription = async (w: { blockId: number; workoutId: number }, idx: number) => {
       const [row] = await tx
         .insert(schema.prescriptions)
         .values({
           publicId: newId(),
-          blockId,
-          dayRole: 'strength',
+          blockId: w.blockId,
+          workoutId: w.workoutId,
+          clientId: newId(),
           movementId: entryBase.movementId!,
           idx,
         })
         .returning({ id: schema.prescriptions.id });
       return row.id;
     };
-    const pA = await prescription(a.blockId, 900);
+    const pA = await prescription(a, 900);
 
     const session = (over: Partial<typeof schema.sessions.$inferInsert> = {}) =>
       tx
@@ -1379,7 +1391,7 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
     );
 
     // ── (e) two sets of one superset member commit, and so does purging their prescription ──────────
-    const pB = await prescription(a.blockId, 901);
+    const pB = await prescription(a, 901);
     const member = { sessionId: s1.id, prescriptionId: pB, supersetId: ss.id, supersetOrder: 0 };
     await tx.insert(schema.entries).values({
       ...entryBase,
@@ -1441,7 +1453,7 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
       'FAM-1 4a-ii: every session naming a workout is of type workout',
     );
     const bLive = await mkWorkout(B_SCOPE, 'fam-1-4a-ii-b2');
-    const pForeign = await prescription(bLive.blockId, 902);
+    const pForeign = await prescription(bLive, 902);
     const [foreignSession] = await session({
       activityDate: '2026-11-20',
       workoutId: bLive.workoutId,
@@ -1535,5 +1547,541 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
   });
   console.log(
     '✓ FAM-1 4a-ii: a purged workout leaves its session with workout_id NULL and the frozen name kept',
+  );
+}
+
+// ── FAM-1 step 4b ───────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Linked entries whose prescription is not in the workout their session names (plan §5 row 4b, owed
+ * by 4a-ii's review): a legacy prescription, a session naming no workout, or another workout. With
+ * `prescriptions.workout_id` in place, this is what stops a twin filed under another session, which
+ * the row arbiter cannot see. Hidden rows are NOT excluded: a hidden mismatch is still a defect.
+ * Against production the same query is run by hand (read-only).
+ */
+async function entriesOnAnotherWorkoutsPrescriptions(tx: VerifyTx): Promise<number[]> {
+  const res = await tx.execute(sql`
+    SELECT e.id FROM entries e
+      JOIN sessions s ON s.id = e.session_id
+      JOIN prescriptions pr ON pr.id = e.prescription_id
+     WHERE pr.workout_id IS NULL OR pr.workout_id IS DISTINCT FROM s.workout_id
+     ORDER BY e.id`);
+  return (res as unknown as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+}
+
+/**
+ * Prescriptions on a TEMPLATE block with no workout (A2 §4, §10: "a template prescription with a
+ * `day_role` is refused and flagged"). The XOR cannot see the block's kind, so this is the "flagged"
+ * half; step 6a's writer is the "refused" half. Run by hand against production too.
+ */
+async function prescriptionsWithoutAWorkoutOnTemplateBlocks(tx: VerifyTx): Promise<number[]> {
+  const res = await tx.execute(sql`
+    SELECT pr.id FROM prescriptions pr
+      JOIN program_blocks b ON b.id = pr.block_id
+     WHERE b.kind = ${PROGRAM_BLOCK_KIND.template} AND pr.workout_id IS NULL
+     ORDER BY pr.id`);
+  return (res as unknown as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+}
+
+async function constraintDef(conname: string): Promise<string> {
+  const res = await db.execute(
+    sql`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = ${conname}`,
+  );
+  const rows = (res as unknown as { rows: { def: string }[] }).rows;
+  assert.equal(rows.length, 1, `${conname} exists`);
+  return rows[0].def;
+}
+
+async function verifyStep4b({ A_SCOPE }: VerifyContext): Promise<void> {
+  // ── (a) shapes, and every bound pinned to its shared const ────────────────────────────────────────
+  assert.equal(
+    (await columnCatalogShape('prescriptions', 'day_role'))?.is_nullable,
+    'YES',
+    'FAM-1 4b: prescriptions.day_role is nullable (the XOR replaces NOT NULL)',
+  );
+  await assertLengthCheckIs('prescriptions_notes_length_check', FREE_TEXT_NOTE_MAX);
+  await assertLengthCheckIs('prescriptions_rest_after_length_check', SLOT_LABEL_MAX);
+  await assertLengthCheckIs('prescriptions_superset_label_length_check', SLOT_LABEL_MAX);
+  await assertLengthCheckIs('prescriptions_target_reps_length_check', TARGET_REPS_MAX);
+  await assertLengthCheckIs('prescriptions_sets_max_check', MAX_SETS_PER_MOVEMENT);
+  await assertLengthCheckIs('prescriptions_superset_order_check', MAX_WORKOUT_ITEMS);
+  // 🔴 11b copies superset_label into supersets.prescription_group: the two CHECKs must be the SAME
+  // expression, not merely the same bound, or the ✓ fails with 23514 (plan §3 row 4b).
+  assert.equal(
+    (await constraintDef('prescriptions_superset_label_length_check')).replaceAll(
+      'superset_label',
+      'prescription_group',
+    ),
+    await constraintDef('supersets_prescription_group_length_check'),
+    "FAM-1 4b: superset_label's CHECK is exactly supersets.prescription_group's",
+  );
+  console.log(
+    '✓ FAM-1 4b: day_role is nullable; the six new bounds are pinned to their consts, and superset_label is bounded exactly as prescription_group is',
+  );
+
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    assert.deepEqual(
+      await entriesOnAnotherWorkoutsPrescriptions(tx),
+      [],
+      "FAM-1 4b: on the seeded database, no entry names a prescription outside its session's workout",
+    );
+    assert.deepEqual(
+      await prescriptionsWithoutAWorkoutOnTemplateBlocks(tx),
+      [],
+      'FAM-1 4b: on the seeded database, no template block holds a prescription without a workout',
+    );
+
+    // A template block with two workouts, and a second template block with one.
+    const mkBlock = async (slug: string) => {
+      const clientId = newId();
+      await insertProgramBlockOwnedBy(exec, A_SCOPE, { clientId, slug, name: slug, notes: null });
+      return (await programBlockByClientId(exec, A_SCOPE, clientId))!.id;
+    };
+    const mkWorkout = async (blockId: number, name: string) =>
+      (await insertWorkoutOwnedBy(exec, A_SCOPE, {
+        blockId,
+        clientId: newId(),
+        name,
+        description: null,
+      }))!.id;
+    const blockA = await mkBlock('fam-1-4b-a');
+    const w1 = await mkWorkout(blockA, 'Push day');
+    const w2 = await mkWorkout(blockA, 'Pull day');
+    const blockB = await mkBlock('fam-1-4b-b');
+    const w3 = await mkWorkout(blockB, 'Legs day');
+    const [{ movementId }] = await tx
+      .select({ movementId: schema.prescriptions.movementId })
+      .from(schema.prescriptions)
+      .orderBy(schema.prescriptions.id)
+      .limit(1);
+    const [legacy] = await tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy))
+      .orderBy(schema.programBlocks.id)
+      .limit(1);
+
+    type PrescriptionInsert = typeof schema.prescriptions.$inferInsert;
+    const tpl = (over: Partial<PrescriptionInsert> = {}) =>
+      tx
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId: blockA,
+          workoutId: w1,
+          clientId: newId(),
+          movementId,
+          idx: 0,
+          ...over,
+        })
+        .returning({ id: schema.prescriptions.id, clientId: schema.prescriptions.clientId });
+    const legacyRow = (over: Partial<PrescriptionInsert> & { idx: number }) =>
+      tx
+        .insert(schema.prescriptions)
+        .values({ publicId: newId(), blockId: legacy.id, dayRole: 'strength', movementId, ...over })
+        .returning({ id: schema.prescriptions.id });
+
+    // ── (b) the XOR, the client_id CHECK and the composite FK ──────────────────────────────────────
+    const [p0] = await tpl();
+    await expectRejectedBy(
+      'prescriptions_day_role_xor_workout_check',
+      () => tpl({ idx: 1, dayRole: 'strength' }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_day_role_xor_workout_check',
+      () => legacyRow({ idx: 960, dayRole: null }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_template_client_id_check',
+      () => tpl({ idx: 1, clientId: null }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_template_client_id_check',
+      () => legacyRow({ idx: 960, clientId: newId() }),
+      tx,
+    );
+    // A workout of ANOTHER block: the block a row names is its workout's, by the composite FK.
+    await expectRejectedBy(
+      'prescriptions_workout_block_fkey',
+      () => tpl({ idx: 1, workoutId: w3 }),
+      tx,
+    );
+    console.log(
+      '✓ FAM-1 4b: a row names a day_role or a workout, exactly one; a template row has a client_id and a legacy row none; a workout of another block is refused',
+    );
+
+    // ── (c) the slot key, the client_id key, and a reorder through a band ──────────────────────────
+    await expectRejectedBy(PRESCRIPTION_WORKOUT_SLOT_UNIQUE_INDEX, () => tpl({ idx: 0 }), tx);
+    await tpl({ idx: 0, workoutId: w2 }); // same idx, another workout of the SAME block: accepted
+    await tx
+      .update(schema.prescriptions)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.prescriptions.id, p0.id));
+    await assert.doesNotReject(
+      tx.transaction(async () => {
+        await tpl({ idx: 0 });
+      }),
+      'FAM-1 4b: a hidden row frees its slot',
+    );
+    // The client_id key: a twin in one workout is refused, even once its holder is HIDDEN (p0 is),
+    // and the same id in another workout is accepted.
+    await expectRejectedBy(
+      PRESCRIPTION_WORKOUT_CLIENT_ID_UNIQUE_INDEX,
+      () => tpl({ idx: 2, clientId: p0.clientId }),
+      tx,
+    );
+    await tpl({ idx: 2, workoutId: w2, clientId: p0.clientId });
+    // A reorder: swapping two places directly is refused (why 6a's shift-band exists); shifting both
+    // up a band and back commits, and each row keeps its id and client_id.
+    const [r1] = await tpl({ idx: 10 });
+    const [r2] = await tpl({ idx: 11 });
+    await expectRejectedBy(
+      PRESCRIPTION_WORKOUT_SLOT_UNIQUE_INDEX,
+      () =>
+        tx.update(schema.prescriptions).set({ idx: 11 }).where(eq(schema.prescriptions.id, r1.id)),
+      tx,
+    );
+    await tx
+      .update(schema.prescriptions)
+      .set({ idx: sql`${schema.prescriptions.idx} + 100` })
+      .where(inArray(schema.prescriptions.id, [r1.id, r2.id]));
+    await tx
+      .update(schema.prescriptions)
+      .set({ idx: 11 })
+      .where(eq(schema.prescriptions.id, r1.id));
+    await tx
+      .update(schema.prescriptions)
+      .set({ idx: 10 })
+      .where(eq(schema.prescriptions.id, r2.id));
+    const swapped = await tx
+      .select({
+        id: schema.prescriptions.id,
+        idx: schema.prescriptions.idx,
+        clientId: schema.prescriptions.clientId,
+      })
+      .from(schema.prescriptions)
+      .where(inArray(schema.prescriptions.id, [r1.id, r2.id]))
+      .orderBy(schema.prescriptions.idx);
+    assert.deepEqual(
+      swapped,
+      [
+        { id: r2.id, idx: 10, clientId: r2.clientId },
+        { id: r1.id, idx: 11, clientId: r1.clientId },
+      ],
+      'FAM-1 4b: a reorder through a band keeps each row and its client_id',
+    );
+    console.log(
+      '✓ FAM-1 4b: one live row per workout place (a hidden row frees it); a client_id is unique in its workout, hidden or not, and free in another; a reorder through a band keeps rows',
+    );
+
+    // ── (d) the text and number bounds; the template-only ones leave legacy rows alone ─────────────
+    const at = (n: number) => 'x'.repeat(n);
+    const group = { supersetLabel: 'a', supersetOrder: 1 };
+    await tpl({ idx: 20, notes: at(FREE_TEXT_NOTE_MAX) });
+    await expectRejectedBy(
+      'prescriptions_notes_length_check',
+      () => tpl({ idx: 21, notes: at(FREE_TEXT_NOTE_MAX + 1) }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_notes_length_check',
+      () => tpl({ idx: 21, notes: '  ' }),
+      tx,
+    );
+    await tpl({
+      idx: 21,
+      ...group,
+      supersetLabel: at(SLOT_LABEL_MAX),
+      restAfter: at(SLOT_LABEL_MAX),
+    });
+    await expectRejectedBy(
+      'prescriptions_superset_label_length_check',
+      () => tpl({ idx: 22, ...group, supersetLabel: at(SLOT_LABEL_MAX + 1) }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_rest_after_length_check',
+      () => tpl({ idx: 22, ...group, restAfter: at(SLOT_LABEL_MAX + 1) }),
+      tx,
+    );
+    await tpl({ idx: 22, targetReps: at(TARGET_REPS_MAX), sets: MAX_SETS_PER_MOVEMENT });
+    await expectRejectedBy(
+      'prescriptions_target_reps_length_check',
+      () => tpl({ idx: 23, targetReps: at(TARGET_REPS_MAX + 1) }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_target_reps_length_check',
+      () => tpl({ idx: 23, targetReps: ' ' }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_sets_max_check',
+      () => tpl({ idx: 23, sets: MAX_SETS_PER_MOVEMENT + 1 }),
+      tx,
+    );
+    // 🔴 The scoping, pinned: a LEGACY row keeps the archived block's 32-character reps and its set
+    // count, as production's rows do. An all-rows CHECK would fail 0025's validating scan.
+    await assert.doesNotReject(
+      tx.transaction(async () => {
+        await legacyRow({
+          idx: 961,
+          targetReps: '3 (top triple, then 2 back-offs)',
+          sets: MAX_SETS_PER_MOVEMENT + 1,
+        });
+      }),
+      "FAM-1 4b: a legacy row keeps the archived block's 32-character reps and 21 sets",
+    );
+    await expectRejectedBy(
+      'prescriptions_superset_order_check',
+      () => tpl({ idx: 23, supersetLabel: 'a', supersetOrder: 0 }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_superset_order_check',
+      () => tpl({ idx: 23, supersetLabel: 'a', supersetOrder: MAX_WORKOUT_ITEMS + 1 }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_superset_pair_check',
+      () => tpl({ idx: 23, supersetLabel: 'a' }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_superset_pair_check',
+      () => tpl({ idx: 23, supersetOrder: 1 }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescriptions_rest_after_needs_superset_check',
+      () => tpl({ idx: 23, restAfter: '90 s' }),
+      tx,
+    );
+    console.log(
+      "✓ FAM-1 4b: notes, rest, group, reps, sets and group place are bounded at their consts on template rows; a legacy row keeps the archived block's 32-character reps",
+    );
+
+    // ── (e) prescription_quantities ────────────────────────────────────────────────────────────────
+    const [pq] = await tpl({ idx: 30 });
+    type QuantityInsert = typeof schema.prescriptionQuantities.$inferInsert;
+    const quantity = (over: Partial<QuantityInsert> = {}) =>
+      tx
+        .insert(schema.prescriptionQuantities)
+        .values({
+          prescriptionId: pq.id,
+          slot: 'primary',
+          dimension: UNIT_DIMENSION_BY_CODE.lb,
+          unit: 'lb',
+          valueMin: null,
+          ...over,
+        })
+        .returning({ id: schema.prescriptionQuantities.id });
+    // Every (slot, unit) a tracking type can prescribe is writable: a pair missing from
+    // quantity_slots would otherwise first show as a 23503 inside 6a's writer.
+    for (const type of TRACKING_TYPES) {
+      const { slot } = TRACKING_TYPE_FIELDS[type];
+      if (!slot) continue;
+      for (const unit of unitsForTrackingType(type)) {
+        const [row] = await quantity({ slot, unit, dimension: UNIT_DIMENSION_BY_CODE[unit] });
+        await tx
+          .delete(schema.prescriptionQuantities)
+          .where(eq(schema.prescriptionQuantities.id, row.id));
+      }
+    }
+    await expectRejectedBy(
+      'prescription_quantities_unit_dimension_fkey',
+      () => quantity({ unit: 'in' }), // a length unit on a mass quantity
+      tx,
+    );
+    await expectRejectedBy(
+      'prescription_quantities_slot_dimension_fkey',
+      () => quantity({ slot: 'distance' }), // a mass on the distance slot
+      tx,
+    );
+    const [q1] = await quantity(); // value_min NULL: "log in this unit, no target"
+    await expectRejectedBy(PRESCRIPTION_QUANTITY_SLOT_UNIQUE_INDEX, () => quantity(), tx);
+    await tx
+      .update(schema.prescriptionQuantities)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.prescriptionQuantities.id, q1.id));
+    await assert.doesNotReject(
+      tx.transaction(async () => {
+        await quantity({ valueMin: '95', valueMax: '115' }); // a range, once the hidden row freed the slot
+      }),
+      'FAM-1 4b: a hidden quantity frees its slot',
+    );
+    const one = {
+      slot: 'distance' as const,
+      dimension: UNIT_DIMENSION_BY_CODE.yd,
+      unit: 'yd' as const,
+    };
+    await expectRejectedBy(
+      'prescription_quantities_value_min_check',
+      () => quantity({ ...one, valueMin: '-1' }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescription_quantities_value_min_check',
+      () => quantity({ ...one, valueMin: 'NaN' }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescription_quantities_value_max_check',
+      () => quantity({ ...one, valueMin: '10', valueMax: '5' }),
+      tx,
+    );
+    await expectRejectedBy(
+      'prescription_quantities_value_max_check',
+      () => quantity({ ...one, valueMin: null, valueMax: '5' }),
+      tx,
+    );
+    console.log(
+      '✓ FAM-1 4b: every prescribable (slot, unit) is writable; a unit or slot of the wrong dimension is refused; one live quantity per slot (a hidden one frees it); a negative, NaN, inverted or half range is refused',
+    );
+
+    // ── (f) the audits, each branch with its own control ───────────────────────────────────────────
+    const [tplEntry] = await tx
+      .select()
+      .from(schema.entries)
+      .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, blockA))
+      .where(
+        sql`${schema.profiles.householdId} = ${schema.programBlocks.householdId} and ${schema.entries.sessionId} is not null and ${schema.entries.movementId} is not null and ${schema.entries.metricKey} is null and ${schema.entries.deletedAt} is null`,
+      )
+      .orderBy(schema.entries.id)
+      .limit(1);
+    assert.ok(tplEntry, 'FAM-1 4b: a strength entry exists to clone probe rows from');
+    const {
+      id: _id,
+      publicId: _p,
+      clientId: _c,
+      createdAt: _ca,
+      updatedAt: _ua,
+      ...entryBase
+    } = tplEntry.entries;
+    let day = 0;
+    const sessionOn = async (workoutId: number | null) => {
+      day += 1;
+      const [row] = await tx
+        .insert(schema.sessions)
+        .values({
+          publicId: newId(),
+          clientId: newId(),
+          profileId: entryBase.profileId,
+          activityDate: `2026-12-${String(day).padStart(2, '0')}`,
+          sessionType: workoutId === null ? SESSION_TYPES[0] : SESSION_TYPE.workout,
+          workoutId,
+          workoutName: workoutId === null ? null : 'Push day',
+        })
+        .returning({ id: schema.sessions.id });
+      return row.id;
+    };
+    const linked = async (sessionId: number, prescriptionId: number) => {
+      const [row] = await tx
+        .insert(schema.entries)
+        .values({
+          ...entryBase,
+          publicId: newId(),
+          clientId: newId(),
+          supersetId: null,
+          supersetOrder: null,
+          sessionId,
+          prescriptionId,
+          prescriptionSet: 1,
+        })
+        .returning({ id: schema.entries.id });
+      return row.id;
+    };
+    const [inW1] = await tpl({ idx: 40 });
+    const [legacyP] = await legacyRow({ idx: 962 });
+    const ok = await linked(await sessionOn(w1), inW1.id); // (a) its own workout: not flagged
+    const otherWorkout = await linked(await sessionOn(w2), inW1.id); // (b) another workout
+    const noWorkout = await linked(await sessionOn(null), inW1.id); // (c) `<>` would miss it
+    const legacyLink = await linked(await sessionOn(null), legacyP.id); // (d) the IS NULL arm
+    assert.deepEqual(
+      await entriesOnAnotherWorkoutsPrescriptions(tx),
+      [otherWorkout, noWorkout, legacyLink],
+      "FAM-1 4b: an entry naming a prescription outside its session's workout is flagged, each branch",
+    );
+    void ok;
+    const [onTemplate] = await tx
+      .insert(schema.prescriptions)
+      .values({ publicId: newId(), blockId: blockA, dayRole: 'strength', movementId, idx: 963 })
+      .returning({ id: schema.prescriptions.id });
+    assert.deepEqual(
+      await prescriptionsWithoutAWorkoutOnTemplateBlocks(tx),
+      [onTemplate.id],
+      'FAM-1 4b: a day-role row on a template block is legal to the XOR, and flagged here',
+    );
+    console.log(
+      "✓ FAM-1 4b: an entry outside its session's workout (another workout, none, a legacy row) and a day-role row on a template block are each flagged",
+    );
+
+    // ── (g) erasure and ADR 0008's purge: the order is load-bearing ────────────────────────────────
+    // One child per refusal, so the constraint named is the only one that could fire.
+    const blockE = await mkBlock('fam-1-4b-erase');
+    const wE = await mkWorkout(blockE, 'Erase day');
+    const [pE] = await tpl({ blockId: blockE, workoutId: wE, idx: 0 });
+    await expectRejectedBy(
+      'prescriptions_workout_block_fkey',
+      () => tx.delete(schema.workouts).where(eq(schema.workouts.id, wE)),
+      tx,
+    );
+    const [qE] = await tx
+      .insert(schema.prescriptionQuantities)
+      .values({
+        prescriptionId: pE.id,
+        slot: 'primary',
+        dimension: 'mass',
+        unit: 'lb',
+        valueMin: '45',
+      })
+      .returning({ id: schema.prescriptionQuantities.id });
+    await tx
+      .update(schema.prescriptionQuantities)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.prescriptionQuantities.id, qE.id));
+    await expectRejectedBy(
+      'prescription_quantities_prescription_id_prescriptions_id_fk',
+      () => tx.delete(schema.prescriptions).where(eq(schema.prescriptions.id, pE.id)),
+      tx, // a HIDDEN quantity still refuses: the household delete counts and deletes hidden rows
+    );
+    const sE = await sessionOn(wE);
+    const eE = await linked(sE, pE.id);
+    // The purge, in its order: quantities, then the prescription, then the workout.
+    await tx
+      .delete(schema.prescriptionQuantities)
+      .where(eq(schema.prescriptionQuantities.prescriptionId, pE.id));
+    await tx.delete(schema.prescriptions).where(eq(schema.prescriptions.id, pE.id));
+    await tx.delete(schema.workouts).where(eq(schema.workouts.id, wE));
+    const [entryAfter] = await tx
+      .select({
+        prescriptionId: schema.entries.prescriptionId,
+        set: schema.entries.prescriptionSet,
+        snapshot: schema.entries.prescribedSnapshot,
+      })
+      .from(schema.entries)
+      .where(eq(schema.entries.id, eE));
+    assert.deepEqual(
+      entryAfter,
+      { prescriptionId: null, set: 1, snapshot: entryBase.prescribedSnapshot },
+      'FAM-1 4b: a purged prescription leaves its entry with the set and the snapshot',
+    );
+    const [sessionAfter] = await tx
+      .select({ workoutId: schema.sessions.workoutId, name: schema.sessions.workoutName })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, sE));
+    assert.deepEqual(
+      sessionAfter,
+      { workoutId: null, name: 'Push day' },
+      'FAM-1 4b: the purged workout leaves its session with the frozen name',
+    );
+  });
+  console.log(
+    "✓ FAM-1 4b: a workout with a prescription, and a prescription with a quantity (hidden or not), refuse deletion; quantities → prescription → workout commits and keeps the log's snapshot and name",
   );
 }

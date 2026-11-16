@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -1578,7 +1578,7 @@
+   const res = await tx.execute(sql`
+     SELECT pr.id FROM prescriptions pr
+       JOIN program_blocks b ON b.id = pr.block_id
+-     WHERE b.kind = ${PROGRAM_BLOCK_KIND.template} AND pr.workout_id IS NULL
++     WHERE pr.workout_id IS NULL
+      ORDER BY pr.id`);
+   return (res as unknown as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+ }

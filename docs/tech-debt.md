@@ -27,6 +27,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Fix:** strip `params` (and a 23514's `detail`, the CHECK-violation row) from errors before Next
   logs them, at the one place they are thrown up to `error.tsx`; with a test.
 - **Severity:** medium.
+- **Gate (added at FAM-1 4b):** fixed before the step that makes save-workout reachable (6a's writer
+  behind a screen). 0025 adds `prescriptions.notes` (500 characters an adult types per exercise, which
+  can hold health detail about a child), so the first failed save would put that text in the log.
 
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 

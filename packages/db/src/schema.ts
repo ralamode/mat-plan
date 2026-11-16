@@ -289,6 +289,15 @@ export const SESSION_WORKOUT_DAY_UNIQUE_INDEX = 'uq_sessions_profile_day_workout
 export const SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX = 'uq_supersets_session_prescription_group';
 export const ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX = 'uq_entries_session_prescription_set';
 
+/**
+ * FAM-1 4b's two template-prescription keys and the quantity slot key, named once so step 6a's
+ * save-workout and shift-band writers match a 23505 by const. Renaming one means a new migration too.
+ */
+export const PRESCRIPTION_WORKOUT_CLIENT_ID_UNIQUE_INDEX = 'uq_prescriptions_workout_client_id';
+export const PRESCRIPTION_WORKOUT_SLOT_UNIQUE_INDEX = 'uq_prescriptions_workout_idx';
+export const PRESCRIPTION_QUANTITY_SLOT_UNIQUE_INDEX =
+  'uq_prescription_quantities_prescription_slot';
+
 export const entries = pgTable(
   'entries',
   {
@@ -1186,6 +1195,25 @@ export const blockDayWorkouts = pgTable(
  * which means a re-seed is INSERT-ONLY (onConflictDoNothing never reorders/replaces a slot — the ramp_targets
  * precedent; block edits are a future authoring path, not re-seed). `target_reps` is TEXT (lossless "8-12"/
  * "AMRAP", like entries.raw_reps).
+ *
+ * **FAM-1 4b (ADR 0007 A2 §4, Amendment 3; plan D2, D14, D19): a row is LEGACY or TEMPLATE, never both.**
+ * A legacy row names a `day_role` on the seeded block; a template row names a `workout_id` (and,
+ * through the composite FK, the workout's own block), always has a `client_id` (the editor's card
+ * identity, D19: a save matches rows by it, so a reorder never detaches a logged row and a replay adds
+ * nothing), and may carry the author's `notes`, a superset place (`superset_label` + `superset_order`)
+ * and, on a group's last item, `rest_after`. The "config → no client_id" sentence above holds for
+ * legacy rows only.
+ *
+ * 🔴 **The XOR cannot see the block's kind**: a row with a `day_role` on a TEMPLATE block is legal
+ * here, and only the writer (6a) refuses it; `db:verify` flags it
+ * (`prescriptionsWithoutAWorkoutOnTemplateBlocks`).
+ *
+ * ⚠️ **The template-only bounds are scoped `workout_id is null or …` on purpose.** Production still
+ * holds an archived block whose `target_reps` run to 32 characters (the seed is insert-only, and the
+ * block #151 replaced was never deleted), so an all-rows CHECK would fail its validating scan. A legacy
+ * row is bounded by nothing new.
+ *
+ * Nothing writes a template row until step 6a's save-workout writer; the stay-dark test pins that.
  */
 export const prescriptions = pgTable(
   'prescriptions',
@@ -1195,13 +1223,24 @@ export const prescriptions = pgTable(
     blockId: bigint('block_id', { mode: 'number' })
       .notNull()
       .references(() => programBlocks.id),
-    dayRole: text('day_role').notNull(), // mirrors shared DAY_ROLES (pinned by db:verify)
+    // mirrors shared DAY_ROLES (pinned by db:verify). NULL on a template row since FAM-1 4b (the XOR).
+    dayRole: text('day_role'),
     movementId: bigint('movement_id', { mode: 'number' })
       .notNull()
       .references(() => movements.id),
     idx: integer('idx').notNull(), // 0-based order within the day (matches entry_sets.idx idiom)
     sets: integer('sets'), // prescribed set count (nullable — a movement-only prescription)
     targetReps: text('target_reps'), // verbatim/lossless: "3", "8-12", "AMRAP"
+    // FAM-1 4b. The workout this row belongs to; NULL on every legacy row. FK'd with `block_id` as a
+    // PAIR, so the block is the workout's own (MATCH SIMPLE skips legacy rows).
+    workoutId: bigint('workout_id', { mode: 'number' }),
+    // FAM-1 4b (A3, D19): the editor's card identity, device-minted per item. Set exactly on template
+    // rows (the two-way CHECK below). Returned to the household's own devices from 6a; never exported.
+    clientId: uuid('client_id'),
+    notes: text('notes'), // the author's instructions for this item (FREE_TEXT_NOTE_MAX); free text
+    restAfter: text('rest_after'), // a superset group's rest, on its LAST item only (D14; writer)
+    supersetLabel: text('superset_label'), // the group key 11b copies to supersets.prescription_group
+    supersetOrder: integer('superset_order'), // 1-based place in the group (12a orders by it, then idx)
     ...timestamps,
   },
   (t) => [
@@ -1218,6 +1257,135 @@ export const prescriptions = pgTable(
     ),
     check('prescriptions_idx_check', sql`${t.idx} >= 0`),
     check('prescriptions_sets_check', sql`${t.sets} is null or ${t.sets} > 0`),
+    // ── FAM-1 4b ──
+    foreignKey({
+      name: 'prescriptions_workout_block_fkey',
+      columns: [t.workoutId, t.blockId],
+      foreignColumns: [workouts.id, workouts.blockId],
+    }),
+    // NON-partial (ADR 0008 3.4): a hidden holder keeps its id, so a replay never twins it. Leading on
+    // `workout_id`, it is also the covering index for the composite FK, hidden rows included (0023's
+    // `uq_workouts_block_client_id` does the same for the block FK), so there is no separate one.
+    uniqueIndex(PRESCRIPTION_WORKOUT_CLIENT_ID_UNIQUE_INDEX).on(t.workoutId, t.clientId),
+    // The template slot key. The legacy key above never fires on a template row (NULL day_role).
+    uniqueIndex(PRESCRIPTION_WORKOUT_SLOT_UNIQUE_INDEX)
+      .on(t.workoutId, t.idx)
+      .where(sql`${t.workoutId} is not null and ${t.deletedAt} is null`),
+    check(
+      'prescriptions_day_role_xor_workout_check',
+      sql`num_nonnulls(${t.dayRole}, ${t.workoutId}) = 1`,
+    ),
+    // Two-way: neither column is ever SET NULL, so a purge cannot break it.
+    check(
+      'prescriptions_template_client_id_check',
+      sql`(${t.workoutId} is null) = (${t.clientId} is null)`,
+    ),
+    // The template-only bounds (see the docblock for why they are scoped).
+    check(
+      'prescriptions_target_reps_length_check',
+      sql`${t.workoutId} is null or ${t.targetReps} is null or (char_length(btrim(${t.targetReps})) >= 1 and char_length(${t.targetReps}) <= 20)`,
+    ),
+    check(
+      'prescriptions_sets_max_check',
+      sql`${t.workoutId} is null or ${t.sets} is null or ${t.sets} <= 20`,
+    ),
+    // New columns: NULL on every legacy row, so these bound every row.
+    check(
+      'prescriptions_notes_length_check',
+      sql`${t.notes} is null or (char_length(btrim(${t.notes})) >= 1 and char_length(${t.notes}) <= 500)`,
+    ),
+    check(
+      'prescriptions_rest_after_length_check',
+      sql`${t.restAfter} is null or (char_length(btrim(${t.restAfter})) >= 1 and char_length(${t.restAfter}) <= 30)`,
+    ),
+    // 🔴 EXACTLY `supersets_prescription_group_length_check`'s form: 11b copies this label there, so a
+    // looser bound here would fail the ✓ with 23514. db:verify compares the two definitions.
+    check(
+      'prescriptions_superset_label_length_check',
+      sql`${t.supersetLabel} is null or (char_length(btrim(${t.supersetLabel})) >= 1 and char_length(${t.supersetLabel}) <= 30)`,
+    ),
+    check(
+      'prescriptions_superset_order_check',
+      sql`${t.supersetOrder} is null or (${t.supersetOrder} >= 1 and ${t.supersetOrder} <= 30)`,
+    ),
+    // A label and its order travel together (entries' 0005 pairing idiom).
+    check(
+      'prescriptions_superset_pair_check',
+      sql`(${t.supersetLabel} is null) = (${t.supersetOrder} is null)`,
+    ),
+    // D14's row-local half: a rest note belongs to a group. "Last item only" is the writer's.
+    check(
+      'prescriptions_rest_after_needs_superset_check',
+      sql`${t.restAfter} is null or ${t.supersetLabel} is not null`,
+    ),
+  ],
+);
+
+/**
+ * prescription_quantity — a TEMPLATE prescription's typed target (FAM-1 4b; plan D2; ADR 0007 A2 §4),
+ * mirroring `entry_set_quantities` so step 11b's ✓ copies rows to rows. One row per (prescription,
+ * slot): a Weight × reps item writes `('primary','mass','lb', …)`; a carry writes a mass and a
+ * distance. `value_min` NULL means "log in this unit, no target"; a range sets both.
+ *
+ * The unit guard is `entry_set_quantities`': `dimension` is stored and shared by two composite FKs,
+ * so no unit of the wrong dimension and no slot of the wrong dimension can be written.
+ *
+ * HUMAN-AUTHORED: a mass row is a prescribed LOAD, which the LLM never authors (AGENTS.md), as
+ * `prescription_targets`' docblock says. Once step 5 assigns a program to one athlete, it is that
+ * athlete's prescribed load.
+ *
+ * **No `client_id` and no `public_id`, unlike `entry_set_quantities`.** This is config, not log data:
+ * its address is (prescription, slot), a PLACE, so the partial key frees on a hide (the
+ * `block_day_workouts` precedent), and a replayed save is arbitrated by the prescription's
+ * `client_id`. An upsert MUST repeat the partial predicate (`targetWhere` for DoUpdate, `where` for
+ * DoNothing; docs/lessons.md, 42P10).
+ *
+ * OWNERSHIP: no `household_id`; the scope path is prescription → block → household, like
+ * `prescription_targets`. Readers join through a LIVE prescription. 6a owes the wrong-owner test.
+ * The FK is NO ACTION: the household delete and ADR 0008's purge delete these rows first.
+ */
+export const prescriptionQuantities = pgTable(
+  'prescription_quantities',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    prescriptionId: bigint('prescription_id', { mode: 'number' })
+      .notNull()
+      .references(() => prescriptions.id),
+    slot: text('slot').notNull(), // mirrors QUANTITY_SLOT_CODES; FK'd as a PAIR with dimension
+    dimension: text('dimension').notNull(), // denormalized on purpose — the composite FKs below
+    unit: text('unit').notNull(),
+    valueMin: numeric('value_min', { precision: 8, scale: 3 }), // NULL: this unit, no target
+    valueMax: numeric('value_max', { precision: 8, scale: 3 }), // NULL: a single value, not a range
+    ...timestamps,
+  },
+  (t) => [
+    foreignKey({
+      name: 'prescription_quantities_slot_dimension_fkey',
+      columns: [t.slot, t.dimension],
+      foreignColumns: [quantitySlots.code, quantitySlots.dimension],
+    }),
+    foreignKey({
+      name: 'prescription_quantities_unit_dimension_fkey',
+      columns: [t.unit, t.dimension],
+      foreignColumns: [units.code, units.dimension],
+    }),
+    index('idx_prescription_quantities_prescription').on(t.prescriptionId), // covers the FK, hidden rows too
+    index('idx_prescription_quantities_slot').on(t.slot, t.dimension), // covers the composite FK
+    index('idx_prescription_quantities_unit').on(t.unit, t.dimension), // covers the composite FK
+    uniqueIndex(PRESCRIPTION_QUANTITY_SLOT_UNIQUE_INDEX)
+      .on(t.prescriptionId, t.slot)
+      .where(sql`${t.deletedAt} is null`),
+    // `'NaN'::numeric >= 0` is TRUE in Postgres, so NaN is refused by name.
+    check(
+      'prescription_quantities_value_min_check',
+      sql`${t.valueMin} is null or (${t.valueMin} >= 0 and ${t.valueMin} <> 'NaN')`,
+    ),
+    // Tighter than D2's text (which passes a max with no min, `x >= NULL` being NULL): a range has
+    // both ends, and a max alone is refused here rather than only by the writer.
+    check(
+      'prescription_quantities_value_max_check',
+      sql`${t.valueMax} is null or (${t.valueMin} is not null and ${t.valueMax} >= ${t.valueMin} and ${t.valueMax} <> 'NaN')`,
+    ),
   ],
 );
 
