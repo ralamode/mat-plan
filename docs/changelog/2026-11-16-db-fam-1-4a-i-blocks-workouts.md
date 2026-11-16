@@ -7,7 +7,7 @@
   `PROGRAM_NAME_MAX`); and `block_day_workouts`, the week, whose composite FK keeps a slot on its own
   block's workouts, with one slot per place and one per workout per day. `writers/ownership.ts` gains
   the insert helpers lane P's writers will call: a block lands `template` explicitly, a workout only in
-  this household's live template block, and a replay returns the first row. `db:verify` proves each
+  this household's live template block, a replay is answered first (reporting whether the row was created and whether it is hidden), and a template block must carry its `client_id` (a CHECK). `db:verify` proves each
   constraint, both "flagged" audits and the program tables' erasure order (lettered 9a and 9b in the
-  runbook); mutations 46–50 prove the helpers' refusals; a source scan keeps the tables dark until
+  runbook); mutations 46–51 prove the helpers' refusals and the scoped block read; a source scan keeps the tables dark until
   lane P. Nothing writes the tables yet; the privacy notice and inventory say so.

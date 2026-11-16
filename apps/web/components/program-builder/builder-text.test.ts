@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   athleteHint,
+  cleanName,
   copiedFromText,
   hasStarted,
   MONDAY_FIRST,
@@ -13,7 +14,6 @@ import {
   weekdayName,
   workoutSummary,
 } from './builder-text';
-import { cleanName } from './use-name-form';
 
 describe('the program builder’s sentences (the prototype’s wording)', () => {
   it('"Used by": none, one, both, all n', () => {
