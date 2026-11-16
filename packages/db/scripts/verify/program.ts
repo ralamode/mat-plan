@@ -359,6 +359,50 @@ async function verifySlugRace({ A_SCOPE }: VerifyContext): Promise<void> {
       /something else/,
       'FAM-1 6a-i: any other error is thrown unchanged',
     );
+
+    // ── the writers' own lost-race branch: the race staged on one connection ──
+    // A throw becomes a value, so a writer that lets the race escape fails the assertion by name.
+    const threw = (e: unknown) => ({ threw: String(e) });
+    // `stealing(slug)` is `exec`, except that a program holding `slug` is written just as the writer
+    // opens its savepoint: after it read the slug as free, before its write. That is the other
+    // device winning the race.
+    const stealing = (slug: string): typeof exec =>
+      new Proxy(exec, {
+        get(target, prop, receiver) {
+          if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+          return async (fn: Parameters<typeof exec.transaction>[0]) => {
+            await insertProgramBlockOwnedBy(target, A_SCOPE, {
+              clientId: newId(),
+              slug,
+              name: `Thief ${slug}`,
+              notes: null,
+            });
+            return target.transaction(fn);
+          };
+        },
+      });
+    assert.deepEqual(
+      await createProgram(stealing(movementSlug('Race A')), A_SCOPE, {
+        clientId: newId(),
+        name: 'Race A',
+      }).catch(threw),
+      { ok: false, reason: PROGRAM_REFUSAL.retry },
+      'FAM-1 6a-i: a create that loses its slug race answers retry, never throws',
+    );
+    const racer = await mustCreate(tx, A_SCOPE, 'Race B');
+    assert.deepEqual(
+      await renameProgram(stealing(movementSlug('Race C')), A_SCOPE, {
+        programPublicId: racer,
+        name: 'Race C',
+      }).catch(threw),
+      { ok: false, reason: PROGRAM_REFUSAL.retry },
+      'FAM-1 6a-i: a rename that loses its slug race answers retry, never throws',
+    );
+    assert.equal(
+      (await blockRow(tx, racer))?.name,
+      'Race B',
+      'FAM-1 6a-i: a lost rename writes nothing',
+    );
   });
   console.log('✓ FAM-1 6a-i: lostSlugRace (the slug index, the savepoint, other errors)');
 }

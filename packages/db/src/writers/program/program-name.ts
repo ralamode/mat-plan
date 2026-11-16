@@ -29,10 +29,11 @@ import { liveTemplateBlockIn, programBlockInHousehold } from '../ownership';
  *   household holds a handful of programs.
  *
  * ⚠️ **A read before the write, not a lock.** Two writes of one name at the same moment (two
- * creates, two renames, or one of each, from different programs) can both pass it, and the
- * household then has two programs with one folded name. No index can hold a folded name; it needs
- * two people naming programs in the same second, and is accepted, as `createProfile`'s duplicate
- * check accepts it.
+ * creates, two renames, or one of each, from different programs) can both pass it. Where the two
+ * names also share a slug, the slug index stops the second ({@link lostSlugRace}: `retry`, and the
+ * retry answers `name_taken`). Only names that fold alike but slug apart ("Héavy A", "Heavy A") can
+ * end as two programs with one folded name. No index can hold a folded name; it needs two people
+ * naming programs in the same second, and is accepted, as `createProfile`'s duplicate check is.
  */
 export async function programNameTaken(
   exec: Executor,
@@ -105,7 +106,11 @@ export async function freeProgramSlug(
   return firstFreeSlug(movementSlug(name), new Set(rows.map((row) => row.slug)));
 }
 
-/** The index a slug race violates (`schema.ts`, `programBlocks`). */
+/**
+ * The index a slug race violates (`schema.ts`, `programBlocks`). ⚠️ A literal until lane A exports it
+ * from `schema.ts` as a `*_UNIQUE_INDEX` const (requested 2026-11-16); then import that one. The
+ * forced collision in `verify/program.ts` fails if the two ever differ.
+ */
 export const PROGRAM_SLUG_UNIQUE_INDEX = 'uq_program_blocks_household_slug';
 
 /**
@@ -128,8 +133,10 @@ export async function lostSlugRace(
     });
     return false;
   } catch (e) {
-    const constraint = (e as { cause?: { constraint?: string } })?.cause?.constraint;
-    if (constraint === PROGRAM_SLUG_UNIQUE_INDEX) return true;
+    // `hide.ts`'s `isBodyweightSlotConflict` shape: drizzle wraps the driver error in `cause`.
+    const cause = (e as { cause?: unknown })?.cause ?? e;
+    const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
+    if (code === '23505' && constraint === PROGRAM_SLUG_UNIQUE_INDEX) return true;
     throw e;
   }
 }
