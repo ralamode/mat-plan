@@ -16,6 +16,7 @@ import {
   type UnitDimension,
 } from '@mat-plan/shared';
 
+import { itemCountText } from '@/lib/constants';
 import { formatDayShort } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -135,7 +136,7 @@ export function weekdayName(weekday: number, style: 'long' | 'short' = 'long'): 
 
 /** "6 items · Used Mon, Tue" or "… · Not on any day yet". */
 export function workoutSummary(itemCount: number, usedOn: readonly number[]): string {
-  const items = plural(itemCount, { one: '1 item', other: `${itemCount} items` });
+  const items = itemCountText(itemCount);
   const days = usedOn.length
     ? `Used ${formatList(
         usedOn.map((k) => weekdayName(k, 'short')),

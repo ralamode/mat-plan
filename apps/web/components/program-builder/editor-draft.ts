@@ -1,6 +1,7 @@
 import {
   FREE_TEXT_NOTE_MAX,
   isPlainDecimal,
+  isWholeNumber,
   quantityCeiling,
   saveWorkoutSchema,
   SLOT_LABEL_MAX,
@@ -78,7 +79,7 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   if (fields.sets) {
     const typed = card.sets.trim();
     const parsed = workoutDraftItemSchema.shape.sets.safeParse(Number(typed));
-    if (!/^\d+$/.test(typed) || !parsed.success || parsed.data === null) {
+    if (!isWholeNumber(typed) || !parsed.success || parsed.data === null) {
       refuse('sets', EDITOR_ERRORS.sets);
     } else sets = parsed.data;
   }

@@ -123,11 +123,11 @@ flowchart LR
     pair to whichever group either is in, and two groups become one under the earlier key; **the
     later group's rest is kept** and a different earlier one is named as dropped. An unlink splits
     the group between the two cards and **copies the rest to both sides**, so it is lost only when
-    neither side stays a superset. **The opposite tap undoes a tap**: a rest a card lost as a group's
-    last item (a join, or an unlink that ended the group) is held aside, outside the draft, and
-    given back when that card is a group's last again; and "changed" compares group keys by order
-    of first appearance, so a key minted on the way is not a change. Unlink after Join, or Link
-    after Unlink, gives back the same draft, and Cancel does not ask. The rest is edited on the group's last card, labelled "Rest"
+    neither side stays a superset. **The opposite tap undoes a tap**: straight after a link or unlink, the opposite tap on the same
+    card, with nothing else changed in between, puts the cards back exactly (a one-step undo held
+    outside the draft). Any other edit ends it, so a rest a join removed never comes back over one
+    typed since. "Changed" also compares group keys by order of first appearance, so a key minted
+    on the way is not a change. The rest is edited on the group's last card, labelled "Rest"
     (the day page prints "Rest " before it), and cleaned at Save like a note.
 13. **The editor refuses on the client what the writer refuses**, field by field (`readDraft`), so
     `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
@@ -145,7 +145,7 @@ flowchart LR
     locked, it has logs" is not shown (the draft carries no logs). Remove has no undo but Cancel,
     as the prototype; a second Remove or link within `DOUBLE_TAP_MS` is taken as the same tap. The
     link control reads "Superset with next", "Unlink from next" or "Join supersets A and B", never
-    the next item's name (up to 100 characters at 360px); its accessible name adds it. It sits in
+    the next item's name (up to 100 characters at 360px); its accessible name adds both items, its own first ("Superset with next: DB bench press and Pull-up"). It sits in
     its own row below the tools, and the rest field last in the card, so what a link moves is
     always below the tapped control, which is held where the thumb is and kept clear of the save
     bar. The status line names supersets by letter ("Linked: superset B now has 3 items."), never
