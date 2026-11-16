@@ -185,9 +185,15 @@ The shapes those lanes agree on, the fakes and the preview route are
    `not_found` for no session is ADR 0006 again: a caller cannot tell "signed out" from "another
    household's id" from "no such id", so neither refusal list has a "forbidden" member and none may
    be added. `retry` is true because the limit is checked before the parse and before any read or
-   write: nothing happened, and the screen may send the same `clientId` again. ⚠️ The cost: a
+   write: nothing happened, and the screen may send the same `clientId` again. ⚠️ Two costs, both accepted: a
    rate-limited caller reads the screen's ordinary "Couldn't save. Try again." and not
-   `RATE_LIMITED`'s "wait a moment".
+   `RATE_LIMITED`'s "wait a moment"; and a caller whose session ended reads the screen's words for a
+   thing that is gone (the builder's "This workout no longer exists.", with the draft still open),
+   because the answer must not say why.
+   ⚠️ **Import `enterMutation` alone on its line**: the source guard pins
+   `import { enterMutation } from '@/app/p/mutation-entry'`, so adding `type ContractEntry` inside
+   the same braces turns the guard red. An action rarely needs the type; if it does, it is a second
+   `import type` line.
    **It is an overload, not a second function**, so the two checks and their order are still written
    once, and the source guard below reads a contract action exactly as it reads a form action: the
    awaited `enterMutation(` call, `if (!entry.ok) return entry;`, the pinned import. A second entry

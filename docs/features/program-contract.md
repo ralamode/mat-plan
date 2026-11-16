@@ -185,8 +185,8 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     `PROGRAM_REFUSALS` and `ROW_REFUSALS`, so one value is a `ProgramResult` and a `RowResult`. The
     web app's entry check returns them (`enterMutation(TRANSPORT_REFUSALS)`,
     [write-path.md](./write-path.md) invariant 1); a later API transport returns the same two.
-    Neither list gains a "signed out" or "forbidden" member (ADR 0006). A fake never answers
-    `not_found` for a missing session: the preview route has no session to lose.
+    Neither list gains a "signed out" or "forbidden" member (ADR 0006). A fake calls no
+    transport, so it never answers either word for these two reasons.
 
 ## Traps
 

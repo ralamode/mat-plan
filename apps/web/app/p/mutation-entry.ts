@@ -87,6 +87,9 @@ export type ContractEntry = { ok: true; userId: string } | TransportRefusal;
  * which is the alternation `pages-need-a-session.test.ts` forbids, and would have put the two
  * conjuncts and their order in two places. Here the checks below are written once and only the
  * shape of the answer differs.
+ * ⚠️ **The argument only chooses the envelope; the two words are read from the const**, never from
+ * what the caller passed, so a look-alike object pushed past the type by a cast cannot change what
+ * a refused caller is told.
  *
  * @param refusal what a caller with no session is answered with: a form action's copy (never
  *   distinguishable from any other refusal to a caller), or `TRANSPORT_REFUSALS` for an action that
@@ -110,14 +113,14 @@ export async function enterMutation(
   if (!user) {
     return typeof refusal === 'string'
       ? { ok: false, error: refusal }
-      : { ok: false, reason: refusal.noSession };
+      : { ok: false, reason: TRANSPORT_REFUSALS.noSession };
   }
 
   const limit = await checkMutationLimit(user.userId, policy);
   if (!limit.allowed) {
     return typeof refusal === 'string'
       ? { ok: false, error: RATE_LIMITED }
-      : { ok: false, reason: refusal.rateLimited };
+      : { ok: false, reason: TRANSPORT_REFUSALS.rateLimited };
   }
   if (limit.reason === 'limiter-error') {
     // A permanently-dead fail-open limiter is otherwise completely silent.

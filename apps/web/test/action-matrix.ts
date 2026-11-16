@@ -1,6 +1,8 @@
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { TRANSPORT_REFUSALS } from '@mat-plan/shared';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -255,7 +257,7 @@ export function describeActionMatrices<R extends ActionRegistry>(
  * 🔴 **A Server Action module's test calls `describeActionMatrices`, never this.** The on-disk guard
  * (`actions.test.ts` → "the registry matches every Server Action module on disk") looks for that
  * name, so a module tested through this one is red there. It is exported for
- * `test/action-matrix.test.ts` alone, which runs the rows over actions defined in the test file:
+ * `test/action-matrix.contract.test.ts` alone, which runs the rows over actions defined in the test file:
  * the only way to prove the rows drive an action that speaks the FAM-1 contract before one exists
  * (a `'use server'` fixture would be a real public endpoint, and would have to be added to the
  * pinned list of this app's action modules).
@@ -293,12 +295,16 @@ export function describeMatrixRows<R extends ActionRegistry>(
       : (body) => (fn as ActionFn)(INITIAL_ACTION_STATE, body as FormData);
   };
 
-  /** The whole refusal a not-found class of caller gets from this action, in its envelope. */
+  /**
+   * The whole refusal a not-found class of caller gets from this action, in its envelope. The
+   * contract's words come from the shared const, not from the registry entry, so an entry cast past
+   * its type cannot make the rows agree with a wrong word.
+   */
   const notFoundOf = (name: string): AnyResult => {
     const { refusal } = entryOf(name);
     return typeof refusal === 'string'
       ? { ok: false, error: refusal }
-      : { ok: false, reason: refusal.noSession };
+      : { ok: false, reason: TRANSPORT_REFUSALS.noSession };
   };
 
   /**
@@ -309,7 +315,7 @@ export function describeMatrixRows<R extends ActionRegistry>(
     const { refusal } = entryOf(name);
     return typeof refusal === 'string'
       ? { ok: false, error: RATE_LIMITED }
-      : { ok: false, reason: refusal.rateLimited };
+      : { ok: false, reason: TRANSPORT_REFUSALS.rateLimited };
   };
 
   const rowFor = (name: string): Row => [name, callerOf(name), notFoundOf(name)];
