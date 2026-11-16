@@ -619,6 +619,10 @@ describe('the item picker (FAM-1 9)', () => {
       typeReps();
       pressCreate();
       await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('true'));
+      // The message is there first (it is set a frame later), so Add is what clears it.
+      await waitFor(() =>
+        expect(within(sheet()).getAllByText(createdText('Bear crawl')).length).toBeGreaterThan(0),
+      );
       // A second after Create: a new tap, not the same one.
       tapClock().tap(within(sheet()).getByRole('button', { name: addItemsText(1) }));
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
