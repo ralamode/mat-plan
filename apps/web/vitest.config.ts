@@ -89,8 +89,8 @@ export default defineConfig({
        * count a file the app never executes and the tests exercise thoroughly, inflating the number
        * by precisely the amount an honest denominator exists to prevent.
        *
-       * `day-test-utils.tsx` is the same case in `components/**`: the day page's test fixtures and
-       * render helpers (vitest's `vi`, testing-library), imported only by the day `*.test.tsx` files.
+       * `day-test-utils.tsx` is the same case in `components/**`: the day page's shared test
+       * harness (mount, spies, role queries), imported only by the day `*.test.tsx` files.
        */
       exclude: [
         '**/*.test.{ts,tsx}',
