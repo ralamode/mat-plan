@@ -7,6 +7,7 @@ import {
   MOVEMENT_SEED_ROWS,
   newId,
   PROFILE_KIND,
+  PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
   QUANTITY_SLOT_ROWS,
   type ProgramBlockSeedRow,
@@ -489,7 +490,9 @@ export async function seedProgram(
         target: [schema.programBlocks.householdId, schema.programBlocks.slug],
         where: isNull(schema.programBlocks.deletedAt),
       });
-    // Re-resolve the block id (just-inserted OR pre-existing) by its natural key.
+    // Re-resolve the block id (just-inserted OR pre-existing) by its natural key — and only a LEGACY
+    // block (FAM-1 4a-i): a template block a household built under the same slug must never be adopted
+    // and filled with seeded prescriptions. The insert above omits `kind`, so it lands `legacy`.
     const [blockRow] = await db
       .select({ id: schema.programBlocks.id })
       .from(schema.programBlocks)
@@ -497,6 +500,7 @@ export async function seedProgram(
         and(
           eq(schema.programBlocks.householdId, household.id),
           eq(schema.programBlocks.slug, block.slug),
+          eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy),
           isNull(schema.programBlocks.deletedAt),
         ),
       );

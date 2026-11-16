@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -13,6 +14,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -938,6 +940,13 @@ export const programBlocks = pgTable(
     slug: text('slug').notNull(),
     name: text('name').notNull(),
     notes: text('notes'),
+    // FAM-1 4a-i (ADR 0007 A2 §1): mirrors shared PROGRAM_BLOCK_KINDS (pinned by db:verify). `legacy`
+    // is today's day_role block, the default, which the seed's insert omits; `template` is a block a
+    // household builds, set EXPLICITLY by `insertProgramBlockOwnedBy`, never by default.
+    kind: text('kind').notNull().default('legacy'),
+    // FAM-1 4a-i (A2 §5): a template block's offline identity. NULL on the seeded/legacy blocks, which
+    // a server-side creator (the seed) writes with no client. Scoped to the household, never global.
+    clientId: uuid('client_id'),
     ...timestamps,
   },
   (t) => [
@@ -945,6 +954,122 @@ export const programBlocks = pgTable(
     uniqueIndex('uq_program_blocks_household_slug')
       .on(t.householdId, t.slug)
       .where(sql`${t.deletedAt} is null`),
+    check('program_blocks_kind_check', sql`${t.kind} in ('legacy', 'template')`),
+    // NON-partial (ADR 0008 3.4): a hidden block still owns its client_id, so a replay from a device
+    // that never saw the hide is recognised instead of twinned. Household-scoped, so one household
+    // cannot probe another's ids (A2 §2).
+    uniqueIndex('uq_program_blocks_household_client_id').on(t.householdId, t.clientId),
+  ],
+);
+
+/**
+ * workout — one named workout in a TEMPLATE block (FAM-1 4a-i; ADR 0007 Amendment 2 §2). Only
+ * template blocks own workouts (`insertWorkoutOwnedBy` refuses any other, and `db:verify` flags one).
+ * Its items are prescriptions with `workout_id` set (step 4b); the week places it on weekdays
+ * (`block_day_workouts`).
+ *
+ * - `client_id`: NOT NULL, unique within its block, non-partial: a workout has no natural key, and a
+ *   hidden workout keeps its id so a replayed save is recognised (ADR 0008 3.4).
+ * - Copy provenance (step 10b): `copied_from_workout_id` is identity, `ON DELETE SET NULL`, and must
+ *   name a workout in the SAME household (writer, plus `db:verify`'s audit). `copied_from_program_name`
+ *   is the source program's name FROZEN at copy time, so a rename or purge of the source never
+ *   changes "Copied from …". The id never outlives the name (the CHECK below); the name may outlive
+ *   the id, which is what a purge leaves.
+ * - Text bounds are CHECKs pinned to the shared consts by `db:verify` (maintainer, 2026-11-16):
+ *   `WORKOUT_NAME_MAX`, `FREE_TEXT_NOTE_MAX`, `PROGRAM_NAME_MAX`. Blank-after-trim is refused too,
+ *   because the read schemas refuse it.
+ */
+export const workouts = pgTable(
+  'workouts',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    clientId: uuid('client_id').notNull(),
+    blockId: bigint('block_id', { mode: 'number' })
+      .notNull()
+      .references(() => programBlocks.id),
+    name: text('name').notNull(),
+    description: text('description'),
+    copiedFromWorkoutId: bigint('copied_from_workout_id', { mode: 'number' }).references(
+      (): AnyPgColumn => workouts.id,
+      { onDelete: 'set null' },
+    ),
+    copiedFromProgramName: text('copied_from_program_name'),
+    ...timestamps,
+  },
+  (t) => [
+    // The composite-FK target for the week (and prescriptions, step 4b). A CONSTRAINT, not a unique
+    // index: the FK is created first, and Postgres needs the key to exist (docs/lessons.md, 0011).
+    unique('workouts_id_block_id_unique').on(t.id, t.blockId),
+    // Also the covering index for the block FK (leading column).
+    uniqueIndex('uq_workouts_block_client_id').on(t.blockId, t.clientId),
+    index('idx_workouts_copied_from_workout').on(t.copiedFromWorkoutId), // covers the self-FK
+    check(
+      'workouts_name_length_check',
+      sql`char_length(btrim(${t.name})) >= 1 and char_length(${t.name}) <= 30`,
+    ),
+    check(
+      'workouts_description_length_check',
+      sql`${t.description} is null or (char_length(btrim(${t.description})) >= 1 and char_length(${t.description}) <= 500)`,
+    ),
+    check(
+      'workouts_copied_from_program_name_length_check',
+      sql`${t.copiedFromProgramName} is null or (char_length(btrim(${t.copiedFromProgramName})) >= 1 and char_length(${t.copiedFromProgramName}) <= 60)`,
+    ),
+    check(
+      'workouts_copied_from_pairing_check',
+      sql`${t.copiedFromWorkoutId} is null or ${t.copiedFromProgramName} is not null`,
+    ),
+  ],
+);
+
+/**
+ * block_day_workouts — the week template: which workouts a TEMPLATE block runs on each weekday, in
+ * order (FAM-1 4a-i; ADR 0007 Amendment 2 §3). A rest day has no rows.
+ *
+ * - `weekday`: 0 = Sunday … 6, pinned to shared `WEEKDAYS` by `assertCheckCoversIntConst`.
+ * - The slot key `(block_id, weekday, idx)` is PARTIAL on live rows, so removing a slot frees its
+ *   place; a workout runs at most once a day (`(block_id, weekday, workout_id)`, also partial).
+ * - `(workout_id, block_id)` is a composite FK to `workouts(id, block_id)`, so one block's week can
+ *   never name another block's workout.
+ * - No `public_id` or `client_id`: a week is saved whole (`saveWeek`), and its rows are never
+ *   addressed from outside the server.
+ * - `label` is bounded by `SLOT_LABEL_MAX` (pinned by `db:verify`).
+ */
+export const blockDayWorkouts = pgTable(
+  'block_day_workouts',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    blockId: bigint('block_id', { mode: 'number' })
+      .notNull()
+      .references(() => programBlocks.id),
+    weekday: integer('weekday').notNull(),
+    idx: integer('idx').notNull(),
+    workoutId: bigint('workout_id', { mode: 'number' }).notNull(),
+    label: text('label'),
+    ...timestamps,
+  },
+  (t) => [
+    foreignKey({
+      name: 'block_day_workouts_workout_block_fkey',
+      columns: [t.workoutId, t.blockId],
+      foreignColumns: [workouts.id, workouts.blockId],
+    }),
+    // NON-partial, so it covers hidden rows too. ONE index serves both FKs: the block FK by its
+    // leading column, and the composite FK, whose lookups are equality on both columns.
+    index('idx_block_day_workouts_block_workout').on(t.blockId, t.workoutId),
+    uniqueIndex('uq_block_day_workouts_slot')
+      .on(t.blockId, t.weekday, t.idx)
+      .where(sql`${t.deletedAt} is null`),
+    uniqueIndex('uq_block_day_workouts_once_per_day')
+      .on(t.blockId, t.weekday, t.workoutId)
+      .where(sql`${t.deletedAt} is null`),
+    check('block_day_workouts_weekday_check', sql`${t.weekday} in (0, 1, 2, 3, 4, 5, 6)`),
+    check('block_day_workouts_idx_check', sql`${t.idx} >= 0`),
+    check(
+      'block_day_workouts_label_length_check',
+      sql`${t.label} is null or (char_length(btrim(${t.label})) >= 1 and char_length(${t.label}) <= 30)`,
+    ),
   ],
 );
 
