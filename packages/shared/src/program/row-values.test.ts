@@ -8,7 +8,7 @@ import {
   ENTRY_UNIT_WITHOUT_QUANTITY,
   entryUnitFor,
   fillRowValues,
-  prescriptionTarget,
+  prescribedTarget,
   rowValuesSchema,
   TRACKING_TYPE_FIELDS,
   unitsForTrackingType,
@@ -169,29 +169,29 @@ describe('fillRowValues: what a ✓ stores', () => {
   });
 });
 
-describe('prescriptionTarget: a prescription’s numbers as a row uses them', () => {
+describe('prescribedTarget: a prescription’s numbers as a row uses them', () => {
   it('reps are a number only when the text is a whole number', () => {
-    expect(prescriptionTarget('8', []).reps).toBe(8);
+    expect(prescribedTarget('8', []).reps).toBe(8);
     for (const text of ['8-10', '10 per side', 'AMRAP', '', ' 8', '8.5']) {
-      expect(prescriptionTarget(text, []).reps, text).toBeNull();
+      expect(prescribedTarget(text, []).reps, text).toBeNull();
     }
-    expect(prescriptionTarget(null, []).reps).toBeNull();
+    expect(prescribedTarget(null, []).reps).toBeNull();
   });
 
   it('a single value is the target; "no target" stays null', () => {
     expect(
-      prescriptionTarget('8', [
+      prescribedTarget('8', [
         { slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25, valueMax: null },
       ]),
     ).toEqual({ reps: 8, quantities: [primary('lb', 25)] });
     expect(
-      prescriptionTarget(null, [{ slot: QUANTITY_SLOT.primary, unit: 'min', value: null }])
+      prescribedTarget(null, [{ slot: QUANTITY_SLOT.primary, unit: 'min', value: null }])
         .quantities,
     ).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'min', value: null }]);
   });
 
   it('a range has no number to accept, so an empty ✓ on it asks for one', () => {
-    const target = prescriptionTarget('8', [
+    const target = prescribedTarget('8', [
       { slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25, valueMax: 35 },
     ]);
     expect(target.quantities).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: null }]);
@@ -204,7 +204,7 @@ describe('prescriptionTarget: a prescription’s numbers as a row uses them', ()
   });
 
   it('carries only the three fields a target has', () => {
-    const [quantity] = prescriptionTarget(null, [
+    const [quantity] = prescribedTarget(null, [
       { slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25, valueMax: null },
     ]).quantities;
     expect(Object.keys(quantity!).sort()).toEqual(['slot', 'unit', 'value']);
@@ -227,15 +227,33 @@ describe('entryUnitFor: the unit an entry stores (plan §2)', () => {
     expect(Object.keys(ENTRY_UNIT_WITHOUT_QUANTITY).sort()).toEqual([...withoutQuantity].sort());
   });
 
-  it('a Check or Reps item ignores a unit it is handed', () => {
+  it('a type whose unit is fixed ignores a unit it is handed', () => {
     expect(entryUnitFor(TRACKING_TYPE.check, 'lb')).toBe('bool');
     expect(entryUnitFor(TRACKING_TYPE.reps, 'lb')).toBe('count');
+    // A Duration is always minutes and Time per set always seconds, whatever the caller passes.
+    expect(entryUnitFor(TRACKING_TYPE.duration, 'sec')).toBe('min');
+    expect(entryUnitFor(TRACKING_TYPE.time_sets, 'min')).toBe('sec');
+    expect(entryUnitFor(TRACKING_TYPE.duration, null)).toBe('min');
+    for (const type of TRACKING_TYPES) {
+      const { unit } = TRACKING_TYPE_FIELDS[type];
+      if (unit) expect(entryUnitFor(type, 'lb'), type).toBe(unit);
+    }
   });
 
-  it('a type with a quantity and no prescribed unit is a caller’s bug, and throws', () => {
-    for (const type of TRACKING_TYPES) {
-      if (TRACKING_TYPE_FIELDS[type].slot === null) continue;
+  it('a type whose unit comes from the prescription, given none, is a caller’s bug and throws', () => {
+    const fromThePrescription = TRACKING_TYPES.filter(
+      (t) => TRACKING_TYPE_FIELDS[t].slot !== null && TRACKING_TYPE_FIELDS[t].unit === null,
+    );
+    expect(fromThePrescription.length).toBeGreaterThan(0);
+    for (const type of fromThePrescription) {
       expect(() => entryUnitFor(type, null), type).toThrow(/needs the prescribed unit/);
     }
+  });
+
+  it('a degenerate range is still a range', () => {
+    expect(
+      prescribedTarget('8', [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 25, valueMax: 25 }])
+        .quantities[0]?.value,
+    ).toBeNull();
   });
 });

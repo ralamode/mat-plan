@@ -23,8 +23,9 @@ export function isoDayDiff(a: string, b: string): number {
 }
 
 /**
- * How many days before today a write is still accepted: 1, so today and yesterday. One number for
- * the server's bound and for the screens that gate on it.
+ * How far from today a write is still accepted, in days: 1. One number for both rules that use it:
+ * `inWritableWindow` below (that many days BEFORE today, and never after), and the older forms'
+ * `isWritableDay` in the web app (that many days either side, until plan step 12c).
  */
 export const WRITABLE_DAY_RADIUS = 1;
 

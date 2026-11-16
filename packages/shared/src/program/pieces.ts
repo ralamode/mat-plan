@@ -371,12 +371,13 @@ export type PrescribedTarget = {
  *   row then asks for reps.
  * - **A range has no number to accept.** A quantity whose `valueMax` is set becomes `value: null`,
  *   the same as "log in this unit, no target": the row shows no number and an empty ✓ answers
- *   `bad_value`. No FAM-1 screen can write a range (`saveWorkoutSchema` holds one value); the rule
+ *   `bad_value`. Any `valueMax` makes it a range, one equal to `value` included: the rule reads the
+ *   column, not the arithmetic. No FAM-1 screen can write a range (`saveWorkoutSchema` holds one value); the rule
  *   is here so a row that has one is not logged at its low end without anyone typing it.
  *
  * Numbers, not the database's numeric strings: the caller converts.
  */
-export function prescriptionTarget(
+export function prescribedTarget(
   targetReps: string | null,
   quantities: readonly {
     slot: QuantitySlot;
@@ -452,17 +453,22 @@ export const ENTRY_UNIT_WITHOUT_QUANTITY = {
 } as const satisfies Partial<Record<TrackingType, Unit>>;
 
 /**
- * The unit a logged row's entry stores (`entries.unit`): the type's own for a Check and for Reps,
- * else the unit the item is prescribed in. One rule for the row writer and for the export (contract
- * change C10).
+ * The unit a logged row's entry stores (`entries.unit`), as plan §2's table has it: `bool` for a
+ * Check and `count` for Reps; the type's fixed unit where it has one (`min` for a Duration, `sec`
+ * for Time per set: `TRACKING_TYPE_FIELDS[type].unit`); else the unit the item is prescribed in.
+ * One rule for the row writer and for the export (contract change C10).
  *
- * It throws for a type that has a quantity when no prescribed unit is given: that is a caller's
- * bug (every such item has a unit, `DayItem.unit`), not something to answer a person with.
+ * A type whose unit is fixed ignores the unit it is handed, so the answer is the table's whatever
+ * the caller passes. It throws for a type whose unit comes from the prescription when none is
+ * given: that is a caller's bug (every such item has a unit, `DayItem.unit`), not something to
+ * answer a person with.
  */
 export function entryUnitFor(trackingType: TrackingType, prescribedUnit: Unit | null): Unit {
-  if (trackingType in ENTRY_UNIT_WITHOUT_QUANTITY) {
+  if (Object.hasOwn(ENTRY_UNIT_WITHOUT_QUANTITY, trackingType)) {
     return ENTRY_UNIT_WITHOUT_QUANTITY[trackingType as keyof typeof ENTRY_UNIT_WITHOUT_QUANTITY];
   }
+  const fixed = TRACKING_TYPE_FIELDS[trackingType].unit;
+  if (fixed) return fixed;
   if (prescribedUnit === null) {
     throw new Error(
       `a ${trackingType} item has a quantity, so its entry needs the prescribed unit`,

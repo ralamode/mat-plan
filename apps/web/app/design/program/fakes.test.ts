@@ -339,7 +339,7 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
   });
 
   it('a slot named twice, and a value over the unit’s ceiling, are bad_value on ✓ and on Change', async () => {
-    const { actions } = day(heavyASupersets);
+    const { actions, plan } = day(heavyASupersets);
     const write = tick(heavyASupersets, 'DB bench press', { reps: 8, quantities: [lb(25)] });
     const refused = { ok: false, reason: ROW_REFUSAL.bad_value };
     expect(
@@ -360,7 +360,13 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(
       await actions.amendRow({ ...amend, values: { reps: 8, quantities: [lb(99_000)] } }),
     ).toEqual(refused);
-    // Nothing was changed by the refused amends.
+    // Nothing was changed by the refused amends: the row still holds what the ✓ wrote.
+    expect(
+      itemOf(plan(), 'DB bench press').item.rows.find((r) => r.set === write.set)?.logged,
+    ).toMatchObject({
+      entryPublicId: made.entryPublicId,
+      values: { reps: 8, quantities: [lb(25)] },
+    });
     expect(
       await actions.amendRow({ ...amend, values: { reps: 9, quantities: [lb(30)] } }),
     ).toMatchObject({ ok: true, values: { reps: 9, quantities: [lb(30)] } });
