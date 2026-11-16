@@ -185,8 +185,9 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  *
  * 🔴 **A slot holds at most one entry** (plan D35; a slot is one athlete, day, prescription and
  * set). Program rows only: bodyweight and practice are single values with their own writers,
- * and a re-entry there is a new row. A ✓ under a NEW `clientId`, on a set with no logged row whose entry the athlete un-ticked
- * (or that Clear day hid), does not add a second entry: the writer brings that entry back and
+ * and a re-entry there is a new row. A ✓ under a NEW `clientId`, on a set with no logged row
+ * whose entry the athlete un-ticked (or that Clear day hid), does not add a second entry: the
+ * writer brings that entry back and
  * writes this ✓ on it, in one transaction, and answers with ITS `entryPublicId`. **The entry is
  * then exactly what a new ✓ would have made, but for its id**: this ✓'s numbers, filled from the
  * prescription as for any ✓, and the prescription's text as it reads now (`prescribedText` is
@@ -201,9 +202,9 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * - A `clientId` a revive replaced is not remembered anywhere. Replayed while the set is logged it
  *   is a ✓ on a logged set (`slot_taken`). ⚠️ Replayed after the set has been un-ticked AGAIN it
  *   cannot be told from a new ✓, and revives the entry with that old attempt's numbers. This is a
- *   known and accepted limit (plan D35): the day screen never re-sends an attempt after a later action on its
- *   row and there is no offline queue; a transport that can replay old attempts must first keep
- *   the replaced ids.
+ *   known and accepted limit (plan D35): the day screen never re-sends an attempt after a later
+ *   action on its row and there is no offline queue; a transport that can replay old attempts
+ *   must first keep the replaced ids.
  */
 export const rowWriteSchema = z.object({
   clientId: uuidSchema,
