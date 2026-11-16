@@ -32,12 +32,16 @@ import { readRowValues } from '../../src/queries/day/stored-row-values';
 import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/log-row';
 import { hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
+import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import {
-  insertProgramBlockOwnedBy,
-  insertWorkoutOwnedBy,
-  programBlockByClientId,
-} from '../../src/writers/ownership';
-import { asTx, idsOf, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+  entriesOnAnotherWorkoutsPrescriptions,
+  entriesOnForeignPrescriptions,
+  mkTemplateBlock,
+  sessionsOnForeignWorkouts,
+  workoutSessionsOfAnotherType,
+  workoutSessionsWithADayRole,
+} from './schema';
 
 /**
  * `db:verify` proofs for the DAY writers and reads.
@@ -83,42 +87,6 @@ const YESTERDAY = addDays(DAY, -1);
 const MONDAY = 1;
 const SUNDAY = 0;
 const TUESDAY = 2;
-
-// TODO(lane A request): import from verify/schema.ts once exported. The three detectors below are
-// lane A's, copied with their SQL unchanged (plan § Requests to other owners).
-
-/** Sessions whose workout is in ANOTHER household than the session's profile (A2 §6). Runbook pre-flight (f). */
-async function sessionsOnForeignWorkouts(tx: VerifyTx): Promise<number[]> {
-  const res = await tx.execute(sql`
-    SELECT s.id FROM sessions s
-      JOIN profiles p ON p.id = s.profile_id
-      JOIN workouts w ON w.id = s.workout_id
-      JOIN program_blocks b ON b.id = w.block_id
-     WHERE p.household_id <> b.household_id`);
-  return idsOf(res);
-}
-
-/** Entries whose prescription is in ANOTHER household than the entry's profile (A3). Runbook pre-flight (g). */
-async function entriesOnForeignPrescriptions(tx: VerifyTx): Promise<number[]> {
-  const res = await tx.execute(sql`
-    SELECT e.id FROM entries e
-      JOIN profiles p ON p.id = e.profile_id
-      JOIN prescriptions pr ON pr.id = e.prescription_id
-      JOIN program_blocks b ON b.id = pr.block_id
-     WHERE p.household_id <> b.household_id`);
-  return idsOf(res);
-}
-
-/** Linked entries whose prescription is not in the workout their session names (4b). */
-async function entriesOnAnotherWorkoutsPrescriptions(tx: VerifyTx): Promise<number[]> {
-  const res = await tx.execute(sql`
-    SELECT e.id FROM entries e
-      JOIN sessions s ON s.id = e.session_id
-      JOIN prescriptions pr ON pr.id = e.prescription_id
-     WHERE pr.workout_id IS NULL OR pr.workout_id IS DISTINCT FROM s.workout_id
-     ORDER BY e.id`);
-  return idsOf(res);
-}
 
 /** The writers take a database handle; inside `rolledBack` that is the transaction (a savepoint). */
 const asDb = (tx: VerifyTx) => tx as unknown as NodePgDatabase<Schema>;
@@ -194,12 +162,7 @@ async function fixture(tx: VerifyTx) {
   }
   const foreignMove = await movement(f.id, TRACKING_TYPE.check, 'verify-11b-foreign');
 
-  // TODO(lane A request): import mkTemplateBlock / mkWorkout from verify/schema.ts once exported.
-  const mkTemplateBlock = async (scope: typeof H_SCOPE, slug: string) => {
-    const clientId = newId();
-    await insertProgramBlockOwnedBy(exec, scope, { clientId, slug, name: slug, notes: null });
-    return (await programBlockByClientId(exec, scope, clientId))!.id;
-  };
+  // TODO(lane A request): import mkWorkout from verify/schema.ts once one with this shape exists.
   const mkWorkout = async (scope: typeof H_SCOPE, blockId: number, name: string) => {
     const w = (await insertWorkoutOwnedBy(exec, scope, {
       blockId,
@@ -258,7 +221,7 @@ async function fixture(tx: VerifyTx) {
   };
   const primary = QUANTITY_SLOT.primary;
 
-  const block = await mkTemplateBlock(H_SCOPE, 'verify-11b-h');
+  const block = await mkTemplateBlock(exec, H_SCOPE, 'verify-11b-h');
   const w1 = await mkWorkout(H_SCOPE, block, 'Push day');
   const w2 = await mkWorkout(H_SCOPE, block, 'Pull day');
   const wOff = await mkWorkout(H_SCOPE, block, 'Tuesday day');
@@ -268,7 +231,7 @@ async function fixture(tx: VerifyTx) {
   await schedule(wHidden, MONDAY, 2);
   await schedule(w1, SUNDAY, 0);
   await schedule(wOff, TUESDAY, 0);
-  const hiddenBlock = await mkTemplateBlock(H_SCOPE, 'verify-11b-h-hidden');
+  const hiddenBlock = await mkTemplateBlock(exec, H_SCOPE, 'verify-11b-h-hidden');
   const wHiddenBlock = await mkWorkout(H_SCOPE, hiddenBlock, 'Old day');
   await schedule(wHiddenBlock, MONDAY, 0);
 
@@ -331,7 +294,7 @@ async function fixture(tx: VerifyTx) {
     .where(eq(schema.programBlocks.id, hiddenBlock));
 
   // Household F: a fully valid block of its own on Monday, and a hidden workout.
-  const fBlock = await mkTemplateBlock(F_SCOPE, 'verify-11b-f');
+  const fBlock = await mkTemplateBlock(exec, F_SCOPE, 'verify-11b-f');
   const fw = await mkWorkout(F_SCOPE, fBlock, 'Their day');
   const fwHidden = await mkWorkout(F_SCOPE, fBlock, 'Their old day');
   await schedule(fw, MONDAY, 0);
@@ -493,9 +456,11 @@ async function proof(name: string, body: (f: Fixture, tx: VerifyTx) => Promise<v
         f: await sessionsOnForeignWorkouts(tx),
         g: await entriesOnForeignPrescriptions(tx),
         pair: await entriesOnAnotherWorkoutsPrescriptions(tx),
+        sessionType: await workoutSessionsOfAnotherType(tx),
+        dayRole: await workoutSessionsWithADayRole(tx),
       },
-      { f: [], g: [], pair: [] },
-      `FAM-1 11b ${name}: the (f), (g) and mismatched-pair detectors read nothing`,
+      { f: [], g: [], pair: [], sessionType: [], dayRole: [] },
+      `FAM-1 11b ${name}: lane A's (f), (g), mismatched-pair and workout-session detectors read nothing`,
     );
   });
   console.log(`✓ FAM-1 11b ${name}`);
