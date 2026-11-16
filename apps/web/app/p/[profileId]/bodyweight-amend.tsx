@@ -245,7 +245,14 @@ export function BodyweightAmend({
           variant={clears ? 'destructive' : 'default'}
           disabled={pending}
           aria-label={clears && !pending ? BODYWEIGHT_COPY.clearLabel : undefined}
-          className="flex-1"
+          // The destructive variant's own fill (`bg-destructive/10`) puts its red text under AA even on
+          // a plain surface (a11y.spec.ts scans this state), so Clear keeps the red text and a red
+          // edge on the page's own background, and its hover stays a faint tint.
+          className={
+            clears
+              ? 'border-destructive/60 hover:bg-destructive/5 dark:hover:bg-destructive/10 flex-1 bg-transparent dark:bg-transparent'
+              : 'flex-1'
+          }
         >
           {pending
             ? clears
