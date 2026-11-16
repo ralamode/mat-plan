@@ -21,8 +21,10 @@ const REPO = resolve(WEB_DIR, '../..');
  * It also pins that `apps/web` names neither ownership helper yet: the privacy docs say no app path
  * writes these tables, and this is what keeps that sentence true until lane P changes it.
  */
-describe('the program tables stay dark (FAM-1 4a-i)', () => {
-  const TABLES = 'programBlocks|workouts|blockDayWorkouts';
+describe('the program tables stay dark (FAM-1 4a-i, 4b)', () => {
+  // `prescriptions` and `prescriptionQuantities` since FAM-1 4b: 0025 adds six columns and a table,
+  // and its header's "no request-path statement in the deploy window" is this scan.
+  const TABLES = 'programBlocks|workouts|blockDayWorkouts|prescriptions|prescriptionQuantities';
   const PATTERNS: Record<string, RegExp> = {
     insert: new RegExp(`\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`),
     'bare select': new RegExp(
