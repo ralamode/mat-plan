@@ -866,13 +866,15 @@ describe('a quantity needs its unit (C16)', () => {
     expect(select.getAttribute('aria-invalid')).toBe('true');
     fireEvent.change(select, { target: { value: 'lb' } });
     expect(select.getAttribute('aria-invalid')).toBeNull();
-    expect(
-      within(card)
-        .getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`))
-        .getAttribute('aria-invalid'),
-    ).toBeNull();
     save();
     await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
+    // What is sent: the typed number, under the unit chosen.
+    const sent = vi
+      .mocked(all.saveWorkout)
+      .mock.calls[0]![0].items.find(
+        (item) => item.prescriptionClientId === bench.prescriptionClientId,
+      )!;
+    expect(sent.quantities).toMatchObject([{ unit: 'lb', value: 25 }]);
   });
 
   it('the bar counts the fields to fix', async () => {
@@ -889,5 +891,14 @@ describe('a quantity needs its unit (C16)', () => {
     save();
     // The contract-pinned sentence, once.
     await waitFor(() => expect(alerts()).toEqual(['2 fields need fixing before saving.']));
+    // Choosing a unit clears both of the card's refusals in one write.
+    const select = document.getElementById(unitFieldId(bench.prescriptionClientId))!;
+    fireEvent.change(select, { target: { value: 'lb' } });
+    expect(select.getAttribute('aria-invalid')).toBeNull();
+    expect(
+      within(card)
+        .getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`))
+        .getAttribute('aria-invalid'),
+    ).toBeNull();
   });
 });
