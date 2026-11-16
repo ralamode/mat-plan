@@ -228,9 +228,13 @@ export type ProgramView = z.infer<typeof programViewSchema>;
  * Whether an athlete has started on a program by `today`: their `since` is today or earlier.
  * `since` may be after today (Put on, starting tomorrow), and then they are listed but not started.
  *
- * One rule, three readers: the page's "since" or "starts" wording, what Take off does (someone who
- * has not started simply leaves; someone who has stays through today), and the preview's fake.
- * Both days are `isoDaySchema` text, which sorts as the calendar does.
+ * One rule, three readers: the page's "since" or "starts" wording, the first half of what Take off
+ * does (someone who has not started simply leaves), and the preview's fake. Both days are
+ * `isoDaySchema` text, which sorts as the calendar does.
+ *
+ * ⚠️ **"Started" does not by itself mean Take off keeps them through today.** A start dated today
+ * with nothing logged under it is undone by Take off as well (`takeOffSchema`); read what Take off
+ * did from its answer, not from this.
  */
 export function hasStarted(athlete: { since: string }, today: string): boolean {
   return athlete.since <= today;
@@ -284,7 +288,15 @@ export const newItemSchema = z.object({
 });
 export type NewItem = z.infer<typeof newItemSchema>;
 
-/** Put someone on a program. `from` is today or tomorrow; the action checks it against its own clock. */
+/**
+ * Put someone on a program. `from` is today or tomorrow; the action checks it against its own clock.
+ *
+ * **Someone already on it is skipped, with one exception: an athlete whose last day is today**
+ * (Take off was tapped). Putting them on undoes the Take off: their last day is cleared and they
+ * stay on with no gap, one stretch, whatever `from` says (maintainer, 2026-11-16). So the dialog
+ * lists such an athlete as available, marked "last day today"; it finds them by joining
+ * `candidates` (where they are still `on`) with `athletes` (where `lastDay` is set).
+ */
 export const assignDraftSchema = z.object({
   programPublicId: uuidSchema,
   profilePublicIds: z.array(uuidSchema).min(1).max(MAX_HOUSEHOLD_ATHLETES).refine(distinct),
@@ -292,7 +304,18 @@ export const assignDraftSchema = z.object({
 });
 export type AssignDraft = z.infer<typeof assignDraftSchema>;
 
-/** Take an athlete off a program, after today. */
+/**
+ * Take an athlete off a program. What it does depends on where their start stands:
+ *
+ * - **Not started** (`since` after today): the start is removed. They were never on it.
+ * - **Started today, nothing logged under it yet**: the start is removed too, as if Put on had not
+ *   been tapped (maintainer, 2026-11-16: a same-day Put on is undoable). "Nothing logged" means no
+ *   live row of that athlete today in a workout of this program; a row ticked and un-ticked does
+ *   not count.
+ * - **Otherwise**: they stay on through today, and today is their last day.
+ *
+ * The answer says which: `lastDay` is today, or `null` when the start was removed.
+ */
 export const takeOffSchema = z.object({
   programPublicId: uuidSchema,
   profilePublicId: uuidSchema,
@@ -314,11 +337,25 @@ export const programOrderSchema = z.object({
 });
 export type ProgramOrder = z.infer<typeof programOrderSchema>;
 
-/** Copy a workout into a program, optionally onto weekdays. `clientId` is one copy attempt. */
+/**
+ * Copy a workout into a program, optionally onto weekdays. `clientId` is one copy attempt.
+ *
+ * **`name` is the copy's name, when the person gave one** (maintainer, 2026-11-16). A copy into the
+ * workout's own program always needs a different name, so the dialog shows a Name field there,
+ * prefilled with `copyName(name)` (`./pieces`: the name and " (copy)", cut to fit). Left out, the
+ * copy takes that default in its own program and the workout's own name in another.
+ * ⚠️ Unlike the contract's other optional texts, a blank `name` is NOT "left out": it is `invalid`.
+ * A Name field the person emptied must not quietly fall back to the default; leave the key out to
+ * ask for the default. **A name already used in the program it is copied
+ * into answers `name_taken`, in any program** (maintainer, 2026-11-16: never two workouts with one
+ * name). The dialog then shows the Name field, prefilled with the name and " (copy)", and the
+ * person copies again; it needs no list of the other program's workouts to do that.
+ */
 export const copyDraftSchema = z.object({
   clientId: uuidSchema,
   workoutPublicId: uuidSchema,
   toProgramPublicId: uuidSchema,
+  name: workoutNameSchema.optional(),
   weekdays: z.array(weekdaySchema).max(WEEKDAYS.length).refine(distinct),
   label: slotLabelSchema,
 });
