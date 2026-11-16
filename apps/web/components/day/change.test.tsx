@@ -837,4 +837,41 @@ describe('Change: second-pass fixes', () => {
     act(() => control.setPlan(withSet3(null))); // another phone un-ticked it
     expect(benchTick(3).getAttribute('aria-pressed')).toBe('false');
   });
+
+  it('a ✓ then two Changes before the data had any: the ✓’s late refresh is not another phone', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (a) => ({
+        logRow: async (input) => ({
+          ok: true,
+          entryPublicId: ENTRY_3,
+          values: { ...input.values, reps: input.values.reps ?? 8 },
+        }),
+        amendRow: amendOk,
+        untickRow: a.untickRow,
+      }),
+    });
+    const set3 = () =>
+      within(bench()).getByRole<HTMLInputElement>('textbox', {
+        name: DAY_COPY.fieldLabel(setLabel(3), SPOKEN.lb),
+      });
+    type(set3(), '30');
+    await press(benchTick(3));
+    type(set3(), '35');
+    await leave(set3());
+    type(set3(), '40');
+    await leave(set3());
+    const late: DayPlan = structuredClone(control.plan);
+    late.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[2]!.logged = {
+      ...yesterdayHalfDone.workouts
+        .find((w) => w.name === HEAVY)!
+        .items.find((i) => i.name === BENCH)!.rows[0]!.logged!,
+      entryPublicId: ENTRY_3,
+      values: { reps: 8, quantities: [{ slot: 'primary', unit: 'lb', value: 30 }] },
+    };
+    act(() => control.setPlan(late)); // the ✓'s refresh, from before both Changes
+    expect(set3().value).toBe('40');
+  });
 });
