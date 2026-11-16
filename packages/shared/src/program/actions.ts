@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { keyBySelf } from '../enums';
 import type { TrackingType } from '../movements';
-import type { RowAmend, RowResult, RowRetick, RowUntick, RowWrite } from './day-shapes';
+import type { RowAmend, RowRefusal, RowResult, RowRetick, RowUntick, RowWrite } from './day-shapes';
 import type {
   AssignDraft,
   CopyDraft,
@@ -41,6 +41,38 @@ export const PROGRAM_REFUSAL = keyBySelf(PROGRAM_REFUSALS);
 /** What a program write resolves to: `{ ok: true }` plus what it made, or a typed refusal. */
 export type ProgramResult<T extends object = object> =
   ({ ok: true } & T) | { ok: false; reason: ProgramRefusal };
+
+/**
+ * **What a transport answers before the action's own work starts**, in the contract's words. A
+ * transport is whatever carries a call to an action: the web app's Server Actions today
+ * (`enterMutation`, `apps/web/app/p/mutation-entry.ts`), an API route later. Each one checks the
+ * caller, then the rate limit, then hands the input to the schema; these are the two refusals that
+ * can come out of the first two checks.
+ *
+ * - **No session answers `not_found`**, the same answer as an id from another household and an id
+ *   that does not exist. A caller must not be able to tell the three apart (ADR 0006: 404, never
+ *   403), so there is no "signed out" or "forbidden" member in either refusal list, and none may be
+ *   added for this.
+ * - **Over the rate limit answers `retry`.** The limit is checked before the input is parsed and
+ *   before anything is read or written, so nothing happened and the same `clientId` may be sent
+ *   again.
+ *
+ * Both words are members of `PROGRAM_REFUSALS` and of `ROW_REFUSALS` (the `satisfies` below is that
+ * check), so one refusal value is a valid `ProgramResult` and a valid `RowResult`.
+ *
+ * An input the schema refuses is the action's own answer, after these: `invalid` for a program
+ * write, `bad_value` for a row write.
+ */
+export const TRANSPORT_REFUSALS = {
+  noSession: 'not_found',
+  rateLimited: 'retry',
+} as const satisfies Record<string, ProgramRefusal & RowRefusal>;
+
+/** A transport's refusal: assignable to every `ProgramResult` and to `RowResult`. */
+export type TransportRefusal = {
+  ok: false;
+  reason: (typeof TRANSPORT_REFUSALS)[keyof typeof TRANSPORT_REFUSALS];
+};
 
 /**
  * Each member's input has a schema in `./program-shapes` (`createProgramSchema`,
