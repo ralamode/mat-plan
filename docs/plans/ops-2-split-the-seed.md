@@ -171,7 +171,7 @@ the one production call site by source: the same protection, already shipped.
 
 ### D4 · The ramp expansion leaves production (Q6)
 
-**Recommended: delete it.** The schedule has been `[]` since V1-6b-1, the seed is its only consumer,
+**Decided: delete it** _(maintainer, 2026-11-16, Q6)_. The schedule has been `[]` since V1-6b-1, the seed is its only consumer,
 and FAM-1 D10 already decided that authored household config does not reach production through a seed.
 Kept only for fixture databases, it would be a household-scoped extraction, a test-only `schedule`
 parameter, a sandbox step and two mutations, all for code that writes zero rows anywhere. PR 1 deletes
@@ -217,7 +217,7 @@ delete's step 5 proves profile counts are zero. A tombstone is a hidden row, and
 shape (scrub `name` and `routine_config`) also kept `birthdate`, `avatar`, `pin_hash`, `kind`, the
 timestamps and `archived_at`. So Q2 has three options:
 
-- **(a) SEC-6's production re-key runs before the first seed-id deletion (recommended).** The family's
+- **(a) SEC-6's production re-key runs before the first seed-id deletion — decided** _(maintainer, 2026-11-16)_. The family's
   rows then carry ordinary UUIDv7s and are hard-deleted like anyone's. Old code can at worst re-create
   **role-named fixture rows** under the seed ids (no live household) or throw (another live household):
   junk, not personal data, removable with D10's correction shape. No tombstone, no notice change, and
@@ -343,6 +343,7 @@ Plus the rules the section states:
 | `docs/plans/fam-1-family-program.md`                          | EDIT     | OPS-2 PR 1's guest row in the seam table (`write-path.md`).                                                                                                                                                                                                                                                           |
 | `docs/plan.md`                                                | EDIT     | OPS-2 row: the personal name, the `PROGRAM_SEED` clause, PR states. SEC-6 row: D9's fix, acceptance, gate and the `ID-1` item it owes.                                                                                                                                                                                |
 | `docs/milestones/beta-1.md`                                   | EDIT     | The "no test athletes" box; row 7 → two PRs; the OPS-2 description (personal name, `PROGRAM_SEED`) and the table note on the first program write; the step chart.                                                                                                                                                     |
+| `docs/tech-debt.md`                                           | EDIT     | Close "The seed's ramp-target expansion reads every household's kid profiles" (D4, Q6).                                                                                                                                                                                                                               |
 | `docs/status.md`, `docs/roadmap.md`, changelog                | EDIT/NEW | "Status rides with the work"; the order in § Where this sits.                                                                                                                                                                                                                                                         |
 
 ### PR 2 · `fix/ops-2-2-fixture-athlete` (~140 lines; after PR 1)
@@ -425,17 +426,17 @@ guarded `UPDATE … SET deleted_at = NULL, updated_at = now()` by `public_id`.
 
 ## Downstream: what the sibling drafts must reconcile
 
-| Draft  | Cites                                                                       | Becomes                                                                                                                |
-| ------ | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| PRIV-3 | waits on "OPS-2 PR 1b"                                                      | OPS-2 PR 1                                                                                                             |
-| PRIV-3 | takes `SEED_HOUSEHOLD_WRITE_LOCK` (`OPS-2` D6)                              | withdrawn (D6); a lock against OPS-3's restore, if wanted, is PRIV-3's and OPS-3's to define                           |
-| PRIV-3 | the lift check as "M4"                                                      | M3, § "What lifts the preconditions"                                                                                   |
-| PRIV-3 | D6 tombstones "agree with OPS-2 D8"; old code "throws with nothing written" | D8 is re-opened (Q2); today's code against a tombstone runs **green** with nothing written                             |
-| PRIV-3 | proof P8 calls `seedProductionDatabase` and asserts "OPS-2's skip line"     | `seed({ fixtures: false })`; there is no skip line (D11's production line instead)                                     |
-| PRIV-3 | the seed-household row: "no refusal; a tombstone instead"                   | stands only if Q2 picks (b); under (a) no production row carries a seed id by the time it is deleted                   |
-| OPS-3  | takes the lock (D6); relies on D8 tombstones                                | as for PRIV-3. Production's seed writes nothing household-scoped, so a restored household is never topped up by a push |
-| OPS-3  | A-S7: assert the reference table set                                        | taken up: proof A's derived set                                                                                        |
-| SEC-6  | gated on `PROGRAM_SEED` leaving prod                                        | gated on OPS-2 PR 1, with the restated fix and acceptance (D9); on Q2's critical path if (a)                           |
+| Draft  | Cites                                                                       | Becomes                                                                                                                                           |
+| ------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PRIV-3 | waits on "OPS-2 PR 1b"                                                      | OPS-2 PR 1                                                                                                                                        |
+| PRIV-3 | takes `SEED_HOUSEHOLD_WRITE_LOCK` (`OPS-2` D6)                              | withdrawn (D6); a lock against OPS-3's restore, if wanted, is PRIV-3's and OPS-3's to define                                                      |
+| PRIV-3 | the lift check as "M4"                                                      | M3, § "What lifts the preconditions"                                                                                                              |
+| PRIV-3 | D6 tombstones "agree with OPS-2 D8"; old code "throws with nothing written" | Q2 chose (a): no tombstones. PRIV-3's D6 and its tombstone writer go; seed-id rows are re-keyed by SEC-6 first                                    |
+| PRIV-3 | proof P8 calls `seedProductionDatabase` and asserts "OPS-2's skip line"     | `seed({ fixtures: false })`; there is no skip line (D11's production line instead)                                                                |
+| PRIV-3 | the seed-household row: "no refusal; a tombstone instead"                   | withdrawn: Q2 chose (a), so no production row carries a seed id by the time it is deleted, and no tombstone is written                            |
+| OPS-3  | takes the lock (D6); relies on D8 tombstones                                | as for PRIV-3. Production's seed writes nothing household-scoped, so a restored household is never topped up by a push                            |
+| OPS-3  | A-S7: assert the reference table set                                        | taken up: proof A's derived set                                                                                                                   |
+| SEC-6  | gated on `PROGRAM_SEED` leaving prod                                        | gated on OPS-2 PR 1, with the restated fix and acceptance (D9); **on the deletion path** (Q2 (a)), and must respect `ID-1`'s lifetime `public_id` |
 
 ## Alternatives considered
 
@@ -455,18 +456,20 @@ guarded `UPDATE … SET deleted_at = NULL, updated_at = now()` by `public_id`.
 - Household creation for a fork or an invited family (the invite row).
 - A real path for a non-empty ramp schedule to reach a household (if Q6 picks (a)).
 
-## Open questions (maintainer decisions)
+## Maintainer decisions
+
+All answered; none is open.
 
 - **Q1 (D7) — answered by #432:** preview gets fixtures.
-- **Q2 (D8, with PRIV-3).** What makes a seed-id deletion safe from old code: **(a)** SEC-6's
-  production re-key first, then ordinary hard deletes (**recommended**); **(b)** a fully constant
-  tombstone plus PRIV-3's notice and inventory edits; or **(c)** the 30-day window and prose?
+- **Q2 (D8) — (a), re-key first** _(maintainer, 2026-11-16)_. SEC-6's production-only re-key runs
+  before the first seed-id deletion; the family's rows get ordinary ids and are hard-deleted like
+  anyone's. **No tombstones.** SEC-6 joins the deletion path and must respect `ID-1`: a `public_id` is
+  the athlete's for life. How a one-time re-key squares with that is SEC-6's to answer in its plan.
 - **Q3 (D5) — answered by #432** (FAM-1 D10): `PROGRAM_SEED` no longer reaches production.
-- **Q4 (D10).** Remove the test athlete with the guarded soft-delete correction (**recommended**), an
-  in-app archive, or a hard delete?
+- **Q4 (D10) — the guarded soft-delete correction** _(maintainer, 2026-11-16)_.
 - **Q5 — answered:** two PRs.
-- **Q6 (D4).** The ramp expansion: **(a)** delete it (**recommended**); **(b)** keep it for fixture
-  databases only, household-scoped; or **(c)** keep it in production for the seed household?
+- **Q6 (D4) — (a), delete it** _(maintainer, 2026-11-16)_. It also closes `tech-debt.md`'s "The seed's
+  ramp-target expansion reads every household's kid profiles", which PR 1 removes.
 
 ## Review-response log (adversarial panel)
 
@@ -513,9 +516,8 @@ Five lenses. **Four blocking findings, all accepted**; three lenses found the fi
 | R2-31 | correctness                   | Patches 10 and 45 will not apply after D1                                                                                                                                                        | **accepted**              | Named in the mutations row                                                                                                        |
 | R2-32 | correctness                   | PR 2's undo should set `updated_at`                                                                                                                                                              | **accepted**              | Rollback                                                                                                                          |
 
-**Open blocking items after reconciliation:** none in this plan's own design. **Two maintainer
-decisions block PR 1 (Q2 shapes its runbook text, Q6 its code); Q4 blocks PR 2.** Q2 is joint with
-PRIV-3 and, under (a), with SEC-6.
+**Open blocking items after reconciliation:** none. The maintainer answered Q2 (a), Q4 and Q6 (a) on
+2026-11-16 (§ Maintainer decisions).
 
 ### Round 1 (2026-11-13, the first draft)
 
