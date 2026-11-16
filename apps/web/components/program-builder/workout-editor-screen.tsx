@@ -31,6 +31,7 @@ import { moveDown, moveUp } from '@/lib/routine/editor';
 
 import {
   addedText,
+  capText,
   BUILDER_COPY,
   EDITOR_COPY,
   ITEM_PICKER_COPY,
@@ -598,7 +599,10 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
             type="button"
             variant={cards.length ? 'ghost' : 'outline'}
             className={CTA_CLASS}
+            aria-disabled={cards.length >= MAX_WORKOUT_ITEMS || undefined}
             onClick={() => {
+              // A full workout says so here, rather than opening a picker where every row refuses.
+              if (cards.length >= MAX_WORKOUT_ITEMS) return report(capText(MAX_WORKOUT_ITEMS));
               pickerReturn.current = addItemsRef.current;
               setPickerOpen(true);
             }}

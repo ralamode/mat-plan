@@ -178,9 +178,20 @@ flowchart LR
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.
-    - Differences from v12, each a decision above: the selection survives Close; the form takes
-      over the sheet; the type has no default; added cards have no numbers (v12 prefilled 3 × 10 and
-      20 lb).
+    - **Focus and messages**: after Create or "Select …", focus is on that item's row, scrolled into
+      view; after Cancel, on the create button; an inactive Create moves to what is missing. A
+      message (created, selected, the cap) is seen in the footer and heard in the sheet's status,
+      and the next search clears it. Closing the sheet drops the form; the ticks and items made
+      stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
+      `DOUBLE_TAP_MS` of the form closing is ignored (Create sat in the same place). A name the
+      same-movement rule folds to nothing ("S") is refused.
+    - Differences from v12, each a decision above or recorded here: the selection survives Close;
+      the form takes over the sheet; the type has no default; added cards have no numbers (v12
+      prefilled 3 × 10 and 20 lb); a ticked row is outlined with a ✓ box, not green (the `done`
+      green means "logged"); rows are grouped under the picker's headings, not one A–Z list; the
+      search is pinned in the header; a ✕ in the header and Close in the footer; the footer lists
+      the picks ("2 picked: …", at most two lines) and the cap; an item already on a card says
+      "already in this workout"; with no match, the list empties under "New item: “…”".
 
 ## Traps
 

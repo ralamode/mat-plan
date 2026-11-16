@@ -368,7 +368,10 @@ export const ITEM_PICKER_COPY = {
   title: 'Add items',
   open: '+ Add items',
   newItem: '+ New item',
-  noMatch: 'No item matches. Make it with “+ New item”.',
+  noMatch: 'No item matches. Make it a new item with the button above.',
+  searchLabel: 'Search items',
+  searchPlaceholder: 'Search items',
+  giveAName: 'Give the item a name with a letter or a number in it.',
   pickToAdd: 'Pick items to add',
   alreadyIn: 'already in this workout',
   formTitle: 'New item',
@@ -391,7 +394,8 @@ export const newItemLabel = (typed: string) =>
 export const addItemsText = (n: number) => `Add ${itemCountText(n)}`;
 
 /** The picked items, in the order they were picked, above the Add button. */
-export const pickedText = (names: readonly string[]) => formatList(names);
+export const pickedText = (names: readonly string[]) =>
+  `${names.length} picked: ${formatList(names)}`;
 
 /** Why a tap selected nothing: the workout is full. */
 export const capText = (max: number) => `A workout holds at most ${max} items.`;

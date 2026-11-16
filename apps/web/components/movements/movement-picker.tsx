@@ -45,6 +45,10 @@ const SHEET_ID = 'movement-picker';
 // `${SHEET_ID}-…` re-typed at the second site is how a label stops pointing at its field, silently.
 const SEARCH_ID = `${SHEET_ID}-search`;
 const TYPED_HINT_ID = `${SHEET_ID}-typed-hint`;
+/** Multi mode's create button: the caller returns focus to it from its form. */
+export const PICKER_CREATE_ID = `${SHEET_ID}-create`;
+/** A multi row's option id, so a caller can focus the row it just selected. */
+export const OPTION_ID_ATTR = 'data-option-id';
 
 /** What the picker needs to know about the day's program, as IDS on both sides (panel 2 · 6). */
 export type TodaysProgramForPicker = {
@@ -75,6 +79,11 @@ export type MultiPick = {
   footerAction: ReactNode;
   /** A message for the sheet's status region, in place of the count while it is set. */
   notice?: string;
+  /** Every change of the search text; the caller clears a stale `notice` with it. */
+  onQueryChange?: () => void;
+  /** The search's label and placeholder: the caller's noun ("items"), not "movements". */
+  searchLabel: string;
+  searchPlaceholder: string;
   /**
    * The caller's own body and footer in place of the search and the list (the new-item form). The
    * list, the selection and the query are kept underneath.
@@ -341,14 +350,17 @@ export function MovementPicker({
         multiple?.takeover ? undefined : (
           <div>
             <label className="sr-only" htmlFor={SEARCH_ID}>
-              {COPY.searchLabel}
+              {multiple?.searchLabel ?? COPY.searchLabel}
             </label>
             <input
               ref={searchRef}
               id={SEARCH_ID}
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                multiple?.onQueryChange?.();
+              }}
               onKeyDown={(e) => {
                 // Enter picks only when unambiguous, and NEVER fires "use as typed" (UX3 N8).
                 if (e.key !== 'Enter') return;
@@ -375,7 +387,7 @@ export function MovementPicker({
               autoCapitalize="words"
               spellCheck={false}
               enterKeyHint="search"
-              placeholder={COPY.searchPlaceholder}
+              placeholder={multiple?.searchPlaceholder ?? COPY.searchPlaceholder}
               aria-describedby={sheetStatusId(SHEET_ID)}
               className={cn(INPUT_CLASS, 'w-full')}
             />
@@ -542,8 +554,11 @@ function CreateTop({
   return (
     <div className="mb-4 flex flex-col gap-1">
       <Button
+        id={PICKER_CREATE_ID}
         type="button"
-        variant={typed === '' || !loud ? 'ghost' : 'outline'}
+        // The plain "+ New item" is a button that looks like one (the prototype's), and so is the
+        // only path when nothing matches; with candidates above, it is quiet.
+        variant={typed === '' || loud ? 'outline' : 'ghost'}
         size="lg"
         aria-disabled={issue !== null || undefined}
         aria-describedby={issue || noMatch ? TYPED_HINT_ID : undefined}
@@ -623,11 +638,12 @@ function OptionList({ rows, mode }: { rows: Row[]; mode: RowMode }) {
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
+                {...{ [OPTION_ID_ATTR]: option.publicId }}
                 onClick={() => mode.onPick(option)}
-                className={cn(
-                  'focus-visible:ring-ring hover:bg-accent grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:ring-3',
-                  checked && 'bg-accent',
-                )}
+                // A ticked row is OUTLINED, not filled: muted text on the accent fill is 4.34:1,
+                // under AA (docs/design.md, the rail's open row). The box carries the state, and
+                // the `done` green is not used: it means "logged" (docs/design.md).
+                className="focus-visible:ring-ring hover:border-border aria-checked:border-foreground grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left outline-none focus-visible:ring-3"
               >
                 <span className="flex min-w-0 flex-col">
                   <span className="text-base wrap-anywhere">{option.name}</span>
@@ -638,7 +654,7 @@ function OptionList({ rows, mode }: { rows: Row[]; mode: RowMode }) {
                 <span
                   aria-hidden
                   className={cn(
-                    'flex size-6 items-center justify-center rounded border text-sm',
+                    'border-muted-foreground flex size-6 items-center justify-center rounded border text-sm',
                     checked && 'border-primary bg-primary text-primary-foreground',
                   )}
                 >

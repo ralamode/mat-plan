@@ -100,7 +100,7 @@ function Harness({
 }
 
 const open = () => act(() => void trigger().click());
-const search = () => screen.getByRole('searchbox', { name: COPY.searchLabel });
+const search = () => screen.getByRole('searchbox');
 let lastTyped = '';
 const type = (value: string) => {
   lastTyped = value.trim();
@@ -632,6 +632,8 @@ describe('multi-select', () => {
             onCreate,
             createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
             noMatchHint: 'No item matches.',
+            searchLabel: 'Search items',
+            searchPlaceholder: 'Search items',
             describe: () => 'Weight × reps',
             footerAction: <button type="button">Add {selected.length}</button>,
             notice,

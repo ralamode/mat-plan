@@ -133,8 +133,13 @@ path and **creating** the deliberate one.
     - every caller-specific word comes in through the props, so this file holds none of the
       builder's copy;
     - the caller's `footerAction` sits above the picker's own Close, which stays last;
-    - `notice` takes the status region; `takeover` replaces the search and the list (the caller's
-      form), and coming back from it clears the search.
+    - `notice` takes the status region until the caller clears it (`onQueryChange` fires on every
+      search change); `takeover` replaces the search and the list (the caller's form), and coming
+      back from it clears the search;
+    - the search's label and placeholder are the caller's (`searchLabel`, `searchPlaceholder`);
+    - a ticked row is outlined (`aria-checked:border-foreground`), never filled: muted text on the
+      accent fill is under AA. Rows carry `data-option-id`, and the create button has
+      `PICKER_CREATE_ID`, so the caller can put focus back on them.
 
 ## Traps
 

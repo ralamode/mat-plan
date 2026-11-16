@@ -4,6 +4,7 @@ import {
   matchMovementOptions,
   MAX_WORKOUT_ITEMS,
   MOVEMENT_NAME_MAX,
+  movementNameKey,
   newItemSchema,
   TRACKING_TYPE_LABELS,
   TRACKING_TYPES,
@@ -13,9 +14,13 @@ import {
 import { useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 
-import { MovementPicker } from '@/components/movements/movement-picker';
+import {
+  MovementPicker,
+  OPTION_ID_ATTR,
+  PICKER_CREATE_ID,
+} from '@/components/movements/movement-picker';
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 
 import {
@@ -37,6 +42,7 @@ import {
 import { FieldLabel } from '../field-label';
 import { NameField } from '../name-field';
 import { useAttempt } from '../use-attempt';
+import { DOUBLE_TAP_MS } from '../workout-editor-screen';
 
 /**
  * The item's stored name from `newItem`'s answer. ⚠️ Contract change C8 (roadmap thread, 2026-11-16)
@@ -62,7 +68,8 @@ const WARNING_ID = 'new-item-warning';
  *   the editor, so a Close or a back swipe keeps the ticks _(maintainer, 2026-11-16)_ and a reopened
  *   picker lists what was just made.
  * - **The new-item form takes over the sheet** _(maintainer, 2026-11-16)_: search and list hide,
- *   Create and Cancel are pinned where a thumb reaches with the keyboard up.
+ *   and Create and Cancel sit in the sheet's footer (pinned, except under a 480px visual viewport,
+ *   where the sheet lets the footer scroll; `sheet.tsx`).
  * - **What it tracks has no default** _(maintainer, 2026-11-16)_: Create is inactive until a type is
  *   chosen, because the type can never be changed and the item never deleted.
  * - **A name already in the list selects that item**, by the picker's own rule
@@ -104,7 +111,15 @@ export function ItemPicker({
   onCreated: (option: MovementOptionDTO) => void;
   onAdd: () => void;
 }) {
-  const [notice, setNotice] = useState('');
+  const [notice, setNoticeNow] = useState('');
+  /** Cleared first and set a frame later, so the same message twice is said twice. */
+  const setNotice = (message: string) => {
+    setNoticeNow('');
+    if (message) requestAnimationFrame(() => setNoticeNow(message));
+  };
+  /** When the form last closed: a tap within `DOUBLE_TAP_MS` of it is the same tap, not Add. */
+  const formClosedAt = useRef(0);
+  const SUMMARY_ID = 'item-picker-picked';
   const [form, setForm] = useState<{
     name: string;
     type: TrackingType | '';
@@ -154,26 +169,50 @@ export function ItemPicker({
     form && cleaned && !existing
       ? (() => {
           const parsed = newItemSchema.shape.name.safeParse(cleaned);
-          return parsed.success ? null : (parsed.error.issues[0]?.message ?? null);
+          if (!parsed.success) return parsed.error.issues[0]?.message ?? null;
+          // A name the "same movement" rule folds to nothing ("S") could be added twice; contract
+          // C8 refuses it in `newItemSchema`, and until then this is that rule.
+          return movementNameKey(cleaned) === '' ? COPY.giveAName : null;
         })()
       : null;
   const canCreate =
     !!form && !form.pending && !!cleaned && (existing ? true : !nameIssue && !!form.type);
 
   const openForm = (typed: string) => {
+    setNotice('');
     flushSync(() => setForm({ name: typed, type: '', error: null, pending: false }));
     // In the same tap, so a phone raises the keyboard (program-builder trap).
     nameRef.current?.focus();
   };
 
-  const closeForm = () => setForm(null);
+  /**
+   * Back to the list, with focus on `focusId`'s row (the item just made or selected, scrolled into
+   * view) or on the create button (Cancel). The control that had focus unmounts with the form, and
+   * the sheet itself has no visible focus ring.
+   */
+  const closeForm = (focusId?: string) => {
+    // The frame's time is on the same clock as a tap's `event.timeStamp`.
+    requestAnimationFrame((time) => {
+      formClosedAt.current = time;
+    });
+    flushSync(() => setForm(null));
+    const target = focusId
+      ? document.querySelector<HTMLElement>(`[${OPTION_ID_ATTR}="${focusId}"]`)
+      : document.getElementById(PICKER_CREATE_ID);
+    target?.focus();
+    target?.scrollIntoView?.({ block: 'nearest' });
+  };
+
+  /** A Create that cannot run says why, by moving to what is missing. */
+  const showMissing = () => (cleaned ? typeRef.current : nameRef.current)?.focus();
 
   async function create() {
-    if (!form || !canCreate) return;
+    if (!form) return;
+    if (!canCreate) return showMissing();
     if (existing) {
       select(existing);
       setNotice(existedText(existing.name, TRACKING_TYPE_LABELS[existing.trackingType]));
-      return closeForm();
+      return closeForm(existing.publicId);
     }
     const trackingType = form.type as TrackingType;
     const mine = begin();
@@ -208,7 +247,7 @@ export function ItemPicker({
         ? existedText(option.name, TRACKING_TYPE_LABELS[option.trackingType])
         : createdText(option.name),
     );
-    closeForm();
+    closeForm(option.publicId);
   }
 
   const takeover = form
@@ -243,14 +282,16 @@ export function ItemPicker({
                 max={MOVEMENT_NAME_MAX}
                 placeholder={COPY.namePlaceholder}
                 autoCapitalize="words"
-                error={
-                  form.error ??
-                  (existing
-                    ? alreadyListedText(existing.name, TRACKING_TYPE_LABELS[existing.trackingType])
-                    : nameIssue)
-                }
+                enterKeyHint="next"
+                error={form.error ?? nameIssue}
                 onChange={(name) => setForm({ ...form, name, error: null })}
               />
+              {/* Not a refusal: the name is fine, and Create becomes "Select …". */}
+              {existing ? (
+                <p className={`mt-1 text-sm ${NAME_WRAP_CLASS}`}>
+                  {alreadyListedText(existing.name, TRACKING_TYPE_LABELS[existing.trackingType])}
+                </p>
+              ) : null}
             </div>
             {existing ? null : (
               <div className="flex flex-col gap-1">
@@ -280,7 +321,7 @@ export function ItemPicker({
               </div>
             )}
             {existing ? null : (
-              <p id={WARNING_ID} className="text-sm">
+              <p id={WARNING_ID} className={`text-sm ${NAME_WRAP_CLASS}`}>
                 {newItemWarning(cleaned)}
               </p>
             )}
@@ -292,9 +333,11 @@ export function ItemPicker({
               type="submit"
               form={FORM_ID}
               size="lg"
-              className={`w-full text-base ${PENDING_CLASS}`}
+              className={`h-auto w-full text-base whitespace-normal ${NAME_WRAP_CLASS} ${PENDING_CLASS}`}
               aria-disabled={!canCreate || undefined}
-              aria-describedby={existing ? undefined : WARNING_ID}
+              aria-describedby={
+                existing ? undefined : form.type ? WARNING_ID : `${TYPE_HINT_ID} ${WARNING_ID}`
+              }
             >
               {form.pending
                 ? COPY.creating
@@ -307,7 +350,7 @@ export function ItemPicker({
               variant="outline"
               size="lg"
               className="w-full text-base"
-              onClick={closeForm}
+              onClick={() => closeForm()}
             >
               {BUILDER_COPY.cancel}
             </Button>
@@ -319,7 +362,14 @@ export function ItemPicker({
   return (
     <MovementPicker
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(next) => {
+        // A closed sheet drops the form and its message; the ticks and items made stay.
+        if (!next) {
+          setForm(null);
+          setNoticeNow('');
+        }
+        onOpenChange(next);
+      }}
       title={COPY.title}
       data={{ options }}
       alreadyIn={{ ids: inWorkout, label: COPY.alreadyIn }}
@@ -332,11 +382,21 @@ export function ItemPicker({
         noMatchHint: COPY.noMatch,
         describe: (option) => TRACKING_TYPE_LABELS[option.trackingType],
         notice,
+        onQueryChange: () => setNoticeNow(''),
+        searchLabel: COPY.searchLabel,
+        searchPlaceholder: COPY.searchPlaceholder,
         takeover,
         footerAction: (
           <div className="flex flex-col gap-2">
-            {pickedNames.length ? <p className="text-sm">{pickedText(pickedNames)}</p> : null}
-            {full ? (
+            {/* Seen as well as heard: a different type than the one chosen, the cap. */}
+            {notice ? <p className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>{notice}</p> : null}
+            {/* At most two lines, so the list keeps its room; the whole order is read with Add. */}
+            {pickedNames.length ? (
+              <p id={SUMMARY_ID} className="line-clamp-2 text-sm wrap-anywhere">
+                {pickedText(pickedNames)}
+              </p>
+            ) : null}
+            {full && notice !== capText(MAX_WORKOUT_ITEMS) ? (
               <p className="text-muted-foreground text-sm">{capText(MAX_WORKOUT_ITEMS)}</p>
             ) : null}
             <Button
@@ -344,7 +404,10 @@ export function ItemPicker({
               size="lg"
               className={`w-full text-base ${PENDING_CLASS}`}
               aria-disabled={selected.length === 0 || undefined}
-              onClick={() => {
+              aria-describedby={pickedNames.length ? SUMMARY_ID : undefined}
+              onClick={(event) => {
+                // The form's last button sat here a moment ago: a double tap is not an Add.
+                if (event.timeStamp - formClosedAt.current < DOUBLE_TAP_MS) return;
                 if (selected.length) onAdd();
               }}
             >
