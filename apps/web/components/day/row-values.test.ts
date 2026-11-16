@@ -1,4 +1,4 @@
-import { QUANTITY_SLOT } from '@mat-plan/shared';
+import { QUANTITY_SLOT, quantityCeiling, UNIT_CODES } from '@mat-plan/shared';
 import { everyTypeOnce } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
@@ -46,8 +46,11 @@ describe('readTyped', () => {
   });
 
   it('refuses any typed number in a unit with no declared ceiling (`quantityCeiling`’s rule)', () => {
-    const plainCount: DayItem = { ...item('Vest weight'), unit: 'count' };
-    expect(readTyped(plainCount, '3')).toEqual({ ok: false, problem: 'out_of_range' });
+    // Whichever unit has no ceiling today (step 3 gave `count` one): found, not named.
+    const uncapped = UNIT_CODES.find((unit) => quantityCeiling(unit) === undefined);
+    expect(uncapped, 'every unit has a ceiling now: this test has nothing to hold').toBeDefined();
+    const noCeiling: DayItem = { ...item('Vest weight'), unit: uncapped! };
+    expect(readTyped(noCeiling, '3')).toEqual({ ok: false, problem: 'out_of_range' });
   });
 
   it.each([
