@@ -177,16 +177,19 @@ export function ItemPicker({
   const cleaned = form ? cleanName(form.name) : '';
   /** The item this name already is, by the picker's own rule (`listedAs`: name or alias). */
   const existing = form && cleaned ? listedAs(options, cleaned) : undefined;
-  const nameIssue =
-    form && cleaned && !existing
-      ? (() => {
-          const parsed = newItemSchema.shape.name.safeParse(cleaned);
-          if (!parsed.success) return parsed.error.issues[0]?.message ?? null;
-          // A name the "same movement" rule folds to nothing ("S") could be added twice; contract
-          // C8 refuses it in `newItemSchema`, and until then this is that rule.
-          return movementNameKey(cleaned) === '' ? COPY.giveAName : null;
-        })()
-      : null;
+  const nameIssue = !form
+    ? null
+    : !cleaned
+      ? COPY.giveAName
+      : !existing
+        ? (() => {
+            const parsed = newItemSchema.shape.name.safeParse(cleaned);
+            if (!parsed.success) return parsed.error.issues[0]?.message ?? null;
+            // A name the "same movement" rule folds to nothing ("S") could be added twice; contract
+            // C8 refuses it in `newItemSchema`, and until then this is that rule.
+            return movementNameKey(cleaned) === '' ? COPY.giveAName : null;
+          })()
+        : null;
   const canCreate =
     !!form && !form.pending && !!cleaned && (existing ? true : !nameIssue && !!form.type);
 
@@ -268,7 +271,9 @@ export function ItemPicker({
       // A name refusal is the name's; a failure to reach the server is not, so it is not marked
       // on the field.
       if (refusal.footer) setNotice(refusal.footer);
-      nameRef.current?.focus();
+      // A name refusal goes back to the name; a failure stays on Create, to try again, with no
+      // keyboard raised for a name that was fine.
+      (refusal.field ? nameRef.current : createRef.current)?.focus();
       return;
     }
     const option = known ?? made(result);
@@ -369,6 +374,8 @@ export function ItemPicker({
         ),
         footer: (
           <div className="flex flex-col gap-2">
+            {/* Seen, not only heard: a failure to reach the server leaves the form as it was. */}
+            {notice ? <p className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>{notice}</p> : null}
             <Button
               ref={createRef}
               type="submit"

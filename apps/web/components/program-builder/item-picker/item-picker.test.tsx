@@ -674,5 +674,97 @@ describe('the item picker (FAM-1 9)', () => {
       search('Bear');
       await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
     });
+
+    it('Create, Cancel, Create again, both answers land: the item is listed once', async () => {
+      const answers: ((value: unknown) => void)[] = [];
+      editor({ newItem: vi.fn(() => new Promise((resolve) => answers.push(resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      search('Bear crawl');
+      fireEvent.click(
+        await waitFor(() =>
+          within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }),
+        ),
+      );
+      typeReps();
+      pressCreate();
+      answers[0]!({
+        ok: true,
+        itemPublicId: NEW_ID,
+        trackingType: TRACKING_TYPE.reps,
+        existed: false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      answers[1]!({
+        ok: true,
+        itemPublicId: NEW_ID,
+        trackingType: TRACKING_TYPE.reps,
+        existed: true,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(within(sheet()).getAllByRole('checkbox', { name: /^Bear crawl/ })).toHaveLength(1);
+    });
+
+    it('a failure to reach the server is seen in the form, and the name is not blamed', async () => {
+      editor({ newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() =>
+        expect(
+          within(sheet())
+            .queryAllByText(ITEM_PICKER_COPY.failed)
+            .some((node) => !node.closest('.sr-only')),
+        ).toBe(true),
+      );
+      expect(
+        within(sheet()).getByLabelText(ITEM_PICKER_COPY.name).getAttribute('aria-invalid'),
+      ).toBeNull();
+      expect(document.activeElement).toBe(
+        within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }),
+      );
+    });
+
+    it('a create answered after Escape ticks nothing in the closed sheet', async () => {
+      let answer!: (value: unknown) => void;
+      editor({ newItem: vi.fn(() => new Promise((resolve) => (answer = resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.keyDown(sheet(), { key: 'Escape' });
+      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      openPicker();
+      expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
+      search('Bear');
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
+    });
+
+    it('Create while creating sends nothing more', async () => {
+      const newItem = vi.fn(() => new Promise(() => {}));
+      editor({ newItem: newItem as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.creating }));
+      expect(newItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('a missing type is marked, and an empty name says why', () => {
+      editor();
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      pressCreate();
+      expect(within(sheet()).getByText(ITEM_PICKER_COPY.giveAName)).toBeTruthy();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'Bear crawl' },
+      });
+      pressCreate();
+      expect(
+        within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks).getAttribute('aria-invalid'),
+      ).toBe('true');
+    });
   });
 });

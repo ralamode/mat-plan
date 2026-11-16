@@ -686,7 +686,12 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
         inWorkout={new Set(cards.map((card) => card.item.itemPublicId))}
         room={MAX_WORKOUT_ITEMS - cards.length}
         newItem={actions.newItem}
-        onCreated={(option) => setMade((all) => [...all, option])}
+        // Once per item: a retried Create can answer twice for the same one.
+        onCreated={(option) =>
+          setMade((all) =>
+            all.some((made) => made.publicId === option.publicId) ? all : [...all, option],
+          )
+        }
         onAdd={addPicked}
       />
     </>
