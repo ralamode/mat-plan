@@ -192,8 +192,9 @@ flowchart LR
       and the next search clears it. Closing the sheet drops the form; the ticks and items made
       stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
       `DOUBLE_TAP_MS` of the tap that closed the form is ignored (Add sits under the left half of the
-      form's Cancel; both times are `event.timeStamp`s, one clock). A double tap on Cancel's right
-      half lands on Close, which closes the sheet: accepted, since Close keeps the ticks. A name the same-movement rule folds to nothing ("S")
+      form's Cancel; both times are `event.timeStamp`s, one clock); a second tap on Create lands on
+      the footer's text lines. A double tap on Cancel's right half lands on Close, which closes the
+      sheet: accepted, since Close keeps the ticks _(#478's review, 2026-11-16)_. A name the same-movement rule folds to nothing ("S")
       is refused by the contract's own `newItemSchema` (C8), shown once Create is pressed rather
       than on the first keystroke; an empty name is the lane's plainer "Give the item a name." **A create in flight ends** with Cancel, a closed sheet or a
       fresh form (invariant 11): its answer leaves the screen alone, but a new item it made is still

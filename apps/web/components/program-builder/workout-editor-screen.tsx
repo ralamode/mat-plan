@@ -359,11 +359,12 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     pickerReturn.current = document.getElementById(
       cardHeadingId(added[0]!.item.prescriptionClientId),
     );
+    // Said once focus is back (`onReturned`): while the sheet is open the bar is hidden from a
+    // screen reader. Only after an Add, never after a plain Close. Set BEFORE the close, so a
+    // close that runs at once still finds it.
+    justAdded.current = added.length;
     setPickerOpen(false);
     quiet();
-    // Said once focus is back (`onReturned`): while the sheet is open the bar is hidden from a
-    // screen reader. Only after an Add, never after a plain Close.
-    justAdded.current = added.length;
   }
 
   /** The group's rest, typed on its last card. */

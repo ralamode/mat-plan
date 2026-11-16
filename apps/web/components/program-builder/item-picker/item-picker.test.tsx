@@ -90,7 +90,6 @@ const row = (name: string) =>
   within(sheet()).getByRole('checkbox', { name: new RegExp(`^${name}`) });
 const cardNames = () =>
   [...document.querySelectorAll('ol > li h3')].map((heading) => heading.textContent);
-/** The footer's line of picked names. */
 /** The picks so far: the line Add is described by. */
 const picked = () => {
   const id = within(sheet())
@@ -654,6 +653,29 @@ describe('the item picker (FAM-1 9)', () => {
         name: 'Bear crawl',
         trackingType: TRACKING_TYPE.reps,
       });
+    });
+
+    it('an item another parent made takes its stored name, not the one typed', async () => {
+      editor({
+        newItem: vi.fn().mockResolvedValue({
+          ok: true,
+          itemPublicId: NEW_ID,
+          name: 'Bear Crawl',
+          trackingType: TRACKING_TYPE.reps,
+          existed: true,
+        }),
+      });
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'bear crawl' },
+      });
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(row('Bear Crawl')).toBeTruthy());
+      tapClock().tap(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(cardNames()).toEqual(['Bear Crawl']);
     });
 
     it('an invalid name with a type chosen: Create moves to the name', () => {
