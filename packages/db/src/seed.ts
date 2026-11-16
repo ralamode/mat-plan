@@ -172,9 +172,10 @@ export interface SeedOptions {
 }
 
 /**
- * `db:seed`'s whole decision, in one tested function (`scripts/seed.ts` passes its result straight to
- * `seed`): the flag from the environment, and, when it is on, the allowlist on the URL the seed
- * connects with. Throws `FIXTURES_TARGET_REFUSED` before anything connects.
+ * `db:seed`'s whole decision, in one tested function: the flag from the environment, and, when it is
+ * on, the allowlist on the URL the seed connects with. Throws `FIXTURES_TARGET_REFUSED` before
+ * anything connects. `scripts/seed.ts` passes its result straight to `seed`, and `seed.test.ts` pins
+ * that call site by source, so neither the function nor its one caller can drop the guard silently.
  */
 export function resolveSeedOptions(
   env: Readonly<Record<string, string | undefined>>,

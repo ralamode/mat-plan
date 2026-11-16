@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -73,7 +75,7 @@ describe('assertFixturesTargetAllowed: an allowlist on the URL itself', () => {
   });
 });
 
-// `scripts/seed.ts` is one call to this, so deleting the guard or hard-coding `fixtures` is a test edit.
+// The function's behaviour; the next describe pins that `scripts/seed.ts` actually calls it.
 describe('resolveSeedOptions: what db:seed decides before it connects', () => {
   const PROD = 'postgres://u:p@ep-prod.us-east-2.aws.neon.tech/mat_plan?sslmode=require';
   const LOCAL = 'postgres://u:p@localhost:5432/mat_plan';
@@ -91,5 +93,26 @@ describe('resolveSeedOptions: what db:seed decides before it connects', () => {
     expect(() => resolveSeedOptions({ [SEED_FIXTURES_ENV]: '1' }, PROD)).toThrow(
       new Error(FIXTURES_TARGET_REFUSED),
     );
+  });
+});
+
+/**
+ * The CALL SITE, pinned by source (as `seed-fixtures-is-contained.test.ts` pins the harness): the
+ * unit tests above prove `resolveSeedOptions`, and this proves `db:seed` decides through it and
+ * nothing else. Without it, `seed(createDb(pool), { fixtures: true })` in the script would pass
+ * every test and every proof.
+ */
+describe('scripts/seed.ts decides through resolveSeedOptions', () => {
+  const script = readFileSync(new URL('../scripts/seed.ts', import.meta.url), 'utf8');
+
+  it('resolves its options from the environment and the URL it connects with', () => {
+    expect(script).toContain('const options = resolveSeedOptions(process.env, url);');
+    expect(script).toContain('createDbPool(url)');
+  });
+
+  it('passes exactly those options to seed(), and calls seed() once', () => {
+    expect(script).toContain('await seed(createDb(pool), options);');
+    expect(script.match(/\bseed\(/g)).toHaveLength(1);
+    expect(script).not.toMatch(/fixtures\s*:/);
   });
 });
