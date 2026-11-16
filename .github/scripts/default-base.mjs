@@ -15,6 +15,8 @@
  * Used by check-feature-guides.mjs and check-status-touched.mjs. Self-test: default-base.test.sh.
  */
 import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const FALLBACK = 'origin/main';
 
@@ -65,5 +67,17 @@ export function defaultBase(explicit) {
 
 // `node .github/scripts/default-base.mjs [base]` prints the base, for the bash guards
 // (hold-the-bar's check.sh).
-if (import.meta.url === `file://${process.argv[1]}`)
-  process.stdout.write(defaultBase(process.argv[2]));
+// Resolved through realpath and pathToFileURL, so a path with a space, a symlink or macOS's /tmp
+// (a symlink to /private/tmp) still matches.
+// When imported (or under `node -e`, where argv[1] is not a script), argv[1] may not be a path at
+// all, so a failed realpath means "not run as the script".
+const runAsScript = () => {
+  try {
+    return (
+      !!process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+    );
+  } catch {
+    return false;
+  }
+};
+if (runAsScript()) process.stdout.write(defaultBase(process.argv[2]));

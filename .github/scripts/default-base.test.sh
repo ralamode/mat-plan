@@ -47,6 +47,10 @@ else printf '✗ in CI with no base: exit %s, gh-calls %s\n%s\n' "$code" "$([ -e
 fake_gh 'feat/parent' 0
 got="$(cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_ACTIONS= node "$helper" 2>/dev/null)"
 [ "$got" = 'origin/feat/parent' ] && printf '✓ %s\n' 'the CLI prints the base' || { printf '✗ CLI printed %s\n' "$got"; fails=$((fails + 1)); }
+# …also from a path with a space, reached through a symlink (macOS's /tmp is one).
+mkdir -p "$tmp/with space" && ln -s "$helper" "$tmp/with space/link.mjs"
+got="$(cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_ACTIONS= node "$tmp/with space/link.mjs" 2>/dev/null)"
+[ "$got" = 'origin/feat/parent' ] && printf '✓ %s\n' 'the CLI works through a symlink and a space' || { printf '✗ CLI via symlink printed [%s]\n' "$got"; fails=$((fails + 1)); }
 if grep -q 'default-base.mjs' "$here/../../.claude/skills/hold-the-bar/check.sh"; then printf '✓ %s\n' 'hold-the-bar uses it'
 else printf '✗ hold-the-bar does not use it\n'; fails=$((fails + 1)); fi
 fake_gh 'main' 0
