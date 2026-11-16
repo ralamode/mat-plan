@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProgramActions, ProgramView } from '@mat-plan/shared';
+import { hasStarted, type ProgramActions, type ProgramView } from '@mat-plan/shared';
 import { useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,6 @@ import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import {
   athleteHint,
   BUILDER_COPY,
-  hasStarted,
   PENDING_CLASS,
   takenOffText,
   takeOffFailedText,
