@@ -1,8 +1,8 @@
-import type { ProgramView } from '@mat-plan/shared';
+import { MONDAY_FIRST, type ProgramView } from '@mat-plan/shared';
 
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 
-import { BUILDER_COPY, MONDAY_FIRST, weekdayName } from './builder-text';
+import { BUILDER_COPY, weekdayName } from './builder-text';
 
 const HEADING_ID = 'program-week';
 
