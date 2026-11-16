@@ -293,6 +293,22 @@ describe('ProgramLine and the Program order dialog', () => {
     expect(items()).toEqual(numbered([FIRST, SECOND]));
   });
 
+  it('a refusal on a third queued save shows the order the server took, not an older re-read', async () => {
+    const { reorder, answer } = deferredReorder();
+    const view = mountLine(todayTwoPrograms, withReorder(todayTwoPrograms, reorder));
+    fireEvent.click(orderButton());
+    fireEvent.click(arrow('down', FIRST.name)); // save 1: [second, first]
+    fireEvent.click(arrow('up', FIRST.name)); // queued: [first, second]
+    await answer(0, { ok: true }); // save 2 starts
+    // Save 1's re-read lands while save 2 is in flight.
+    const afterOne = { ...todayTwoPrograms, currentPrograms: [SECOND, FIRST] };
+    view.rerender(<ProgramLine plan={afterOne} actions={withReorder(afterOne, reorder)} />);
+    fireEvent.click(arrow('down', FIRST.name)); // queued: [second, first]
+    await answer(1, { ok: true }); // save 2 took [first, second]; save 3 starts
+    await answer(2, { ok: false, reason: PROGRAM_REFUSAL.retry });
+    expect(items()).toEqual(numbered([FIRST, SECOND]));
+  });
+
   it('a refusal after an earlier success puts back the order the server took, not the first one', async () => {
     let calls = 0;
     const reorderPrograms = vi.fn(async (): Promise<ProgramResult> =>

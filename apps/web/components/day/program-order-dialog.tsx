@@ -178,12 +178,13 @@ export function ProgramOrderDialog({
     }
     saved.current = next;
     arrivedMidSave.current = false;
+    // Every order seen so far is older than this save: none of it may be adopted over it later.
+    settle();
     setError('');
     if (waiting) {
       await save(waiting.order, waiting.moved);
       return;
     }
-    settle();
     setPending(false);
     announce(PROGRAM_COPY.moved(moved.name, next.indexOf(moved) + 1, next.length));
   }
