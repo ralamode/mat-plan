@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 52c5474a..5b08a8e3 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -149,7 +149,6 @@ async function openRowDay(
+     .limit(1);
+   if (!profile) refuse(ROW_REFUSAL.not_found);
+   if (profile.archivedAt !== null) refuse(ROW_REFUSAL.closed_day);
+-  if (!inWritableWindow(args.day, args.today)) refuse(ROW_REFUSAL.closed_day);
+   return profile.id;
+ }
+ 

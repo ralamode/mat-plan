@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/day/scheduled.ts b/packages/db/src/queries/day/scheduled.ts
+index 293d5d68..e321d7b9 100644
+--- a/packages/db/src/queries/day/scheduled.ts
++++ b/packages/db/src/queries/day/scheduled.ts
+@@ -27,7 +27,6 @@ export function scheduledOn(blockId: number, workoutId: number, day: string) {
+   return and(
+     eq(schema.blockDayWorkouts.blockId, blockId),
+     eq(schema.blockDayWorkouts.workoutId, workoutId),
+-    eq(schema.blockDayWorkouts.weekday, localWeekday(day)),
+     isNull(schema.blockDayWorkouts.deletedAt),
+   );
+ }

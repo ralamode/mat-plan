@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index f8c99297..3194f420 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -300,7 +300,6 @@ const RESTORE_SLOT_INDEXES: readonly string[] = [
+   // FAM-1 11b: a program row whose set was ticked again while it was hidden. Like practice, it has no
+   // pre-check and no `heldBy` (a program row has no swap): the restore's UPDATE hits the partial row
+   // arbiter inside the item's savepoint, and this catch answers `slot_taken` (`verify/day.ts` 10).
+-  ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX,
+ ];
+ 
+ /**

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 52c5474a..dcd1266c 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -107,7 +107,6 @@ export function programRowOf(profileId: number, day: string) {
+ /** The natural key of `SESSION_WORKOUT_DAY_UNIQUE_INDEX`. Callers add `deleted_at IS NULL`. */
+ export function workoutSessionSlot(profileId: number, day: string, workoutId: number) {
+   return and(
+-    eq(schema.sessions.profileId, profileId),
+     eq(schema.sessions.activityDate, day),
+     eq(schema.sessions.workoutId, workoutId),
+   );

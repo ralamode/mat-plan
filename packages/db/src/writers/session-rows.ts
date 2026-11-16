@@ -69,7 +69,8 @@ export async function insertEntrySetRows(
   // The dimension is derived from each quantity's unit rather than assumed: a movement may be logged
   // in `in` (a box jump) or `sec` (a hold), and a Duration row is in `min`. Deriving keeps the pair
   // consistent with `units(code, dimension)`, which the composite FK checks — a hard-coded `'mass'`
-  // here would be an FK violation surfacing as a 500 on a gym floor (mutation 120).
+  // here would be an FK violation surfacing as a 500 on a gym floor. `verify.ts`'s GAP-3 hold (`sec`)
+  // and `verify/day.ts` 4 (every tracking type) both write a non-mass quantity through here.
   //
   // A set with no quantity (pure bodyweight, a band, a Check, Reps) writes NO quantity row — a mode
   // is not a measurement, and a row with a NULL value would be the EAV smell the child table avoids.

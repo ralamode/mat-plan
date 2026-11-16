@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 52c5474a..aa782c69 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -192,7 +192,6 @@ export async function classifyRowHolder(
+         programRowOf(profileId, write.day),
+         eq(schema.entries.prescriptionSet, write.set),
+         eq(schema.prescriptions.publicId, write.prescriptionPublicId),
+-        eq(schema.workouts.publicId, write.workoutPublicId),
+       )}, false)`,
+     })
+     .from(schema.entries)

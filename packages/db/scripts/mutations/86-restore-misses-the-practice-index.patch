@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
-index f8d402be..5359a5b1 100644
+index f8c99297..fdaa8528 100644
 --- a/packages/db/src/writers/hide.ts
 +++ b/packages/db/src/writers/hide.ts
-@@ -291,7 +291,6 @@ export async function restoreHidden(
+@@ -296,7 +296,6 @@ export async function restoreHidden(
   */
  const RESTORE_SLOT_INDEXES: readonly string[] = [
    BODYWEIGHT_DAY_UNIQUE_INDEX,
 -  PRACTICE_DAY_UNIQUE_INDEX,
- ];
- 
- /**
+   // FAM-1 11b: a program row whose set was ticked again while it was hidden. Like practice, it has no
+   // pre-check and no `heldBy` (a program row has no swap): the restore's UPDATE hits the partial row
+   // arbiter inside the item's savepoint, and this catch answers `slot_taken` (`verify/day.ts` 10).

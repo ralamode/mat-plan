@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 52c5474a..ae3d0775 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -199,7 +199,7 @@ export async function classifyRowHolder(
+     .leftJoin(schema.prescriptions, eq(schema.prescriptions.id, schema.entries.prescriptionId))
+     .leftJoin(schema.sessions, eq(schema.sessions.id, schema.entries.sessionId))
+     .leftJoin(schema.workouts, eq(schema.workouts.id, schema.sessions.workoutId))
+-    .where(eq(schema.entries.clientId, write.clientId))
++    .where(and(eq(schema.entries.clientId, write.clientId), isNull(schema.entries.deletedAt)))
+     .limit(1);
+   if (!holder) return { held: false };
+   return {
