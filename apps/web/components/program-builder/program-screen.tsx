@@ -2,7 +2,7 @@
 
 import type { ProgramActions, ProgramView } from '@mat-plan/shared';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { NAV_LINK_CLASS } from '@/lib/constants';
@@ -24,7 +24,7 @@ import { WorkoutsList } from './workouts-list';
  *
  * A client component because it holds the page's one status line: Rename and Take off both report
  * there. The line sits under the "Used by" sentence, where the prototype puts its banner, and is
- * mounted empty with its height reserved, so a message neither goes unannounced nor shifts the page.
+ * mounted empty, so a message is announced; it takes the prototype's banner look once it has one.
  *
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
  * hides its control (plan §6). `takeOff` arrives that way, at step 15.
@@ -33,6 +33,11 @@ export type ProgramScreenProps = { program: ProgramView; actions: ProgramActions
 
 export function ProgramScreen({ program, actions }: ProgramScreenProps) {
   const [status, setStatus] = useState('');
+  // Cleared first, so the same message twice is announced twice and the banner blinks.
+  const report = useCallback((message: string) => {
+    setStatus('');
+    if (message) requestAnimationFrame(() => setStatus(message));
+  }, []);
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -43,14 +48,18 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
           programPublicId={program.programPublicId}
           name={program.name}
           renameProgram={actions.renameProgram}
-          onRenamed={() => setStatus(BUILDER_COPY.renamed)}
+          onStatus={report}
         />
         <p className="text-muted-foreground text-sm">
           {usedByText(program.athletes.map((athlete) => athlete.name))}
         </p>
-        <Announcer message={status} className="min-h-5 text-sm font-medium" />
+        {/* Mounted empty with no height, as `Announcer` asks; a banner once it has something. */}
+        <Announcer
+          message={status}
+          className={status ? 'bg-muted rounded-lg px-3 py-2 text-sm font-medium' : 'h-0'}
+        />
       </div>
-      <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={setStatus} />
+      <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={report} />
       <WorkoutsList program={program} />
       <WeekShell program={program} />
     </div>

@@ -3,6 +3,7 @@
 import { newId, PROGRAM_NAME_MAX, type ProgramActions } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
+import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { CTA_CLASS } from '@/lib/constants';
@@ -71,9 +72,9 @@ export function CreateProgram({
         className={CTA_CLASS}
         onClick={() => {
           clientId.current = newId();
-          setOpen(true);
-          // After the form mounts.
-          requestAnimationFrame(() => fieldRef.current?.focus());
+          // Focus inside the tap, so iOS raises the keyboard: the form must exist by then.
+          flushSync(() => setOpen(true));
+          fieldRef.current?.focus();
         }}
       >
         {BUILDER_COPY.createProgram}

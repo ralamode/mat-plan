@@ -2,10 +2,11 @@ import type { ProgramView } from '@mat-plan/shared';
 import Link from 'next/link';
 
 import { buttonVariants } from '@/components/ui/button';
-import { CTA_CLASS, NAME_WRAP_CLASS, NAV_ROW_CLASS } from '@/lib/constants';
+import { CTA_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { BUILDER_COPY, copiedFromText, workoutSummary } from './builder-text';
+import { CHEVRON_CLASS, GROUP_LIST_CLASS, GROUP_ROW_LINK_CLASS } from './classes';
 import { newWorkoutPath, workoutPath } from './routes';
 
 const HEADING_ID = 'program-workouts';
@@ -25,12 +26,12 @@ export function WorkoutsList({ program }: { program: ProgramView }) {
         {BUILDER_COPY.workouts}
       </h2>
       {workouts.length ? (
-        <ul className="flex flex-col gap-2">
+        <ul className={GROUP_LIST_CLASS}>
           {workouts.map((workout) => (
-            <li key={workout.workoutPublicId} className="flex items-stretch gap-2">
+            <li key={workout.workoutPublicId} className="flex items-stretch">
               <Link
                 href={workoutPath(programPublicId, workout.workoutPublicId)}
-                className={cn(NAV_ROW_CLASS, 'min-w-0 flex-1')}
+                className={cn(GROUP_ROW_LINK_CLASS, 'min-w-0 flex-1')}
               >
                 <span className="flex items-center gap-3">
                   <span className="flex min-w-0 flex-1 flex-col">
@@ -44,7 +45,7 @@ export function WorkoutsList({ program }: { program: ProgramView }) {
                       </span>
                     ) : null}
                   </span>
-                  <span aria-hidden="true" className="text-muted-foreground shrink-0">
+                  <span aria-hidden="true" className={CHEVRON_CLASS}>
                     ›
                   </span>
                 </span>

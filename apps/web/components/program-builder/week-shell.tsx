@@ -34,7 +34,7 @@ export function WeekShell({ program }: { program: ProgramView }) {
                     <li key={slot.workoutPublicId} className={`text-sm ${NAME_WRAP_CLASS}`}>
                       {slot.label ? (
                         <>
-                          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                          <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                             {slot.label}
                           </span>
                           <span aria-hidden="true"> · </span>

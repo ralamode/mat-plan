@@ -2,6 +2,7 @@
 
 import { PROGRAM_NAME_MAX, type ProgramActions } from '@mat-plan/shared';
 import { useRef, useState, type FormEvent } from 'react';
+import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
@@ -17,19 +18,20 @@ const NAME_ID = 'program-name';
  * Rename swaps the heading's row for a stacked form: at 360px a field beside its buttons would show
  * about 20 of the name's 60 characters. Beyond the prototype it has Cancel and Escape, and the
  * counter plan §8 asks of every name. On a save, the heading comes back, focus returns to Rename
- * and `onRenamed` reports it; an unchanged name just closes. A refusal keeps the form open, says
+ * and `onStatus` reports it; an unchanged name just closes. A refusal keeps the form open, says
  * why under the field and focuses it.
  */
 export function ProgramHeader({
   programPublicId,
   name,
   renameProgram,
-  onRenamed,
+  onStatus,
 }: {
   programPublicId: string;
   name: string;
   renameProgram: ProgramActions['renameProgram'];
-  onRenamed: () => void;
+  /** Reports to the page's status line; `''` clears it. */
+  onStatus: (message: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -60,13 +62,13 @@ export function ProgramHeader({
     setPending(false);
     if (!result.ok) return refuse(nameRefusal(result.reason));
     close();
-    onRenamed();
+    onStatus(BUILDER_COPY.renamed);
   }
 
   if (!editing) {
     return (
       <div className="flex items-start gap-2">
-        <h1 className={`flex-1 text-2xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>
+        <h1 className={`flex-1 py-1.5 text-2xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>
           {name}
         </h1>
         <Button
@@ -75,9 +77,13 @@ export function ProgramHeader({
           className="shrink-0"
           aria-label={`${BUILDER_COPY.rename} ${name}`}
           onClick={() => {
-            setDraft(name);
-            setEditing(true);
-            requestAnimationFrame(() => fieldRef.current?.focus());
+            onStatus('');
+            // Focus inside the tap, so iOS raises the keyboard: the form must exist by then.
+            flushSync(() => {
+              setDraft(name);
+              setEditing(true);
+            });
+            fieldRef.current?.focus();
           }}
         >
           {BUILDER_COPY.rename}

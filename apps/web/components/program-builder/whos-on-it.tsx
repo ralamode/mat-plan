@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 
 import { athleteHint, BUILDER_COPY, takenOffText, takeOffFailedText } from './builder-text';
+import { FOCUS_TARGET_CLASS } from './classes';
 
 const HEADING_ID = 'program-whos-on-it';
 
@@ -62,7 +63,7 @@ export function WhosOnIt({
         id={HEADING_ID}
         ref={headingRef}
         tabIndex={-1}
-        className="text-lg font-semibold outline-none"
+        className={`text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
       >
         {BUILDER_COPY.whosOnIt}
       </h2>
@@ -79,7 +80,7 @@ export function WhosOnIt({
                   else rows.current.delete(athlete.profilePublicId);
                 }}
                 tabIndex={-1}
-                className="flex min-w-0 flex-1 flex-col outline-none"
+                className={`flex min-w-0 flex-1 flex-col ${FOCUS_TARGET_CLASS}`}
               >
                 <span className={`font-medium ${NAME_WRAP_CLASS}`}>{athlete.name}</span>
                 <span className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
@@ -98,7 +99,9 @@ export function WhosOnIt({
                   aria-disabled={pending === athlete.profilePublicId || undefined}
                   onClick={() => takeOffAthlete(athlete)}
                 >
-                  {BUILDER_COPY.takeOff}
+                  {pending === athlete.profilePublicId
+                    ? BUILDER_COPY.takingOff
+                    : BUILDER_COPY.takeOff}
                 </Button>
               ) : null}
             </li>

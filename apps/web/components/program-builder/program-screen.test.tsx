@@ -151,6 +151,17 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     );
   });
 
+  it('Take off says it is working while the action is pending', () => {
+    const takeOff = vi.fn(() => new Promise<never>(() => {}));
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    const button = screen.getByRole('button', { name: 'Take off Athlete One' });
+    fireEvent.click(button);
+    expect(button.textContent).toBe(BUILDER_COPY.takingOff);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(button);
+    expect(takeOff).toHaveBeenCalledTimes(1);
+  });
+
   it('a Take off that fails keeps the button, refocuses it and says so', async () => {
     const takeOff = vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry });
     render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);

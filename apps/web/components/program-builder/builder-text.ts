@@ -28,6 +28,7 @@ export const BUILDER_COPY = {
   whosOnIt: 'Who’s on it',
   noOneOnIt: 'No one yet.',
   takeOff: 'Take off',
+  takingOff: 'Taking off…',
   workouts: 'Workouts',
   noWorkouts: 'No workouts yet.',
   newWorkout: '+ New workout',

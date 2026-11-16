@@ -1,10 +1,11 @@
 import type { ProgramActions, ProgramList } from '@mat-plan/shared';
 import Link from 'next/link';
 
-import { APP_HOME_PATH, NAME_WRAP_CLASS, NAV_LINK_CLASS, NAV_ROW_CLASS } from '@/lib/constants';
+import { APP_HOME_PATH, NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
 import { formatList } from '@/lib/i18n/plural';
 
 import { BUILDER_COPY } from './builder-text';
+import { CHEVRON_CLASS, GROUP_LIST_CLASS, GROUP_ROW_LINK_CLASS } from './classes';
 import { CreateProgram } from './create-program';
 import { programPath } from './routes';
 
@@ -31,11 +32,11 @@ export function ProgramsListScreen({ programs, actions }: ProgramsListScreenProp
       </Link>
       <h1 className="text-2xl font-semibold tracking-tight">{BUILDER_COPY.programs}</h1>
       {programs.length ? (
-        <ul className="flex flex-col gap-2">
+        <ul className={GROUP_LIST_CLASS}>
           {programs.map((program) => (
             <li key={program.programPublicId}>
-              <Link href={programPath(program.programPublicId)} className={NAV_ROW_CLASS}>
-                {/* `NAV_ROW_CLASS` stacks its children, so the chevron needs a row of its own. */}
+              <Link href={programPath(program.programPublicId)} className={GROUP_ROW_LINK_CLASS}>
+                {/* The row link stacks its children, so the chevron needs a row of its own. */}
                 <span className="flex items-center gap-3">
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className={`font-semibold ${NAME_WRAP_CLASS}`}>{program.name}</span>
@@ -45,7 +46,7 @@ export function ProgramsListScreen({ programs, actions }: ProgramsListScreenProp
                         : BUILDER_COPY.noOneYet}
                     </span>
                   </span>
-                  <span aria-hidden="true" className="text-muted-foreground shrink-0">
+                  <span aria-hidden="true" className={CHEVRON_CLASS}>
                     ›
                   </span>
                 </span>

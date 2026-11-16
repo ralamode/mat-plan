@@ -48,6 +48,7 @@ invariants here.
 | `apps/web/components/program-builder/name-field.tsx`            | A name input with its counter (outside the label, by `aria-describedby`) and its refusal. Step 8 reuses it.           |
 | `apps/web/components/program-builder/builder-text.ts`           | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.              |
 | `apps/web/components/program-builder/routes.ts`                 | The builder's paths. The screens link with them; 7b builds its pages at them.                                         |
+| `apps/web/components/program-builder/classes.ts`                | The builder's class strings: the prototype's grouped list (one border, dividers), a focus target's ring, the chevron. |
 | `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions })`; `picker` is the picker's own `MovementPickerData`. A stub until 8. |
 | `apps/web/components/program-builder/*-screen.test.tsx`         | Each stub's own output. The step that fills a stub in replaces its test.                                              |
 | `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.  |
