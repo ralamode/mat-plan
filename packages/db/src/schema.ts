@@ -288,13 +288,29 @@ export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
 export const PRACTICE_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_practice';
 
 /**
- * FAM-1 4a-ii's three arbiters (ADR 0007 A2 §6, A3), named once so step 11b's writer and `hide.ts`'s
- * restore check match them by const, as they match `BODYWEIGHT_DAY_UNIQUE_INDEX`. Renaming one means
- * a new migration too.
+ * FAM-1 4a-ii's three arbiters (ADR 0007 A2 §6, A3), named once so code that must name one matches it
+ * by const, as it matches `BODYWEIGHT_DAY_UNIQUE_INDEX`. Renaming one means a new migration too.
+ * ⚠️ Step 11b's row writer infers the session and superset arbiters with a bare `ON CONFLICT`, so today
+ * only `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX` has a code consumer (`hide.ts`'s restore list); the other
+ * two are kept for a restore check or an explicit target, not because anything reads them yet.
  */
 export const SESSION_WORKOUT_DAY_UNIQUE_INDEX = 'uq_sessions_profile_day_workout';
 export const SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX = 'uq_supersets_session_prescription_group';
 export const ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX = 'uq_entries_session_prescription_set';
+
+/**
+ * A household's block slug key, named once so lane P's program writers (`writers/program/program-name.ts`,
+ * `lostSlugRace`) recognise a lost slug race by const. Renaming it means a new migration too.
+ */
+export const PROGRAM_BLOCK_SLUG_UNIQUE_INDEX = 'uq_program_blocks_household_slug';
+
+/**
+ * FAM-1 step 5's three assignment keys, named once so lane P's put-on, take-off and reorder writers
+ * (6c, 6d) recognise a 23505 by const. Renaming one means a new migration too. See `programAssignments`.
+ */
+export const ASSIGNMENT_START_UNIQUE_INDEX = 'uq_program_assignments_profile_block_from';
+export const ASSIGNMENT_OPEN_UNIQUE_INDEX = 'uq_program_assignments_profile_block_open';
+export const ASSIGNMENT_ORDER_UNIQUE_INDEX = 'uq_program_assignments_profile_idx';
 
 /**
  * FAM-1 4b's two template-prescription keys and the quantity slot key, named once so step 6a's
@@ -1071,7 +1087,7 @@ export const programBlocks = pgTable(
   },
   (t) => [
     index('idx_program_blocks_household').on(t.householdId), // covering index for the household FK
-    uniqueIndex('uq_program_blocks_household_slug')
+    uniqueIndex(PROGRAM_BLOCK_SLUG_UNIQUE_INDEX)
       .on(t.householdId, t.slug)
       .where(sql`${t.deletedAt} is null`),
     check('program_blocks_kind_check', sql`${t.kind} in ('legacy', 'template')`),
@@ -1437,5 +1453,119 @@ export const prescriptionTargets = pgTable(
     uniqueIndex('uq_prescription_targets_prescription_profile')
       .on(t.prescriptionId, t.profileId)
       .where(sql`${t.deletedAt} is null`),
+  ],
+);
+
+/**
+ * program_assignment — "this athlete is on this program, from this day, through this day" (FAM-1
+ * step 5; ADR 0007 decision 1 and Amendment 2 §1, §7; SCHED-1 1c as revised). The one link between a
+ * household-built (TEMPLATE) block and an athlete: a template block reaches nobody except through a
+ * row here (A2 §1). Nothing reads or writes it until lane P's put-on (6c); the stay-dark test pins that.
+ *
+ * **Three words, used exactly** (readers in 6c, 6d, 11b and 12a depend on them):
+ * - **open**: `active_to IS NULL`. An INDEX notion only: the two partial keys below are on open rows.
+ * - **on day D**: live (`deleted_at IS NULL`) and `active_from <= D` and (`active_to IS NULL` or
+ *   `D <= active_to`). ⚠️ `active_to` is the INCLUSIVE last day: a program taken off today is still on
+ *   today, and is no longer open. `queries/program-assignments.ts` → `assignmentOnDay` is the ONE
+ *   spelling; due adds a live weekday row for `localWeekday(D)` (`assignmentDueOn`).
+ * - **current as of T**: live and (`active_to IS NULL` or `T <= active_to`): on today, or starting later.
+ *   `DayPlan.currentPrograms` and `ProgramOrder` are over current rows, so `idx` is read and REWRITTEN on
+ *   current rows, a closed-through-today one included, and readers order by `(idx, id)` (A2 §7): on the
+ *   take-off day a closed row and an open one may share an `idx`, because the order key covers open rows.
+ *
+ * **Keys.** `public_id` is the row's address (ASSIGN-1's version guard names it; `(profile, block)` is
+ * ambiguous once closed rows exist). NO `client_id`: put-on carries none (`assignDraftSchema`); the
+ * natural key is `(profile, block, active_from)`. ⚠️ **A hit on it is a replay ONLY if the row it hit is
+ * still open.** Off and on again the same day (`from = today` after a take-off today) hits the CLOSED row,
+ * whose `active_to` the writer must read back: a blind `ON CONFLICT DO NOTHING` would answer ok and leave
+ * the athlete off from tomorrow. Whether such a put-on reopens that row or is refused is 6c's decision.
+ * A second open row for one (profile, block) is refused by the open key; a later row must start after
+ * the earlier one's `active_to`.
+ *
+ * ⚠️ **WRITER-ENFORCED, not schema-enforced** (a choice: a carried `household_id` and composite FKs would
+ * enforce the first two, at the cost of `UNIQUE (id, household_id)` on `profiles` and `program_blocks`;
+ * ADR 0007 chose the writer): the block is a TEMPLATE block (A2 §1: refused by 6c, flagged here by
+ * `db:verify`); the block and the profile are in ONE household; two live rows for one (profile, block)
+ * never cover the same day; every live assignment has at least one live weekday row (FAM-1's put-on
+ * writes all seven). `db:verify` flags each. A reader joins BOTH `profile_id` and `block_id` to the scope:
+ * a stray cross-household row would otherwise show another household's program text on Today.
+ *
+ * PERSONAL DATA (A2 §8): which child is on which program, from and to which day. Both FKs are NO
+ * ACTION: the household delete and the per-athlete erasure delete these rows first (`runbooks.md`
+ * steps 9c, 9d; "Erase one athlete"). Take off is NOT a soft delete (the closed row stays as history); a
+ * program that has not started is soft-deleted instead.
+ */
+export const programAssignments = pgTable(
+  'program_assignments',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    blockId: bigint('block_id', { mode: 'number' })
+      .notNull()
+      .references(() => programBlocks.id),
+    profileId: bigint('profile_id', { mode: 'number' })
+      .notNull()
+      .references(() => profiles.id),
+    idx: integer('idx').notNull(), // the athlete's program order, 0-based (D8); written by the band
+    // NOT NULL: a nullable start would let two identical open rows through the natural key (NULLs are
+    // distinct in a unique index).
+    activeFrom: date('active_from').notNull(),
+    activeTo: date('active_to'), // the INCLUSIVE last day; NULL while open
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_program_assignments_block').on(t.blockId), // covers the block FK, hidden rows too
+    index('idx_program_assignments_profile').on(t.profileId), // covers the profile FK, hidden rows too
+    uniqueIndex(ASSIGNMENT_START_UNIQUE_INDEX)
+      .on(t.profileId, t.blockId, t.activeFrom)
+      .where(sql`${t.deletedAt} is null`),
+    // At most one OPEN row per program (A2 §7). Partial on both conjuncts: an upsert targeting it must
+    // repeat both (docs/lessons.md, 42P10).
+    uniqueIndex(ASSIGNMENT_OPEN_UNIQUE_INDEX)
+      .on(t.profileId, t.blockId)
+      .where(sql`${t.activeTo} is null and ${t.deletedAt} is null`),
+    // One open program per place in the athlete's order (A2 §7); a closed row frees its place.
+    uniqueIndex(ASSIGNMENT_ORDER_UNIQUE_INDEX)
+      .on(t.profileId, t.idx)
+      .where(sql`${t.activeTo} is null and ${t.deletedAt} is null`),
+    check('program_assignments_idx_check', sql`${t.idx} >= 0`),
+    check(
+      'program_assignments_active_range_check',
+      sql`${t.activeTo} is null or ${t.activeTo} >= ${t.activeFrom}`,
+    ),
+  ],
+);
+
+/**
+ * program_assignment_weekday — WHICH DAYS an assignment is due, as rows (ADR 0007 decision 1). Due on D
+ * is a lookup (a live row with `weekday = localWeekday(D)`), never arithmetic. FAM-1's put-on writes all
+ * SEVEN (A2 §7); an athlete's own days are ASSIGN-1's, which owes this table a privacy re-read, because
+ * it then becomes a child's weekly schedule.
+ *
+ * `weekday` is `0 = Sunday … 6 = Saturday`, `localWeekday`'s origin (`WEEKDAYS`); the CHECK inlines the
+ * members and `db:verify` pins it to `WEEKDAYS` both ways, and proves the origin against literals.
+ * No `public_id` (the `block_day_workouts` precedent: nothing outside the server addresses one); its
+ * address is (assignment, weekday). The FK is named explicitly because drizzle's generated name is 67
+ * bytes and Postgres truncates at 63.
+ */
+export const programAssignmentWeekdays = pgTable(
+  'program_assignment_weekdays',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    assignmentId: bigint('assignment_id', { mode: 'number' }).notNull(),
+    weekday: integer('weekday').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    foreignKey({
+      name: 'program_assignment_weekdays_assignment_fkey',
+      columns: [t.assignmentId],
+      foreignColumns: [programAssignments.id],
+    }),
+    index('idx_program_assignment_weekdays_assignment').on(t.assignmentId), // covers the FK, hidden rows too
+    uniqueIndex('uq_program_assignment_weekdays_assignment_weekday')
+      .on(t.assignmentId, t.weekday)
+      .where(sql`${t.deletedAt} is null`),
+    check('program_assignment_weekdays_weekday_check', sql`${t.weekday} in (0, 1, 2, 3, 4, 5, 6)`),
   ],
 );

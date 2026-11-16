@@ -41,6 +41,9 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   exercises done together, and the targets you set (sets, reps, and a weight, time, distance or
   count). These belong to the household, so removing one athlete does not
   remove them; deleting the household does.
+  **Who is on which program**: which athlete is on it, from which day and through which day, and on
+  which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
+  an athlete off a program keeps the record that they were on it.
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
@@ -231,8 +234,8 @@ file — an empty zip looks exactly like a download that failed.
 **If you want everything, ask** and you will be sent a full copy — including anything you have
 cleared or hidden, which the export leaves out, and what Clerk holds about
 your login: your email address, your name, your profile picture, your Google account identifier, and when
-you signed in. And **export before you delete anything** — once a profile is removed, its data can no
-longer be exported, even though it is still in the database.
+you signed in. And **export before you delete anything**: a hidden profile can no longer be exported
+even though it is still in the database, and once an athlete is erased there is nothing left to export.
 
 ## Deleting your data
 
@@ -241,6 +244,17 @@ by mistake, and that is all it does: everything they logged is kept, their page 
 **in your household** who has the link or who looks in Household settings, and their export still works. **The household
 owner archives an athlete; any member of the household can rename and restore one.** An archived
 athlete is kept in full until you restore them, or until you ask us to delete them.
+
+**Ask, and one athlete is erased.** Their profile, every session and set they logged, their weigh-ins,
+readiness, the targets set for them, and which programs they were on and when are **permanently removed
+from the database**. The household owner asks, or an adult athlete may ask about their own profile (the
+owner is told first). The same confirmation, 7-day pause and restore point as a household deletion apply,
+and "What remains afterwards" below applies too. What stays is the household's: the programs it wrote
+(if a program was written for that athlete alone, we will ask whether you want it removed too), any name
+typed into a program, workout or movement, including copies of that text kept on other athletes' logs,
+and every sign-in account. For an athlete, the record of the deletion holds the athlete's internal
+identifier and no login ids. An athlete added through the app can be erased today; the three athletes
+the app started with cannot yet, because setup would put them back.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your

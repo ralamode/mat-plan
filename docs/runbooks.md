@@ -1307,6 +1307,12 @@ UNION ALL SELECT 'prescriptions', count(*) FROM prescriptions WHERE block_id IN 
 -- either: a hidden slot or workout is still a row the delete must remove).
 UNION ALL SELECT 'block_day_workouts', count(*) FROM block_day_workouts WHERE block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'workouts', count(*) FROM workouts WHERE block_id IN (SELECT id FROM b)
+-- FAM-1 5: assignments, by EITHER side (pre-flight (h) makes the two sides agree), and their weekdays.
+UNION ALL SELECT 'program_assignments', count(*) FROM program_assignments
+  WHERE profile_id IN (SELECT id FROM p) OR block_id IN (SELECT id FROM b)
+UNION ALL SELECT 'program_assignment_weekdays', count(*) FROM program_assignment_weekdays
+  WHERE assignment_id IN (SELECT id FROM program_assignments
+    WHERE profile_id IN (SELECT id FROM p) OR block_id IN (SELECT id FROM b))
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
   WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
     (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
@@ -1394,6 +1400,17 @@ child:
 --         JOIN program_blocks b ON b.id = x.block_id
 --        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
 --       (`db:verify` proves both joins find a planted row, `verify/schema.ts` → FAM-1 4a-ii.)
+-- (h) FAM-1 5: an ASSIGNMENT whose athlete and program are in DIFFERENT households, either side in H.
+--       Steps 9c/9d select by `profile_id ∈ H OR block_id ∈ H`, so they would delete another family's
+--       child's assignment (H's block) or leave one of H's children on another family's deleted block.
+--       STOP; with a correction hard-delete the stray assignment and its weekday rows (it is a row about
+--       the other family's child, and no writer can make one: 6c refuses it). No deleted_at filter.
+--       SELECT a.id FROM program_assignments a
+--         JOIN profiles pr ON pr.id = a.profile_id
+--         JOIN program_blocks b ON b.id = a.block_id
+--        WHERE (pr.household_id = (SELECT id FROM h) OR b.household_id = (SELECT id FROM h))
+--          AND pr.household_id <> b.household_id
+--       (`db:verify` → FAM-1 5 flags a planted one, hidden too.)
 ```
 
 🔴 **Why (d) exists, and why it STAYS although `TEN-2c` closed the writer that minted it.** `TEN-2a`
@@ -1448,9 +1465,9 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write them all out against the same CTEs and read the numbers. (a)–(c) and (e)–(g) must be zero. For
-(d), follow the repoint above rather than stopping; for (e)–(g), STOP and clear the other household's
-copies of H's text with a correction first, as each says.
+Write them all out against the same CTEs and read the numbers. (a)–(c) and (e)–(h) must be zero. For
+(d), follow the repoint above rather than stopping; for (e)–(h), STOP and clear the other household's
+copies of H's text (or, for (h), the stray assignment) with a correction first, as each says.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 
@@ -1471,7 +1488,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 17 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 19 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -1481,35 +1498,40 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
 `packages/db/src/schema.ts` by two independent reviews:
 
-| #   | Table                     | Scoped by                                                       |
-| --- | ------------------------- | --------------------------------------------------------------- |
-| 1   | `entry_set_quantities`    | `entry_set_id` ∈ entry_sets of entries of H                     |
-| 2   | `entry_sets`              | `entry_id` ∈ entries of H                                       |
-| 3   | **`entries`**             | `profile_id` ∈ H — **before 4 and 5**                           |
-| 4   | `supersets`               | `session_id` ∈ sessions of H                                    |
-| 5   | `sessions`                | `profile_id` ∈ H                                                |
-| 6   | `day_readiness`           | `profile_id` ∈ H                                                |
-| 7   | `ramp_targets`            | `profile_id` ∈ H                                                |
-| 8   | `prescription_targets`    | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H  |
-| 8a  | `prescription_quantities` | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9** |
-| 9   | `prescriptions`           | `block_id` ∈ program_blocks of H                                |
-| 9a  | `block_day_workouts`      | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**    |
-| 9b  | `workouts`                | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**    |
-| 10  | `program_blocks`          | `household_id` = H                                              |
-| 11  | **`movements`**           | `household_id` = H — **TEN-2a; see below**                      |
-| 12  | `profiles`                | `household_id` = H                                              |
-| 13  | **`household_members`**   | `household_id` = H — **AUTH-1 1b; see below**                   |
-| 14  | `households`              | `id` = H                                                        |
+| #   | Table                         | Scoped by                                                                                |
+| --- | ----------------------------- | ---------------------------------------------------------------------------------------- |
+| 1   | `entry_set_quantities`        | `entry_set_id` ∈ entry_sets of entries of H                                              |
+| 2   | `entry_sets`                  | `entry_id` ∈ entries of H                                                                |
+| 3   | **`entries`**                 | `profile_id` ∈ H — **before 4 and 5**                                                    |
+| 4   | `supersets`                   | `session_id` ∈ sessions of H                                                             |
+| 5   | `sessions`                    | `profile_id` ∈ H                                                                         |
+| 6   | `day_readiness`               | `profile_id` ∈ H                                                                         |
+| 7   | `ramp_targets`                | `profile_id` ∈ H                                                                         |
+| 8   | `prescription_targets`        | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H                           |
+| 8a  | `prescription_quantities`     | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9**                          |
+| 9   | `prescriptions`               | `block_id` ∈ program_blocks of H                                                         |
+| 9a  | `block_day_workouts`          | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**                             |
+| 9b  | `workouts`                    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**                             |
+| 9c  | `program_assignment_weekdays` | `assignment_id` ∈ 9d's set — **FAM-1 5; before 9d**                                      |
+| 9d  | `program_assignments`         | `profile_id` ∈ H **OR** `block_id` ∈ program_blocks of H — **FAM-1 5; before 10 and 12** |
+| 10  | `program_blocks`              | `household_id` = H                                                                       |
+| 11  | **`movements`**               | `household_id` = H — **TEN-2a; see below**                                               |
+| 12  | `profiles`                    | `household_id` = H                                                                       |
+| 13  | **`household_members`**       | `household_id` = H — **AUTH-1 1b; see below**                                            |
+| 14  | `households`                  | `id` = H                                                                                 |
 
-**Steps 8a, 9a and 9b are lettered, not numbered**, so every "step 11" and "step 14" cited across the
+**Steps 8a, 9a–9d are lettered, not numbered**, so every "step 11" and "step 14" cited across the
 repo still names the same table. A week slot references its workout through a composite FK, and a
 workout references its block, both `NO ACTION`: out of order, the delete raises `23503` and the
 transaction rolls back (`db:verify` proves both refusals and the order that commits). FAM-1 4b adds
 two more `NO ACTION` edges, so step 8a precedes 9 and 9 precedes 9b: a prescription's quantity
 refuses the prescription's delete (a **hidden** quantity too, which is why no step filters on
 `deleted_at`), and a template prescription refuses its workout's, through the composite FK
-`(workout_id, block_id)` (`db:verify` → FAM-1 4b proves both, and the order that commits). Step 5 of
-FAM-1 adds its tables the same way.
+`(workout_id, block_id)` (`db:verify` → FAM-1 4b proves both, and the order that commits). FAM-1 5
+adds 9c and 9d: an assignment refuses both its block's delete (10) and its athlete's (12), and its
+weekday rows refuse its own, all `NO ACTION`, hidden rows included (`db:verify` → FAM-1 5). ADR 0007
+A2 §8 lists the assignment tables before `block_day_workouts` and `workouts`; no FK runs between them,
+so 9c/9d after 9b is the same order and keeps every step number already cited.
 
 Steps 1 and 2 are redundant with the `ON DELETE CASCADE` on `entry_sets.entry_id` and
 `entry_set_quantities.entry_set_id` — written out anyway, because **the counts are the proof** and a
@@ -1660,6 +1682,134 @@ the kind of thing someone asking to be deleted does not expect to be kept. It is
 - Disclosed in [notice.md](./privacy/notice.md) → "Deleting your data" and listed in
   [data-inventory.md](./privacy/data-inventory.md) §8. It is not a secret kept from the household; it
   is a record held briefly on their behalf.
+
+---
+
+## Erase one athlete (FAM-1 step 5)
+
+**When:** the household asks for one athlete's data to be removed, not the whole household's.
+[privacy/notice.md](./privacy/notice.md) → "Deleting your data" promises it. **Manual until `PRIV-3`
+scripts it**, as the household delete is; the guarded script is `PRIV-3`'s. Read
+["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1) first: this section reuses its
+preconditions, its transaction shape and its ledger, and says only what differs.
+
+### ⛔ Preconditions
+
+1. **Who may ask** _(maintainer, 2026-11-16)_: the household **owner**, on the invitation channel; or an
+   **adult athlete** about their own profile, in which case the owner is told before anything happens.
+   Then precondition 1 of the household delete applies unchanged: the verified channel, the notice of a
+   date and a way to cancel, the 7-day wait, the re-confirmation, and a Neon restore branch held 7 days.
+   `OPS-3`'s rehearsal is a precondition of the first real erasure, as it is of the first deletion.
+2. **A seeded athlete cannot be erased yet.** The seed inserts its profiles by fixed `public_id` on every
+   push to `main` (`packages/db/src/seed.ts`), so a hard-deleted seed profile comes back, as an empty
+   athlete, on the next merge. Refuse if the profile's `public_id` is one of the `SEED_PROFILE*_PUBLIC_ID`
+   values until `OPS-2` takes the seed out of production. An athlete added in the app is unaffected.
+
+### Steps
+
+**0. Record the request** in the ledger (below). **No Clerk step:** erasing an athlete deletes no sign-in
+account. An adult athlete's own account goes only with the household, or by removing their membership.
+
+**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`), and the full copy on request,
+**including hidden rows**, delivered on the verified channel. Afterwards there is nothing to export.
+
+**2. Resolve the athlete by `public_id`** and assert their household:
+
+```sql
+SELECT id, household_id, public_id FROM profiles WHERE public_id = :profile_public_id;
+-- :P below is that id; :H its household_id. Check the household is the requester's.
+```
+
+**3. Dry run: counts, the pre-flight, and the report.** No `deleted_at` filter anywhere: a hidden row is a
+row the erasure removes.
+
+```sql
+SELECT 'entry_set_quantities' t, count(*) FROM entry_set_quantities
+  WHERE entry_set_id IN (SELECT id FROM entry_sets WHERE entry_id IN (SELECT id FROM entries WHERE profile_id = :P))
+UNION ALL SELECT 'entry_sets', count(*) FROM entry_sets WHERE entry_id IN (SELECT id FROM entries WHERE profile_id = :P)
+UNION ALL SELECT 'entries', count(*) FROM entries WHERE profile_id = :P
+UNION ALL SELECT 'supersets', count(*) FROM supersets WHERE session_id IN (SELECT id FROM sessions WHERE profile_id = :P)
+UNION ALL SELECT 'sessions', count(*) FROM sessions WHERE profile_id = :P
+UNION ALL SELECT 'day_readiness', count(*) FROM day_readiness WHERE profile_id = :P
+UNION ALL SELECT 'ramp_targets', count(*) FROM ramp_targets WHERE profile_id = :P
+UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets WHERE profile_id = :P
+UNION ALL SELECT 'program_assignment_weekdays', count(*) FROM program_assignment_weekdays
+  WHERE assignment_id IN (SELECT id FROM program_assignments WHERE profile_id = :P)
+UNION ALL SELECT 'program_assignments', count(*) FROM program_assignments WHERE profile_id = :P
+UNION ALL SELECT 'profiles', count(*) FROM profiles WHERE id = :P;
+
+-- PRE-FLIGHT (must be 0): another athlete's entry in P's session or superset. The delete would abort
+-- 23503 on it. On a non-zero, repoint or clear that pointer with a correction; NEVER delete the other
+-- athlete's row to make this pass.
+SELECT e.id FROM entries e
+ WHERE e.profile_id <> :P
+   AND (e.session_id IN (SELECT id FROM sessions WHERE profile_id = :P)
+        OR e.superset_id IN (SELECT ss.id FROM supersets ss JOIN sessions s ON s.id = ss.session_id
+                              WHERE s.profile_id = :P));
+
+-- REPORT (not a stop): programs only P was ever on (every assignment row, open, closed or hidden, is P's).
+-- Program text and targets belong to the household and stay, but one written for this athlete alone can
+-- hold their prescribed loads and an instruction about them. List these to the household on the verified
+-- channel at the START of the cooling-off and ask, for each: keep it, or remove it too.
+SELECT b.id, b.public_id FROM program_blocks b
+ WHERE b.kind = 'template'
+   AND EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id)
+   AND NOT EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id AND a.profile_id <> :P);
+```
+
+The household pre-flight's (a)–(h) need not be re-run: they look across households, and this erasure
+stays inside one. (`prescription_targets` is deleted by its `profile_id = P` arm only: its other arm is
+the household's prescriptions, which stay.)
+
+**4. Apply — one transaction; re-run step 3's counts and pre-flight inside it** (the cooling-off made
+step 3's numbers stale), then the eleven DELETEs in this order, child before parent:
+
+| #   | Table                         | Scoped by                                  |
+| --- | ----------------------------- | ------------------------------------------ |
+| 1   | `entry_set_quantities`        | `entry_set_id` ∈ entry_sets of P's entries |
+| 2   | `entry_sets`                  | `entry_id` ∈ P's entries                   |
+| 3   | `entries`                     | `profile_id` = P — before 4 and 5          |
+| 4   | `supersets`                   | `session_id` ∈ P's sessions                |
+| 5   | `sessions`                    | `profile_id` = P                           |
+| 6   | `day_readiness`               | `profile_id` = P                           |
+| 7   | `ramp_targets`                | `profile_id` = P                           |
+| 8   | `prescription_targets`        | `profile_id` = P (this arm only)           |
+| 9   | `program_assignment_weekdays` | `assignment_id` ∈ P's assignments          |
+| 10  | `program_assignments`         | `profile_id` = P                           |
+| 11  | `profiles`                    | `id` = P                                   |
+
+If the household chose to remove a program only P was on, delete it in the same transaction, after step 10:
+`prescription_quantities` → `prescriptions` → `block_day_workouts` → `workouts` → `program_blocks` for
+those blocks (`prescription_targets` on them are already gone with step 8, since only P was on them;
+re-count to be sure). Then re-run the counts: **every row reads 0**, and the household's other
+athletes' counts and its program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise.
+
+`db:verify` → FAM-1 5 runs exactly this order (`verify/schema.ts` → `eraseAthlete`) on an athlete with a
+row in every table, hidden rows included, beside a sibling whose rows must come through unchanged, and
+fails when a new table gains an FK to `profiles` until it is named here and there.
+
+**5. Close out.** Ledger, the held restore branch, and tell the household it is done.
+
+### What remains afterwards
+
+Say this to the household; the notice's "Deleting your data" holds the same list.
+
+- **The household's programs**, unless they asked for a program only this athlete was on to go too.
+  Their instructions and targets were written by the household and stay with it.
+- **A name typed into shared text**: a program or workout name, a movement the household typed, and the
+  frozen copies of such text on other athletes' rows (`sessions.workout_name`, `supersets.prescription_group`,
+  `entries.prescribed_snapshot`, `workouts.copied_from_program_name`).
+- **Sign-in accounts and memberships** (an adult athlete's own account included).
+- **Backups and the held restore branch**, until their windows pass; **Vercel's request logs** hold
+  `/p/<profile public_id>` paths for 24 hours; **exports already downloaded**.
+- **The ledger entry**, as below.
+
+### The ledger, at athlete grain
+
+One ledger with the household delete. An athlete entry records: the request date, **the profile
+`public_id`** (the target; `OPS-3`'s replay re-applies the erasure after a restore), the verifying
+channel, the apply date, and the restore-branch-deleted date. **No Clerk ids** (nothing in Clerk is
+deleted) and no names. Retention as for a household entry.
 
 ---
 

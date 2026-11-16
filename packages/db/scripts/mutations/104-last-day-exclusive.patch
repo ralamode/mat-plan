@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program-assignments.ts b/packages/db/src/queries/program-assignments.ts
+--- a/packages/db/src/queries/program-assignments.ts
++++ b/packages/db/src/queries/program-assignments.ts
+@@ -18,7 +18,7 @@
+   return and(
+     isNull(a.deletedAt),
+     lte(a.activeFrom, day),
+-    or(isNull(a.activeTo), gte(a.activeTo, day)),
++    or(isNull(a.activeTo), sql`${a.activeTo} > ${day}`),
+   );
+ }
+ 

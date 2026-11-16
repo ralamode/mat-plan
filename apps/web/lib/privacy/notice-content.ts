@@ -273,7 +273,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
+              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does.\n"
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Who is on which program"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": ": which athlete is on it, from which day and through which day, and on\nwhich days of the week. That belongs to the athlete, and goes with them if they are removed. Taking\nan athlete off a program keeps the record that they were on it.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
             },
             {
               "k": "em",
@@ -1849,7 +1862,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " — once a profile is removed, its data can no\nlonger be exported, even though it is still in the database."
+        "text": ": a hidden profile can no longer be exported\neven though it is still in the database, and once an athlete is erased there is nothing left to export."
       }
     ]
   },
@@ -1903,6 +1916,37 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "k": "text",
         "text": " An archived\nathlete is kept in full until you restore them, or until you ask us to delete them."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Ask, and one athlete is erased."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Their profile, every session and set they logged, their weigh-ins,\nreadiness, the targets set for them, and which programs they were on and when are "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "permanently removed\nfrom the database"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". The household owner asks, or an adult athlete may ask about their own profile (the\nowner is told first). The same confirmation, 7-day pause and restore point as a household deletion apply,\nand \"What remains afterwards\" below applies too. What stays is the household's: the programs it wrote\n(if a program was written for that athlete alone, we will ask whether you want it removed too), any name\ntyped into a program, workout or movement, including copies of that text kept on other athletes' logs,\nand every sign-in account. For an athlete, the record of the deletion holds the athlete's internal\nidentifier and no login ids. An athlete added through the app can be erased today; the three athletes\nthe app started with cannot yet, because setup would put them back."
       }
     ]
   },

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program-assignments.ts b/packages/db/src/queries/program-assignments.ts
+--- a/packages/db/src/queries/program-assignments.ts
++++ b/packages/db/src/queries/program-assignments.ts
+@@ -41,7 +41,7 @@
+         .select({ one: sql`1` })
+         .from(w)
+         .where(
+-          and(eq(w.assignmentId, a.id), eq(w.weekday, localWeekday(day)), isNull(w.deletedAt)),
++          and(eq(w.assignmentId, a.id), eq(w.weekday, localWeekday(day))),
+         ),
+     ),
+   );
