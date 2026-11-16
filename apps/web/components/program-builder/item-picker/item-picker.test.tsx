@@ -36,7 +36,7 @@ import {
   selectExistingText,
   TRACKING_TYPE_EXAMPLES,
 } from '../builder-text';
-import { tapClock } from '../test-taps';
+import { tapAt, tapClock } from '../test-taps';
 import { SHEET_COPY } from '@/components/ui/sheet';
 import { WorkoutEditorScreen } from '../workout-editor-screen';
 
@@ -596,6 +596,21 @@ describe('the item picker (FAM-1 9)', () => {
       fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
       search('Bear');
       await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
+    });
+
+    it('a double tap on Cancel is not an Add: Add sits where Cancel was', () => {
+      editor();
+      openPicker();
+      fireEvent.click(row('Sprawls'));
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const at = Date.now() + 1000;
+      tapAt(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }), at);
+      const add = within(sheet()).getByRole('button', { name: addItemsText(1) });
+      tapAt(add, at + 100);
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(cardNames()).toEqual([]);
+      tapAt(add, at + 1000);
+      expect(cardNames()).toEqual(['Sprawls']);
     });
 
     it('a message does not outlive Add', async () => {
