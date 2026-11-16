@@ -280,7 +280,7 @@ export function unitChangedText(item: string, value: number, from: Unit, to: Uni
 export function fieldsToFixText(count: number): string {
   return count === 1
     ? 'One field needs fixing before saving.'
-    : 'Some fields need fixing before saving.';
+    : `${count} fields need fixing before saving.`;
 }
 
 /** What a refused Save says in the save bar. `name_taken` is said under the name as well. */
