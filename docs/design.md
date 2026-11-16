@@ -13,7 +13,7 @@ CSS-variable tokens, so a reskin is a token change and both themes are already d
 - **Token-driven.** Components never hardcode colors; they use the semantic tokens below. To reskin,
   change the tokens, not the components.
 - **Restrained palette.** Neutral grayscale base (zero-chroma) keeps it calm and grown-up; color is
-  reserved for meaning (primary actions, destructive, charts).
+  reserved for meaning (primary actions, destructive, charts, a logged row).
 - **Kid ergonomics as defaults:** interactive targets ≥ 44px, `inputmode="numeric"` on number
   fields, high contrast, generous text size — applied everywhere, no separate "kid mode."
 - **Adaptive / mobile-first:** the kids use this **primarily on phones and tablets**, so design at the
@@ -94,8 +94,8 @@ in both themes:
   `muted-foreground` is 4.27:1 there in light, under AA. `done` is never text on its own; a word or
   the ✓ goes with it ("Done ✓").
 - **Focus on a ✓ is a full-opacity `ring-foreground` ring OUTSIDE the ✓**, offset onto the tint or
-  the card, where it is at least 3:1 in both themes. Never inset it on the fill: there it is 3.8:1
-  in light but 2.0:1 in dark. `ring` is 2.3:1 on the light tint.
+  the card, where it is at least 3:1 in both themes. Never inset it on the fill: there it is 2.0:1
+  in dark. `ring` is under 3:1 on the tint in both themes, so it isn't used there.
 
 The prototype's light fill was 3.7:1 under white, so the app's is darker. A reskin (UI-3) re-measures
 these pairs, since the candidate sets don't declare them.
@@ -159,4 +159,6 @@ component changes. Two constraints that came out of building it:
   They are pinned with their measured values in `app/design/tokens/token-sets.test.ts` and are inputs
   to the reskin, not background noise.
 
-⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`.
+⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`, **except
+`contrast.ts` and `css-block.ts`**, which `app/done-tokens.test.ts` imports; that PR moves them to
+`lib/` rather than deleting the pins with them.

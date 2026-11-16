@@ -78,6 +78,30 @@ describe.each([
 });
 
 describe('pinned, so a reskin cannot separate them', () => {
+  it.each([
+    ['light', ':root'],
+    ['dark', '.dark'],
+  ] as const)(
+    '%s: ring on the tint is under 3:1, so a ✓ focuses with ring-foreground',
+    (_t, sel) => {
+      const t = tokensOf(sel);
+      expect(ratioOf(t['ring']!, t['done-surface']!, t['background']!)!).toBeLessThan(AA_LARGE);
+    },
+  );
+
+  it.each([
+    ['light', ':root'],
+    ['dark', '.dark'],
+  ] as const)(
+    '%s: done-foreground on the tint is under 3:1, so the tint is never a fill',
+    (_t, sel) => {
+      const t = tokensOf(sel);
+      expect(ratioOf(t['done-foreground']!, t['done-surface']!, t['background']!)!).toBeLessThan(
+        AA_LARGE,
+      );
+    },
+  );
+
   it('dark secondary text on the tint is the theme’s own muted-foreground', () => {
     const dark = tokensOf('.dark');
     expect(dark['done-muted-foreground']).toBe(dark['muted-foreground']);
