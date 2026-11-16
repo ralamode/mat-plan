@@ -5,6 +5,9 @@
 --   1. movements.tracking_type text NOT NULL DEFAULT 'weight_reps' + movements_tracking_type_check,
 --      pinned to shared TRACKING_TYPES by db:verify. A constant default is metadata-only (PG 11+):
 --      no table rewrite.
+--      No IF NOT EXISTS: the file is one transaction, so a guard cannot help a re-run (the unguarded
+--      ADD CONSTRAINT would abort it anyway), and it would silently keep a column of the wrong shape
+--      (0021's header). _journal.json is what guarantees one application.
 --   2. A ONE-TIME typing of the built-in items, by slug (D25: a first typing, not a retype). Guarded
 --      three ways, so a re-run changes nothing: only global rows (household_id IS NULL), only rows
 --      still at the default, only the slugs listed. A household's own row with a seeded slug is never
@@ -34,7 +37,7 @@
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
 LOCK TABLE "movements", "sessions" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
-ALTER TABLE "movements" ADD COLUMN IF NOT EXISTS "tracking_type" text DEFAULT 'weight_reps' NOT NULL;--> statement-breakpoint
+ALTER TABLE "movements" ADD COLUMN "tracking_type" text DEFAULT 'weight_reps' NOT NULL;--> statement-breakpoint
 -- Small table, locked above; every row holds the default, which the CHECK accepts.
 -- squawk-ignore constraint-missing-not-valid
 ALTER TABLE "movements" ADD CONSTRAINT "movements_tracking_type_check" CHECK ("movements"."tracking_type" in ('check', 'count', 'reps', 'weight_reps', 'duration', 'time_sets', 'distance'));--> statement-breakpoint
