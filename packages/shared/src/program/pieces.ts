@@ -458,6 +458,36 @@ export function fillRowValues(
 }
 
 /**
+ * The unit an item logs in, which is `DayItem.unit`: `null` for a type with no quantity (a Check,
+ * Reps); the type's fixed unit where it has one (a Duration is minutes, Time per set seconds); else
+ * the unit its prescription names in the type's slot, or `null` when the prescription has no
+ * quantity there.
+ *
+ * **One definition for the day's read and the row writer** (contract change C13, from step 11b's
+ * review). `fillRowValues` refuses a quantity in another unit than the item's, so if the page's
+ * `DayItem.unit` and the writer's idea of the unit ever differed, a correctly typed number would
+ * answer `bad_value`.
+ *
+ * The fixed unit comes first, as in `entryUnitFor`: a Duration is minutes whatever its
+ * prescription row says.
+ *
+ * ⚠️ **For an item with a live prescription only.** An item whose prescription was removed
+ * (`prescriptionPublicId: null`) has no quantities to read, and its `DayItem.unit` is the unit its
+ * logged entry was stored in; the day's read takes it from the entry, not from here.
+ * ⚠️ `null` for a type whose unit comes from the prescription (a Count, Weight × reps, Distance)
+ * means the prescription names no unit in that slot. No ✓ can then be stored (`fillRowValues`
+ * refuses every quantity), so the workout writer must not save such a prescription.
+ */
+export function itemUnit(
+  trackingType: TrackingType,
+  quantities: readonly { slot: QuantitySlot; unit: Unit }[],
+): Unit | null {
+  const { slot, unit } = TRACKING_TYPE_FIELDS[trackingType];
+  if (slot === null) return null;
+  return unit ?? slotQuantity({ trackingType }, quantities)?.unit ?? null;
+}
+
+/**
  * The unit an entry is stored under when its type has no quantity of its own (plan §2, the
  * `entries.unit` column of the seven types): a Check is done or not, Reps are a count.
  */

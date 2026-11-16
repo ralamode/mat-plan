@@ -338,6 +338,9 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
   const withItems = (out: readonly WorkoutDraftItem[]) =>
     cards.map((card, i) => ({ ...card, item: out[i]! }));
 
+  /** How many items the last Add put in, until it is said. */
+  const justAdded = useRef(0);
+
   /**
    * Adds a card per ticked item, in pick order, with no numbers (`newCard`), and closes the picker
    * with focus on the first new card's heading.
@@ -356,9 +359,12 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     pickerReturn.current = document.getElementById(
       cardHeadingId(added[0]!.item.prescriptionClientId),
     );
+    // Said once focus is back (`onReturned`): while the sheet is open the bar is hidden from a
+    // screen reader. Only after an Add, never after a plain Close. Set BEFORE the close, so a
+    // close that runs at once still finds it.
+    justAdded.current = added.length;
     setPickerOpen(false);
     quiet();
-    report(addedText(added.length));
   }
 
   /** The group's rest, typed on its last card. */
@@ -686,6 +692,10 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
           )
         }
         onAdd={addPicked}
+        onReturned={() => {
+          if (justAdded.current) report(addedText(justAdded.current));
+          justAdded.current = 0;
+        }}
       />
     </>
   );
