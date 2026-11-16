@@ -19,8 +19,9 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 10.** The Programs list, the program page with its week editor, and the
-workout editor with its supersets and its item picker are real screens on the preview route. Each
+🚧 **Built through step 10b.** The Programs list, the program page with its week editor and its
+Copy and Put-on dialogs, and the workout editor with its supersets and its item picker are real
+screens on the preview route. Each
 step below adds its files and its invariants here.
 
 ## The map
@@ -57,11 +58,13 @@ flowchart LR
 | `apps/web/components/program-builder/create-program.tsx`                | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.                                                                                                                                                            |
 | `apps/web/components/program-builder/program-screen.tsx`                | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                                                                                                                                                                   |
 | `apps/web/components/program-builder/program-header.tsx`                | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                                                                                                                                                                                 |
-| `apps/web/components/program-builder/whos-on-it.tsx`                    | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                                                                                                                                                                   |
-| `apps/web/components/program-builder/workouts-list.tsx`                 | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.                                                                                                                                                                |
+| `apps/web/components/program-builder/whos-on-it.tsx`                    | "Who's on it" and Take off, shown only when `actions.takeOff` exists; "Put someone on" under it when `actions.putOn` does.                                                                                                                                              |
+| `apps/web/components/program-builder/put-on-dialog.tsx`                 | "Put someone on this program": who, from today or tomorrow, and what that day changes.                                                                                                                                                                                  |
+| `apps/web/components/program-builder/workouts-list.tsx`                 | The workouts, each a link to its editor, with "Copy to…" beside it when `copyWorkout` is wired; "+ New workout".                                                                                                                                                        |
+| `apps/web/components/program-builder/copy-dialog.tsx`                   | "Copy to…": one Sheet for every row. To, the optional days and label, who will see it.                                                                                                                                                                                  |
 | `apps/web/components/program-builder/week-editor/week-editor.tsx`       | The week, edited in place: per day its slots (↑ ↓ ✕, the label by a tap), "+ Add", Undo; saves the whole week at once.                                                                                                                                                  |
 | `apps/web/components/program-builder/week-editor/add-form.tsx`          | "+ Add" on a day: a workout (no default), a label, the days.                                                                                                                                                                                                            |
-| `apps/web/components/program-builder/week-editor/days-label-fields.tsx` | A slot's label and its days; 10b's Copy dialog takes the same fields.                                                                                                                                                                                                   |
+| `apps/web/components/program-builder/week-editor/days-label-fields.tsx` | A slot's label (`SlotLabelField`) and its days (`DaysFieldset`, its legend and hint the caller's): the week's add form and the Copy dialog.                                                                                                                             |
 | `apps/web/components/program-builder/week-editor/week-draft.ts`         | The week's changes as pure functions: add to days (skipping those that have it), move, remove, label, and Undo's insert.                                                                                                                                                |
 | `apps/web/components/program-builder/test-taps.ts`                      | Tests only: taps at stated `event.timeStamp`s (`tapAt`, `tapClock`) for the double-tap guards, so no test sleeps past `DOUBLE_TAP_MS`.                                                                                                                                  |
 | `apps/web/components/program-builder/name-field.tsx`                    | A short text field with its counter (outside the label, by `aria-describedby`) and its refusal; `multiline` for a note.                                                                                                                                                 |
@@ -111,7 +114,9 @@ flowchart LR
 9. **"Used by … Changes apply to …" counts everyone in `athletes`**, someone whose last day is
    today included: they are on it through today, so an edit now still changes their day.
 10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's
-    row, or to the section's heading when they had not started and leave the list. The message is
+    row, or to the section's heading when they leave the list. Which one, and the message, come from
+    Take off's answer (`lastDay`, C15): a day means they come off after it, `null` that they never
+    start (a start dated today included). Never from the screen's own reading of the dates. The message is
     set after the move. Focus moves only if it is still where the tap left it: an answer that lands
     after the person moved on (into Rename, say) leaves their focus alone.
 11. **A name form, and the editor's Save, drop a late answer, but not the write** (`useAttempt`).
@@ -237,6 +242,36 @@ flowchart LR
     - Also different from v12: the label stacked over the workout's name, "+ Label" or ✎ beside it;
       "· today" on today's day; one line, not seven "+ Add", when there are no workouts; ↑ on the
       first slot and ↓ on the last dimmed (`aria-disabled`); the week capped at `max-w-2xl`.
+
+18. **The Copy and Put-on dialogs** (step 10b; UX panel and maintainer, 2026-11-16):
+    - **Each is one `Sheet` (`variant="sheet"`) with a constant id**, its action a `type=submit`
+      button in the footer (action first, Cancel last). Its own refusals are said in a visible
+      footer `Announcer` tied to the action; the success line goes to the page's bar from
+      `onReturned`, once focus is back. A stale refusal closes, refreshes and says nothing was done; a
+      throw (a dropped connection) is a `retry`. The Sheet stays mounted when its trigger goes (the
+      last person put on): it closes as a sheet, and focus returns to the line that replaced it.
+    - **Copy's To starts on "Choose a program"** unless only one is offered: a copy cannot be
+      deleted. Under it, who is on that program. Days are optional; the label shows once a day is
+      ticked, prefilled from this program's week only when the copy stays in it. Someone on both
+      programs who already does the workout on a picked day is named, and heard. **A Name field**
+      (C15) shows for a copy into this program, and for another program once it answers
+      `name_taken`; it is prefilled with the shared `copyName` ("Heavy A (copy)", within
+      `WORKOUT_NAME_MAX`), and a name already in this program is said on it before anything is
+      sent. A label typed by the person stays when To changes; only the prefill follows it. One
+      `clientId` per opening, reused on a retry. "Put them on it
+      instead" shows only when `putOn` is wired and the copy goes elsewhere.
+    - **Put on lists every candidate**: someone on it is ticked and inactive ("on it"); someone taken
+      off shows their last day and can be ticked, which undoes the Take off (C15); the rest say what
+      they keep, stacked under the name. **Starting** is two
+      radios, Today or Tomorrow, with a line saying what that day changes from this program's week.
+      Start names its count and is inactive until someone new is ticked. The order and "to switch
+      instead" lines show only when someone ticked keeps another program. With everyone on it, the
+      button is replaced by a line saying so. A start today is undoable the same day: Take off
+      removes it when nothing is logged (C15).
+    - Differences from v12, each a decision above: To has no default; who will see a copy; the
+      double-workout warning; the label only after a day; Starting as radios with what it changes;
+      the hints shown only when they apply; Start's count; "last day …", tickable, in place of "on it";
+      the Name field.
 
 ## Traps
 
