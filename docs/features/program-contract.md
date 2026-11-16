@@ -157,6 +157,12 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
    (E), `apps/web/components/program-builder/owed.test.ts` (B) and
    `apps/web/components/day/owed.test.ts` (C). Lanes A and S have no guide, so their lines stay in
    `packages/shared/src/program/owed.test.ts` and are edited under the seam rule, one PR at a time.
+10. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
+    `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
+    `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
+    has no nav rail) and no `programsHref` until the Programs page exists (7b). The switcher's links
+    come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
+    The parts are lane C's; their props are a contract with the page and this harness.
 
 ## Traps
 
