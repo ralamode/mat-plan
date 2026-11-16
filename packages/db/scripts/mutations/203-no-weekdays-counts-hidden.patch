@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -2178,7 +2178,7 @@
+   return idsOf(
+     await tx.execute(sql`
+       SELECT a.id FROM program_assignments a
+-       WHERE a.deleted_at IS NULL
++       WHERE true
+          AND NOT EXISTS (SELECT 1 FROM program_assignment_weekdays w
+                           WHERE w.assignment_id = a.id AND w.deleted_at IS NULL)
+        ORDER BY a.id`),

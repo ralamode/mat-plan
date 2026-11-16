@@ -187,6 +187,11 @@ export async function constraintDef(conname: string): Promise<string> {
   return rows[0].def;
 }
 
+/** The rows of a raw `execute` result, typed by the caller (the cast lives here once). */
+export function rowsOf<T>(res: unknown): T[] {
+  return (res as { rows: T[] }).rows;
+}
+
 /** The `id` column of a raw `execute` result, as numbers (an audit query's flagged rows). */
 export function idsOf(res: unknown): number[] {
   return (res as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));

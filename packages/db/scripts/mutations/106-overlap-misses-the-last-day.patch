@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -2158,7 +2158,7 @@
+           ON earlier.profile_id = later.profile_id AND earlier.block_id = later.block_id
+          AND earlier.id < later.id
+          AND earlier.deleted_at IS NULL AND later.deleted_at IS NULL
+-         AND later.active_from <= coalesce(earlier.active_to, 'infinity'::date)
++         AND later.active_from < coalesce(earlier.active_to, 'infinity'::date)
+          AND earlier.active_from <= coalesce(later.active_to, 'infinity'::date)
+        ORDER BY later.id`),
+   );

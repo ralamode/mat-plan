@@ -21,10 +21,25 @@ const REPO = resolve(WEB_DIR, '../..');
  * It also pins that `apps/web` names neither ownership helper yet: the privacy docs say no app path
  * writes these tables, and this is what keeps that sentence true until lane P changes it.
  */
-describe('the program tables stay dark (FAM-1 4a-i, 4b)', () => {
+describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // `prescriptions` and `prescriptionQuantities` since FAM-1 4b: 0025 adds six columns and a table,
   // and its header's "no request-path statement in the deploy window" is this scan.
-  const TABLES = 'programBlocks|workouts|blockDayWorkouts|prescriptions|prescriptionQuantities';
+  const TABLES =
+    'programBlocks|workouts|blockDayWorkouts|prescriptions|prescriptionQuantities|programAssignments|programAssignmentWeekdays';
+  /**
+   * 🔴 FAM-1 step 5's two tables are NEW, so even a named-column read of one fails `42P01` in a deploy
+   * that races `migrate.yml`. The patterns above catch only whole-row shapes, so for these two ANY
+   * reference outside the allowlist is refused, the snake_case name in raw SQL included. Lane P's
+   * writers (`writers/program/`) are allowlisted already; 6c's reads elsewhere (`queries/program/`) are
+   * what relax it.
+   */
+  const NEW_TABLES =
+    /\b(?:(?:schema\.)?(?:programAssignments|programAssignmentWeekdays)|program_assignments|program_assignment_weekdays)\b/;
+  const NEW_TABLES_ALLOWED = [
+    'packages/db/src/schema.ts',
+    'packages/db/src/queries/program-assignments.ts',
+    'packages/db/src/writers/program/',
+  ];
   const PATTERNS: Record<string, RegExp> = {
     insert: new RegExp(`\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`),
     'bare select': new RegExp(
@@ -110,6 +125,18 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b)', () => {
     expect(PATTERNS['bare selectDistinct']!.test('db.selectDistinct().from(schema.workouts)')).toBe(
       true,
     );
+  });
+
+  it("no code outside the allowlist names step 5's tables yet", () => {
+    const hits = files.filter(
+      (f) =>
+        NEW_TABLES.test(code(join(REPO, f))) && !NEW_TABLES_ALLOWED.some((a) => f.startsWith(a)),
+    );
+    expect(hits, 'a read of a table 0027 creates fails 42P01 in the deploy window').toEqual([]);
+    // Non-vacuity: the pattern sees the one module that does name them.
+    expect(
+      NEW_TABLES.test(code(join(REPO, 'packages/db/src/queries/program-assignments.ts'))),
+    ).toBe(true);
   });
 
   it('apps/web calls none of the ownership helpers yet', () => {
