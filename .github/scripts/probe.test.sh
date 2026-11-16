@@ -70,6 +70,18 @@ else
   printf '✓ an ambiguous --from leaves the file untouched\n'
 fi
 
+# 5b · a gate already RED before the mutation is DID-NOT-PROVE, even when its output names --expect
+printf '#!/bin/sh\necho "GATE SAYS NO"; exit 1\n' >"$tmp/red.sh" && chmod +x "$tmp/red.sh"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm red
+run 'a red baseline is DID-NOT-PROVE, not RED' 1 'DID-NOT-PROVE' -- \
+  --file src.js --from KEEP --to GONE --gate ./red.sh --expect 'GATE SAYS NO'
+if ! grep -q KEEP "$tmp/src.js"; then
+  printf '✗ a red baseline must not write the mutation\n'
+  fails=$((fails + 1))
+else
+  printf '✓ a red baseline leaves the file untouched\n'
+fi
+
 # 6 · 🔴 THE CASE THIS FILE EXISTS FOR: uncommitted work in the probed file SURVIVES.
 printf 'export const value = "KEEP";\nexport const precious = "UNCOMMITTED WORK";\n' >"$tmp/src.js"
 run 'a dirty file is refused by default' 1 'has uncommitted changes' -- \

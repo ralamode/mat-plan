@@ -1,0 +1,3 @@
+# `pnpm probe` refuses to report a catch when the check was already failing
+
+`pnpm probe` now runs the gate once before mutating anything, and the gate must pass. Before, a test that was already failing could print the `--expect` text on its own, for example its name in the failure output, so the probe reported "RED for the named reason" when the mutation had done nothing. A lane hit exactly that on 2026-11-16. A failing baseline is now reported as DID-NOT-PROVE and the file is never mutated. It costs one extra run of the gate. There's a new self-test in `probe.test.sh`, and the review-pr skill and the lessons entry describe the four outcomes.

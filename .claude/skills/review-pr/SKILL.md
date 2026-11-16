@@ -198,9 +198,10 @@ correct list beats a long, noisy one, and a false P0 costs the author an afterno
   against the shared schema settled it in one run, and turned up a P0. Put the probe in the
   scratchpad and copy it in only to run it; never commit it.
 - **To check whether an assertion can fail, use `pnpm probe`, not a hand-rolled checkout.** It
-  mutates one literal, runs the gate, restores the file from a snapshot of the tree (**never from
-  `HEAD`**) and verifies the restore — and it reports GREEN, DID-NOT-RUN and "red for the wrong
-  reason" as three distinct failures. ⚠️ Rolling this by hand lost uncommitted work three times in
+  runs the gate once unmutated (it must be green), mutates one literal, runs the gate again, restores
+  the file from a snapshot of the tree (**never from `HEAD`**) and verifies the restore — and it
+  reports a red baseline (DID-NOT-PROVE), GREEN, DID-NOT-RUN and "red for the wrong reason" as four
+  distinct failures. ⚠️ Rolling this by hand lost uncommitted work three times in
   one session, which is why the script exists ([lessons.md](../../../docs/lessons.md) → "Guards that
   pass while guarding nothing").
 
