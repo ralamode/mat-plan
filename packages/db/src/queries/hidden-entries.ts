@@ -11,8 +11,10 @@ import { isLiveProfile } from '../writers/ownership';
  * surface built to show it — the day's "Hidden — Restore" region. Every other query in this package
  * and in `lib/dal` filters tombstones, and
  * [delete-and-restore.md](../../../../docs/features/delete-and-restore.md) carries the audit of all
- * of them. If a second module ever needs hidden rows, it belongs here rather than growing a
- * `includeHidden` flag on a live reader, which is how a tombstone reaches an export.
+ * of them. A second module that needs a hidden row's VALUES belongs here rather than growing a
+ * `includeHidden` flag on a live reader, which is how a tombstone reaches an export. (The clear's
+ * pre-read in `writers/single-value.ts` sees a hidden row only to answer a replay, and returns its
+ * day and nothing else.)
  *
  * ⚠️ **Neither function reads `scope.householdId` directly** — both go through `isLiveProfile`, so
  * `packages/db/src/scope.test.ts`'s rule that exactly one module names that field still holds.

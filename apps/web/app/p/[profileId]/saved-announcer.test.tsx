@@ -2,15 +2,15 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { BODYWEIGHT_COPY } from '@/lib/constants';
-
 import { SavedAnnouncer } from './saved-announcer';
 
 // COMPONENT TIER (RTL/jsdom — the profile-tile.test.tsx idiom). V1-24 PR 1a, plan acceptance 6.
 afterEach(cleanup);
 
 const FOCUS_ID = 'saved-target';
-const SAVED = BODYWEIGHT_COPY.announced('84.5 lb');
+// Any message: since 3b-bw only Life uses this island, and its message is the caller's.
+const announced = (value: string) => `Saved: ${value}.`;
+const SAVED = announced('Wrestling practice · 90 min');
 
 /** The announcer plus a focus target standing in for the server-rendered receipt. */
 function Harness({ saved }: { saved: string | null }) {
@@ -58,7 +58,7 @@ describe('SavedAnnouncer', () => {
    */
   it('does NOT announce or steal focus on a value → value change', () => {
     const { rerender } = render(<Harness saved={SAVED} />);
-    rerender(<Harness saved={BODYWEIGHT_COPY.announced('86 lb')} />);
+    rerender(<Harness saved={announced('Wrestling practice · 45 min')} />);
     expect(screen.getByRole('status').textContent).toBe('');
     expect(document.activeElement).toBe(document.body);
   });

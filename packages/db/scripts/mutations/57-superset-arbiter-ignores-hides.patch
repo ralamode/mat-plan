@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0024_fam1_4a_ii_log_side.sql b/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
+--- a/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
++++ b/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
+@@ -61,7 +61,7 @@ CREATE INDEX "idx_entries_prescription" ON "entries" USING btree ("prescription_
+ CREATE UNIQUE INDEX "uq_entries_session_prescription_set" ON "entries" USING btree ("session_id","prescription_id","prescription_set") WHERE "entries"."prescription_id" is not null and "entries"."deleted_at" is null;--> statement-breakpoint
+ CREATE INDEX "idx_sessions_workout" ON "sessions" USING btree ("workout_id");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_sessions_profile_day_workout" ON "sessions" USING btree ("profile_id","activity_date","workout_id") WHERE "sessions"."workout_id" is not null and "sessions"."deleted_at" is null;--> statement-breakpoint
+-CREATE UNIQUE INDEX "uq_supersets_session_prescription_group" ON "supersets" USING btree ("session_id","prescription_group") WHERE "supersets"."prescription_group" is not null and "supersets"."deleted_at" is null;--> statement-breakpoint
++CREATE UNIQUE INDEX "uq_supersets_session_prescription_group" ON "supersets" USING btree ("session_id","prescription_group") WHERE "supersets"."prescription_group" is not null;--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_entries_superset_order" ON "entries" USING btree ("superset_id","superset_order") WHERE "entries"."deleted_at" is null and "entries"."prescription_set" is null;--> statement-breakpoint
+ -- Every row holds NULL in the new column(s), which this CHECK accepts; table locked above.
+ -- squawk-ignore constraint-missing-not-valid

@@ -277,10 +277,9 @@ export function movementIsAvailableTo(scope: HouseholdScope) {
  * `scope.householdId`, which is why it belongs in this module — `scope.test.ts` asserts exactly one
  * module does.
  *
- * Its one consumer is `householdHasProgram`, which the day page needs to tell two states apart that
- * look identical to the old query: **"this household programs nothing"** and **"this household
- * programs, but you are an adult so none of it is yours"**. Without it the adult sees an unexplained
- * empty day.
+ * Its consumers: `householdHasProgram` (whose one caller is the add-athlete form,
+ * `apps/web/app/p/new/page.tsx`, wording the Child option by whether the household has a legacy
+ * program), `liveTemplateBlockIn` below, and the template-block helpers.
  */
 export function programBlockInHousehold(scope: HouseholdScope) {
   return eq(schema.programBlocks.householdId, scope.householdId);
@@ -542,6 +541,15 @@ export async function insertProfileOwnedBy(
 // the only module that may unwrap `scope.householdId` (`src/scope.test.ts` → `UNWRAPS_SCOPE`); the
 // writers themselves never hold the tenant id. Nothing calls them yet: `apps/web` has no path to these
 // tables until lane P (`apps/web/test/program-tables-stay-dark.test.ts`).
+
+/**
+ * 🔴 **THE legacy-block predicate: `program_blocks.kind = 'legacy'`** (FAM-1 5b; ADR 0007 A2 §1). The
+ * seed's day-role block, read by the newest-block reads (`queries/program-day.ts`) and the only kind
+ * the seed adopts on its re-select (`seed.ts`). Named once so the reads and the seed cannot drift.
+ */
+export function programBlockIsLegacy() {
+  return eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy);
+}
 
 /**
  * 🔴 **THE template-block predicate: this household's ∧ `kind = template` ∧ live.** The only blocks

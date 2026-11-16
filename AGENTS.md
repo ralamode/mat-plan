@@ -137,8 +137,8 @@ Keys:   internal PK = bigint GENERATED ALWAYS AS IDENTITY (never serial/UUIDv4 P
         client_id = UUIDv7, UNIQUE, non-partial for NEW ones (ADR 0008 3.4); NOT NULL unless a
         server-side creator needs NULL (say so in the column's docblock).
 Time:   all timestamptz, UTC, created_at DEFAULT now(). deleted_at NULL for soft delete.
-        LWW: compare CLIENT-supplied updated_at/version (not server clock); upsert
-        setWhere incoming >= stored. (offline clock-skew correctness)
+        LWW (v1.5 /api/sync, NOT wired): compare CLIENT updated_at/version;
+        upsert setWhere incoming >= stored.
 Naming: snake_case; tables plural; FK <singular>_id; idx_<table>_<cols>. Drizzle casing:'snake_case'.
 Constraints: NOT NULL default; FK+index on every ref.
         Tagged union: CHECK ((movement_id IS NOT NULL) <> (metric_key IS NOT NULL)).
@@ -156,15 +156,19 @@ Migrate: drizzle-kit generate+migrate ONLY (never push in prod); forward-only; n
 Trust: every Server Action + Route Handler is a PUBLIC endpoint. Re-auth + re-authorize (ownership)
        + zod-validate inside each. Never trust FormData/JSON/searchParams/params/headers.
 DAL:   all DB access via lib/dal/* (server-only). Thin actions/handlers → validate → DAL → revalidate.
-Split: mutations → Server Actions. Reads/external/batch → Route Handlers. /api/sync is a Route Handler.
-Errors: expected → typed envelope { ok:false, error, fieldErrors? } + useActionState (don't throw).
-        unexpected → throw → error.tsx. Never leak internals; return only what the UI needs.
+Contract: ANY request/response change ⇒ its shared zod schema (types via z.infer), same PR. NEW
+        mutations copy FAM-1 (program/actions.ts, rowResultSchema): zod input + response;
+        {ok:true,…} | {ok:false, reason}, refusals never thrown; FormData only at the edge.
+        Unexpected throws to error.tsx; never leak internals. Additive; breaking ⇒ /api/vN,
+        Deprecation/Sunset.
+Time:   lib/dal + writers get day + tz as args; only routes/actions (and their private helpers)
+        read the tz cookie.
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
 Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
-        enableLogs + structured context (userId, householdId, batchId).
+        enableLogs + structured context: NOT wired (ADR 0001).
 ```
 
 Security baseline lives in [.github/SECURITY.md](./.github/SECURITY.md) (BOLA-first,
@@ -279,9 +283,10 @@ movement picker.
 
 - **pre-commit (husky + lint-staged):** ESLint + Prettier on **staged files only**. Never put
   whole-project checks here.
-- **pre-push:** `pnpm typecheck` + affected tests — **two** `tsc --noEmit` projects, `apps/web` and
-  `packages/db` (`src/**` + `scripts/**`). ⚠️ **Not the whole repo:** `packages/shared` and
-  `packages/engine` have no tsconfig and are checked only _transitively_, through the app's imports.
+- **pre-push:** `pnpm typecheck` + affected tests — **four** `tsc --noEmit` projects: `apps/web`,
+  `packages/db` (`src/**` + `scripts/**`), `packages/evals` and `packages/shared` (`src/**`, its
+  `*.test.ts` included). ⚠️ **Not the whole repo:** `packages/engine` has no tsconfig and is checked
+  only _transitively_, through the app's imports.
 - **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it), **~40s** warm:
@@ -291,10 +296,10 @@ movement picker.
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
   **This section is the one list of where each gate runs**; other docs point here rather than
-  restating it. `skills:check`, `guards:test` (all twelve guard self-tests) and `audit:check` run here
+  restating it. `skills:check`, `guards:test` (all thirteen guard self-tests) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
   on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)) — **separately**, as
-  `pnpm status:check $(git merge-base HEAD origin/main)`, and ⚠️ it names the fragment it wants from
+  `pnpm status:check` (on a stacked PR it compares with the parent's branch, as CI does), and ⚠️ it names the fragment it wants from
   the BRANCH (`<date>-<branch-with-slashes-as-dashes>.md`), so a descriptively-named one is found
   and rejected. `actions:check` runs here
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
@@ -396,13 +401,11 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   1 re-verify authN inside it (page/middleware auth does NOT protect an action — it's a public POST).
   2 re-verify authZ / resource ownership (IDOR guard).  3 zod-validate ALL input first.
   4 return a minimal DTO, never a raw row.  5 db+auth via the server-only DAL; keep 'use server' thin.
-  6 mutations: Idempotency-Key → persist first result → replay on retry.
-  7 typed error envelope + structured logs (correlation id) + Sentry; rate-limit expensive ops.
+  6 idempotent: body clientId + UNIQUE; replay → one effect, same result.
+  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: export limit; correlation ids.
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.
-Contract: request/response change ⇒ update shared zod schema (types via z.infer) same PR. Additive by
-  default; breaking ⇒ BREAKING CHANGE footer + /api/vN + Deprecation/Sunset headers.
 Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (mock Clerk auth() +
   Drizzle); async Server Components → Playwright, not Vitest; push logic into the (sync, testable) DAL.
 ```
