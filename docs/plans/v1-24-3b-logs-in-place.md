@@ -369,7 +369,153 @@ the UX panel and a correctness lens (the log below). The reference is **v12** (`
 
 **Accepted, said in the PR:** V1-9b Decision 7's bodyweight throw (`bodyweight.ts:267-284`) becomes reachable. It takes a ✓ whose response is lost, another phone clearing in between, and a retry from the same mount, and the result is `error.tsx`.
 
+## 3b-0: what the slice settles (2026-11-16)
+
+> This section **replaces** the 3b-0 rows of the file table, the 3b-0 half of D3's "One per day"
+> bullet, and the 3b-0 Risks row, after a DB-safety and a correctness lens re-read them against main at
+> `5c20dd23` (log below). Where the two disagree, this section wins.
+>
+> _Roadmap alignment (2026-11-16): advances V1-24 3b within FAM-1's lane S; gates 3b-life; the
+> restore list is shared with FAM-1 11b (lane E), which appends #447's entries arbiter to it._
+
+**Z1 — The index.** `PRACTICE_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_practice'`, beside
+`BODYWEIGHT_DAY_UNIQUE_INDEX` (`schema.ts:281`): `UNIQUE (profile_id, activity_date) WHERE deleted_at
+IS NULL AND metric_key = 'practice_minutes'`. No `coalesce(context)`: practice has no slot. The
+predicate is a SQL literal in `schema.ts` (an interpolated const renders as `$1`, `schema.ts:430-432`).
+`practice_minutes` aggregates by `sum` (`catalog-metrics.ts:145-149`); with the index the sum is over
+one row, and two sessions a day would need a re-key migration.
+
+**Z2 — The migration is 0012's shape, not a concurrent build.**
+
+- `SET lock_timeout = '5s'`, `SET statement_timeout = '60s'`, `LOCK TABLE "entries" IN SHARE MODE`.
+- A `DO` block that counts live practice groups by `(profile_id, activity_date)` with more than one row
+  and raises a count-only message naming the runbook section. Then a plain `CREATE UNIQUE INDEX`, in
+  the transaction. Every statement gets a breakpoint.
+- No `CONCURRENTLY` (drizzle's migrator wraps the file in one transaction, `scripts/migrate.ts:21`;
+  the stripping runner does not exist) and no `IF NOT EXISTS` (it would skip a same-named index with a
+  different predicate, `0012:21-23`). The header says why, and that this is a partial index over
+  practice rows only (the 13th on `entries`).
+- **Why the pre-check, not only the prod read:** the practice ✓ is live, so a duplicate can land
+  between the last read and `migrate.yml`'s apply. A bare `23505` would print the key (a profile id and
+  a date) into the world-readable Actions log and wedge every later migration (lane A's 4b included).
+- **The number is not fixed** until the board says which of 3b-0 and lane A's 4b goes first; the file is
+  regenerated on top of main by the db-migration skill's recipe, and no doc names its number.
+- A runbook entry, **"If 3b-0's migration refuses"**: read the groups, decide each with the maintainer
+  (two real sessions on one day are a sum, not a duplicate), correct, re-run `migrate.yml`.
+
+**Z3 — The prod read (the maintainer runs it).** Inside `BEGIN READ ONLY` on `DATABASE_URL_UNPOOLED`;
+only the count is committed, never a profile or a date. Its predicate is exactly the index's:
+
+```sql
+BEGIN READ ONLY;
+SELECT count(*) AS duplicate_groups
+FROM (
+  SELECT 1 FROM entries
+  WHERE deleted_at IS NULL AND metric_key = 'practice_minutes'
+  GROUP BY profile_id, activity_date
+  HAVING count(*) > 1
+) d;
+ROLLBACK;
+```
+
+Run once before the migration is written into the PR's final head, and again just before merge.
+A non-zero answer stops 3b-0 for a correction PR (Z2's runbook entry).
+
+**Z4 — The insert (`writers/checkin.ts`).** `writeCheckinEntries`' INSERT becomes **target-less**
+`ON CONFLICT DO NOTHING`, for the whole batch: only a practice row can hit a non-`client_id` unique on
+this path, and a target-less skip is per row, so a habit in the same batch still inserts (with today's
+`client_id` target, the new index would raise a statement-level `23505` and lose the batch). A row not
+inserted is classified in this order:
+
+1. **replay**: a live row of this profile holds the `client_id`, **with the same metric and day** (the
+   pin `bodyweight.ts:240-256` has; today's lookup has neither, `checkin.ts:119, 142`);
+2. **`day_taken`**: the item is `practice_minutes` and a live row holds `practiceSlot(profileId, day)`;
+3. **`own_hidden`**: a hidden row of this profile holds the `client_id` and the day is free;
+4. **conflict**: another profile's row holds it;
+5. otherwise the existing throw.
+
+`practiceSlot` is exported from `checkin.ts` (not `single-value.ts`, which imports `hide.ts`), for
+3b-life's clear. The `checkin.ts:85-88` comment and write-path.md invariant 6 are updated in the PR.
+
+**Z5 — The action, until 3b-life.** `logLifeActivitiesAction` (`actions.ts:495-499`) handles
+`day_taken` explicitly as `ok: true`, with a comment and a test: in 3b-0 the ✓ writes a constant, so the
+other phone's row already says what this tap meant. Refusing would show an alert inside `LifeButton`
+that unmounts on the revalidate. **3b-life** turns it into `{ ok: false }` through the island, with its
+copy and a boundary test (added to 3b-life's table).
+
+**Z6 — Restore (`writers/hide.ts`).** The 23505 matcher becomes a **list of index-name consts**
+(maintainer, 2026-11-16), `[BODYWEIGHT_DAY_UNIQUE_INDEX, PRACTICE_DAY_UNIQUE_INDEX]`; lane E's 11b
+appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX` (the other two #447 arbiters are on `sessions` and
+`supersets`, which restore never writes). **Practice goes through the catch only**: no holder lookup and
+no swap, so a practice restore into a re-entered day answers `slot_taken` without `heldBy`, and
+`keepInsteadOf` stays bodyweight-only. Bodyweight's pre-check and swap are unchanged. This keeps the
+list provable: with a pre-check in front, the catch is unreachable on single-connection PGlite, and a
+wrong name in the list would pass every gate.
+
+**Z7 — Deploy order.** New code before the index is safe (the target-less insert names no index; the
+new branches are dead until it exists). The index before the new code is not: the old writer turns a
+second same-day practice into a bare `23505`. So the migration header says: merge when nobody is
+logging, confirm `migrate.yml` green and `pg_indexes.indexdef` before 3b-life merges, and a Vercel
+rollback past this PR re-exposes the bare `23505`. A separate writer-first PR was considered and
+rejected at today's traffic.
+
+**Z8 — Proofs, in `verify/single-values.ts`, and their mutation patches.**
+
+- Index: `pg_indexes.indexdef` is the shipped line; a raw second live practice is rejected by name
+  (`expectRejectedBy`, inside the savepoint); a hidden one, another day, another profile, and a
+  bodyweight on the same day are allowed.
+- The migration's own `DO` block, read from disk by slug, refuses a seeded duplicate, with a fixture
+  where dropping `profile_id` from the key would change the count.
+- Writer: same `client_id` → `replay`, same id; another `client_id` → `day_taken`, one live row, its
+  value untouched; a habit plus a taken practice in one batch → `created` and `day_taken`; after a
+  hide, a new insert → `created`; a hidden `client_id` holder with a free day → `own_hidden`; a
+  non-practice no-op with no holder throws; a `client_id` replayed under another metric is not a replay.
+- Restore: a habit plus a re-entered practice → `ok` and `slot_taken` in one call; the hidden practice
+  restores once the live one is hidden.
+- Mutation patches (with `.expect`): the index loses `deleted_at is null`; the insert's `client_id`
+  target comes back; `day_taken` loses its metric pin; the slot lookup loses its live-only filter;
+  the practice index leaves the restore list; the replay lookup loses its metric pin. Patch 40 still
+  applies to `checkin.ts`, or it is regenerated.
+- **PGlite has one connection**, so two phones racing cannot be shown there: a two-connection probe
+  on `e2e:local`'s embedded Postgres, recorded in the PR (3b-bw's precedent).
+
+**Z9 — Files.** `schema.ts`, the generated migration, `writers/checkin.ts`, `writers/hide.ts`,
+`apps/web/lib/dal/entries.ts` (the type), `apps/web/app/p/[profileId]/actions.ts` (+ test),
+`verify/single-values.ts`, the mutation patches and README, `docs/features/write-path.md` (invariant 6;
+the bodyweight and strength inserts cannot hit the new index), `docs/features/delete-and-restore.md`
+(owns `hide.ts`; the reader audit gains the slot lookup), `docs/runbooks.md` (Z2), `docs/architecture.md`
+(the new arbiter), the changelog fragment.
+
+**Not in 3b-0:** any copy, any screen, the practice amend and clear (3b-life).
+
 ## Review-response log (adversarial panel)
+
+### 3b-0 — a DB-safety and a correctness lens, before implementation (2026-11-16)
+
+Against main at `5c20dd23`, after #447 (three new arbiters) and the maintainer's two decisions of
+2026-11-16 (restore's check is a list of index names; a ✓ on a slot held by its own hidden entry
+revives it, in 11b/11c).
+
+| #   | Lens        | Critique (short)                                                                                         | Verdict      | Resolution                                                                                   |
+| --- | ----------- | -------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------- |
+| D1  | DB-safety   | **BLOCKING:** a concurrent build and `IF NOT EXISTS` cannot run here and contradict "0012's shape"       | **accepted** | Z2                                                                                           |
+| D2  | DB-safety   | **BLOCKING:** the prod read does not protect the apply; a bare 23505 leaks a key and wedges the queue    | **accepted** | Z2's pre-check; Z3 stays as the early warning                                                |
+| D3  | DB-safety   | Deploy order unanalysed                                                                                  | **accepted** | Z7; the writer-first PR rejected at today's traffic                                          |
+| D4  | DB-safety   | "The practice insert" is the shared batched writer; the typed result reaches nobody                      | **accepted** | Z4, Z5                                                                                       |
+| D5  | DB-safety   | Restore needs a shape; a registry in `single-value.ts` is an import cycle                                | **accepted** | Z6 (catch-only for practice, per C4); `practiceSlot` in `checkin.ts`                         |
+| D6  | DB-safety   | Proofs under-specified, aimed at `verify.ts`                                                             | **accepted** | Z8                                                                                           |
+| D7  | DB-safety   | The index shape is not written down                                                                      | **accepted** | Z1                                                                                           |
+| D8  | DB-safety   | The prod read is SQL in the plan, not a script                                                           | **accepted** | Z3                                                                                           |
+| D9  | DB-safety   | Classification order: the `client_id` holder first, so a hidden holder with a held day is `own_hidden`   | **rejected** | Z4 follows C3: the slot decides before `own_hidden`, as bodyweight's does (plan C3, round 2) |
+| C1  | Correctness | **BLOCKING:** no PR consumes `day_taken`; it would read as success                                       | **accepted** | Z5: explicit `ok` in 3b-0 while the value is constant; a refusal in 3b-life                  |
+| C2  | Correctness | **BLOCKING:** the migration instructions contradict 0012; no runbook entry                               | **accepted** | Z2                                                                                           |
+| C3  | Correctness | The classification order and its metric pin are unspecified                                              | **accepted** | Z4                                                                                           |
+| C4  | Correctness | With a pre-check, the restore catch list is unprovable on PGlite                                         | **accepted** | Z6: practice through the catch only; bodyweight unchanged                                    |
+| C5  | Correctness | Owed proofs and patches not named                                                                        | **accepted** | Z8                                                                                           |
+| C6  | Correctness | The prod read: same predicate as the index; a group may be two real sessions                             | **accepted** | Z3, Z2's runbook entry                                                                       |
+| N1  | both        | File table omits `delete-and-restore.md`, `runbooks.md`, `actions.ts`; `verify.ts` vs `single-values.ts` | **accepted** | Z9                                                                                           |
+| X1  | both        | The check-in replay lookup has no metric or day pin (outside the diff, #385; crafted input only)         | **accepted** | Z4 step 1 pins it, with a proof and a patch                                                  |
+| X2  | both        | Is the revive-and-amend decision scoped to program rows?                                                 | **open**     | Asked of the maintainer; Z4–Z8 assume single values keep new-row re-entry, as #442 shipped   |
 
 ### 3b-bw — the UX panel and a correctness lens, before implementation (2026-11-15)
 
