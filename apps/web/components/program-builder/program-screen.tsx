@@ -1,36 +1,78 @@
-import type { ProgramActions, ProgramView } from '@mat-plan/shared';
+'use client';
 
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import type { ProgramActions, ProgramView } from '@mat-plan/shared';
+import Link from 'next/link';
+import { useCallback, useState } from 'react';
+
+import { Announcer } from '@/components/ui/announcer';
+import { NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
+
+import { BUILDER_COPY, usedByText } from './builder-text';
+import { ProgramHeader } from './program-header';
+import { PROGRAMS_PATH } from './routes';
+import { WeekShell } from './week-shell';
+import { WhosOnIt } from './whos-on-it';
+import { WorkoutsList } from './workouts-list';
 
 /**
- * One program's page: who's on it, its workouts and its week, with the Put-on and Copy dialogs
- * (FAM-1 lane B; plan §4, §8 "Program page").
+ * One program's page: who's on it, its workouts and its week (FAM-1 step 8a; plan §8 "Program
+ * page"; the prototype's `vProgram`). Steps 10 and 10b grow it: the week editor, and the Copy and
+ * Put-on dialogs with their buttons.
  *
- * 🚧 **A stub from step 0b: steps 8a, 10 and 10b fill it in.** It is typed to the screen's final
- * props, the contract's data and the contract's actions object, so the preview route
- * (`/design/program`) and, later, the real route mount it the same way and never change when the
- * screen grows.
+ * **The screen is the page.** Its route is thin, so the screen renders the page's `<h1>`, its
+ * top-level blocks and "← Programs", inside the shell's one `<main>`. It adds no landmark of its own.
  *
- * **The screen is the page.** Its route is thin, so the screen renders the page's `<h1>` and its
- * top-level blocks, inside the shell's one `<main>`. It adds no landmark of its own around them.
+ * A client component because it holds the page's one status line: Rename and Take off both report
+ * there. The line sits under the "Used by" sentence, where the prototype puts its banner, and is
+ * mounted empty, so a message is announced; it takes the prototype's banner look once it has one.
  *
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
- * hides its control (plan §6). `putOn` and `takeOff` arrive that way, at step 15.
+ * hides its control (plan §6). `takeOff` arrives that way, at step 15.
  */
+/** The status line once it has a message: the prototype's banner. Names in it may be long. */
+const BANNER_CLASS = `rounded-lg px-3 py-2 text-sm font-medium ${NAME_WRAP_CLASS}`;
+
 export type ProgramScreenProps = { program: ProgramView; actions: ProgramActions };
 
 export function ProgramScreen({ program, actions }: ProgramScreenProps) {
-  const supplied = Object.entries(actions).flatMap(([name, action]) => (action ? [name] : []));
-  const slots = Object.values(program.week).flat().length;
+  const [status, setStatus] = useState({ message: '', tone: 'status' as 'status' | 'alert' });
+  // Cleared first, so the same message twice is announced twice and the banner blinks.
+  const report = useCallback((message: string, tone: 'status' | 'alert' = 'status') => {
+    setStatus({ message: '', tone });
+    if (message) requestAnimationFrame(() => setStatus({ message, tone }));
+  }, []);
+  const shown = (tone: 'status' | 'alert') => (status.tone === tone ? status.message : '');
   return (
-    <div className="flex flex-col gap-3">
-      <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>{program.name}</h1>
-      <p className="text-muted-foreground text-sm">Not built yet: FAM-1 steps 8a, 10 and 10b.</p>
-      <p>
-        {program.athletes.length} on it, {program.workouts.length} workouts, {slots} slots in the
-        week
-      </p>
-      <p className="text-sm">Actions: {supplied.join(', ')}</p>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Link href={PROGRAMS_PATH} className={NAV_LINK_CLASS}>
+          {BUILDER_COPY.backToPrograms}
+        </Link>
+        <ProgramHeader
+          programPublicId={program.programPublicId}
+          name={program.name}
+          renameProgram={actions.renameProgram}
+          onStatus={report}
+        />
+        <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+          {usedByText(program.athletes.map((athlete) => athlete.name))}
+        </p>
+        {/* Both mounted empty with no height, as `Announcer` asks; a banner once they have
+            something. A refusal the person must act on is an alert, not a status. */}
+        <Announcer
+          message={shown('status')}
+          className={shown('status') ? `${BANNER_CLASS} bg-muted` : 'h-0'}
+        />
+        <p
+          role="alert"
+          className={shown('alert') ? `${BANNER_CLASS} bg-destructive/10 text-destructive` : 'h-0'}
+        >
+          {shown('alert')}
+        </p>
+      </div>
+      <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={report} />
+      <WorkoutsList program={program} />
+      <WeekShell program={program} />
     </div>
   );
 }

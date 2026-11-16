@@ -19,8 +19,9 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Written at step 0b, before the lane's first step.** The three screens are stubs. Each step
-below adds its files, its diagram and its invariants here.
+🚧 **Built through step 8a.** The Programs list and the program page are real screens on the
+preview route; the workout editor is still a stub. Each step below adds its files and its
+invariants here.
 
 ## The map
 
@@ -33,17 +34,42 @@ below adds its files, its diagram and its invariants here.
 | 7a   | `apps/web/app/programs/actions.ts` (the real `ProgramActions`) with its registry file; `apps/web/lib/dal/program/`. |
 | 7b   | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                     |
 
+### How a screen is put together (8a)
+
+```mermaid
+flowchart LR
+  route["route (7b) or preview harness"] -->|data + ProgramActions| screen["ProgramScreen"]
+  screen --> header["ProgramHeader: h1, Rename"]
+  screen --> who["WhosOnIt: Take off"]
+  screen --> workouts["WorkoutsList"]
+  screen --> week["WeekShell (step 10: week editor)"]
+  header -->|useNameForm| actions["ProgramActions"]
+  who --> actions
+  header -->|onStatus| status["the page's status line: status or alert"]
+  who -->|onStatus| status
+```
+
 ## Files
 
-| File                                                            | What it is for                                                                                                        |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`. A stub until 8a.                                                         |
-| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`. A stub until 8a.                                                               |
-| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions })`; `picker` is the picker's own `MovementPickerData`. A stub until 8. |
-| `apps/web/components/program-builder/*-screen.test.tsx`         | Each stub's own output. The step that fills a stub in replaces its test.                                              |
-| `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.  |
-| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                   |
-| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                                                                                |
+| File                                                            | What it is for                                                                                                                      |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/program-builder/programs-list-screen.tsx`  | `ProgramsListScreen({ programs, actions })`: the list, "← Home", and `CreateProgram`.                                               |
+| `apps/web/components/program-builder/create-program.tsx`        | "+ Create a program": a name, then `createProgram`, then the program's page. One `clientId` per opened form.                        |
+| `apps/web/components/program-builder/program-screen.tsx`        | `ProgramScreen({ program, actions })`: composes the parts below and holds the page's one status line.                               |
+| `apps/web/components/program-builder/program-header.tsx`        | The `<h1>` and Rename (a stacked form; Cancel, Escape).                                                                             |
+| `apps/web/components/program-builder/whos-on-it.tsx`            | "Who's on it" and Take off, shown only when `actions.takeOff` exists.                                                               |
+| `apps/web/components/program-builder/workouts-list.tsx`         | The workouts, each a link to its editor; "+ New workout". 10b adds "Copy to…" as a sibling of each link.                            |
+| `apps/web/components/program-builder/week-shell.tsx`            | The week, read-only. Step 10's week editor takes its place.                                                                         |
+| `apps/web/components/program-builder/name-field.tsx`            | A name input with its counter (outside the label, by `aria-describedby`) and its refusal. Step 8 reuses it.                         |
+| `apps/web/components/program-builder/builder-text.ts`           | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.                            |
+| `apps/web/components/program-builder/routes.ts`                 | The builder's paths. The screens link with them; 7b builds its pages at them.                                                       |
+| `apps/web/components/program-builder/group-list.tsx`            | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                   |
+| `apps/web/components/program-builder/use-name-form.ts`          | A name form's state and submit: cleans the name, refuses an empty one, drops an answer that arrives after Cancel. Step 8 reuses it. |
+| `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions })`; `picker` is the picker's own `MovementPickerData`. A stub until 8.               |
+| `apps/web/components/program-builder/*-screen.test.tsx`         | Each screen's tests. The workout editor's is still the stub's own output until step 8 replaces it.                                  |
+| `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                |
+| `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                                 |
+| `apps/web/lib/dal/program/index.ts`                             | A placeholder so the directory exists.                                                                                              |
 
 ## Invariants
 
@@ -68,6 +94,35 @@ below adds its files, its diagram and its invariants here.
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
    shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
+8. **A screen links by `routes.ts`, and 7b's pages live at those paths** _(maintainer, 2026-11-15)_.
+   The props carry only data and actions, so the screens build their own links; until 7b they
+   lead nowhere on the preview route.
+9. **"Used by … Changes apply to …" counts everyone in `athletes`**, someone whose last day is
+   today included: they are on it through today, so an edit now still changes their day.
+10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's
+    row, or to the section's heading when they had not started and leave the list. The message is
+    set after the move. Focus moves only if it is still where the tap left it: an answer that lands
+    after the person moved on (into Rename, say) leaves their focus alone.
+11. **A name form drops a late answer, but not the write.** Cancel, Escape, a fresh open or
+    leaving the screen ends the attempt, so a late answer neither navigates nor shows an alert. The
+    create or rename it sent may still have landed; 6a and 7a inherit that.
+
+## Traps
+
+- **A name form assumes leaving the screen unmounts it.** `useNameForm` ends the attempt in an
+  effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in
+  `<Activity>` instead of unmounting it, so a create answered while hidden would be dropped and
+  the form would come back stuck on "Creating…". Revisit this if that flag is turned on.
+- **Until 7b, the preview route never reaches `networkidle`.** The screens link to `/programs/...`
+  pages that do not exist yet; Next prefetches each link, the 404 answers, and the response body
+  stays open. `pnpm --filter web screenshot:ephemeral` waits for `networkidle`, so it times out on
+  these states. Capture with a throwaway `e2e/<step>-capture.a11y.spec.ts` that waits for `load`
+  and the `<h1>` instead (the lane brief's capture recipe), and never commit it. Once 7b builds the
+  pages, the prefetches complete.
+- **A hook result that holds a ref is read as a ref by the React compiler's lint.** Destructure
+  `useNameForm()` (`const { name, fieldRef, … } = …`); `form.name` in JSX fails `react-hooks/refs`.
+- **Focus a field in the same tap that opens it.** Mount the form with `flushSync`, then focus: a
+  focus deferred to a frame may not raise the iPhone keyboard.
 
 ## Changing it
 
