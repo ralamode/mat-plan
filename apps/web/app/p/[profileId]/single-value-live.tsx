@@ -13,6 +13,8 @@ import {
 
 import { Announcer } from '@/components/ui/announcer';
 
+import { TickedCopy } from './log-tick';
+
 /**
  * Where focus goes after a single value's action settles (V1-24 3b-bw, plan W6). `change` is the
  * logged row's Change; `field` is the row's input, the create form's or the open editor's.
@@ -30,6 +32,17 @@ export type Report = {
   tone: 'sr' | 'status' | 'alert';
   /** Targets in order of preference: the first of them to be mounted takes focus. */
   focus: readonly FocusTarget[];
+  /**
+   * An alert whose copy names the ✓ ("Tap ✓ to try again."): the button's accessible name, read in
+   * place of the glyph (`TickedCopy`, V1-24 3b-life-b), so a screen reader never says "check mark".
+   */
+  tickLabel?: string;
+  /**
+   * Keep this alert when the row's Change opens (V1-24 3b-life-b): an "already logged" refusal names
+   * the number that was not saved, and the editor opens on the other phone's. Cancel and the next
+   * report still drop it.
+   */
+  keepOnOpen?: boolean;
 };
 
 type Live = {
@@ -38,14 +51,21 @@ type Live = {
   claimFocus: (targets: readonly FocusTarget[]) => void;
   /** A ref callback that registers an element as `target`, and takes a pending claim for it. */
   focusRef: (target: FocusTarget) => (node: HTMLElement | null) => (() => void) | void;
-  /** Drop a shown refusal: the editor reopened or was cancelled, so it no longer describes the screen. */
+  /** Drop a shown refusal: the editor was cancelled, so it no longer describes the screen. */
   dismiss: () => void;
+  /** Drop a shown refusal as Change opens, unless it was reported `keepOnOpen`. */
+  dismissOnOpen: () => void;
   /**
    * The status line's id while it is SHOWN (a clear), for the field to list in `aria-describedby` so
    * arriving focus reads it. `undefined` otherwise: a spoken-only "Bodyweight logged" left in the
    * region must not describe a field that a different event emptied.
    */
   statusId: string | undefined;
+  /**
+   * The shown refusal's id, for the field to list in `aria-describedby` (V1-24 3b-life-b): when focus
+   * lands on a field the refusal left mounted, the alert is read with it. `undefined` with no alert.
+   */
+  alertId: string | undefined;
 };
 
 const LiveContext = createContext<Live | null>(null);
@@ -91,8 +111,14 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
     visible: false,
     n: 0,
   });
-  const [alert, setAlert] = useState<{ text: string; n: number } | null>(null);
+  const [alert, setAlert] = useState<{
+    text: string;
+    n: number;
+    tickLabel?: string;
+    keepOnOpen?: boolean;
+  } | null>(null);
   const statusId = useId();
+  const alertId = useId();
   /** The island's own subtree (`display: contents`, so it adds no box to the section's layout). */
   const root = useRef<HTMLDivElement>(null);
   const claim = useRef<readonly FocusTarget[] | null>(null);
@@ -129,10 +155,10 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
   );
 
   const report = useCallback(
-    ({ message, tone, focus }: Report) => {
+    ({ message, tone, focus, tickLabel, keepOnOpen }: Report) => {
       if (tone === 'alert') {
         // A refusal does not replace a visible "cleared" line: the clear still happened.
-        setAlert((a) => ({ text: message, n: (a?.n ?? 0) + 1 }));
+        setAlert((a) => ({ text: message, n: (a?.n ?? 0) + 1, tickLabel, keepOnOpen }));
       } else {
         setAlert(null);
         // A new key per report, so a repeated message is a new text node and is read again.
@@ -178,12 +204,15 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
   }, []);
 
   const dismiss = useCallback(() => setAlert(null), []);
+  const dismissOnOpen = useCallback(() => setAlert((a) => (a?.keepOnOpen ? a : null)), []);
   const live: Live = {
     report,
     claimFocus: take,
     focusRef,
     dismiss,
+    dismissOnOpen,
     statusId: status.visible ? statusId : undefined,
+    alertId: alert ? alertId : undefined,
   };
 
   return (
@@ -200,8 +229,12 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
             is one: an `alert` is read when it is inserted, and an empty second alert region would
             sit beside the form's own field-error alert. */}
         {alert ? (
-          <p key={alert.n} role="alert" className="text-destructive text-sm">
-            {alert.text}
+          <p key={alert.n} id={alertId} role="alert" className="text-destructive text-sm">
+            {alert.tickLabel ? (
+              <TickedCopy text={alert.text} buttonLabel={alert.tickLabel} />
+            ) : (
+              alert.text
+            )}
           </p>
         ) : null}
       </div>

@@ -230,6 +230,9 @@ and complete; this is the one thing it cannot reach.
      "weigh-in + strength only". Before ONB-0 the fallback _was_ the membership set, so a brand-new
      household inherited the entire catalog — ~17 controls belonging to the maintainer's household,
      including seven wrestling-drill metrics grouped under the label "Brush teeth".
+     `life:wrestling_practice` stays out of it too. Its first reason (a one-tap that wrote 90
+     unprompted) went at V1-24 3b-life-b, which made it typed minutes; whether a new household sees
+     it by default is still the neutral default's own call.
    - They are paired in **exactly one place**: `resolveProfileRoutine` in `apps/web/lib/routine/catalog.ts`,
      which is also the only module in `apps/web` that imports `resolveRoutine`. `resolveRoutine`'s third
      parameter is _defaulted_ to the membership set, so a two-arg call still means "inherit the whole
