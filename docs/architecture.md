@@ -641,8 +641,8 @@ flowchart TB
 
 ### 4b. The program tables (FAM-1, through 4b)
 
-A household's program is a `program_blocks` row (`kind` tells a block built in the app from the
-`legacy` seeded one). Its workouts are `workouts`; the week template places them on weekdays through
+A household's program is a `program_blocks` row (`kind` is `template` for a block built in the
+app, `legacy` for the seeded one). Its workouts are `workouts`; the week template places them on weekdays through
 `block_day_workouts`; a workout's items are `prescriptions`, with typed targets in
 `prescription_quantities`. Two links run from the log side back to the plan: `sessions.workout_id`
 and `entries.prescription_id`. Both are `ON DELETE SET NULL` and identity only: what was asked
@@ -657,7 +657,7 @@ erDiagram
   program_blocks ||--o{ block_day_workouts : "the week template (block_id)"
   workouts ||--o{ block_day_workouts : "(workout_id, block_id) composite FK"
   program_blocks ||--o{ prescriptions : "block_id"
-  workouts ||--o{ prescriptions : "(workout_id, block_id) composite FK (4b)"
+  workouts |o--o{ prescriptions : "(workout_id, block_id) composite FK (4b); NULL on legacy rows"
   workouts |o--o{ workouts : "copied_from_workout_id, SET NULL"
   movements ||--o{ prescriptions : "movement_id"
   prescriptions ||--o{ prescription_quantities : "typed targets (4b)"
@@ -672,15 +672,17 @@ erDiagram
     bigint id PK
     uuid public_id UK "anti-IDOR"
     bigint household_id FK "the authz root"
-    text kind "legacy or built in the app (4a-i)"
+    text kind "legacy or template (4a-i)"
+    uuid client_id "UNIQUE per household; required on template"
     text name
   }
   workouts {
     bigint id PK
     uuid public_id UK "anti-IDOR"
-    uuid client_id "UNIQUE non-partial"
+    uuid client_id "UNIQUE per block (block_id, client_id)"
     bigint block_id FK
     text name
+    bigint copied_from_workout_id FK "SET NULL"
     text copied_from_program_name "frozen on Copy"
   }
   block_day_workouts {
@@ -696,7 +698,7 @@ erDiagram
     bigint block_id FK
     bigint workout_id FK "4b; XOR with day_role"
     text day_role "legacy rows only"
-    uuid client_id "4b; exactly on template rows"
+    uuid client_id "4b; on template rows; UNIQUE per workout"
     int sets "prescribed set count"
     text notes "the author's instructions"
     text rest_after "a superset's last item only"
@@ -706,6 +708,7 @@ erDiagram
   prescription_quantities {
     bigint prescription_id FK
     text slot "FK as a pair with dimension"
+    text dimension "denormalized for the two pair FKs"
     text unit "FK as a pair with dimension"
     numeric value_min "NULL means no target"
     numeric value_max "a range needs both ends"
@@ -717,6 +720,7 @@ erDiagram
   entries {
     bigint prescription_id FK "identity only"
     int prescription_set "1-based; marks a row logged in a program"
+    text prescribed_snapshot "what was asked, frozen"
   }
 ```
 
