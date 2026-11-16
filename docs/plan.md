@@ -326,6 +326,72 @@ NL logging via Anthropic structured outputs → human-confirm chip → write, wi
   the measurement columns AI-1 extracts into**, so AI-1 sequences **behind GAP-3**: legacy CSV samples
   → GAP-3 plan + panels → GAP-3 → V1-13 → AI-1. Rationale + the two rejected alternatives: plan **S5**.
 
+## SCALE — Beta 0 scale-readiness (2026-11-16)
+
+_Roadmap alignment (2026-11-16): scale-readiness hygiene for Beta 0; gates nothing in FAM-1; the
+time-zone and identity questions belong to `ID-1`; the native API layer is unscheduled and these
+items keep it a second transport, not a rewrite._
+
+Four small items from a research pass on decisions that get expensive to undo if the app grows
+(native apps, more of the US, later the UK). None adds a feature or changes a screen. Each is cheap
+now and dearer once FAM-1's lanes have written their actions and reads, or once more data exists.
+**Only these four are Beta 0.** Their order, and where each waits on a FAM-1 queue, is in
+[roadmap.md → In flight](./roadmap.md#in-flight).
+
+- <a id="scale-1"></a>**SCALE-1 — one rule for every new action (docs).** A short rule in AGENTS.md →
+  "Server conventions", in two parts. **(a) Every new mutation follows the FAM-1 contract pattern:** an
+  object input parsed by a zod schema in `packages/shared`; a typed result (`{ ok: true, … } |
+{ ok: false, reason }`) that never throws for a refusal; the response shape a zod schema in
+  `packages/shared`, not a TS type in `lib/dal`; `FormData` converted to that object at the edge.
+  Reference: `packages/shared/src/program/actions.ts` and `day-shapes.ts`. **(b) The DAL and the
+  writers take the day and the time zone as inputs:** the route or the action resolves the zone once
+  (`getActiveTimeZone`) and passes it down; nothing below reads the `tz` cookie. That is true of the
+  code today (the two readers are `app/p/[profileId]/actions.ts` and `page.tsx`); the rule keeps it
+  true. **Why:** a native app cannot call a Server Action and has no cookie, so a later `/api/v1`
+  handler should be a second transport over the same functions. **Out of scope:** retrofitting the
+  old actions (FAM-1 step 12f removes them); a time-zone column (no consumer yet; when one lands it
+  belongs on the athlete with a household default, `ID-1` keep-open item 4). _(Beta 0.)_
+- <a id="scale-2"></a>**SCALE-2 — pin the function region beside the database, and record every
+  vendor's region.** **(a)** A manual step: the maintainer reads the Neon project's region (and
+  Upstash's) in each console. **(b)** Pin Vercel functions to the matching region (for example Neon `us-east-1`
+  ↔ Vercel `iad1`) in a new `vercel.json` `regions` entry, not a `preferredRegion` constant. **(c)**
+  Add **region** and **processor agreement / transfer mechanism** columns to the processor table in
+  `docs/privacy/data-inventory.md` and fill them for Neon, Vercel, Clerk, Sentry and Upstash, from
+  the consoles, not from the setup docs' advice. **Why:** nothing in the tree pins a region today,
+  and a Neon project's region cannot be changed after creation. Owes the privacy lens ("a change to
+  who receives data, or where, updates the inventory in the same PR"). Confirm the region in the
+  Vercel dashboard at the phone run-through. _(Beta 0; a manual-step row like `DX-5(a)`.)_
+- <a id="scale-3"></a>**SCALE-3 — a statement timeout on the runtime pool.**
+  `packages/db/src/client.ts` creates the pool with a connect timeout only. Bound a statement at
+  about 10–15 s so a runaway query cannot hold a pooled connection. ⚠️ **Prove the mechanism against
+  the pooled connection string on the seed-only preview before choosing**, because the runtime goes
+  through PgBouncer in transaction mode: (1) a role-level `ALTER ROLE … SET statement_timeout`,
+  shipped as a migration; (2) node-postgres's client-side `query_timeout`; (3) `SET LOCAL` inside an
+  existing transaction. ⚠️ **If it is (1), check what else runs as that role:** a role-level timeout
+  also bounds the migration runner, `db:seed` and any backfill, which need their own session-level
+  override on the unpooled connection. A second attempt owes a `docs/lessons.md` entry. A migration
+  owes the `db-migration` skill and the db-safety lens. _(Beta 0.)_
+- <a id="scale-4"></a>**SCALE-4 — the rules that are written down but not wired (one docs PR).** Nine
+  places where a doc states something the code does not do. For each, fix the claim (mark it "planned,
+  not wired yet" with its owner row) or fix the code; almost always the claim. The nine: `Intl`
+  formatting (`docs/principles.md` §8); rate-limit expensive operations (AGENTS.md, Backend rules 7:
+  the zip export has no limiter); Sentry `enableLogs` (AGENTS.md, Server conventions); cursor
+  pagination for any list that can grow (`docs/principles.md`: the export loads every month); the
+  `Idempotency-Key` header (AGENTS.md, Backend rules 6: idempotency is the body's `clientId` plus a
+  UNIQUE, which is fine, so the claim changes); last-write-wins on a client `updated_at` (AGENTS.md,
+  Schema "Time": deferred to v1.5); "request and response change ⇒ shared zod schema" (`SCALE-1`
+  sets it going forward); the household time-zone override in `apps/web/lib/active-timezone.ts`'s
+  comment; and `ramp_targets.week_start`'s "ISO-week Monday (UTC)" comment in `schema.ts`, which is
+  **left for FAM-1's lane A** (its file while its chain runs). More drift found on the way joins the
+  list. **Why:** AGENTS.md says never to cite an unwired gate; this is that rule applied to prose.
+  _(Beta 0.)_
+
+**Explicitly not Beta 0, and not planned here:** adding `household_id` to `entries`, `entry_sets` or
+`sessions` (it would break `ID-1` keep-open item 4; a partition key would be `profile_id`); a
+time-zone column, `/api/v1`, an i18n library, a load test, read replicas (each has a later trigger);
+a consent record, a retention policy and a purge window (they gate the first outside family, Beta 1).
+Nothing in Beta 0 should assume there will never be a consent table.
+
 ## v1.5 — offline (the local-first / distributed-systems phase, isolated)
 
 > **Auth moved out of v1.5** (2026-09-30): Clerk login is pulled forward to [AUTH-1](#auth-1) in
