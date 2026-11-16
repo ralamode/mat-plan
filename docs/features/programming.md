@@ -99,6 +99,15 @@ scans the card in **both** states) **fails the build**. Two more things not to r
 3. **`programDayRows` returns ONE block by design.** It is not a bug that a second block does not
    appear. Anything wanting multiple concurrent programs is SCHED-1, a different model.
 
+   🔴 **Both newest-block reads are LEGACY-only since FAM-1 5b** (`programBlockIsLegacy()` from `writers/ownership.ts`, used in
+   `queries/program-day.ts`; ADR 0007 A2 §1): `programDayRows` and `householdHasProgram` never see a
+   block a household built in the app (`kind = 'template'`), which reaches an athlete only through an
+   assignment. It is the REAL guard, not a belt-and-braces one: 4b's `day_role`/`workout_id` CHECK
+   cannot see a block's kind, so a template prescription with a `day_role` is legal in the database.
+   `db:verify` proves the legacy output byte-identical with a newer template block on the same day,
+   and mutations 55 and 56 keep it honest. ⚠️ So a household whose only programs are built ones reads
+   "no program" in `householdHasProgram` (the add-athlete form's Child wording).
+
    ⚠️ **This is why only ONE block is seeded.** Since 2026-09-24 that is the **Youth Daily Program**
    — the A/B rotation the kids actually run. The Kids S&C Foundation block it replaced is archived
    verbatim at [docs/programs/kids-sc-foundation-archived.md](../programs/kids-sc-foundation-archived.md)

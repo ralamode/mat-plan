@@ -9,6 +9,7 @@ import {
   PROGRAM_BLOCK_KIND,
   PROGRAM_BLOCK_KINDS,
   PROGRAM_NAME_MAX,
+  PROGRAM_READ_KIND,
   SLOT_LABEL_MAX,
   WEEKDAYS,
   WORKOUT_NAME_MAX,
@@ -26,6 +27,9 @@ import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../../src/client';
+import { householdHasProgram, programDayRows } from '../../src/queries/program-day';
+import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import { prescribedSnapshotsFor } from '../../src/writers/prescribed-snapshot';
 import { seed } from '../../src/seed';
 import { findOrCreateTypedMovement } from '../../src/writers/movement-catalog';
 import {
@@ -35,6 +39,7 @@ import {
   movementInHousehold,
   movementIsGlobal,
   programBlockByClientId,
+  programBlockInHousehold,
 } from '../../src/writers/ownership';
 import {
   asTx,
@@ -63,6 +68,8 @@ import {
  *   (ADR 0007 Amendment 2 §10), `assertCheckCoversIntConst`, the length CHECKs pinned to their consts;
  * - step 4a-ii: the append arbiters and the row arbiter;
  * - step 4b: the XOR both ways, slot keys, quantity keys, the scoped `client_id`;
+ * - step 5b ✅: the legacy reads are byte-identical with a newer template block present, and
+ *   `householdHasProgram` counts legacy blocks only;
  * - step 5: assignments and erasure.
  *
  * What a module can rely on when it runs, and the helpers to import, are in `./harness` →
@@ -73,6 +80,7 @@ import {
 export async function verifySchema(ctx: VerifyContext): Promise<void> {
   await verifyStep3(ctx);
   await verifyStep4ai(ctx);
+  await verifyStep5b(ctx);
   await verifyStep1();
 }
 
@@ -926,4 +934,169 @@ async function verifyStep1(): Promise<void> {
   console.log(
     '✓ FAM-1 1: the seed writes the program only when asked for fixtures (production never asks)',
   );
+}
+
+// ── FAM-1 step 5b ───────────────────────────────────────────────────────────────────────────────────
+
+async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const pg = tx as unknown as NodePgDatabase<typeof schema>;
+
+    // A day role A's legacy block programs WITH a rendered target (sets set), so a snapshot is
+    // non-empty, and a kid of that household to read it for.
+    const [legacy] = await tx
+      .select({
+        dayRole: schema.prescriptions.dayRole,
+        householdId: schema.programBlocks.householdId,
+      })
+      .from(schema.prescriptions)
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
+      .where(
+        and(
+          programBlockInHousehold(A_SCOPE),
+          sql`${schema.programBlocks.kind} = ${PROGRAM_BLOCK_KIND.legacy} and ${schema.programBlocks.deletedAt} is null and ${schema.prescriptions.deletedAt} is null and ${schema.prescriptions.sets} is not null`,
+        ),
+      )
+      .orderBy(schema.prescriptions.id)
+      .limit(1);
+    assert.ok(legacy, 'FAM-1 5b: a legacy prescription with a target exists');
+    const [kid] = await tx
+      .select({ publicId: schema.profiles.publicId })
+      .from(schema.profiles)
+      .where(
+        sql`${schema.profiles.householdId} = ${legacy.householdId} and ${schema.profiles.kind} = ${PROGRAM_READ_KIND} and ${schema.profiles.deletedAt} is null`,
+      )
+      .orderBy(schema.profiles.id)
+      .limit(1);
+    assert.ok(kid, 'FAM-1 5b: a kid reads that program');
+    const dayRole = legacy.dayRole as Parameters<typeof programDayRows>[1]['dayRole'];
+    const read = { scope: A_SCOPE, profilePublicId: kid.publicId, dayRole };
+
+    const rowsBefore = await programDayRows(pg, read);
+    assert.ok(
+      rowsBefore.length > 0,
+      'FAM-1 5b: the legacy read returns rows (an adult would give [] on both sides)',
+    );
+    const legacyMovements = [...new Set(rowsBefore.map((r) => r.movementId))];
+
+    // The worst case: a NEWER template block in the same household, with a prescription on the SAME
+    // day role (legal in the database after 4b too; only the writer refuses it), a target, and a
+    // movement the legacy block does not use.
+    const clientId = newId();
+    await insertProgramBlockOwnedBy(exec, A_SCOPE, {
+      clientId,
+      slug: 'fam-1-5b-template',
+      name: 'T',
+      notes: null,
+    });
+    const template = (await programBlockByClientId(exec, A_SCOPE, clientId))!;
+    const [otherMovement] = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(
+        sql`${schema.movements.householdId} is null and ${schema.movements.id} not in (${sql.join(
+          legacyMovements.map((m) => sql`${m}`),
+          sql`, `,
+        )})`,
+      )
+      .orderBy(schema.movements.id)
+      .limit(1);
+    await tx.insert(schema.prescriptions).values({
+      publicId: newId(),
+      blockId: template.id,
+      dayRole,
+      movementId: otherMovement.id,
+      idx: 0,
+      sets: 3,
+      targetReps: '5',
+    });
+    const movementIds = [...legacyMovements, otherMovement.id];
+    // Control: unfiltered, the template block IS the newest block programming this day role.
+    const [newest] = await tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .innerJoin(schema.prescriptions, eq(schema.prescriptions.blockId, schema.programBlocks.id))
+      .where(
+        sql`${schema.programBlocks.householdId} = ${legacy.householdId} and ${schema.prescriptions.dayRole} = ${dayRole} and ${schema.programBlocks.deletedAt} is null`,
+      )
+      .orderBy(sql`${schema.programBlocks.id} desc`)
+      .limit(1);
+    assert.equal(
+      newest.id,
+      template.id,
+      'FAM-1 5b: control — unfiltered, the template block would be the one read',
+    );
+
+    // Byte-identical legacy output with the template block present.
+    assert.deepEqual(
+      await programDayRows(pg, read),
+      rowsBefore,
+      'FAM-1 5b: programDayRows is byte-identical with a template block present',
+    );
+    // The snapshot writer reads programDayRows too; recorded on the same movements, it must not see
+    // the template prescription. (Recording the "before" map now is equivalent: the legacy rows did not change.)
+    const snapshots = await prescribedSnapshotsFor(pg, { ...read, movementIds });
+    assert.ok(
+      [...snapshots.values()].some((v) => v !== ''),
+      'FAM-1 5b: control — a legacy snapshot renders non-empty',
+    );
+    assert.equal(
+      snapshots.get(otherMovement.id) ?? '',
+      '',
+      "FAM-1 5b: the template's movement has no snapshot",
+    );
+  });
+  console.log(
+    '✓ FAM-1 5b: programDayRows and the snapshot writer read the legacy block only, byte-identical with a newer template block on the same day',
+  );
+
+  // householdHasProgram counts LEGACY blocks only, in a household of its own.
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const pg = tx as unknown as NodePgDatabase<typeof schema>;
+    const [hh] = await tx
+      .insert(schema.households)
+      .values({ publicId: newId(), name: 'FAM-1 5b probe' })
+      .returning({ id: schema.households.id });
+    const FRESH_SCOPE = householdScopeForScript(hh.id);
+    assert.equal(
+      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
+      false,
+      'FAM-1 5b: no blocks: no program',
+    );
+    const clientId = newId();
+    await insertProgramBlockOwnedBy(exec, FRESH_SCOPE, {
+      clientId,
+      slug: 'fam-1-5b-only-template',
+      name: 'T',
+      notes: null,
+    });
+    const t = await programBlockByClientId(exec, FRESH_SCOPE, clientId);
+    assert.ok(t && !t.deleted, 'FAM-1 5b: the template block exists and is live');
+    assert.equal(
+      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
+      false,
+      'FAM-1 5b: a template block alone is not "a program" for this read',
+    );
+    const [legacyBlock] = await tx
+      .insert(schema.programBlocks)
+      .values({ publicId: newId(), householdId: hh.id, slug: 'fam-1-5b-legacy', name: 'L' })
+      .returning({ id: schema.programBlocks.id });
+    assert.equal(
+      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
+      true,
+      'FAM-1 5b: a live legacy block is',
+    );
+    await tx
+      .update(schema.programBlocks)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.programBlocks.id, legacyBlock.id));
+    assert.equal(
+      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
+      false,
+      'FAM-1 5b: a hidden legacy block is not',
+    );
+  });
+  console.log('✓ FAM-1 5b: householdHasProgram counts a live legacy block, never a template one');
 }
