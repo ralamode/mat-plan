@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index eacb662f..c4b437e9 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -204,7 +204,7 @@ export async function writeCheckinEntries(
+       return { clientId: v.clientId, outcome: 'day_taken' as const };
+     }
+     // 3 · own_hidden: this profile's HIDDEN row holds the id, and the day is free.
+-    if (own && holder.deletedAt !== null) {
++    if (holder !== undefined && holder.deletedAt !== null) {
+       return { clientId: v.clientId, outcome: 'own_hidden' as const };
+     }
+     // 4 · conflict: another profile's row holds the id, or this profile's live row holds it for

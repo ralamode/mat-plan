@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { TRANSPORT_REFUSALS, type TransportRefusal } from '@mat-plan/shared';
 import * as Sentry from '@sentry/nextjs';
 
 import { RATE_LIMITED } from '@/lib/constants';
@@ -23,6 +24,14 @@ import type { ActionState } from '@/app/p/[profileId]/action-state';
 type MutationRefusal = ActionState & { ok: false };
 
 export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
+
+/**
+ * The entry of an action that speaks the FAM-1 contract (`ProgramActions`, `DayActions`): the same
+ * two checks, refused in the contract's words. `TransportRefusal` is a valid `ProgramResult` and a
+ * valid `RowResult`, so such an action writes `if (!entry.ok) return entry;` exactly as a form
+ * action does, and the source guard reads both the same way.
+ */
+export type ContractEntry = { ok: true; userId: string } | TransportRefusal;
 
 /**
  * 🔴 **The entry check every mutating Server Action under `/p` runs first — in BOTH modules since
@@ -70,19 +79,49 @@ export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
  * refusal suites for every enumerated action. The source guard covers what those cannot — placement
  * and order — not the whole claim.
  *
- * @param refusal the copy for "no session" — never distinguishable from any other refusal to a caller.
+ * 🔴 **ONE function for both envelopes, on purpose (FAM-1 contract change C7).** An action that
+ * speaks the FAM-1 contract takes a typed input and resolves a `ProgramResult` or a `RowResult`, not
+ * an `ActionState`. It passes `TRANSPORT_REFUSALS` (`@mat-plan/shared`) where a form action passes
+ * its copy, and is refused with `{ ok: false, reason }`: `not_found` for no session, `retry` for
+ * the limit. A second entry function would have needed the source guard to accept either name,
+ * which is the alternation `pages-need-a-session.test.ts` forbids, and would have put the two
+ * conjuncts and their order in two places. Here the checks below are written once and only the
+ * shape of the answer differs.
+ * ⚠️ **The argument only chooses the envelope; the two words are read from the const**, never from
+ * what the caller passed, so a look-alike object pushed past the type by a cast cannot change what
+ * a refused caller is told.
+ *
+ * @param refusal what a caller with no session is answered with: a form action's copy (never
+ *   distinguishable from any other refusal to a caller), or `TRANSPORT_REFUSALS` for an action that
+ *   speaks the FAM-1 contract.
  * @param policy the rate-limit budget this mutation counts against; the default for everything
  *   that is not a day-page row write.
  */
 export async function enterMutation(
   refusal: string,
+  policy?: MutationLimitPolicy,
+): Promise<MutationEntry>;
+export async function enterMutation(
+  refusal: typeof TRANSPORT_REFUSALS,
+  policy?: MutationLimitPolicy,
+): Promise<ContractEntry>;
+export async function enterMutation(
+  refusal: string | typeof TRANSPORT_REFUSALS,
   policy: MutationLimitPolicy = MUTATION_RATE_LIMIT,
-): Promise<MutationEntry> {
+): Promise<MutationEntry | ContractEntry> {
   const user = await sessionUserOrNull();
-  if (!user) return { ok: false, error: refusal };
+  if (!user) {
+    return typeof refusal === 'string'
+      ? { ok: false, error: refusal }
+      : { ok: false, reason: TRANSPORT_REFUSALS.noSession };
+  }
 
   const limit = await checkMutationLimit(user.userId, policy);
-  if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
+  if (!limit.allowed) {
+    return typeof refusal === 'string'
+      ? { ok: false, error: RATE_LIMITED }
+      : { ok: false, reason: TRANSPORT_REFUSALS.rateLimited };
+  }
   if (limit.reason === 'limiter-error') {
     // A permanently-dead fail-open limiter is otherwise completely silent.
     Sentry.addBreadcrumb({

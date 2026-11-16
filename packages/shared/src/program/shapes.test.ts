@@ -21,7 +21,14 @@ import { QUANTITY_SLOT, slotAcceptsDimension } from '../quantity-slots';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import { FREE_TEXT_NOTE_MAX } from '../text';
 import { MAX_STORABLE_QUANTITY, UNIT_DIMENSION_BY_CODE } from '../units';
-import { PROGRAM_REFUSALS, type DayActions, type ProgramActions } from './actions';
+import {
+  PROGRAM_REFUSALS,
+  TRANSPORT_REFUSALS,
+  type DayActions,
+  type ProgramActions,
+  type ProgramResult,
+  type TransportRefusal,
+} from './actions';
 import {
   dayPlanSchema,
   ON_PROGRAM_STATES,
@@ -591,6 +598,22 @@ describe('the row writes', () => {
 });
 
 describe('the actions interfaces', () => {
+  it('names what a transport answers before the action runs, in words both results hold', () => {
+    // No session is `not_found` (never a "forbidden": ADR 0006), and the rate limit is `retry`.
+    expect(TRANSPORT_REFUSALS).toEqual({ noSession: 'not_found', rateLimited: 'retry' });
+    for (const reason of Object.values(TRANSPORT_REFUSALS)) {
+      expect(PROGRAM_REFUSALS).toContain(reason);
+      expect(ROW_REFUSALS).toContain(reason);
+      // One value is a valid `RowResult` at runtime and, below, a valid `ProgramResult` by type.
+      const refusal: TransportRefusal = { ok: false, reason };
+      expect(rowResultSchema.parse(refusal)).toEqual(refusal);
+      const asProgram: ProgramResult<{ programPublicId: string }> = refusal;
+      expect(asProgram.ok).toBe(false);
+    }
+    // The two must stay different words, or a rate-limited caller is told the thing is gone.
+    expect(TRANSPORT_REFUSALS.noSession).not.toBe(TRANSPORT_REFUSALS.rateLimited);
+  });
+
   it('lets the wiring leave out exactly the members the plan marks optional', async () => {
     // Types only, so the proof is that this compiles: the required members alone satisfy each
     // interface, and a screen reads an unwired member as `undefined` and hides its control.
