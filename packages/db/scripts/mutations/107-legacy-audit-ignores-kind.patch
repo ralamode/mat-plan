@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -2128,7 +2128,7 @@
+     await tx.execute(sql`
+       SELECT a.id FROM program_assignments a
+         JOIN program_blocks b ON b.id = a.block_id
+-       WHERE b.kind <> ${PROGRAM_BLOCK_KIND.template}
++       WHERE b.kind IS NOT NULL
+        ORDER BY a.id`),
+   );
+ }

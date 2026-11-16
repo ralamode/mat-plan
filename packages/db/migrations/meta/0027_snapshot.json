@@ -1,5 +1,5 @@
 {
-  "id": "a73effc1-c682-4e29-a4af-ad808ce59944",
+  "id": "28f19f34-c709-4937-b541-5801bd61dfdd",
   "prevId": "d8a5abdf-127c-4ee1-b658-6ebc7ccc25fa",
   "version": "7",
   "dialect": "postgresql",
@@ -46,15 +46,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "activity_types_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -132,9 +132,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_activity_types_default_unit": {
           "name": "idx_activity_types_default_unit",
@@ -147,54 +147,54 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "activity_types_category_activity_type_categories_code_fk": {
           "name": "activity_types_category_activity_type_categories_code_fk",
           "tableFrom": "activity_types",
+          "tableTo": "activity_type_categories",
           "columnsFrom": [
             "category"
           ],
-          "tableTo": "activity_type_categories",
           "columnsTo": [
             "code"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "activity_types_default_unit_units_code_fk": {
           "name": "activity_types_default_unit_units_code_fk",
           "tableFrom": "activity_types",
+          "tableTo": "units",
           "columnsFrom": [
             "default_unit"
           ],
-          "tableTo": "units",
           "columnsTo": [
             "code"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "activity_types_public_id_unique": {
           "name": "activity_types_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "activity_types_key_unique": {
           "name": "activity_types_key_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "key"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -216,15 +216,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "block_day_workouts_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "block_id": {
@@ -296,9 +296,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_block_day_workouts_slot": {
           "name": "uq_block_day_workouts_slot",
@@ -323,10 +323,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"block_day_workouts\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_block_day_workouts_once_per_day": {
           "name": "uq_block_day_workouts_once_per_day",
@@ -351,40 +351,40 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"block_day_workouts\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "block_day_workouts_block_id_program_blocks_id_fk": {
           "name": "block_day_workouts_block_id_program_blocks_id_fk",
           "tableFrom": "block_day_workouts",
+          "tableTo": "program_blocks",
           "columnsFrom": [
             "block_id"
           ],
-          "tableTo": "program_blocks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "block_day_workouts_workout_block_fkey": {
           "name": "block_day_workouts_workout_block_fkey",
           "tableFrom": "block_day_workouts",
+          "tableTo": "workouts",
           "columnsFrom": [
             "workout_id",
             "block_id"
           ],
-          "tableTo": "workouts",
           "columnsTo": [
             "id",
             "block_id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -416,15 +416,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "day_readiness_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -490,9 +490,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_day_readiness_profile_date": {
           "name": "uq_day_readiness_profile_date",
@@ -511,35 +511,35 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"day_readiness\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "day_readiness_profile_id_profiles_id_fk": {
           "name": "day_readiness_profile_id_profiles_id_fk",
           "tableFrom": "day_readiness",
+          "tableTo": "profiles",
           "columnsFrom": [
             "profile_id"
           ],
-          "tableTo": "profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "day_readiness_public_id_unique": {
           "name": "day_readiness_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -561,15 +561,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "entries_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -762,9 +762,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entries_unit": {
           "name": "idx_entries_unit",
@@ -777,9 +777,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entries_session": {
           "name": "idx_entries_session",
@@ -792,9 +792,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entries_activity_type": {
           "name": "idx_entries_activity_type",
@@ -807,9 +807,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entries_movement": {
           "name": "idx_entries_movement",
@@ -822,9 +822,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entries_metric_key": {
           "name": "idx_entries_metric_key",
@@ -837,9 +837,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entries_superset": {
           "name": "idx_entries_superset",
@@ -852,9 +852,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_entries_superset_order": {
           "name": "uq_entries_superset_order",
@@ -873,10 +873,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"entries\".\"deleted_at\" is null and \"entries\".\"prescription_set\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "idx_entries_prescription": {
           "name": "idx_entries_prescription",
@@ -889,10 +889,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"entries\".\"prescription_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_entries_session_prescription_set": {
           "name": "uq_entries_session_prescription_set",
@@ -917,10 +917,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"entries\".\"prescription_id\" is not null and \"entries\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_entries_client_id": {
           "name": "uq_entries_client_id",
@@ -933,9 +933,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_entries_profile_day_bodyweight": {
           "name": "uq_entries_profile_day_bodyweight",
@@ -954,16 +954,16 @@
             },
             {
               "expression": "coalesce(\"context\", 'morning')",
-              "isExpression": true,
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"entries\".\"deleted_at\" is null and \"entries\".\"metric_key\" = 'bodyweight'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_entries_profile_day_practice": {
           "name": "uq_entries_profile_day_practice",
@@ -982,126 +982,126 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"entries\".\"deleted_at\" is null and \"entries\".\"metric_key\" = 'practice_minutes'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "entries_profile_id_profiles_id_fk": {
           "name": "entries_profile_id_profiles_id_fk",
           "tableFrom": "entries",
+          "tableTo": "profiles",
           "columnsFrom": [
             "profile_id"
           ],
-          "tableTo": "profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_unit_units_code_fk": {
           "name": "entries_unit_units_code_fk",
           "tableFrom": "entries",
+          "tableTo": "units",
           "columnsFrom": [
             "unit"
           ],
-          "tableTo": "units",
           "columnsTo": [
             "code"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_session_id_sessions_id_fk": {
           "name": "entries_session_id_sessions_id_fk",
           "tableFrom": "entries",
+          "tableTo": "sessions",
           "columnsFrom": [
             "session_id"
           ],
-          "tableTo": "sessions",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_activity_type_id_activity_types_id_fk": {
           "name": "entries_activity_type_id_activity_types_id_fk",
           "tableFrom": "entries",
+          "tableTo": "activity_types",
           "columnsFrom": [
             "activity_type_id"
           ],
-          "tableTo": "activity_types",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_movement_id_movements_id_fk": {
           "name": "entries_movement_id_movements_id_fk",
           "tableFrom": "entries",
+          "tableTo": "movements",
           "columnsFrom": [
             "movement_id"
           ],
-          "tableTo": "movements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_metric_key_metric_definitions_key_fk": {
           "name": "entries_metric_key_metric_definitions_key_fk",
           "tableFrom": "entries",
+          "tableTo": "metric_definitions",
           "columnsFrom": [
             "metric_key"
           ],
-          "tableTo": "metric_definitions",
           "columnsTo": [
             "key"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_superset_id_supersets_id_fk": {
           "name": "entries_superset_id_supersets_id_fk",
           "tableFrom": "entries",
+          "tableTo": "supersets",
           "columnsFrom": [
             "superset_id"
           ],
-          "tableTo": "supersets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entries_prescription_id_prescriptions_id_fk": {
           "name": "entries_prescription_id_prescriptions_id_fk",
           "tableFrom": "entries",
+          "tableTo": "prescriptions",
           "columnsFrom": [
             "prescription_id"
           ],
-          "tableTo": "prescriptions",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "entries_public_id_unique": {
           "name": "entries_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1143,15 +1143,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "entry_set_quantities_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "client_id": {
@@ -1223,9 +1223,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entry_set_quantities_slot": {
           "name": "idx_entry_set_quantities_slot",
@@ -1244,9 +1244,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_entry_set_quantities_unit": {
           "name": "idx_entry_set_quantities_unit",
@@ -1265,9 +1265,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_entry_set_quantities_set_slot": {
           "name": "uq_entry_set_quantities_set_slot",
@@ -1286,10 +1286,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"entry_set_quantities\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_entry_set_quantities_client_id": {
           "name": "uq_entry_set_quantities_client_id",
@@ -1302,54 +1302,54 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "entry_set_quantities_entry_set_id_entry_sets_id_fk": {
           "name": "entry_set_quantities_entry_set_id_entry_sets_id_fk",
           "tableFrom": "entry_set_quantities",
+          "tableTo": "entry_sets",
           "columnsFrom": [
             "entry_set_id"
           ],
-          "tableTo": "entry_sets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "entry_set_quantities_slot_dimension_fkey": {
           "name": "entry_set_quantities_slot_dimension_fkey",
           "tableFrom": "entry_set_quantities",
+          "tableTo": "quantity_slots",
           "columnsFrom": [
             "slot",
             "dimension"
           ],
-          "tableTo": "quantity_slots",
           "columnsTo": [
             "code",
             "dimension"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "entry_set_quantities_unit_dimension_fkey": {
           "name": "entry_set_quantities_unit_dimension_fkey",
           "tableFrom": "entry_set_quantities",
+          "tableTo": "units",
           "columnsFrom": [
             "unit",
             "dimension"
           ],
-          "tableTo": "units",
           "columnsTo": [
             "code",
             "dimension"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1373,15 +1373,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "entry_sets_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -1468,9 +1468,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_entry_sets_entry_idx": {
           "name": "uq_entry_sets_entry_idx",
@@ -1489,10 +1489,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"entry_sets\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_entry_sets_client_id": {
           "name": "uq_entry_sets_client_id",
@@ -1505,34 +1505,34 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "entry_sets_entry_id_entries_id_fk": {
           "name": "entry_sets_entry_id_entries_id_fk",
           "tableFrom": "entry_sets",
+          "tableTo": "entries",
           "columnsFrom": [
             "entry_id"
           ],
-          "tableTo": "entries",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "entry_sets_public_id_unique": {
           "name": "entry_sets_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1554,15 +1554,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "household_members_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -1622,9 +1622,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_household_members_clerk_user": {
           "name": "uq_household_members_clerk_user",
@@ -1637,35 +1637,35 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"household_members\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "household_members_household_id_households_id_fk": {
           "name": "household_members_household_id_households_id_fk",
           "tableFrom": "household_members",
+          "tableTo": "households",
           "columnsFrom": [
             "household_id"
           ],
-          "tableTo": "households",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "household_members_public_id_unique": {
           "name": "household_members_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1687,15 +1687,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "households_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -1744,10 +1744,10 @@
       "uniqueConstraints": {
         "households_public_id_unique": {
           "name": "households_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1764,15 +1764,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "metric_definitions_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -1844,41 +1844,41 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "metric_definitions_unit_units_code_fk": {
           "name": "metric_definitions_unit_units_code_fk",
           "tableFrom": "metric_definitions",
+          "tableTo": "units",
           "columnsFrom": [
             "unit"
           ],
-          "tableTo": "units",
           "columnsTo": [
             "code"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "metric_definitions_public_id_unique": {
           "name": "metric_definitions_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "metric_definitions_key_unique": {
           "name": "metric_definitions_key_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "key"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1904,15 +1904,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "movements_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -2010,9 +2010,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_movements_slug_global": {
           "name": "uq_movements_slug_global",
@@ -2025,10 +2025,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"movements\".\"household_id\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_movements_household_slug": {
           "name": "uq_movements_household_slug",
@@ -2047,48 +2047,48 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"movements\".\"household_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "movements_household_id_households_id_fk": {
           "name": "movements_household_id_households_id_fk",
           "tableFrom": "movements",
+          "tableTo": "households",
           "columnsFrom": [
             "household_id"
           ],
-          "tableTo": "households",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "movements_unit_default_units_code_fk": {
           "name": "movements_unit_default_units_code_fk",
           "tableFrom": "movements",
+          "tableTo": "units",
           "columnsFrom": [
             "unit_default"
           ],
-          "tableTo": "units",
           "columnsTo": [
             "code"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "movements_public_id_unique": {
           "name": "movements_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2118,15 +2118,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "prescription_quantities_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "prescription_id": {
@@ -2198,9 +2198,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_prescription_quantities_slot": {
           "name": "idx_prescription_quantities_slot",
@@ -2219,9 +2219,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_prescription_quantities_unit": {
           "name": "idx_prescription_quantities_unit",
@@ -2240,9 +2240,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_prescription_quantities_prescription_slot": {
           "name": "uq_prescription_quantities_prescription_slot",
@@ -2261,55 +2261,55 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"prescription_quantities\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "prescription_quantities_prescription_id_prescriptions_id_fk": {
           "name": "prescription_quantities_prescription_id_prescriptions_id_fk",
           "tableFrom": "prescription_quantities",
+          "tableTo": "prescriptions",
           "columnsFrom": [
             "prescription_id"
           ],
-          "tableTo": "prescriptions",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "prescription_quantities_slot_dimension_fkey": {
           "name": "prescription_quantities_slot_dimension_fkey",
           "tableFrom": "prescription_quantities",
+          "tableTo": "quantity_slots",
           "columnsFrom": [
             "slot",
             "dimension"
           ],
-          "tableTo": "quantity_slots",
           "columnsTo": [
             "code",
             "dimension"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "prescription_quantities_unit_dimension_fkey": {
           "name": "prescription_quantities_unit_dimension_fkey",
           "tableFrom": "prescription_quantities",
+          "tableTo": "units",
           "columnsFrom": [
             "unit",
             "dimension"
           ],
-          "tableTo": "units",
           "columnsTo": [
             "code",
             "dimension"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2337,15 +2337,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "prescription_targets_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -2411,9 +2411,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_prescription_targets_profile": {
           "name": "idx_prescription_targets_profile",
@@ -2426,9 +2426,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_prescription_targets_prescription_profile": {
           "name": "uq_prescription_targets_prescription_profile",
@@ -2447,48 +2447,48 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"prescription_targets\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "prescription_targets_prescription_id_prescriptions_id_fk": {
           "name": "prescription_targets_prescription_id_prescriptions_id_fk",
           "tableFrom": "prescription_targets",
+          "tableTo": "prescriptions",
           "columnsFrom": [
             "prescription_id"
           ],
-          "tableTo": "prescriptions",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "prescription_targets_profile_id_profiles_id_fk": {
           "name": "prescription_targets_profile_id_profiles_id_fk",
           "tableFrom": "prescription_targets",
+          "tableTo": "profiles",
           "columnsFrom": [
             "profile_id"
           ],
-          "tableTo": "profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "prescription_targets_public_id_unique": {
           "name": "prescription_targets_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2505,15 +2505,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "prescriptions_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -2627,9 +2627,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_prescriptions_movement": {
           "name": "idx_prescriptions_movement",
@@ -2642,9 +2642,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_prescriptions_block_day_role_idx": {
           "name": "uq_prescriptions_block_day_role_idx",
@@ -2669,10 +2669,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"prescriptions\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_prescriptions_workout_client_id": {
           "name": "uq_prescriptions_workout_client_id",
@@ -2691,9 +2691,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_prescriptions_workout_idx": {
           "name": "uq_prescriptions_workout_idx",
@@ -2712,63 +2712,63 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"prescriptions\".\"workout_id\" is not null and \"prescriptions\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "prescriptions_block_id_program_blocks_id_fk": {
           "name": "prescriptions_block_id_program_blocks_id_fk",
           "tableFrom": "prescriptions",
+          "tableTo": "program_blocks",
           "columnsFrom": [
             "block_id"
           ],
-          "tableTo": "program_blocks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "prescriptions_movement_id_movements_id_fk": {
           "name": "prescriptions_movement_id_movements_id_fk",
           "tableFrom": "prescriptions",
+          "tableTo": "movements",
           "columnsFrom": [
             "movement_id"
           ],
-          "tableTo": "movements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "prescriptions_workout_block_fkey": {
           "name": "prescriptions_workout_block_fkey",
           "tableFrom": "prescriptions",
+          "tableTo": "workouts",
           "columnsFrom": [
             "workout_id",
             "block_id"
           ],
-          "tableTo": "workouts",
           "columnsTo": [
             "id",
             "block_id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "prescriptions_public_id_unique": {
           "name": "prescriptions_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2838,15 +2838,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "profiles_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -2942,9 +2942,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_profiles_client_id": {
           "name": "uq_profiles_client_id",
@@ -2957,34 +2957,34 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "profiles_household_id_households_id_fk": {
           "name": "profiles_household_id_households_id_fk",
           "tableFrom": "profiles",
+          "tableTo": "households",
           "columnsFrom": [
             "household_id"
           ],
-          "tableTo": "households",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "profiles_public_id_unique": {
           "name": "profiles_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2992,6 +2992,358 @@
         "profiles_kind_check": {
           "name": "profiles_kind_check",
           "value": "\"profiles\".\"kind\" in ('kid', 'adult')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.program_assignment_weekdays": {
+      "name": "program_assignment_weekdays",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "program_assignment_weekdays_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weekday": {
+          "name": "weekday",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_program_assignment_weekdays_assignment": {
+          "name": "idx_program_assignment_weekdays_assignment",
+          "columns": [
+            {
+              "expression": "assignment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_program_assignment_weekdays_assignment_weekday": {
+          "name": "uq_program_assignment_weekdays_assignment_weekday",
+          "columns": [
+            {
+              "expression": "assignment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "weekday",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"program_assignment_weekdays\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "program_assignment_weekdays_assignment_fkey": {
+          "name": "program_assignment_weekdays_assignment_fkey",
+          "tableFrom": "program_assignment_weekdays",
+          "tableTo": "program_assignments",
+          "columnsFrom": [
+            "assignment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "program_assignment_weekdays_weekday_check": {
+          "name": "program_assignment_weekdays_weekday_check",
+          "value": "\"program_assignment_weekdays\".\"weekday\" in (0, 1, 2, 3, 4, 5, 6)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.program_assignments": {
+      "name": "program_assignments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "program_assignments_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "public_id": {
+          "name": "public_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_id": {
+          "name": "block_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile_id": {
+          "name": "profile_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idx": {
+          "name": "idx",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active_from": {
+          "name": "active_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active_to": {
+          "name": "active_to",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_program_assignments_block": {
+          "name": "idx_program_assignments_block",
+          "columns": [
+            {
+              "expression": "block_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_program_assignments_profile": {
+          "name": "idx_program_assignments_profile",
+          "columns": [
+            {
+              "expression": "profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_program_assignments_profile_block_from": {
+          "name": "uq_program_assignments_profile_block_from",
+          "columns": [
+            {
+              "expression": "profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "active_from",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"program_assignments\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_program_assignments_profile_block_open": {
+          "name": "uq_program_assignments_profile_block_open",
+          "columns": [
+            {
+              "expression": "profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"program_assignments\".\"active_to\" is null and \"program_assignments\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_program_assignments_profile_idx": {
+          "name": "uq_program_assignments_profile_idx",
+          "columns": [
+            {
+              "expression": "profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idx",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"program_assignments\".\"active_to\" is null and \"program_assignments\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "program_assignments_block_id_program_blocks_id_fk": {
+          "name": "program_assignments_block_id_program_blocks_id_fk",
+          "tableFrom": "program_assignments",
+          "tableTo": "program_blocks",
+          "columnsFrom": [
+            "block_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "program_assignments_profile_id_profiles_id_fk": {
+          "name": "program_assignments_profile_id_profiles_id_fk",
+          "tableFrom": "program_assignments",
+          "tableTo": "profiles",
+          "columnsFrom": [
+            "profile_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "program_assignments_public_id_unique": {
+          "name": "program_assignments_public_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "public_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "program_assignments_idx_check": {
+          "name": "program_assignments_idx_check",
+          "value": "\"program_assignments\".\"idx\" >= 0"
+        },
+        "program_assignments_active_range_check": {
+          "name": "program_assignments_active_range_check",
+          "value": "\"program_assignments\".\"active_to\" is null or \"program_assignments\".\"active_to\" >= \"program_assignments\".\"active_from\""
         }
       },
       "isRLSEnabled": false
@@ -3006,15 +3358,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "program_blocks_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -3093,9 +3445,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_program_blocks_household_slug": {
           "name": "uq_program_blocks_household_slug",
@@ -3114,10 +3466,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"program_blocks\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_program_blocks_household_client_id": {
           "name": "uq_program_blocks_household_client_id",
@@ -3136,34 +3488,34 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "program_blocks_household_id_households_id_fk": {
           "name": "program_blocks_household_id_households_id_fk",
           "tableFrom": "program_blocks",
+          "tableTo": "households",
           "columnsFrom": [
             "household_id"
           ],
-          "tableTo": "households",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "program_blocks_public_id_unique": {
           "name": "program_blocks_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3234,15 +3586,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "ramp_targets_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -3308,9 +3660,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_ramp_targets_metric_key": {
           "name": "idx_ramp_targets_metric_key",
@@ -3323,9 +3675,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_ramp_targets_profile_metric_week": {
           "name": "uq_ramp_targets_profile_metric_week",
@@ -3350,48 +3702,48 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"ramp_targets\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "ramp_targets_profile_id_profiles_id_fk": {
           "name": "ramp_targets_profile_id_profiles_id_fk",
           "tableFrom": "ramp_targets",
+          "tableTo": "profiles",
           "columnsFrom": [
             "profile_id"
           ],
-          "tableTo": "profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "ramp_targets_metric_key_metric_definitions_key_fk": {
           "name": "ramp_targets_metric_key_metric_definitions_key_fk",
           "tableFrom": "ramp_targets",
+          "tableTo": "metric_definitions",
           "columnsFrom": [
             "metric_key"
           ],
-          "tableTo": "metric_definitions",
           "columnsTo": [
             "key"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "ramp_targets_public_id_unique": {
           "name": "ramp_targets_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3413,15 +3765,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "sessions_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -3536,9 +3888,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_sessions_client_id": {
           "name": "uq_sessions_client_id",
@@ -3551,9 +3903,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_sessions_workout": {
           "name": "idx_sessions_workout",
@@ -3566,9 +3918,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_sessions_profile_day_workout": {
           "name": "uq_sessions_profile_day_workout",
@@ -3593,48 +3945,48 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"sessions\".\"workout_id\" is not null and \"sessions\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "sessions_profile_id_profiles_id_fk": {
           "name": "sessions_profile_id_profiles_id_fk",
           "tableFrom": "sessions",
+          "tableTo": "profiles",
           "columnsFrom": [
             "profile_id"
           ],
-          "tableTo": "profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "sessions_workout_id_workouts_id_fk": {
           "name": "sessions_workout_id_workouts_id_fk",
           "tableFrom": "sessions",
+          "tableTo": "workouts",
           "columnsFrom": [
             "workout_id"
           ],
-          "tableTo": "workouts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "sessions_public_id_unique": {
           "name": "sessions_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3672,15 +4024,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "supersets_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -3752,9 +4104,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_supersets_client_id": {
           "name": "uq_supersets_client_id",
@@ -3767,9 +4119,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "uq_supersets_session_prescription_group": {
           "name": "uq_supersets_session_prescription_group",
@@ -3788,35 +4140,35 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"supersets\".\"prescription_group\" is not null and \"supersets\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "supersets_session_id_sessions_id_fk": {
           "name": "supersets_session_id_sessions_id_fk",
           "tableFrom": "supersets",
+          "tableTo": "sessions",
           "columnsFrom": [
             "session_id"
           ],
-          "tableTo": "sessions",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "supersets_public_id_unique": {
           "name": "supersets_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3876,9 +4228,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -3903,15 +4255,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "workouts_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -3995,9 +4347,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "idx_workouts_copied_from_workout": {
           "name": "idx_workouts_copied_from_workout",
@@ -4010,55 +4362,55 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "workouts_block_id_program_blocks_id_fk": {
           "name": "workouts_block_id_program_blocks_id_fk",
           "tableFrom": "workouts",
+          "tableTo": "program_blocks",
           "columnsFrom": [
             "block_id"
           ],
-          "tableTo": "program_blocks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "workouts_copied_from_workout_id_workouts_id_fk": {
           "name": "workouts_copied_from_workout_id_workouts_id_fk",
           "tableFrom": "workouts",
+          "tableTo": "workouts",
           "columnsFrom": [
             "copied_from_workout_id"
           ],
-          "tableTo": "workouts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "workouts_public_id_unique": {
           "name": "workouts_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "workouts_id_block_id_unique": {
           "name": "workouts_id_block_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "id",
             "block_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -4085,10 +4437,10 @@
   },
   "enums": {},
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

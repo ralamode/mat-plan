@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/practice.ts b/packages/db/src/writers/practice.ts
+index 341594fc..795c9e38 100644
+--- a/packages/db/src/writers/practice.ts
++++ b/packages/db/src/writers/practice.ts
+@@ -72,7 +72,6 @@ function amendablePractice(entryId: string) {
+     eq(schema.entries.publicId, entryId),
+     isNull(schema.entries.deletedAt),
+     eq(schema.entries.metricKey, METRIC_KEYS.practice_minutes),
+-    eq(schema.entries.unit, PRACTICE_UNIT),
+     eq(schema.entries.status, ENTRY_STATUS.done),
+     isNotNull(schema.entries.valueNum),
+     isNull(schema.entries.valueText),

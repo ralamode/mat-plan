@@ -576,8 +576,10 @@ export function liveTemplateBlockIn(scope: HouseholdScope) {
  *   without a `client_id`.
  * - `public_id` is minted here, and the columns are enumerated, never spread (no mass assignment).
  * - The conflict target is NAMED and non-partial, so no `where:`. A slug collision
- *   (`uq_program_blocks_household_slug`) is NOT swallowed: the writer picks a free slug first (D9's
- *   `-2`, `-3` suffix), and a collision here is a real error.
+ *   (`PROGRAM_BLOCK_SLUG_UNIQUE_INDEX`) is NOT swallowed HERE: the caller picks a free slug first (D9's
+ *   `-2`, `-3` suffix), and a 23505 on it means another save took that slug in between. Lane P's
+ *   program writers catch exactly that race by the const and pick again; any other caller sees it as
+ *   the error it is.
  */
 export async function insertProgramBlockOwnedBy(
   exec: Executor,

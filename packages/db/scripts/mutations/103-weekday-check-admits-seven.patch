@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0027_fam1_5_program_assignments.sql b/packages/db/migrations/0027_fam1_5_program_assignments.sql
+--- a/packages/db/migrations/0027_fam1_5_program_assignments.sql
++++ b/packages/db/migrations/0027_fam1_5_program_assignments.sql
+@@ -37,7 +37,7 @@
+ 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+ 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+ 	"deleted_at" timestamp with time zone,
+-	CONSTRAINT "program_assignment_weekdays_weekday_check" CHECK ("program_assignment_weekdays"."weekday" in (0, 1, 2, 3, 4, 5, 6))
++	CONSTRAINT "program_assignment_weekdays_weekday_check" CHECK ("program_assignment_weekdays"."weekday" in (0, 1, 2, 3, 4, 5, 6, 7))
+ );
+ --> statement-breakpoint
+ CREATE TABLE "program_assignments" (

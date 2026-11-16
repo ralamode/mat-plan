@@ -41,6 +41,11 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   exercises done together, and the targets you set (sets, reps, and a weight, time, distance or
   count). These belong to the household, so removing one athlete does not
   remove them; deleting the household does.
+  **Who is on which program**: which athlete is on it, from which day and through which day, and on
+  which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
+  an athlete off a program keeps the record that they were on it. If the program only started that day
+  and nothing was logged in it, the record is hidden rather than kept on the athlete's list; it is
+  still held until the athlete or the household is erased.
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
@@ -186,25 +191,25 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
 ⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
-weigh-in** on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and the app
-**does not offer to put a cleared weigh-in back**, so re-enter the right weight instead. Anyone signed
-in to your household can clear any athlete's weigh-in, and the app does not record who did. A cleared
-weigh-in is not removed from the database, and it is **not in the export** (ask for a full copy, below,
-and it is included). The only way anything comes out of the database today is deleting a whole athlete
+weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap Clear): that
+hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
+instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
+does not record who did. A cleared one is not removed from the database, and it is **not in the
+export** (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete
 or household. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
 **What is being built, so you know what to expect.** A **Clear this day** control, which hides
-everything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be **put back**:
+everything logged on one day at once. Unlike a cleared weigh-in or practice, a cleared day can be **put back**:
 a banner offers **Restore all** while that day is today or yesterday (after that, the day stays
 hidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been
 logged in that day's place — when that happens the app will say so rather than fail quietly. There
 will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
-field. Two things are worth saying plainly about every clear:
+field, as above. Two things are worth saying plainly about every clear:
 
 - **It hides from everyone in your household, not just from the person who cleared it.** The app does
   not record who cleared what, and anyone signed in to your household can open any athlete. So a child
-  can clear a weigh-in and a parent will not see it either. ⚠️ That is still the honest shape of it:
+  can clear a weigh-in or a practice and a parent will not see it either. ⚠️ That is still the honest shape of it:
   per-person sign-in is now the only way in, but the app records no author on an entry, so sign-in
   alone did not fix this one.
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
@@ -231,8 +236,8 @@ file — an empty zip looks exactly like a download that failed.
 **If you want everything, ask** and you will be sent a full copy — including anything you have
 cleared or hidden, which the export leaves out, and what Clerk holds about
 your login: your email address, your name, your profile picture, your Google account identifier, and when
-you signed in. And **export before you delete anything** — once a profile is removed, its data can no
-longer be exported, even though it is still in the database.
+you signed in. And **export before you delete anything**: a hidden profile can no longer be exported
+even though it is still in the database, and once an athlete is erased there is nothing left to export.
 
 ## Deleting your data
 
@@ -241,6 +246,20 @@ by mistake, and that is all it does: everything they logged is kept, their page 
 **in your household** who has the link or who looks in Household settings, and their export still works. **The household
 owner archives an athlete; any member of the household can rename and restore one.** An archived
 athlete is kept in full until you restore them, or until you ask us to delete them.
+
+**Ask, and one athlete is erased.** Their profile, every session and set they logged, their weigh-ins,
+readiness, the targets set for them, and which programs they were on and when are **permanently removed
+from the database**. The household owner asks; or an adult athlete may ask about their own profile, in
+which case the owner is told first but **cannot cancel it**: only the adult can, because it is their
+data. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is
+confirmed on their own invitation channel, and their full copy goes to them), and "What remains
+afterwards" below applies too. What stays is the household's: the programs it wrote (if a program was
+written for that athlete alone, we will ask whether you want it removed too), any name typed into a
+program, workout or movement, including copies of that text kept on other athletes' logs, and every
+sign-in account; an adult athlete can ask for their own account to be deleted as well. For an athlete,
+the record of the deletion holds the athlete's internal identifier and no login ids unless their
+account went too. An athlete added through the app can be erased today; the three athletes the app
+started with cannot yet, because setup would put them back.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
@@ -264,7 +283,8 @@ Because this cannot be undone, both of the steps below stay in place:
   household, your login ids, and how we confirmed the request — **no names** — it is kept outside the
   source code and the database, and it is deleted once the restore windows above have passed.
 - **Server logs** at Vercel, and **error reports** at Sentry, for their retention periods. Neither
-  should contain your data, but logs record that requests happened.
+  should contain your data, but logs record that requests happened, and Vercel's request logs keep the
+  address of an athlete's page (it carries their internal identifier, not a name) for 24 hours.
 - **Movement names.** If someone in your household types a movement that isn't already in the app's
   catalogue, whatever they typed is stored as a movement **belonging to your household**, and it **is
   removed** when you delete your household. Two things to know while the catalogue is still being

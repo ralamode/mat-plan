@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/rename-program.ts b/packages/db/src/writers/program/rename-program.ts
+index 011fd582..3099fb7f 100644
+--- a/packages/db/src/writers/program/rename-program.ts
++++ b/packages/db/src/writers/program/rename-program.ts
+@@ -50,7 +50,7 @@ export async function renameProgram(
+     return { ok: false, reason: PROGRAM_REFUSAL.name_taken };
+   }
+ 
+-  const slug = await freeProgramSlug(exec, scope, name, { exceptPublicId: programPublicId });
++  const slug = await freeProgramSlug(exec, scope, name);
+   let updated = 0;
+   const lost = await lostSlugRace(exec, async (tx) => {
+     const rows = await tx

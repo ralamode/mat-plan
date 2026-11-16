@@ -22,8 +22,8 @@ import type { ActionState } from './action-state';
  *
  * ⚠️ Compared by IDENTITY, not by `.ok`. `useActionState` returns a fresh object per submit, so two
  * consecutive successful saves each fire — which is what makes a second correction collapse the
- * editor too. `saved-announcer.tsx` deliberately does NOT use this: its input is a derived string,
- * not an `ActionState`, and its transition rule is different.
+ * editor too. The day page's single values do not use this either: they report from the action's own
+ * result through `single-value-live.tsx`.
  */
 export function useOnActionSuccess(state: ActionState, onSuccess: () => void): void {
   const [seen, setSeen] = useState(state);

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/program-name.ts b/packages/db/src/writers/program/program-name.ts
+index 4f29af00..ce8ce3fa 100644
+--- a/packages/db/src/writers/program/program-name.ts
++++ b/packages/db/src/writers/program/program-name.ts
+@@ -53,7 +53,7 @@ export async function programNameTaken(
+     );
+   const folded = foldName(name);
+   return rows.some(
+-    (row) => foldName(row.name) === folded && row.clientId !== options.exceptClientId,
++    (row) => row.name === name && row.clientId !== options.exceptClientId,
+   );
+ }
+ 

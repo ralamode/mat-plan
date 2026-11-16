@@ -215,8 +215,8 @@ export async function writeCheckinEntries(
     // No insert, no holder and no taken day. Two ways to get here, neither an outcome to invent:
     // - the insert collided on another unique (a reused `public_id`), which no app path sends;
     // - since 3b-0, a RACE: the live practice that skipped this insert was hidden before the
-    //   held-day lookup ran (three autocommit statements, READ COMMITTED). Unreachable until an app
-    //   path hides a practice; 3b-life, which ships the practice clear, owes the retry.
+    //   held-day lookup ran (three autocommit statements, READ COMMITTED). Reachable since V1-24
+    //   3b-life-a ships the practice clear; ACCEPTED, as bodyweight's twin is (`tech-debt.md`).
     // Either way, say so rather than guess — `reselectLiveByClientId`'s judgement about its own
     // impossible branch.
     throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);

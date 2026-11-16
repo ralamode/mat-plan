@@ -639,7 +639,7 @@ flowchart TB
   CHK["✓ CHECK: at-most-one of movement_id / metric_key"]
 ```
 
-### 4b. The program tables (FAM-1, through 4b)
+### 4b. The program tables (FAM-1, through step 5)
 
 A household's program is a `program_blocks` row (`kind` is `template` for a block built in the
 app, `legacy` for the seeded one). Its workouts are `workouts`; the week template places them on weekdays through
@@ -647,8 +647,11 @@ app, `legacy` for the seeded one). Its workouts are `workouts`; the week templat
 `prescription_quantities`. Two links run from the log side back to the plan: `sessions.workout_id`
 and `entries.prescription_id`. Both are `ON DELETE SET NULL` and identity only: what was asked
 is frozen on the log row (`sessions.workout_name`, `entries.prescribed_snapshot`), so a rename or
-purge never rewrites history. Who is on which block (assignments) arrives with FAM-1 step 5, which
-adds its tables here.
+purge never rewrites history. Who is on which program is `program_assignments` (FAM-1 step 5): one
+row per athlete and program from `active_from` through `active_to` (inclusive; NULL while open), with
+`program_assignment_weekdays` saying which days it is due. A template block reaches an athlete only
+through an assignment; "on day D" and "due on D" are spelled once, in
+`packages/db/src/queries/program-assignments.ts`.
 
 ```mermaid
 erDiagram
@@ -667,6 +670,9 @@ erDiagram
   profiles ||--o{ prescription_targets : "profile_id"
   workouts |o--o{ sessions : "workout_id, SET NULL (4a-ii)"
   prescriptions |o--o{ entries : "prescription_id, SET NULL (4a-ii)"
+  program_blocks ||--o{ program_assignments : "block_id (5); template blocks only, writer-enforced"
+  profiles ||--o{ program_assignments : "profile_id (5); same household, writer-enforced"
+  program_assignments ||--o{ program_assignment_weekdays : "assignment_id (5)"
 
   program_blocks {
     bigint id PK
@@ -721,6 +727,17 @@ erDiagram
     bigint prescription_id FK "identity only"
     int prescription_set "1-based; marks a row logged in a program"
     text prescribed_snapshot "what was asked, frozen"
+  }
+  program_assignments {
+    bigint profile_id FK
+    bigint block_id FK
+    int idx "the athlete's program order"
+    date active_from "NOT NULL"
+    date active_to "inclusive last day; NULL while open"
+  }
+  program_assignment_weekdays {
+    bigint assignment_id FK
+    int weekday "0 is Sunday"
   }
 ```
 

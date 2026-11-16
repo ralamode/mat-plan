@@ -39,6 +39,13 @@ export type VerifyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  */
 export const asTx = (tx: VerifyTx) => tx as unknown as Executor;
 
+/**
+ * The same transaction as the database handle a QUERY or a seed helper takes
+ * (`NodePgDatabase`), where `asTx` gives the handle a WRITER takes. One cast for the proof modules,
+ * which had each written it inline (FAM-1 contract change C13).
+ */
+export const asDb = (tx: VerifyTx) => tx as unknown as NodePgDatabase<typeof schema>;
+
 /** Thrown by {@link rolledBack} to roll its transaction back. Private: nothing else throws it. */
 class Rollback extends Error {}
 
@@ -178,6 +185,11 @@ export async function constraintDef(conname: string): Promise<string> {
   const rows = (res as unknown as { rows: { def: string }[] }).rows;
   assert.equal(rows.length, 1, `${conname} exists`);
   return rows[0].def;
+}
+
+/** The rows of a raw `execute` result, typed by the caller (the cast lives here once). */
+export function rowsOf<T>(res: unknown): T[] {
+  return (res as { rows: T[] }).rows;
 }
 
 /** The `id` column of a raw `execute` result, as numbers (an audit query's flagged rows). */

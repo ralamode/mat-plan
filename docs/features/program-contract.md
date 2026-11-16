@@ -75,8 +75,8 @@ flowchart LR
 
 Small rules and names that more than one lane needs. 🔴 **Import these from `@mat-plan/shared`; do
 not write your own.** A lane's own copy is a second definition that drifts (the first lane PRs each
-wrote some of these, which is why they are here). All but `rolledBack` are in the root barrel and
-safe in a `'use client'` component; `rolledBack` is the proof modules' and comes from the
+wrote some of these, which is why they are here). All but `rolledBack` and `asDb` are in the root barrel and
+safe in a `'use client'` component; those two are the proof modules' and come from the
 `db:verify` harness. If a lane needs one that is missing, it asks the contract owner (invariant 1).
 
 | Export                                                              | Where                                           | What it is                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -95,9 +95,11 @@ safe in a `'use client'` component; `rolledBack` is the proof modules' and comes
 | `fillRowValues(item, typed, target)`                                | `packages/shared/src/program/pieces.ts`         | What a ✓ or a Change stores, or `null` for `bad_value`: typed numbers, else the prescription's (an amend passes `target: null`). The one value-fill rule, for the row writer, the amend and the fake (invariant 16).                                                                                                                                                                                           |
 | `prescribedTarget(targetReps, quantities)`, `PrescribedTarget`      | `packages/shared/src/program/pieces.ts`         | A prescription's numbers as `DayItem.target` holds them: whole-number reps or `null`; a quantity with a `valueMax` (a range) has `value: null`. The day's read and the row writer both build the target with it.                                                                                                                                                                                               |
 | `entryUnitFor(type, prescribedUnit)`, `ENTRY_UNIT_WITHOUT_QUANTITY` | `packages/shared/src/program/pieces.ts`         | The unit a logged row's entry stores: `bool` for a Check, `count` for Reps, else the prescribed unit (plan §2). For the row writer and the export.                                                                                                                                                                                                                                                             |
+| `itemUnit(trackingType, quantities)`                                | `packages/shared/src/program/pieces.ts`         | The unit an item logs in, which is `DayItem.unit`: `null` for a Check or Reps, the type's fixed unit, else the prescription's unit in the type's slot. One definition for the day's read and the row writer, because `fillRowValues` refuses a quantity in any other unit.                                                                                                                                     |
 | `inWritableWindow(day, today)`, `WRITABLE_DAY_RADIUS`               | `packages/shared/src/day.ts`                    | Today and yesterday, never a day after today (plan D20, D32): what `DayPlan.writable` means and what a row write is held to. Pure; the caller supplies `today`. ⚠️ The older forms' `isWritableDay` (web) also accepts tomorrow until step 12c.                                                                                                                                                                |
 | `DEFAULT_TRACKING_TYPE`                                             | `packages/shared/src/movements.ts`              | The type an item gets when none is named: `weight_reps`, the `movements.tracking_type` column's default. `packages/db/src/tracking-type-default.test.ts` holds the const and the schema's default equal.                                                                                                                                                                                                       |
 | `rolledBack(fn)`                                                    | `packages/db/scripts/verify/harness.ts`         | For `db:verify` proof modules, not the app: runs a proof's writes in a transaction that is always rolled back, and rethrows the proof's own failure. Imported from `./harness`, beside `asTx` and `expectRejectedBy`.                                                                                                                                                                                          |
+| `asDb(tx)`                                                          | `packages/db/scripts/verify/harness.ts`         | A proof's transaction as the database handle a query or a seed helper takes, where `asTx(tx)` is the handle a writer takes. Not in a barrel: import it from the harness, as `rolledBack`.                                                                                                                                                                                                                      |
 
 `quantityText` is client-safe because it reads its two primitives (`formatNumeric`, and seconds
 spelled `s`) from `packages/shared/src/quantity-spelling.ts`, which imports nothing; `csv/value.ts`
@@ -202,7 +204,9 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
     Three limits, each on purpose: the options passed must carry `isCatalog` (the picker's
     tie-break, so the type requires it); a name whose key is empty (`S`) is refused by
-    `newItemSchema`, since it could be matched to nothing; and the check is a read before the
+    `newItemSchema`, since it could be matched to nothing, with a sentence a form shows as it is
+    (`NEW_ITEM_NAME_MESSAGES.noKey`: "Give the item a longer name."; only a name of the letter `s`
+    alone reaches it, so it must not ask for a letter); and the check is a read before the
     insert, so two calls in the same moment with names that share a key but not a slug can both
     insert (plan D25).
 
@@ -246,6 +250,25 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     steps: a re-tick after a new ✓ (`slot_taken` under 11b), and a replay of the first ✓'s id while
     its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
     is the limit above).
+
+19. **Take off says what it did, and a same-day Put on is undone by it** (`takeOffSchema`,
+    maintainer, 2026-11-16). A start that has not begun is removed. A start dated today with no
+    live row logged under it is removed too, as if Put on had not been tapped. Any other start ends
+    today. The answer's `lastDay` is today, or `null` for a removed start, and the screen words its
+    message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
+    program fake holds no logged rows, so in the preview a start dated today is always removed.
+20. **A copy may carry its own name, and no program ever holds two workouts with one name**
+    (`CopyDraft.name`, optional; maintainer, 2026-11-16). Without a name, a copy into the workout's
+    own program is named with " (copy)" and a copy into another program keeps the name. A name
+    already used in the program it is copied into answers `name_taken`, in any program. The dialog
+    then shows its Name field, prefilled, and the person copies again; it needs no list of the other
+    program's workouts. ⚠️ The fake knows another program's names only by what it has copied there,
+    so in the preview the clash is a second copy of one workout into the same other program.
+21. **Put on undoes a Take off whose last day is today** (`assignDraftSchema`; maintainer,
+    2026-11-16). An athlete already on a program is skipped by Put on, except one with a last day:
+    that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
+    athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
+    to list them as available.
 
 ## Traps
 

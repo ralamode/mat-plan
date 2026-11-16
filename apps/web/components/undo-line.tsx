@@ -23,8 +23,8 @@ import { NAME_WRAP_CLASS, UNDO_BUTTON_ATTR, UNDO_LABEL } from '@/lib/constants';
  *   the page's island owns the one `<Announcer>`. Two reasons. First, a region that is also the
  *   `aria-describedby` target would have its text swapped out from under the description. Second,
  *   `components/ui/announcer.tsx` rule 1 means there must be exactly one persistent region per page,
- *   and a shared component cannot know whether its host already has one (the weigh-in's
- *   `SavedAnnouncer` does).
+ *   and a shared component cannot know whether its host already has one (the day page's
+ *   single values have `single-value-live.tsx`'s).
  *
  * ## Where it renders, which is part of the contract
  *
