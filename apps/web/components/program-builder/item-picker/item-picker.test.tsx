@@ -351,7 +351,11 @@ describe('the item picker (FAM-1 9)', () => {
       });
       fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
       await waitFor(() => expect(document.activeElement).toBe(row('Bear crawl')));
-      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      // The search's deferred value settles a render later; the plain button follows it.
+      const newItem = await waitFor(() =>
+        within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }),
+      );
+      fireEvent.click(newItem);
       fireEvent.click(within(sheet()).getByRole('button', { name: 'Cancel' }));
       expect(document.activeElement).toBe(
         within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }),
