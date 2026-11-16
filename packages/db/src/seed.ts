@@ -10,7 +10,6 @@ import {
   namesPreviewDatabase,
   newId,
   PROFILE_KIND,
-  PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
   QUANTITY_SLOT_ROWS,
   type ProgramBlockSeedRow,
@@ -29,7 +28,12 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
 import { householdScopeForScript } from './writers/household-scope-script';
-import { inHousehold, movementIsGlobal, movementIsOwned } from './writers/ownership';
+import {
+  inHousehold,
+  movementIsGlobal,
+  movementIsOwned,
+  programBlockIsLegacy,
+} from './writers/ownership';
 import { seedProgramFixtures } from './writers/program/seed-fixtures';
 
 /**
@@ -576,7 +580,7 @@ export async function seedProgram(
         and(
           eq(schema.programBlocks.householdId, household.id),
           eq(schema.programBlocks.slug, block.slug),
-          eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy),
+          programBlockIsLegacy(),
           isNull(schema.programBlocks.deletedAt),
         ),
       );
