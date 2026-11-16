@@ -189,8 +189,9 @@ flowchart LR
       message (created, selected, the cap) is seen in the footer and heard in the sheet's status, a failure to reach the server is seen above Create in the form with focus left on Create, an empty name says why once Create is pressed, and a made item is listed once per id;
       and the next search clears it. Closing the sheet drops the form; the ticks and items made
       stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
-      `DOUBLE_TAP_MS` of the tap that closed the form is ignored (Create sat in the same place; both
-      times are `event.timeStamp`s, one clock). A name the same-movement rule folds to nothing ("S")
+      `DOUBLE_TAP_MS` of the tap that closed the form is ignored (Add sits under the left half of the
+      form's Cancel; both times are `event.timeStamp`s, one clock). A double tap on Cancel's right
+      half lands on Close, which closes the sheet: accepted, since Close keeps the ticks. A name the same-movement rule folds to nothing ("S")
       is refused by the contract's own `newItemSchema` (C8), shown once Create is pressed rather
       than on the first keystroke; an empty name is the lane's plainer "Give the item a name." **A create in flight ends** with Cancel, a closed sheet or a
       fresh form (invariant 11): its answer leaves the screen alone, but a new item it made is still
@@ -201,7 +202,7 @@ flowchart LR
       prefilled 3 × 10 and 20 lb); a ticked row is outlined with a ✓ box, not green (the `done`
       green means "logged"); rows are grouped under the picker's headings, not one A–Z list; the
       search is pinned in the header; a ✕ in the header and Close in the footer; the footer lists
-      the picks ("2 picked: …", at most two lines) and the cap; an item already on a card says
+      the picks ("2 picked: …", one line, read in full with Add) and the cap; an item already on a card says
       "already in this workout"; with no match, the household's list empties under "New item: “…”" (the catalog's browse groups, once 6a supplies them, stay).
 
 17. **The week editor** (step 10) _(maintainer, 2026-11-16)_:

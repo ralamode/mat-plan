@@ -426,7 +426,7 @@ describe('the item picker (FAM-1 9)', () => {
       const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
       fireEvent.change(name, { target: { value: 'S' } });
       // Not on the first keystroke of "Squat".
-      expect(within(sheet()).queryByText(ITEM_PICKER_COPY.giveAName)).toBeNull();
+      expect(within(sheet()).queryByText(NEW_ITEM_NAME_MESSAGES.noKey)).toBeNull();
       fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
         target: { value: TRACKING_TYPE.reps },
       });

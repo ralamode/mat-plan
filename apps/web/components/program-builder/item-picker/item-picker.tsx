@@ -194,7 +194,6 @@ export function ItemPicker({
    * the sheet itself has no visible focus ring.
    */
   const closeForm = (at: number, focusId?: string) => {
-    // Cancel: an answer still in flight no longer belongs to the screen.
     // Cancel: an answer still in flight no longer belongs to the screen, nor does its message.
     if (!focusId) {
       cancel();
