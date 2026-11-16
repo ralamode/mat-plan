@@ -76,6 +76,12 @@ function failSwitch() {
   };
 }
 
+/** Put a row where its set number belongs: rows are listed in set order, gaps allowed. */
+function insertBySet(rows: DayRow[], row: DayRow): void {
+  const at = rows.findIndex((r) => r.set > row.set);
+  rows.splice(at === -1 ? rows.length : at, 0, row);
+}
+
 /** A hide token in `hiddenAtSchema`'s format: UTC text with six fractional digits. */
 const hideToken = () => new Date().toISOString().replace('Z', '000Z');
 
@@ -146,6 +152,15 @@ export function createFakeDayActions(
     { hiddenAt: string; logged: Logged; workout: DayWorkout; item: DayItem; row: DayRow }
   >();
 
+  /**
+   * The rows "+ Add set" made in this fake: sets past the prescribed ones. The contract lists such a
+   * row only while it is logged (`dayItemSchema.rows`), so un-ticking one takes the row away and
+   * ticking it back returns it. A set that was already past the prescription in the fixture cannot
+   * be told from a prescribed one (a `DayItem` does not carry the prescribed set count), so the fake
+   * keeps that row when it is un-ticked; the real read drops it.
+   */
+  const added = new WeakSet<DayRow>();
+
   const refuse = (reason: RowRefusal): RowResult => ({ ok: false, reason });
   const done = (logged: Logged, hiddenAt?: string): RowResult => ({
     ok: true,
@@ -201,16 +216,17 @@ export function createFakeDayActions(
         if (!values) return refuse(ROW_REFUSAL.bad_value);
 
         if (!row) {
-          // "+ Add set": the rows run 1..n with no gap, so a set past the last adds each one before
-          // it too. Only a type logged set by set has a second row.
+          // "+ Add set": only a type logged set by set has a second row. Any set number the schema
+          // allows may be logged if it has no logged row: the screen numbers an added set past the
+          // highest it SHOWS, and it keeps an un-ticked row for the page visit, so its numbers can
+          // run ahead of the rows listed here. The row is made because it is being logged; none is
+          // made for a set nobody logged (`dayItemSchema.rows`), so the numbers may have gaps.
           if (!hasSetRows(item.trackingType)) return refuse(ROW_REFUSAL.bad_value);
-          for (let set = item.rows.length + 1; set <= write.set; set += 1) {
-            row = { set, previous: null, logged: null };
-            item.rows.push(row);
-            workout.progress.total += 1;
-          }
+          row = { set: write.set, previous: null, logged: null };
+          added.add(row);
+          insertBySet(item.rows, row);
+          workout.progress.total += 1;
         }
-        if (!row) return refuse(ROW_REFUSAL.bad_value);
         row.logged = { entryPublicId: newId(), values, prescribedText: item.prescribedText };
         count(workout, item, 1);
         attempts.set(write.clientId, row.logged.entryPublicId);
@@ -235,6 +251,11 @@ export function createFakeDayActions(
         hidden.set(entryPublicId, { hiddenAt, ...found });
         found.row.logged = null;
         count(found.workout, found.item, -1);
+        if (added.has(found.row)) {
+          // An added set that is no longer logged is no longer a row.
+          found.item.rows.splice(found.item.rows.indexOf(found.row), 1);
+          found.workout.progress.total -= 1;
+        }
         changed();
         return done(found.logged, hiddenAt);
       },
@@ -252,8 +273,16 @@ export function createFakeDayActions(
           return found ? done(found.logged) : refuse(ROW_REFUSAL.not_found);
         }
         if (gone.hiddenAt !== hiddenAt) return refuse(ROW_REFUSAL.not_found);
-        if (gone.row.logged) return refuse(ROW_REFUSAL.slot_taken);
+        // The set was logged again since: on its own row, or (an added set) on a new row that took
+        // its number.
+        const holder = gone.item.rows.find((r) => r.set === gone.row.set);
+        if (holder?.logged) return refuse(ROW_REFUSAL.slot_taken);
 
+        if (!holder) {
+          // An added set comes back as a row, in set order.
+          insertBySet(gone.item.rows, gone.row);
+          gone.workout.progress.total += 1;
+        }
         gone.row.logged = gone.logged;
         hidden.delete(entryPublicId);
         count(gone.workout, gone.item, 1);
