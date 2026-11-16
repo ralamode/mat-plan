@@ -267,8 +267,13 @@ export type RenameProgram = z.infer<typeof renameProgramSchema>;
  * it. A form shows a schema's message under the field, so these are sentences for a person.
  */
 export const NEW_ITEM_NAME_MESSAGES = {
-  /** The name has no key (`S`): nothing the "same movement" rule can match on. */
-  noKey: 'Give the item a name with a letter or a number in it.',
+  /**
+   * The name has no key: nothing the "same movement" rule can match on. Only a name made of the
+   * letter `s` alone reaches this (`S`, `s s`); a name with no letter is refused earlier by
+   * `movementNameSchema`. So the sentence must not ask for a letter: the person typed one.
+   * Wording chosen by the maintainer, 2026-11-16.
+   */
+  noKey: 'Give the item a longer name.',
 } as const;
 
 export const newItemSchema = z.object({

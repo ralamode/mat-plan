@@ -51,11 +51,15 @@ ALTER TABLE "x" ADD COLUMN IF NOT EXISTS "y" text;--> statement-breakpoint
   "cannot insert multiple commands into a prepared statement".
 - **`ADD COLUMN … NOT NULL` on a populated table fails.** Split it: add nullable → backfill `UPDATE`
   (bounded) → `SET NOT NULL`. A new constraint on existing data: `NOT VALID` now, `VALIDATE` in a
-  **separate PR** (in one file they share a transaction, and NOT VALID buys nothing).
+  **separate PR**, applied before the next merges (in one transaction they'd share the lock, and NOT
+  VALID buys nothing). ⚠️ drizzle's migrator runs **every pending file in one transaction**, not one
+  per file, so it's the queue (AGENTS.md → Database / migration PR rules, "Queue") that keeps them
+  apart, not the files.
 - **Destructive changes are expand→contract across deploys.** Add the new column, then ship code
   that writes both and reads the new one, backfill, and drop the old column in a later PR. Only
   collapse the steps with evidence (0011 had 0 prod rows) written in the header.
-- **Indexes:** `CONCURRENTLY` can't run inside drizzle's per-file transaction, and the
+- **Indexes:** `CONCURRENTLY` can't run inside drizzle's migration transaction (one for all pending
+  files), and the
   transaction-stripping runner AGENTS.md describes **doesn't exist** (tech-debt.md). A plain
   `CREATE INDEX` on a small or new table is accepted with a comment saying why. On a large hot table,
   stop and plan the runner first.
