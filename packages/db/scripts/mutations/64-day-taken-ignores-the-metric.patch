@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index b9b32f92..8b9ea6fb 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -199,7 +199,7 @@ export async function writeCheckinEntries(
+       return { clientId: v.clientId, outcome: 'replay' as const, publicId: holder.publicId };
+     }
+     // 2 · day_taken: a practice whose day a live practice already holds.
+-    if (v.metricKey === METRIC_KEYS.practice_minutes && takenDays.has(v.activityDate)) {
++    if (takenDays.has(v.activityDate)) {
+       return { clientId: v.clientId, outcome: 'day_taken' as const };
+     }
+     // 3 · own_hidden: this profile's HIDDEN row holds the id, and the day is free.

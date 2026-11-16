@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index 49abbff6..db4c07bf 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -287,7 +287,6 @@ export async function restoreHidden(
+  */
+ export const DAY_SLOT_INDEXES: readonly string[] = [
+   BODYWEIGHT_DAY_UNIQUE_INDEX,
+-  PRACTICE_DAY_UNIQUE_INDEX,
+ ];
+ 
+ /**

@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index b9b32f92..ccebc14f 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -192,9 +192,7 @@ export async function writeCheckinEntries(
+     // 1 · replay: this profile's LIVE row holds the id, for the same metric and day.
+     if (
+       own &&
+-      holder.deletedAt === null &&
+-      holder.metricKey === v.metricKey &&
+-      holder.activityDate === v.activityDate
++      holder.deletedAt === null
+     ) {
+       return { clientId: v.clientId, outcome: 'replay' as const, publicId: holder.publicId };
+     }

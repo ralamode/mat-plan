@@ -244,6 +244,19 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
   the pre-check's message above, nothing is wrong with the data: re-run `migrate.yml` via
   `workflow_dispatch`, and the freeze is the same until it goes green.
 
+**If 3b-0's migration refuses** (V1-24 3b-0, one live practice per athlete and day; the error names
+this section: _"V1-24 3b-0: N (profile, day) group(s) hold more than one live practice"_), it is the
+same wedge as 1d's above, with the same freeze and the same exceptions. Two differences:
+
+- **A group may be two real sessions, not a duplicate.** `practice_minutes` sums, so two rows on one
+  day may be a morning and an evening practice. Read the groups (aggregate first, inside
+  `BEGIN READ ONLY`, the query in [the plan](./plans/v1-24-3b-logs-in-place.md) → Z3), and the
+  maintainer decides each: **merge** (one row holds the day's total) or **hide** the duplicate. No
+  practice correction exists yet; write one in `corrections/registry.ts`, guarded and dry-run first
+  (the `data-correction` skill), and never commit a profile, a date or a value.
+- **The app keeps logging meanwhile.** The new writer's insert is target-less and names no index, so
+  it works with or without it; until the index exists, nothing refuses a second same-day practice.
+
 ---
 
 ## Enable `pg_stat_statements` on prod (slow-query insight) — do this ONCE
