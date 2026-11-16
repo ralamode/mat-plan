@@ -2,7 +2,7 @@ import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-p
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
 import { CLOSED_DAY_NOTICE, VALUE_JOINER } from '@/lib/constants';
-import { formatList, plural } from '@/lib/i18n/plural';
+import { formatList } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
 
@@ -38,8 +38,6 @@ export const DAY_COPY = {
   loggedAgainst: (text: string) => `Logged rows were against ${text}.`,
   superset: (letter: string) => `Superset ${letter}`,
   rest: (text: string) => `Rest ${text}`,
-  /** Look-ahead: the size of a workout, where the progress line would be (v12). */
-  items: (count: number) => plural(count, { one: '1 item', other: `${count} items` }),
   /** A row whose prescription left the workout after it was logged (v12, `index.html:2432`). */
   removed: 'No longer in this workout. What was logged stays.',
   /** The whole screen turns read-only after the first `closed_day`. */

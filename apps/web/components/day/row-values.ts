@@ -1,5 +1,6 @@
 import {
   isPlainDecimal,
+  isWholeNumber,
   quantityCeiling,
   quantityText,
   repsSchema,
@@ -62,9 +63,6 @@ export function placeholderOf(item: DayItem, field: RowField): string | undefine
 /** Why a typed value cannot be sent, before any write. */
 export type TypedProblem = 'not_a_number' | 'out_of_range' | 'missing';
 
-/** A whole number of reps, as typed: digits only (`8`, not `8.0` or `8 reps`). */
-const WHOLE = /^\d+$/;
-
 /**
  * What a ✓ sends, from the row's fields (plan D13).
  *
@@ -95,7 +93,8 @@ export function readTyped(
         continue;
       }
       empty = false;
-      if (!WHOLE.test(typed)) return { ok: false, problem: 'not_a_number', field };
+      // Whole reps as typed: digits only (`8`, not `8.0` or `8 reps`).
+      if (!isWholeNumber(typed)) return { ok: false, problem: 'not_a_number', field };
       const reps = repsSchema.safeParse(Number(typed));
       if (!reps.success) return { ok: false, problem: 'out_of_range', field };
       values.reps = shown.reps = reps.data;
