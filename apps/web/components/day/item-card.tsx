@@ -4,7 +4,7 @@ import { hasSetRows, TRACKING_TYPE } from '@mat-plan/shared';
 import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { FOCUS_TARGET_CLASS, INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
@@ -21,9 +21,27 @@ import {
 } from './row-values';
 import { useRow } from './use-row';
 
-/** An item's card; a logged one is marked by its border (neutral until a "done" colour exists). */
+/**
+ * An item's card, and how a logged one looks (`docs/design.md` → the `done` tokens): a `border-done`
+ * edge, which is the boundary, and a `done-surface` tint, which is decoration. Secondary text on the
+ * tint is `done-muted-foreground`, since `muted-foreground` is under AA there.
+ *
+ * ⚠️ **No tint while the row shows a message.** `destructive` text is 4.30:1 on the light tint,
+ * under AA, and a failed un-tick puts "Still logged…" on a logged row. The edge and the filled ✓
+ * still say it is logged.
+ */
 const CARD_CLASS = 'rounded-xl border p-3';
-const LOGGED_CARD_CLASS = 'border-primary';
+const LOGGED_CARD_CLASS = 'border-done';
+const TINT_CLASS = 'bg-done-surface';
+const secondaryText = (onTint: boolean) =>
+  onTint ? 'text-done-muted-foreground' : 'text-muted-foreground';
+
+/**
+ * The ✓'s focus ring (design.md): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
+ * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
+ */
+const TICK_FOCUS_CLASS =
+  'outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
 /**
  * One item of a workout, as a card in the workout's list (FAM-1 step 13).
@@ -45,10 +63,10 @@ export function ItemCard({
   if (hasSetRows(item.trackingType) || !row) {
     const logged = item.rows.filter((r) => r.logged).length;
     return (
-      <li className={cn(CARD_CLASS, logged > 0 && LOGGED_CARD_CLASS)}>
-        <ItemHeading item={item} />
+      <li className={cn(CARD_CLASS, logged > 0 && [LOGGED_CARD_CLASS, TINT_CLASS])}>
+        <ItemHeading item={item} onTint={logged > 0} />
         {logged > 0 ? (
-          <p className="text-muted-foreground mt-2 text-sm">{DAY_COPY.setsLogged(logged)}</p>
+          <p className={cn('mt-2 text-sm', secondaryText(true))}>{DAY_COPY.setsLogged(logged)}</p>
         ) : null}
       </li>
     );
@@ -56,21 +74,22 @@ export function ItemCard({
   return <SingleItem workout={workout} workoutKey={workoutKey} item={item} row={row} />;
 }
 
-function ItemHeading({ item }: { item: DayItem }) {
+function ItemHeading({ item, onTint }: { item: DayItem; onTint: boolean }) {
+  const muted = secondaryText(onTint);
   return (
     <>
       {/* Wraps, as v12's card heading does: a long prescription goes under the name. */}
       <div className="flex flex-wrap items-baseline gap-x-3">
         <h4 className={cn('font-semibold', NAME_WRAP_CLASS)}>{item.name}</h4>
         {item.prescribedText ? (
-          <span className="text-muted-foreground ml-auto text-sm">{item.prescribedText}</span>
+          <span className={cn('ml-auto text-sm', muted)}>{item.prescribedText}</span>
         ) : null}
       </div>
       {item.notes ? (
-        <p className={cn('text-muted-foreground mt-1 text-sm', NAME_WRAP_CLASS)}>{item.notes}</p>
+        <p className={cn('mt-1 text-sm', muted, NAME_WRAP_CLASS)}>{item.notes}</p>
       ) : null}
       {item.prescriptionPublicId === null ? (
-        <p className="text-muted-foreground mt-1 text-sm">{DAY_COPY.removed}</p>
+        <p className={cn('mt-1 text-sm', muted)}>{DAY_COPY.removed}</p>
       ) : null}
     </>
   );
@@ -115,11 +134,13 @@ function SingleItem({
     left = `${DAY_COPY.lastTime} ${formatRowQuantity(previous.value, previous.unit)}`;
   }
 
+  const onTint = r.logged !== null && !r.error;
+
   return (
-    <li className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS)}>
-      <ItemHeading item={item} />
+    <li className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}>
+      <ItemHeading item={item} onTint={onTint} />
       <div className="mt-2 flex items-center gap-2">
-        <span className="text-muted-foreground min-w-0 flex-1 text-sm">{left}</span>
+        <span className={cn('min-w-0 flex-1 text-sm', secondaryText(onTint))}>{left}</span>
         {r.logged ? (
           !isCheck && (
             <span className="shrink-0 text-base font-medium tabular-nums">
@@ -168,11 +189,13 @@ function SingleItem({
             aria-disabled={r.pending || undefined}
             aria-describedby={r.error ? errorId : undefined}
             className={cn(
-              FOCUS_TARGET_CLASS,
+              TICK_FOCUS_CLASS,
               'flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg',
-              // Un-pressed reads as not done: a muted glyph, as v12's is.
+              // Ticked: the `done` fill carries the state (at least 3:1 against an un-ticked ✓),
+              // and under forced colours, where fills vanish, a heavier border does. Un-ticked: a
+              // muted glyph, as v12's is.
               r.logged
-                ? 'bg-primary text-primary-foreground border-primary'
+                ? 'bg-done text-done-foreground border-done forced-colors:border-4'
                 : 'bg-background text-muted-foreground',
             )}
           >

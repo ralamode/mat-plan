@@ -100,8 +100,11 @@ adds its files and invariants here.
 
 **Decided with the maintainer at step 13 (2026-11-15):**
 
-- A logged row is neutral (a `border-primary` card and a filled primary ✓), not green, until a
-  "done" colour token exists.
+- A logged row was to stay neutral until a "done" colour existed. #424 added the `done` tokens
+  before this step merged, so the row uses them as `docs/design.md` sets out: a `border-done` edge,
+  a `done-surface` tint (dropped while the row shows a message, because `destructive` is 4.30:1
+  on the light tint), a `done` ✓ with a heavier border under forced colours, and a `foreground`
+  focus outline outside the ✓.
 - "N not saved" shows beside a workout's progress while a save has failed.
 - A Reload button appears on a refusal that means the page is out of date.
 
