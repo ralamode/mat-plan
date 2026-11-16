@@ -9,5 +9,5 @@ FAM-1 step 4b, migration `0025` (expand only; nothing writes it until step 6a's 
   quantity slot, with the same unit guard as `entry_set_quantities`.
 - Bounds pinned to the shared constants. `target_reps` and `sets` are bounded on template rows only,
   because production still holds an archived block whose reps run to 32 characters.
-- `db:verify` proves every constraint and two new audits; mutations 62–73 prove the proofs can fail.
+- `db:verify` proves every constraint and three new audits; mutations 62–73, 80 and 81 prove the proofs can fail.
   The household delete gains step 8a, and the privacy inventory and notice say what is stored.

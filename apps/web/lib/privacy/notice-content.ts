@@ -273,7 +273,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount, as one number or a range). These belong to the household, so removing one athlete does not\nremove them; deleting the household does.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
+              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
             },
             {
               "k": "em",

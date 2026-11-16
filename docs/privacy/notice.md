@@ -39,7 +39,7 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   copy a workout from another of your programs, that program's name as it was when you copied it.
   For each exercise in a workout: its instructions and rest note, the name you give a group of
   exercises done together, and the targets you set (sets, reps, and a weight, time, distance or
-  count, as one number or a range). These belong to the household, so removing one athlete does not
+  count). These belong to the household, so removing one athlete does not
   remove them; deleting the household does.
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
