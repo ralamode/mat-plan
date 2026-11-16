@@ -251,7 +251,7 @@ export async function restoreHidden(
       }
       // 🔴 **A restore can land on a place another live row now holds** (`RESTORE_SLOT_INDEXES`).
       // Two ways: a practice (V1-24 3b-0) has no holder lookup, so a re-entered day reaches here
-      // every time, proved in `verify/single-values.ts` § 3b-0 (mutation 78); and for a weigh-in,
+      // every time, proved in `verify/single-values.ts` § 3b-0 (mutation 86); and for a weigh-in,
       // `restoreOne` reads the holder without locking a row that may not exist yet, so another device
       // inserting a weigh-in for the same (profile, day, slot) in that window makes the restore's
       // `deleted_at = NULL` hit `BODYWEIGHT_DAY_UNIQUE_INDEX`. The savepoint has already rolled back,

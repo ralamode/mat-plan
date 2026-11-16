@@ -1,5 +1,5 @@
 {
-  "id": "f0b5348c-c0bb-4e97-92ed-8bdf1cf84706",
+  "id": "4358d0b0-104f-4864-a236-45e25bc1d0f1",
   "prevId": "b0880789-2935-4964-adec-0e684105fded",
   "version": "7",
   "dialect": "postgresql",
@@ -961,28 +961,6 @@
           ],
           "isUnique": true,
           "where": "\"entries\".\"deleted_at\" is null and \"entries\".\"metric_key\" = 'bodyweight'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "uq_entries_profile_day_practice": {
-          "name": "uq_entries_profile_day_practice",
-          "columns": [
-            {
-              "expression": "profile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "activity_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"entries\".\"deleted_at\" is null and \"entries\".\"metric_key\" = 'practice_minutes'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2108,6 +2086,225 @@
       },
       "isRLSEnabled": false
     },
+    "public.prescription_quantities": {
+      "name": "prescription_quantities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "prescription_quantities_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "prescription_id": {
+          "name": "prescription_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dimension": {
+          "name": "dimension",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_min": {
+          "name": "value_min",
+          "type": "numeric(8, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_max": {
+          "name": "value_max",
+          "type": "numeric(8, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_prescription_quantities_prescription": {
+          "name": "idx_prescription_quantities_prescription",
+          "columns": [
+            {
+              "expression": "prescription_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_prescription_quantities_slot": {
+          "name": "idx_prescription_quantities_slot",
+          "columns": [
+            {
+              "expression": "slot",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dimension",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_prescription_quantities_unit": {
+          "name": "idx_prescription_quantities_unit",
+          "columns": [
+            {
+              "expression": "unit",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dimension",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_prescription_quantities_prescription_slot": {
+          "name": "uq_prescription_quantities_prescription_slot",
+          "columns": [
+            {
+              "expression": "prescription_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slot",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"prescription_quantities\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "prescription_quantities_prescription_id_prescriptions_id_fk": {
+          "name": "prescription_quantities_prescription_id_prescriptions_id_fk",
+          "tableFrom": "prescription_quantities",
+          "tableTo": "prescriptions",
+          "columnsFrom": [
+            "prescription_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "prescription_quantities_slot_dimension_fkey": {
+          "name": "prescription_quantities_slot_dimension_fkey",
+          "tableFrom": "prescription_quantities",
+          "tableTo": "quantity_slots",
+          "columnsFrom": [
+            "slot",
+            "dimension"
+          ],
+          "columnsTo": [
+            "code",
+            "dimension"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "prescription_quantities_unit_dimension_fkey": {
+          "name": "prescription_quantities_unit_dimension_fkey",
+          "tableFrom": "prescription_quantities",
+          "tableTo": "units",
+          "columnsFrom": [
+            "unit",
+            "dimension"
+          ],
+          "columnsTo": [
+            "code",
+            "dimension"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "prescription_quantities_value_min_check": {
+          "name": "prescription_quantities_value_min_check",
+          "value": "\"prescription_quantities\".\"value_min\" is null or (\"prescription_quantities\".\"value_min\" >= 0 and \"prescription_quantities\".\"value_min\" <> 'NaN')"
+        },
+        "prescription_quantities_value_max_check": {
+          "name": "prescription_quantities_value_max_check",
+          "value": "\"prescription_quantities\".\"value_max\" is null or (\"prescription_quantities\".\"value_min\" is not null and \"prescription_quantities\".\"value_max\" >= \"prescription_quantities\".\"value_min\" and \"prescription_quantities\".\"value_max\" <> 'NaN')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.prescription_targets": {
       "name": "prescription_targets",
       "schema": "",
@@ -2313,7 +2510,7 @@
           "name": "day_role",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "movement_id": {
           "name": "movement_id",
@@ -2336,6 +2533,42 @@
         "target_reps": {
           "name": "target_reps",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workout_id": {
+          "name": "workout_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rest_after": {
+          "name": "rest_after",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superset_label": {
+          "name": "superset_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superset_order": {
+          "name": "superset_order",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -2418,6 +2651,49 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "uq_prescriptions_workout_client_id": {
+          "name": "uq_prescriptions_workout_client_id",
+          "columns": [
+            {
+              "expression": "workout_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_prescriptions_workout_idx": {
+          "name": "uq_prescriptions_workout_idx",
+          "columns": [
+            {
+              "expression": "workout_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idx",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"prescriptions\".\"workout_id\" is not null and \"prescriptions\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2446,6 +2722,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "prescriptions_workout_block_fkey": {
+          "name": "prescriptions_workout_block_fkey",
+          "tableFrom": "prescriptions",
+          "tableTo": "workouts",
+          "columnsFrom": [
+            "workout_id",
+            "block_id"
+          ],
+          "columnsTo": [
+            "id",
+            "block_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2471,6 +2762,46 @@
         "prescriptions_sets_check": {
           "name": "prescriptions_sets_check",
           "value": "\"prescriptions\".\"sets\" is null or \"prescriptions\".\"sets\" > 0"
+        },
+        "prescriptions_day_role_xor_workout_check": {
+          "name": "prescriptions_day_role_xor_workout_check",
+          "value": "num_nonnulls(\"prescriptions\".\"day_role\", \"prescriptions\".\"workout_id\") = 1"
+        },
+        "prescriptions_template_client_id_check": {
+          "name": "prescriptions_template_client_id_check",
+          "value": "(\"prescriptions\".\"workout_id\" is null) = (\"prescriptions\".\"client_id\" is null)"
+        },
+        "prescriptions_target_reps_length_check": {
+          "name": "prescriptions_target_reps_length_check",
+          "value": "\"prescriptions\".\"workout_id\" is null or \"prescriptions\".\"target_reps\" is null or (char_length(btrim(\"prescriptions\".\"target_reps\")) >= 1 and char_length(\"prescriptions\".\"target_reps\") <= 20)"
+        },
+        "prescriptions_sets_max_check": {
+          "name": "prescriptions_sets_max_check",
+          "value": "\"prescriptions\".\"workout_id\" is null or \"prescriptions\".\"sets\" is null or \"prescriptions\".\"sets\" <= 20"
+        },
+        "prescriptions_notes_length_check": {
+          "name": "prescriptions_notes_length_check",
+          "value": "\"prescriptions\".\"notes\" is null or (char_length(btrim(\"prescriptions\".\"notes\")) >= 1 and char_length(\"prescriptions\".\"notes\") <= 500)"
+        },
+        "prescriptions_rest_after_length_check": {
+          "name": "prescriptions_rest_after_length_check",
+          "value": "\"prescriptions\".\"rest_after\" is null or (char_length(btrim(\"prescriptions\".\"rest_after\")) >= 1 and char_length(\"prescriptions\".\"rest_after\") <= 30)"
+        },
+        "prescriptions_superset_label_length_check": {
+          "name": "prescriptions_superset_label_length_check",
+          "value": "\"prescriptions\".\"superset_label\" is null or (char_length(btrim(\"prescriptions\".\"superset_label\")) >= 1 and char_length(\"prescriptions\".\"superset_label\") <= 30)"
+        },
+        "prescriptions_superset_order_check": {
+          "name": "prescriptions_superset_order_check",
+          "value": "\"prescriptions\".\"superset_order\" is null or (\"prescriptions\".\"superset_order\" >= 1 and \"prescriptions\".\"superset_order\" <= 30)"
+        },
+        "prescriptions_superset_pair_check": {
+          "name": "prescriptions_superset_pair_check",
+          "value": "(\"prescriptions\".\"superset_label\" is null) = (\"prescriptions\".\"superset_order\" is null)"
+        },
+        "prescriptions_rest_after_needs_superset_check": {
+          "name": "prescriptions_rest_after_needs_superset_check",
+          "value": "\"prescriptions\".\"rest_after\" is null or \"prescriptions\".\"superset_label\" is not null"
         }
       },
       "isRLSEnabled": false

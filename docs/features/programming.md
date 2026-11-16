@@ -103,7 +103,8 @@ scans the card in **both** states) **fails the build**. Two more things not to r
    `queries/program-day.ts`; ADR 0007 A2 §1): `programDayRows` and `householdHasProgram` never see a
    block a household built in the app (`kind = 'template'`), which reaches an athlete only through an
    assignment. It is the REAL guard, not a belt-and-braces one: 4b's `day_role`/`workout_id` CHECK
-   cannot see a block's kind, so a template prescription with a `day_role` is legal in the database.
+   cannot see a block's kind, so a template prescription with a `day_role` is legal in the database
+   (since migration 0025; `db:verify` flags one, `prescriptionsWithoutAWorkoutOnTemplateBlocks`).
    `db:verify` proves the legacy output byte-identical with a newer template block on the same day,
    and mutations 55 and 56 keep it honest. ⚠️ So a household whose only programs are built ones reads
    "no program" in `householdHasProgram` (the add-athlete form's Child wording).

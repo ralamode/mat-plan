@@ -12,5 +12,5 @@
   - **Restore:** its duplicate catch is a list of index names (`RESTORE_SLOT_INDEXES`), which FAM-1 11b
     extends. Restore all into a day whose practice was re-entered answers `slot_taken` for that item
     and restores the rest.
-  - **Proofs:** `verify/single-values.ts` § 3b-0; mutation patches 74–82, and patch 40 regenerated.
+  - **Proofs:** `verify/single-values.ts` § 3b-0; mutation patches 82–90, and patch 40 regenerated.
   - **The runbook** gains "If 3b-0's migration refuses".

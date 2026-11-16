@@ -1,7 +1,7 @@
-diff --git a/packages/db/migrations/0025_v1_24_3b0_practice_one_per_day.sql b/packages/db/migrations/0025_v1_24_3b0_practice_one_per_day.sql
+diff --git a/packages/db/migrations/0026_v1_24_3b0_practice_one_per_day.sql b/packages/db/migrations/0026_v1_24_3b0_practice_one_per_day.sql
 index 99381c56..c5bb2b56 100644
---- a/packages/db/migrations/0025_v1_24_3b0_practice_one_per_day.sql
-+++ b/packages/db/migrations/0025_v1_24_3b0_practice_one_per_day.sql
+--- a/packages/db/migrations/0026_v1_24_3b0_practice_one_per_day.sql
++++ b/packages/db/migrations/0026_v1_24_3b0_practice_one_per_day.sql
 @@ -44,4 +44,4 @@ BEGIN
      RAISE EXCEPTION 'V1-24 3b-0: % (profile, day) group(s) hold more than one live practice. Correct them first: docs/runbooks.md -> "If 3b-0''s migration refuses".', dup_groups;
    END IF;
