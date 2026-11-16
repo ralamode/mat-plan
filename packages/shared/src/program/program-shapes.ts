@@ -7,6 +7,7 @@ import { movementLabelSchema, movementNameSchema, trackingTypeSchema } from '../
 import { MAX_HOUSEHOLD_ATHLETES } from '../profiles';
 import { MAX_WORKOUT_ITEMS } from '../programming';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
+import { hasControlChar } from '../text';
 import {
   athleteLabelSchema,
   hasSetRows,
@@ -248,9 +249,17 @@ export const renameProgramSchema = z.object({
 });
 export type RenameProgram = z.infer<typeof renameProgramSchema>;
 
-/** `newItem`'s input: a name a person typed (`movementNameSchema`'s rules) and its type. */
+/**
+ * `newItem`'s input: a name a person typed (`movementNameSchema`'s rules) and its type.
+ *
+ * `movementNameSchema` refuses a comma and a line break but not the other control characters, and a
+ * NUL that reaches Postgres makes the action throw instead of answering `invalid`; so this refuses
+ * them too (`control-chars.test.ts` holds every typed text in the write schemas to that).
+ */
 export const newItemSchema = z.object({
-  name: movementNameSchema,
+  name: movementNameSchema.refine((v) => !hasControlChar(v), {
+    message: 'a name has no control characters',
+  }),
   trackingType: trackingTypeSchema,
 });
 export type NewItem = z.infer<typeof newItemSchema>;
