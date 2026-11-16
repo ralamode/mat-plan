@@ -212,6 +212,12 @@ describe('readAmend (Change, 13b-ii)', () => {
     });
   });
 
+  it('🔴 never sends what the amend writer refuses, whoever calls it: a row in another unit', () => {
+    const inKg = { quantities: [{ slot: primary, unit: 'kg' as const, value: 27.5 }], reps: 8 };
+    // Only reps typed: the kg load would go out untouched, under an item that logs in lb.
+    expect(readAmend(bench, { quantity: '27.5', reps: '10' }, inKg).send).toBeNull();
+  });
+
   it('a load over the unit’s ceiling is kept, not sent', () => {
     const over = String(quantityCeiling('lb')! + 1);
     expect(readAmend(bench, { quantity: over, reps: '8' }, logged)).toEqual({
