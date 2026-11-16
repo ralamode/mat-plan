@@ -1,10 +1,22 @@
-import { PROGRAM_READ_KIND, type DayRole } from '@mat-plan/shared';
+import { PROGRAM_BLOCK_KIND, PROGRAM_READ_KIND, type DayRole } from '@mat-plan/shared';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
 import { isLiveProfile, programBlockInHousehold } from '../writers/ownership';
+
+/**
+ * 🔴 **The legacy-read guard (FAM-1 5b; ADR 0007 A2 §1): `program_blocks.kind = 'legacy'`.** A block a
+ * household builds in the app (`template`) is reached only through an assignment, never through these
+ * newest-block reads, so neither read below may see one. ⚠️ **It is the REAL guard, not a second one:**
+ * step 4b's `num_nonnulls(day_role, workout_id) = 1` cannot see a block's kind, so a template block's
+ * prescription with a `day_role` stays legal in the database and only the writer refuses it. Do not
+ * delete this as redundant (mutations 55 and 56).
+ */
+function isLegacyBlock() {
+  return eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy);
+}
 
 /**
  * The programmed movements for ONE kid on ONE `day_role` (V1-10 slice 2), single-sourced here so the app
@@ -95,6 +107,7 @@ export function programDayRows(
         // Guarding the latter consumers separately would be copies, and
         // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
         eq(schema.profiles.kind, PROGRAM_READ_KIND),
+        isLegacyBlock(),
         isNull(schema.programBlocks.deletedAt),
       ),
     )
@@ -176,7 +189,10 @@ export function programDayRows(
 export type ProgramDayRow = Awaited<ReturnType<typeof programDayRows>>[number];
 
 /**
- * Does this household have ANY live program block? (`PROF-1` a-g)
+ * Does this household have a live LEGACY program block? (`PROF-1` a-g; legacy-only since FAM-1 5b, so a
+ * household whose only programs are ones it built in the app reads `false` here: those reach an
+ * athlete through an assignment, not through the kid-default read this explains.) Its one caller today
+ * is the add-athlete form (`apps/web/app/p/new/page.tsx`), which words the Child option by it.
  *
  * 🔴 **It exists to tell two states apart that `programDayRows` renders identically** — both return
  * `[]`:
@@ -196,7 +212,13 @@ export async function householdHasProgram(
   const [row] = await db
     .select({ id: schema.programBlocks.id })
     .from(schema.programBlocks)
-    .where(and(programBlockInHousehold(args.scope), isNull(schema.programBlocks.deletedAt)))
+    .where(
+      and(
+        programBlockInHousehold(args.scope),
+        isLegacyBlock(),
+        isNull(schema.programBlocks.deletedAt),
+      ),
+    )
     .limit(1);
   return row !== undefined;
 }
