@@ -1,19 +1,14 @@
 'use client';
 
 import { PROGRAM_REFUSAL, type ProgramResult } from '@mat-plan/shared';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 
-import { nameRefusal } from './builder-text';
-
-/**
- * A name typed the way the schemas store it: runs of whitespace (a pasted tab or newline included)
- * become one space, and the ends are trimmed. `shortTextSchema` refuses a control character, so a
- * pasted tab would otherwise come back `invalid` under a name that looks fine.
- */
-export const cleanName = (raw: string) => raw.replace(/\s+/g, ' ').trim();
+import { cleanName, nameRefusal } from './builder-text';
+import { focusField, useAttempt } from './use-attempt';
 
 /**
- * One name form's state and submit (FAM-1 lane B: Create, Rename; step 8's workout name next).
+ * One name form's state and submit (FAM-1 lane B: Create, Rename). The workout editor shares its
+ * parts (`useAttempt`, `focusField`, `cleanName`), not the hook: its Save has many fields.
  *
  * - **An attempt belongs to the form that made it.** `reset()` (Cancel, Escape, a fresh open)
  *   starts a new attempt, and a result that arrives for an older one is dropped: a Cancel mid-save
@@ -39,25 +34,17 @@ export function useNameForm<T extends object>({
   const [name, setName] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const attempt = useRef(0);
+  const { begin, isCurrent, cancel } = useAttempt();
   const fieldRef = useRef<HTMLInputElement>(null);
-  // Leaving the screen ends the attempt too: a create answered after that must not navigate.
-  useEffect(
-    () => () => {
-      attempt.current += 1;
-    },
-    [],
-  );
 
   const refuse = (message: string) => {
     setError(message);
-    fieldRef.current?.focus();
-    fieldRef.current?.scrollIntoView?.({ block: 'center' });
+    focusField(fieldRef.current);
   };
 
   /** A fresh form: drops any answer still in flight. */
   const reset = (value = initial) => {
-    attempt.current += 1;
+    cancel();
     setName(value);
     setError(null);
     setPending(false);
@@ -70,10 +57,10 @@ export function useNameForm<T extends object>({
     if (!cleaned) return refuse(nameRefusal(PROGRAM_REFUSAL.invalid));
     const call = submit(cleaned);
     if (!call) return onSaved({ ok: true } as { ok: true } & T, false);
-    const mine = ++attempt.current;
+    const mine = begin();
     setPending(true);
     const result = await call;
-    if (mine !== attempt.current) return;
+    if (!isCurrent(mine)) return;
     if (result.ok) return onSaved(result, true);
     setPending(false);
     refuse(nameRefusal(result.reason));
