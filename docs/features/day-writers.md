@@ -17,27 +17,32 @@ An athlete ticks a row of a workout and it is logged: one writer for every track
 that changes a logged row's numbers, and the resolver that turns an athlete and a day into the
 `DayPlan` the day page shows. The lane starts when the plan's migration 4a-ii is applied.
 
-🚧 **Written at step 0b, before the lane's first step.** It names the lane's directories and the
-rules it starts under. Each step below adds its files, its diagram and its invariants here.
+🚧 **Steps 11a and 11b are in** (the row writer, with its un-tick and re-tick); 12a, 11c and 14 add
+their files, diagrams and invariants here. The row writer's sequence diagram is
+[architecture.md §2i](../architecture.md); its plan is
+[fam-1-11b-row-writer.md](../plans/fam-1-11b-row-writer.md).
 
 ## The map
 
 | Step | Adds                                                                                                                                                              |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 11a  | `writers/session-rows.ts`, extracted from the strength writer. A seam: it owes [write-path.md](./write-path.md) and [strength-logging.md](./strength-logging.md). |
-| 11b  | `writers/day/log-row.ts`, the one row writer. It also edits `writers/hide.ts`, a seam shared with lane S.                                                         |
+| 11b  | `writers/day/log-row.ts`, `queries/day/{scheduled,stored-row-values}.ts`. Seams: `hide.ts` (lane S), `ownership.ts`, `session-rows.ts`, `unique-violation.ts`.    |
 | 12a  | `queries/day/{day-plan,previous}.ts`: the day resolver and PREVIOUS.                                                                                              |
 | 11c  | `writers/day/amend-row.ts`: Change.                                                                                                                               |
 | 14   | The export. Seams: `apps/web/lib/dal/export.ts`, `queries/export-month.ts`, `packages/shared/src/csv/`.                                                           |
 
 ## Files
 
-| File                                       | What it is for                                                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/day/index.ts`     | A placeholder so the directory exists. The first real module may replace it.                                                          |
-| `packages/db/src/writers/day/owed.test.ts` | The lane's `it.todo` list: the tests steps 11b, 12a, 11c and 14 still owe the contract. Delete a line in the PR that writes its test. |
-| `packages/db/src/queries/day/index.ts`     | The same, for the reads.                                                                                                              |
-| `packages/db/scripts/verify/day.ts`        | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                         |
+| File                                               | What it is for                                                                                                                                                                                 |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/day/index.ts`             | The directory's exports: `logRow`, `untickRow`, `retickRow`, re-exported from the package index for step 12b's actions.                                                                        |
+| `packages/db/src/writers/day/log-row.ts`           | **The row writer** (11b): the three writers, `classifyRowHolder`, `rowWorkout`, `RowRefused`, and the conjuncts `programRowOf`, `workoutSessionSlot`, `workoutSupersetSlot`, `programRowSlot`. |
+| `packages/db/src/queries/day/scheduled.ts`         | `scheduledOn(blockId, workoutId, day)`: a live week slot on the day's weekday (`localWeekday`). One rule for the writer, 12a's `scheduled` and 11c. **OWED(step 5)**: the assignment conjunct. |
+| `packages/db/src/queries/day/stored-row-values.ts` | `readRowValues`: a logged row's live set and its live quantities, as `RowValues`. Throws on two live sets (D3). A second copy of the DAL's read (`docs/tech-debt.md`).                         |
+| `packages/db/src/writers/day/owed.test.ts`         | The lane's `it.todo` list: the tests steps 11b, 12a, 11c and 14 still owe the contract. Delete a line in the PR that writes its test.                                                          |
+| `packages/db/src/queries/day/index.ts`             | The directory's exports. Not re-exported from the package index yet; 12a decides.                                                                                                              |
+| `packages/db/scripts/verify/day.ts`                | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                  |
 
 ## Invariants
 
@@ -64,6 +69,43 @@ rules it starts under. Each step below adds its files, its diagram and its invar
    gate no longer sends a PR there: ownership proven by `public_id` inside the transaction (2), the
    writer shared with `db:verify` (3), and idempotency by a client id, a database UNIQUE and
    `ON CONFLICT` (5).
+
+8. 🔴 **The row writer's check order is the contract**: profile (archived → `closed_day`) → window
+   (`inWritableWindow`, D32) → replay → workout → prescription → movement → scheduled → set →
+   values → writes. Every step has a proof in `verify/day.ts` and a mutation that turns it red
+   (`scripts/mutations/README.md`, 110–129 and 170–177). Reorder nothing without moving its proof.
+9. 🔴 **The replay answers first, and it is pinned.** `classifyRowHolder` finds the entry holding the
+   `clientId`, live or hidden (unguarded, so a hidden holder answers `own_hidden`, D18), and it is
+   this write only if it is `programRowOf(profile, day)` for this set, prescription and workout.
+   Anything else answers `not_found`, never `ok` with another row's values (3c–3h). A replay after a
+   purge answers `not_found`: the purge cleared `prescription_id`.
+10. **`programRowOf(profileId, day)` is "a program row of this athlete on this day"**
+    (`prescription_set IS NOT NULL`): the one conjunct for the pin, un-tick and re-tick, so a weigh-in
+    is never reached through a row action (10a, 10b).
+11. 🔴 **A refusal reached after the first insert leaves by `RowRefused`**, thrown inside the
+    transaction and caught at its edge (`hide.ts`'s `ItemRefused` pattern), so a session or superset
+    the call created is rolled back. Every refusal uses it. Unproven on PGlite: only a second
+    connection can produce a refusal after a fresh insert (plan § Test plan).
+12. **Ownership.** Every public id resolves inside the scope; the workout lookup also ties the block
+    to the profile's own household (`programBlockOfProfile`, runbook pre-flight (f), proof 4d,
+    mutation 111), so it holds whatever a scope widens to. A foreign id, hidden or not, answers
+    `not_found`. ⚠️ **`not_found` is uniform for public ids, not for `clientId`**: a `clientId` held
+    by another household's row also answers `not_found`, which tells a caller the id is in use.
+    Guessing one needs the 74 random bits of a UUIDv7, so that is accepted, and said here rather than
+    claimed away.
+
+## Fake parity
+
+The preview's fake (`apps/web/app/design/program/fakes.ts`) and the writer answer the same input the
+same way, except:
+
+- The fake has no household or archive, so `not_found` for a foreign id and `closed_day` for an
+  archived athlete are the writer's alone. The fake answers `program_changed` for an unknown
+  workout; the writer, `not_found` (it cannot tell unknown from foreign).
+- A replay after the window has closed answers `closed_day` in both. A replay after a purge answers
+  `not_found` in the writer only (the fake has no purge).
+- Until step 5, the writer has no "on the program that day" check (`OWED(step 5)`); the fake reads
+  it from the fixture.
 
 ## Changing it
 

@@ -1375,8 +1375,9 @@ child:
 --       PGlite, never on production, so THIS is the check against real rows.)
 -- (f) FAM-1 4a-ii: a SESSION of ANOTHER household naming one of H's workouts. Step 9b would SET NULL
 --       its `workout_id` silently, and its `workout_name` (H's typed text) would stay on another
---       family's child's session, and from step 14 in their export. Step 11b's writer must refuse it
---       (owed, with a boundary test; no writer exists before 11b), so a row here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
+--       family's child's session, and from step 14 in their export. Step 11b's writer refuses it:
+--       `programBlockOfProfile` in the workout lookup, proved by `verify/day.ts` 4d and mutation
+--       111. So a row here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
 --       that session (the pairing CHECK allows both NULL) before this procedure.
 --       SELECT s.id FROM sessions s
 --         JOIN profiles pr ON pr.id = s.profile_id

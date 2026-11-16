@@ -100,6 +100,20 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
   [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
 
+### Two reads of a logged row's live sets and quantities (added 2026-11-16, FAM-1 step 11b)
+
+- **What & why it's debt:** `packages/db/src/queries/day/stored-row-values.ts` (`readRowValues`, the
+  row writer's replay and re-tick answer) and the app DAL's day read
+  (`apps/web/lib/dal/entries.ts`, the live `entry_sets` and then their quantities) are the same two
+  queries with the same load-bearing parent filter. 11b wrote the first in `packages/db` because the
+  writer cannot import the app DAL; folding the DAL onto it changes a lane-S file, so it was left.
+- **Impact:** a change to the parent filter made in one copy (the set-liveness rule) leaves the other
+  reading by the old rule. The writer's copy is guarded by mutation 172; the DAL's is not.
+- **The fix:** the DAL calls `readRowValues` (or a sibling that also returns the set ids and
+  statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
+  one from the start.
+- **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
+
 ### The a11y checks have two copies (added 2026-11-15, FAM-1 step 0b)
 
 - **What & why it's debt:** `apps/web/e2e/a11y-checks.ts` exports `expectNoAxeViolations` and
