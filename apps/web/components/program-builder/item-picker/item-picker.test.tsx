@@ -131,6 +131,39 @@ describe('the item picker (FAM-1 9)', () => {
     expect(row('Sprawls').getAttribute('aria-checked')).toBe('true');
   });
 
+  it('after Add, the picker opens with nothing ticked', async () => {
+    editor();
+    openPicker();
+    fireEvent.click(row('Sprawls'));
+    fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    openPicker();
+    expect(row('Sprawls').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('a new item not in the list takes the name the server stored', async () => {
+    editor({
+      newItem: vi.fn().mockResolvedValue({
+        ok: true,
+        itemPublicId: NEW_ID,
+        name: 'Bear Crawl',
+        trackingType: 'reps',
+        existed: true,
+      }),
+    });
+    openPicker();
+    search('bear crawl');
+    fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('bear crawl') }));
+    fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+      target: { value: 'reps' },
+    });
+    fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+    await waitFor(() => expect(row('Bear Crawl').getAttribute('aria-checked')).toBe('true'));
+    expect(
+      within(sheet()).getByText(existedText('Bear Crawl', TRACKING_TYPE_LABELS.reps)),
+    ).toBeTruthy();
+  });
+
   it('with nothing ticked, Add says so and does nothing', () => {
     editor();
     openPicker();

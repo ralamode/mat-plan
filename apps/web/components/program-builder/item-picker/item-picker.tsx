@@ -38,6 +38,16 @@ import { FieldLabel } from '../field-label';
 import { NameField } from '../name-field';
 import { useAttempt } from '../use-attempt';
 
+/**
+ * The item's stored name from `newItem`'s answer. ⚠️ Contract change C8 (roadmap thread, 2026-11-16)
+ * adds `name` to every success: the existing item's own name when `existed`, the cleaned typed name
+ * otherwise. Until C8 is on main the answer has no `name`, so it is read defensively here, in ONE
+ * place; once C8 lands this becomes `result.name`.
+ */
+function storedName(result: object, typed: string): string {
+  return 'name' in result && typeof result.name === 'string' ? result.name : typed;
+}
+
 const FORM_ID = 'new-item-form';
 const NAME_ID = 'new-item-name';
 const TYPE_ID = 'new-item-type';
@@ -185,7 +195,7 @@ export function ItemPicker({
     const known = byId.get(result.itemPublicId);
     const option: MovementOptionDTO = known ?? {
       publicId: result.itemPublicId,
-      name: cleaned,
+      name: storedName(result, cleaned),
       trackingType: result.trackingType,
       owner: 'household',
       unitDefault: null,

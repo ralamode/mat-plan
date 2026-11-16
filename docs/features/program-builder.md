@@ -171,7 +171,10 @@ flowchart LR
       inactive until a type is chosen, with a line explaining the chosen type, and the warning that
       the item can't be deleted or renamed and its type can't change.
     - **A name already in the list selects that item**, by the picker's own rule (aliases
-      included): "RDL" selects Romanian Deadlift; the server's `existed` reads the same.
+      included): "RDL" selects Romanian Deadlift. If the server still answers `existed` (a stale
+      list, or another parent got there first), the item it names is added under its stored name
+      and the status line says "… is in the list (Reps). Selected." (v12 has no such line). The
+      name comes from the answer's `name` (contract C8), read in one place, `storedName`.
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.
