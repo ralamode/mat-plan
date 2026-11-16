@@ -170,7 +170,9 @@ flowchart LR
       Add; items made in the picker are kept too, so a reopened picker lists them.
     - **Add** appends a card per item in pick order (`newCard`): a fresh `prescriptionClientId`, **no
       numbers**, and the unit the type fixes, else the item's own declared unit when the type allows
-      it, else none. Focus goes to the first new card's heading; the status line says how many.
+      it, else none. Focus goes to the first new card's heading; the status line says how many, from
+      the sheet's `onReturned` (the bar is hidden from a screen reader while the sheet is open), once
+      per Add: a plain Close says nothing.
     - **The new-item form takes over the sheet**, and **what it tracks has no default**: Create is
       inactive until a type is chosen, with a line explaining the chosen type, and the warning that
       the item can't be deleted or renamed and its type can't change.
@@ -178,8 +180,7 @@ flowchart LR
       included): "RDL" selects Romanian Deadlift. If the server still answers `existed` (a stale
       list, or another parent got there first), the item it names is added under its stored name
       and the status line says "… is in the list (Reps). Selected." (v12 has no such line). The
-      name comes from the answer's `name` once contract C8 lands; until then `storedName` reads it
-      defensively, in one place (`owed.test.ts` holds the swap).
+      name is the answer's `name` (contract C8).
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.
@@ -188,9 +189,10 @@ flowchart LR
       message (created, selected, the cap) is seen in the footer and heard in the sheet's status, a failure to reach the server is seen above Create in the form with focus left on Create, an empty name says why once Create is pressed, and a made item is listed once per id;
       and the next search clears it. Closing the sheet drops the form; the ticks and items made
       stay. A full workout says so at "+ Add items" and opens nothing. A tap on Add within
-      `DOUBLE_TAP_MS` of the form closing is ignored (Create sat in the same place). A name the
-      same-movement rule folds to nothing ("S") is refused, shown once Create is pressed rather
-      than on the first keystroke. **A create in flight ends** with Cancel, a closed sheet or a
+      `DOUBLE_TAP_MS` of the tap that closed the form is ignored (Create sat in the same place; both
+      times are `event.timeStamp`s, one clock). A name the same-movement rule folds to nothing ("S")
+      is refused by the contract's own `newItemSchema` (C8), shown once Create is pressed rather
+      than on the first keystroke; an empty name is the lane's plainer "Give the item a name." **A create in flight ends** with Cancel, a closed sheet or a
       fresh form (invariant 11): its answer leaves the screen alone, but a new item it made is still
       listed, since the write may have landed. At the cap, an item made or found is listed but not
       ticked, and the message says so.

@@ -3,7 +3,6 @@
 import {
   MAX_WORKOUT_ITEMS,
   MOVEMENT_NAME_MAX,
-  movementNameKey,
   newItemSchema,
   TRACKING_TYPE_LABELS,
   TRACKING_TYPES,
@@ -44,17 +43,7 @@ import {
 } from '../builder-text';
 import { FieldLabel } from '../field-label';
 import { NameField } from '../name-field';
-import { DOUBLE_TAP_MS, useAttempt } from '../use-attempt';
-
-/**
- * The item's stored name from `newItem`'s answer. ⚠️ Contract change C8 (roadmap thread, 2026-11-16)
- * adds `name` to every success: the existing item's own name when `existed`, the cleaned typed name
- * otherwise. Until C8 is on main the answer has no `name`, so it is read defensively here, in ONE
- * place; once C8 lands this becomes `result.name`.
- */
-function storedName(result: object, typed: string): string {
-  return 'name' in result && typeof result.name === 'string' ? result.name : typed;
-}
+import { isSameTap, useAttempt } from '../use-attempt';
 
 const FORM_ID = 'new-item-form';
 const NAME_ID = 'new-item-name';
@@ -89,6 +78,7 @@ export function ItemPicker({
   open,
   onOpenChange,
   returnFocusTo,
+  onReturned,
   options,
   selected,
   onToggle,
@@ -114,6 +104,8 @@ export function ItemPicker({
   /** A new item, to keep in the editor's options. */
   onCreated: (option: MovementOptionDTO) => void;
   onAdd: () => void;
+  /** Once per close, after focus is back: the moment for a page-level message ("3 items added."). */
+  onReturned?: () => void;
 }) {
   const [notice, setNoticeNow] = useState('');
   /** Cleared first and set a frame later, so the same message twice is said twice. */
@@ -122,7 +114,7 @@ export function ItemPicker({
     if (message) requestAnimationFrame(() => setNoticeNow(message));
   };
   /** When the form last closed: a tap within `DOUBLE_TAP_MS` of it is the same tap, not Add. */
-  const formClosedAt = useRef(0);
+  const formClosedAt = useRef<number | undefined>(undefined);
   const [form, setForm] = useState<{
     name: string;
     type: TrackingType | '';
@@ -182,13 +174,8 @@ export function ItemPicker({
     : !cleaned
       ? COPY.giveAName
       : !existing
-        ? (() => {
-            const parsed = newItemSchema.shape.name.safeParse(cleaned);
-            if (!parsed.success) return parsed.error.issues[0]?.message ?? null;
-            // A name the "same movement" rule folds to nothing ("S") could be added twice; contract
-            // C8 refuses it in `newItemSchema`, and until then this is that rule.
-            return movementNameKey(cleaned) === '' ? COPY.giveAName : null;
-          })()
+        ? // The contract's own rules, a name that folds to nothing ("S") included (C8).
+          (newItemSchema.shape.name.safeParse(cleaned).error?.issues[0]?.message ?? null)
         : null;
   const canCreate =
     !!form && !form.pending && !!cleaned && (existing ? true : !nameIssue && !!form.type);
@@ -206,17 +193,15 @@ export function ItemPicker({
    * view) or on the create button (Cancel). The control that had focus unmounts with the form, and
    * the sheet itself has no visible focus ring.
    */
-  const closeForm = (focusId?: string) => {
+  const closeForm = (at: number, focusId?: string) => {
     // Cancel: an answer still in flight no longer belongs to the screen.
     // Cancel: an answer still in flight no longer belongs to the screen, nor does its message.
     if (!focusId) {
       cancel();
       setNoticeNow('');
     }
-    // The frame's time is on the same clock as a tap's `event.timeStamp`.
-    requestAnimationFrame((time) => {
-      formClosedAt.current = time;
-    });
+    // The tap that closed it: a second tap within `DOUBLE_TAP_MS` lands on what took its place.
+    formClosedAt.current = at;
     flushSync(() => setForm(null));
     const target =
       (focusId && document.querySelector<HTMLElement>(`[${OPTION_ID_ATTR}="${focusId}"]`)) ||
@@ -243,12 +228,13 @@ export function ItemPicker({
         ? existedText(option.name, TRACKING_TYPE_LABELS[option.trackingType])
         : createdText(option.name);
 
-  async function create() {
+  /** `at` is the Create tap's `event.timeStamp`. */
+  async function create(at: number) {
     if (!form || form.pending) return;
     if (!canCreate) return showMissing();
     if (existing) {
       setNotice(said(select(existing), existing, true));
-      return closeForm(existing.publicId);
+      return closeForm(at, existing.publicId);
     }
     const trackingType = form.type as TrackingType;
     const mine = begin();
@@ -258,7 +244,8 @@ export function ItemPicker({
     const known = result.ok ? byId.get(result.itemPublicId) : undefined;
     const made = (answer: Extract<typeof result, { ok: true }>): MovementOptionDTO => ({
       publicId: answer.itemPublicId,
-      name: storedName(answer, cleaned),
+      // The stored name: the existing item's own when `existed`, the cleaned typed one otherwise.
+      name: answer.name,
       trackingType: answer.trackingType,
       owner: 'household',
       unitDefault: null,
@@ -284,7 +271,7 @@ export function ItemPicker({
     const option = known ?? made(result);
     if (!known) onCreated(option);
     setNotice(said(select(option), option, result.existed));
-    closeForm(option.publicId);
+    closeForm(at, option.publicId);
   }
 
   const takeover = form
@@ -296,7 +283,7 @@ export function ItemPicker({
             aria-labelledby={`${FORM_ID}-title`}
             onSubmit={(event) => {
               event.preventDefault();
-              void create();
+              void create(event.timeStamp);
             }}
           >
             <h3 id={`${FORM_ID}-title`} className="text-lg font-semibold">
@@ -407,7 +394,7 @@ export function ItemPicker({
               variant="outline"
               size="lg"
               className="w-full text-base"
-              onClick={() => closeForm()}
+              onClick={(event) => closeForm(event.timeStamp)}
             >
               {BUILDER_COPY.cancel}
             </Button>
@@ -428,6 +415,7 @@ export function ItemPicker({
       data={{ options }}
       alreadyIn={{ ids: inWorkout, label: COPY.alreadyIn }}
       returnFocusTo={returnFocusTo}
+      onReturned={onReturned}
       multiple={{
         selected,
         onToggle: toggle,
@@ -440,34 +428,36 @@ export function ItemPicker({
         searchLabel: COPY.searchLabel,
         searchPlaceholder: COPY.searchPlaceholder,
         takeover,
-        footerAction: (
-          <div className="flex flex-col gap-2">
+        footerNote: (
+          <>
             {/* Seen as well as heard: a different type than the one chosen, the cap. */}
             {notice ? <p className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>{notice}</p> : null}
-            {/* At most two lines, so the list keeps its room; the whole order is read with Add. */}
+            {/* One line, so the list keeps its room; the whole order is read with Add. */}
             {pickedNames.length ? (
-              <p id={SUMMARY_ID} className="line-clamp-2 text-sm wrap-anywhere">
+              <p id={SUMMARY_ID} className="line-clamp-1 text-sm wrap-anywhere">
                 {pickedText(pickedNames)}
               </p>
             ) : null}
             {full && notice !== capText(MAX_WORKOUT_ITEMS) ? (
               <p className="text-muted-foreground text-sm">{capText(MAX_WORKOUT_ITEMS)}</p>
             ) : null}
-            <Button
-              type="button"
-              size="lg"
-              className={`w-full text-base ${PENDING_CLASS}`}
-              aria-disabled={selected.length === 0 || undefined}
-              aria-describedby={pickedNames.length ? SUMMARY_ID : undefined}
-              onClick={(event) => {
-                // The form's last button sat here a moment ago: a double tap is not an Add.
-                if (event.timeStamp - formClosedAt.current < DOUBLE_TAP_MS) return;
-                if (selected.length) onAdd();
-              }}
-            >
-              {selected.length ? addItemsText(selected.length) : COPY.pickToAdd}
-            </Button>
-          </div>
+          </>
+        ),
+        footerAction: (
+          <Button
+            type="button"
+            size="lg"
+            className={`w-full text-base ${PENDING_CLASS}`}
+            aria-disabled={selected.length === 0 || undefined}
+            aria-describedby={pickedNames.length ? SUMMARY_ID : undefined}
+            onClick={(event) => {
+              // The form's last button sat here a moment ago: a double tap is not an Add.
+              if (isSameTap(formClosedAt.current, event.timeStamp)) return;
+              if (selected.length) onAdd();
+            }}
+          >
+            {selected.length ? addItemsText(selected.length) : COPY.pickToAdd}
+          </Button>
         ),
       }}
     />

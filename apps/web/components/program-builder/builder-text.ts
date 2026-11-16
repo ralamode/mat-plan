@@ -375,7 +375,8 @@ export const ITEM_PICKER_COPY = {
   noMatch: 'No item matches. Make it a new item with the button above.',
   searchLabel: 'Search items',
   searchPlaceholder: 'Search items',
-  giveAName: 'Give the item a name with a letter or a number in it.',
+  /** An empty name. A name with nothing to tell it apart is the contract's own refusal (C8). */
+  giveAName: 'Give the item a name.',
   pickToAdd: 'Pick items to add',
   /** The shared picker's tag reads "already in {this}". */
   alreadyIn: 'this workout',
