@@ -66,21 +66,36 @@ export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) 
       );
     }
     case 'workout-editor':
-      // Both draft fixtures are workouts of the Family program, so that is the program on screen.
+      // Both draft fixtures are workouts of the Family program, so that is the program on screen,
+      // and the one the editor is told it belongs to (`program`).
       return (
         <ProgramsPreview seed={{ ...BUILDER, program: familyProgram }} failNext={failNext}>
-          {(state, actions) => (
-            <WorkoutEditorScreen
-              draft={named(WORKOUT_DRAFT_FIXTURES, fixture)}
-              picker={{ options: state.items }}
-              actions={actions}
-            />
-          )}
+          {(state, actions) => {
+            const draft = named(WORKOUT_DRAFT_FIXTURES, fixture);
+            return (
+              <WorkoutEditorScreen
+                draft={draft}
+                picker={{ options: state.items }}
+                actions={actions}
+                // The draft's own program, as the real page loads it (7b): the back link names it
+                // and the editor says who a change applies to. Read from the fake's list, so a
+                // rename made on the preview shows here too.
+                program={programOf(state.programs, draft.programPublicId)}
+              />
+            );
+          }}
         </ProgramsPreview>
       );
     case 'day':
       return <DayPreview selection={{ screen, fixture, failNext }} />;
   }
+}
+
+/** The entry of the Programs list a draft belongs to. Every draft fixture's program is listed. */
+function programOf(programs: ProgramList, programPublicId: string): ProgramList[number] {
+  const program = programs.find((listed) => listed.programPublicId === programPublicId);
+  if (!program) throw new Error(`program preview: no listed program ${programPublicId}`);
+  return program;
 }
 
 /** The fixture of that name. The route's parser has already checked the name is one of them. */

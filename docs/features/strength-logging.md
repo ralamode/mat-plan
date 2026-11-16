@@ -207,7 +207,8 @@ all derived from the one unit, so none can disagree with it:
   change C2) are built from it too: the shape of a quantity typed into a TEXT field (`5`, `5.5`,
   `.5`; not `-5`, `1e3`, `5.`), for the FAM-1 day page and workout editor. ⚠️ Not this form's
   check: `strength.ts` keeps its own pattern, which refuses `.5`. Do not merge the two without
-  deciding that on purpose.
+  deciding that on purpose. **`WHOLE_NUMBER` / `isWholeNumber`** (same file) is the matching shape
+  check for reps as typed: digits only.
 - **V1-30b-ii — the stored-value ceiling is PER UNIT, and it lives in the SESSION refine.** A set
   schema cannot judge a magnitude: `3219` is a real distance in metres and an absurd one in inches, so
   only the unit tells them apart. The shared `> 2000` on `strengthSetSchema` is **deleted**;
