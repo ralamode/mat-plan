@@ -856,6 +856,16 @@ export const STRENGTH_COPY = {
  */
 export const movementCount = (n: number) =>
   plural(n, { one: `${n} movement`, other: `${n} movements` });
+
+/**
+ * "1 item" / "6 items": the one spelling of how many items a workout holds (FAM-1). The builder's
+ * workout line ("6 items · Used Mon, Tue") and the day page's look-ahead both read it, so the two
+ * screens cannot count the same workout in different words.
+ *
+ * Here and not in `@mat-plan/shared`: the count is spelled in the app's locale, and the locale
+ * (`./i18n/locale`) and `plural()` are the web app's. `movementCount` above is the same shape.
+ */
+export const itemCount = (n: number) => plural(n, { one: `${n} item`, other: `${n} items` });
 export const skippedCount = (n: number) => `${n} skipped`;
 
 /** A session receipt's id in the strength section — the focus target after its save. The prefix is
