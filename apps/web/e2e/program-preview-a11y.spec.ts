@@ -16,7 +16,11 @@ import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
  *
  * 🔴 **The list is the route's own** (`preview-registry.ts`: every screen × every named fixture,
  * plus the ✓ that fails). A lane that adds a state adds a fixture to the contract and never edits
- * this file; a state cannot be on the route without being scanned here.
+ * this file; **every state a fixture can load is scanned here.** ⚠️ Not every state on the route is
+ * one a fixture can load: a state reached only by typing or tapping after the page has loaded (the
+ * typed states of Change on a logged number, an open dialog) is not seen by this walk. The step
+ * that builds such a state checks it itself and lists it in its lane's `owed.test.ts` until a spec
+ * of its own covers it (step 12d for Change's).
  *
  * Per state, the three things only a browser can show (definition-of-done → Speed budget): the axe
  * scan in the real cascade (WCAG 2.0 A and AA, the same bar `a11y.spec.ts` holds), 44px tap targets
