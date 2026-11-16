@@ -29,6 +29,13 @@ export function useAttempt() {
   };
 }
 
+/**
+ * How soon after a tap a second one is taken as the same tap (FAM-1 lane B): the next card's Remove
+ * slides up under the thumb, the link control flips to its opposite in place, and the item picker's
+ * Add sits where the form's Create was.
+ */
+export const DOUBLE_TAP_MS = 500;
+
 /** A refused field: focused, and scrolled to the middle, because a phone's keyboard covers the bottom. */
 export function focusField(field: HTMLElement | null | undefined) {
   field?.focus();

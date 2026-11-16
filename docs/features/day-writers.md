@@ -22,13 +22,13 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## The map
 
-| Step | Adds                                                                                                             |
-| ---- | ---------------------------------------------------------------------------------------------------------------- |
-| 11a  | `writers/session-rows.ts`, extracted from the strength writer. A seam: it owes [write-path.md](./write-path.md). |
-| 11b  | `writers/day/log-row.ts`, the one row writer. It also edits `writers/hide.ts`, a seam shared with lane S.        |
-| 12a  | `queries/day/{day-plan,previous}.ts`: the day resolver and PREVIOUS.                                             |
-| 11c  | `writers/day/amend-row.ts`: Change.                                                                              |
-| 14   | The export. Seams: `apps/web/lib/dal/export.ts`, `queries/export-month.ts`, `packages/shared/src/csv/`.          |
+| Step | Adds                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 11a  | `writers/session-rows.ts`, extracted from the strength writer. A seam: it owes [write-path.md](./write-path.md) and [strength-logging.md](./strength-logging.md). |
+| 11b  | `writers/day/log-row.ts`, the one row writer. It also edits `writers/hide.ts`, a seam shared with lane S.                                                         |
+| 12a  | `queries/day/{day-plan,previous}.ts`: the day resolver and PREVIOUS.                                                                                              |
+| 11c  | `writers/day/amend-row.ts`: Change.                                                                                                                               |
+| 14   | The export. Seams: `apps/web/lib/dal/export.ts`, `queries/export-month.ts`, `packages/shared/src/csv/`.                                                           |
 
 ## Files
 
@@ -43,7 +43,8 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 1. 🔴 **New files go in these three paths. Anything else the lane touches is a seam** with a merge
    order in the plan's §6 table: `session-rows.ts`, `hide.ts` and the export files owe
-   [write-path.md](./write-path.md) or [delete-and-restore.md](./delete-and-restore.md), one PR in
+   [write-path.md](./write-path.md) or [delete-and-restore.md](./delete-and-restore.md)
+   (`session-rows.ts` also owes [strength-logging.md](./strength-logging.md)), one PR in
    review at a time with lane S. The lane never edits `schema.ts`; a missing column is a **column
    request** to lane A.
 2. 🔴 **The resolver deep-equals every `DayPlan` fixture.** Step 12a seeds the state each fixture

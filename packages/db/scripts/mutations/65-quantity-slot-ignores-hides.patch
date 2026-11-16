@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -77,7 +77,7 @@
+ CREATE INDEX "idx_prescription_quantities_prescription" ON "prescription_quantities" USING btree ("prescription_id");--> statement-breakpoint
+ CREATE INDEX "idx_prescription_quantities_slot" ON "prescription_quantities" USING btree ("slot","dimension");--> statement-breakpoint
+ CREATE INDEX "idx_prescription_quantities_unit" ON "prescription_quantities" USING btree ("unit","dimension");--> statement-breakpoint
+-CREATE UNIQUE INDEX "uq_prescription_quantities_prescription_slot" ON "prescription_quantities" USING btree ("prescription_id","slot") WHERE "prescription_quantities"."deleted_at" is null;--> statement-breakpoint
++CREATE UNIQUE INDEX "uq_prescription_quantities_prescription_slot" ON "prescription_quantities" USING btree ("prescription_id","slot");--> statement-breakpoint
+ -- workout_id was added NULL just above, so the FK scan reads keys MATCH SIMPLE skips; tables locked
+ -- above (0024 was the repo's first adding-foreign-key-constraint ignore).
+ -- squawk-ignore adding-foreign-key-constraint, constraint-missing-not-valid

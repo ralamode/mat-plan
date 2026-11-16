@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -95,7 +95,7 @@
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_target_reps_length_check" CHECK ("prescriptions"."workout_id" is null or "prescriptions"."target_reps" is null or (char_length(btrim("prescriptions"."target_reps")) >= 1 and char_length("prescriptions"."target_reps") <= 20));--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+-ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_sets_max_check" CHECK ("prescriptions"."workout_id" is null or "prescriptions"."sets" is null or "prescriptions"."sets" <= 20);--> statement-breakpoint
++ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_sets_max_check" CHECK ("prescriptions"."sets" is null or "prescriptions"."sets" <= 20);--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_notes_length_check" CHECK ("prescriptions"."notes" is null or (char_length(btrim("prescriptions"."notes")) >= 1 and char_length("prescriptions"."notes") <= 500));--> statement-breakpoint

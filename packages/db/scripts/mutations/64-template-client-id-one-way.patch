@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+--- a/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
++++ b/packages/db/migrations/0025_fam1_4b_workout_prescriptions.sql
+@@ -89,7 +89,7 @@
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_day_role_xor_workout_check" CHECK (num_nonnulls("prescriptions"."day_role", "prescriptions"."workout_id") = 1);--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+-ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_template_client_id_check" CHECK (("prescriptions"."workout_id" is null) = ("prescriptions"."client_id" is null));--> statement-breakpoint
++ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_template_client_id_check" CHECK ("prescriptions"."workout_id" is null or "prescriptions"."client_id" is not null);--> statement-breakpoint
+ -- Valid by construction (the header): every existing row passes; table locked above.
+ -- squawk-ignore constraint-missing-not-valid
+ ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_target_reps_length_check" CHECK ("prescriptions"."workout_id" is null or "prescriptions"."target_reps" is null or (char_length(btrim("prescriptions"."target_reps")) >= 1 and char_length("prescriptions"."target_reps") <= 20));--> statement-breakpoint
