@@ -30,6 +30,16 @@ import type { Breadcrumb, ErrorEvent, Event, init, Log } from '@sentry/nextjs';
  *     goes. `extraErrorDataIntegration` (if ever enabled) would also copy the error's own `params`
  *     property into `contexts`/`extra`, so any key named `params` is dropped there too.
  *
+ *  5. **The row a CHECK or a UNIQUE rejected (FAM-1 4a-i review).** Postgres puts it in the error's
+ *     `detail`: `Failing row contains (…)` for a CHECK (23514) or a NOT NULL, `Key (…)=(…) already
+ *     exists.` for a UNIQUE (23505), so a rejected row's household text (a program's name, an
+ *     instruction) or a value rides on `detail`. node-postgres copies it onto the error as an own,
+ *     enumerable property, so a normalized error (a breadcrumb's data, `extraErrorDataIntegration`'s
+ *     contexts) carries it, and a log line that prints the error writes it as `DETAIL: …`. Every
+ *     key named `detail` is dropped and every string is cut from a `DETAIL:` line on, the same two
+ *     halves as `params`. The SQLSTATE `code`, `constraint`, `table` and `column` are kept: they name
+ *     the schema, not a person, and they are what makes a CHECK failure diagnosable.
+ *
  * Sentry 11's defaults also collect REQUEST BODIES (a Server Action's body is its form: a weight, a
  * movement name) and STACK-FRAME LOCAL VARIABLES (a writer's locals hold the row it was writing). Both
  * are off in `SENTRY_DATA_COLLECTION`, and both are stripped here too, so a future SDK default or a
@@ -92,12 +102,32 @@ const FORM_DATA_EXTRA_PREFIX = 'server_action_form_data.';
  */
 const QUERY_PARAMS_TAIL = /(^|\n|\\n)[ \t]*params:[\s\S]*$/;
 
-/** The object key drizzle's error carries its values under, wherever an integration copies it. */
-const PARAMS_KEY = 'params';
+/**
+ * A line starting `DETAIL:` and everything after it: how a printed Postgres error carries its
+ * `detail` (the rejected row, item 5). Same newline handling as `QUERY_PARAMS_TAIL`.
+ */
+const DB_DETAIL_TAIL = /(^|\n|\\n)[ \t]*DETAIL:[\s\S]*$/;
 
-/** Cut a query's params off a message, keeping the SQL. Non-strings pass through. */
+/**
+ * Postgres's own detail sentences, wherever they appear inside a longer string, cut to the end of
+ * their line: a row's text can itself hold `)`, so no closing bracket is trusted.
+ */
+const DB_DETAIL_PHRASE = /(Failing row contains \(|Key \()[^\n]*/g;
+
+/** Object keys that carry values: drizzle's query `params`, and Postgres's `detail` (the row). */
+const VALUE_KEYS = new Set(['params', 'detail']);
+
+/** Cut a query's params and a database error's detail off a message, keeping the SQL. Non-strings
+ *  pass through. */
 function stripQueryParams<T>(value: T): T {
-  return (typeof value === 'string' ? value.replace(QUERY_PARAMS_TAIL, '') : value) as T;
+  return (
+    typeof value === 'string'
+      ? value
+          .replace(QUERY_PARAMS_TAIL, '')
+          .replace(DB_DETAIL_TAIL, '')
+          .replace(DB_DETAIL_PHRASE, '')
+      : value
+  ) as T;
 }
 
 /**
@@ -115,7 +145,7 @@ function scrubTree(node: unknown, seen = new Set<unknown>(), depth = 0): void {
   seen.add(node);
   const record = node as Record<string, unknown>;
   for (const key of Object.keys(record)) {
-    if (key === PARAMS_KEY && !Array.isArray(node)) {
+    if (VALUE_KEYS.has(key) && !Array.isArray(node)) {
       delete record[key];
       continue;
     }

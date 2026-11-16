@@ -352,3 +352,66 @@ describe('the identified user never reaches Sentry (AUTH-1 1c-1)', () => {
     });
   });
 });
+
+// FAM-1 4a-i review: a CHECK (23514) or UNIQUE (23505) violation's `detail` is the rejected row,
+// household text included. node-postgres puts it on the error as an own property, so a normalized
+// error carries it as a key, and a printed error carries it as a `DETAIL:` line.
+describe('scrubSentryEvent — a rejected row never leaves the server (Postgres `detail`)', () => {
+  const ROW = 'Failing row contains (42, 7, Saturday hill sprints with (a) partner, null).';
+  const KEY = 'Key (household_id, name)=(7, Saturday hill sprints) already exists.';
+
+  it('drops `detail` keys wherever an error was normalized, and keeps the diagnosable fields', () => {
+    const event = scrubSentryEvent({
+      contexts: {
+        DatabaseError: {
+          code: '23514',
+          constraint: 'workouts_name_len',
+          table: 'workouts',
+          detail: ROW,
+        },
+      },
+      breadcrumbs: [
+        { category: 'query', data: { error: { message: 'violates check', detail: KEY } } },
+      ],
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
+    expect(event.contexts?.DatabaseError).toEqual({
+      code: '23514',
+      constraint: 'workouts_name_len',
+      table: 'workouts',
+    });
+  });
+
+  it('cuts a printed `DETAIL:` line and everything after it, keeping the message', () => {
+    const printed = `new row for relation "workouts" violates check constraint "workouts_name_len"\nDETAIL:  ${ROW}`;
+    const event = scrubSentryEvent({
+      exception: { values: [{ value: printed }] },
+      message: printed.replace('\n', '\\n'),
+    } as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
+    expect(event.exception?.values?.[0]?.value).toBe(
+      'new row for relation "workouts" violates check constraint "workouts_name_len"',
+    );
+  });
+
+  it('cuts the detail sentence where it sits inside a longer line, even with a ")" in the row', () => {
+    const event = scrubSentryEvent({
+      exception: {
+        values: [{ value: `insert failed: ${ROW} (code 23514)` }, { value: `dup: ${KEY}` }],
+      },
+    } as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('Saturday hill sprints');
+    expect(JSON.stringify(event)).not.toContain('partner');
+    expect(event.exception?.values?.[0]?.value).toBe('insert failed: ');
+  });
+
+  it('beforeSendLog and beforeBreadcrumb drop it too', () => {
+    const log = beforeSendLogScrubbed({
+      level: 'error',
+      message: `write failed\nDETAIL: ${ROW}`,
+      attributes: { err: { detail: KEY } },
+    } as Parameters<typeof beforeSendLogScrubbed>[0]);
+    const crumb = beforeBreadcrumbScrubbed({ message: `x\nDETAIL: ${KEY}`, data: { detail: ROW } });
+    expect(JSON.stringify({ log, crumb })).not.toContain('Saturday hill sprints');
+  });
+});
