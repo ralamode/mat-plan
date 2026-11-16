@@ -162,6 +162,12 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     `control-chars.test.ts` sweeps every typed field of the write schemas; a field added to one
     joins that table. `freeTextNoteSchema` and `movementNameSchema` refuse only a line break (and a
     comma), so the contract adds the rule where it builds on them.
+11. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
+    `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
+    `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
+    has no nav rail) and no `programsHref` until the Programs page exists (7b). The switcher's links
+    come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
+    The parts are lane C's; their props are a contract with the page and this harness.
 
 ## Traps
 
