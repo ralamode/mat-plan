@@ -82,9 +82,10 @@ the **legacy forms**, which FAM-1 step 12f removes. Steps 2 and 7 still apply. F
 - 🔴 **Not supported yet.** `enterMutation` (`apps/web/app/p/mutation-entry.ts`) returns an
   `ActionState`. `ActionFn` (`apps/web/test/action-matrix.ts:66`) is
   `(ActionState, FormData) => ActionState`. Neither can drive a contract action, so it cannot get its
-  mandatory boundary tests from them. **FAM-1 step C7 (the contract owner) teaches both of them the
-  contract shape, ahead of 7a and 12b**, and the first real contract action then replaces these
-  legacy steps here.
+  mandatory boundary tests from them. **The FAM-1 contract owner teaches both of them the contract
+  shape, as a contract change made before 7a and 12b open**
+  ([program-contract.md](../../../docs/features/program-contract.md) → Owner; its changelog fragment
+  names the change). The first real contract action then replaces these legacy steps here.
 
 Copy the shape of `logBodyweightAction` (plain form) or `editRoutineAction` (JSON payload):
 

@@ -18,5 +18,6 @@
   refusal mapping the FAM-1 contract owner confirmed: no session and wrong household answer
   `not_found`, rate-limited answers `retry`, and the order stays session, then limiter, then parse.
   It also states that `enterMutation` and the action matrix cannot drive a contract action yet;
-  FAM-1 step C7 (the contract owner) teaches both of them the contract shape, ahead of 7a and 12b.
+  the FAM-1 contract owner teaches both of them the contract shape, as a contract change made before
+  7a and 12b open.
   Docs only; no code changes.
