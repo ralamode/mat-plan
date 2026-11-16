@@ -1,8 +1,10 @@
 import {
   FREE_TEXT_NOTE_MAX,
-  QUANTITY_DECIMALS,
+  isPlainDecimal,
+  isWholeNumber,
   quantityCeiling,
   saveWorkoutSchema,
+  SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   wholeReps,
   workoutDraftItemSchema,
@@ -18,7 +20,9 @@ import { cleanName, EDITOR_ERRORS, quantityLabel } from './builder-text';
  * (FAM-1 step 8). Pure, so every refusal is tested without a screen.
  *
  * A card keeps the item it was loaded from (its ids, its type, its superset) and holds each field
- * as the text typed, so a half-typed value survives a move and a refusal names its field.
+ * as the text typed, so a half-typed value survives a move and a refusal names its field. The
+ * group's rest is the exception: it is the item's `restAfter`, because the superset rules move it
+ * from item to item.
  */
 export type EditorCard = {
   item: WorkoutDraftItem;
@@ -34,20 +38,10 @@ export type EditorCard = {
 };
 
 /** A field of a card, or of the workout, that can be refused. */
-export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | 'notes';
+export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | 'notes' | 'rest';
 
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
-
-/**
- * A plain decimal with at most `QUANTITY_DECIMALS` places: `5`, `5.5`, `.5`; not `-5`, `1e3` or
- * `5 lb`. ⚠️ The same rule as the day page's `PLAIN_DECIMAL` (`components/day/row-values.ts`),
- * which is lane C's. The contract now exports one (`@mat-plan/shared`, #436); step 8b swaps this
- * copy for it.
- */
-const PLAIN_DECIMAL = new RegExp(
-  `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,
-);
 
 function startingUnit(item: WorkoutDraftItem): Unit | null {
   const { slot, unit } = TRACKING_TYPE_FIELDS[item.trackingType];
@@ -85,7 +79,7 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   if (fields.sets) {
     const typed = card.sets.trim();
     const parsed = workoutDraftItemSchema.shape.sets.safeParse(Number(typed));
-    if (!/^\d+$/.test(typed) || !parsed.success || parsed.data === null) {
+    if (!isWholeNumber(typed) || !parsed.success || parsed.data === null) {
       refuse('sets', EDITOR_ERRORS.sets);
     } else sets = parsed.data;
   }
@@ -112,7 +106,7 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
       let value: number | null = null;
       if (typed) {
         const ceiling = card.unit ? quantityCeiling(card.unit) : undefined;
-        if (!PLAIN_DECIMAL.test(typed)) refuse('value', EDITOR_ERRORS.value(label));
+        if (!isPlainDecimal(typed)) refuse('value', EDITOR_ERRORS.value(label));
         else if (!card.unit) refuse('value', EDITOR_ERRORS.unit(label));
         // A unit with no declared ceiling refuses: no bound is not "no cap" (`quantityCeiling`).
         else if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));
@@ -128,7 +122,11 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   const notes = cleanNote(card.notes);
   if (notes && notes.length > FREE_TEXT_NOTE_MAX) refuse('notes', EDITOR_ERRORS.tooLong);
 
-  return { item: { ...card.item, sets, targetReps, quantities, notes }, errors };
+  // The group's rest, cleaned as notes are; only a superset's last item holds one.
+  const restAfter = card.item.superset ? cleanNote(card.item.restAfter ?? '') : null;
+  if (restAfter && restAfter.length > SLOT_LABEL_MAX) refuse('rest', EDITOR_ERRORS.rest);
+
+  return { item: { ...card.item, sets, targetReps, quantities, notes, restAfter }, errors };
 }
 
 /**

@@ -1,5 +1,6 @@
 import {
   MAX_SETS_PER_MOVEMENT,
+  SLOT_LABEL_MAX,
   QUANTITY_SLOT,
   quantityCeiling,
   saveWorkoutSchema,
@@ -175,5 +176,24 @@ describe('quantityLabel', () => {
       expect(quantityLabel(type) !== null).toBe(TRACKING_TYPE_FIELDS[type].slot !== null);
     }
     expect(quantityLabel('duration')).toBe('Minutes');
+  });
+});
+
+describe('a superset’s rest', () => {
+  const withRest = (rest: string) =>
+    toCards(heavyADraft).map((card, i) =>
+      i === 1 ? { ...card, item: { ...card.item, restAfter: rest } } : card,
+    );
+  it('is cleaned as a note, and bounded at SLOT_LABEL_MAX, both ends', () => {
+    expect(saved(readDraft(heavyADraft, typed(withRest('  2   min ')))).items[1]!.restAfter).toBe(
+      '2 min',
+    );
+    expect(
+      saved(readDraft(heavyADraft, typed(withRest('x'.repeat(SLOT_LABEL_MAX))))).items[1]!
+        .restAfter,
+    ).toBe('x'.repeat(SLOT_LABEL_MAX));
+    expect(
+      errorsOf(readDraft(heavyADraft, typed(withRest('x'.repeat(SLOT_LABEL_MAX + 1))))),
+    ).toEqual([['rest', EDITOR_ERRORS.rest]]);
   });
 });
