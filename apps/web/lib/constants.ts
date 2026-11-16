@@ -358,6 +358,14 @@ export const QUIET_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
 
 /**
+ * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
+ * notices on the day page, the day page's "Not on a program yet" and rest-day notices). Defined at
+ * FAM-1 13d, the third copy; `page.tsx`'s two literals move to it when 12c next edits that file.
+ */
+export const NOTICE_CLASS =
+  'border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm';
+
+/**
  * The picker's FIRST-RUN copy (ONB-0) — the screen a brand-new deployment actually opens on, which
  * until now read "No profiles found. Seed the database to get started."
  *
