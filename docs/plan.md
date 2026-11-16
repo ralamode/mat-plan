@@ -1761,6 +1761,10 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   keep `PROGRAM_SEED` reaching prod until V1-22; scope ramp targets by household. _(Beta 0.)_
   ⚠️ _2026-11-14:_ removing `PROGRAM_SEED` from production (the OPS-2 plan's Q3) is proposed as
   [FAM-1](./milestones/fam-1-family-program.md) step 1, right after this row's split.
+  ⚠️ _2026-11-16:_ FAM-1 step 1 (#432) does it **without waiting for this split** (the FAM-1 plan's
+  D10): from that PR the production seed no longer writes the program, existing rows stay, and only
+  the test and preview seeds write it, behind `SEED_FIXTURES`. \"Keep `PROGRAM_SEED` reaching prod
+  until V1-22\" above no longer holds.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
