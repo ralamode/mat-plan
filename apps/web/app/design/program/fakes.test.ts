@@ -592,6 +592,28 @@ describe('the fake ProgramActions: workouts and the week', () => {
     );
   });
 
+  it('refuses a save that breaks the sets rule, and changes nothing', async () => {
+    // `saveWorkoutSchema`'s rule: a set count exactly when the item's type is logged set by set.
+    const { actions, view } = builder();
+    const [first, ...rest] = heavyADraft.items;
+    expect(first.sets).not.toBeNull();
+    expect(
+      await actions.saveWorkout({ ...heavyADraft, items: [{ ...first, sets: null }, ...rest] }),
+    ).toEqual(refusal('invalid'));
+    const check = { ...first, trackingType: TRACKING_TYPE.check, sets: 3 };
+    expect(await actions.saveWorkout({ ...heavyADraft, items: [check, ...rest] })).toEqual(
+      refusal('invalid'),
+    );
+    const duration = { ...first, trackingType: TRACKING_TYPE.duration, sets: 3 };
+    expect(await actions.saveWorkout({ ...heavyADraft, items: [duration, ...rest] })).toEqual(
+      refusal('invalid'),
+    );
+    expect(view()).toEqual(familyProgram);
+    // The same cards with the rule kept still save.
+    const fixed = { ...check, sets: null };
+    expect((await actions.saveWorkout({ ...heavyADraft, items: [fixed, ...rest] })).ok).toBe(true);
+  });
+
   it('saves a week, and each workout says which days use it, Monday first', async () => {
     const { actions, view } = builder();
     const days = structuredClone(familyProgram.week);

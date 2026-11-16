@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  DEFAULT_TRACKING_TYPE,
   FREE_TEXT_NOTE_MAX,
   MOVEMENT_SEED_ROWS,
   newId,
@@ -11,6 +12,8 @@ import {
   SLOT_LABEL_MAX,
   WEEKDAYS,
   WORKOUT_NAME_MAX,
+  PROGRAM_SEED,
+  SEED_HOUSEHOLD_PUBLIC_ID,
   QUANTITY_SLOT,
   SESSION_TYPE,
   SESSION_TYPES,
@@ -20,7 +23,10 @@ import {
 } from '@mat-plan/shared';
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+
 import { schema } from '../../src/client';
+import { seed } from '../../src/seed';
 import { findOrCreateTypedMovement } from '../../src/writers/movement-catalog';
 import {
   insertMovementOwnedBy,
@@ -36,6 +42,7 @@ import {
   columnCatalogShape,
   db,
   expectRejectedBy,
+  rolledBack,
   type VerifyContext,
   type VerifyTx,
 } from './harness';
@@ -66,21 +73,7 @@ import {
 export async function verifySchema(ctx: VerifyContext): Promise<void> {
   await verifyStep3(ctx);
   await verifyStep4ai(ctx);
-}
-
-/** Thrown to roll a probe transaction back; anything else propagates. */
-class Rollback extends Error {}
-
-/** Run `fn` in a transaction that is always rolled back, so a probe's writes never persist. */
-async function rolledBack(fn: (tx: VerifyTx) => Promise<void>): Promise<void> {
-  try {
-    await db.transaction(async (tx) => {
-      await fn(tx);
-      throw new Rollback();
-    });
-  } catch (e) {
-    if (!(e instanceof Rollback)) throw e;
-  }
+  await verifyStep1();
 }
 
 // The marker the migration puts on the line above its typing statement.
@@ -191,7 +184,7 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
   // before production. A household's own row with a slug the typing RETYPES must survive it.
   const typing = migrationTypingStatement();
   const PINNED = '2000-01-01T00:00:00Z';
-  const notAtDefault = [...SEEDED_TYPE_BY_SLUG].filter(([, t]) => t !== TRACKING_TYPE.weight_reps);
+  const notAtDefault = [...SEEDED_TYPE_BY_SLUG].filter(([, t]) => t !== DEFAULT_TRACKING_TYPE);
   assert.ok(notAtDefault.length > 0, 'FAM-1 3: the typing retypes at least one built-in');
   const [ownSlug] = notAtDefault[0];
   // Only the seeded slugs: verify.ts leaves other global rows behind that the hand-re-added
@@ -201,7 +194,7 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     await tx
       .update(schema.movements)
-      .set({ trackingType: TRACKING_TYPE.weight_reps })
+      .set({ trackingType: DEFAULT_TRACKING_TYPE })
       .where(and(movementIsGlobal(), seededSlug));
     await insertMovementOwnedBy(asTx(tx), A_SCOPE, {
       publicId: newId(),
@@ -214,7 +207,7 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
     // measures the migration, not a leftover type.
     assert.deepEqual(
       [...new Set((await globalTypesBySlug(tx)).values())],
-      [TRACKING_TYPE.weight_reps],
+      [DEFAULT_TRACKING_TYPE],
       'FAM-1 3: every built-in is at the default before the typing runs',
     );
     await tx.execute(typing); // the migration's own text, verbatim — not interpolated input
@@ -230,7 +223,7 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
       .where(and(eq(schema.movements.slug, ownSlug), movementInHousehold(A_SCOPE)));
     assert.equal(
       own?.trackingType,
-      TRACKING_TYPE.weight_reps,
+      DEFAULT_TRACKING_TYPE,
       "FAM-1 3: the typing never touches a household's own row, even one with a slug it retypes",
     );
 
@@ -800,5 +793,89 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
   });
   console.log(
     "✓ FAM-1 4a-i: a workout on a non-template block and a cross-household copy are each flagged; the program tables erase in the runbook's order (slots, workouts, blocks), and out of order is refused",
+  );
+}
+
+/**
+ * FAM-1 step 1 (plan D10): the program fixtures are written ONLY when the seed is asked for them.
+ *
+ * In a rolled-back transaction: hard-delete the seed household's program (targets → prescriptions →
+ * blocks; nothing else references them), then `seed(…, { fixtures: false })` must leave it empty and
+ * `seed(…, { fixtures: true })` must put `PROGRAM_SEED` back, every block, prescription and target.
+ * The seed runs on the transaction's own handle (PGlite has one connection).
+ */
+async function verifyStep1(): Promise<void> {
+  const seedBlocks = PROGRAM_SEED.filter((b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID);
+  assert.ok(seedBlocks.length > 0, 'FAM-1 1: PROGRAM_SEED has a block for the seed household');
+  const expected = {
+    blocks: seedBlocks.map((b) => b.slug).sort(),
+    prescriptions: seedBlocks.reduce((n, b) => n + b.prescriptions.length, 0),
+    targets: seedBlocks.reduce(
+      (n, b) => n + b.prescriptions.reduce((m, p) => m + p.targets.length, 0),
+      0,
+    ),
+  };
+
+  await rolledBack(async (tx) => {
+    const [household] = await tx
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+    assert.ok(household, 'FAM-1 1: the seed household exists');
+
+    const blocksOf = tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.householdId, household.id));
+    const prescriptionsOf = tx
+      .select({ id: schema.prescriptions.id })
+      .from(schema.prescriptions)
+      .where(inArray(schema.prescriptions.blockId, blocksOf));
+
+    /** What the seed household's program holds now: block slugs, and the live rows under them. */
+    const program = async () => {
+      const blocks = await tx
+        .select({ slug: schema.programBlocks.slug })
+        .from(schema.programBlocks)
+        .where(eq(schema.programBlocks.householdId, household.id));
+      const [p] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.prescriptions)
+        .where(inArray(schema.prescriptions.blockId, blocksOf));
+      const [t] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.prescriptionTargets)
+        .where(inArray(schema.prescriptionTargets.prescriptionId, prescriptionsOf));
+      return { blocks: blocks.map((b) => b.slug).sort(), prescriptions: p.n, targets: t.n };
+    };
+
+    await tx
+      .delete(schema.prescriptionTargets)
+      .where(inArray(schema.prescriptionTargets.prescriptionId, prescriptionsOf));
+    await tx.delete(schema.prescriptions).where(inArray(schema.prescriptions.blockId, blocksOf));
+    await tx.delete(schema.programBlocks).where(eq(schema.programBlocks.householdId, household.id));
+    assert.deepEqual(
+      await program(),
+      { blocks: [], prescriptions: 0, targets: 0 },
+      'FAM-1 1: the seed household holds no program before the seed runs',
+    );
+
+    const seedDb = tx as unknown as NodePgDatabase<typeof schema>;
+    await seed(seedDb, { fixtures: false });
+    assert.deepEqual(
+      await program(),
+      { blocks: [], prescriptions: 0, targets: 0 },
+      'FAM-1 1: seed({ fixtures: false }) writes no program, which is how production seeds',
+    );
+
+    await seed(seedDb, { fixtures: true });
+    assert.deepEqual(
+      await program(),
+      expected,
+      'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
+    );
+  });
+  console.log(
+    '✓ FAM-1 1: the seed writes the program only when asked for fixtures (production never asks)',
   );
 }

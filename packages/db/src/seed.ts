@@ -3,8 +3,11 @@ import {
   ACTIVITY_TYPE_SEED_ROWS,
   CALISTHENICS_METRIC_KEYS,
   CALISTHENICS_RAMP_SCHEDULE,
+  databaseNameOf,
+  isLocalDbHost,
   METRIC_DEFINITION_SEED_ROWS,
   MOVEMENT_SEED_ROWS,
+  namesPreviewDatabase,
   newId,
   PROFILE_KIND,
   PROGRAM_BLOCK_KIND,
@@ -27,6 +30,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 import { householdScopeForScript } from './writers/household-scope-script';
 import { inHousehold, movementIsGlobal, movementIsOwned } from './writers/ownership';
+import { seedProgramFixtures } from './writers/program/seed-fixtures';
 
 /**
  * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
@@ -120,7 +124,73 @@ export {
   SEED_PROFILE_3_NAME,
 } from '@mat-plan/shared';
 
-export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
+/**
+ * 🔴 **The environment flag that turns the PROGRAM fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10).
+ *
+ * With it, the seed also writes `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c).
+ * Without it, which is how `migrate.yml` seeds **production**, it writes neither, and program rows a
+ * database already holds stay as they are. Only the exact value `1` turns it on.
+ *
+ * ⚠️ **It gates the PROGRAM fixtures only.** The seed household (`Home`) and its three fixture
+ * profiles are still written either way; moving those out of production is `OPS-2`'s.
+ *
+ * The runners that set it: CI's e2e job (`ci.yml`), the preview migration (`migrate-preview.yml`) and
+ * the local harnesses (`apps/web/scripts/embedded-pg.ts` → `migrateAndSeed`). A test pins that no
+ * other workflow names it (`apps/web/test/seed-fixtures-is-contained.test.ts`).
+ */
+export const SEED_FIXTURES_ENV = 'SEED_FIXTURES';
+
+/** Whether the flag's raw value turns the program fixtures on. Fail closed: only `'1'` does. */
+export function seedFixturesRequested(raw: string | undefined): boolean {
+  return raw === '1';
+}
+
+/** The refusal `assertFixturesTargetAllowed` throws. Fixed text: it names nothing from the URL. */
+export const FIXTURES_TARGET_REFUSED =
+  'db:seed: refusing to seed program fixtures — SEED_FIXTURES=1 is allowed only against a local ' +
+  'database or the preview database, and this connection string names neither (FAM-1 plan D10; ' +
+  'docs/features/programming.md, invariant 3)';
+
+/**
+ * 🔴 **Program fixtures go only to a database that is provably not production**: one on this machine,
+ * or one whose name marks it as the preview database. An ALLOWLIST on the connection string itself,
+ * not a check of `EXPECTED_DB_ENV`, which is a declaration and is simply absent from a seed run by
+ * hand (the security lens's finding on the step-1 plan). Run after `assertMigrationTarget`, on the
+ * same resolved string the seed connects with.
+ *
+ * Accepted limits, shared with OPS-1's guards (`db-environment.ts`): a production database named
+ * `*preview*`, or a tunnel to production on localhost, would pass.
+ */
+export function assertFixturesTargetAllowed(connectionString: string): void {
+  const local = isLocalDbHost(connectionString);
+  const preview = namesPreviewDatabase(databaseNameOf(connectionString) ?? '');
+  if (!local && !preview) throw new Error(FIXTURES_TARGET_REFUSED);
+}
+
+/** What a caller must decide about every seed run. `fixtures` is REQUIRED: none gets it by omission. */
+export interface SeedOptions {
+  readonly fixtures: boolean;
+}
+
+/**
+ * `db:seed`'s whole decision, in one tested function: the flag from the environment, and, when it is
+ * on, the allowlist on the URL the seed connects with. Throws `FIXTURES_TARGET_REFUSED` before
+ * anything connects. `scripts/seed.ts` passes its result straight to `seed`, and `seed.test.ts` pins
+ * that call site by source, so neither the function nor its one caller can drop the guard silently.
+ */
+export function resolveSeedOptions(
+  env: Readonly<Record<string, string | undefined>>,
+  connectionString: string,
+): SeedOptions {
+  const fixtures = seedFixturesRequested(env[SEED_FIXTURES_ENV]);
+  if (fixtures) assertFixturesTargetAllowed(connectionString);
+  return { fixtures };
+}
+
+export async function seed(
+  db: NodePgDatabase<typeof schema>,
+  { fixtures }: SeedOptions,
+): Promise<void> {
   // GAP-3: onConflictDoUPDATE, not DoNothing. The 7 pre-GAP-3 rows already exist in every deployed DB,
   // so DoNothing would leave them with whatever `dimension` the migration backfilled and never reconcile
   // them with the shared const again — a reference table that silently stops being a mirror of its source.
@@ -353,9 +423,15 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
       });
   }
 
-  // V1-10: the programming blocks + prescriptions + per-kid load targets. Ships EMPTY today (PROGRAM_SEED =
-  // []); the loop below is a no-op until Ray's real block lands in a data-only PR (the LLM never authors loads).
-  await seedProgram(db, PROGRAM_SEED);
+  // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
+  // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
+  // for fixtures, which production's seed never does. Both calls sit in this one branch on purpose, so
+  // neither can drift outside it. Program rows a database already holds are left alone either way.
+  if (fixtures) {
+    await seedProgram(db, PROGRAM_SEED);
+    // The seed household's scope, minted from the household resolved (and refused) above.
+    await seedProgramFixtures(db, householdScopeForScript(household.id));
+  }
 
   // TEN-2c: the shadow guard's REPORT, LAST (it was a `throw` until 0017 removed its premise — see
   // the long note above the movements insert). A warning, not an error: the curated row IS inserted

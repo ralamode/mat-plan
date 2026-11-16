@@ -37,7 +37,7 @@ They **co-exist permanently**. Ray runs a daily A/B program _and_ a weekday S&C 
 flowchart TD
   subgraph authored["authored — TypeScript, no UI yet"]
     SEED["shared/programming.ts<br/>PROGRAM_SEED"]
-    SEEDFN["db/seed.ts → seedProgram()<br/>resolves refs, fails LOUDLY"]
+    SEEDFN["db/seed.ts → seedProgram()<br/>resolves refs, fails LOUDLY<br/>test databases only (SEED_FIXTURES)"]
   end
 
   subgraph tables["postgres"]
@@ -104,6 +104,12 @@ scans the card in **both** states) **fails the build**. Two more things not to r
    verbatim at [docs/programs/kids-sc-foundation-archived.md](../programs/kids-sc-foundation-archived.md)
    and can be re-seeded when it returns. Seeding both would silently hijack one card with the other,
    because the newest block per day-role wins.
+
+   🔴 **Since FAM-1 step 1 (plan D10) only TEST databases are seeded with it.** `seed(db, { fixtures })`
+   writes `PROGRAM_SEED` (and lane P's fixture programs) only when `fixtures` is true, which
+   `scripts/seed.ts` sets from `SEED_FIXTURES=1`, refused unless the URL is local or the preview
+   database. CI's smoke, the preview migration and the local harnesses set it; `migrate.yml` does
+   not, so **production keeps the block it already holds and is never re-seeded**.
 
 3b. **The day letter comes from the CALENDAR, and that is a decision.** `resolveDayRole` is
 epoch-day parity — every calendar day is A or B, alternating, with no rest day. Date parity, not
@@ -354,12 +360,12 @@ and complete; this is the one thing it cannot reach.
 
 ## Changing it
 
-| If you are…                      | Start here                                                                    |
-| -------------------------------- | ----------------------------------------------------------------------------- |
-| changing the authored program    | `shared/programming.ts` `PROGRAM_SEED`, then re-run the seed (idempotent)     |
-| changing what Today shows        | `queries/program-day.ts` → `lib/dal/programming.ts` → `program-reference.tsx` |
-| changing the day's section order | `shared/routine.ts` — and remember NULL is meaningful                         |
-| adding a write path              | V1-22. Both panels required; these are the first config-mutating endpoints.   |
+| If you are…                      | Start here                                                                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| changing the authored program    | Test databases: `shared/programming.ts` `PROGRAM_SEED`, then re-seed with `SEED_FIXTURES=1`. Production is not re-seeded (D10): a `db:correct` correction until the program builder ships |
+| changing what Today shows        | `queries/program-day.ts` → `lib/dal/programming.ts` → `program-reference.tsx`                                                                                                             |
+| changing the day's section order | `shared/routine.ts` — and remember NULL is meaningful                                                                                                                                     |
+| adding a write path              | V1-22. Both panels required; these are the first config-mutating endpoints.                                                                                                               |
 
 Then `pnpm verify` — the programming proofs in `db:verify` are extensive and will catch a scoping
 regression that tests will not.

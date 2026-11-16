@@ -280,6 +280,11 @@ function fixed(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
  * [docs/programs/kids-sc-foundation-archived.md](../../../docs/programs/kids-sc-foundation-archived.md)
  * and can be re-seeded when it returns. Both cannot be active at once, because `programDayRows` picks
  * the newest block per day-role.
+ *
+ * 🔴 **Test databases only, since FAM-1 step 1 (plan D10).** `seed(db, { fixtures: true })` writes this
+ * (CI's smoke, the preview database, the local harnesses); production's seed does not, so an edit
+ * here never reaches production. Production keeps the block it already holds; change it there with a
+ * `db:correct` correction until the program builder ships (`docs/features/programming.md`).
  */
 export const PROGRAM_SEED: readonly ProgramBlockSeedRow[] = [
   {

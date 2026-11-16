@@ -18,7 +18,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { RoutineConfig } from '@mat-plan/shared';
+import { DEFAULT_TRACKING_TYPE, type RoutineConfig } from '@mat-plan/shared';
 
 /**
  * Schema — v0 thin slice (units + profiles + entries + entry_sets) plus the V1-1a
@@ -687,7 +687,7 @@ export const movements = pgTable(
     // db:verify). Set ONCE: built-ins by migration 0022's typing, a new item when it is made
     // (`findOrCreateTypedMovement`). Nothing retypes a row. The default is what an item made in the old
     // strength form gets.
-    trackingType: text('tracking_type').notNull().default('weight_reps'),
+    trackingType: text('tracking_type').notNull().default(DEFAULT_TRACKING_TYPE),
     videoUrl: text('video_url'),
     cues: text('cues'),
     ...timestamps,

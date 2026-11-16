@@ -58,3 +58,15 @@ export function localWeekday(day: string): number {
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
 export const weekdaySchema = z.literal(WEEKDAYS);
+
+/**
+ * The same seven weekdays in the order a week is SHOWN: Monday first, Sunday last (1, 2, … 6, 0).
+ *
+ * ⚠️ **An order, not a numbering.** Each member is still a `Weekday` in `WEEKDAYS`' origin
+ * (0 = Sunday), so `MONDAY_FIRST[0]` is `1`. Index into a week with the member, never with its
+ * position here: the position is the Monday-first 0–6 the note above warns about.
+ *
+ * FAM-1 lists a week this way wherever a person reads one: the program page's week and
+ * `ProgramView.workouts[].usedOn`.
+ */
+export const MONDAY_FIRST: readonly Weekday[] = [...WEEKDAYS.slice(1), WEEKDAYS[0]];

@@ -772,6 +772,9 @@ exists goes with it. This follows the standard the repo already set and reviewed
 difference from decision 2 is that the archived doc is **packaged for re-seeding** (its numbers are an
 instruction), while this one is a dated **design record** (its numbers are testimony about shape), and the
 file now says so at the top. A stricter call remains available if the maintainer wants it.
+⚠️ **Since FAM-1 step 1 no production re-seed path exists** (plan D10: `PROGRAM_SEED` is written only
+to test databases). The archived doc stays as the record of a block that may return, through the
+program builder or a test seed; its numbers are still an instruction, not testimony.
 
 ### What remains — residuals, not oversights
 

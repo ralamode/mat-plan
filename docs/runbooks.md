@@ -567,7 +567,8 @@ At `read -s PREVIEW_DIRECT`, paste the preview **direct** (unpooled) string at t
 read -s PREVIEW_DIRECT
 export EXPECTED_DB_ENV=preview
 DATABASE_URL_UNPOOLED="$PREVIEW_DIRECT" pnpm --filter @mat-plan/db db:migrate
-DATABASE_URL_UNPOOLED="$PREVIEW_DIRECT" pnpm --filter @mat-plan/db db:seed
+# SEED_FIXTURES=1: the preview gets the program fixtures, as migrate-preview.yml seeds it (FAM-1 D10).
+SEED_FIXTURES=1 DATABASE_URL_UNPOOLED="$PREVIEW_DIRECT" pnpm --filter @mat-plan/db db:seed
 unset EXPECTED_DB_ENV PREVIEW_DIRECT
 ```
 
