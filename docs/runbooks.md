@@ -1232,8 +1232,9 @@ nothing in the database to find them by. Capture them now; the ledger is the rec
 ⚠️ **That export is a partial copy** — no check-ins or life activities, no readiness colours, no "how
 it felt" notes, no per-athlete prescribed targets
 ([data-inventory.md](./privacy/data-inventory.md) §6). The notice promises a full copy on request, so
-**ask whether they want one**, and if they do, produce it by hand **before step 4**. Handing over a
-partial copy immediately before irreversible destruction is not keeping that promise.
+**ask whether they want one**, and if they do, produce it by hand **before step 4**, **including
+hidden rows** (`deleted_at IS NOT NULL`: a cleared weigh-in is one, and it is in no export). Handing
+over a partial copy immediately before irreversible destruction is not keeping that promise.
 
 **Deliver it through the channel that verified the request in step 0 — never to whatever address
 asked.** That is the rule: the prohibition is on sending a minor's training history to an

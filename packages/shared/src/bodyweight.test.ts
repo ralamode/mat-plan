@@ -8,6 +8,7 @@ import {
   DEFAULT_BODYWEIGHT_UNIT,
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
   editBodyweightSchema,
+  isBlankWeight,
   logBodyweightSchema,
   type BodyweightUnit,
 } from './bodyweight';
@@ -63,7 +64,7 @@ describe('logBodyweightSchema — the plausibility bound (V1-24 PR 1a)', () => {
 
   it('still rejects a zero or non-number', () => {
     expect(valueErrors('0', LB)).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
-    expect(parse('abc', LB).success).toBe(false);
+    expect(valueErrors('abc', LB)).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
   });
 });
 
@@ -71,9 +72,10 @@ describe('editBodyweightSchema (V1-24 PR 1b)', () => {
   const valid = {
     profileId: '019826b4-0000-7000-8000-000000000001',
     entryId: '019826b4-0000-7000-8000-0000000000aa',
-    value: 85.2,
+    // FormData only ever carries strings, and since 3b-bw the field is text, so the schema takes text.
+    value: '85.2',
     unit: 'lb',
-    seenValue: 84.5,
+    seenValue: '84.5',
   };
 
   it('accepts a plausible correction', () => {
@@ -90,17 +92,19 @@ describe('editBodyweightSchema (V1-24 PR 1b)', () => {
    * the module docblock).
    */
   it('rejects an implausible weight, exactly as the log path does', () => {
-    const tooBig = editBodyweightSchema.safeParse({ ...valid, value: 845 });
+    const tooBig = editBodyweightSchema.safeParse({ ...valid, value: '845' });
     expect(tooBig.success).toBe(false);
     expect(tooBig.error!.flatten().fieldErrors.value).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
 
-    expect(editBodyweightSchema.safeParse({ ...valid, value: 8.45 }).success).toBe(false);
+    expect(editBodyweightSchema.safeParse({ ...valid, value: '8.45' }).success).toBe(false);
   });
 
   it('applies the bound of the submitted unit', () => {
     // 450 is inside the lb bound (≤ 500) and outside the kg bound (≤ 230).
-    expect(editBodyweightSchema.safeParse({ ...valid, value: 450, unit: 'lb' }).success).toBe(true);
-    expect(editBodyweightSchema.safeParse({ ...valid, value: 450, unit: 'kg' }).success).toBe(
+    expect(editBodyweightSchema.safeParse({ ...valid, value: '450', unit: 'lb' }).success).toBe(
+      true,
+    );
+    expect(editBodyweightSchema.safeParse({ ...valid, value: '450', unit: 'kg' }).success).toBe(
       false,
     );
   });
@@ -117,6 +121,59 @@ describe('editBodyweightSchema (V1-24 PR 1b)', () => {
     expect(parsed.success).toBe(true);
     expect(parsed.data!.value).toBe(85.2);
     expect(parsed.data!.seenValue).toBe(84.5);
+  });
+
+  // V1-24 3b-bw (plan W7): a blank Save clears the weigh-in.
+  it('reads a field that is empty after trim as a clear (null)', () => {
+    for (const blank of ['', '  ']) {
+      const parsed = editBodyweightSchema.safeParse({ ...valid, value: blank });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data!.value).toBeNull();
+    }
+  });
+
+  it('refuses an ABSENT value, a null and a File — a clear is only ever a typed empty field', () => {
+    const { value: _dropped, ...absent } = valid;
+    expect(editBodyweightSchema.safeParse(absent).success).toBe(false);
+    expect(editBodyweightSchema.safeParse({ ...valid, value: null }).success).toBe(false);
+    expect(editBodyweightSchema.safeParse({ ...valid, value: new File([], 'x') }).success).toBe(
+      false,
+    );
+  });
+
+  it('refuses text that is not a weight, with the bound’s own copy', () => {
+    for (const bad of ['84..5', 'abc', '1e2', '0x50', '-85', '84.5555']) {
+      const r = editBodyweightSchema.safeParse({ ...valid, value: bad });
+      expect(r.success, bad).toBe(false);
+      expect(r.error!.flatten().fieldErrors.value, bad).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
+    }
+  });
+});
+
+describe('both schemas read a typed weight the same way (V1-24 3b-bw, plan W3)', () => {
+  it('takes one comma as the decimal point', () => {
+    const parsed = logBodyweightSchema.safeParse({
+      profileId: newId(),
+      value: '84,5',
+      unit: LB,
+      clientId: newId(),
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data!.value).toBe(84.5);
+  });
+
+  it('refuses text that is not a weight on the log path, with the bound’s own copy', () => {
+    for (const bad of ['84..5', 'abc', '1e2', '0x50', '', '84.5555']) {
+      expect(valueErrors(bad, LB), bad).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
+    }
+  });
+
+  it('isBlankWeight is true only for a string that is empty after trim', () => {
+    expect(isBlankWeight('')).toBe(true);
+    expect(isBlankWeight(' \t')).toBe(true);
+    expect(isBlankWeight('0')).toBe(false);
+    expect(isBlankWeight(null)).toBe(false);
+    expect(isBlankWeight(undefined)).toBe(false);
   });
 });
 

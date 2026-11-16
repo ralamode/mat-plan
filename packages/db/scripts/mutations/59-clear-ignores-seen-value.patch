@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/single-value.ts b/packages/db/src/writers/single-value.ts
+index b7366808..41c40611 100644
+--- a/packages/db/src/writers/single-value.ts
++++ b/packages/db/src/writers/single-value.ts
+@@ -153,7 +153,7 @@ async function clearSingleValue(
+     }
+ 
+     // `numeric(8,3)` arrives as a string (`'84.500'`); `Number` compares it exactly to the posted value.
+-    if (row.unit !== args.unit || Number(row.value) !== args.seenValue) return { stale: true };
++    if (row.unit !== args.unit) return { stale: true };
+ 
+     // `hide.ts` stays the only app writer of `deleted_at` (delete-and-restore.md invariant 1). The
+     // row is locked and proven owned, so a `notFound` here is a contract break, not an outcome.

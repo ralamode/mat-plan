@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 
 import {
   BODYWEIGHT_COPY,
-  BODYWEIGHT_RECEIPT_ID,
+  changeLabel,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   LIFE_LOGGED_ID,
@@ -71,6 +71,14 @@ export const bodyweightSection = (page: Page) =>
 export const lifeSection = (page: Page) =>
   page.getByRole('region', { name: LIFE_COPY.heading, exact: true });
 
+/** The logged row's value (`✓ 84.5 lb`), by the value's own element (V1-24 3b-bw). */
+export const loggedWeight = (page: Page, value: string) =>
+  bodyweightSection(page).getByText(shownWeight(value), { exact: true });
+
+/** The logged row's Change, named with its value. */
+export const changeWeight = (page: Page, value: string) =>
+  bodyweightSection(page).getByRole('button', { name: changeLabel('weight', shownWeight(value)) });
+
 /** How the app displays a weight the specs log in the default unit (`84.5` → `84.5 lb`). */
 export const shownWeight = (value: string) =>
   formatValueUnit(Number(value), DEFAULT_BODYWEIGHT_UNIT);
@@ -99,15 +107,16 @@ export async function logBodyweight(
   opts?: { timeout?: number },
 ): Promise<void> {
   const section = bodyweightSection(page);
-  const saved = section.getByText(BODYWEIGHT_COPY.saved(shownWeight(value)), { exact: true });
+  const saved = loggedWeight(page, value);
   const input = section.getByLabel('Weight', { exact: true });
 
   if ((await input.count()) > 0) {
     await input.fill(value);
-    await section.getByRole('button', { name: 'Log weight' }).click();
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
     await expect(saved).toBeVisible(opts);
-    // The submit button that held focus has unmounted; `SavedAnnouncer` moves focus to the receipt.
-    await expect(section.locator(`#${BODYWEIGHT_RECEIPT_ID}`)).toBeFocused();
+    // The ✓ that held focus has unmounted; the section's live island hands focus to Change
+    // (V1-24 3b-bw, plan W6) rather than letting it drop to `<body>`.
+    await expect(changeWeight(page, value)).toBeFocused();
   }
 
   await expect(saved).toBeVisible(opts);

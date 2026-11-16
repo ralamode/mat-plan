@@ -154,8 +154,10 @@ component changes. Two constraints that came out of building it:
   44px tap-target bar — is `calc(var(--spacing) * 11)`. Below `0.25rem` every control drops under the
   bar.
 - **Three pairs in the current palette are already under AA** (`muted-foreground` on `muted` 4.34:1,
-  the unused `destructive` button variant 4.39:1 light / 3.04:1 dark) and the hairlines miss SC
-  1.4.11 (1.26:1 light, 2.69:1 dark). None is rendered by a route today, which is why CI is green.
+  the `destructive` button variant 4.39:1 light / 3.04:1 dark) and the hairlines miss SC
+  1.4.11 (1.26:1 light, 2.69:1 dark). None is rendered by a route today, which is why CI is green:
+  the variant's one call site, the bodyweight Clear (V1-24 3b-bw), overrides its fill to
+  `bg-transparent` so its red text sits on the page background, and its 5% hover tint is not measured.
   They are pinned with their measured values in `app/design/tokens/token-sets.test.ts` and are inputs
   to the reskin, not background noise.
 
