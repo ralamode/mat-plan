@@ -115,11 +115,17 @@ regenerate). Each command is one line; run them from the repo root.
 1. Save your migration's SQL and hand-hardening **from the commit that has your real SQL**, not one
    after a wrong regenerate: `git show <commit>:packages/db/migrations/<your file>.sql`, saved
    outside the repo.
-2. Bring main in:
+2. Bring main in, and make sure it **is** in. A merge that CONFLICTS is fine: you resolve it below,
+   and it is still in progress. A merge that is REFUSED (a dirty tree: "Your local changes would be
+   overwritten") brings nothing in, and every later step then regenerates against an old main and
+   drops main's columns. Resolve `packages/db/src/schema.ts` by keeping **both** sides, never "ours".
 
    ```bash
    git fetch origin && git merge origin/main
+   git rev-parse -q --verify MERGE_HEAD >/dev/null || git merge-base --is-ancestor origin/main HEAD || echo "STOP: main is not merged"
    ```
+
+   The second line must print nothing.
 
 3. Make `meta/` **exactly** main's. A snapshot with your number is **main's** and stays; any snapshot
    of yours that main lacks goes, **tracked or untracked**, or drizzle-kit diffs against it and emits
@@ -146,8 +152,10 @@ regenerate). Each command is one line; run them from the repo root.
 
    then paste your saved SQL into the new file.
 
-5. The new `.sql` must contain **only your change**. Re-apply its hand-hardening (§2). Never edit a
-   `when` or a `prevId` by hand.
+5. The new `.sql` must contain **only your change**. Re-apply its hand-hardening (§2). Then commit:
+   while a merge is in progress, that commit concludes it. In this recipe, never edit a `when` or a
+   `prevId` by hand. (Repairing a `prevId` is right in one other case, the two-pass add-or-drop
+   above, where no merge with main is involved.)
 
 ## 6. Ship and deploy order
 

@@ -176,9 +176,10 @@ jobs:
 
           Each meta/NNNN_snapshot.json must have prevId == the PREVIOUS snapshot's id.
           drizzle only walks this chain when appending, so a break is silent until the
-          NEXT migration fails to generate. Fix by setting the offending prevId to the
-          id of the snapshot before it — the snapshot files are NOT applied to prod and
-          are safe to repair. EXCEPT after merging main or after a regenerate: then a
+          NEXT migration fails to generate. Outside a merge with main (the two-pass
+          add-or-drop in the db-migration skill), fix it by setting the offending prevId to
+          the id of the snapshot before it — the snapshot files are NOT applied to prod and
+          are safe to repair. NOT after merging main or after a regenerate: then a
           snapshot of yours main lacks is probably still in meta/, and the .sql may hold
           main's DDL. Don't hand-edit the prevId; follow .claude/skills/db-migration/SKILL.md
           -> "Regenerate on top of main".
