@@ -2,6 +2,7 @@ import {
   addDays,
   assignDraftSchema,
   copyDraftSchema,
+  copyName,
   createProgramSchema,
   foldName,
   hasStarted,
@@ -22,7 +23,6 @@ import {
   takeOffSchema,
   hasSetRows,
   weekDraftSchema,
-  WORKOUT_NAME_MAX,
   type DayActions,
   type DayItem,
   type DayPlan,
@@ -367,11 +367,6 @@ export type FakePrograms = {
  */
 const sameName = (a: string, b: string) => foldName(a) === foldName(b);
 
-/** A copy made inside one program is renamed, and the name still fits `WORKOUT_NAME_MAX`. */
-const COPY_SUFFIX = ' (copy)';
-const copyName = (name: string) =>
-  `${name.slice(0, WORKOUT_NAME_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
-
 /** A draft that fails `weekDraftSchema` because a day names one workout twice. */
 function repeatsAWorkout(draft: WeekDraft): boolean {
   return Object.values(draft?.days ?? {}).some(
@@ -395,8 +390,12 @@ function repeatsAWorkout(draft: WeekDraft): boolean {
  *   from is the program's name on the day of the copy, frozen.
  * - A new item whose name matches an existing one (folded, likewise) selects that item, with its
  *   own type.
- * - Put on starts today or tomorrow and skips whoever is already on it. Take off ends after today;
- *   someone who had not started yet simply leaves.
+ * - Put on starts today or tomorrow and skips whoever is already on it, except someone whose last
+ *   day is today: for them it undoes the Take off. Take off ends after today; a start that has not
+ *   begun, or that began today (nothing is logged under it here), is removed instead. It answers
+ *   which (`lastDay`).
+ * - A copy never makes a second workout of one name in a program: that is `name_taken`, and a copy
+ *   may carry its own name.
  */
 export function createFakeProgramActions(
   seed: FakeProgramState,

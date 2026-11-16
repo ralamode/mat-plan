@@ -342,8 +342,11 @@ export type ProgramOrder = z.infer<typeof programOrderSchema>;
  *
  * **`name` is the copy's name, when the person gave one** (maintainer, 2026-11-16). A copy into the
  * workout's own program always needs a different name, so the dialog shows a Name field there,
- * prefilled with the workout's name and " (copy)". Left out, the copy takes that default in its own
- * program and the workout's own name in another. **A name already used in the program it is copied
+ * prefilled with `copyName(name)` (`./pieces`: the name and " (copy)", cut to fit). Left out, the
+ * copy takes that default in its own program and the workout's own name in another.
+ * ⚠️ Unlike the contract's other optional texts, a blank `name` is NOT "left out": it is `invalid`.
+ * A Name field the person emptied must not quietly fall back to the default; leave the key out to
+ * ask for the default. **A name already used in the program it is copied
  * into answers `name_taken`, in any program** (maintainer, 2026-11-16: never two workouts with one
  * name). The dialog then shows the Name field, prefilled with the name and " (copy)", and the
  * person copies again; it needs no list of the other program's workouts to do that.

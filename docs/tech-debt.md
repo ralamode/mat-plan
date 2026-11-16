@@ -23,7 +23,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   (`packages/shared/src/ramp-schedule.ts`), so it writes nothing today.
 - **Impact:** none while the schedule is empty. The day it is filled, the next deploy writes ramp
   targets for the kids of every household in the database, archived athletes included: one
-  household's program written into another's, by a path with no scope.
+  schedule written to every household's kids, by a path with no scope.
 - **Fix:** the ramp card and its read leave the app at FAM-1 step 12f (plan D21). Remove the
   expansion from the seed in the same change, or scope it to the seeded household and to live
   profiles if the ramp is kept. Either way before the first outside family is invited.

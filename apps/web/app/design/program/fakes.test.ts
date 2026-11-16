@@ -995,11 +995,10 @@ describe('the fake ProgramActions: workouts and the week', () => {
     expect(await actions.copyWorkout(copy(named.toUpperCase()))).toEqual(refusal('name_taken'));
     // Another program's names do not clash with this one's, and this page is untouched.
     const [, another] = familyProgram.otherPrograms;
-    if (another) {
-      expect(
-        (await actions.copyWorkout({ ...copy(), toProgramPublicId: another.programPublicId })).ok,
-      ).toBe(true);
-    }
+    expect(another, 'the fixture has a second other program').toBeDefined();
+    expect(
+      (await actions.copyWorkout({ ...copy(), toProgramPublicId: another!.programPublicId })).ok,
+    ).toBe(true);
     expect(view()).toEqual(familyProgram);
   });
 
