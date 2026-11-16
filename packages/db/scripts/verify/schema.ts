@@ -113,6 +113,7 @@ export async function verifySchema(ctx: VerifyContext): Promise<void> {
   await verifyStep4aii(ctx);
   await verifyStep4b(ctx);
   await verifyStep5(ctx);
+  await verifyTechDebtChecks(ctx);
   await verifyStep1();
 }
 
@@ -3195,5 +3196,159 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   });
   console.log(
     "✓ FAM-1 5: erasing one athlete removes their row in every table (hidden ones too) and leaves a sibling and the household's programs exactly as they were; the pre-flights catch a sibling's entry in their session or superset (which aborts the erasure) and a row on another household's program; the report lists only this household's program only they were on",
+  );
+}
+
+// ── Lane A tech-debt: four CHECKs added NOT VALID (migration 0029; validated by the next) ──────────
+
+/** The four constraints 0029 adds NOT VALID; the validating migration flips each to valid. */
+const TECH_DEBT_CHECKS = [
+  'program_blocks_name_length_check',
+  'ramp_targets_target_value_not_nan_check',
+  'entries_value_num_check',
+  'entry_set_quantities_value_num_not_nan_check',
+] as const;
+
+async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
+  // ── (a) each exists, NOT VALID until the validating migration, and the name bound is its const ─────
+  // ⚠️ Read straight off the migrations: no fixture in db:verify drops and re-adds any of these four (the
+  // TEN-2c lesson, verify.ts: a re-added constraint would make this read measure itself).
+  const rows = rowsOf<{ conname: string; convalidated: boolean }>(
+    await db.execute(sql`
+      SELECT conname, convalidated FROM pg_constraint
+       WHERE conname IN (${sql.join(
+         TECH_DEBT_CHECKS.map((c) => sql`${c}`),
+         sql`, `,
+       )})
+       ORDER BY conname`),
+  );
+  assert.deepEqual(
+    rows.map((r) => [r.conname, r.convalidated]),
+    [...TECH_DEBT_CHECKS].sort().map((c) => [c, false]),
+    'lane A tech-debt: the four CHECKs exist and are NOT VALID until the validating migration',
+  );
+  await assertUpperBoundIs('program_blocks_name_length_check', PROGRAM_NAME_MAX);
+  console.log(
+    '✓ lane A tech-debt: the program-name, NaN and entries-value CHECKs exist, NOT VALID; the name bound is PROGRAM_NAME_MAX',
+  );
+
+  // ── (b) each refuses what it names, by name, and accepts the bounds ────────────────────────────────
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const blockId = await mkTemplateBlock(exec, A_SCOPE, 'td-checks');
+    const householdId = await householdOfBlock(tx, blockId);
+    const block = (name: string) =>
+      tx
+        .insert(schema.programBlocks)
+        .values({ publicId: newId(), householdId, slug: `td-${newId()}`, name });
+    // Code points, not bytes: astral characters are 4 bytes each, so a byte-counting CHECK fails here.
+    await assert.doesNotReject(
+      tx.transaction(async () => {
+        await block(astral(PROGRAM_NAME_MAX));
+        await block('L');
+      }),
+      'lane A tech-debt: a block name of PROGRAM_NAME_MAX code points, and of one, is accepted',
+    );
+    await expectRejectedBy(
+      'program_blocks_name_length_check',
+      () => block(astral(PROGRAM_NAME_MAX + 1)),
+      tx,
+    );
+    await expectRejectedBy('program_blocks_name_length_check', () => block('   '), tx);
+
+    // entries.value_num: refused negative and NaN, on an UPDATE of an existing reading.
+    const [reading] = await tx
+      .select({ id: schema.entries.id })
+      .from(schema.entries)
+      .where(sql`${schema.entries.valueNum} is not null`)
+      .orderBy(schema.entries.id)
+      .limit(1);
+    assert.ok(reading, 'lane A tech-debt: a logged reading exists to probe');
+    const setReading = (v: string) =>
+      tx.update(schema.entries).set({ valueNum: v }).where(eq(schema.entries.id, reading.id));
+    await expectRejectedBy('entries_value_num_check', () => setReading('-1'), tx);
+    await expectRejectedBy('entries_value_num_check', () => setReading('NaN'), tx);
+    await assert.doesNotReject(
+      tx.transaction(async () => {
+        await setReading('0');
+      }),
+      'lane A tech-debt: a reading of 0 is accepted',
+    );
+
+    // entry_set_quantities.value_num: NaN refused (the older `>= 0` CHECK admits it).
+    const [quantity] = await tx
+      .select({ id: schema.entrySetQuantities.id })
+      .from(schema.entrySetQuantities)
+      .orderBy(schema.entrySetQuantities.id)
+      .limit(1);
+    assert.ok(quantity, 'lane A tech-debt: a logged quantity exists to probe');
+    await expectRejectedBy(
+      'entry_set_quantities_value_num_not_nan_check',
+      () =>
+        tx
+          .update(schema.entrySetQuantities)
+          .set({ valueNum: 'NaN' })
+          .where(eq(schema.entrySetQuantities.id, quantity.id)),
+      tx,
+    );
+
+    // ramp_targets.target_value: NaN refused; a real target accepted.
+    const P = await mkKid(tx, householdId, 'Ramp probe');
+    const [{ metricKey }] = await tx
+      .select({ metricKey: schema.metricDefinitions.key })
+      .from(schema.metricDefinitions)
+      .orderBy(schema.metricDefinitions.key)
+      .limit(1);
+    const ramp = (targetValue: string, weekStart: string) =>
+      tx
+        .insert(schema.rampTargets)
+        .values({ publicId: newId(), profileId: P, metricKey, weekStart, targetValue });
+    await expectRejectedBy(
+      'ramp_targets_target_value_not_nan_check',
+      () => ramp('NaN', '2026-11-09'),
+      tx,
+    );
+    await assert.doesNotReject(
+      tx.transaction(async () => {
+        await ramp('10', '2026-11-16');
+      }),
+      'lane A tech-debt: a real ramp target is accepted',
+    );
+  });
+
+  // ── (c) why the production read gates the merge: NOT VALID still refuses an UPDATE of a bad row ───
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const householdId = await householdOfBlock(
+      tx,
+      await mkTemplateBlock(exec, A_SCOPE, 'td-window'),
+    );
+    await tx.execute(
+      sql`ALTER TABLE program_blocks DROP CONSTRAINT program_blocks_name_length_check`,
+    );
+    const [bad] = await tx
+      .insert(schema.programBlocks)
+      .values({
+        publicId: newId(),
+        householdId,
+        slug: `td-${newId()}`,
+        name: 'x'.repeat(PROGRAM_NAME_MAX + 1),
+      })
+      .returning({ id: schema.programBlocks.id });
+    // Re-added exactly as 0029 writes it (NOT VALID: the planted row is not scanned).
+    await tx.execute(sql`ALTER TABLE program_blocks ADD CONSTRAINT program_blocks_name_length_check
+      CHECK (char_length(btrim(name)) >= 1 and char_length(name) <= 60) NOT VALID`);
+    await expectRejectedBy(
+      'program_blocks_name_length_check',
+      () =>
+        tx
+          .update(schema.programBlocks)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.programBlocks.id, bad.id)),
+      tx,
+    );
+  });
+  console.log(
+    '✓ lane A tech-debt: a long or blank block name, a negative or NaN reading, a NaN quantity and a NaN ramp target are each refused by name; the bounds are accepted; and NOT VALID still refuses a soft delete of an existing bad row, which is why the production read gates the merge',
   );
 }

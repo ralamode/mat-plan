@@ -1,0 +1,9 @@
+diff --git a/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql b/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql
+--- a/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql
++++ b/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql
+@@ -35,4 +35,4 @@
+ ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_name_length_check" CHECK (char_length(btrim("program_blocks"."name")) >= 1 and char_length("program_blocks"."name") <= 60) NOT VALID;--> statement-breakpoint
+ ALTER TABLE "ramp_targets" ADD CONSTRAINT "ramp_targets_target_value_not_nan_check" CHECK ("ramp_targets"."target_value" <> 'NaN') NOT VALID;--> statement-breakpoint
+ ALTER TABLE "entries" ADD CONSTRAINT "entries_value_num_check" CHECK ("entries"."value_num" is null or ("entries"."value_num" >= 0 and "entries"."value_num" <> 'NaN')) NOT VALID;--> statement-breakpoint
+-ALTER TABLE "entry_set_quantities" ADD CONSTRAINT "entry_set_quantities_value_num_not_nan_check" CHECK ("entry_set_quantities"."value_num" <> 'NaN') NOT VALID;
++ALTER TABLE "entry_set_quantities" ADD CONSTRAINT "entry_set_quantities_value_num_not_nan_check" CHECK ("entry_set_quantities"."value_num" IS NOT NULL) NOT VALID;

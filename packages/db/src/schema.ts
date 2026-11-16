@@ -341,7 +341,9 @@ export const entries = pgTable(
       .notNull()
       .references(() => units.code),
     movementName: text('movement_name'), // strength only (no movement catalog until V1-1)
-    valueNum: numeric('value_num', { precision: 8, scale: 3 }), // bodyweight value
+    // Every reading an entry logs: a weigh-in, a check-in (a ticked box is 1, a count, a 1–10 scale),
+    // wake minutes since midnight, practice minutes. All non-negative today; `entries_value_num_check`.
+    valueNum: numeric('value_num', { precision: 8, scale: 3 }),
     rawLoad: text('raw_load'), // verbatim legacy strings → lossless CSV export
     rawReps: text('raw_reps'),
     // V1-22 chunk 1: the PLAN as asked, rendered to one string and frozen at log time, so a later
@@ -474,6 +476,13 @@ export const entries = pgTable(
       .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'practice_minutes'`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
+    // Lane A tech-debt (0029, NOT VALID; validated by 0030). Non-negative is a fact of today's catalog:
+    // a signed metric (a delta) must relax this CHECK first. `'NaN' >= 0` is TRUE in Postgres, so NaN
+    // is refused by name.
+    check(
+      'entries_value_num_check',
+      sql`${t.valueNum} is null or (${t.valueNum} >= 0 and ${t.valueNum} <> 'NaN')`,
+    ),
     // Legacy tagged-union shape guard (V0): bodyweight carries value_num (no movement); strength
     // names a movement. RETAINED past V1-1c — it (and entries_kind_check) still guard the live
     // `kind` dual-writer. On a kind=NULL check-in it passes AS LONG AS value_num is populated:
@@ -611,6 +620,8 @@ export const entrySetQuantities = pgTable(
     uniqueIndex('uq_entry_set_quantities_client_id').on(t.clientId),
     // `weight_num` never had this (enforced only in parseLoad); the typed column gets it in the DB.
     check('entry_set_quantities_value_num_check', sql`${t.valueNum} >= 0`),
+    // `'NaN' >= 0` is TRUE in Postgres, so the check above admits NaN (0029, NOT VALID; validated by 0030).
+    check('entry_set_quantities_value_num_not_nan_check', sql`${t.valueNum} <> 'NaN'`),
   ],
 );
 
@@ -1055,6 +1066,8 @@ export const rampTargets = pgTable(
       .on(t.profileId, t.metricKey, t.weekStart)
       .where(sql`${t.deletedAt} is null`),
     check('ramp_targets_target_value_check', sql`${t.targetValue} >= 0`),
+    // As `entry_set_quantities_value_num_not_nan_check` (0029, NOT VALID; validated by 0030).
+    check('ramp_targets_target_value_not_nan_check', sql`${t.targetValue} <> 'NaN'`),
   ],
 );
 
@@ -1091,6 +1104,12 @@ export const programBlocks = pgTable(
       .on(t.householdId, t.slug)
       .where(sql`${t.deletedAt} is null`),
     check('program_blocks_kind_check', sql`${t.kind} in ('legacy', 'template')`),
+    // PROGRAM_NAME_MAX, exactly `workouts_name_length_check`'s form, on every row (0029, NOT VALID;
+    // validated by 0030 after a production read of the longest name). Pinned by db:verify.
+    check(
+      'program_blocks_name_length_check',
+      sql`char_length(btrim(${t.name})) >= 1 and char_length(${t.name}) <= 60`,
+    ),
     // A template block is always built by a device, so it always carries the id a replay matches on.
     check(
       'program_blocks_template_client_id_check',

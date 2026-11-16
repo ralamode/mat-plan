@@ -197,6 +197,13 @@
       "when": 1794859957827,
       "tag": "0027_fam1_5_program_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794870353193,
+      "tag": "0028_tdebt_name_and_nan_checks_not_valid",
+      "breakpoints": true
     }
   ]
 }
