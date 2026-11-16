@@ -15,6 +15,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
+
+- **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
+  `ramp_targets` rows for every profile with `kind = 'kid'`, with no household predicate and no
+  `deleted_at IS NULL`. The seed runs on every push to `main`. The schedule ships empty
+  (`packages/shared/src/ramp-schedule.ts`), so it writes nothing today.
+- **Impact:** none while the schedule is empty. The day it is filled, the next deploy writes ramp
+  targets for the kids of every household in the database, archived athletes included: one
+  schedule written to every household's kids, by a path with no scope.
+- **Fix:** the ramp card and its read leave the app at FAM-1 step 12f (plan D21). Remove the
+  expansion from the seed in the same change, or scope it to the seeded household and to live
+  profiles if the ramp is kept. Either way before the first outside family is invited.
+- **Severity:** low today, high the moment the schedule has a row. Owner: lane A (`seed.ts` is its
+  file), with step 12f.
+
 ### A logged quantity's CHECK admits `NaN` (found 2026-11-16, FAM-1 step 4b's panel)
 
 - **What & why it's debt:** `entry_set_quantities_value_num_check` is `CHECK (value_num >= 0)`
@@ -31,6 +46,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   step:** nothing in FAM-1 depends on it and the migration queue is taken until step 5 is applied;
   it is the first migration after that. Owner: the Platform thread.
 - **Severity:** low.
+
+### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel)
+
+- **What & why it's debt:** `writeCheckinEntries` (a practice) and `insertBodyweightEntry` (a
+  weigh-in) are skipped by their day index when another live row holds the day, then re-read to say
+  why. If that other row is cleared between the skipped insert and the re-read, nothing holds the day
+  or the id, and the writer throws (`neither inserted nor held`), so the person sees `error.tsx`.
+- **Impact:** low. It takes a second phone's ✓ within milliseconds of a clear on the same athlete's
+  same day, in a one-household app; a reload logs normally. Bodyweight has had it since #442, practice
+  since its clear (3b-life-a).
+- **Fix:** re-run the insert once for exactly those items before throwing. Provable on PGlite only
+  with a statement-level `AFTER INSERT` trigger that hides the holder inside the insert (the
+  correctness lens's stage), which costs more than the race; build it if it is ever seen.
+- **Severity:** low. **Accepted** _(V1-24 3b-life plan, 2026-11-16)_.
 
 ### A failed query's params reach Vercel's runtime logs (found 2026-11-16, #447 privacy review)
 
@@ -604,7 +633,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
 
 ### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
 
-- **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
+- **What & why:** `saved-announcer.tsx` (deleted at V1-24 3b-life-a), `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
   an effect. What TRIGGERS each is deliberately different (B5: an island announces its own save,
   never a value diff), but the presentational half is copied.
@@ -614,16 +643,17 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ✅ **Half of the destination exists as of `PROF-1` a-r (2026-11-07): `apps/web/components/ui/announcer.tsx`.**
   It owns the REGION — the `role="status"` element and the mounted-while-empty rule — and deliberately
   **not** the trigger: the four copies differ in _what_ announces, and that difference is load-bearing
-  (`saved-announcer.tsx` explains why a value→value change must not announce). The transition half is
+  (a value→value change, such as paging to a logged day, must not announce). The transition half is
   already single-sourced for action results, in `use-on-action-success.ts`.
   ⚠️ **The count is still four.** a-r is the component's first consumer and converted none of them, so
   this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b
   are the next consumers.
   ✅ **Down to three (V1-24 3b-bw, 2026-11-16).** `bodyweight-amend.tsx`'s own region is gone: the
   bodyweight row reports to `single-value-live.tsx`, which renders `Announcer` once (with a
-  `messageKey`, so a repeated message re-announces) and owns a single-use focus claim. 3b-life moves
-  the Life row onto it and retires `saved-announcer.tsx`'s last consumer, leaving `editable-set.tsx`
-  and the `StrengthForm` island.
+  `messageKey`, so a repeated message re-announces) and owns a single-use focus claim.
+  ✅ **Down to two (V1-24 3b-life-a, 2026-11-16).** The Life row reports to the same island, and
+  `saved-announcer.tsx` is deleted (it had no other consumer), leaving `editable-set.tsx` and the
+  `StrengthForm` island.
   ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
   `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
   `messageKey` when that lane next touches it.

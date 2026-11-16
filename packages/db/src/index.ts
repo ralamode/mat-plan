@@ -48,6 +48,8 @@ export * from './queries/hidden-entries';
 // V1-24 3b-bw: Clear on the day page, through `hideEntries`. Its pre-read sees a hidden row too, but
 // returns only its day (delete-and-restore.md's reader audit).
 export * from './writers/single-value';
+// V1-24 3b-life: the practice amend's guarded UPDATE and its re-read (the clear is in single-value).
+export * from './writers/practice';
 export * from './queries/last-bodyweight';
 // The single-sourced find-or-create for `movements` (TEN-1 1d). Extracted so db:verify proves the
 // catalog's CROSS-HOUSEHOLD behaviour against the same function the app runs — `movements` has no

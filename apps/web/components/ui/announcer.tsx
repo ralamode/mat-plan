@@ -4,14 +4,14 @@
  * ## Why this is a component rather than three lines at each use site
  *
  * `docs/tech-debt.md` records **four** copies of `<p role="status" className="sr-only">{message}</p>`
- * paired with transition tracking (`saved-announcer.tsx`, `bodyweight-amend.tsx`,
- * `editable-set.tsx`, the `StrengthForm` island). PROF-1 a-r's rename form was going to be the fifth,
+ * paired with transition tracking (the day page's former `SavedAnnouncer`, removed at
+ * V1-24 3b-life; `bodyweight-amend.tsx`, `editable-set.tsx`, the `StrengthForm` island). PROF-1 a-r's rename form was going to be the fifth,
  * which the UX panel flagged (U12), so the element gets a home before it multiplies rather than after.
  *
  * ⚠️ **It owns the REGION, not the trigger — and that split is deliberate.** The four copies differ in
  * *what* announces (a value transition, an action result, an explicit focus target) and that
- * difference is load-bearing: `saved-announcer.tsx`'s own comment explains why a value→value change
- * must NOT announce. Collapsing the triggers would be the refactor that breaks one of them. The
+ * difference is load-bearing: a value→value change (paging to a logged day) must NOT announce, which
+ * is why the day page's island reports from the action's result instead. Collapsing the triggers would be the refactor that breaks one of them. The
  * transition half is already single-sourced for action results — `use-on-action-success.ts`.
  *
  * ⚠️ **This PR does not convert the four.** a-r is the first consumer; a-1 and PROF-1 b follow, and

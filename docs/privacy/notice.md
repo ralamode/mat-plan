@@ -189,25 +189,25 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
 ⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
-weigh-in** on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and the app
-**does not offer to put a cleared weigh-in back**, so re-enter the right weight instead. Anyone signed
-in to your household can clear any athlete's weigh-in, and the app does not record who did. A cleared
-weigh-in is not removed from the database, and it is **not in the export** (ask for a full copy, below,
-and it is included). The only way anything comes out of the database today is deleting a whole athlete
+weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap Clear): that
+hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
+instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
+does not record who did. A cleared one is not removed from the database, and it is **not in the
+export** (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete
 or household. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
 **What is being built, so you know what to expect.** A **Clear this day** control, which hides
-everything logged on one day at once. Unlike a cleared weigh-in, a cleared day can be **put back**:
+everything logged on one day at once. Unlike a cleared weigh-in or practice, a cleared day can be **put back**:
 a banner offers **Restore all** while that day is today or yesterday (after that, the day stays
 hidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been
 logged in that day's place — when that happens the app will say so rather than fail quietly. There
 will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
-field. Two things are worth saying plainly about every clear:
+field, as above. Two things are worth saying plainly about every clear:
 
 - **It hides from everyone in your household, not just from the person who cleared it.** The app does
   not record who cleared what, and anyone signed in to your household can open any athlete. So a child
-  can clear a weigh-in and a parent will not see it either. ⚠️ That is still the honest shape of it:
+  can clear a weigh-in or a practice and a parent will not see it either. ⚠️ That is still the honest shape of it:
   per-person sign-in is now the only way in, but the app records no author on an entry, so sign-in
   alone did not fix this one.
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,

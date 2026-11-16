@@ -509,18 +509,20 @@ replacement coexists with it.
 one place in the app tree (a committed data correction)". There are now **three** writers of
 `entries.deleted_at`, and the distinction between them is what matters here:
 
-| Writer                                                            | Reachable by                                                                                                                                                                  | Touches production?       |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                     | **yes** — it has been run |
-| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete | **yes, from 3b-bw**       |
-| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                     | no                        |
+| Writer                                                            | Reachable by                                                                                                                                                                                                              | Touches production?       |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                 | **yes** — it has been run |
+| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete | **yes, from 3b-bw**       |
+| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                 | no                        |
 
 ⚠️ **Updated 2026-11-16 (V1-24 3b-bw).** The app now writes `deleted_at`: clearing a weigh-in on the
 day page (Change, empty the field, Clear) **hides** that one row through `hideEntries`. The app does
 not offer to restore it ([ADR 0008](../decisions/0008-deletion.md) Amendment 1: a blank-cleared
 value is not offered for restore), nothing purges it, and nothing records who cleared it, so a
 cleared weigh-in stays in the database, out of every reader (the day page, "Last time", the export),
-until the household is deleted; the on-request full copy includes it (§6, `runbooks.md`). No column, processor or reader audience is new; the "Last time" hint reads the athlete's own
+until the household is deleted; the on-request full copy includes it (§6, `runbooks.md`). **From V1-24
+3b-life-a a wrestling practice clears the same way** (`clearPractice`, the same core), with the same
+reach. No column, processor or reader audience is new; the "Last time" hint reads the athlete's own
 earlier live weigh-in, which their own page already shows on its day.
 
 **Nothing stored, received or retained changed in B1-1b**: no column, no processor, no new reader
@@ -622,7 +624,7 @@ notes) and bodyweight (date, weight, context, notes).
   sentence if it does.
 - **Soft-deleted ("hidden") rows.** Every export query filters `deleted_at IS NULL`, so a hidden entry
   is absent from the zip while still held in the database. **User-facing since V1-24 3b-bw:** a
-  cleared weigh-in leaves the export, and the app offers no restore for it, so the full copy on request
+  cleared weigh-in (and from 3b-life-a a cleared practice) leaves the export, and the app offers no restore for it, so the full copy on request
   (which includes hidden rows) is the household's only way to get it back
   ([ADR 0008](../decisions/0008-deletion.md), "a hide must never remove the export path").
 - A profile with readiness rows but no entries exports an **empty zip** (`loggedMonths` keys off
