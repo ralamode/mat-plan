@@ -492,8 +492,9 @@ export function Sheet({
                 // would otherwise have no indicator at all, which is why it is focusable but not
                 // tabbable. `outline-none` + `focus-visible:ring-3` is this repo's idiom
                 // (`callout.tsx`, `INPUT_CLASS`). `NAME_WRAP_CLASS`: a title often holds a person's or
-                // a program's name, and a long unbroken one pushed the Close button off a 360px
-                // screen (found in FAM-1 13d's review). Compact still truncates on purpose.
+                // a program's name, and a long unbroken one ran under the Close button and was
+                // clipped at the screen's edge (found in FAM-1 13d's review). Compact still
+                // truncates on purpose.
                 className={cn(
                   'focus-visible:ring-ring flex-1 rounded font-semibold outline-none focus-visible:ring-3',
                   NAME_WRAP_CLASS,

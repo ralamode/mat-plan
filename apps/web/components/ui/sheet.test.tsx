@@ -362,6 +362,10 @@ describe('Sheet — the keyboard geometry', () => {
     });
     expect(dialog().style.getPropertyValue('--sheet-vvh')).toBe('190px');
     expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(true);
+    // Compact still truncates the title: tailwind-merge keeps `truncate` beside NAME_WRAP_CLASS,
+    // and `nowrap` wins, so a long name stays on one line while the keyboard is up.
+    const title = document.getElementById(dialog().getAttribute('aria-labelledby')!)!;
+    expect(title.className).toContain('truncate');
   });
 
   /**
