@@ -61,7 +61,12 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
         putOn={actions.putOn}
         onStatus={report}
       />
-      <WorkoutsList program={program} />
+      <WorkoutsList
+        program={program}
+        copyWorkout={actions.copyWorkout}
+        putOnWired={!!actions.putOn}
+        onStatus={report}
+      />
       <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />
       {/* The page's one status bar, in view wherever the change was made. */}
       <div

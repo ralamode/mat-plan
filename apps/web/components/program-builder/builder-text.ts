@@ -11,6 +11,7 @@ import {
   SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   UNIT_LABELS,
+  WORKOUT_NAME_MAX,
   type ProgramRefusal,
   type ProgramView,
   type TrackingType,
@@ -591,4 +592,65 @@ export function startedText(
 ) {
   const when = from === today ? 'today' : `on ${formatDayShort(from)}`;
   return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${when}.`;
+}
+
+/** The Copy dialog's words (FAM-1 step 10b; the prototype's `openCopy`). */
+export const COPY_COPY = {
+  open: 'Copy to…',
+  to: 'To',
+  chooseProgram: 'Choose a program',
+  chooseFirst: 'Choose where to copy it',
+  days: 'On which days',
+  optional: '(optional)',
+  labelHint: 'Shown above the workout on those days.',
+  separate: 'The copy is separate: editing one never changes the other.',
+  copy: 'Copy',
+  copying: 'Copying…',
+  failed: 'Couldn’t copy it. Try again.',
+  stale: 'This program changed somewhere else. It now shows the latest; nothing was copied.',
+} as const;
+
+/** The trigger's name: the visible words first (WCAG 2.5.3), then which workout. */
+export const copyToLabel = (workout: string) => `${COPY_COPY.open} a program: ${workout}`;
+export const copyTitle = (workout: string) => `Copy ${workout}`;
+export const thisProgramOption = (program: string) => `This program: ${program}`;
+
+/**
+ * A copy's name in the same program, within `WORKOUT_NAME_MAX`. ⚠️ The server's rule, repeated:
+ * the preview fake (`app/design/program/fakes.ts`) holds the other copy, and neither file is
+ * shared code lane B may edit. The contract step that adds a name to `CopyDraft` (maintainer,
+ * 2026-11-16) retires this: the dialog then sends the name it shows.
+ */
+const COPY_SUFFIX = ' (copy)';
+export const copyName = (name: string) =>
+  `${name.slice(0, WORKOUT_NAME_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
+export const copyTakenText = (name: string) =>
+  `There’s already a ${name}. Rename it first, then copy again.`;
+
+/** Who sees the copy: the people on the target program. */
+export const targetPeopleText = (program: string, people: readonly string[]) =>
+  people.length
+    ? `On ${program}: ${formatList(people)}. They’ll see it on the days you pick.`
+    : `No one is on ${program} yet.`;
+/** An athlete on both programs who already does this workout on a picked day. */
+export const doubleText = (
+  athlete: string,
+  workout: string,
+  days: readonly number[],
+  program: string,
+) =>
+  `${athlete} already does ${workout} on ${formatList(days.map((d) => weekdayName(d, 'short')))} (${program}).`;
+export const putOnInsteadText = (program: string) =>
+  `If you want someone to get every change to ${program}, put them on it instead: they get its whole week, and every later change.`;
+
+export function copiedText(
+  workout: string,
+  target: string,
+  days: readonly number[],
+  sameProgram: boolean,
+): string {
+  const on = days.length ? `, on ${formatList(days.map((d) => weekdayName(d, 'short')))}` : '';
+  return sameProgram
+    ? `${copyName(workout)} added${on}.`
+    : `${workout} copied to ${target}${on}. Editing one won’t change the other.`;
 }
