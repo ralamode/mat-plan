@@ -251,6 +251,25 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
     is the limit above).
 
+19. **Take off says what it did, and a same-day Put on is undone by it** (`takeOffSchema`,
+    maintainer, 2026-11-16). A start that has not begun is removed. A start dated today with no
+    live row logged under it is removed too, as if Put on had not been tapped. Any other start ends
+    today. The answer's `lastDay` is today, or `null` for a removed start, and the screen words its
+    message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
+    program fake holds no logged rows, so in the preview a start dated today is always removed.
+20. **A copy may carry its own name, and no program ever holds two workouts with one name**
+    (`CopyDraft.name`, optional; maintainer, 2026-11-16). Without a name, a copy into the workout's
+    own program is named with " (copy)" and a copy into another program keeps the name. A name
+    already used in the program it is copied into answers `name_taken`, in any program. The dialog
+    then shows its Name field, prefilled, and the person copies again; it needs no list of the other
+    program's workouts. ⚠️ The fake knows another program's names only by what it has copied there,
+    so in the preview the clash is a second copy of one workout into the same other program.
+21. **Put on undoes a Take off whose last day is today** (`assignDraftSchema`; maintainer,
+    2026-11-16). An athlete already on a program is skipped by Put on, except one with a last day:
+    that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
+    athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
+    to list them as available.
+
 ## Traps
 
 - **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are
