@@ -246,7 +246,9 @@ export function BodyweightAmend({
           // The destructive variant's fill is translucent, and over the logged row's done tint its
           // red text drops under AA (a11y.spec.ts scans this state). A solid surface underneath
           // keeps it on the contrast it was designed for.
-          className={clears ? 'bg-background hover:bg-destructive/10 flex-1' : 'flex-1'}
+          className={
+            clears ? 'bg-background hover:bg-destructive/10 dark:bg-background flex-1' : 'flex-1'
+          }
         >
           {pending ? SAVING_LABEL : clears ? BODYWEIGHT_COPY.clear : AMEND_COPY.save}
         </Button>
