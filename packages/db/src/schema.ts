@@ -1268,6 +1268,8 @@ export const prescriptions = pgTable(
     // `uq_workouts_block_client_id` does the same for the block FK), so there is no separate one.
     uniqueIndex(PRESCRIPTION_WORKOUT_CLIENT_ID_UNIQUE_INDEX).on(t.workoutId, t.clientId),
     // The template slot key. The legacy key above never fires on a template row (NULL day_role).
+    // ⚠️ Partial on TWO conjuncts: an upsert that targets it must repeat both (`targetWhere` for
+    // DoUpdate, `where` for DoNothing), or Postgres cannot infer it (docs/lessons.md, 42P10).
     uniqueIndex(PRESCRIPTION_WORKOUT_SLOT_UNIQUE_INDEX)
       .on(t.workoutId, t.idx)
       .where(sql`${t.workoutId} is not null and ${t.deletedAt} is null`),
@@ -1334,7 +1336,7 @@ export const prescriptions = pgTable(
  * `prescription_targets`' docblock says. Once step 5 assigns a program to one athlete, it is that
  * athlete's prescribed load.
  *
- * **No `client_id` and no `public_id`, unlike `entry_set_quantities`.** This is config, not log data:
+ * **No `client_id` (and, like `entry_set_quantities`, no `public_id`).** This is config, not log data:
  * its address is (prescription, slot), a PLACE, so the partial key frees on a hide (the
  * `block_day_workouts` precedent), and a replayed save is arbitrated by the prescription's
  * `client_id`. An upsert MUST repeat the partial predicate (`targetWhere` for DoUpdate, `where` for
