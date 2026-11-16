@@ -1,8 +1,8 @@
 {
   // `packages/shared` had no tsconfig, so its source was type-checked only transitively, through the
   // files apps/web and packages/db import, and its `*.test.ts` files by NOTHING: no project imports
-  // them, and vitest strips types without checking. Every `@ts-expect-error` pin and every "this
-  // compiles" proof in a shared test was inert. This project is the missing gate; the root
+  // them, and vitest strips types without checking. Every type-level proof in a
+  // shared test (a `satisfies`, a "this compiles") was inert. This project is the missing gate; the root
   // `typecheck` script runs it alongside the others.
   //
   // Options mirror packages/db/tsconfig.json (ES2022, Node types, `bundler` resolution for the
