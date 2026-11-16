@@ -75,8 +75,8 @@ flowchart LR
 
 Small rules and names that more than one lane needs. 🔴 **Import these from `@mat-plan/shared`; do
 not write your own.** A lane's own copy is a second definition that drifts (the first lane PRs each
-wrote some of these, which is why they are here). All but `rolledBack` are in the root barrel and
-safe in a `'use client'` component; `rolledBack` is the proof modules' and comes from the
+wrote some of these, which is why they are here). All but `rolledBack` and `asDb` are in the root barrel and
+safe in a `'use client'` component; those two are the proof modules' and come from the
 `db:verify` harness. If a lane needs one that is missing, it asks the contract owner (invariant 1).
 
 | Export                                                              | Where                                           | What it is                                                                                                                                                                                                                                                                                                                                                                                                     |
