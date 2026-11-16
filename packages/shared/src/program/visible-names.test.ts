@@ -16,10 +16,24 @@ import {
  * made only of zero-width characters is one character long and passed `min(1)`; it then showed as
  * a blank line in the Programs list and could not be told from another such name.
  */
-const INVISIBLE = ['​', '​​', '‍', '‌‍', '⁠', ' ​ ', '﻿​'];
-const VISIBLE = ['A', 'a​', 'Heavy A', '💪', '7', '—', 'Ünïcode', 'م'];
+const INVISIBLE = [
+  '\u200b',
+  '\u200b\u200b',
+  '\u200d',
+  '\u200c\u200d',
+  '\u2060',
+  ' \u200b ',
+  '\ufeff\u200b',
+];
+const VISIBLE = ['A', 'a\u200b', 'Heavy A', '💪', '7', '—', 'Ünïcode', 'م'];
 
-describe('a required name has at least one character that can be seen', () => {
+/**
+ * Blank-looking characters `foldName` keeps, so they still pass. Pinned so that closing them (in
+ * `foldName`, for every name in the app) is a deliberate change.
+ */
+const BLANK_BUT_KEPT = ['\u2800', '\u3164', '\u115f', '\u1160', '\uffa0'];
+
+describe('a required name is not made only of characters that fold away', () => {
   const schemas = { programNameSchema, workoutNameSchema, supersetGroupSchema };
 
   it('the probe names really are invisible: each folds to nothing', () => {
@@ -42,6 +56,16 @@ describe('a required name has at least one character that can be seen', () => {
       for (const name of VISIBLE) expect(schema.safeParse(name).success, name).toBe(true);
     },
   );
+
+  it('a name of combining marks only is refused; one of blank-looking letters is the known gap', () => {
+    for (const name of ['\u0301', '\u0e31', '\u093f']) {
+      expect(programNameSchema.safeParse(name).success, JSON.stringify(name)).toBe(false);
+    }
+    for (const name of BLANK_BUT_KEPT) {
+      expect(foldName(name), JSON.stringify(name)).not.toBe('');
+      expect(programNameSchema.safeParse(name).success, JSON.stringify(name)).toBe(true);
+    }
+  });
 
   it('so do the write schemas that hold a name', () => {
     const id = '019826b4-0000-7000-8000-000000000001';

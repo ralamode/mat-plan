@@ -46,15 +46,21 @@ import {
 
 const ONE_LINE = 'one line of text, with no control characters';
 /**
- * A required name must fold to something (`foldName`): a name made only of characters nobody can
- * see (zero-width spaces and joiners) is one character long, so `min(1)` takes it, and it would
- * show as a blank line in every list. Found by FAM-1 step 6a's review; contract change C12.
+ * A required name must fold to something (`foldName`): a name made only of zero-width or format
+ * characters (zero-width spaces and joiners, direction marks, variation selectors), or only of
+ * combining marks, is one character long, so `min(1)` takes it, and it would show as a blank line
+ * in every list. Found by FAM-1 step 6a's review; contract change C12.
+ *
+ * ⚠️ Not a promise that a name can be seen. A few characters that draw as blank are letters or
+ * symbols to Unicode and still pass: the braille blank (U+2800), the Hangul fillers (U+3164,
+ * U+115F, U+1160, U+FFA0) and the object replacement character (U+FFFC). Closing those means
+ * stripping them in `foldName`, which every name in the app shares, so it is not done here.
  */
-const SOMETHING_TO_READ = 'a name needs at least one character you can see';
+const SOMETHING_TO_READ = 'a name needs more than invisible characters';
 
 /**
  * A short text a person typed on one line: trimmed, 1..`max` characters, no control characters,
- * and at least one character that can be seen.
+ * and not made only of zero-width, format or combining characters (`SOMETHING_TO_READ`).
  *
  * The control-character rule is the one `athleteNameSchema` documents: a NUL passes every length
  * check, reaches Postgres, and `text` rejects it, so the action throws instead of answering.
