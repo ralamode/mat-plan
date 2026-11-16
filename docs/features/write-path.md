@@ -750,7 +750,12 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
     **THREE deliberate exceptions, each documented where it lives, none a copy of this predicate.**
     `reportScopeMiss` in `lib/dal/household.ts` is an _existence-only_ probe that reaches `db` with no
     scope on purpose (it is how the miss path tells `cross_household` from `unknown_resource`) and
-    returns `void` so it cannot be copied into something that returns data. `getActivityTypeByKey` and
+    returns `void` so it cannot be copied into something that returns data. **Since FAM-1 contract
+    change C11 it reports four kinds of id** (a profile's, a program's, a workout's, a
+    prescription's), still as that one declaration. For the three program kinds it asks "live, in a
+    household that is not the caller's" through `programBlockInHousehold`, negated, because a
+    program read serves less than "live, in my household" and the caller's own row can miss. A DAL
+    function that resolves one of those ids calls it on a miss; none writes a probe of its own. `getActivityTypeByKey` and
     `getMetricDefinition` in `catalog.ts` are global reference reads.
     ✅ **`findOrCreateMovementId` was a fourth and is not any more** — `TEN-2b` scoped it, and
     `scoped.test.ts`'s dead-entry assertion is what forced its allowlist entry out rather than letting

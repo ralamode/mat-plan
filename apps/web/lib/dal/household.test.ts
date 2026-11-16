@@ -335,7 +335,16 @@ describe('reportScopeMiss — the miss-path event', () => {
     const call = await miss([[11, HOUSEHOLD_ROLE.owner]], true);
     const ctx = (call?.[1] as { contexts: { scope_miss: Record<string, unknown> } }).contexts
       .scope_miss;
-    expect(Object.keys(ctx).sort()).toEqual(['action', 'actor', 'outcome', 'resource']);
+    expect(Object.keys(ctx).sort()).toEqual(['action', 'actor', 'kind', 'outcome', 'resource']);
+    // A fixed word naming which kind of id `resource` is (C11), never a value read from the row.
+    expect(ctx.kind).toBe('profile');
+    // 🔴 The TAGS too, exactly: a tag is sent to Sentry like any context field, and a matcher that
+    // only looks for the expected ones lets a fourth through.
+    expect((call?.[1] as { tags: unknown }).tags).toStrictEqual({
+      scope_outcome: 'cross_household',
+      scope_action: 'resolve_profile',
+      scope_kind: 'profile',
+    });
     // 🔴 The VALUE, not just the key. `actor` is a CONSTANT describing the KIND of principal, never
     // the user id — a requester→owner mapping in a third-party store is the same cross-tenant
     // linkage the owning household id is forbidden for below. It changed `gate_session` →
@@ -345,6 +354,215 @@ describe('reportScopeMiss — the miss-path event', () => {
     // SEC-3's scar: a `DrizzleQueryError` message embeds query params, and that has already shipped
     // a kid's bodyweight to Sentry once.
     expect(JSON.stringify(call?.[1])).not.toMatch(/params/);
+  });
+
+  /**
+   * FAM-1 contract change C11: the same event for a program, a workout and a prescription id. One
+   * module graph per case, returning the capture and every statement the probe ran.
+   */
+  async function missOn(
+    kind: 'program' | 'workout' | 'prescription',
+    memberships: unknown[][],
+    existsElsewhere: boolean,
+  ) {
+    const { createRecordingDb } = await import('./recording-db');
+    const rec = createRecordingDb((sql) =>
+      /from "household_members"/.test(sql) ? memberships : existsElsewhere ? [[FOREIGN]] : [],
+    );
+    vi.doMock('./db', () => ({ db: rec.db }));
+    vi.resetModules();
+    const mod = await import('./household');
+    const args = {
+      program: {
+        action: mod.SCOPE_MISS_ACTION.resolveProgram,
+        resource: { kind: mod.SCOPE_MISS_KIND.program, publicId: FOREIGN },
+      },
+      workout: {
+        action: mod.SCOPE_MISS_ACTION.resolveWorkout,
+        resource: { kind: mod.SCOPE_MISS_KIND.workout, publicId: FOREIGN },
+      },
+      prescription: {
+        action: mod.SCOPE_MISS_ACTION.resolvePrescription,
+        resource: { kind: mod.SCOPE_MISS_KIND.prescription, publicId: FOREIGN },
+      },
+    } as const;
+    captureMessage.mockClear();
+    await mod.reportScopeMiss(args[kind]);
+    vi.doUnmock('./db');
+    vi.resetModules();
+    const probe = rec.queries.map((q) => q.text).filter((sql) => !/"household_members"/.test(sql));
+    return { calls: captureMessage.mock.calls, probe };
+  }
+
+  /** A household id that appears nowhere else in an event, so a leak of it is findable. */
+  const CALLER_HOUSEHOLD = 987_654;
+
+  const NEW_KINDS = [
+    ['program', 'resolve_program', 'program_blocks'],
+    ['workout', 'resolve_workout', 'workouts'],
+    ['prescription', 'resolve_prescription', 'prescriptions'],
+  ] as const;
+
+  describe.each(NEW_KINDS)('a %s id (C11)', (kind, action, table) => {
+    it('found in another household → its own message, the shared outcome tag, the id and its kind', async () => {
+      const { calls } = await missOn(kind, [[11, HOUSEHOLD_ROLE.owner]], true);
+      expect(calls).toHaveLength(1);
+      // The message starts with the kind, so each kind is its own Sentry issue; the runbook's alert
+      // filters on the part they share.
+      expect(calls[0]?.[0]).toBe(`${kind} scope miss: cross_household`);
+      expect(calls[0]?.[1]).toMatchObject({
+        level: 'warning',
+        tags: { scope_outcome: 'cross_household', scope_action: action, scope_kind: kind },
+        contexts: {
+          scope_miss: {
+            actor: 'clerk_session',
+            action,
+            kind,
+            resource: FOREIGN,
+            outcome: 'cross_household',
+          },
+        },
+      });
+      const ctx = (calls[0]?.[1] as { contexts: { scope_miss: Record<string, unknown> } }).contexts
+        .scope_miss;
+      expect(Object.keys(ctx).sort()).toEqual(['action', 'actor', 'kind', 'outcome', 'resource']);
+      // Exactly these tags and these top-level keys: nothing rides along beside the context.
+      expect((calls[0]?.[1] as { tags: unknown }).tags).toStrictEqual({
+        scope_outcome: 'cross_household',
+        scope_action: action,
+        scope_kind: kind,
+      });
+      expect(Object.keys(calls[0]?.[1] as object).sort()).toEqual(['contexts', 'level', 'tags']);
+    });
+
+    it('carries neither household id, and no `params` tail', async () => {
+      // The caller's household id is in the probe's parameters now (the negated household half),
+      // so it is the value most likely to leak. A number that appears nowhere else in the event.
+      const { calls, probe } = await missOn(kind, [[CALLER_HOUSEHOLD, HOUSEHOLD_ROLE.owner]], true);
+      expect(probe).toHaveLength(1);
+      const sent = JSON.stringify(calls);
+      expect(sent).not.toContain(String(CALLER_HOUSEHOLD));
+      expect(sent).not.toMatch(/params/);
+    });
+
+    it('🔴 asks for a live row in a household that is NOT the caller\'s, never "live anywhere"', async () => {
+      // A program read serves less than "live, in my household" (template programs only; a
+      // prescription only to an athlete on its program that day), so the caller's own row can miss.
+      // A probe without the household half would report the household probing itself.
+      const { probe } = await missOn(kind, [[11, HOUSEHOLD_ROLE.owner]], true);
+      expect(probe).toHaveLength(1);
+      // It selects the id it was asked for and nothing else from the row.
+      expect(probe[0]).toMatch(new RegExp(`^select (?:"${table}"\\.)?"public_id" from "${table}"`));
+      expect(probe[0]).toMatch(new RegExp(`"${table}"\\."public_id" = \\$\\d`));
+      expect(probe[0]).toMatch(new RegExp(`"${table}"\\."deleted_at" is null`));
+      expect(probe[0]).toMatch(/not "program_blocks"\."household_id" = \$\d/);
+      expect(probe[0]).toMatch(/limit \$\d/);
+    });
+
+    it('found in no other household → unknown_resource, at info', async () => {
+      const { calls } = await missOn(kind, [[11, HOUSEHOLD_ROLE.owner]], false);
+      expect(calls[0]?.[0]).toBe(`${kind} scope miss: unknown_resource`);
+      expect(calls[0]?.[1]).toMatchObject({ level: 'info', tags: { scope_kind: kind } });
+    });
+
+    it('NO resolvable scope → no_scope whatever the probe finds, with no household to compare', async () => {
+      const { calls, probe } = await missOn(kind, [], true);
+      const noScope = tagged(calls, 'no_scope');
+      expect(noScope).toHaveLength(1);
+      expect(noScope[0]?.[0]).toBe(`${kind} scope miss: no_scope`);
+      expect(tagged(calls, 'cross_household')).toHaveLength(0);
+      expect(probe).toHaveLength(1);
+      expect(probe[0]).not.toMatch(/household_id/);
+    });
+  });
+
+  it('a workout and a prescription reach the household through their program, by block_id', async () => {
+    const workout = await missOn('workout', [[11, HOUSEHOLD_ROLE.owner]], true);
+    expect(workout.probe[0]).toMatch(
+      /inner join "program_blocks" on "program_blocks"\."id" = "workouts"\."block_id"/,
+    );
+    const prescription = await missOn('prescription', [[11, HOUSEHOLD_ROLE.owner]], true);
+    expect(prescription.probe[0]).toMatch(
+      /inner join "program_blocks" on "program_blocks"\."id" = "prescriptions"\."block_id"/,
+    );
+  });
+
+  it('the profile probe is unchanged: existence only, with no household half', async () => {
+    const { createRecordingDb } = await import('./recording-db');
+    const rec = createRecordingDb((sql) =>
+      /from "household_members"/.test(sql) ? [[11, HOUSEHOLD_ROLE.owner]] : [[FOREIGN]],
+    );
+    vi.doMock('./db', () => ({ db: rec.db }));
+    vi.resetModules();
+    const mod = await import('./household');
+    captureMessage.mockClear();
+    await mod.reportScopeMiss({
+      action: mod.SCOPE_MISS_ACTION.resolveProfile,
+      resource: { kind: mod.SCOPE_MISS_KIND.profile, publicId: FOREIGN },
+    });
+    vi.doUnmock('./db');
+    vi.resetModules();
+    const probe = rec.queries.map((q) => q.text).filter((sql) => !/"household_members"/.test(sql));
+    expect(probe).toHaveLength(1);
+    expect(probe[0]).toMatch(/from "profiles"/);
+    expect(probe[0]).not.toMatch(/household_id|program_blocks/);
+    // The message the runbook's alert has matched since TEN-1, word for word.
+    expect(captureMessage.mock.calls[0]?.[0]).toBe('profile scope miss: cross_household');
+  });
+
+  it('an action cannot be handed another kind of id (a compile error, pinned here)', async () => {
+    const mod = await import('./household');
+    const mismatched = {
+      action: mod.SCOPE_MISS_ACTION.resolveProgram,
+      resource: { kind: mod.SCOPE_MISS_KIND.workout, publicId: FOREIGN },
+    } as const;
+    // @ts-expect-error -- the program action takes a program id: `ScopeMissArgs` pairs them
+    const args: Parameters<typeof mod.reportScopeMiss>[0] = mismatched;
+    expect(args).toBe(mismatched);
+    expect(mod.SCOPE_MISS_KIND_OF[mismatched.action]).not.toBe(mismatched.resource.kind);
+    const both = {
+      action: mod.SCOPE_MISS_ACTION.resolveProfile,
+      profilePublicId: FOREIGN,
+      resource: { kind: mod.SCOPE_MISS_KIND.workout, publicId: FOREIGN },
+    } as const;
+    // @ts-expect-error -- one form or the other: an id named twice could name two kinds
+    const twice: Parameters<typeof mod.reportScopeMiss>[0] = both;
+    expect(twice).toBe(both);
+  });
+
+  it('🔴 the table is chosen by the ACTION, so a cast cannot point the probe at another table', async () => {
+    const { createRecordingDb } = await import('./recording-db');
+    const rec = createRecordingDb((sql) =>
+      /from "household_members"/.test(sql) ? [[11, HOUSEHOLD_ROLE.owner]] : [[FOREIGN]],
+    );
+    vi.doMock('./db', () => ({ db: rec.db }));
+    vi.resetModules();
+    const mod = await import('./household');
+    captureMessage.mockClear();
+    await mod.reportScopeMiss({
+      action: mod.SCOPE_MISS_ACTION.resolveProgram,
+      resource: { kind: mod.SCOPE_MISS_KIND.workout, publicId: FOREIGN },
+    } as never);
+    vi.doUnmock('./db');
+    vi.resetModules();
+    const probe = rec.queries.map((q) => q.text).filter((sql) => !/"household_members"/.test(sql));
+    expect(probe).toHaveLength(1);
+    expect(probe[0]).toMatch(/from "program_blocks"/);
+    expect(captureMessage.mock.calls[0]?.[0]).toBe('program scope miss: cross_household');
+    expect(captureMessage.mock.calls[0]?.[1]).toMatchObject({
+      tags: { scope_kind: 'program' },
+      contexts: { scope_miss: { kind: 'program' } },
+    });
+  });
+
+  it('every action names exactly one kind, and every kind has an action', async () => {
+    const mod = await import('./household');
+    expect(Object.keys(mod.SCOPE_MISS_KIND_OF).sort()).toEqual(
+      Object.values(mod.SCOPE_MISS_ACTION).sort(),
+    );
+    expect(Object.values(mod.SCOPE_MISS_KIND_OF).sort()).toEqual(
+      Object.values(mod.SCOPE_MISS_KIND).sort(),
+    );
   });
 
   it('swallows its own driver failure — a telemetry probe never turns a 404 into a 500', async () => {
