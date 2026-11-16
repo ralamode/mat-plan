@@ -105,7 +105,11 @@ edited in place. The wiring (12b on) comes next; each step adds its files and in
 11. **Re-tick only when nothing new was typed.** After an un-tick the field keeps the old number; ✓
     with it unchanged calls `retickRow` (the same entry back), a changed or emptied field is a new
     `logRow`, because a re-tick restores the old numbers. A retry with different numbers mints a
-    new `clientId`, or the server would answer with the first attempt's.
+    new `clientId`, or the server would answer with the first attempt's. **An entry id does not say
+    the data has caught up** (a ✓ after an un-tick may come back with the same id, contract C9): an
+    un-tick holds until the data has shown the set empty, and the set shown logged after that is the
+    truth (another phone's ✓, or this phone's whose answer was lost); a ✓ holds while the data
+    still shows what it showed when the ✓ was sent.
 12. **Read-only is `!writable`, a workout that left the week, or a `closed_day` already seen.** Such
     rows show what was logged as text, with no ✓, field or "Last time" (D33). A read-only row shows no
     message and no longer counts as "not saved": there is nothing left to retry. The count is an
