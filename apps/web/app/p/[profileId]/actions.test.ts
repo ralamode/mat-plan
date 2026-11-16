@@ -2007,8 +2007,9 @@ describe('editPracticeAction — the typed refusals', () => {
   });
 
   it('refuses an absent value: a crafted call cannot clear by omission', async () => {
-    const { value: _dropped, ...rest } = practiceInput();
-    const res = await editPracticeAction(rest as unknown as EditPracticeInput);
+    const withoutValue: Partial<EditPracticeInput> = practiceInput();
+    delete withoutValue.value;
+    const res = await editPracticeAction(withoutValue as EditPracticeInput);
     expect(res).toEqual({ ok: false, reason: PRACTICE_AMEND_REFUSAL.invalid });
     expect(clearPracticeEntry).not.toHaveBeenCalled();
   });

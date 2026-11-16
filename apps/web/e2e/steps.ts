@@ -7,7 +7,7 @@ import {
   changeLabel,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
-  LIFE_LOGGED_ID,
+  PRACTICE_COPY,
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
@@ -128,24 +128,31 @@ export const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
 )!.label;
 const PRACTICE_SHOWN = formatValueUnit(DEFAULT_PRACTICE_MINUTES, 'min');
 
+/** The logged practice's Change, named by `changeLabel` as the app names it (3b-life A1). */
+export function practiceChange(page: Page, value: string = PRACTICE_SHOWN) {
+  return lifeSection(page).getByRole('button', {
+    name: changeLabel(PRACTICE_COPY.changeSubject, value),
+  });
+}
+
 /**
- * Tap the one-tap **Wrestling practice** button and assert the Life section's logged row, with its
- * minutes (V1-24 3b-page). Retry-safe: a logged activity has no button (the row replaced it), so a
- * Playwright retry on the reused DB skips the tap and asserts the end state.
+ * Tap the one-tap **Wrestling practice** button and assert the Life section's logged row: the label
+ * and its minutes, and its Change (V1-24 3b-page; Change since 3b-life-a). Retry-safe: a logged
+ * activity has no button (the row replaced it), so a Playwright retry on the reused DB skips the tap
+ * and asserts the end state.
  *
- * On a fresh log it also asserts focus moved to the logged rows: the button that had focus has
- * unmounted, and `SavedAnnouncer` moves it rather than letting it drop to `<body>`.
+ * On a fresh log it also asserts focus moved to the row's Change: the button that had focus has
+ * unmounted, and the section's island hands focus on rather than letting it drop to `<body>`.
  */
 export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
   const button = life.getByRole('button', { name: PRACTICE_LABEL, exact: true });
-  const row = life
-    .getByRole('listitem')
-    .filter({ hasText: LIFE_COPY.logged(PRACTICE_LABEL, PRACTICE_SHOWN) });
+  const change = practiceChange(page);
   if ((await button.count()) > 0) {
     await button.click();
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(life.locator(`#${LIFE_LOGGED_ID}`)).toBeFocused();
+    await expect(change).toBeVisible({ timeout: 15_000 });
+    await expect(change).toBeFocused();
   }
-  await expect(row).toHaveCount(1);
+  await expect(life.getByText(PRACTICE_SHOWN, { exact: true })).toHaveCount(1);
+  await expect(change).toHaveCount(1);
 }
