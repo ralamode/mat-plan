@@ -265,6 +265,10 @@ describe('the week editor (FAM-1 10)', () => {
     fireEvent.click(screen.getByRole('button', { name: moveOnLabel('down', 'Morning habits', 3) }));
     expect(saveWeek).toHaveBeenCalledTimes(2);
     expect(sent(all, 1)[6]).toEqual(familyProgram.week[6]);
+    // When it is back, the dropped change is not sent after it.
+    answers[1]!({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(saveWeek).toHaveBeenCalledTimes(2);
   });
 
   it('a week the page brings while a save is out shows once the save is back', async () => {
