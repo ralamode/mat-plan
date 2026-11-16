@@ -1,13 +1,21 @@
 diff --git a/packages/db/src/writers/program/rename-program.ts b/packages/db/src/writers/program/rename-program.ts
-index 011fd582..cce3d566 100644
+index 011fd582..bc5b9dbf 100644
 --- a/packages/db/src/writers/program/rename-program.ts
 +++ b/packages/db/src/writers/program/rename-program.ts
-@@ -52,7 +52,7 @@ export async function renameProgram(
+@@ -52,14 +52,14 @@ export async function renameProgram(
  
    const slug = await freeProgramSlug(exec, scope, name, { exceptPublicId: programPublicId });
    let updated = 0;
 -  const lost = await lostSlugRace(exec, async (tx) => {
-+  const lost = await (async (f: (t: Executor) => Promise<void>) => { await f(exec); return false; })(async (tx) => {
++  const lost = await exec.transaction(async (tx) => {
      const rows = await tx
        .update(schema.programBlocks)
        .set({ name, slug, updatedAt: sql`now()` })
+       .where(isThisProgram)
+       .returning({ id: schema.programBlocks.id });
+     updated = rows.length;
+-  });
++  }).then(() => false);
+   if (lost) return { ok: false, reason: PROGRAM_REFUSAL.retry };
+   return updated > 0 ? { ok: true } : { ok: false, reason: PROGRAM_REFUSAL.not_found };
+ }

@@ -326,8 +326,9 @@ async function verifyRenameProgram({ A_SCOPE, B_SCOPE }: VerifyContext): Promise
 }
 
 /**
- * `lostSlugRace`: the one catch both writers rely on for a race PGlite cannot stage. Proven by
- * forcing the collision it names, so its constraint name cannot drift from the schema's.
+ * The slug race, on PGlite's one connection: `lostSlugRace` alone (a forced collision pins its
+ * constraint name to the schema's), then both writers losing it, staged by writing the colliding row
+ * as the writer opens its savepoint. Each answers `retry`, and a lost rename writes nothing.
  */
 async function verifySlugRace({ A_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
@@ -404,5 +405,5 @@ async function verifySlugRace({ A_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6a-i: a lost rename writes nothing',
     );
   });
-  console.log('✓ FAM-1 6a-i: lostSlugRace (the slug index, the savepoint, other errors)');
+  console.log('✓ FAM-1 6a-i: the slug race (lostSlugRace; both writers answer retry)');
 }

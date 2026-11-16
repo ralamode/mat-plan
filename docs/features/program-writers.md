@@ -80,7 +80,8 @@ rules it starts under. Each step below adds its files, its diagram and its invar
    slug at the same moment: the loser fails the slug index, and `lostSlugRace` answers it (a create's
    replay, or `retry`) instead of throwing. PGlite has one connection, so neither interleaving is
    staged by two connections; `verify/program.ts` stages the slug race on one by writing the
-   colliding row as the writer opens its savepoint (mutation `rename-lets-slug-race-escape`).
+   colliding row as the writer opens its savepoint (mutations `rename-lets-slug-race-escape`,
+   `create-lets-slug-race-escape`).
 10. **No diagram yet**: 6a-i's two writers are straight-line (parse, find, check, write). 6a-ii's
     save-workout, which matches rows by `client_id` and reorders through the band, adds the lane's
     first.
