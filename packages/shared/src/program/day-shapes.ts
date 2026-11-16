@@ -201,7 +201,7 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  * - A `clientId` a revive replaced is not remembered anywhere. Replayed while the set is logged it
  *   is a ✓ on a logged set (`slot_taken`). ⚠️ Replayed after the set has been un-ticked AGAIN it
  *   cannot be told from a new ✓, and revives the entry with that old attempt's numbers. This is a
- *   known limit (plan D35): the day screen never re-sends an attempt after a later action on its
+ *   known and accepted limit (plan D35): the day screen never re-sends an attempt after a later action on its
  *   row and there is no offline queue; a transport that can replay old attempts must first keep
  *   the replaced ids.
  */

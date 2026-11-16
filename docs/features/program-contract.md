@@ -240,7 +240,8 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     ⚠️ **One known limit:** the entry stores one `clientId`, so an id a revive replaced is forgotten.
     Replayed after the set is un-ticked again, it revives the entry with that old attempt's numbers
     (`fakes.test.ts` pins it). No screen re-sends such an attempt and there is no offline queue;
-    closing it means keeping the replaced ids, which is a table. The real writer gets all of this at
+    closing it means keeping the replaced ids, which is a table. The maintainer accepted the limit
+    (2026-11-16); it is revisited when an offline sync queue arrives. The real writer gets all of this at
     step 11c. Until then 11b inserts where 11c will revive, so two answers differ between the two
     steps: a re-tick after a new ✓ (`slot_taken` under 11b), and a replay of the first ✓'s id while
     its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
