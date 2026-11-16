@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0024_fam1_4a_ii_log_side.sql b/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
+--- a/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
++++ b/packages/db/migrations/0024_fam1_4a_ii_log_side.sql
+@@ -56,7 +56,7 @@ ALTER TABLE "entries" ADD CONSTRAINT "entries_prescription_id_prescriptions_id_f
+ -- squawk-ignore adding-foreign-key-constraint, constraint-missing-not-valid
+ ALTER TABLE "sessions" ADD CONSTRAINT "sessions_workout_id_workouts_id_fk" FOREIGN KEY ("workout_id") REFERENCES "public"."workouts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ CREATE INDEX "idx_entries_prescription" ON "entries" USING btree ("prescription_id") WHERE "entries"."prescription_id" is not null;--> statement-breakpoint
+-CREATE UNIQUE INDEX "uq_entries_session_prescription_set" ON "entries" USING btree ("session_id","prescription_id","prescription_set") WHERE "entries"."prescription_id" is not null and "entries"."deleted_at" is null;--> statement-breakpoint
++CREATE UNIQUE INDEX "uq_entries_session_prescription_set" ON "entries" USING btree ("session_id","prescription_id","prescription_set") WHERE "entries"."prescription_id" is not null;--> statement-breakpoint
+ CREATE INDEX "idx_sessions_workout" ON "sessions" USING btree ("workout_id");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_sessions_profile_day_workout" ON "sessions" USING btree ("profile_id","activity_date","workout_id") WHERE "sessions"."workout_id" is not null and "sessions"."deleted_at" is null;--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_supersets_session_prescription_group" ON "supersets" USING btree ("session_id","prescription_group") WHERE "supersets"."prescription_group" is not null and "supersets"."deleted_at" is null;--> statement-breakpoint
