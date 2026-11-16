@@ -1,4 +1,5 @@
 import {
+  fillRowValues,
   isPlainDecimal,
   isWholeNumber,
   quantityCeiling,
@@ -84,42 +85,35 @@ export function readTyped(
   | { ok: true; values: RowValues; shown: RowValues; empty: boolean }
   | { ok: false; problem: TypedProblem; field: RowField } {
   const values: RowValues = { quantities: [] };
-  const shown: RowValues = { quantities: [] };
-  let empty = true;
-
-  for (const field of fieldsOf(item)) {
+  const fields = fieldsOf(item);
+  for (const field of fields) {
     const typed = text[field].trim();
+    if (typed === '') {
+      // Named here, in field order, so the field marked is the one the prescription cannot fill
+      // (a load of 25 lb with a range of reps asks for the reps, not the load).
+      const fillable = field === 'reps' ? item.target.reps !== null : targetQuantity(item) !== null;
+      if (!fillable) return { ok: false, problem: 'missing', field };
+      continue;
+    }
+    const read = readNumber(item, field, typed);
+    if (!read.ok) return { ok: false, problem: read.problem, field };
     if (field === 'reps') {
-      if (typed === '') {
-        if (item.target.reps === null) return { ok: false, problem: 'missing', field };
-        shown.reps = item.target.reps;
-        continue;
-      }
-      empty = false;
-      const reps = readNumber(item, field, typed);
-      if (!reps.ok) return { ok: false, problem: reps.problem, field };
-      values.reps = shown.reps = reps.value;
+      values.reps = read.value;
       continue;
     }
     const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
-    if (!slot || !item.unit) continue;
-    if (typed === '') {
-      const target = targetQuantity(item);
-      if (!target) return { ok: false, problem: 'missing', field };
-      shown.quantities.push(target);
-      continue;
-    }
-    empty = false;
-    const read = readNumber(item, field, typed);
-    if (!read.ok) return { ok: false, problem: read.problem, field };
-    const quantity = { slot, unit: item.unit, value: read.value };
-    values.quantities.push(quantity);
-    shown.quantities.push(quantity);
+    if (slot && item.unit) values.quantities.push({ slot, unit: item.unit, value: read.value });
   }
+  const first = fields[0] ?? 'quantity';
   if (!rowValuesSchema.safeParse(values).success) {
-    return { ok: false, problem: 'out_of_range', field: fieldsOf(item)[0] ?? 'quantity' };
+    return { ok: false, problem: 'out_of_range', field: first };
   }
-  return { ok: true, values, shown, empty };
+  // What the ✓ will store, by the writer's own rule (contract C10's `fillRowValues`): the typed
+  // numbers, and the prescription's where a field was left empty. A refusal past the checks above
+  // (a target in another unit than the item's) names the first field.
+  const shown = fillRowValues(item, values, item.target);
+  if (!shown) return { ok: false, problem: 'out_of_range', field: first };
+  return { ok: true, values, shown, empty: fields.every((field) => text[field].trim() === '') };
 }
 
 /** Two rows' fields hold the same text. */
@@ -229,14 +223,11 @@ function readNumber(
  * the quantity. The row stays text, and un-tick then a new ✓ is the way to change it.
  */
 export function canChangeValues(item: DayItem, logged: RowValues): boolean {
-  if (fieldsOf(item).length === 0) return false;
-  const { slot, reps } = TRACKING_TYPE_FIELDS[item.trackingType];
-  // Logged as another type (the item's type changed since): a Change would send numbers the type
-  // no longer has, so it stays text like a row in another unit.
-  if (logged.reps !== undefined && !reps) return false;
-  // A type with a load whose row has none (logged as reps only): a Change could not send one.
-  if (slot && item.unit && !logged.quantities.some((q) => q.slot === slot)) return false;
-  return logged.quantities.every((q) => q.slot === slot && q.unit === item.unit);
+  // The amend writer's own rule (`fillRowValues` with no target, C10): the row holds exactly the
+  // numbers the item's type has, in its unit and under its ceiling. A row logged in another unit, as
+  // another type, without a number the type now has, or over a ceiling lowered since, stays text:
+  // stricter than the writer, which judges only what is sent; un-tick then a new ✓ changes it.
+  return fieldsOf(item).length > 0 && fillRowValues(item, logged, null) !== null;
 }
 
 /**
@@ -277,7 +268,9 @@ export function readAmend(
   if (sameValues(values, logged) || !rowValuesSchema.safeParse(values).success) {
     return { send: null, kept };
   }
-  return { send: values, kept };
+  // Checked by the amend writer's rule before it is sent, so the screen never sends what it refuses.
+  const send = fillRowValues(item, values, null);
+  return { send, kept };
 }
 
 /** One field of a row's values as words on the screen: `25 lb`, `8 reps`, `30 s`. */
