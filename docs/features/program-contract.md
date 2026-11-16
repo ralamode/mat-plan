@@ -219,6 +219,15 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     until the number is fixed and the next ✓ answers `slot_taken`. `entryUnitFor` answers plan §2's
     table whatever unit it is handed for a type whose unit is fixed.
 
+17. **A required name is not made only of characters that fold away** (`shortTextSchema`: a
+    program's name, a workout's, a superset's group key and the keys of a day's `restAfter`;
+    contract change C12). A name of zero-width or format characters only, or of combining marks
+    only, is one character long, so a length check alone takes it; it must also fold to something
+    (`foldName`). `invalid` otherwise. ⚠️ This is narrower than "can be seen": the braille blank and
+    the Hangul filler characters draw as nothing and still pass, because `foldName` keeps them; they
+    are named on the schema. An item's name is held to more by `movementNameSchema` (a letter) and
+    `newItemSchema` (a key, invariant 15).
+
 ## Traps
 
 - **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are
