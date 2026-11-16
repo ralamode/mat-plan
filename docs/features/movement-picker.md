@@ -133,7 +133,8 @@ path and **creating** the deliberate one.
       footer is about 110 rows down), is withheld on an exact or alias hit as before (invariant 4),
       and hands the typed text to `onCreate`. The component still never writes (invariant 2);
     - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts ("2 movements match some of your words") and `movementNameSchema`'s messages;
-    - the caller's `footerAction` sits above the picker's own Close, which stays last;
+    - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
+    - `onReturned` passes through to the sheet: the caller's moment for a page-level message after a close;
     - `matchPickerOptions` and `listedAs` are the one place a `MovementOptionDTO` becomes what the matcher reads; the caller's "is this already an item" asks `listedAs`, never a copy;
     - `onToggle` says how a row was ticked (`'enter'` from the search), so the caller can say what a focusless Enter did;
     - `notice` takes the status region until the caller clears it (`onQueryChange` fires on every

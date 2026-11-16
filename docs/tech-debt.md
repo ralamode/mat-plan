@@ -544,24 +544,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `docs/specs/v1-22-…` are known false positives — they are about other columns).
 - **Severity:** low (docs drift), and now three copies rather than twelve.
 
-### "drizzle wraps EACH migration file in a transaction" is wrong, in five places (found 2026-10-09, TEN-2a)
-
-- **What & why:** verified in `drizzle-orm@0.45.3`'s source — `pg-core/dialect.js` → `migrate()` is a
-  **single** `session.transaction(...)` with `for await (const migration of migrations)` **inside** it.
-  So the whole **pending set** is one transaction, not one per file. The repo says "each file" in
-  **five** places: `AGENTS.md`'s `CREATE INDEX CONCURRENTLY` GOTCHA, `.squawk.toml` (where the claim is
-  marked LOAD-BEARING), migrations `0012` and `0014`, and `docs/runbooks.md`.
-- **Impact:** low, and in the **safe** direction — the real atomicity is _stronger_ than claimed, so
-  `assume_in_transaction = true` stays correct. Two things it does change: alongside another pending
-  file, an `ACCESS EXCLUSIVE` taken by one migration is held for the **entire run**; and a plain `SET`
-  (which 0006–0015 all use, rather than `SET LOCAL`) **leaks its timeouts onto later files in the same
-  run**.
-- **Proposed fix:** a one-line docs PR correcting the three editable places (`AGENTS.md`,
-  `.squawk.toml`, `runbooks.md`). ⚠️ `0012` and `0014` are **applied migrations and may never be
-  edited** — their copies stay wrong, which is itself an argument for keeping claims out of migration
-  headers. `0015` states the corrected version.
-- **Severity:** low.
-
 ### Two load-bearing strings are re-typed next to the const that defines them (found 2026-10-09, TEN-2a reuse panel)
 
 - **What & why:** out of TEN-2a's diff, so recorded rather than fixed. (1) `packages/db/scripts/verify.ts`
@@ -939,7 +921,7 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low, but the gate **silently implies `main` is clean**, which it is not. Recorded so that
   implication is not mistaken for a fact.
 - **Also still unenforced:** `require-concurrent-index-creation` is excluded, because `CONCURRENTLY`
-  cannot run inside drizzle's per-file transaction and the transaction-stripping runner AGENTS.md
+  cannot run inside drizzle's migration transaction (one for all pending files) and the transaction-stripping runner AGENTS.md
   describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
 - **Severity:** low.
 

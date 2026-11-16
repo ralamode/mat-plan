@@ -76,8 +76,14 @@ export type MultiPick = {
   noMatchHint: string;
   /** The line under each row's name (what it tracks). */
   describe: (option: MovementOptionDTO) => string;
-  /** The caller's action, rendered above the picker's own Close ("Add 3 items"). */
+  /**
+   * The caller's action ("Add 3 items"), beside the picker's own Close: side by side, so the footer
+   * is one button tall and the list keeps its room with a phone's keyboard up (maintainer,
+   * 2026-11-16). Close stays the last child.
+   */
   footerAction: ReactNode;
+  /** The caller's lines above the two buttons (the picks so far, a notice). */
+  footerNote?: ReactNode;
   /** A message for the sheet's status region, in place of the count while it is set. */
   notice?: string;
   /** Every change of the search text; the caller clears a stale `notice` with it. */
@@ -104,6 +110,8 @@ export type MovementPickerProps = {
   /** The card's current movement, marked `aria-current`. */
   currentId?: string;
   returnFocusTo: RefObject<HTMLElement | null>;
+  /** Passed to the sheet: once per close, after focus is back (a page-level message's moment). */
+  onReturned?: () => void;
 } & (
   | {
       onPick: (
@@ -179,6 +187,7 @@ export function MovementPicker({
   returnFocusTo,
   onPick,
   multiple,
+  onReturned,
 }: MovementPickerProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -366,6 +375,7 @@ export function MovementPicker({
       onOpenChange={onOpenChange}
       title={title}
       returnFocusTo={returnFocusTo}
+      onReturned={onReturned}
       initialFocus={prefersKeyboardFocus && !multiple?.takeover ? searchRef : undefined}
       status={multiple?.notice || status}
       headerExtra={
@@ -421,18 +431,21 @@ export function MovementPicker({
         multiple?.takeover ? (
           multiple.takeover.footer
         ) : multiple ? (
-          // The caller's action above the picker's own Close, which stays LAST (panel 2 · 7).
+          // The caller's action beside the picker's own Close, which stays LAST (panel 2 · 7).
           <div className="flex flex-col gap-2">
-            {multiple.footerAction}
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="w-full text-base"
-              onClick={() => onOpenChange(false)}
-            >
-              {SHEET_COPY.close}
-            </Button>
+            {multiple.footerNote}
+            <div className="grid grid-cols-2 gap-2">
+              {multiple.footerAction}
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full text-base"
+                onClick={() => onOpenChange(false)}
+              >
+                {SHEET_COPY.close}
+              </Button>
+            </div>
           </div>
         ) : (
           // 🔴 **ALWAYS a footer, and Close is ALWAYS its last child** (panel 2 · 7). U0 renders a
