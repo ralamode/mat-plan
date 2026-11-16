@@ -15,7 +15,8 @@
   repeated the Architecture bullet), so AGENTS.md does not grow (4,834 words before and after).
 
   The `add-server-action` skill marks which of its steps describe the legacy forms. It names the
-  proposed refusal mapping: no session and wrong household answer `not_found`, and rate-limited
-  answers `retry`; the contract owner confirms it. It also states that `enterMutation` and the
-  action matrix cannot drive a contract action yet. The first real contract action (FAM-1 7a or
-  12b) teaches both of them the contract shape. Docs only; no code changes.
+  refusal mapping the FAM-1 contract owner confirmed: no session and wrong household answer
+  `not_found`, rate-limited answers `retry`, and the order stays session, then limiter, then parse.
+  It also states that `enterMutation` and the action matrix cannot drive a contract action yet;
+  FAM-1 step C7 (the contract owner) teaches both of them the contract shape, ahead of 7a and 12b.
+  Docs only; no code changes.

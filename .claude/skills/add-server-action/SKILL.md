@@ -70,15 +70,21 @@ the **legacy forms**, which FAM-1 step 12f removes. Steps 2 and 7 still apply. F
   `packages/shared/src/program/actions.ts` (`ProgramActions`, `DayActions`). `rowResultSchema`
   (`day-shapes.ts`) is the response-schema example. `ProgramResult` is still a bare TS type, so give
   it a schema with its first real action.
-- **Refusals (proposed in SCALE-1's review; the FAM-1 contract owner confirms):** no session and
-  wrong household both answer **`not_found`**, indistinguishably (ADR 0006's 404-never-403, which
-  `enterMutation` already enforces); rate-limited answers **`retry`**.
+- **Refusals (confirmed by the FAM-1 contract owner, 2026-11-16):**
+  - **No session, or the wrong household:** **`not_found`**, and a caller can't tell the two apart
+    (ADR 0006's 404-never-403, which `enterMutation` already enforces). This holds for an action that
+    names no id too: `createProgram` with no session answers `not_found`.
+  - **Rate-limited:** **`retry`**. The limiter runs before anything is read or written, so a retry may
+    reuse its `clientId`.
+  - **The order stays session → limiter → schema parse.** An input the schema refuses answers
+    `invalid` (a `ProgramResult`) or `bad_value` (a `RowResult`), as the contract already says.
 - **Time.** The action resolves the day and the time zone and passes them to the writer.
 - 🔴 **Not supported yet.** `enterMutation` (`apps/web/app/p/mutation-entry.ts`) returns an
   `ActionState`. `ActionFn` (`apps/web/test/action-matrix.ts:66`) is
   `(ActionState, FormData) => ActionState`. Neither can drive a contract action, so it cannot get its
-  mandatory boundary tests from them. **The first real contract action (FAM-1 7a or 12b, whichever
-  opens first) teaches both the contract shape**, and replaces these legacy steps here.
+  mandatory boundary tests from them. **FAM-1 step C7 (the contract owner) teaches both of them the
+  contract shape, ahead of 7a and 12b**, and the first real contract action then replaces these
+  legacy steps here.
 
 Copy the shape of `logBodyweightAction` (plain form) or `editRoutineAction` (JSON payload):
 

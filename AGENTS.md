@@ -161,8 +161,8 @@ Contract: ANY request/response change ⇒ its shared zod schema (types via z.inf
         {ok:true,…} | {ok:false, reason}, refusals never thrown; FormData only at the edge.
         Unexpected throws to error.tsx; never leak internals. Additive; breaking ⇒ /api/vN,
         Deprecation/Sunset.
-Time:   lib/dal + writers get day + tz as args; only routes/actions (and helpers only they call)
-        read the cookie.
+Time:   lib/dal + writers get day + tz as args; only routes/actions (and their private helpers)
+        read the tz cookie.
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
