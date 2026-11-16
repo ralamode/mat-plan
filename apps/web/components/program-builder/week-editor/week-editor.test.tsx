@@ -17,7 +17,7 @@ import {
   weekdayName,
 } from '../builder-text';
 import { ProgramScreen } from '../program-screen';
-import { DOUBLE_TAP_MS } from '../use-attempt';
+import { tapClock } from '../test-taps';
 
 afterEach(cleanup);
 
@@ -51,7 +51,6 @@ const slotNames = (weekday: number) =>
     .map((li) => li.querySelector('button')?.textContent?.replace(`${WEEK_COPY.editLabel}: `, ''));
 const sent = (all: ProgramActions, call = 0) => vi.mocked(all.saveWeek).mock.calls[call]![0].days;
 const status = () => screen.getByRole('status').textContent;
-const pause = () => new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
 
 describe('the week editor (FAM-1 10)', () => {
   it('+ Add opens a form under the day: the workout has no default, and Add waits for one', () => {
@@ -120,7 +119,8 @@ describe('the week editor (FAM-1 10)', () => {
 
   it('✕ leaves "… removed · Undo" in place; Undo puts it back where it was', async () => {
     const { all } = page();
-    fireEvent.click(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
+    const clock = tapClock();
+    clock.tap(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
     const undo = within(day(6)).getByRole('button', { name: WEEK_COPY.undo });
     expect(document.activeElement).toBe(undo);
     expect(within(day(6)).getByText(removedRowText('Heavy B'))).toBeTruthy();
@@ -129,10 +129,9 @@ describe('the week editor (FAM-1 10)', () => {
     await waitFor(() => expect(all.saveWeek).toHaveBeenCalledTimes(1));
     expect(sent(all)[6].map((s) => s.workoutPublicId)).not.toContain(HEAVY_B);
     // A double tap on ✕ lands on Undo: it is the same tap.
-    fireEvent.click(undo);
+    clock.again(undo);
     expect(all.saveWeek).toHaveBeenCalledTimes(1);
-    await pause();
-    fireEvent.click(within(day(6)).getByRole('button', { name: WEEK_COPY.undo }));
+    clock.tap(within(day(6)).getByRole('button', { name: WEEK_COPY.undo }));
     await waitFor(() => expect(all.saveWeek).toHaveBeenCalledTimes(2));
     expect(sent(all, 1)).toEqual(familyProgram.week);
     expect(slotNames(6)).toEqual([
