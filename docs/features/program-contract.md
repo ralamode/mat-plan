@@ -168,6 +168,9 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     has no nav rail) and no `programsHref` until the Programs page exists (7b). The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
     The parts are lane C's; their props are a contract with the page and this harness.
+12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
+    from the fake's Programs list by the draft's `programPublicId`, as the real page will load it
+    (7b). The screen's prop is optional; the harness always supplies it.
 
 ## Traps
 
