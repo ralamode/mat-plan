@@ -532,3 +532,63 @@ export const undoLabel = (workout: string, day: number) =>
 
 /** A day that already has the chosen workout, in the days fieldset. */
 export const hasItLabel = (day: number) => `${weekdayName(day)}, ${WEEK_COPY.hasIt}`;
+
+/** The Put-on dialog's words (FAM-1 step 10b; the prototype's `openStart`). */
+export const PUT_ON_COPY = {
+  open: 'Put someone on this program…',
+  everyoneOn: 'Everyone in the household is on it.',
+  who: 'Who',
+  intro: 'This adds a program; their other programs stay.',
+  starting: 'Starting',
+  onIt: 'on it',
+  noProgramYet: 'no program yet',
+  pickSomeone: 'Pick someone first',
+  start: 'Start',
+  starting_: 'Starting…',
+  failed: 'Couldn’t start them. Try again.',
+  stale: 'This program changed somewhere else. It now shows the latest; no one was started.',
+} as const;
+
+export const putOnTitle = (program: string) => `Put someone on ${program}`;
+export const keepsText = (programs: readonly string[]) =>
+  programs.length ? `keeps ${formatList(programs)}` : PUT_ON_COPY.noProgramYet;
+export const lastDayText = (day: string) => `last day ${formatDayShort(day)}`;
+export const candidateOnLabel = (name: string, hint: string) => `${name}, ${hint}`;
+export const startLabel = (count: number, program: string) =>
+  count ? `${PUT_ON_COPY.start} ${count} on ${program}` : PUT_ON_COPY.start;
+export const fromText = (when: 'today' | 'tomorrow', day: string) =>
+  `${when === 'today' ? 'Today' : 'Tomorrow'}, ${formatDayShort(day)}`;
+
+/**
+ * What the chosen start changes, named (the trust lens): the workouts that go on their page that
+ * day, or that the day has none and when the first one is. Today also says what was logged stays.
+ */
+export function startEffectText(
+  when: 'today' | 'tomorrow',
+  workouts: readonly string[],
+  next: { day: string; workouts: readonly string[] } | null,
+): string {
+  const day = when === 'today' ? 'Today' : 'Tomorrow';
+  const kept = when === 'today' ? ' What they’ve already logged today stays.' : '';
+  if (workouts.length) {
+    return `${day}: ${formatList(workouts)} ${workouts.length > 1 ? 'go' : 'goes'} on their page.${kept}`;
+  }
+  const first = next ? ` Their first workout is ${formatDayShort(next.day)}.` : '';
+  return `${day}: nothing from this program.${first}${kept}`;
+}
+
+/** Shown when someone ticked keeps another program: where this one goes in their day's order. */
+export const orderHintText = (program: string) =>
+  `${program} goes where it sits in the Programs list. Each person can change their order from their day page.`;
+/** Shown when someone ticked keeps another program and Take off is wired: how to switch instead. */
+export const switchHintText = (programs: readonly string[]) =>
+  `To switch instead, start tomorrow, then take them off ${formatList(programs)} from that program’s page.`;
+export function startedText(
+  names: readonly string[],
+  program: string,
+  from: string,
+  today: string,
+) {
+  const when = from === today ? 'today' : `on ${formatDayShort(from)}`;
+  return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${when}.`;
+}

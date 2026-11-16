@@ -34,7 +34,6 @@ describe('ProgramList and ProgramView: owed by their consumers', () => {
 });
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
-  it.todo('10b: Start is disabled until someone is picked');
   it.todo('15: a parent puts a test athlete on a program and they log it (e2e)');
 });
 
@@ -45,7 +44,6 @@ describe('CopyDraft: owed by its consumers', () => {
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo('7a: no formData or headers reach a captured event');
-  it.todo('10b: a screen hides the control of a member that is undefined');
   it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');

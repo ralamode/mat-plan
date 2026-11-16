@@ -3,6 +3,8 @@
 import { hasStarted, type ProgramActions, type ProgramView } from '@mat-plan/shared';
 import { useRef, useState } from 'react';
 
+import { PutOn } from './put-on-dialog';
+
 import { Button } from '@/components/ui/button';
 import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 
@@ -44,10 +46,13 @@ const focusStayed = (tapped: HTMLElement | undefined) => {
 export function WhosOnIt({
   program,
   takeOff,
+  putOn,
   onStatus,
 }: {
   program: ProgramView;
   takeOff: ProgramActions['takeOff'];
+  /** "Put someone on this program…": shown only once the route wires it (step 15). */
+  putOn: ProgramActions['putOn'];
   /** Reports to the page's status line; `alert` for a refusal the person must act on. */
   onStatus: (message: string, tone?: 'alert') => void;
 }) {
@@ -136,6 +141,9 @@ export function WhosOnIt({
       ) : (
         <p className="text-muted-foreground">{BUILDER_COPY.noOneOnIt}</p>
       )}
+      {putOn ? (
+        <PutOn program={program} putOn={putOn} takeOffWired={!!takeOff} onStatus={onStatus} />
+      ) : null}
     </section>
   );
 }

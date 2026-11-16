@@ -55,7 +55,12 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
           {usedByText(program.athletes.map((athlete) => athlete.name))}
         </p>
       </div>
-      <WhosOnIt program={program} takeOff={actions.takeOff} onStatus={report} />
+      <WhosOnIt
+        program={program}
+        takeOff={actions.takeOff}
+        putOn={actions.putOn}
+        onStatus={report}
+      />
       <WorkoutsList program={program} />
       <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />
       {/* The page's one status bar, in view wherever the change was made. */}
