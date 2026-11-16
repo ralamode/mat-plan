@@ -40,7 +40,8 @@ export type EditorCard = {
 };
 
 /** A field of a card, or of the workout, that can be refused. */
-export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | 'notes' | 'rest';
+export type EditorField =
+  'name' | 'description' | 'sets' | 'reps' | 'value' | 'unit' | 'notes' | 'rest';
 
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
@@ -101,24 +102,22 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   const label = quantityLabel(card.item.trackingType) ?? '';
   if (fields.slot) {
     const typed = card.value.trim();
-    // Loaded with no quantity and left alone: saved with none, not with a unit nobody chose.
-    const untouched =
-      !typed && card.item.quantities.length === 0 && card.unit === startingUnit(card.item);
-    if (!untouched) {
-      let value: number | null = null;
-      if (typed) {
-        const ceiling = card.unit ? quantityCeiling(card.unit) : undefined;
-        if (!isPlainDecimal(typed)) refuse('value', EDITOR_ERRORS.value(label));
-        else if (!card.unit) refuse('value', EDITOR_ERRORS.unit(label));
-        // A unit with no declared ceiling refuses: no bound is not "no cap" (`quantityCeiling`).
-        else if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));
-        else if (Number(typed) > ceiling) {
-          refuse('value', EDITOR_ERRORS.ceiling(label, ceiling, card.unit));
-        } else value = Number(typed);
-      }
-      // A blank value under a chosen unit: "log in this unit, no target" (plan D2).
-      if (card.unit) quantities.push({ slot: fields.slot, unit: card.unit, value });
+    // A quantity needs its unit, number or not: without one no ✓ can ever be stored (C16;
+    // `itemUnit`'s note). The refusal is the unit select's, so focus goes where the fix is.
+    if (!card.unit) refuse('unit', EDITOR_ERRORS.unit(label));
+    let value: number | null = null;
+    if (typed && !isPlainDecimal(typed)) refuse('value', EDITOR_ERRORS.value(label));
+    else if (typed && card.unit) {
+      // With no unit the refusal above is the unit's, said once. A unit with no declared ceiling
+      // refuses: no bound is not "no cap" (`quantityCeiling`).
+      const ceiling = quantityCeiling(card.unit);
+      if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));
+      else if (Number(typed) > ceiling) {
+        refuse('value', EDITOR_ERRORS.ceiling(label, ceiling, card.unit));
+      } else value = Number(typed);
     }
+    // A blank value under its unit: "log in this unit, no target" (plan D2).
+    if (card.unit) quantities.push({ slot: fields.slot, unit: card.unit, value });
   }
 
   const notes = cleanNote(card.notes);
@@ -167,7 +166,7 @@ export const fieldId = (card: string | null, field: EditorField) =>
 export const cardHeadingId = (card: string) => `card-${card}-heading`;
 
 /** The id of a card's unit select. */
-export const unitFieldId = (card: string) => `${fieldId(card, 'value')}-unit`;
+export const unitFieldId = (card: string) => fieldId(card, 'unit');
 
 /**
  * A new card for an item picked in the item picker (FAM-1 step 9): a fresh `prescriptionClientId`

@@ -156,7 +156,7 @@ export function ItemCard({
     </div>
   );
 
-  const shownErrors = (['sets', 'reps', 'value'] as const).flatMap((field) => {
+  const shownErrors = (['sets', 'reps', 'value', 'unit'] as const).flatMap((field) => {
     const error = errorOf(field);
     return error ? [{ field, message: error.message }] : [];
   });
@@ -204,6 +204,8 @@ export function ItemCard({
                     id={unitFieldId(id)}
                     value={card.unit ?? ''}
                     onChange={(event) => onUnit(event.target.value as Unit)}
+                    aria-invalid={errorOf('unit') ? true : undefined}
+                    aria-describedby={errorOf('unit') ? errorId('unit') : undefined}
                     className={FIELD_CLASS}
                   >
                     {card.unit ? null : (

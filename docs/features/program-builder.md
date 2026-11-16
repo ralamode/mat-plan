@@ -142,8 +142,11 @@ flowchart LR
 13. **The editor refuses on the client what the writer refuses**, field by field (`readDraft`), so
     `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
     whole number or blank _(maintainer, 2026-11-16)_, a quantity a plain decimal under its unit's
-    ceiling (blank: the unit with no target), notes one line. An item loaded with no quantity is
-    saved with none until a unit is chosen: the machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
+    ceiling (blank: the unit with no target), notes one line. **A quantity needs its unit** (contract C16): a
+    Count, Weight × reps or Distance card with no unit is refused at Save, number or not, because no
+    ✓ could ever be stored for it. The refusal is the unit select's ("Weight: choose a unit."), so
+    focus goes where the fix is; typing a number does not clear it, choosing a unit does. The bar
+    counts the fields to fix. The machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
     `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
     editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
     sends.

@@ -23,11 +23,13 @@ import {
   fieldsToFixText,
   linkLabel,
   moveLabel,
+  quantityLabel,
   removeLabel,
   saveRefusal,
   undoneText,
   usedByText,
 } from './builder-text';
+import { unitFieldId } from './editor-draft';
 import { programPath } from './routes';
 import { tapClock } from './test-taps';
 import { WorkoutEditorScreen } from './workout-editor-screen';
@@ -835,5 +837,36 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       await frames();
       expect(screen.getByRole('status').textContent).toBe('');
     });
+  });
+});
+
+describe('a quantity needs its unit (C16)', () => {
+  it('Save refuses on the unit select; a typed number does not clear it, choosing a unit does', async () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const bare = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) => (item === bench ? { ...item, quantities: [] } : item)),
+    };
+    const all = editor({}, bare);
+    save();
+    const select = document.getElementById(
+      unitFieldId(bench.prescriptionClientId),
+    ) as HTMLSelectElement;
+    await waitFor(() => expect(document.activeElement).toBe(select));
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(select.getAttribute('aria-describedby')!)!.textContent).toBe(
+      EDITOR_ERRORS.unit(quantityLabel('weight_reps')!),
+    );
+    await waitFor(() => expect(alerts()).toEqual([fieldsToFixText(1)]));
+    // A number is not the fix: the refusal stays on the unit.
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    fireEvent.change(within(card).getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`)), {
+      target: { value: '25' },
+    });
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.change(select, { target: { value: 'lb' } });
+    expect(select.getAttribute('aria-invalid')).toBeNull();
+    save();
+    await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
   });
 });

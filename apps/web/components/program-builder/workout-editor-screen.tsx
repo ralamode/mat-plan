@@ -410,6 +410,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     const typed = card.value.trim();
     updateCard(card.item.prescriptionClientId, { unit });
     clearError(card.item.prescriptionClientId, 'value');
+    clearError(card.item.prescriptionClientId, 'unit');
     quiet();
     if (typed && card.unit && card.unit !== unit && Number.isFinite(Number(typed))) {
       report(unitChangedText(card.item.itemName, Number(typed), card.unit, unit));
