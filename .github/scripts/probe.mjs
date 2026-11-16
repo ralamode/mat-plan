@@ -41,8 +41,16 @@
  *                   waives the "commit first" precondition, and the reason it exists is that waiving
  *                   it is now SAFE rather than forbidden.
  *
- * Exit 0 means the gate went red for the named reason — the probe passed. Any other outcome exits 1
- * and says which of the three it was.
+ * 🔴 **The gate runs once BEFORE the mutation, and must be green.** A gate already red proves
+ * nothing: its failure output can contain the `--expect` text anyway (a test's NAME is printed on
+ * failure), so the mutated run reads as "RED for the named reason" while the mutation did nothing.
+ * Lane C hit exactly that (2026-11-16): a test red with or without the mutation, reported as caught.
+ * So a red baseline is DID-NOT-PROVE, and the mutation is never written. So is a GREEN baseline
+ * whose output already contains `--expect` (a verbose reporter listing passing test names): a red
+ * run could not then show it was that assertion that caught the mutation. It costs one extra run.
+ *
+ * Exit 0 means the gate was green, then went red for the named reason — the probe passed. Any other
+ * outcome exits 1 and says which it was.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -114,6 +122,31 @@ if (occurrences !== 1) {
       `  Nothing was changed. An ambiguous target is how a probe mutates a line it was not aiming at.`,
   );
 }
+// ── 3b. The BASELINE: the unmutated gate must be green, or the mutated run can prove nothing ─────
+const baseline = spawnSync(args.gate, { shell: true, encoding: 'utf8', cwd: root });
+if (baseline.error || baseline.status === 127) {
+  fail(`the gate could not run (${baseline.error?.message ?? 'exit 127'}). Nothing was proved.`);
+}
+const baselineOutput = `${baseline.stdout ?? ''}${baseline.stderr ?? ''}`;
+if (baseline.status !== 0) {
+  const tail = baselineOutput.trimEnd().split('\n').slice(-20).join('\n');
+  fail(
+    `DID-NOT-PROVE — the gate is already RED before any mutation (exit ${baseline.status}).\n` +
+      `  A red baseline can print the --expect text on its own (a failing test's name, say), so the\n` +
+      `  mutated run would read as caught when the mutation did nothing. Nothing was changed.\n` +
+      `  Make \`${args.gate}\` pass on the unmutated tree first. Its last lines:\n${tail}`,
+  );
+}
+// A GREEN baseline that already prints --expect (a verbose reporter listing passing test names)
+// would make any red run look like the named catch. Refuse it too.
+if (args.expect && baselineOutput.includes(args.expect)) {
+  fail(
+    `DID-NOT-PROVE — the gate's PASSING output already contains --expect ("${args.expect}"),\n` +
+      `  so a red run could not show it was this assertion that caught the mutation. Pick an\n` +
+      `  --expect only the failure prints (the assertion's message, not the test's name).`,
+  );
+}
+
 writeFileSync(path, before.replace(args.from, args.to));
 
 // ── 4. Run the gate, then ALWAYS restore, then verify the restore ────────────────────────────────
