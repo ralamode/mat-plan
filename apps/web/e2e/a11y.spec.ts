@@ -650,6 +650,101 @@ test.describe('U0 — the sheet, open', () => {
   });
 
   /**
+   * 🔴 **Compact — the keyboard-up layout, below 480px of visual viewport.** Nothing else opens a
+   * sheet that short, so the compact branch was audited by no browser at all (review of #476).
+   * Two shapes: a short phone with the keyboard up, and landscape. In each: axe, no sideways
+   * overflow, and the footer action is reachable by scrolling the one scroller.
+   */
+  for (const viewport of [
+    { width: 360, height: 400 },
+    { width: 844, height: 390 },
+  ]) {
+    test(`compact at ${viewport.width}×${viewport.height}: axe, no overflow, footer reachable`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openSheet(page);
+      await expectNoAxeViolations(page, `sheet (compact ${viewport.width}×${viewport.height})`);
+      const overflows = await dialog.evaluate((d) => d.scrollWidth > d.clientWidth);
+      expect(overflows, 'the compact sheet must not scroll sideways').toBe(false);
+      const action = dialog.getByRole('button', { name: 'Use as typed' });
+      await action.scrollIntoViewIfNeeded();
+      await expect(action).toBeInViewport();
+    });
+  }
+
+  /**
+   * 🔴 **A compact flip keeps the scroll offset and the footer element** (#476). The footer used to
+   * re-mount on each flip (focus lost), and the first fix moved the scroller instead (offset lost).
+   * One scroller, one footer: resizing across the 480px line must change neither.
+   */
+  test('a compact flip keeps the scroll offset and the same footer button', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const dialog = await openSheet(page);
+    const scroller = dialog.locator('.overflow-y-auto').first();
+    const action = dialog.getByRole('button', { name: 'Use as typed' });
+    await action.evaluate((b) => b.setAttribute('data-probe', 'same'));
+    await action.focus();
+    const before = await scroller.evaluate((el) => {
+      el.scrollTop = Math.min(40, el.scrollHeight - el.clientHeight);
+      return el.scrollTop;
+    });
+    // Or the test passes trivially on a list too short to scroll.
+    expect(before, 'the list scrolls at 360×640, so there is an offset to keep').toBeGreaterThan(0);
+    await page.setViewportSize({ width: 360, height: 400 });
+    await expect(dialog.locator('[data-probe=same]')).toHaveCount(1);
+    await expect(action).toBeFocused();
+    expect(await scroller.evaluate((el) => el.scrollTop), 'the offset survives the flip').toBe(
+      before,
+    );
+  });
+
+  /**
+   * 🔴 **WCAG 2.2 SC 2.4.11 — focus never lands behind the sticky footer** (#476). The pinned
+   * footer sits inside the scroller, so without `scroll-padding-bottom` the browser parks a tabbed
+   * row under it. Tab through every focusable in the body and check each one's bottom edge.
+   */
+  test('a focused control in the body is never hidden behind the pinned footer', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 520 });
+    const dialog = await openSheet(page);
+    const footerTop = async () =>
+      dialog.getByRole('button', { name: 'Use as typed' }).evaluate((b) => {
+        const footer = b.closest('.sticky');
+        return footer ? footer.getBoundingClientRect().top : Infinity;
+      });
+    // ⚠️ The demo's own controls all sit ABOVE the fold, so focusing them can never reach the
+    // footer — a first version of this test passed with the fix removed (probe: GREEN). A real
+    // consumer's list (the item picker's rows) runs under it, so stand one in: 30 buttons, the
+    // shape a long result list has.
+    await dialog.locator('.grow').evaluate((body) => {
+      for (let i = 0; i < 30; i += 1) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = `Row ${i}`;
+        b.setAttribute('data-probe-row', '');
+        b.style.display = 'block';
+        b.style.minHeight = '44px';
+        body.appendChild(b);
+      }
+    });
+    const controls = dialog.locator('[data-probe-row]');
+    const count = await controls.count();
+    for (let i = 0; i < count; i += 1) {
+      const control = controls.nth(i);
+      // Tab, not `.focus()`: the browser's own focus-scroll is the behaviour under test.
+      if (i === 0) await control.focus();
+      else await page.keyboard.press('Tab');
+      await expect(control).toBeFocused();
+      const bottom = await control.evaluate((el) => el.getBoundingClientRect().bottom);
+      expect(bottom, `control ${i} clears the footer`).toBeLessThanOrEqual(
+        (await footerTop()) + 0.5,
+      );
+    }
+  });
+
+  /**
    * 🔴 **Above 1040px the dialog variant drifted right** — `inset-0` leaves `right: 0` set, so a
    * width plus `left: 1/2` plus `margin-inline: auto` is over-constrained with AUTO margins, and
    * CSS solves the margins inside the 50%→100% band instead of ignoring `right`. Centring is a
