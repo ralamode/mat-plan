@@ -111,6 +111,11 @@ describe('seed-row schemas', () => {
         .success,
     ).toBe(false);
     expect(programBlockSeedRowSchema.safeParse({ ...block, name: '   ' }).success).toBe(false);
+    // The raw value, as the seed inserts it: padding that pushes it past the bound is refused too.
+    expect(
+      programBlockSeedRowSchema.safeParse({ ...block, name: ` ${'x'.repeat(PROGRAM_NAME_MAX)}` })
+        .success,
+    ).toBe(false);
   });
 
   it('rejects a negative idx, a non-positive set count, and a bad day role', () => {
