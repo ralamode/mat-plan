@@ -522,7 +522,7 @@ export function createFakeProgramActions(
         const workoutPublicId = newId();
         // A copy into another program lands on that program's page, which is not on screen.
         if (copy.toProgramPublicId === view.programPublicId) {
-          const name = copyName(source.name);
+          const name = copy.name ?? copyName(source.name);
           if (view.workouts.some((w) => sameName(w.name, name))) {
             return refuse(PROGRAM_REFUSAL.name_taken);
           }
@@ -619,8 +619,12 @@ export function createFakeProgramActions(
         const athlete = view?.athletes.find((a) => a.profilePublicId === profilePublicId);
         if (!view || !athlete) return refuse(PROGRAM_REFUSAL.not_found);
 
-        if (!hasStarted(athlete, view.today)) {
-          // Not started yet: they leave, and nothing says they were ever on it.
+        // A start that has not begun, or that begins today, is removed: nothing says they were ever
+        // on it. ⚠️ The real writer removes a start dated today only when nothing is logged under it
+        // (`takeOffSchema`); this fake holds no logged rows, so for it a start dated today never has
+        // any.
+        const removed = !hasStarted(athlete, view.today) || athlete.since === view.today;
+        if (removed) {
           view.athletes = view.athletes.filter((a) => a !== athlete);
           const candidate = view.candidates.find((c) => c.profilePublicId === profilePublicId);
           if (candidate) {
@@ -634,7 +638,7 @@ export function createFakeProgramActions(
           athlete.lastDay = view.today;
         }
         changed();
-        return { ok: true };
+        return { ok: true, lastDay: removed ? null : view.today };
       },
     },
   };

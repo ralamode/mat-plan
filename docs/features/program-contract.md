@@ -251,6 +251,17 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
     is the limit above).
 
+19. **Take off says what it did, and a same-day Put on is undone by it** (`takeOffSchema`,
+    maintainer, 2026-11-16). A start that has not begun is removed. A start dated today with no
+    live row logged under it is removed too, as if Put on had not been tapped. Any other start ends
+    today. The answer's `lastDay` is today, or `null` for a removed start, and the screen words its
+    message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
+    program fake holds no logged rows, so in the preview a start dated today is always removed.
+20. **A copy may carry its own name** (`CopyDraft.name`, optional). Without one, a copy into the
+    workout's own program is named with " (copy)" and a copy into another program keeps the name.
+    A name already used in the program it is copied into answers `name_taken`, as saving a workout
+    under a taken name does.
+
 ## Traps
 
 - **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are

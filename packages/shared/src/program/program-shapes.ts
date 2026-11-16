@@ -228,9 +228,13 @@ export type ProgramView = z.infer<typeof programViewSchema>;
  * Whether an athlete has started on a program by `today`: their `since` is today or earlier.
  * `since` may be after today (Put on, starting tomorrow), and then they are listed but not started.
  *
- * One rule, three readers: the page's "since" or "starts" wording, what Take off does (someone who
- * has not started simply leaves; someone who has stays through today), and the preview's fake.
- * Both days are `isoDaySchema` text, which sorts as the calendar does.
+ * One rule, three readers: the page's "since" or "starts" wording, the first half of what Take off
+ * does (someone who has not started simply leaves), and the preview's fake. Both days are
+ * `isoDaySchema` text, which sorts as the calendar does.
+ *
+ * ⚠️ **"Started" does not by itself mean Take off keeps them through today.** A start dated today
+ * with nothing logged under it is undone by Take off as well (`takeOffSchema`); read what Take off
+ * did from its answer, not from this.
  */
 export function hasStarted(athlete: { since: string }, today: string): boolean {
   return athlete.since <= today;
@@ -292,7 +296,18 @@ export const assignDraftSchema = z.object({
 });
 export type AssignDraft = z.infer<typeof assignDraftSchema>;
 
-/** Take an athlete off a program, after today. */
+/**
+ * Take an athlete off a program. What it does depends on where their start stands:
+ *
+ * - **Not started** (`since` after today): the start is removed. They were never on it.
+ * - **Started today, nothing logged under it yet**: the start is removed too, as if Put on had not
+ *   been tapped (maintainer, 2026-11-16: a same-day Put on is undoable). "Nothing logged" means no
+ *   live row of that athlete today in a workout of this program; a row ticked and un-ticked does
+ *   not count.
+ * - **Otherwise**: they stay on through today, and today is their last day.
+ *
+ * The answer says which: `lastDay` is today, or `null` when the start was removed.
+ */
 export const takeOffSchema = z.object({
   programPublicId: uuidSchema,
   profilePublicId: uuidSchema,
@@ -314,11 +329,20 @@ export const programOrderSchema = z.object({
 });
 export type ProgramOrder = z.infer<typeof programOrderSchema>;
 
-/** Copy a workout into a program, optionally onto weekdays. `clientId` is one copy attempt. */
+/**
+ * Copy a workout into a program, optionally onto weekdays. `clientId` is one copy attempt.
+ *
+ * **`name` is the copy's name, when the person gave one** (maintainer, 2026-11-16). A copy into the
+ * workout's own program always needs a different name, so the dialog shows a Name field there,
+ * prefilled with the workout's name and " (copy)". Left out, the copy takes that default in its own
+ * program and the workout's own name in another. A name already used in the program it is copied
+ * into answers `name_taken`.
+ */
 export const copyDraftSchema = z.object({
   clientId: uuidSchema,
   workoutPublicId: uuidSchema,
   toProgramPublicId: uuidSchema,
+  name: workoutNameSchema.optional(),
   weekdays: z.array(weekdaySchema).max(WEEKDAYS.length).refine(distinct),
   label: slotLabelSchema,
 });
