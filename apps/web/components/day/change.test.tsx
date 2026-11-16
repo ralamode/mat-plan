@@ -783,4 +783,16 @@ describe('Change: second-pass fixes', () => {
     act(() => control.setPlan(late)); // the ✓'s refresh, arriving late
     expect(tickButton().getAttribute('aria-pressed')).toBe('false');
   });
+
+  it('a Cancel press that turned into a scroll does not stop a later save', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '35');
+    await safariTap(load(), button(DAY_COPY.change.cancel)); // a real Cancel: nothing sent
+    type(load(), '30');
+    fireEvent.pointerDown(button(DAY_COPY.change.cancel)); // a touch that became a scroll
+    await leave(load()); // its blur is the one the press stops
+    act(() => load().focus());
+    await leave(load()); // the next time focus leaves the row, the Change is sent
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
 });
