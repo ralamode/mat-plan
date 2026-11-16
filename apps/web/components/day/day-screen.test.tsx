@@ -16,7 +16,7 @@ import {
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
@@ -32,6 +32,8 @@ afterEach(() => {
 });
 
 type Actions = Required<DayActions>;
+/** Every action, as a spy over the fake (or over what `wrap` put in its place). */
+type Spies = { [K in keyof Actions]: Mock<Actions[K]> };
 
 /**
  * The screen as the preview route mounts it: the fake's change comes back as new props. `wrap`
@@ -42,10 +44,10 @@ function mount(
   fixture: DayPlan,
   options: { failNext?: boolean; wrap?: (actions: Actions) => Partial<DayActions> } = {},
 ) {
-  const control: { plan: DayPlan; setPlan: (plan: DayPlan) => void; actions: Actions } = {
+  const control: { plan: DayPlan; setPlan: (plan: DayPlan) => void; actions: Spies } = {
     plan: fixture,
     setPlan: () => {},
-    actions: undefined as unknown as Actions,
+    actions: undefined as unknown as Spies,
   };
   function Harness() {
     const [plan, setPlan] = useState(fixture);
@@ -63,8 +65,8 @@ function mount(
         reorderPrograms: vi.fn(wrapped.reorderPrograms),
       };
       // The screen gets what step 13's routes have: no Change, no Program order.
-      const { amendRow: _amend, reorderPrograms: _reorder, ...wired } = control.actions;
-      return wired;
+      const { logRow, untickRow, retickRow } = control.actions;
+      return { logRow, untickRow, retickRow };
     });
     return <DayScreen plan={plan} actions={actions} />;
   }
