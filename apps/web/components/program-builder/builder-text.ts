@@ -1,6 +1,24 @@
-import { PROGRAM_REFUSAL, WEEKDAYS, type ProgramRefusal, type ProgramView } from '@mat-plan/shared';
+import {
+  collapseWhitespace,
+  quantityText,
+  FREE_TEXT_NOTE_MAX,
+  hasStarted,
+  LOGGABLE_DIMENSION_LABELS,
+  MAX_SETS_PER_MOVEMENT,
+  PROGRAM_REFUSAL,
+  SLOT_LABEL_MAX,
+  TRACKING_TYPE_FIELDS,
+  UNIT_LABELS,
+  type ProgramRefusal,
+  type ProgramView,
+  type TrackingType,
+  type Unit,
+  type UnitDimension,
+} from '@mat-plan/shared';
 
+import { itemCountText } from '@/lib/constants';
 import { formatDayShort } from '@/lib/date';
+import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural } from '@/lib/i18n/plural';
 
@@ -36,7 +54,18 @@ export const BUILDER_COPY = {
   week: 'Week',
   weekIntro: 'Each day runs its workouts in this order. A day with none is a rest day.',
   restDay: 'Rest day',
+  optional: '(optional)',
 } as const;
+
+/** What a refused write says when trying again is the only advice. */
+export const SAVE_FAILED = 'Couldn’t save. Try again.';
+
+/**
+ * Text typed the way the schemas store it: runs of whitespace (a pasted tab or line break
+ * included) become one space, and the ends are trimmed. The contract refuses a control character
+ * and a line break, so a pasted tab would otherwise come back `invalid` under text that looks fine.
+ */
+export const cleanName = (raw: string) => collapseWhitespace(raw).trim();
 
 /**
  * A pending button: `aria-disabled` (a disabled one drops focus to <body>), which `Button` does
@@ -54,7 +83,7 @@ export function nameRefusal(reason: ProgramRefusal): string {
     case PROGRAM_REFUSAL.not_found:
       return 'This program no longer exists.';
     default:
-      return 'Couldn’t save. Try again.';
+      return SAVE_FAILED;
   }
 }
 
@@ -67,14 +96,6 @@ export function usedByText(athletes: readonly string[]): string {
   const who =
     athletes.length === 1 ? athletes[0] : athletes.length === 2 ? 'both' : `all ${athletes.length}`;
   return `Used by ${formatList(athletes)}. Changes apply to ${who}.`;
-}
-
-/**
- * Whether an athlete has started on the program by `today`. One rule for the "since" or "starts"
- * wording and for what Take off does (someone who had not started simply leaves).
- */
-export function hasStarted(athlete: { since: string }, today: string): boolean {
-  return athlete.since <= today;
 }
 
 /**
@@ -106,13 +127,6 @@ export function takeOffFailedText(athlete: string): string {
   return `Couldn’t take ${athlete} off. Try again.`;
 }
 
-/**
- * The week in the order the builder shows it: Monday first (`ProgramView.workouts[].usedOn` is
- * listed the same way). ⚠️ The preview's fake keeps its own copy (`app/design/program/fakes.ts`); a
- * shared one belongs in the contract, which this lane does not edit.
- */
-export const MONDAY_FIRST = [...WEEKDAYS.slice(1), WEEKDAYS[0]];
-
 /** A weekday's name, from a fixed week that starts on a Sunday (2026-11-15). */
 export function weekdayName(weekday: number, style: 'long' | 'short' = 'long'): string {
   return new Intl.DateTimeFormat(APP_LOCALE, { weekday: style, timeZone: 'UTC' }).format(
@@ -122,7 +136,7 @@ export function weekdayName(weekday: number, style: 'long' | 'short' = 'long'): 
 
 /** "6 items · Used Mon, Tue" or "… · Not on any day yet". */
 export function workoutSummary(itemCount: number, usedOn: readonly number[]): string {
-  const items = plural(itemCount, { one: '1 item', other: `${itemCount} items` });
+  const items = itemCountText(itemCount);
   const days = usedOn.length
     ? `Used ${formatList(
         usedOn.map((k) => weekdayName(k, 'short')),
@@ -136,4 +150,215 @@ export function workoutSummary(itemCount: number, usedOn: readonly number[]): st
 /** Where a copied workout came from: the program's name as it was on the day of the copy. */
 export function copiedFromText(from: { programName: string; on: string }): string {
   return `Copied from ${from.programName} · ${formatDayShort(from.on)}`;
+}
+
+/** The link control's words, which the intro line names too. */
+const LINK_NEXT = 'Superset with next';
+
+/** The workout editor's words (FAM-1 step 8; the prototype's `vWorkout`). */
+export const EDITOR_COPY = {
+  backToProgram: '← Program',
+  editWorkout: 'Edit workout',
+  newWorkout: 'New workout',
+  workoutName: 'Name',
+  workoutNamePlaceholder: 'e.g. Heavy A',
+  description: 'Description',
+  items: 'Items',
+  noItems: 'No items yet.',
+  checkHint: 'Checked off in one tap.',
+  sets: 'Sets',
+  reps: 'Reps',
+  unit: 'Unit',
+  chooseUnit: 'Choose…',
+  instructions: 'Instructions',
+  instructionsHint: 'Shown with the item, every time.',
+  rest: 'Rest',
+  restPlaceholder: 'e.g. 90 s after each round',
+  supersetIntro: `A superset is items done back to back. Tap “${LINK_NEXT}” under an item; add a third the same way.`,
+  linkNext: LINK_NEXT,
+  unlinkNext: 'Unlink from next',
+  up: 'Up',
+  down: 'Down',
+  remove: 'Remove',
+  save: 'Save workout',
+  discardQuestion: 'Discard your changes to this workout?',
+  discard: 'Discard',
+  keepEditing: 'Keep editing',
+  alreadyFirst: 'Already first.',
+  alreadyLast: 'Already last.',
+  nameTaken: 'A workout with this name is already in this program.',
+} as const;
+
+export type MoveDirection = 'up' | 'down';
+
+/** A field's refusal, under it. Each names its field, so two on one card can be told apart. */
+export const EDITOR_ERRORS = {
+  name: 'Give the workout a name, then Save.',
+  sets: `Sets: a whole number from 1 to ${MAX_SETS_PER_MOVEMENT}.`,
+  reps: 'Reps: a whole number, or leave it blank.',
+  value: (label: string) => `${label}: a number like 22.5, or leave it blank.`,
+  ceiling: (label: string, ceiling: number, unit: Unit) =>
+    `${label}: at most ${formatValueUnit(ceiling, unit)}.`,
+  unit: (label: string) => `${label}: choose a unit.`,
+  tooLong: `At most ${FREE_TEXT_NOTE_MAX} characters.`,
+  rest: `Rest: at most ${SLOT_LABEL_MAX} characters.`,
+} as const;
+
+/** The words a type's quantity field is called by, where the type does not fix its unit. */
+const QUANTITY_WORDS: Partial<Record<TrackingType, string>> = {
+  weight_reps: 'Weight',
+  distance: 'Distance',
+  count: 'Target',
+};
+
+/**
+ * What a card's quantity field is called, or `null` for a type with no quantity
+ * (`TRACKING_TYPE_FIELDS[type].slot`). A fixed unit names its own field: "Minutes", "Seconds".
+ */
+export function quantityLabel(type: TrackingType): string | null {
+  const { slot, unit } = TRACKING_TYPE_FIELDS[type];
+  if (!slot) return null;
+  return unit ? UNIT_LABELS[unit] : (QUANTITY_WORDS[type] ?? null);
+}
+
+/** The unit select's group names: the shared ones, plus a count. */
+export const UNIT_GROUP_LABELS: Partial<Record<UnitDimension, string>> = {
+  ...LOGGABLE_DIMENSION_LABELS,
+  count: 'Count',
+};
+
+/** Names that tell a card's buttons apart; the visible word comes first (WCAG 2.5.3). */
+export const moveLabel = (direction: MoveDirection, item: string) =>
+  `${EDITOR_COPY[direction]}: ${item}`;
+export const removeLabel = (item: string) => `${EDITOR_COPY.remove} ${item}`;
+
+/** A superset's letter, read out: "A1" is "Superset A, item 1". */
+export function supersetSpoken(label: string): string {
+  const letter = supersetLetterOf(label);
+  return `Superset ${letter}, item ${label.slice(letter.length)}`;
+}
+
+/** What a move or a remove did to the supersets, for the status line. */
+export type SupersetChange = { ended: number; left: readonly string[]; droppedRests: number };
+
+function supersetChangeText({ ended, left, droppedRests }: SupersetChange): string {
+  const parts: string[] = [];
+  if (ended) {
+    parts.push(plural(ended, { one: 'A superset ended.', other: `${ended} supersets ended.` }));
+  }
+  if (left.length) {
+    parts.push(`${formatList(left)} left ${left.length === 1 ? 'its' : 'their'} superset.`);
+  }
+  if (droppedRests) {
+    parts.push(
+      plural(droppedRests, { one: 'Its rest is gone.', other: `${droppedRests} rests are gone.` }),
+    );
+  }
+  return parts.join(' ');
+}
+
+export function movedText(item: string, direction: MoveDirection, change: SupersetChange): string {
+  return [`${item} moved ${direction}.`, supersetChangeText(change)].filter(Boolean).join(' ');
+}
+
+export function removedText(item: string, change: SupersetChange): string {
+  return [`${item} removed. Cancel undoes all changes.`, supersetChangeText(change)]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** A unit changed under a typed number: say what the number now means. */
+export function unitChangedText(item: string, value: number, from: Unit, to: Unit): string {
+  return `${item}: now ${quantityText(value, to)} (was ${quantityText(value, from)}).`;
+}
+
+/** The save bar after a refused Save. No count, so it stays true as fields are fixed. */
+export function fieldsToFixText(count: number): string {
+  return count === 1
+    ? 'One field needs fixing before saving.'
+    : 'Some fields need fixing before saving.';
+}
+
+/** What a refused Save says in the save bar. `name_taken` is said under the name as well. */
+export function saveRefusal(reason: ProgramRefusal): string {
+  switch (reason) {
+    case PROGRAM_REFUSAL.name_taken:
+      return EDITOR_COPY.nameTaken;
+    case PROGRAM_REFUSAL.invalid:
+      return 'Couldn’t save: part of this workout wasn’t accepted. Check it and try again.';
+    case PROGRAM_REFUSAL.not_found:
+      return 'This workout no longer exists.';
+    default:
+      return SAVE_FAILED;
+  }
+}
+
+/**
+ * The link control's visible words: joining two supersets says so before the tap (a merge can drop
+ * a rest); otherwise "Superset with next" or "Unlink from next". Never the item's name, which may
+ * be 100 characters at 360px; the next card's heading is right below it.
+ */
+export function linkText(link: {
+  linked: boolean;
+  joins: readonly [string, string] | null;
+}): string {
+  if (link.linked) return EDITOR_COPY.unlinkNext;
+  return link.joins ? `Join supersets ${link.joins[0]} and ${link.joins[1]}` : EDITOR_COPY.linkNext;
+}
+
+/**
+ * The control's accessible name: its visible words first (WCAG 2.5.3), then the two items it
+ * joins, this card's own first, as the card's other buttons name their own item.
+ */
+export const linkLabel = (visible: string, item: string, next: string) =>
+  `${visible}: ${item} and ${next}`;
+
+/** A superset's letter from its label: "A2" is "A", "AA1" is "AA". */
+export const supersetLetterOf = (label: string) => label.replace(/\d+$/, '');
+
+/** A rest a link or unlink removed, said one way. */
+const restRemovedText = (rest: string) => `Rest “${rest}” removed.`;
+
+/** A rest field's name, told apart from the others by its superset's letter. */
+export const restForLabel = (letter: string) => `of superset ${letter}`;
+
+/**
+ * What a link did, for the status line: by superset letter, never by item names, so it stays
+ * within two lines in the save bar. A join names the rest it removed; the one kept is in the field.
+ */
+export function linkedText(link: {
+  letter: string;
+  joined: 'pair' | 'one' | 'groups';
+  size: number;
+  from: readonly [string, string] | null;
+  dropped: string | null;
+}): string {
+  // A new pair: its rest field is on its last card, which may be off-screen.
+  if (link.joined === 'pair')
+    return `Linked: superset ${link.letter}. Its rest is on its last item.`;
+  if (link.joined === 'one') return `Linked: superset ${link.letter} now has ${link.size} items.`;
+  const done = `Supersets ${link.from![0]} and ${link.from![1]} are now ${link.letter}.`;
+  return link.dropped ? `${done} ${restRemovedText(link.dropped)}` : done;
+}
+
+/** What an unlink did: the superset ended, lost an item, or became two. By letter. */
+export function unlinkedText(unlink: {
+  letter: string;
+  ended: boolean;
+  /** The size of the one side still a superset, or `null` when both are. */
+  size: number | null;
+  droppedRest: string | null;
+}): string {
+  if (unlink.ended) {
+    const done = `Unlinked: superset ${unlink.letter} ended.`;
+    return unlink.droppedRest ? `${done} ${restRemovedText(unlink.droppedRest)}` : done;
+  }
+  return unlink.size === null
+    ? `Unlinked: superset ${unlink.letter} is now two.`
+    : `Unlinked: superset ${unlink.letter} now has ${unlink.size} items.`;
+}
+
+/** The opposite tap, straight after: everything is as it was before the first. */
+export function undoneText(linked: boolean): string {
+  return linked ? 'Linked again: as it was.' : 'Unlinked again: as it was.';
 }

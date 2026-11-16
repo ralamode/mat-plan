@@ -19,12 +19,13 @@ import { numericSetSchema } from '../strength';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import { FREE_TEXT_NOTE_MAX, freeTextNoteSchema, hasControlChar } from '../text';
 import {
+  isWholeNumber,
   MAX_STORABLE_QUANTITY,
+  type Unit,
   UNIT_DIMENSION,
+  type UnitDimension,
   unitSchema,
   unitsOfDimension,
-  type Unit,
-  type UnitDimension,
 } from '../units';
 
 /**
@@ -88,11 +89,15 @@ export const athleteLabelSchema = z.string().min(1).max(PROFILE_NAME_MAX);
 
 /**
  * A workout's description, or an item's instructions: `freeTextNoteSchema`'s rules (trimmed, one
- * line, at most `FREE_TEXT_NOTE_MAX`; plan D4) with "nothing" spelled `null`, because the contract's
+ * line, no control characters, at most `FREE_TEXT_NOTE_MAX`; plan D4) with "nothing" spelled `null`, because the contract's
  * shapes are read as well as written and a read has no absent keys. Blank is `null`.
  */
 export const nullableNoteSchema = freeTextNoteSchema
   .unwrap()
+  // `freeTextNoteSchema` refuses a line break only (its CSV rule). A NUL or another control
+  // character would reach Postgres, which refuses it, and the action would throw instead of
+  // answering `invalid`; so the contract refuses those here, as `shortTextSchema` does.
+  .refine((v) => v === undefined || !hasControlChar(v), ONE_LINE)
   .nullable()
   .transform((v) => v ?? null);
 
@@ -122,7 +127,7 @@ export const repsSchema = z
  * it and the row writer fills an absent `reps` with it.
  */
 export function wholeReps(targetReps: string | null): number | null {
-  if (targetReps === null || !/^\d+$/.test(targetReps)) return null;
+  if (targetReps === null || !isWholeNumber(targetReps)) return null;
   const parsed = repsSchema.safeParse(Number(targetReps));
   return parsed.success ? parsed.data : null;
 }

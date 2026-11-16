@@ -1,0 +1,180 @@
+import { collapseWhitespace, SLOT_LABEL_MAX, type Superset } from '@mat-plan/shared';
+
+/** What the superset rules read on a card: its place in a group, and the group's rest. */
+export type SupersetMember = { superset: Superset; restAfter: string | null };
+
+/**
+ * Keep a workout's supersets well formed after a move or a remove (FAM-1 step 8; plan D14; the
+ * prototype's `normalize`). Decided to live here, not at 8b _(maintainer, 2026-11-16)_, so every
+ * draft the editor saves is one the writer accepts:
+ *
+ * - **A group is a run of neighbours.** A group key that comes back after another group is a new
+ *   group, under a fresh key.
+ * - **A group of one dissolves** (D14: the rule `dissolveSmallSupersets` applies to logged sets,
+ *   restated because the draft's `{ group, order }` is not that helper's shape).
+ * - `order` runs 1..n, and the group's rest sits on its **last** item (`restAfter`'s contract).
+ * - **The rest belongs to the group, not to an item.** It stays with the run that held it, or moves
+ *   to the group's surviving run if that one dissolved; it is dropped only when no run of the group
+ *   survives.
+ *
+ * Pure. Returns the items, how many groups ended, which items left a group that goes on, and the
+ * rests dropped, so the screen can say each.
+ */
+export function normalizeSupersets<T extends SupersetMember>(
+  items: readonly T[],
+): { items: T[]; ended: number; left: number[]; droppedRests: string[] } {
+  const runs: { key: string | null; start: number; members: T[] }[] = [];
+  items.forEach((item, index) => {
+    const key = item.superset?.group ?? null;
+    const last = runs.at(-1);
+    if (key !== null && last?.key === key) last.members.push(item);
+    else runs.push({ key, start: index, members: [item] });
+  });
+
+  const survives = (run: (typeof runs)[number]) => run.key !== null && run.members.length > 1;
+  // Each group's rest, and the run that keeps it.
+  const holders = new Map<(typeof runs)[number], string>();
+  const droppedRests: string[] = [];
+  let ended = 0;
+  for (const key of new Set(runs.flatMap((run) => (run.key === null ? [] : [run.key])))) {
+    const ofKey = runs.filter((run) => run.key === key);
+    const surviving = ofKey.filter(survives);
+    const withRest = ofKey.find((run) => run.members.some((member) => member.restAfter));
+    const rest = withRest?.members.find((member) => member.restAfter)?.restAfter ?? null;
+    if (!surviving.length) {
+      ended += 1;
+      if (rest) droppedRests.push(rest);
+      continue;
+    }
+    if (rest) holders.set(withRest && survives(withRest) ? withRest : surviving.at(-1)!, rest);
+  }
+
+  const used = new Set<string>();
+  const left: number[] = [];
+  const out: T[] = [];
+  for (const run of runs) {
+    if (!survives(run)) {
+      run.members.forEach((member, i) => {
+        if (
+          member.superset &&
+          run.key !== null &&
+          !droppedFromEndedGroup(runs, run.key, survives)
+        ) {
+          left.push(run.start + i);
+        }
+        out.push({ ...member, superset: null, restAfter: null });
+      });
+      continue;
+    }
+    const group = freshKey(run.key!, used);
+    const rest = holders.get(run) ?? null;
+    run.members.forEach((member, i) =>
+      out.push({
+        ...member,
+        superset: { group, order: i + 1 },
+        restAfter: i === run.members.length - 1 ? rest : null,
+      }),
+    );
+  }
+  return { items: out, ended, left, droppedRests };
+}
+
+/** Whether no run of `key` survives: then its items did not "leave" a group, the group ended. */
+function droppedFromEndedGroup<R extends { key: string | null }>(
+  runs: readonly R[],
+  key: string,
+  survives: (run: R) => boolean,
+): boolean {
+  return !runs.some((run) => run.key === key && survives(run));
+}
+
+/** `key`, or `key-2`, `key-3`… when an earlier run took it, kept within `SLOT_LABEL_MAX`. */
+function freshKey(key: string, used: Set<string>): string {
+  let candidate = key;
+  for (let n = 2; used.has(candidate); n += 1) {
+    const suffix = `-${n}`;
+    candidate = `${key.slice(0, SLOT_LABEL_MAX - suffix.length)}${suffix}`;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+/** A group key no item in `items` uses: `g1`, `g2`… (short, within `SLOT_LABEL_MAX`). */
+export function mintGroupKey(items: readonly SupersetMember[]): string {
+  const used = new Set(items.flatMap((item) => (item.superset ? [item.superset.group] : [])));
+  let n = 1;
+  while (used.has(`g${n}`)) n += 1;
+  return `g${n}`;
+}
+
+/** A rest as Save stores it: one line, trimmed, blank as none (so `' '` is no rest). */
+const cleanRest = (rest: string | null) => (rest ? collapseWhitespace(rest).trim() || null : null);
+
+/** The rest of the group keyed `group`, wherever in it it sits, as Save would store it. */
+const restOf = (items: readonly SupersetMember[], group: string | null) =>
+  group === null
+    ? null
+    : (items
+        .map((item) => (item.superset?.group === group ? cleanRest(item.restAfter) : null))
+        .find(Boolean) ?? null);
+
+/**
+ * Link the item at `index` with the next one (FAM-1 step 8b; the prototype's `ss-link`).
+ *
+ * The pair joins whichever group either is in; two groups become one, under the earlier one's key
+ * (so unlink-then-relink gives back the same draft). **The later group's rest is kept**, being on
+ * the last item already, and a different earlier rest is dropped and returned so the screen can
+ * name it _(maintainer, 2026-11-16)_.
+ */
+export function linkWithNext<T extends SupersetMember>(
+  items: readonly T[],
+  index: number,
+): { items: T[]; merged: boolean; droppedRest: string | null } {
+  const a = items[index]!.superset?.group ?? null;
+  const b = items[index + 1]!.superset?.group ?? null;
+  const key = a ?? b ?? mintGroupKey(items);
+  const restA = restOf(items, a);
+  const restB = restOf(items, b);
+  const kept = restB ?? restA;
+  const joined = items.map((item, i) => {
+    const group = item.superset?.group ?? null;
+    const inside =
+      i === index || i === index + 1 || (group !== null && (group === a || group === b));
+    return inside ? { ...item, superset: { group: key, order: 1 }, restAfter: null } : item;
+  });
+  joined[index + 1] = { ...joined[index + 1]!, restAfter: kept };
+  return {
+    items: normalizeSupersets(joined).items,
+    merged: a !== null && b !== null && a !== b,
+    droppedRest: restA && restB && restA !== restB ? restA : null,
+  };
+}
+
+/**
+ * Unlink the item at `index` from the next one: the group splits between them, and a side of one
+ * item dissolves. **The rest is copied to both sides** _(maintainer, 2026-11-16)_, so unlinking
+ * never loses it while a side survives. `ended` and `droppedRest` say when neither side does.
+ */
+export function unlinkFromNext<T extends SupersetMember>(
+  items: readonly T[],
+  index: number,
+): { items: T[]; ended: boolean; droppedRest: string | null } {
+  const key = items[index]!.superset!.group;
+  const rest = restOf(items, key);
+  const later = mintGroupKey(items);
+  let end = index + 1;
+  while (items[end]?.superset?.group === key) end += 1;
+  const split = items.map((item, i) => {
+    if (item.superset?.group !== key) return item;
+    const side = i > index && i < end ? later : key;
+    // One copy of the rest per side, on its first item; normalize moves it to the side's last.
+    const first = i === index + 1 || (i < index + 1 && items[i - 1]?.superset?.group !== key);
+    return { ...item, superset: { group: side, order: 1 }, restAfter: first ? rest : null };
+  });
+  const { items: out } = normalizeSupersets(split);
+  // Whether either side of the old group is still a superset.
+  const survivors = out.filter(
+    (item, i) => item.superset && items[i]!.superset?.group === key,
+  ).length;
+  return { items: out, ended: survivors === 0, droppedRest: survivors === 0 ? rest : null };
+}

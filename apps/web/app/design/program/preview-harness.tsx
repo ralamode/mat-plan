@@ -11,7 +11,10 @@ import {
 } from '@mat-plan/shared/program/fixtures';
 import { useState, type ReactNode } from 'react';
 
+import { AthleteSwitcher } from '@/components/day/athlete-switcher';
 import { DayScreen } from '@/components/day/day-screen';
+import { NotOnAProgram } from '@/components/day/not-on-a-program';
+import { ProgramLine } from '@/components/day/program-line';
 import { ProgramScreen } from '@/components/program-builder/program-screen';
 import { ProgramsListScreen } from '@/components/program-builder/programs-list-screen';
 import { WorkoutEditorScreen } from '@/components/program-builder/workout-editor-screen';
@@ -24,7 +27,7 @@ import {
   type FakePrograms,
 } from './fakes';
 import { pickerOptions } from './picker-options';
-import type { PreviewSelection } from './preview-registry';
+import { dayPreviewHrefFor, type PreviewSelection } from './preview-registry';
 
 /**
  * Mounts one screen with one named fixture and the fakes, exactly as a real route mounts it with
@@ -63,21 +66,36 @@ export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) 
       );
     }
     case 'workout-editor':
-      // Both draft fixtures are workouts of the Family program, so that is the program on screen.
+      // Both draft fixtures are workouts of the Family program, so that is the program on screen,
+      // and the one the editor is told it belongs to (`program`).
       return (
         <ProgramsPreview seed={{ ...BUILDER, program: familyProgram }} failNext={failNext}>
-          {(state, actions) => (
-            <WorkoutEditorScreen
-              draft={named(WORKOUT_DRAFT_FIXTURES, fixture)}
-              picker={{ options: state.items }}
-              actions={actions}
-            />
-          )}
+          {(state, actions) => {
+            const draft = named(WORKOUT_DRAFT_FIXTURES, fixture);
+            return (
+              <WorkoutEditorScreen
+                draft={draft}
+                picker={{ options: state.items }}
+                actions={actions}
+                // The draft's own program, as the real page loads it (7b): the back link names it
+                // and the editor says who a change applies to. Read from the fake's list, so a
+                // rename made on the preview shows here too.
+                program={programOf(state.programs, draft.programPublicId)}
+              />
+            );
+          }}
         </ProgramsPreview>
       );
     case 'day':
-      return <DayPreview fixture={fixture} failNext={failNext} />;
+      return <DayPreview selection={{ screen, fixture, failNext }} />;
   }
+}
+
+/** The entry of the Programs list a draft belongs to. Every draft fixture's program is listed. */
+function programOf(programs: ProgramList, programPublicId: string): ProgramList[number] {
+  const program = programs.find((listed) => listed.programPublicId === programPublicId);
+  if (!program) throw new Error(`program preview: no listed program ${programPublicId}`);
+  return program;
 }
 
 /** The fixture of that name. The route's parser has already checked the name is one of them. */
@@ -124,7 +142,17 @@ function ProgramsPreview({
   return children(state, fake.actions);
 }
 
-function DayPreview({ fixture, failNext }: { fixture: string; failNext: boolean }) {
+/**
+ * The day page, as far as the plan's lanes build it: the page's `<h1>`, then the three parts the
+ * page places itself (FAM-1 plan D34), then the day screen. The order is the page's
+ * (`docs/features/day-page.md` invariant 1); on the real page Bodyweight and Life, which are another
+ * lane's, sit between the parts and the screen.
+ *
+ * All four get the SAME `plan`, and the two that write get the same `actions`, so a reorder made in
+ * `ProgramLine` shows in `DayScreen` as it will in production.
+ */
+function DayPreview({ selection }: { selection: PreviewSelection }) {
+  const { fixture, failNext } = selection;
   const [plan, setPlan] = useState(() => named(DAY_PLAN_FIXTURES, fixture));
   const [fake] = useState(() => {
     const made = createFakeDayActions(plan, setPlan);
@@ -137,6 +165,11 @@ function DayPreview({ fixture, failNext }: { fixture: string; failNext: boolean 
     <>
       {/* The day page's own heading: on the real page it is the page's, not the screen's. */}
       <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>{athlete.name}</h1>
+      {/* No `lg:hidden` here, unlike the page: the preview has no nav rail to list the athletes. */}
+      <AthleteSwitcher plan={plan} hrefFor={dayPreviewHrefFor(selection)} />
+      <ProgramLine plan={plan} actions={fake.actions} />
+      {/* No `programsHref`: the Programs page does not exist until step 7b. */}
+      <NotOnAProgram plan={plan} />
       <DayScreen plan={plan} actions={fake.actions} />
     </>
   );

@@ -1,19 +1,19 @@
-import { PROGRAM_REFUSALS } from '@mat-plan/shared';
+import { MONDAY_FIRST, PROGRAM_REFUSALS } from '@mat-plan/shared';
 import { familyProgram, familyProgramAfterTakeOff } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import {
   athleteHint,
+  cleanName,
   copiedFromText,
-  hasStarted,
-  MONDAY_FIRST,
   nameRefusal,
+  supersetLetterOf,
+  supersetSpoken,
   takenOffText,
   usedByText,
   weekdayName,
   workoutSummary,
 } from './builder-text';
-import { cleanName } from './use-name-form';
 
 describe('the program builder’s sentences (the prototype’s wording)', () => {
   it('"Used by": none, one, both, all n', () => {
@@ -78,12 +78,13 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
     ]);
   });
 
-  it('someone has started on their first day, not before', () => {
-    expect(hasStarted({ since: '2026-11-14' }, '2026-11-14')).toBe(true);
-    expect(hasStarted({ since: '2026-11-15' }, '2026-11-14')).toBe(false);
-  });
-
   it('a name is sent the way it is stored: whitespace runs as one space, trimmed', () => {
     expect(cleanName('  Summer\t block\n ')).toBe('Summer block');
+  });
+
+  it('a superset’s letter is the label without its number, past Z too', () => {
+    expect(supersetLetterOf('A2')).toBe('A');
+    expect(supersetLetterOf('AA12')).toBe('AA');
+    expect(supersetSpoken('AA2')).toBe('Superset AA, item 2');
   });
 });

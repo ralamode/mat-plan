@@ -30,6 +30,20 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   default needs the value PINNED in the fixture, not sampled from the environment the proof runs in —
   otherwise the environment decides whether the assertion has teeth.
 
+- **A column "shipped dark" fails `42703` on a deploy that races the migration, though no code reads
+  it yet.** → Drizzle's `insert()` lists **every** column the schema declares (unset ones as
+  `default`), and a bare `select()`, a `db.query.*` read or a column-less `.returning()` names them
+  all too. So any code path that inserts into, or select-alls from, the table is not dark. → Keep such
+  paths out until the migration is applied, and pin it: `apps/web/test/program-tables-stay-dark.test.ts`
+  (FAM-1 4a-i, after V1-22 A4-1's plan).
+
+- **A regenerated migration contains a `DROP INDEX` (or another statement) you never asked for.** →
+  `drizzle-kit generate` diffs against the newest `meta/NNNN_snapshot.json`, and an **untracked**
+  snapshot from your own earlier `generate` survives `git checkout --no-overlay origin/main --
+packages/db/migrations/meta`: that only rewrites TRACKED paths. → Delete your untracked
+  `NNNN_*.sql` and `meta/NNNN_snapshot.json` first (`git status --short packages/db/migrations`
+  must show nothing), then restore `meta/` and regenerate. (FAM-1 4a-i, the first run of #429's recipe)
+
 - **A migration adding a table with a COMPOSITE foreign key aborts with `there is no unique constraint
 matching given keys for referenced table "<parent>"`, even though the parent obviously has one.** →
   `drizzle-kit generate` emits statements in a fixed order — `CREATE TABLE` → `ADD CONSTRAINT … FOREIGN
@@ -136,6 +150,14 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   `--> statement-breakpoint`, including each `SET`. (migration 0010)
 
 ## GitHub / PRs
+
+- **Merge-conflict markers shipped in a markdown table, and every gate stayed green.** → A merge of
+  `main` conflicted in several files; only the last lines of `git merge`'s output were read (one
+  `CONFLICT`), and `git add -A` committed the rest with their markers. Prettier then reflowed
+  the three seven-character conflict markers inside a table into table rows and a blockquote of
+  seven spaced `>`s, so `format:check`, `guides:check` and CI all passed; a reviewer found it (FAM-1 4a-i,
+  #437). → After any merge, read the WHOLE output and run `git diff --name-only --diff-filter=U`
+  before committing; `git grep -nE '^(<{7}|={7}|>{7})( |$)|(> ){6}>'` must print nothing.
 
 - **A skip label was added, the job was re-run, and the label was ignored.** → A re-run **replays the
   original event payload**, so `github.event.pull_request.labels` is frozen at the moment the run was

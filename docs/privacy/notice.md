@@ -34,6 +34,11 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **How a session felt** — a free-text box.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
+- **Programs you build yourself** _(coming; the app cannot save one yet)_: a program's name, its
+  workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
+  copy a workout from another of your programs, that program's name as it was when you copied it.
+  _(The tables exist so the app can be built against them. Nothing writes to them today; this line is
+  here because the schema is public and you would otherwise find them.)_
 
 **Three text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
 and, since the rename and add screens, an **athlete's name**. Whatever goes in is stored exactly as

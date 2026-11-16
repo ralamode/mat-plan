@@ -20,4 +20,4 @@
     the active time zone every write uses). New `clearBodyweight` and
     `bodyweightRowForAmend` (`packages/db/src/writers/single-value.ts`) and `lastBodyweightBefore`
     (`packages/db/src/queries/last-bodyweight.ts`), proved in `verify/single-values.ts`, with four
-    mutation patches (46–49).
+    mutation patches (58–61).

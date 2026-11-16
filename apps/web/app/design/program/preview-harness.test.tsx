@@ -39,13 +39,21 @@ vi.mock('@/components/program-builder/workout-editor-screen', () => ({
   WorkoutEditorScreen: probe('workout-editor'),
 }));
 vi.mock('@/components/day/day-screen', () => ({ DayScreen: probe('day') }));
+// The three parts the day page places itself (plan D34), which the day case mounts around the screen.
+vi.mock('@/components/day/athlete-switcher', () => ({
+  AthleteSwitcher: probe('athlete-switcher'),
+}));
+vi.mock('@/components/day/program-line', () => ({ ProgramLine: probe('program-line') }));
+vi.mock('@/components/day/not-on-a-program', () => ({ NotOnAProgram: probe('not-on-a-program') }));
 
 import { pickerOptions } from './picker-options';
 import { PreviewHarness } from './preview-harness';
 import {
+  parsePreview,
   PREVIEW_SCREEN_NAMES,
   PREVIEW_SCREENS,
   previewEntries,
+  previewHref,
   previewLabel,
   type PreviewSelection,
 } from './preview-registry';
@@ -57,9 +65,13 @@ afterEach(() => {
 
 type Action = (input: unknown) => Promise<{ ok: boolean; reason?: string }>;
 
-/** The props of the latest render of the one screen that is mounted. */
-function latest(): Mounted & { actions: Record<string, Action> } {
-  const last = mounted.calls.at(-1);
+/** The day page's three page-placed parts, in the order the page has them. */
+const DAY_PARTS = ['athlete-switcher', 'program-line', 'not-on-a-program'] as const;
+const isPart = (name: string) => (DAY_PARTS as readonly string[]).includes(name);
+
+/** The props of the latest render of one mounted component: the screen, unless a part is named. */
+function latest(of?: (typeof DAY_PARTS)[number]): Mounted & { actions: Record<string, Action> } {
+  const last = mounted.calls.findLast((call) => (of ? call.screen === of : !isPart(call.screen)));
   if (!last) throw new Error('the harness mounted no screen');
   return { ...last, actions: last.props.actions as Record<string, Action> };
 }
@@ -73,7 +85,14 @@ function expectedData({ screen: name, fixture }: PreviewSelection): Record<strin
     case 'program':
       return { program: of(PROGRAM_VIEW_FIXTURES) };
     case 'workout-editor':
-      return { draft: of(WORKOUT_DRAFT_FIXTURES), picker: { options: pickerOptions } };
+      return {
+        draft: of(WORKOUT_DRAFT_FIXTURES),
+        picker: { options: pickerOptions },
+        // The Programs list's entry for the draft's own program, never another's.
+        program: PROGRAM_LIST_FIXTURES['programs-list'].find(
+          (listed) => listed.programPublicId === of(WORKOUT_DRAFT_FIXTURES)?.programPublicId,
+        ),
+      };
     case 'day':
       return { plan: of(DAY_PLAN_FIXTURES) };
   }
@@ -101,7 +120,9 @@ describe('the preview harness', () => {
       render(<PreviewHarness {...entry} />);
 
       const { screen: name, props, actions } = latest();
-      expect(new Set(mounted.calls.map((call) => call.screen))).toEqual(new Set([entry.screen]));
+      expect(new Set(mounted.calls.map((call) => call.screen))).toEqual(
+        new Set(entry.screen === 'day' ? ['day', ...DAY_PARTS] : [entry.screen]),
+      );
       expect(name).toBe(entry.screen);
       const data = Object.fromEntries(Object.entries(props).filter(([key]) => key !== 'actions'));
       expect(data).toEqual(expectedData(entry));
@@ -159,6 +180,57 @@ describe('the preview harness', () => {
       'Off season',
     ]);
   });
+
+  it.each(Object.keys(DAY_PLAN_FIXTURES))(
+    'day · %s: the three page-placed parts get the screen’s plan and actions, in the page’s order',
+    (fixture) => {
+      render(<PreviewHarness screen="day" fixture={fixture} failNext={false} />);
+      const day = latest();
+
+      // The same objects, not equal copies: a reorder made in the line must reach the screen.
+      for (const part of DAY_PARTS) expect(latest(part).props.plan).toBe(day.props.plan);
+      expect(latest('program-line').props.actions).toBe(day.props.actions);
+
+      // Nothing the page adds for its own layout or for a page that does not exist yet.
+      expect(Object.keys(latest('athlete-switcher').props).sort()).toEqual(['hrefFor', 'plan']);
+      expect(Object.keys(latest('program-line').props).sort()).toEqual(['actions', 'plan']);
+      expect(Object.keys(latest('not-on-a-program').props)).toEqual(['plan']);
+
+      // Top to bottom: the switcher, the line, the notice, then the screen.
+      // First occurrences, so a double render (StrictMode) cannot make a wrong order look right.
+      const firstSeen = [...new Set(mounted.calls.map((call) => call.screen))];
+      expect(firstSeen).toEqual([...DAY_PARTS, 'day']);
+    },
+  );
+
+  it.each(Object.keys(DAY_PLAN_FIXTURES))(
+    'day · %s: every athlete’s switcher link is a state this route lists',
+    (fixture) => {
+      const current: PreviewSelection = { screen: 'day', fixture, failNext: false };
+      render(<PreviewHarness {...current} />);
+      const hrefFor = latest('athlete-switcher').props.hrefFor as (id: string) => string;
+      const plan = DAY_PLAN_FIXTURES[fixture as keyof typeof DAY_PLAN_FIXTURES];
+
+      for (const athlete of plan.athletes) {
+        const href = hrefFor(athlete.profilePublicId);
+        const selection = parsePreview(Object.fromEntries(new URL(href, 'http://x').searchParams));
+        // An allowlisted state, or it would have parsed to the index.
+        expect(selection?.screen).toBe('day');
+        const target = DAY_PLAN_FIXTURES[selection!.fixture as keyof typeof DAY_PLAN_FIXTURES];
+        // That athlete's day when the fixtures hold one; otherwise the link stays where it is.
+        if (target.profilePublicId !== athlete.profilePublicId) {
+          expect(href).toBe(previewHref(current));
+          expect(
+            Object.values(DAY_PLAN_FIXTURES).some(
+              (other) => other.profilePublicId === athlete.profilePublicId,
+            ),
+          ).toBe(false);
+        }
+      }
+      // An id the route never listed gets no new URL either.
+      expect(hrefFor('not-an-athlete')).toBe(previewHref(current));
+    },
+  );
 
   it('the day preview supplies the page’s <h1>, which on the real page is not the screen’s', () => {
     render(<PreviewHarness screen="day" fixture="no-program" failNext={false} />);

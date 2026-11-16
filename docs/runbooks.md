@@ -1260,6 +1260,10 @@ UNION ALL SELECT 'day_readiness', count(*) FROM day_readiness WHERE profile_id I
 UNION ALL SELECT 'ramp_targets', count(*) FROM ramp_targets WHERE profile_id IN (SELECT id FROM p)
 UNION ALL SELECT 'program_blocks', count(*) FROM b
 UNION ALL SELECT 'prescriptions', count(*) FROM prescriptions WHERE block_id IN (SELECT id FROM b)
+-- FAM-1 4a-i: the week template and the workouts, both scoped by block (no deleted_at filter here
+-- either: a hidden slot or workout is still a row the delete must remove).
+UNION ALL SELECT 'block_day_workouts', count(*) FROM block_day_workouts WHERE block_id IN (SELECT id FROM b)
+UNION ALL SELECT 'workouts', count(*) FROM workouts WHERE block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
   WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
     (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
@@ -1306,6 +1310,21 @@ child:
 --       WHERE e.profile_id IN (SELECT id FROM p)
 --         AND m.household_id IS NOT NULL AND m.household_id <> (SELECT id FROM h)
 --       (and the mirror, plus the same pair over `prescriptions` joined through `b`)
+```
+
+```sql
+-- (e) FAM-1 4a-i: a WORKOUT of ANOTHER household copied from one of H's workouts. Its pointer is
+--       `ON DELETE SET NULL`, so step 9b would rewrite that household's row SILENTLY, and its
+--       `copied_from_program_name` is H's typed text, which the delete would leave behind.
+--       The writer refuses a cross-household copy, so a row here is a defect: STOP, and clear both
+--       provenance columns on the other household's row with a correction before this procedure.
+--       SELECT w.id FROM workouts w
+--         JOIN program_blocks b  ON b.id  = w.block_id
+--         JOIN workouts src      ON src.id = w.copied_from_workout_id
+--         JOIN program_blocks sb ON sb.id = src.block_id
+--        WHERE sb.household_id = (SELECT id FROM h) AND b.household_id <> sb.household_id
+--       (`db:verify` proves this join finds a planted row, `verify/schema.ts` → FAM-1 4a-i; it runs on
+--       PGlite, never on production, so THIS is the check against real rows.)
 ```
 
 🔴 **Why (d) exists, and why it STAYS although `TEN-2c` closed the writer that minted it.** `TEN-2a`
@@ -1360,8 +1379,9 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write all three out against the same CTEs and read the numbers. (a)–(c) must be zero. For (d), follow
-the repoint above rather than stopping — it is the one pre-flight with a documented remedy.
+Write them all out against the same CTEs and read the numbers. (a)–(c) and (e) must be zero. For (d),
+follow the repoint above rather than stopping; for (e), STOP and clear the other household's provenance
+with a correction first, as (e) says.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 
@@ -1382,7 +1402,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 14 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 16 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -1403,11 +1423,19 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 | 7   | `ramp_targets`          | `profile_id` ∈ H                                               |
 | 8   | `prescription_targets`  | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H |
 | 9   | `prescriptions`         | `block_id` ∈ program_blocks of H                               |
+| 9a  | `block_day_workouts`    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**   |
+| 9b  | `workouts`              | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**   |
 | 10  | `program_blocks`        | `household_id` = H                                             |
 | 11  | **`movements`**         | `household_id` = H — **TEN-2a; see below**                     |
 | 12  | `profiles`              | `household_id` = H                                             |
 | 13  | **`household_members`** | `household_id` = H — **AUTH-1 1b; see below**                  |
 | 14  | `households`            | `id` = H                                                       |
+
+**Steps 9a and 9b are lettered, not numbered**, so every "step 11" and "step 14" cited across the
+repo still names the same table. A week slot references its workout through a composite FK, and a
+workout references its block, both `NO ACTION`: out of order, the delete raises `23503` and the
+transaction rolls back (`db:verify` proves both refusals and the order that commits). Steps 4b and 5
+of FAM-1 add their tables the same way.
 
 Steps 1 and 2 are redundant with the `ON DELETE CASCADE` on `entry_sets.entry_id` and
 `entry_set_quantities.entry_set_id` — written out anyway, because **the counts are the proof** and a
