@@ -173,10 +173,12 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | An export you have downloaded                                | Yours — we cannot keep or delete it                                                                                                                                    |
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
-⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. The only way anything comes
-out of the database today is deleting a whole athlete or household, and the one time a row has been
-removed from view, it stayed in the database. **Nothing automatically clears it.** You should know that
-before you log something you might regret.
+⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
+weigh-in** on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and it
+**cannot be put back in the app yet**, so re-enter the right weight instead. A cleared weigh-in is not
+removed from the database. The only way anything comes out of the database today is deleting a whole
+athlete or household. **Nothing automatically clears a hidden row.** You should know that before you
+log something you might regret.
 
 **What is being built, so you know what to expect.** A Delete button, per item, that works like this:
 deleting something **hides it, and then actually removes it** a set number of days later. Two things

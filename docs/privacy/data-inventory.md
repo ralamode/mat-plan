@@ -464,11 +464,18 @@ replacement coexists with it.
 one place in the app tree (a committed data correction)". There are now **three** writers of
 `entries.deleted_at`, and the distinction between them is what matters here:
 
-| Writer                                                            | Reachable by                                                     | Touches production?       |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------- |
-| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                        | **yes** — it has been run |
-| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **nothing yet** — no action or UI imports it until `B1-2`/`B1-3` | not yet                   |
-| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                        | no                        |
+| Writer                                                            | Reachable by                                                                                                                               | Touches production?       |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                  | **yes** — it has been run |
+| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, through `writers/single-value.ts`. B1-2 adds Delete for other entries | **yes, from 3b-bw**       |
+| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                  | no                        |
+
+⚠️ **Updated (V1-24 3b-bw).** The app now writes `deleted_at`: clearing a weigh-in on the day page
+(Change, empty the field, Clear) **hides** that one row through `hideEntries`. Nothing in the app can
+restore it yet (B1-3 builds the hidden region), and nothing purges it, so a cleared weigh-in stays in
+the database, out of every reader (the day page, "Last time", the export), until the household is
+deleted. No column, processor or reader audience is new; the "Last time" hint reads the athlete's own
+earlier live weigh-in, which their own page already shows on its day.
 
 **Nothing stored, received or retained changed in B1-1b**: no column, no processor, no new reader
 audience, and the month export is proved unchanged (restoring returns it deep-equal). The

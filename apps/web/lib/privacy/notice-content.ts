@@ -1520,20 +1520,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " The app has no Delete button yet. The only way anything comes\nout of the database today is deleting a whole athlete or household, and the one time a row has been\nremoved from view, it stayed in the database. "
+        "text": " The app has no Delete button yet. You can "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Nothing automatically clears it."
+            "text": "clear a\nweigh-in"
           }
         ]
       },
       {
         "k": "text",
-        "text": " You should know that\nbefore you log something you might regret."
+        "text": " on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and it\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "cannot be put back in the app yet"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", so re-enter the right weight instead. A cleared weigh-in is not\nremoved from the database. The only way anything comes out of the database today is deleting a whole\nathlete or household. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Nothing automatically clears a hidden row."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " You should know that before you\nlog something you might regret."
       }
     ]
   },

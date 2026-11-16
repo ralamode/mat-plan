@@ -490,8 +490,9 @@ export async function logLifeActivitiesAction(
     // activity is idempotent by its `client_id`, so a double-tap dedupes and the end state is
     // identical — that IS success. But `own_hidden` is not a replay: the id is held by this
     // athlete's own DELETED row, nothing was written, and returning `ok` would report a save that
-    // did not happen (criterion 9). The other half of the fix is in `life-form.tsx`, where the
-    // button's key now carries the day and the row's id so a dead id is not re-submitted at all.
+    // did not happen (criterion 9). The other half is in `life-form.tsx`: each button is keyed
+    // `${day}:${activity}` and mounts only while the day has no row for it, so a logged (or
+    // cleared) row's id is never re-submitted from the same mount.
     if (result?.outcome === 'own_hidden') {
       return { ok: false, error: HIDE_COPY.loggedThenDeleted };
     }

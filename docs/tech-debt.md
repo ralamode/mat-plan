@@ -587,7 +587,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   keeps explaining it.
 - **Severity:** low. It holds nothing today; the cost is the explaining.
 
-### Four copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
+### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
 
 - **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
@@ -604,6 +604,11 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ⚠️ **The count is still four.** a-r is the component's first consumer and converted none of them, so
   this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b
   are the next consumers.
+  ✅ **Down to three (V1-24 3b-bw, 2026-11-16).** `bodyweight-amend.tsx`'s own region is gone: the
+  bodyweight row reports to `single-value-live.tsx`, which renders `Announcer` once (with a
+  `messageKey`, so a repeated message re-announces) and owns a single-use focus claim. 3b-life moves
+  the Life row onto it and retires `saved-announcer.tsx`'s last consumer, leaving `editable-set.tsx`
+  and the `StrengthForm` island.
 - **Severity:** low.
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
