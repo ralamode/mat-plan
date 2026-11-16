@@ -234,6 +234,8 @@ export function canChangeValues(item: DayItem, logged: RowValues): boolean {
   // Logged as another type (the item's type changed since): a Change would send numbers the type
   // no longer has, so it stays text like a row in another unit.
   if (logged.reps !== undefined && !reps) return false;
+  // A type with a load whose row has none (logged as reps only): a Change could not send one.
+  if (slot && item.unit && !logged.quantities.some((q) => q.slot === slot)) return false;
   return logged.quantities.every((q) => q.slot === slot && q.unit === item.unit);
 }
 

@@ -224,6 +224,8 @@ describe('readAmend (Change, 13b-ii)', () => {
     expect(canChangeValues(bench, logged)).toBe(true);
     expect(canChangeValues({ ...bench, unit: 'kg' }, logged)).toBe(false);
     expect(canChangeValues(grip, { quantities: [] })).toBe(false);
+    // Logged as reps only, on what is now weight × reps: no load to send.
+    expect(canChangeValues(bench, { quantities: [], reps: 8 })).toBe(false);
     // Logged as another type (reps on what is now a Duration): no numbers it no longer has.
     expect(
       canChangeValues(splits, {

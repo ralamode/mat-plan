@@ -180,6 +180,10 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   // entry went, or another phone changed it). Data that has not caught up with this visit's ✓ yet
   // (`planValues` null, nothing in the data) keeps it.
   if (override?.kind === 'amended') {
+    // The data shown the entry since the Change was sent counts as shown: its going later is news.
+    if (fromPlan?.entryPublicId === override.entryPublicId && !override.planShown) {
+      setOverride({ ...override, planShown: true });
+    }
     const caughtUp =
       fromPlan?.entryPublicId === override.entryPublicId &&
       sameValues(fromPlan.values, override.values);
@@ -271,7 +275,12 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
         kind: 'amended',
         entryPublicId: result.entryPublicId,
         values: result.values,
-        lagging: [...(fromPlan ? [fromPlan.values] : []), target.values],
+        // A Change over a Change carries the earlier one's lagging values too (A → B → C).
+        lagging: [
+          ...(fromPlan ? [fromPlan.values] : []),
+          target.values,
+          ...(override?.kind === 'amended' ? override.lagging : []),
+        ],
         planShown: fromPlan?.entryPublicId === target.entryPublicId,
       });
       setError(null);
