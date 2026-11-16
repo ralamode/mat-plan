@@ -1,6 +1,6 @@
-diff --git a/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql b/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql
---- a/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql
-+++ b/packages/db/migrations/0028_tdebt_name_and_nan_checks_not_valid.sql
+diff --git a/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql b/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
+--- a/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
++++ b/packages/db/migrations/0029_tdebt_name_and_nan_checks_not_valid.sql
 @@ -34,5 +34,5 @@
  SET statement_timeout = '60s';--> statement-breakpoint
  ALTER TABLE "program_blocks" ADD CONSTRAINT "program_blocks_name_length_check" CHECK (char_length(btrim("program_blocks"."name")) >= 1 and char_length("program_blocks"."name") <= 60) NOT VALID;--> statement-breakpoint
