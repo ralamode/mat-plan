@@ -85,7 +85,14 @@ function expectedData({ screen: name, fixture }: PreviewSelection): Record<strin
     case 'program':
       return { program: of(PROGRAM_VIEW_FIXTURES) };
     case 'workout-editor':
-      return { draft: of(WORKOUT_DRAFT_FIXTURES), picker: { options: pickerOptions } };
+      return {
+        draft: of(WORKOUT_DRAFT_FIXTURES),
+        picker: { options: pickerOptions },
+        // The Programs list's entry for the draft's own program, never another's.
+        program: PROGRAM_LIST_FIXTURES['programs-list'].find(
+          (listed) => listed.programPublicId === of(WORKOUT_DRAFT_FIXTURES)?.programPublicId,
+        ),
+      };
     case 'day':
       return { plan: of(DAY_PLAN_FIXTURES) };
   }
