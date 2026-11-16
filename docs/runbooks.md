@@ -365,8 +365,9 @@ starts, so no gate can watch pooled traffic pick it up ([plan](./plans/scale-3-s
    this reads the app's role, not the migrator's):
    `SELECT current_user, rolconfig FROM pg_roles WHERE rolname = current_user;` must include
    `statement_timeout=15s`. It reads the catalog, so the age of the backend does not matter.
-2. **No backend predates it.** On the direct string, with `<t>` the migrate run's start time from
-   `migrate.yml`, `0` from this means every live backend is bounded (read-only; re-run later if not):
+2. **No backend predates it.** On the direct string, with `<t>` the time `migrate.yml`'s "Apply
+   migrations" step **finished** (later is safe; the run's start time would miss a backend opened during
+   setup), `0` from this means every live backend is bounded (read-only; re-run later if not):
    `SELECT count(*) FROM pg_stat_activity WHERE usename = current_user AND backend_start < '<t>';`
 3. **A long manual query of your own:** `BEGIN; SET LOCAL statement_timeout = 0; <query>; COMMIT;`.
    It lasts for that transaction only, on either string, and never reaches a backend the app reuses.
