@@ -36,11 +36,18 @@
  */
 export function Announcer({
   message,
+  messageKey,
   className = 'sr-only',
   id,
 }: {
   /** The text to announce. `''` is the mounted-and-silent state, which is the initial one. */
   message: string;
+  /**
+   * Change it to announce the SAME message again (V1-24 3b-bw). A live region reads a change to its
+   * text; an identical string is no change, so a second "Bodyweight logged" would be silent. A new
+   * key makes the text a new node, which is read, without a blank frame in between.
+   */
+  messageKey?: number;
   /**
    * An id, so a CONTROL can point `aria-describedby` at this region (PICK-1 PR 3, criterion 46).
    *
@@ -60,7 +67,7 @@ export function Announcer({
 }) {
   return (
     <p role="status" id={id} className={className}>
-      {message}
+      {messageKey === undefined ? message : <span key={messageKey}>{message}</span>}
     </p>
   );
 }

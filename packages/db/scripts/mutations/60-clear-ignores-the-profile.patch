@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/single-value.ts b/packages/db/src/writers/single-value.ts
+index b7366808..a70e0b94 100644
+--- a/packages/db/src/writers/single-value.ts
++++ b/packages/db/src/writers/single-value.ts
+@@ -47,7 +47,6 @@ function ownedSingleValue(
+   entryId: string,
+ ) {
+   return and(
+-    isLiveProfile(profilePublicId, scope),
+     eq(schema.entries.publicId, entryId),
+     eq(schema.entries.metricKey, metric.metricKey),
+     eq(schema.entries.status, ENTRY_STATUS.done),
