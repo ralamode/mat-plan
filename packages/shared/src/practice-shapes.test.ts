@@ -42,6 +42,10 @@ describe('practice-shapes — the contract (V1-24 3b-life)', () => {
     for (const value of [undefined, null, 45, '9', '301', '45.5']) {
       expect(editPracticeSchema.safeParse(input(value)).success).toBe(false);
     }
+    // `seenValue` is a whole number the form rendered; a fractional or missing one is `bad_value`.
+    expect(editPracticeSchema.safeParse({ ...input('45'), seenValue: 45.5 }).success).toBe(false);
+    const { seenValue: _omit, ...noSeen } = input('45');
+    expect(editPracticeSchema.safeParse(noSeen).success).toBe(false);
   });
 
   it("borrows the row contract's words where the meaning is the same", () => {

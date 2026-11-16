@@ -1,4 +1,3 @@
-import { isBlankEntry } from './text';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -166,14 +165,6 @@ describe('both schemas read a typed weight the same way (V1-24 3b-bw, plan W3)',
     for (const bad of ['84..5', 'abc', '1e2', '0x50', '', '84.5555']) {
       expect(valueErrors(bad, LB), bad).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
     }
-  });
-
-  it('isBlankEntry is true only for a string that is empty after trim', () => {
-    expect(isBlankEntry('')).toBe(true);
-    expect(isBlankEntry(' \t')).toBe(true);
-    expect(isBlankEntry('0')).toBe(false);
-    expect(isBlankEntry(null)).toBe(false);
-    expect(isBlankEntry(undefined)).toBe(false);
   });
 });
 

@@ -506,10 +506,9 @@ export async function logLifeActivitiesAction(
     if (result?.outcome === 'own_hidden') {
       return { ok: false, error: HIDE_COPY.loggedThenDeleted };
     }
-    // ⚠️ **`day_taken` is `ok` until 3b-life, on purpose** (plan 3b-0 Z5): another phone's practice
-    // already holds the day, and while the ✓ writes a constant, that row already says what this tap
-    // meant. A refusal here would also be an alert inside `LifeButton`, which unmounts on the
-    // revalidate. 3b-life types the minutes, and then this becomes a refusal with its own copy; a
+    // ⚠️ **`day_taken` is `ok` until 3b-life-b, on purpose** (plan 3b-0 Z5): another phone's practice
+    // already holds the day, and while the button writes a constant, that row already says what this
+    // tap meant. 3b-life-b types the minutes, and then this becomes a refusal with its own copy; a
     // test pins today's answer so that change is a deliberate one.
     return { ok: true, error: null };
   });

@@ -16,8 +16,8 @@ import { plural } from './i18n/plural';
 import { LIFE_ACTIVITIES } from './life/life-activities';
 
 /**
- * App-only, cross-feature constants. **No server or IO dependencies** — only `@mat-plan/shared`'s
- * pure values — so it is safe to import from a `'use client'` component, from the Edge proxy, and
+ * App-only, cross-feature constants. **No server or IO dependencies** — only pure modules
+ * (`@mat-plan/shared`, `./i18n/plural`, `./life/life-activities`) — so it is safe to import from a `'use client'` component, from the Edge proxy, and
  * from `lib/access-gate.ts` (which takes `PRIVACY_PATH` from here) without dragging server code into
  * the client bundle. Named here so a value that must stay in sync across files (a cookie name, the
  * tz default, a published URL) can't drift.
@@ -794,15 +794,15 @@ export const BODYWEIGHT_COPY = {
   }),
 } as const;
 
-/**
- * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
- * the day's TOTAL, and the hint says so (plan A3).
- */
-/** The practice activity's label, from the one list that also names its one-tap button. */
+/** The practice activity's label, from the one list that also names its button (one source). */
 const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
   (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
 )!.label;
 
+/**
+ * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
+ * the day's TOTAL, and the hint says so (plan A3).
+ */
 export const PRACTICE_COPY = {
   label: PRACTICE_LABEL,
   /** `changeLabel`'s subject: `Change wrestling practice — 90 min`. */

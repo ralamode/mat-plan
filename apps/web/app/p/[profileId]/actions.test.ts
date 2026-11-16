@@ -1983,10 +1983,16 @@ const practiceInput = (over: Partial<EditPracticeInput> = {}): EditPracticeInput
 
 describe('editPracticeAction — the typed refusals', () => {
   it('saves a whole number in range through the guarded UPDATE', async () => {
+    // The DAL gets the profile RESOLVED by ownership, not the one posted: the resolver answers a
+    // different id here, so passing the posted one through would fail this.
+    const RESOLVED = '019826b4-0000-7000-8000-0000000000ac';
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({
+      ...(await getProfileByPublicId(PROFILE_ID))!,
+      id: RESOLVED,
+    });
     expect(await editPracticeAction(practiceInput())).toEqual({ ok: true });
-    // The profile is the one RESOLVED (ownership), not merely the one posted.
     expect(vi.mocked(editPractice).mock.calls[0]![0]).toMatchObject({
-      profilePublicId: PROFILE_ID,
+      profilePublicId: RESOLVED,
       entryId: PRACTICE_ENTRY_ID,
       minutes: 45,
       seenValue: 90,

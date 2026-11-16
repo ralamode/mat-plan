@@ -61,7 +61,7 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-24 3b-life-a: Change it to the largest legal value (the longest minutes line; the label is the
   // row's widest line either way), check the row at 360px, refuse an out-of-range value, clear it (Save
-  // reads Clear), then the one-tap ✓ logs it again, so the day ends as it began. Athlete One's today is
+  // reads Clear), then the Wrestling practice button logs it again, so the day ends as it began. Athlete One's today is
   // this spec's alone (the e2e rule, `global.setup.ts`).
   await page.setViewportSize({ width: 360, height: 800 });
   await changePractice(page, PRACTICE_SHOWN, String(PRACTICE_MINUTES_MAX));

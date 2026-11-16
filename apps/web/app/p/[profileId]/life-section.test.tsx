@@ -176,7 +176,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     );
   });
 
-  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning ✓', async () => {
+  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning button', async () => {
     const { rerender } = render(section({ logged: [practice(90)] }));
     open(90);
     fireEvent.change(field(), { target: { value: '' } });
@@ -237,5 +237,24 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     fireEvent.change(field(), { target: { value: '60' } });
     await submit(AMEND_COPY.save);
     expect(screen.getByRole('alert').textContent).toBe(copy());
+  });
+
+  it("a refused log is the island's alert, with focus kept in the island", async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({ ok: false, error: 'Not saved.' });
+    render(section());
+    await submit(practiceLabel);
+    expect(screen.getByRole('alert').textContent).toBe('Not saved.');
+  });
+
+  it('a practice row with no value, or in another unit, shows no Change (the endpoint would refuse it)', () => {
+    render(
+      section({
+        logged: [
+          { entryId: 'n', activityKey: PRACTICE, value: null, unit: PRACTICE_UNIT },
+          { entryId: 's', activityKey: PRACTICE, value: 3600, unit: 'sec' },
+        ],
+      }),
+    );
+    expect(screen.queryByRole('button', { name: /^Change/ })).toBeNull();
   });
 });

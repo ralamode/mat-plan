@@ -191,7 +191,7 @@ export async function changePractice(page: Page, from: string, minutes: string):
 }
 
 /** Clear the logged practice shown as `from`: empty the field, Save reads Clear; the cleared line is
- * shown and focus lands on the one-tap ✓ that comes back (V1-24 3b-life-a A3, A4). */
+ * shown and focus lands on the Wrestling practice button that comes back (V1-24 3b-life-a A3, A4). */
 export async function clearPractice(page: Page, from: string): Promise<void> {
   const life = lifeSection(page);
   await practiceChange(page, from).click();

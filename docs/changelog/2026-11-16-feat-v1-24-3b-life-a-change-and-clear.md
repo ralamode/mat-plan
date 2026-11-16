@@ -5,10 +5,10 @@
   - **Change:** opens with the minutes selected; Cancel, then Save. While the field is empty Save reads
     **Clear**, and a line under the field says how to clear and that two practices in a day are entered
     as their total. Whole minutes from 10 to 300. A clear hides the row through `hideEntries`, the app
-    does not offer to restore it (ADR 0008 Amendment 1), and the one-tap ✓ comes back to log again.
+    does not offer to restore it (ADR 0008 Amendment 1), and the Wrestling practice button comes back to log again.
     An archived athlete can change but not clear.
   - **One editor, two rows:** bodyweight and practice share `SingleValueAmend`, `LoggedValueRow` and
-    one copy factory, so the two rows cannot drift. The one-tap ✓ now reports through 3b-bw's island
+    one copy factory, so the two rows cannot drift. The Wrestling practice button now reports through 3b-bw's island
     (spoken, focus to Change), and `saved-announcer.tsx` is deleted.
   - **The action:** `editPracticeAction` is the first action in this module in the FAM-1 contract:
     typed input and result (`packages/shared/src/practice-shapes.ts`), refusals as reasons, C7's entry,
