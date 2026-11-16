@@ -70,13 +70,13 @@ The contract owner builds these as C10 (`feat/fam-1-c10-row-value-rules`, decide
 **A lane never edits contract-owned files**, so 11b imports them and edits none of
 `packages/shared/src/program/`, `packages/shared/src/day.ts` or the fake.
 
-| Export (`@mat-plan/shared`)                                                    | Used for                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fillRowValues(item, typed, target): RowValues \| null`                        | Step 10. `null` → `bad_value`. It refuses reps on a type without reps, a foreign or repeated slot, a missing number the target cannot supply, another unit, and a value over `quantityCeiling` (or a unit with no ceiling). |
-| `prescriptionTarget(targetReps: string \| null, quantities): PrescribedTarget` | Step 10's target. Applies `wholeReps`; `valueMax` set → `value: null` (the range rule). The writer converts numeric strings to numbers first.                                                                               |
-| `entryUnitFor(trackingType, prescribedUnit): Unit`                             | `entries.unit`. It throws when a type that needs a unit is given none; step 10's re-check stops that from reaching it.                                                                                                      |
-| `inWritableWindow(day, today)`, `WRITABLE_DAY_RADIUS`                          | Step 2. Today and yesterday, **never a day after today** (D32). The app's `isWritableDay` keeps accepting tomorrow until 12c.                                                                                               |
-| The fake judges values before the set                                          | Parity with the writer, which has no slot pre-check.                                                                                                                                                                        |
+| Export (`@mat-plan/shared`)                                                                                         | Used for                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fillRowValues(item, typed, target): RowValues \| null`                                                             | Step 10. `null` → `bad_value`. It refuses reps on a type without reps, a foreign or repeated slot, a missing number the target cannot supply, another unit, and a value over `quantityCeiling` (or a unit with no ceiling). |
+| `prescribedTarget(targetReps: string \| null, quantities): PrescribedTarget`                                        | Step 10's target. Applies `wholeReps`; any `valueMax`, even one equal to the value, → `value: null` (the range rule). The writer converts numeric strings to numbers first.                                                 |
+| `entryUnitFor(trackingType, prescribedUnit): Unit` (Duration → `min` and Time per set → `sec` whatever it is given) | `entries.unit`. It throws when a type that needs a unit is given none; step 10's re-check stops that from reaching it.                                                                                                      |
+| `inWritableWindow(day, today)`, `WRITABLE_DAY_RADIUS`                                                               | Step 2. Today and yesterday, **never a day after today** (D32). The app's `isWritableDay` keeps accepting tomorrow until 12c.                                                                                               |
+| The fake judges values before the set                                                                               | Parity with the writer, which has no slot pre-check.                                                                                                                                                                        |
 
 **Fallback, from the contract owner:** if C10 is not on `main` when 11b is otherwise ready, 11b puts
 the three pure functions in its own directory with their tests, merges, and tells the board. The
@@ -89,14 +89,14 @@ local in the writer, with a comment naming C10.
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
 | Lane A         | Export from `verify/schema.ts`: the detectors `sessionsOnForeignWorkouts`, `entriesOnForeignPrescriptions`, `entriesOnAnotherWorkoutsPrescriptions`, `workoutSessionsOfAnotherType`, `workoutSessionsWithADayRole`, and the builders `mkTemplateBlock`, `mkWorkout` and the template `prescription` builder. | Lane A hoists them into `verify/harness.ts`. |
 | Contract owner | Plan text: row 12b gains "a `cross_household` signal for a probed workout or prescription id" (`reportScopeMiss` covers profiles only, `apps/web/lib/dal/household.ts:521`). L16 names this plan's (f) proof and patch.                                                                                      | This plan's § Out of scope carries it.       |
-| Contract owner | NITs from the reuse lens, for C10's review: `apps/web/components/day/row-values.ts` `readTyped` restates the fill (`:80-125`) and `targetQuantity` (`:47-52`); `prescriptionTarget` shares a name with the `prescription_targets` table (per-athlete loads).                                                 | Theirs to decide.                            |
+| Contract owner | NITs from the reuse lens, for C10's review: `apps/web/components/day/row-values.ts` `readTyped` restates the fill (`:80-125`) and `targetQuantity` (`:47-52`); `prescribedTarget` shares a name with the `prescription_targets` table (per-athlete loads).                                                   | Theirs to decide.                            |
 
 ## The contract, in order
 
 Every writer runs in one transaction. **A refusal reached after the first insert leaves by a
 sentinel throw** (`RowRefused`, like `restoreHidden`'s `ItemRefused`, `writers/hide.ts:231-249`), so
-nothing a refused write began is committed. Mutation numbers are assigned after #461 merges (it
-takes 82–90); `P#` below are this plan's labels.
+nothing a refused write began is committed. Mutation numbers come from lane E's block, 110 and up (the board, 2026-11-16); `P#` below are this
+plan's labels.
 
 **One named conjunct for "a program row of this athlete on this day"**, `programRowOf(profileId,
 day)` (`entries.profile_id`, `activity_date`, `prescription_set IS NOT NULL`), used by step 3,
@@ -161,7 +161,7 @@ profiles.household_id`, column to column, so pre-flight (f) holds whatever a sco
 9. **Set.** `set > 1` on a type without set rows (`hasSetRows`) → `bad_value`. **P9.**
 10. **Values.** First, the prescription's type and unit are re-checked against `TRACKING_TYPE_FIELDS`
     (`dimensions`, the fixed `min`/`sec`); a malformed prescription → `bad_value`, not an FK 500
-    (**P21**, proof 5b). Then `fillRowValues(item, write.values, prescriptionTarget(...))` → `null`
+    (**P21**, proof 5b). Then `fillRowValues(item, write.values, prescribedTarget(...))` → `null`
     → `bad_value`.
 11. **Writes.**
     - **Session:** server-minted `client_id`, `session_type = SESSION_TYPE.workout`, `workout_id`,
@@ -351,7 +351,7 @@ Run: `pnpm verify` (which includes `db:mutations`). No UI, so no screenshots or 
 | SE5 | security                                | The runbook's (f) text goes stale                                                                              | **accepted** | Runbook and L16 in the file table                                                                                                    |
 | SE6 | security                                | `not_found` uniformity doesn't hold for `client_id`                                                            | **accepted** | Stated in Risks and the guide                                                                                                        |
 | SE7 | security                                | No `cross_household` signal for a workout probe                                                                | **accepted** | Out of scope, a 12b obligation                                                                                                       |
-| R1  | reuse                                   | The fill rule would be a fourth copy                                                                           | **accepted** | Shared `fillRowValues` / `prescriptionTarget` (§ Requests)                                                                           |
+| R1  | reuse                                   | The fill rule would be a fourth copy                                                                           | **accepted** | Shared `fillRowValues` / `prescribedTarget` (§ Requests)                                                                             |
 | R2  | reuse                                   | Natural-key predicates written inline twice                                                                    | **accepted** | `workoutSessionSlot`, `workoutSupersetSlot`, `programRowSlot`                                                                        |
 | R3  | reuse                                   | The workout lookup re-types `liveTemplateBlockIn`                                                              | **accepted** | `templateBlockIn`, with `liveTemplateBlockIn` recomposed                                                                             |
 | R4  | reuse                                   | `entries.unit` restates §2                                                                                     | **accepted** | `entryUnitFor` in shared (§ Requests)                                                                                                |
@@ -389,7 +389,7 @@ Run: `pnpm verify` (which includes `db:mutations`). No UI, so no screenshots or 
 | 2S1  | security              | The SE7 obligation isn't in 12b's row                                                | **accepted** | A request to the contract owner for 12b's row                                                                       |
 | 2S2  | security              | `programBlockOfProfile` has one consumer (`ownership.ts`'s two-consumer rule)        | **accepted** | 11c's amend is the second, named in step 4                                                                          |
 | 2R1  | reuse                 | `components/day/row-values.ts` restates the fill and `targetQuantity`                | **accepted** | Passed to the contract owner for C10 (not lane E's file)                                                            |
-| 2R2  | reuse                 | `prescriptionTarget` collides with the `prescription_targets` table                  | **accepted** | Passed to the contract owner (C10 names it)                                                                         |
+| 2R2  | reuse                 | `prescribedTarget` collides with the `prescription_targets` table                    | **accepted** | Passed to the contract owner (C10 names it)                                                                         |
 | 2R3  | reuse                 | `readRowValues` is a second copy of the DAL's live-sets read                         | **accepted** | Named `stored-row-values.ts`; cites `entries.ts:226`; P26 proves the parent filter; folding filed as tech debt      |
 | 2R4  | reuse                 | Recomposing `liveTemplateBlockIn` breaks patches 46–48, and P4 duplicates 47         | **accepted** | 46–48 retargeted, in the file table; P4 dropped in favour of 47                                                     |
 | 2R5  | reuse                 | Lane A's builders not requested; the program-row predicate restated three times      | **accepted** | `mkWorkout` and the prescription builder added to the request; `programRowOf` named once                            |
