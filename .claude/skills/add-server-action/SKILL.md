@@ -61,6 +61,14 @@ the two files beside it are the shortest example. An action added to an EXISTING
 in that module's registry and a binding and a valid body in that module's test. Either way the
 compiler and `actions.test.ts` say what is missing.
 
+⚠️ **A NEW mutation follows AGENTS.md → Server conventions → "Contract" and "Time" (`SCALE-1`),
+which changes steps 1, 3, 4 and 8 below.** It takes the object its `packages/shared` zod schema
+parses, not `(prev, formData)`; it returns that contract's `{ ok:true,… } | { ok:false, reason }`,
+not `ActionState`; and it resolves the day and time zone in the action and passes them to the
+writer. The shape to copy is `packages/shared/src/program/actions.ts` (`ProgramActions`,
+`DayActions`). Steps 2, 5, 6 and 7 are unchanged. The steps as written describe the legacy forms,
+which FAM-1 step 12f removes. Once the first real contract action merges, it replaces them here.
+
 Copy the shape of `logBodyweightAction` (plain form) or `editRoutineAction` (JSON payload):
 
 1. `export async function xAction(prev: ActionState, formData: FormData)`. Only async function

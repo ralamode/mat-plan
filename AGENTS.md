@@ -156,9 +156,12 @@ Migrate: drizzle-kit generate+migrate ONLY (never push in prod); forward-only; n
 Trust: every Server Action + Route Handler is a PUBLIC endpoint. Re-auth + re-authorize (ownership)
        + zod-validate inside each. Never trust FormData/JSON/searchParams/params/headers.
 DAL:   all DB access via lib/dal/* (server-only). Thin actions/handlers → validate → DAL → revalidate.
-Split: mutations → Server Actions. Reads/external/batch → Route Handlers. /api/sync is a Route Handler.
-Errors: expected → typed envelope { ok:false, error, fieldErrors? } + useActionState (don't throw).
-        unexpected → throw → error.tsx. Never leak internals; return only what the UI needs.
+Contract: NEW mutations copy FAM-1 (packages/shared/src/program/actions.ts): zod input AND response
+        in shared, same PR; { ok:true,… } | { ok:false, reason }, refusals never thrown; FormData
+        only at the edge. Unexpected → throw → error.tsx; never leak internals. Additive; breaking ⇒
+        /api/vN + Deprecation/Sunset.
+Time:   lib/dal + writers take day and tz as arguments; only routes/actions read the tz cookie
+        (native clients have neither cookies nor Server Actions).
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
@@ -401,8 +404,6 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.
-Contract: request/response change ⇒ update shared zod schema (types via z.infer) same PR. Additive by
-  default; breaking ⇒ BREAKING CHANGE footer + /api/vN + Deprecation/Sunset headers.
 Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (mock Clerk auth() +
   Drizzle); async Server Components → Playwright, not Vitest; push logic into the (sync, testable) DAL.
 ```
