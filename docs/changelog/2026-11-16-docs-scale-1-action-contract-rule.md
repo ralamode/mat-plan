@@ -12,7 +12,7 @@
   handler should be a second transport over the same functions.
 
   The old "Split:" and "Errors:" lines and Backend's "Contract:" line are folded in ("Split:"
-  repeated the Architecture bullet), so AGENTS.md does not grow (4,834 words before and after).
+  repeated the Architecture bullet), so the change adds no words to AGENTS.md.
 
   The `add-server-action` skill marks which of its steps describe the legacy forms. It names the
   refusal mapping the FAM-1 contract owner confirmed: no session and wrong household answer
