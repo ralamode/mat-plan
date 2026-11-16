@@ -2,7 +2,7 @@ import { SLOT_LABEL_MAX } from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
-import { normalizeSupersets, supersetLabels, type SupersetMember } from './supersets';
+import { normalizeSupersets, type SupersetMember } from './supersets';
 
 const items = heavyADraft.items;
 const names = (list: readonly { itemName: string }[]) => list.map((item) => item.itemName);
@@ -111,15 +111,5 @@ describe('normalizeSupersets', () => {
         .fill(SLOT_LABEL_MAX)
         .map((n, i) => (i === 2 || i === 3 ? 1 : n)),
     );
-  });
-});
-
-describe('supersetLabels', () => {
-  it('letters are ordinal: A1 A2 B1 B2, and an item on its own has none', () => {
-    expect(supersetLabels(items)).toEqual(['A1', 'A2', 'B1', 'B2', null]);
-  });
-
-  it('when group a is gone, group b reads A1, A2', () => {
-    expect(supersetLabels(items.slice(2))).toEqual(['A1', 'A2', null]);
   });
 });

@@ -1,12 +1,12 @@
 import {
   collapseWhitespace,
   FREE_TEXT_NOTE_MAX,
+  hasStarted,
   LOGGABLE_DIMENSION_LABELS,
   MAX_SETS_PER_MOVEMENT,
   PROGRAM_REFUSAL,
   TRACKING_TYPE_FIELDS,
   UNIT_LABELS,
-  WEEKDAYS,
   type ProgramRefusal,
   type ProgramView,
   type TrackingType,
@@ -96,14 +96,6 @@ export function usedByText(athletes: readonly string[]): string {
 }
 
 /**
- * Whether an athlete has started on the program by `today`. One rule for the "since" or "starts"
- * wording and for what Take off does (someone who had not started simply leaves).
- */
-export function hasStarted(athlete: { since: string }, today: string): boolean {
-  return athlete.since <= today;
-}
-
-/**
  * Accessible names that name their subject, so a screen reader's list of buttons tells them
  * apart. The visible word is a prefix of each (WCAG 2.5.3, as `changeLabel` in `lib/constants`).
  */
@@ -131,13 +123,6 @@ export function takenOffText(athlete: string, program: string, started: boolean)
 export function takeOffFailedText(athlete: string): string {
   return `Couldn’t take ${athlete} off. Try again.`;
 }
-
-/**
- * The week in the order the builder shows it: Monday first (`ProgramView.workouts[].usedOn` is
- * listed the same way). ⚠️ The preview's fake keeps its own copy (`app/design/program/fakes.ts`); a
- * shared one belongs in the contract, which this lane does not edit.
- */
-export const MONDAY_FIRST = [...WEEKDAYS.slice(1), WEEKDAYS[0]];
 
 /** A weekday's name, from a fixed week that starts on a Sunday (2026-11-15). */
 export function weekdayName(weekday: number, style: 'long' | 'short' = 'long'): string {

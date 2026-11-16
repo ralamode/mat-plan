@@ -71,7 +71,7 @@ flowchart LR
 | `apps/web/components/program-builder/workout-editor-screen.tsx` | `WorkoutEditorScreen({ draft, picker, actions, program? })`: the cards, one Save, and the save bar with its status line.         |
 | `apps/web/components/program-builder/item-card.tsx`             | One item's card: fields by type (`TRACKING_TYPE_FIELDS`), a unit select, instructions, Up, Down, Remove.                         |
 | `apps/web/components/program-builder/editor-draft.ts`           | The editor's typed draft (`toCards`) and `readDraft`: every refusal the writer would make, per field, before Save calls.         |
-| `apps/web/components/program-builder/supersets.ts`              | `normalizeSupersets` (after every move and remove) and `supersetLabels` (ordinal A1, A2).                                        |
+| `apps/web/components/program-builder/supersets.ts`              | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                |
 | `apps/web/components/program-builder/*.test.ts(x)`              | Each screen's and module's tests, beside it.                                                                                     |
 | `apps/web/components/program-builder/owed.test.ts`              | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.             |
 | `apps/web/app/programs/index.ts`                                | A placeholder so the directory exists. Not a route.                                                                              |
@@ -141,10 +141,6 @@ flowchart LR
     for a history navigation, so a swipe back discards the draft. Recorded, not built.
 
 ## Traps
-
-- **The editor's decimal rule is restated.** `editor-draft.ts`'s `PLAIN_DECIMAL` is the day page's
-  (`components/day/row-values.ts`, lane C's). The contract exports one since #436; 8b swaps to it.
-  Until then, a change to the rule changes both.
 
 - **A name form assumes leaving the screen unmounts it.** `useNameForm` ends the attempt in an
   effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in

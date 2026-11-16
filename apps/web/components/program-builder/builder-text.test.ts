@@ -1,4 +1,4 @@
-import { PROGRAM_REFUSALS } from '@mat-plan/shared';
+import { hasStarted, MONDAY_FIRST, PROGRAM_REFUSALS } from '@mat-plan/shared';
 import { familyProgram, familyProgramAfterTakeOff } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
@@ -6,8 +6,6 @@ import {
   athleteHint,
   cleanName,
   copiedFromText,
-  hasStarted,
-  MONDAY_FIRST,
   nameRefusal,
   takenOffText,
   usedByText,

@@ -5,7 +5,8 @@ import {
   PROGRAM_REFUSAL,
   WORKOUT_NAME_MAX,
   type ProgramActions,
-  type ProgramList,
+  type ProgramListEntry,
+  supersetLabels,
   type Unit,
   type WorkoutDraft,
 } from '@mat-plan/shared';
@@ -44,7 +45,7 @@ import { ItemCard, type CardControl } from './item-card';
 import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
-import { normalizeSupersets, supersetLabels } from './supersets';
+import { normalizeSupersets } from './supersets';
 import { focusField, useAttempt } from './use-attempt';
 
 /**
@@ -72,7 +73,7 @@ export type WorkoutEditorScreenProps = {
   draft: WorkoutDraft;
   picker: MovementPickerData;
   actions: ProgramActions;
-  program?: ProgramList[number];
+  program?: ProgramListEntry;
 };
 
 const HEADING_ID = 'workout-editor-heading';

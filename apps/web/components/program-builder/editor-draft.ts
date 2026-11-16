@@ -1,6 +1,6 @@
 import {
   FREE_TEXT_NOTE_MAX,
-  QUANTITY_DECIMALS,
+  isPlainDecimal,
   quantityCeiling,
   saveWorkoutSchema,
   TRACKING_TYPE_FIELDS,
@@ -38,16 +38,6 @@ export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | '
 
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
-
-/**
- * A plain decimal with at most `QUANTITY_DECIMALS` places: `5`, `5.5`, `.5`; not `-5`, `1e3` or
- * `5 lb`. ⚠️ The same rule as the day page's `PLAIN_DECIMAL` (`components/day/row-values.ts`),
- * which is lane C's. The contract now exports one (`@mat-plan/shared`, #436); step 8b swaps this
- * copy for it.
- */
-const PLAIN_DECIMAL = new RegExp(
-  `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,
-);
 
 function startingUnit(item: WorkoutDraftItem): Unit | null {
   const { slot, unit } = TRACKING_TYPE_FIELDS[item.trackingType];
@@ -112,7 +102,7 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
       let value: number | null = null;
       if (typed) {
         const ceiling = card.unit ? quantityCeiling(card.unit) : undefined;
-        if (!PLAIN_DECIMAL.test(typed)) refuse('value', EDITOR_ERRORS.value(label));
+        if (!isPlainDecimal(typed)) refuse('value', EDITOR_ERRORS.value(label));
         else if (!card.unit) refuse('value', EDITOR_ERRORS.unit(label));
         // A unit with no declared ceiling refuses: no bound is not "no cap" (`quantityCeiling`).
         else if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));

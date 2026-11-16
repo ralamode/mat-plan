@@ -98,22 +98,3 @@ function freshKey(key: string, used: Set<string>): string {
   used.add(candidate);
   return candidate;
 }
-
-/**
- * The letter each card shows (A1, A2, B1), or `null` for an item on its own. Ordinal, never the
- * key (`supersetSchema`'s rule): the letter is the order in which each group first appears, the
- * number is the item's place among that group's items.
- */
-export function supersetLabels(items: readonly SupersetMember[]): (string | null)[] {
-  const letters = new Map<string, string>();
-  const counts = new Map<string, number>();
-  return items.map(({ superset }) => {
-    if (!superset) return null;
-    if (!letters.has(superset.group)) {
-      letters.set(superset.group, String.fromCharCode(65 + letters.size));
-    }
-    const n = (counts.get(superset.group) ?? 0) + 1;
-    counts.set(superset.group, n);
-    return `${letters.get(superset.group)}${n}`;
-  });
-}
