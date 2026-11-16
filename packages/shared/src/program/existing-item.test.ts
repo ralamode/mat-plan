@@ -4,7 +4,7 @@ import { MOVEMENT_PICKER_ALIASES } from '../movement-picker-catalog';
 import { matchMovementOptions } from '../movement-search';
 
 import { existingItem } from './pieces';
-import { newItemSchema } from './program-shapes';
+import { NEW_ITEM_NAME_MESSAGES, newItemSchema } from './program-shapes';
 
 /**
  * `existingItem`: what `newItem` treats as "this item already exists" (FAM-1 contract change C8).
@@ -53,6 +53,12 @@ describe('existingItem: the item a typed name already names', () => {
       );
     }
     expect(newItemSchema.safeParse({ name: 'Ss', trackingType: 'check' }).success).toBe(true);
+    // The sentence a form shows for it: it must not ask for a letter, since one was typed.
+    const refused = newItemSchema.safeParse({ name: 'S', trackingType: 'check' });
+    expect(refused.success ? null : refused.error.issues[0]?.message).toBe(
+      NEW_ITEM_NAME_MESSAGES.noKey,
+    );
+    expect(NEW_ITEM_NAME_MESSAGES.noKey).toBe('Give the item a longer name.');
   });
 
   it('when two items qualify, the catalog one is the answer', () => {

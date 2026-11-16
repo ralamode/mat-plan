@@ -111,7 +111,13 @@ export interface ProgramActions {
     }>
   >;
   putOn?(draft: AssignDraft): Promise<ProgramResult>;
-  takeOff?(input: TakeOff): Promise<ProgramResult>;
+  /**
+   * Resolves what it did, so the screen can say it truthfully (`takeOffSchema` has the rule):
+   * `lastDay` is the day the athlete stays on through (today), or `null` when the start was removed
+   * and they were never on it. A start dated today can be either, so the screen cannot tell from
+   * `since` alone.
+   */
+  takeOff?(input: TakeOff): Promise<ProgramResult<{ lastDay: string | null }>>;
 }
 
 export interface DayActions {

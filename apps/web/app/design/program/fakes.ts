@@ -2,6 +2,7 @@ import {
   addDays,
   assignDraftSchema,
   copyDraftSchema,
+  copyName,
   createProgramSchema,
   foldName,
   hasStarted,
@@ -22,7 +23,6 @@ import {
   takeOffSchema,
   hasSetRows,
   weekDraftSchema,
-  WORKOUT_NAME_MAX,
   type DayActions,
   type DayItem,
   type DayPlan,
@@ -367,11 +367,6 @@ export type FakePrograms = {
  */
 const sameName = (a: string, b: string) => foldName(a) === foldName(b);
 
-/** A copy made inside one program is renamed, and the name still fits `WORKOUT_NAME_MAX`. */
-const COPY_SUFFIX = ' (copy)';
-const copyName = (name: string) =>
-  `${name.slice(0, WORKOUT_NAME_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
-
 /** A draft that fails `weekDraftSchema` because a day names one workout twice. */
 function repeatsAWorkout(draft: WeekDraft): boolean {
   return Object.values(draft?.days ?? {}).some(
@@ -395,8 +390,12 @@ function repeatsAWorkout(draft: WeekDraft): boolean {
  *   from is the program's name on the day of the copy, frozen.
  * - A new item whose name matches an existing one (folded, likewise) selects that item, with its
  *   own type.
- * - Put on starts today or tomorrow and skips whoever is already on it. Take off ends after today;
- *   someone who had not started yet simply leaves.
+ * - Put on starts today or tomorrow and skips whoever is already on it, except someone whose last
+ *   day is today: for them it undoes the Take off. Take off ends after today; a start that has not
+ *   begun, or that began today (nothing is logged under it here), is removed instead. It answers
+ *   which (`lastDay`).
+ * - A copy never makes a second workout of one name in a program: that is `name_taken`, and a copy
+ *   may carry its own name.
  */
 export function createFakeProgramActions(
   seed: FakeProgramState,
@@ -406,6 +405,8 @@ export function createFakeProgramActions(
   const { failNext, failed } = failSwitch();
   /** Client id → the id its first call minted. */
   const minted = new Map<string, string>();
+  /** The names of the workouts this fake has copied into each OTHER program. */
+  const copiedInto = new Map<string, string[]>();
 
   const refuse = (reason: ProgramRefusal) => ({ ok: false, reason }) as const;
   const changed = () => onChange?.(structuredClone(state));
@@ -522,7 +523,7 @@ export function createFakeProgramActions(
         const workoutPublicId = newId();
         // A copy into another program lands on that program's page, which is not on screen.
         if (copy.toProgramPublicId === view.programPublicId) {
-          const name = copyName(source.name);
+          const name = copy.name ?? copyName(source.name);
           if (view.workouts.some((w) => sameName(w.name, name))) {
             return refuse(PROGRAM_REFUSAL.name_taken);
           }
@@ -536,6 +537,15 @@ export function createFakeProgramActions(
             copiedFrom: { programName: view.name, on: view.today },
           });
         } else {
+          // Another program's workouts are not in this fake's state, so it knows that program's
+          // names only by what it has copied there: a second copy under a name already copied in
+          // is the clash, and the dialog then asks for a name (maintainer, 2026-11-16).
+          const name = copy.name ?? source.name;
+          const there = copiedInto.get(copy.toProgramPublicId) ?? [];
+          if (there.some((taken) => sameName(taken, name))) {
+            return refuse(PROGRAM_REFUSAL.name_taken);
+          }
+          copiedInto.set(copy.toProgramPublicId, [...there, name]);
           minted.set(copy.clientId, workoutPublicId);
         }
         changed();
@@ -590,7 +600,16 @@ export function createFakeProgramActions(
         // The new program takes its place in the household's order among the ones they keep.
         const rank = (name: string) => state.programs.findIndex((p) => p.name === name);
         for (const candidate of picked) {
-          if (!candidate || candidate.on) continue;
+          if (!candidate) continue;
+          if (candidate.on) {
+            // On it already. If Take off gave them a last day, Put on undoes that: they stay on
+            // with no gap, one stretch, whichever day was picked (maintainer, 2026-11-16).
+            const athlete = view.athletes.find(
+              (a) => a.profilePublicId === candidate.profilePublicId,
+            );
+            if (athlete) athlete.lastDay = null;
+            continue;
+          }
           const { profilePublicId, name, keeps } = candidate;
           view.athletes.push({ profilePublicId, name, since: from, lastDay: null, alsoOn: keeps });
           const later = keeps.findIndex((kept) => rank(kept) > rank(view.name));
@@ -619,8 +638,12 @@ export function createFakeProgramActions(
         const athlete = view?.athletes.find((a) => a.profilePublicId === profilePublicId);
         if (!view || !athlete) return refuse(PROGRAM_REFUSAL.not_found);
 
-        if (!hasStarted(athlete, view.today)) {
-          // Not started yet: they leave, and nothing says they were ever on it.
+        // A start that has not begun, or that begins today, is removed: nothing says they were ever
+        // on it. ⚠️ The real writer removes a start dated today only when nothing is logged under it
+        // (`takeOffSchema`); this fake holds no logged rows, so for it a start dated today never has
+        // any.
+        const removed = !hasStarted(athlete, view.today) || athlete.since === view.today;
+        if (removed) {
           view.athletes = view.athletes.filter((a) => a !== athlete);
           const candidate = view.candidates.find((c) => c.profilePublicId === profilePublicId);
           if (candidate) {
@@ -634,7 +657,7 @@ export function createFakeProgramActions(
           athlete.lastDay = view.today;
         }
         changed();
-        return { ok: true };
+        return { ok: true, lastDay: removed ? null : view.today };
       },
     },
   };

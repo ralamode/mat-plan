@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/single-value.ts b/packages/db/src/writers/single-value.ts
+index fd8e596e..e0b12fc7 100644
+--- a/packages/db/src/writers/single-value.ts
++++ b/packages/db/src/writers/single-value.ts
+@@ -47,7 +47,7 @@ const BODYWEIGHT: SingleValueMetric = {
+ /** `practiceSlot` is exactly `PRACTICE_DAY_UNIQUE_INDEX`'s key: practice has no slot column. */
+ const PRACTICE: SingleValueMetric = {
+   metricKey: METRIC_KEYS.practice_minutes,
+-  slot: practiceSlot,
++  slot: bodyweightSlot,
+ };
+ 
+ /** One owned, numeric, `done` entry of `metric`, live OR hidden. Ownership is `isLiveProfile`. */

@@ -198,6 +198,7 @@ export default async function TodayPage({
           profileId={profile.id}
           day={day}
           writable={writable}
+          amendable={amendable}
           activityKeys={lifeKeys}
           logged={loggedLifeActivities(entries, lifeKeys)}
         />

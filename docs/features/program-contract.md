@@ -204,7 +204,9 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
     Three limits, each on purpose: the options passed must carry `isCatalog` (the picker's
     tie-break, so the type requires it); a name whose key is empty (`S`) is refused by
-    `newItemSchema`, since it could be matched to nothing; and the check is a read before the
+    `newItemSchema`, since it could be matched to nothing, with a sentence a form shows as it is
+    (`NEW_ITEM_NAME_MESSAGES.noKey`: "Give the item a longer name."; only a name of the letter `s`
+    alone reaches it, so it must not ask for a letter); and the check is a read before the
     insert, so two calls in the same moment with names that share a key but not a slug can both
     insert (plan D25).
 
@@ -248,6 +250,25 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     steps: a re-tick after a new ✓ (`slot_taken` under 11b), and a replay of the first ✓'s id while
     its entry is hidden (`own_hidden` under 11b, and under 11c once that id has been replaced it
     is the limit above).
+
+19. **Take off says what it did, and a same-day Put on is undone by it** (`takeOffSchema`,
+    maintainer, 2026-11-16). A start that has not begun is removed. A start dated today with no
+    live row logged under it is removed too, as if Put on had not been tapped. Any other start ends
+    today. The answer's `lastDay` is today, or `null` for a removed start, and the screen words its
+    message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
+    program fake holds no logged rows, so in the preview a start dated today is always removed.
+20. **A copy may carry its own name, and no program ever holds two workouts with one name**
+    (`CopyDraft.name`, optional; maintainer, 2026-11-16). Without a name, a copy into the workout's
+    own program is named with " (copy)" and a copy into another program keeps the name. A name
+    already used in the program it is copied into answers `name_taken`, in any program. The dialog
+    then shows its Name field, prefilled, and the person copies again; it needs no list of the other
+    program's workouts. ⚠️ The fake knows another program's names only by what it has copied there,
+    so in the preview the clash is a second copy of one workout into the same other program.
+21. **Put on undoes a Take off whose last day is today** (`assignDraftSchema`; maintainer,
+    2026-11-16). An athlete already on a program is skipped by Put on, except one with a last day:
+    that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
+    athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
+    to list them as available.
 
 ## Traps
 

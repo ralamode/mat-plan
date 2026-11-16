@@ -1,3 +1,5 @@
+import { TRANSPORT_REFUSALS } from '@mat-plan/shared';
+
 import { NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
 
 import { ACTION_SCOPE, type ActionRegistry } from './mutating-actions';
@@ -18,5 +20,7 @@ export const ACTION_REGISTRY = {
   logLifeActivitiesAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
   editStrengthSetAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
   editBodyweightAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
+  // V1-24 3b-life: the first action in this module that speaks the FAM-1 contract (typed input and result).
+  editPracticeAction: { refusal: TRANSPORT_REFUSALS, scope: ACTION_SCOPE.profile },
   editRoutineAction: { refusal: NO_PROFILE_SAVE, scope: ACTION_SCOPE.profile },
 } as const satisfies ActionRegistry;
