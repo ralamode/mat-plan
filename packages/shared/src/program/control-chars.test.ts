@@ -4,6 +4,7 @@ import { WEEKDAYS } from '../day';
 import { TRACKING_TYPE } from '../movements';
 import { heavyADraft } from './fixtures';
 import {
+  copyDraftSchema,
   createProgramSchema,
   newItemSchema,
   renameProgramSchema,
@@ -79,6 +80,17 @@ const typed: Array<[string, (text: string) => boolean]> = [
         days: { ...emptyWeek, 1: [{ workoutPublicId: anyId, label: t }] },
       }).success,
   ],
+  [
+    'a copied workout’s label',
+    (t) =>
+      copyDraftSchema.safeParse({
+        clientId: anyId,
+        workoutPublicId: anyId,
+        toProgramPublicId: anyId,
+        weekdays: [1],
+        label: t,
+      }).success,
+  ],
 ];
 
 describe('the write schemas refuse a control character in every typed text', () => {
@@ -86,5 +98,21 @@ describe('the write schemas refuse a control character in every typed text', () 
     expect(accepts('Feet flat')).toBe(true);
     expect(accepts(NUL)).toBe(false);
     expect(accepts(ESC)).toBe(false);
+  });
+});
+
+describe('the one string in a write schema that is NOT typed', () => {
+  /**
+   * `items[].itemName` rides along in a saved draft so the editor can show the card, and is a LABEL
+   * read from the catalog (`movementLabelSchema`): an old name may hold a comma or a tab, so it is
+   * not tightened here. It is safe only because the writer never stores it: `saveWorkout` takes the
+   * item by `itemPublicId` and reads its name and type from the database. Lane P's step 6a owes the
+   * proof of that; this case exists so the gap is a decision, not an oversight.
+   */
+  it('an item’s name on a saved draft accepts what the catalog may hold, by design', () => {
+    const withName = (itemName: string) =>
+      saveWorkoutSchema.safeParse({ ...heavyADraft, items: [{ ...item, itemName }] }).success;
+    expect(withName('Push-ups, strict')).toBe(true);
+    expect(withName(NUL)).toBe(true);
   });
 });
