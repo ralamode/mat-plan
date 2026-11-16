@@ -219,10 +219,11 @@ function useVisualViewport(open: boolean, node: HTMLElement | null, compactBelow
     const write = () => {
       node.style.setProperty('--sheet-vvh', `${vv.height}px`);
       node.style.setProperty('--sheet-vvt', `${vv.offsetTop}px`);
-      // 🔴 **STATE, not just an attribute, because the compact rule MOVES the footer.** Under
-      // compact the footer scrolls at the end of the body rather than pinning, which is a DOM
-      // change no class can make. `setState` with the same boolean is a no-op in React, so this
-      // does not re-render on every scroll frame — only when the flag actually flips.
+      // **STATE, not just an attribute:** compact changes WHICH element scrolls (the body alone, or
+      // the body and the footer together), and several classes follow it. The footer itself is
+      // one element in one place either way, so a flip never re-mounts it (see the render).
+      // `setState` with the same boolean is a no-op in React, so this does not re-render on every
+      // scroll frame — only when the flag actually flips.
       setCompact(vv.height < compactBelow);
     };
 
@@ -535,22 +536,36 @@ export function Sheet({
             {headerExtra}
           </div>
 
-          {/* `min-h-0` is what lets this shrink inside the flex column; without it the body refuses
-              to scroll and pushes the footer off instead. */}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-            {children}
-            {compact ? <div className={FOOTER_CLASS}>{footer ?? <FooterFallback />}</div> : null}
-          </div>
-
-          {/* ⚠️ `[&_[data-slot=button]]` forces wrapping on whatever a consumer passes: `Button` is
-              `whitespace-nowrap`, and at 200% zoom on a 390px phone (195 CSS px) a long action
-              overflows — INVISIBLY to the document-level overflow helper, because a `fixed` box
-              contributes nothing to the document's scrollable width. */}
-          {compact ? null : (
-            <div className={cn('shrink-0 border-t', FOOTER_CLASS)}>
+          {/* 🔴 **The footer is ONE element in ONE place, pinned or compact.** It used to render in two
+              places, inside the body under compact and after it otherwise, so each flip unmounted it
+              and mounted a copy. Focus on a footer button was lost whenever the keyboard opened or
+              closed (lane B found it: a retry focuses Create, the keyboard closes, focus drops to
+              `<body>`). Now only the SCROLLER moves: pinned, the body scrolls and the footer sits
+              below it; compact, this wrapper scrolls the body and the footer together, so the list
+              keeps the room. `min-h-0` is what lets either shrink inside the flex column; without
+              it the scroller refuses to scroll and pushes the footer off instead. */}
+          <div
+            className={cn(
+              'flex min-h-0 flex-1 flex-col',
+              compact && 'overflow-y-auto overscroll-contain',
+            )}
+          >
+            <div
+              className={cn(
+                'p-4',
+                compact ? 'shrink-0' : 'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+              )}
+            >
+              {children}
+            </div>
+            {/* ⚠️ `[&_[data-slot=button]]` forces wrapping on whatever a consumer passes: `Button` is
+                `whitespace-nowrap`, and at 200% zoom on a 390px phone (195 CSS px) a long action
+                overflows — INVISIBLY to the document-level overflow helper, because a `fixed` box
+                contributes nothing to the document's scrollable width. */}
+            <div className={cn(FOOTER_CLASS, !compact && 'shrink-0 border-t')}>
               {footer ?? <FooterFallback />}
             </div>
-          )}
+          </div>
 
           {/* Criterion 46. INSIDE the content, because Radix `aria-hidden`s every sibling of the
               portal while this is open, so a page-level region is dropped by a screen reader.

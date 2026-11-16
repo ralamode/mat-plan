@@ -359,6 +359,12 @@ describe('Sheet — criterion 46, the live region', () => {
  * prevent. A stub cannot catch a wrong `calc()`; it catches the hook not running at all, which is
  * what happened. The real geometry is `e2e/a11y.spec.ts`.
  */
+/** Whether `el` scrolls together with the sheet's body (compact), rather than sitting pinned below it. */
+function scrollsWithBody(el: HTMLElement): boolean {
+  const scroller = el.closest('.overflow-y-auto');
+  return scroller !== null && scroller.contains(dialog().querySelector('p'));
+}
+
 describe('Sheet — the keyboard geometry', () => {
   function withVisualViewport(height: number, offsetTop = 0) {
     const vv = Object.assign(new EventTarget(), { height, offsetTop });
@@ -378,9 +384,9 @@ describe('Sheet — the keyboard geometry', () => {
     const vv = withVisualViewport(640);
     render(<Harness footer={<button type="button">Use as typed</button>} />);
     openAndCapture();
-    // Pinned: the footer is a sibling of the scrolling body, not inside it.
-    const body = dialog().querySelector('.overflow-y-auto')!;
-    expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(false);
+    // Pinned: the footer sits below the scrolling body, not inside any scroller.
+    const action = screen.getByRole('button', { name: 'Use as typed' });
+    expect(scrollsWithBody(action)).toBe(false);
 
     // 844×390 landscape with the keyboard up: ~190px of visual viewport. Two pinned bars would
     // leave about 30px of list, so under COMPACT_VIEWPORT_HEIGHT the footer scrolls with the body.
@@ -389,27 +395,44 @@ describe('Sheet — the keyboard geometry', () => {
       vv.dispatchEvent(new Event('resize'));
     });
     expect(dialog().style.getPropertyValue('--sheet-vvh')).toBe('190px');
-    expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(true);
+    expect(scrollsWithBody(screen.getByRole('button', { name: 'Use as typed' }))).toBe(true);
+    // 🔴 The SAME element, not a re-mounted copy: a flip must not drop focus from a footer button.
+    expect(screen.getByRole('button', { name: 'Use as typed' })).toBe(action);
     // Compact still truncates the title: tailwind-merge keeps `truncate` beside NAME_WRAP_CLASS,
     // and `nowrap` wins, so a long name stays on one line while the keyboard is up.
     const title = document.getElementById(dialog().getAttribute('aria-labelledby')!)!;
     expect(title.className).toContain('truncate');
   });
 
+  it('keeps focus on a footer button when the keyboard opens and closes (compact flips)', () => {
+    const vv = withVisualViewport(640);
+    render(<Harness footer={<button type="button">Create</button>} />);
+    openAndCapture();
+    const create = screen.getByRole('button', { name: 'Create' });
+    act(() => create.focus());
+    expect(document.activeElement).toBe(create);
+    for (const height of [300, 640]) {
+      act(() => {
+        Object.assign(vv, { height });
+        vv.dispatchEvent(new Event('resize'));
+      });
+      expect(create.isConnected).toBe(true);
+      expect(document.activeElement).toBe(create);
+    }
+  });
+
   it('keeps a one-button footer pinned at 520px under the default threshold', () => {
     withVisualViewport(520);
     render(<Harness footer={<button type="button">Add</button>} />);
     openAndCapture();
-    const body = dialog().querySelector('.overflow-y-auto')!;
-    expect(body.contains(screen.getByRole('button', { name: 'Add' }))).toBe(false);
+    expect(scrollsWithBody(screen.getByRole('button', { name: 'Add' }))).toBe(false);
   });
 
   it('`compactBelow` raises the threshold for a taller footer: at 520px it scrolls with the body', () => {
     withVisualViewport(520);
     render(<Harness compactBelow={580} footer={<button type="button">Add</button>} />);
     openAndCapture();
-    const body = dialog().querySelector('.overflow-y-auto')!;
-    expect(body.contains(screen.getByRole('button', { name: 'Add' }))).toBe(true);
+    expect(scrollsWithBody(screen.getByRole('button', { name: 'Add' }))).toBe(true);
   });
 
   /**
