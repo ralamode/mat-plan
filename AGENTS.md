@@ -137,7 +137,7 @@ Keys:   internal PK = bigint GENERATED ALWAYS AS IDENTITY (never serial/UUIDv4 P
         client_id = UUIDv7, UNIQUE, non-partial for NEW ones (ADR 0008 3.4); NOT NULL unless a
         server-side creator needs NULL (say so in the column's docblock).
 Time:   all timestamptz, UTC, created_at DEFAULT now(). deleted_at NULL for soft delete.
-        LWW (v1.5 /api/sync, NOT wired): compare CLIENT updated_at/version, not server now();
+        LWW (v1.5 /api/sync, NOT wired): compare CLIENT updated_at/version;
         upsert setWhere incoming >= stored.
 Naming: snake_case; tables plural; FK <singular>_id; idx_<table>_<cols>. Drizzle casing:'snake_case'.
 Constraints: NOT NULL default; FK+index on every ref.
@@ -400,8 +400,8 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   1 re-verify authN inside it (page/middleware auth does NOT protect an action — it's a public POST).
   2 re-verify authZ / resource ownership (IDOR guard).  3 zod-validate ALL input first.
   4 return a minimal DTO, never a raw row.  5 db+auth via the server-only DAL; keep 'use server' thin.
-  6 idempotent by body clientId, not an Idempotency-Key header.
-  7 typed refusal + Sentry; rate-limit expensive ops (NOT wired: zip export, correlation ids).
+  6 idempotent: body clientId + UNIQUE; replay → one effect, same result.
+  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: export limit; correlation ids.
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.

@@ -10,7 +10,8 @@ import { isIanaTimeZone, localDayIso } from '@/lib/date';
  *   1. a stored zone — NOT wired; no column exists. When one lands it belongs on the ATHLETE,
  *      with a household default (`ID-1` keep-open item 4: an athlete can move households),
  *      not on `households`. It is a signature-changing refactor, NOT a free plug-in, and the
- *      zone still reaches `lib/dal` and the writers as an argument (AGENTS.md → "Time").
+ *      zone still reaches `lib/dal` and the writers as an argument (AGENTS.md → Server
+ *      conventions, "Time").
  *   2. the client's `tz` cookie   — validated as a real IANA zone (public input → never
  *      trusted raw; anything unresolvable is ignored).
  *   3. DEFAULT_TIME_ZONE          — before the cookie exists (first paint).
