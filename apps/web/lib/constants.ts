@@ -858,9 +858,11 @@ export const movementCount = (n: number) =>
   plural(n, { one: `${n} movement`, other: `${n} movements` });
 
 /**
- * "1 item" / "6 items": the one spelling of how many items a workout holds (FAM-1). The builder's
- * workout line ("6 items · Used Mon, Tue") and the day page's look-ahead both read it, so the two
- * screens cannot count the same workout in different words.
+ * "1 item" / "6 items": the one spelling of how many items a workout holds (FAM-1), for the
+ * builder's workout line ("6 items · Used Mon, Tue") and the day page's look-ahead, so the two
+ * screens count the same workout in the same words. ⚠️ Until each lane swaps its own line for this
+ * one (`workoutSummary` in `components/program-builder/builder-text.ts`; `DAY_COPY.items`, which
+ * arrives with step 13b), nothing but the test calls it.
  *
  * Here and not in `@mat-plan/shared`: the count is spelled in the app's locale, and the locale
  * (`./i18n/locale`) and `plural()` are the web app's. `movementCount` above is the same shape.
