@@ -35,6 +35,8 @@ export function NameField({
   multiline = false,
   announce = true,
   hint,
+  autoCapitalize,
+  enterKeyHint = 'done',
 }: {
   ref?: Ref<HTMLInputElement>;
   id: string;
@@ -55,6 +57,10 @@ export function NameField({
   announce?: boolean;
   /** A sentence that says what the field is for, read with it (never only a placeholder). */
   hint?: string;
+  /** `words` for a name that becomes a permanent item, as the movement picker's search does. */
+  autoCapitalize?: 'words';
+  /** What a phone's Enter key says: `done` (it closes the keyboard), or `next` (it moves on). */
+  enterKeyHint?: 'done' | 'next';
 }) {
   const counterId = `${id}-count`;
   const errorId = `${id}-error`;
@@ -64,7 +70,7 @@ export function NameField({
     value,
     maxLength: max,
     placeholder,
-    enterKeyHint: 'done' as const,
+    enterKeyHint,
     onChange: (event: { target: { value: string } }) => onChange(event.target.value),
     'aria-invalid': error ? true : undefined,
     'aria-describedby': described.join(' '),
@@ -87,6 +93,9 @@ export function NameField({
           id={id}
           type="text"
           autoComplete="off"
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCapitalize ? 'off' : undefined}
+          spellCheck={autoCapitalize ? false : undefined}
           {...common}
           className={FIELD_CLASS}
         />

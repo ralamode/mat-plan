@@ -18,6 +18,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
+import { itemCountText } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { card, isTick, lb, makeMount, press, status, workout } from './day-test-utils';
@@ -381,7 +382,7 @@ describe('a day that cannot be written', () => {
     expect(screen.queryAllByRole('button', { name: isTick })).toHaveLength(0);
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     for (const w of futurePreview.workouts) {
-      expect(within(workout(w.name)).getByText(DAY_COPY.items(w.items.length))).toBeTruthy();
+      expect(within(workout(w.name)).getByText(itemCountText(w.items.length))).toBeTruthy();
     }
   });
 });

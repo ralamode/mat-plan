@@ -1,0 +1,833 @@
+// @vitest-environment jsdom
+import {
+  MAX_WORKOUT_ITEMS,
+  PROGRAM_REFUSAL,
+  TRACKING_TYPE,
+  TRACKING_TYPE_LABELS,
+  type ProgramActions,
+  type WorkoutDraft,
+} from '@mat-plan/shared';
+import { heavyADraft, newWorkoutEmpty } from '@mat-plan/shared/program/fixtures';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+
+import { pickerOptions } from '@/app/design/program/picker-options';
+import type { MovementOptionDTO } from '@/lib/movements/movement-option';
+import { MOVEMENT_PICKER_COPY } from '@/lib/movements/movement-picker-copy';
+
+import {
+  addedText,
+  BUILDER_COPY,
+  addItemsText,
+  alreadyListedText,
+  capText,
+  createdText,
+  EDITOR_COPY,
+  existedText,
+  ITEM_PICKER_COPY,
+  newItemLabel,
+  notTickedText,
+  pickedText,
+  selectedText,
+  selectExistingText,
+  TRACKING_TYPE_EXAMPLES,
+} from '../builder-text';
+import { DOUBLE_TAP_MS } from '../use-attempt';
+import { WorkoutEditorScreen } from '../workout-editor-screen';
+
+afterEach(cleanup);
+beforeEach(() => {
+  push.mockReset();
+  // The sheet pops its history entry on close; in jsdom that popstate lands in the NEXT test and
+  // closes its sheet (sheet.test.tsx stubs it the same way).
+  window.history.replaceState(null, '');
+  vi.spyOn(window.history, 'back').mockImplementation(() => {});
+});
+
+const NEW_ID = '00000000-0000-7000-8000-000000009001';
+
+function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
+  return {
+    createProgram: vi.fn(),
+    renameProgram: vi.fn(),
+    saveWorkout: vi.fn().mockResolvedValue({ ok: true, workoutPublicId: 'w' }),
+    saveWeek: vi.fn(),
+    copyWorkout: vi.fn(),
+    newItem: vi.fn().mockResolvedValue({
+      ok: true,
+      itemPublicId: NEW_ID,
+      trackingType: TRACKING_TYPE.reps,
+      existed: false,
+    }),
+    ...extra,
+  };
+}
+
+const editor = (
+  extra: Partial<ProgramActions> = {},
+  draft: WorkoutDraft = newWorkoutEmpty,
+  options: readonly MovementOptionDTO[] = pickerOptions,
+) => {
+  const all = actions(extra);
+  render(<WorkoutEditorScreen draft={draft} picker={{ options }} actions={all} />);
+  return all;
+};
+
+/** The opener, from the DOM: Radix hides the page from role queries while the sheet is open. */
+const opener = () =>
+  [...document.querySelectorAll('button')].find(
+    (button) => button.textContent === ITEM_PICKER_COPY.open,
+  )!;
+const openPicker = () => fireEvent.click(opener());
+const sheet = () => screen.getByRole('dialog');
+const row = (name: string) =>
+  within(sheet()).getByRole('checkbox', { name: new RegExp(`^${name}`) });
+const cardNames = () =>
+  [...document.querySelectorAll('ol > li h3')].map((heading) => heading.textContent);
+/** The footer's line of picked names. */
+const picked = () =>
+  within(sheet())
+    .getByRole('button', { name: /^Add \d/ })
+    .parentElement!.querySelector('p')?.textContent;
+const search = (text: string) =>
+  fireEvent.change(within(sheet()).getByRole('searchbox'), { target: { value: text } });
+
+describe('the item picker (FAM-1 9)', () => {
+  it('renders picker-options: a checkbox row per item, saying what it tracks', () => {
+    editor();
+    openPicker();
+    const pushUps = row('Push-ups');
+    expect(pushUps.getAttribute('aria-checked')).toBe('false');
+    expect(pushUps.textContent).toContain(TRACKING_TYPE_LABELS.reps);
+    expect(within(sheet()).getAllByRole('checkbox')).toHaveLength(pickerOptions.length);
+  });
+
+  it('items picked together are added in the order they were picked, with no numbers', async () => {
+    editor();
+    openPicker();
+    for (const name of ['Sprawls', 'Push-ups', 'Wall sit']) fireEvent.click(row(name));
+    expect(row('Push-ups').getAttribute('aria-checked')).toBe('true');
+    expect(picked()).toBe(pickedText(['Sprawls', 'Push-ups', 'Wall sit']));
+    fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(3) }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(cardNames()).toEqual(['Sprawls', 'Push-ups', 'Wall sit']);
+    const sets = [...document.querySelectorAll('ol > li input')].map(
+      (input) => (input as HTMLInputElement).value,
+    );
+    expect(sets.every((value) => value === '')).toBe(true);
+    expect(document.activeElement?.textContent).toBe('Sprawls');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(addedText(3)));
+  });
+
+  it('an untick takes the item out of the order', () => {
+    editor();
+    openPicker();
+    fireEvent.click(row('Sprawls'));
+    fireEvent.click(row('Push-ups'));
+    fireEvent.click(row('Sprawls'));
+    expect(picked()).toBe(pickedText(['Push-ups']));
+  });
+
+  it('Close keeps the ticks for next time', () => {
+    editor();
+    openPicker();
+    fireEvent.click(row('Sprawls'));
+    fireEvent.click(within(sheet()).getAllByRole('button', { name: 'Close' }).at(-1)!);
+    openPicker();
+    expect(row('Sprawls').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('after Add, the picker opens with nothing ticked', async () => {
+    editor();
+    openPicker();
+    fireEvent.click(row('Sprawls'));
+    fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    openPicker();
+    expect(row('Sprawls').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('a new item not in the list takes the name the server stored', async () => {
+    editor({
+      newItem: vi.fn().mockResolvedValue({
+        ok: true,
+        itemPublicId: NEW_ID,
+        name: 'Bear Crawl',
+        trackingType: TRACKING_TYPE.reps,
+        existed: true,
+      }),
+    });
+    openPicker();
+    search('bear crawl');
+    fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('bear crawl') }));
+    fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+      target: { value: TRACKING_TYPE.reps },
+    });
+    fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+    await waitFor(() => expect(row('Bear Crawl').getAttribute('aria-checked')).toBe('true'));
+    await waitFor(() =>
+      expect(
+        within(sheet()).getAllByText(existedText('Bear Crawl', TRACKING_TYPE_LABELS.reps)).length,
+      ).toBeGreaterThan(0),
+    );
+  });
+
+  it('with nothing ticked, Add says so and does nothing', () => {
+    editor();
+    openPicker();
+    const add = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.pickToAdd });
+    expect(add.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(add);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('an item already on a card is tagged, and can be added again', () => {
+    editor({}, heavyADraft);
+    openPicker();
+    expect(row('Pull-up').textContent).toContain(
+      MOVEMENT_PICKER_COPY.tagAlreadyIn(ITEM_PICKER_COPY.alreadyIn),
+    );
+    expect(row('Pull-up').textContent).not.toContain('already in already in');
+    expect(row('Pull-up').getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('a workout stops at MAX_WORKOUT_ITEMS: a tap past it says why', async () => {
+    const full = {
+      ...heavyADraft,
+      items: Array.from({ length: MAX_WORKOUT_ITEMS - 1 }, (_, i) => ({
+        ...heavyADraft.items[4]!,
+        prescriptionClientId: `00000000-0000-7000-8000-0000000${String(1000 + i)}`,
+      })),
+    };
+    editor({}, full);
+    openPicker();
+    fireEvent.click(row('Sprawls'));
+    fireEvent.click(row('Push-ups'));
+    expect(row('Push-ups').getAttribute('aria-checked')).toBe('false');
+    await waitFor(() =>
+      expect(within(sheet()).getAllByRole('status')[0]!.textContent).toBe(
+        capText(MAX_WORKOUT_ITEMS),
+      ),
+    );
+  });
+
+  it('no match: the hint says how to make it, and the create button names the text', () => {
+    editor();
+    openPicker();
+    search('Bear crawl');
+    expect(within(sheet()).getByText(ITEM_PICKER_COPY.noMatch)).toBeTruthy();
+    expect(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') })).toBeTruthy();
+  });
+
+  describe('a new item', () => {
+    const openForm = (typed = 'Bear crawl') => {
+      openPicker();
+      search(typed);
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel(typed) }));
+    };
+    /** The plain "+ New item", then a name typed in the form. */
+    const openBlankForm = (name: string) => {
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: name },
+      });
+    };
+    const create = () => within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create });
+
+    it('takes over the sheet, its name filled in, and asks what it tracks with no default', () => {
+      editor();
+      openForm();
+      expect(within(sheet()).queryByRole('searchbox')).toBeNull();
+      expect(
+        (within(sheet()).getByLabelText(ITEM_PICKER_COPY.name) as HTMLInputElement).value,
+      ).toBe('Bear crawl');
+      const type = within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks) as HTMLSelectElement;
+      expect(type.value).toBe('');
+      expect(create().getAttribute('aria-disabled')).toBe('true');
+    });
+
+    it('is made with its type, selected, and listed', async () => {
+      const all = editor();
+      openForm();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      expect(within(sheet()).getByText(TRACKING_TYPE_EXAMPLES.reps)).toBeTruthy();
+      fireEvent.click(create());
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('true'));
+      expect(all.newItem).toHaveBeenCalledWith({
+        name: 'Bear crawl',
+        trackingType: TRACKING_TYPE.reps,
+      });
+      expect(all.saveWorkout).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(within(sheet()).getAllByText(createdText('Bear crawl')).length).toBeGreaterThan(0),
+      );
+    });
+
+    it('a name already in the list selects that item, and makes nothing', async () => {
+      const all = editor();
+      openBlankForm('Pull up');
+      expect(
+        within(sheet()).getByText(alreadyListedText('Pull-up', TRACKING_TYPE_LABELS.reps)),
+      ).toBeTruthy();
+      fireEvent.click(within(sheet()).getByRole('button', { name: selectExistingText('Pull-up') }));
+      await waitFor(() => expect(row('Pull-up').getAttribute('aria-checked')).toBe('true'));
+      expect(all.newItem).not.toHaveBeenCalled();
+    });
+
+    it('a name the server already has selects that item', async () => {
+      const pullUp = pickerOptions.find((option) => option.name === 'Pull-up')!;
+      editor({
+        newItem: vi.fn().mockResolvedValue({
+          ok: true,
+          itemPublicId: pullUp.publicId,
+          trackingType: TRACKING_TYPE.reps,
+          existed: true,
+        }),
+      });
+      openForm('Chin over bar');
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      fireEvent.click(create());
+      await waitFor(() => expect(row('Pull-up').getAttribute('aria-checked')).toBe('true'));
+      await waitFor(() =>
+        expect(
+          within(sheet()).getAllByText(existedText('Pull-up', TRACKING_TYPE_LABELS.reps)).length,
+        ).toBeGreaterThan(0),
+      );
+    });
+
+    it('a refused name is said under the field, and the form stays', async () => {
+      editor({
+        newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.invalid }),
+      });
+      openForm();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      fireEvent.click(create());
+      await waitFor(() => expect(within(sheet()).getByText(ITEM_PICKER_COPY.refused)).toBeTruthy());
+      expect(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name)).toBeTruthy();
+    });
+
+    it('Enter in the name moves to the type and never creates', () => {
+      const all = editor();
+      openForm();
+      const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
+      // jsdom never submits from a key press: what is checked is that Enter's default is stopped.
+      expect(fireEvent.keyDown(name, { key: 'Enter' })).toBe(false);
+      expect(document.activeElement).toBe(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks));
+      expect(all.newItem).not.toHaveBeenCalled();
+    });
+
+    it('Cancel goes back to the list with the ticks', () => {
+      editor();
+      openPicker();
+      fireEvent.click(row('Sprawls'));
+      search('Bear crawl');
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      search('');
+      expect(row('Sprawls').getAttribute('aria-checked')).toBe('true');
+    });
+  });
+
+  it('the editor still says when the workout is empty', () => {
+    editor();
+    expect(screen.getByText(EDITOR_COPY.noItems)).toBeTruthy();
+  });
+
+  describe('after the second pass', () => {
+    const openForm = (typed = 'Bear crawl') => {
+      openPicker();
+      search(typed);
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel(typed) }));
+    };
+    const statusRegion = () => within(sheet()).getAllByRole('status')[0]!;
+
+    it('a message does not outlive the next search', async () => {
+      editor();
+      openForm();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+      await waitFor(() => expect(statusRegion().textContent).toBe(createdText('Bear crawl')));
+      search('zzzz');
+      await waitFor(() =>
+        expect(statusRegion().textContent).toContain(MOVEMENT_PICKER_COPY.statusNoMatches),
+      );
+    });
+
+    it('after Create, focus is on the item’s row; after Cancel, on the create button', async () => {
+      editor();
+      openForm();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+      await waitFor(() => expect(document.activeElement).toBe(row('Bear crawl')));
+      // The search's deferred value settles a render later; the plain button follows it.
+      const newItem = await waitFor(() =>
+        within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }),
+      );
+      fireEvent.click(newItem);
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      expect(document.activeElement).toBe(
+        within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }),
+      );
+    });
+
+    it('an inactive Create moves to what is missing', () => {
+      const all = editor();
+      openForm();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+      expect(document.activeElement).toBe(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks));
+      expect(all.newItem).not.toHaveBeenCalled();
+    });
+
+    it('a name the same-movement rule folds to nothing is refused, once Create is pressed', () => {
+      const all = editor();
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
+      fireEvent.change(name, { target: { value: 'S' } });
+      // Not on the first keystroke of "Squat".
+      expect(within(sheet()).queryByText(ITEM_PICKER_COPY.giveAName)).toBeNull();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      const create = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create });
+      expect(create.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(create);
+      expect(within(sheet()).getByText(ITEM_PICKER_COPY.giveAName)).toBeTruthy();
+      expect(document.activeElement).toBe(name);
+      expect(all.newItem).not.toHaveBeenCalled();
+    });
+
+    it('closing the sheet drops the form; the ticks stay', () => {
+      editor();
+      openPicker();
+      fireEvent.click(row('Sprawls'));
+      search('Bear crawl');
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
+      fireEvent.keyDown(sheet(), { key: 'Escape' });
+      openPicker();
+      expect(within(sheet()).queryByLabelText(ITEM_PICKER_COPY.name)).toBeNull();
+      expect(row('Sprawls').getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('a full workout says so at "+ Add items" and opens nothing', async () => {
+      const full = {
+        ...heavyADraft,
+        items: Array.from({ length: MAX_WORKOUT_ITEMS }, (_, i) => ({
+          ...heavyADraft.items[4]!,
+          prescriptionClientId: `00000000-0000-7000-8000-0000000${String(1000 + i)}`,
+        })),
+      };
+      editor({}, full);
+      openPicker();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toBe(capText(MAX_WORKOUT_ITEMS)),
+      );
+    });
+
+    it('an item made here is listed once, when the route’s own list has it too', async () => {
+      const all = actions();
+      const view = render(
+        <WorkoutEditorScreen
+          draft={newWorkoutEmpty}
+          picker={{ options: pickerOptions }}
+          actions={all}
+        />,
+      );
+      openForm();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+      await waitFor(() => expect(row('Bear crawl')).toBeTruthy());
+      const withNew: MovementOptionDTO[] = [
+        ...pickerOptions,
+        {
+          ...pickerOptions[0]!,
+          publicId: NEW_ID,
+          name: 'Bear crawl',
+          trackingType: TRACKING_TYPE.reps,
+        },
+      ];
+      view.rerender(
+        <WorkoutEditorScreen draft={newWorkoutEmpty} picker={{ options: withNew }} actions={all} />,
+      );
+      expect(within(sheet()).getAllByRole('checkbox', { name: /^Bear crawl/ })).toHaveLength(1);
+    });
+
+    const typeReps = () =>
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: TRACKING_TYPE.reps },
+      });
+    const pressCreate = () =>
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+
+    it('Create in the sheet never saves the workout (the picker is outside the editor’s form)', async () => {
+      const all = editor({}, heavyADraft);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('true'));
+      expect(all.saveWorkout).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('added cards are sent with their item and an id each', async () => {
+      const all = editor({}, heavyADraft);
+      openPicker();
+      fireEvent.click(row('Sprawls'));
+      fireEvent.click(row('Wall sit'));
+      fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(2) }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      for (const input of within(document.querySelector('ol')!)
+        .getAllByLabelText('Sets')
+        .slice(-2)) {
+        fireEvent.change(input, { target: { value: '3' } });
+      }
+      fireEvent.click(screen.getByRole('button', { name: EDITOR_COPY.save }));
+      await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
+      const sent = vi.mocked(all.saveWorkout).mock.calls[0]![0].items.slice(-2);
+      const option = (name: string) => pickerOptions.find((o) => o.name === name)!;
+      expect(sent).toMatchObject([
+        { itemPublicId: option('Sprawls').publicId, itemName: 'Sprawls', sets: 3 },
+        { itemPublicId: option('Wall sit').publicId, itemName: 'Wall sit', sets: 3 },
+      ]);
+      const ids = new Set([
+        ...heavyADraft.items.map((item) => item.prescriptionClientId),
+        ...sent.map((item) => item.prescriptionClientId),
+      ]);
+      expect(ids.size).toBe(heavyADraft.items.length + 2);
+    });
+
+    it('an alias is the item it names: "rdl" selects Romanian Deadlift and makes nothing', async () => {
+      const rdl: MovementOptionDTO = {
+        publicId: '00000000-0000-7000-8000-000000009100',
+        name: 'Romanian Deadlift',
+        owner: 'catalog',
+        group: 'legs',
+        aliases: ['RDL'],
+        unitDefault: null,
+        isBodyweight: false,
+        trackingType: TRACKING_TYPE.weight_reps,
+      };
+      const all = editor({}, newWorkoutEmpty, [...pickerOptions, rdl]);
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'rdl' },
+      });
+      fireEvent.click(
+        within(sheet()).getByRole('button', { name: selectExistingText('Romanian Deadlift') }),
+      );
+      await waitFor(() =>
+        expect(row('Romanian Deadlift').getAttribute('aria-checked')).toBe('true'),
+      );
+      expect(all.newItem).not.toHaveBeenCalled();
+    });
+
+    it('a create answered after Cancel leaves a newer form alone, and still lists the item', async () => {
+      let answer!: (value: unknown) => void;
+      editor({ newItem: vi.fn(() => new Promise((resolve) => (answer = resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      fireEvent.click(
+        await waitFor(() =>
+          within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }),
+        ),
+      );
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'Other thing' },
+      });
+      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        (within(sheet()).getByLabelText(ITEM_PICKER_COPY.name) as HTMLInputElement).value,
+      ).toBe('Other thing');
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      search('Bear');
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
+    });
+
+    it('a message does not outlive Add', async () => {
+      editor();
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('true'));
+      await new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 50));
+      fireEvent.click(within(sheet()).getByRole('button', { name: addItemsText(1) }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      openPicker();
+      expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
+    });
+
+    it('the name is sent cleaned, and the item takes the server’s type, not the one chosen', async () => {
+      const all = editor({
+        newItem: vi.fn().mockResolvedValue({
+          ok: true,
+          itemPublicId: NEW_ID,
+          trackingType: TRACKING_TYPE.duration,
+          existed: true,
+        }),
+      });
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: '  Bear   crawl ' },
+      });
+      typeReps();
+      pressCreate();
+      await waitFor(() =>
+        expect(row('Bear crawl').textContent).toContain(TRACKING_TYPE_LABELS.duration),
+      );
+      expect(all.newItem).toHaveBeenCalledWith({
+        name: 'Bear crawl',
+        trackingType: TRACKING_TYPE.reps,
+      });
+    });
+
+    it('an invalid name with a type chosen: Create moves to the name', () => {
+      editor();
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
+      fireEvent.change(name, { target: { value: 'Bear, crawl' } });
+      typeReps();
+      pressCreate();
+      expect(document.activeElement).toBe(name);
+    });
+
+    it('a full workout: a new item is made but not ticked, and the message says so', async () => {
+      const almost = {
+        ...heavyADraft,
+        items: Array.from({ length: MAX_WORKOUT_ITEMS - 1 }, (_, i) => ({
+          ...heavyADraft.items[4]!,
+          prescriptionClientId: `00000000-0000-7000-8000-0000000${String(1000 + i)}`,
+        })),
+      };
+      editor({}, almost);
+      openPicker();
+      fireEvent.click(row('Sprawls'));
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() =>
+        expect(within(sheet()).getAllByText(notTickedText('Bear crawl')).length).toBeGreaterThan(0),
+      );
+      expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('Enter in the search ticks the one match and says so', async () => {
+      editor();
+      openPicker();
+      search('Wall sit');
+      fireEvent.keyDown(within(sheet()).getByRole('searchbox'), { key: 'Enter' });
+      await waitFor(() =>
+        expect(within(sheet()).getAllByRole('status')[0]!.textContent).toBe(
+          selectedText('Wall sit'),
+        ),
+      );
+      expect(row('Wall sit').getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('Enter in a name already listed moves to "Select …", which the line explains', () => {
+      editor();
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
+      fireEvent.change(name, { target: { value: 'pull up' } });
+      fireEvent.keyDown(name, { key: 'Enter' });
+      const select = within(sheet()).getByRole('button', { name: selectExistingText('Pull-up') });
+      expect(document.activeElement).toBe(select);
+      expect(select.getAttribute('aria-describedby')).toBeTruthy();
+      expect(document.getElementById(select.getAttribute('aria-describedby')!)!.textContent).toBe(
+        alreadyListedText('Pull-up', TRACKING_TYPE_LABELS.reps),
+      );
+    });
+
+    it('a create answered after a plain Cancel ticks nothing and says nothing', async () => {
+      let answer!: (value: unknown) => void;
+      editor({ newItem: vi.fn(() => new Promise((resolve) => (answer = resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
+      search('Bear');
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
+    });
+
+    it('Create, Cancel, Create again, both answers land: the item is listed once', async () => {
+      const answers: ((value: unknown) => void)[] = [];
+      editor({ newItem: vi.fn(() => new Promise((resolve) => answers.push(resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      search('Bear crawl');
+      fireEvent.click(
+        await waitFor(() =>
+          within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }),
+        ),
+      );
+      typeReps();
+      pressCreate();
+      answers[0]!({
+        ok: true,
+        itemPublicId: NEW_ID,
+        trackingType: TRACKING_TYPE.reps,
+        existed: false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      answers[1]!({
+        ok: true,
+        itemPublicId: NEW_ID,
+        trackingType: TRACKING_TYPE.reps,
+        existed: true,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(within(sheet()).getAllByRole('checkbox', { name: /^Bear crawl/ })).toHaveLength(1);
+    });
+
+    it('a failure to reach the server is seen in the form, and the name is not blamed', async () => {
+      editor({ newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() =>
+        expect(
+          within(sheet())
+            .queryAllByText(ITEM_PICKER_COPY.failed)
+            .some((node) => !node.closest('.sr-only')),
+        ).toBe(true),
+      );
+      expect(
+        within(sheet()).getByLabelText(ITEM_PICKER_COPY.name).getAttribute('aria-invalid'),
+      ).toBeNull();
+      expect(document.activeElement).toBe(
+        within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }),
+      );
+    });
+
+    it('a create answered after Escape ticks nothing in the closed sheet', async () => {
+      let answer!: (value: unknown) => void;
+      editor({ newItem: vi.fn(() => new Promise((resolve) => (answer = resolve))) as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      fireEvent.keyDown(sheet(), { key: 'Escape' });
+      answer({ ok: true, itemPublicId: NEW_ID, trackingType: TRACKING_TYPE.reps, existed: false });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      openPicker();
+      expect(within(sheet()).queryAllByText(createdText('Bear crawl'))).toEqual([]);
+      search('Bear');
+      await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false'));
+    });
+
+    it('Create while creating sends nothing more', async () => {
+      const newItem = vi.fn(() => new Promise(() => {}));
+      editor({ newItem: newItem as never });
+      openForm();
+      typeReps();
+      pressCreate();
+      const creating = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.creating });
+      creating.focus();
+      fireEvent.click(creating);
+      expect(newItem).toHaveBeenCalledTimes(1);
+      expect(creating.getAttribute('aria-disabled')).toBe('true');
+      // Nothing is missing while it creates: focus stays put.
+      expect(document.activeElement).toBe(creating);
+    });
+
+    it('a missing type is marked, and an empty name says why', () => {
+      editor();
+      openPicker();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      pressCreate();
+      expect(within(sheet()).getByText(ITEM_PICKER_COPY.giveAName)).toBeTruthy();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'Bear crawl' },
+      });
+      pressCreate();
+      expect(
+        within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks).getAttribute('aria-invalid'),
+      ).toBe('true');
+    });
+
+    it('after a failure, Cancel leaves no failure message on the list', async () => {
+      editor({ newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+      const shown = () =>
+        within(sheet())
+          .queryAllByText(ITEM_PICKER_COPY.failed)
+          .filter((node) => !node.closest('.sr-only'))
+          .map((node) => node.textContent);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(shown().length).toBe(1));
+      fireEvent.click(within(sheet()).getByRole('button', { name: BUILDER_COPY.cancel }));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(within(sheet()).queryByLabelText(ITEM_PICKER_COPY.name)).toBeNull();
+      expect(shown()).toEqual([]);
+    });
+    it('a retry in flight no longer shows the last failure', async () => {
+      const newItem = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry })
+        .mockReturnValue(new Promise(() => {}));
+      editor({ newItem: newItem as never });
+      const shown = () =>
+        within(sheet())
+          .queryAllByText(ITEM_PICKER_COPY.failed)
+          .filter((node) => !node.closest('.sr-only'))
+          .map((node) => node.textContent);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(shown().length).toBe(1));
+      pressCreate();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(newItem).toHaveBeenCalledTimes(2);
+      expect(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.creating })).toBeTruthy();
+      expect(shown()).toEqual([]);
+    });
+    it('after a failure, a name already listed does not keep the failure above Select', async () => {
+      editor({ newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
+      const shown = () =>
+        within(sheet())
+          .queryAllByText(ITEM_PICKER_COPY.failed)
+          .filter((node) => !node.closest('.sr-only'))
+          .map((node) => node.textContent);
+      openForm();
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(shown().length).toBe(1));
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+        target: { value: 'pull up' },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(
+        within(sheet()).getByRole('button', { name: selectExistingText('Pull-up') }),
+      ).toBeTruthy();
+      expect(shown()).toEqual([]);
+    });
+  });
+});
