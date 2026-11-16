@@ -34,6 +34,7 @@ import {
 } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
+import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { appSources, code, WEB_DIR } from '@/test/source-scan';
 
 import { createFakeDayActions, createFakeProgramActions, type FakeProgramState } from './fakes';
@@ -714,7 +715,12 @@ describe('the fake ProgramActions: items and athletes', () => {
       name: 'Bear crawl',
       trackingType: TRACKING_TYPE.distance,
     });
-    expect(made).toMatchObject({ ok: true, trackingType: TRACKING_TYPE.distance, existed: false });
+    expect(made).toMatchObject({
+      ok: true,
+      name: 'Bear crawl',
+      trackingType: TRACKING_TYPE.distance,
+      existed: false,
+    });
     expect(state().items.at(-1)).toMatchObject({ name: 'Bear crawl', owner: 'household' });
 
     const pushUps = pickerOptions.find((o) => o.name === 'Push-ups')!;
@@ -724,10 +730,45 @@ describe('the fake ProgramActions: items and athletes', () => {
     ).toEqual({
       ok: true,
       itemPublicId: pushUps.publicId,
+      // The item's own name, not what was typed: the card shows "Push-ups".
+      name: 'Push-ups',
       trackingType: pushUps.trackingType,
       existed: true,
     });
     expect(state().items).toHaveLength(pickerOptions.length + 1);
+  });
+
+  it('a typed alias selects the item it is another name for, and adds nothing', async () => {
+    // The fixture's items carry no aliases, so this seeds one catalog item that does, as the real
+    // picker data will (`MOVEMENT_PICKER_ENTRIES`).
+    const rdl: MovementOptionDTO = {
+      publicId: '019826b4-0000-7000-8000-0000000000d1',
+      name: 'Romanian Deadlift',
+      trackingType: TRACKING_TYPE.weight_reps,
+      owner: 'catalog',
+      group: 'legs',
+      aliases: ['RDL'],
+      unitDefault: null,
+      isBodyweight: false,
+    };
+    const { actions, state } = builder({ items: [...pickerOptions, rdl] });
+    for (const typed of ['RDL', ' rdl ', 'romanian deadlifts']) {
+      expect(
+        await actions.newItem({ name: typed, trackingType: TRACKING_TYPE.check }),
+        typed,
+      ).toEqual({
+        ok: true,
+        itemPublicId: rdl.publicId,
+        name: 'Romanian Deadlift',
+        trackingType: TRACKING_TYPE.weight_reps,
+        existed: true,
+      });
+    }
+    expect(state().items).toHaveLength(pickerOptions.length + 1);
+    // A name that only CONTAINS the alias is a new item: the alias rule is exact.
+    expect(
+      await actions.newItem({ name: 'RDL pause', trackingType: TRACKING_TYPE.weight_reps }),
+    ).toMatchObject({ ok: true, name: 'RDL pause', existed: false });
   });
 
   it('take off ends a program after today: family-program-after-take-off', async () => {

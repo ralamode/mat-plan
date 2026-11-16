@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { matchMovementOptions, type MatchableMovement } from '../movement-search';
 import { TRACKING_TYPES, type TrackingType } from '../movements';
 import { PROFILE_NAME_MAX } from '../profiles';
 import {
@@ -321,4 +322,28 @@ export const SET_TRACKING_TYPES = TRACKING_TYPES.filter((type) => TRACKING_TYPE_
 
 export function hasSetRows(type: TrackingType): boolean {
   return TRACKING_TYPE_FIELDS[type].sets;
+}
+
+/**
+ * The item a typed name already names, or `undefined`: **the one definition of "this item exists"
+ * for `newItem`**, read by the real writer (plan step 6a) and by the preview's fake.
+ *
+ * It is the picker's own rule (`matchMovementOptions`), not a second one: the name's key equals an
+ * item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups` are one item), or equals the
+ * key of one of an item's aliases (`RDL`, `rdl`). Those are exactly the two cases in which the
+ * picker withholds "add as new", so the server and the picker cannot disagree about a duplicate.
+ *
+ * When more than one item qualifies (a household item named `RDL` made before this rule, beside
+ * the catalog's Romanian Deadlift), the first in the picker's order is the answer: a catalog item
+ * before a household one (`isCatalog`), then by name.
+ *
+ * ⚠️ `options` must be every item the household can pick, with each catalog item's `aliases`. An
+ * item left out can be duplicated; an alias left out is not honoured.
+ */
+export function existingItem<T extends MatchableMovement>(
+  options: readonly T[],
+  name: string,
+): T | undefined {
+  const { matches, exact, aliasHit } = matchMovementOptions(options, name);
+  return exact || aliasHit !== null ? matches[0] : undefined;
 }

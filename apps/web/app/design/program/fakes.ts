@@ -6,7 +6,7 @@ import {
   foldName,
   hasStarted,
   MONDAY_FIRST,
-  movementNameKey,
+  existingItem,
   newId,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -544,13 +544,12 @@ export function createFakeProgramActions(
         const parsed = newItemSchema.safeParse(input);
         if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
         const { name, trackingType } = parsed.data;
-        // An item is "the same movement" by the picker's rule (`movement-picker.md` invariant 1), which
-        // is looser than a name's fold: "push ups" is Push-ups.
-        const key = movementNameKey(name);
-        const existing = state.items.find((item) => movementNameKey(item.name) === key);
+        // An item is "the same movement" by the picker's rule (`existingItem`), which is looser than
+        // a name's fold: "push ups" is Push-ups, and a catalog item's alias ("RDL") is that item.
+        const existing = existingItem(state.items, name);
         if (existing) {
-          const { publicId: itemPublicId, trackingType: itsType } = existing;
-          return { ok: true, itemPublicId, trackingType: itsType, existed: true };
+          const { publicId: itemPublicId, name: itsName, trackingType: itsType } = existing;
+          return { ok: true, itemPublicId, name: itsName, trackingType: itsType, existed: true };
         }
 
         const itemPublicId = newId();
@@ -563,7 +562,7 @@ export function createFakeProgramActions(
           isBodyweight: false,
         });
         changed();
-        return { ok: true, itemPublicId, trackingType, existed: false };
+        return { ok: true, itemPublicId, name, trackingType, existed: false };
       },
 
       async putOn(draft) {
