@@ -3,7 +3,7 @@
 import { supersetLabels, type DayItem, type DayWorkout } from '@mat-plan/shared';
 import { memo, useState } from 'react';
 
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { itemCountText, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
@@ -42,7 +42,7 @@ export const WorkoutCard = memo(function WorkoutCard({
 }) {
   const { done, total } = workout.progress;
   const progress = future
-    ? DAY_COPY.items(workout.items.length)
+    ? itemCountText(workout.items.length)
     : total === 0
       ? null
       : done >= total

@@ -1,7 +1,7 @@
 import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-plan/shared';
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
-import { CLOSED_DAY_NOTICE, VALUE_JOINER } from '@/lib/constants';
+import { CLOSED_DAY_NOTICE, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
 import { formatList, plural } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
@@ -25,6 +25,8 @@ export const DAY_COPY = {
   set: 'Set',
   previous: 'Previous',
   reps: 'Reps',
+  /** A number of reps in a sentence: `8 reps`, `1 rep`. */
+  repsCount: (count: number) => plural(count, { one: '1 rep', other: `${count} reps` }),
   noPrevious: 'none',
   addSet: '+ Add set',
   /** "+ Add set" for a screen reader, which hears several on one page: which item it adds to. */
@@ -38,8 +40,6 @@ export const DAY_COPY = {
   loggedAgainst: (text: string) => `Logged rows were against ${text}.`,
   superset: (letter: string) => `Superset ${letter}`,
   rest: (text: string) => `Rest ${text}`,
-  /** Look-ahead: the size of a workout, where the progress line would be (v12). */
-  items: (count: number) => plural(count, { one: '1 item', other: `${count} items` }),
   /** A row whose prescription left the workout after it was logged (v12, `index.html:2432`). */
   removed: 'No longer in this workout. What was logged stays.',
   /** The whole screen turns read-only after the first `closed_day`. */
@@ -48,8 +48,34 @@ export const DAY_COPY = {
   notSaved: (count: number) => `${count} not saved`,
   logLabel: (name: string) => `Log ${name}`,
   fieldLabel: (name: string, unit: string) => (unit ? `${name}, in ${unit}` : name),
+  /**
+   * Change (13b-ii): the line under a logged row. Every number is printed with its unit or "reps", so
+   * the line says which field it means. The maintainer's guards (2026-11-16): Undo returns the number
+   * from before the first Change this visit, and a Cancel stands in for Escape on a phone.
+   */
+  change: {
+    changed: (from: string, to: string) => `Changed ${from} → ${to}`,
+    changedBack: (to: string) => `Changed back to ${to}`,
+    notSaved: (was: string) => `Not saved. Was ${was}.`,
+    failed: (still: string) => `Couldn’t save. Still ${still}.`,
+    undoFailed: (still: string) => `Couldn’t undo. Still ${still}.`,
+    kept: {
+      missing: (kept: string) => `Kept ${kept}: enter a number to change it.`,
+      not_a_number: (kept: string) => `Kept ${kept}: numbers only.`,
+      out_of_range: (kept: string, typed: string) => `Kept ${kept}. ${typed} won’t work.`,
+    },
+    undo: UNDO_LABEL,
+    cancel: 'Cancel',
+    /** A failed save, still typed: send it again. */
+    retry: 'Try again',
+    /** The ✓'s description while a logged number is being changed: the ✓ saves it. */
+    tickSaves: 'The ✓ saves the change.',
+  },
   announce: {
     logged: (name: string) => `${name} logged`,
+    changed: (name: string, from: string, to: string) => `${name} changed from ${from} to ${to}`,
+    changedBack: (name: string, to: string) => `${name} changed back to ${to}`,
+    cancelled: (name: string) => `${name}: change cancelled`,
     unticked: (name: string) => `${name} un-checked`,
     failed: (name: string, message: string) => `${name}: ${message}`,
   },
@@ -106,21 +132,26 @@ export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
 export type RefusalCopy = { message: string; reload: boolean; focusField: boolean };
 
 const UNTICK_FAILED = 'Still logged. Couldn’t un-check; try again.';
+/** A write that can be tried again, by kind; a Change's own line says what is still stored. */
+const RETRY_COPY: Record<RowWriteKind, string> = {
+  tick: SAVE_FAILED,
+  untick: UNTICK_FAILED,
+  amend: SAVE_FAILED,
+};
 
 /**
- * Every refusal, for a ✓ (`tick`) and for an un-tick (`untick`). `closed_day` is here for
+ * Every refusal, for a ✓ (`tick`), an un-tick (`untick`) and a Change (`amend`). `closed_day` is here for
  * completeness; the screen shows it once, at the top, and turns read-only.
  */
 export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCopy {
   switch (reason) {
     case ROW_REFUSAL.retry:
     case ROW_REFUSAL.own_hidden:
-      return {
-        message: write === 'tick' ? SAVE_FAILED : UNTICK_FAILED,
-        reload: false,
-        focusField: false,
-      };
+      return { message: RETRY_COPY[write], reload: false, focusField: false };
     case ROW_REFUSAL.bad_value:
+      // A Change is checked before it is sent, so a refused one means the item changed under the
+      // page (its unit, say): a reload, not the number.
+      if (write === 'amend') return { message: STALE, reload: true, focusField: false };
       return { message: TYPED_PROBLEM_COPY.out_of_range, reload: false, focusField: true };
     case ROW_REFUSAL.closed_day:
       return { message: DAY_COPY.closed, reload: false, focusField: false };
