@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObjec
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
-import { MAIN_CONTENT_ID } from '@/lib/constants';
+import { MAIN_CONTENT_ID, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 /**
@@ -491,9 +491,12 @@ export function Sheet({
                 // default) rather than asserted. On desktop this is the one moment a keyboard user
                 // would otherwise have no indicator at all, which is why it is focusable but not
                 // tabbable. `outline-none` + `focus-visible:ring-3` is this repo's idiom
-                // (`callout.tsx`, `INPUT_CLASS`).
+                // (`callout.tsx`, `INPUT_CLASS`). `NAME_WRAP_CLASS`: a title often holds a person's or
+                // a program's name, and a long unbroken one pushed the Close button off a 360px
+                // screen (found in FAM-1 13d's review). Compact still truncates on purpose.
                 className={cn(
-                  'focus-visible:ring-ring min-w-0 flex-1 rounded font-semibold outline-none focus-visible:ring-3',
+                  'focus-visible:ring-ring flex-1 rounded font-semibold outline-none focus-visible:ring-3',
+                  NAME_WRAP_CLASS,
                   compact ? 'truncate text-base' : 'text-lg',
                 )}
               >
