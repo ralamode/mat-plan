@@ -167,6 +167,7 @@ describe('the week editor (FAM-1 10)', () => {
       'EveningConditioning',
     ]);
     // Focus on the slot's text, not its ✕: a double tap on Undo must not remove it again.
+    expect(document.activeElement?.tagName).toBe('BUTTON');
     expect(document.activeElement?.textContent).toContain('Heavy B');
     clock.again(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
     expect(all.saveWeek).toHaveBeenCalledTimes(2);
@@ -187,6 +188,7 @@ describe('the week editor (FAM-1 10)', () => {
     fireEvent.click(within(day(6)).getByRole('button', { name: BUILDER_COPY.save }));
     await waitFor(() => expect(all.saveWeek).toHaveBeenCalled());
     expect(sent(all)[6][1]).toEqual({ workoutPublicId: HEAVY_B, label: 'Dawn' });
+    expect(document.activeElement?.tagName).toBe('BUTTON');
     expect(document.activeElement?.textContent).toContain('Heavy B');
   });
 
@@ -394,7 +396,9 @@ describe('the week editor (FAM-1 10)', () => {
     page({ saveWeek: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }) });
     fireEvent.click(screen.getByRole('button', { name: removeFromLabel('Heavy B', 6) }));
     await waitFor(() => expect(alerts()).toEqual([WEEK_COPY.failed]));
-    expect(document.activeElement?.textContent).toContain('Heavy B');
+    expect(document.activeElement).toBe(
+      within(day(6)).getAllByRole('button', { name: new RegExp(`^${WEEK_COPY.editLabel}`) })[1],
+    );
   });
 
   it('with one workout not on the day, the form chooses it; its label is checked too', () => {
