@@ -361,7 +361,9 @@ as the `schema.ts` change, and Drizzle names every column on insert, so between 
 migration an insert into the changed table fails `42703` (the FAM-1 plan §3 accepts this window;
 each step's migration header names the statements). The recovery is this re-run; FAM-1 merges
 migrations when nobody is logging. 0022: every movement resolved by name (a strength save with a
-typed name, existing or new) and every `insert into movements` (a new item, the seed).
+typed name, existing or new) and every `insert into movements` (a new item, the seed). 0024: EVERY
+insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll Vercel back to the
+previous deployment (its code works on either schema), then re-run as below.
 
 ---
 
@@ -1279,7 +1281,8 @@ UNION ALL SELECT 'household_members', count(*) FROM household_members
 ```
 
 **Pre-flight integrity — every one of these must return 0, or STOP.** `entries.session_id`,
-`entries.superset_id` and `prescription_targets.prescription_id` are **unscoped FKs, enforced by the
+`entries.superset_id`, `prescription_targets.prescription_id` and, since FAM-1 4a-ii,
+`sessions.workout_id` and `entries.prescription_id` are **unscoped FKs, enforced by the
 writers and not by the schema** (`schema.ts` says so above `supersets`). A stray cross-household row
 either aborts the transaction half-way or makes this procedure delete a row about another family's
 child:
@@ -1324,6 +1327,27 @@ child:
 --        WHERE sb.household_id = (SELECT id FROM h) AND b.household_id <> sb.household_id
 --       (`db:verify` proves this join finds a planted row, `verify/schema.ts` → FAM-1 4a-i; it runs on
 --       PGlite, never on production, so THIS is the check against real rows.)
+-- (f) FAM-1 4a-ii: a SESSION of ANOTHER household naming one of H's workouts. Step 9b would SET NULL
+--       its `workout_id` silently, and its `workout_name` (H's typed text) would stay on another
+--       family's child's session, and from step 14 in their export. The writer refuses it, so a row
+--       here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
+--       that session (the pairing CHECK allows both NULL) before this procedure.
+--       SELECT s.id FROM sessions s
+--         JOIN profiles pr ON pr.id = s.profile_id
+--         JOIN workouts w ON w.id = s.workout_id
+--         JOIN program_blocks b ON b.id = w.block_id
+--        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
+-- (g) FAM-1 4a-ii: an ENTRY of ANOTHER household naming one of H's prescriptions. Step 9 would SET
+--       NULL its `prescription_id`, and its `prescribed_snapshot` (rendered from H's prescription) and
+--       its superset's `prescription_group` (H's label) would stay. A defect for the same reason:
+--       STOP, and with a correction clear `prescription_id`, `prescribed_snapshot` and the superset's
+--       `prescription_group` on those rows; the decision is to keep none of H's text (A2 §8).
+--       SELECT e.id FROM entries e
+--         JOIN profiles pr ON pr.id = e.profile_id
+--         JOIN prescriptions x ON x.id = e.prescription_id
+--         JOIN program_blocks b ON b.id = x.block_id
+--        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
+--       (`db:verify` proves both joins find a planted row, `verify/schema.ts` → FAM-1 4a-ii.)
 ```
 
 🔴 **Why (d) exists, and why it STAYS although `TEN-2c` closed the writer that minted it.** `TEN-2a`
@@ -1378,9 +1402,9 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write them all out against the same CTEs and read the numbers. (a)–(c) and (e) must be zero. For (d),
-follow the repoint above rather than stopping; for (e), STOP and clear the other household's provenance
-with a correction first, as (e) says.
+Write them all out against the same CTEs and read the numbers. (a)–(c) and (e)–(g) must be zero. For
+(d), follow the repoint above rather than stopping; for (e)–(g), STOP and clear the other household's
+copies of H's text with a correction first, as each says.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 

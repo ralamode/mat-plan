@@ -273,7 +273,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\n"
+              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nWhen an athlete logs a workout, its name as it was that day is kept with the session, so renaming\nor deleting the workout later does not change what was logged.\n"
             },
             {
               "k": "em",

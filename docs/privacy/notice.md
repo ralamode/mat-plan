@@ -37,6 +37,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Programs you build yourself** _(coming; the app cannot save one yet)_: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
+  When an athlete logs a workout, its name as it was that day is kept with the session, so renaming
+  or deleting the workout later does not change what was logged.
   _(The tables exist so the app can be built against them. Nothing writes to them today; this line is
   here because the schema is public and you would otherwise find them.)_
 
