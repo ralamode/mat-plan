@@ -6,7 +6,6 @@ import {
   type StrengthSetInput,
   type Unit,
   UNIT_DIMENSION,
-  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -17,7 +16,7 @@ import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
-import { insertSupersetRow, reselectLiveByClientId } from './session-rows';
+import { insertEntrySetRows, type EntrySetRowInput } from './session-rows';
 import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership';
 
 /**
@@ -31,6 +30,42 @@ import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership
  * `getActivityTypeIdByKey`, app-side —
  * both resolved BEFORE the transaction opens). No `server-only`, no app imports.
  */
+
+/** The three graph tables that share the `client_id` + `deleted_at` idempotency shape. */
+type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof schema.entries;
+
+/**
+ * Re-select a live row by its `client_id` after an ON-CONFLICT no-op (a replay). The **`deleted_at
+ * IS NULL` guard is load-bearing**, and since **V1-9b B0** it is load-bearing for the opposite
+ * reason to the one originally written here.
+ *
+ * It used to read: *"the partial UNIQUE lets a soft-deleted row share the client_id, so an unguarded
+ * re-select could return the dead row"*. B0 made these arbiters non-partial, so a hidden row no
+ * longer shares the id — it **holds** it. The guard now matters because a conflict can be with a
+ * HIDDEN row, and an unguarded re-select would return that row's id and attach children to a dead
+ * parent. Either way the guard stays, which is why B0 changes no code here.
+ *
+ * ⚠️ The throw is the behaviour `db:verify`'s B0 case asserts: replaying a hidden write is a
+ * REFUSAL, not a twin. `B1-2` owns turning it into a typed envelope; today it reaches `error.tsx`.
+ * Extracted so the three graph-row inserts can't drift on this. A SELECT over the table union needs
+ * no `as never`.
+ */
+async function reselectLiveByClientId(
+  exec: Executor,
+  table: GraphTable,
+  clientId: string,
+): Promise<{ id: number; publicId: string }> {
+  const [row] = await exec
+    .select({ id: table.id, publicId: table.publicId })
+    .from(table)
+    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
+    .limit(1);
+  // The re-select follows an ON-CONFLICT no-op, so a live row should exist. If it doesn't (e.g. the row
+  // was soft-deleted between the conflict and this SELECT), fail with a clear error rather than let a
+  // caller crash on `.id` of undefined — keeps the non-null return contract honest.
+  if (!row) throw new Error(`no live row for client_id ${clientId}`);
+  return row;
+}
 
 /**
  * A session movement with its catalog `movementId` already resolved (the caller owns
@@ -97,6 +132,30 @@ async function insertStrengthSessionRow(
 }
 
 /**
+ * Insert a `supersets` grouping row, idempotent by `client_id` (the `insertStrengthSessionRow` twin).
+ * NOT exported — reached only via `writeStrengthSession`'s tx. On a replay, re-selects the live row.
+ */
+async function insertSupersetRow(
+  exec: Executor,
+  args: { sessionId: number; clientId: string; label?: string },
+): Promise<{ id: number }> {
+  const [row] = await exec
+    .insert(schema.supersets)
+    .values({
+      publicId: newId(),
+      clientId: args.clientId,
+      sessionId: args.sessionId,
+      label: args.label ?? null,
+    })
+    .onConflictDoNothing({
+      target: schema.supersets.clientId,
+      where: isNull(schema.supersets.deletedAt),
+    })
+    .returning({ id: schema.supersets.id });
+  return row ?? reselectLiveByClientId(exec, schema.supersets, args.clientId);
+}
+
+/**
  * Write ONE session movement: its `entry` + N `entry_set` rows. Idempotent by the entry's
  * `client_id` — a replay finds the existing entry and returns it WITHOUT re-inserting sets (so a
  * retry never doubles them). The member is written in the DECOUPLED forward shape (`kind` NULL +
@@ -118,7 +177,7 @@ async function writeSessionStrengthEntry(
     day: string;
     clientId: string;
     // `weight` is optional here though the schema always emits it — direct callers omit it.
-    sets: readonly (Omit<StrengthSetInput, 'weight'> & { weight?: number | null })[];
+    sets: readonly EntrySetRowInput[];
     status?: MovementStatus;
     supersetId?: number | null;
     supersetOrder?: number | null;
@@ -174,63 +233,7 @@ async function writeSessionStrengthEntry(
     };
   }
 
-  if (args.sets.length > 0) {
-    // GAP-3: the SET row now carries only reps, status and the two qualitative booleans; every
-    // measured quantity is a child row written below. `weight_num`/`weight_label` are gone.
-    const setRows = await exec
-      .insert(schema.entrySets)
-      .values(
-        args.sets.map((s, i) => ({
-          publicId: newId(),
-          clientId: newId(),
-          entryId: entry.id,
-          idx: i + 1, // 1-based
-          reps: s.reps,
-          // `bodyweight`/`band` are MODES, not quantities (GAP-3 §7.2b) — booleans, and omitted when
-          // false so Postgres applies its own default and the row stays byte-minimal.
-          ...(s.isBodyweight ? { isBodyweight: true } : {}),
-          ...(s.isBand ? { isBand: true } : {}),
-          // GAP-1 P1-1b — same omitted-takes-the-DB-default idiom as the entry's status. A `done` set
-          // omits the column entirely, so every pre-existing caller writes a byte-identical row.
-          ...('status' in s && s.status !== undefined ? { status: s.status } : {}),
-        })),
-      )
-      .returning({ id: schema.entrySets.id });
-
-    // One PRIMARY quantity per set that carries a magnitude.
-    //
-    // The unit comes from the MOVEMENT, and the dimension is derived from that unit rather than
-    // assumed: since PR 4a the movement may be logged in `in` (a box jump) or `sec` (a hold), not only
-    // `lb`/`kg`. Deriving keeps the pair consistent with `units(code, dimension)`, which the composite
-    // FK checks — a hard-coded `'mass'` here would be an FK violation surfacing as a 500 on a gym
-    // floor. Census §4.6 is why the unit is not on the value: "weight units are never written", so a
-    // bare `185` means 185 of whatever this movement is logged in.
-    //
-    // A set with no magnitude (pure bodyweight, or a band) writes NO quantity row — a mode is not a
-    // measurement, and a row with a NULL value would be the EAV smell the child table avoids.
-    const quantityRows: (typeof schema.entrySetQuantities.$inferInsert)[] = [];
-    args.sets.forEach((s, i) => {
-      // `=== null` is not enough: the SCHEMA always emits `weight: null`, but the relaxed inner
-      // signature above lets a direct caller (a future importer) omit the key entirely, so handle
-      // both. Until DX-7 this was the ONLY thing standing between an omission and
-      // `numeric: "undefined"` from Postgres, because `packages/db` was typechecked by nothing; the
-      // package now has its own `tsconfig.json` in `pnpm typecheck`, so an omission through the
-      // public `writeStrengthSession` is a compile error. This stays as the inner guard.
-      if (s.weight === null || s.weight === undefined) return;
-      quantityRows.push({
-        clientId: newId(),
-        entrySetId: setRows[i].id,
-        slot: QUANTITY_SLOT.primary,
-        dimension: UNIT_DIMENSION_BY_CODE[args.unit],
-        unit: args.unit,
-        valueNum: String(s.weight), // numeric column takes a string (precision-safe)
-      });
-    });
-
-    if (quantityRows.length > 0) {
-      await exec.insert(schema.entrySetQuantities).values(quantityRows);
-    }
-  }
+  await insertEntrySetRows(exec, { entryId: entry.id, unit: args.unit, sets: args.sets });
 
   return { ...entry, created: true };
 }
