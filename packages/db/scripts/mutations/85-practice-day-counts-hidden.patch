@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index eacb662f..91f8fca4 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -175,7 +175,6 @@ export async function writeCheckinEntries(
+             .where(
+               and(
+                 or(...practiceDays.map((day) => practiceSlot(args.profileId, day))),
+-                isNull(schema.entries.deletedAt),
+               ),
+             )
+         ).map((r) => r.day),

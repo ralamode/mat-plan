@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { matchMovementOptions, type MatchableMovement } from '../movement-search';
 import { TRACKING_TYPES, type TrackingType } from '../movements';
 import { PROFILE_NAME_MAX } from '../profiles';
 import {
@@ -321,4 +322,34 @@ export const SET_TRACKING_TYPES = TRACKING_TYPES.filter((type) => TRACKING_TYPE_
 
 export function hasSetRows(type: TrackingType): boolean {
   return TRACKING_TYPE_FIELDS[type].sets;
+}
+
+/**
+ * The item a typed name already names, or `undefined`: **the one definition of "this item exists"
+ * for `newItem`**. The preview's fake reads it, and the real writer will (plan step 6a).
+ *
+ * It is the picker's own rule (`matchMovementOptions`), not a second one: the name's key equals an
+ * item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups` are one item), or equals the
+ * key of one of an item's aliases (`RDL`, `rdl`). Those are exactly the two cases in which the
+ * picker withholds "add as new", so the server and the picker cannot disagree about a duplicate.
+ *
+ * When more than one item qualifies (a household item named `RDL` made before this rule, beside
+ * the catalog's Romanian Deadlift), the first in the picker's order is the answer: a catalog item
+ * before a household one, then by name. 🔴 **So `isCatalog` is required here**, where the picker's
+ * own type leaves it optional: an option list passed without it would compile and silently pick by
+ * name alone, and the server would then select a different item than the picker offers. A caller
+ * holding `MovementOptionDTO`s maps `owner === 'catalog'` to it, as the picker does.
+ *
+ * ⚠️ `options` must be every item the household can pick, with each catalog item's `aliases`. An
+ * item left out can be duplicated; an alias left out is not honoured.
+ *
+ * ⚠️ A name whose key is empty (`S`, `s s`: the fold drops a lone `s`) matches nothing, here and in
+ * the picker. `newItemSchema` refuses such a name, so `newItem` never reaches this with one.
+ */
+export function existingItem<T extends MatchableMovement & { readonly isCatalog: boolean }>(
+  options: readonly T[],
+  name: string,
+): T | undefined {
+  const { matches, exact, aliasHit } = matchMovementOptions(options, name);
+  return exact || aliasHit !== null ? matches[0] : undefined;
 }

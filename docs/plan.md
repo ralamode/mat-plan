@@ -301,6 +301,14 @@ and panelled; the milestones order them.
   - **Performance is a design constraint**, not polish: a full English word list shipped to the
     browser would cost LCP on a phone. Whether matching runs server-side or against a trimmed list
     is a question for this row's plan.
+  - **Also the program builder's "+ New item" name field** _(maintainer, 2026-11-16, said while
+    answering a wording question on FAM-1 step 9: "eventually we should also have a typeahead where
+    it filters and shows that as an option (fuzzy search, forgiving of typos)")._ As a parent types
+    a new item's name, the field shows the existing items that match, typos included, so a
+    duplicate is seen before Create. FAM-1 step 9 guards that field for an exact name or an alias
+    only (`existingItem`, [program-contract](./features/program-contract.md) invariant 15), which is
+    the floor this builds on; the fuzzy matching itself is `CAT-3`'s (the backlog table above). Not
+    in FAM-1's scope.
   - **Not covered:** movements that are already misspelled. Those are still fixed with a `db:correct`
     correction; this row only stops new ones.
   - **Gated on PICK-1**, whose picker this extends. **Owes** a plan, the engineering panel, and a UX
@@ -2951,7 +2959,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   strength entries and the `Strength` heading rename).
   - **Re-scoped 2026-11-15 to the new day page** (the maintainer, against Beta 0's accepted
     prototype). **2 is not built**: 2a is cut (no Check-ins section remains), 2b is FAM-1 13b. 📋
-    [PR 3b plan](./plans/v1-24-3b-logs-in-place.md): **3b-0** one practice per day in the database ·
+    [PR 3b plan](./plans/v1-24-3b-logs-in-place.md): **3b-0** ✅ #461 one practice per day in the database ·
     **3b-page** ✅ #418 the old Check-ins and Strength forms, the "Logged entries" list and the
     "Calisthenics today" card leave the page; a logged practice shows its minutes · **3b-bw** ✅ #442 bodyweight logs with ✓ under a "Last time" hint, and a blank Save on Change clears it ·
     **3b-life** practice is an empty minutes field, entered once then changed; no Wake. Earlier entries

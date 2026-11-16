@@ -1,6 +1,7 @@
 import {
   addDays,
   dayPlanSchema,
+  existingItem,
   hiddenAtSchema,
   newId,
   PROGRAM_REFUSAL,
@@ -34,6 +35,7 @@ import {
 } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
+import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { appSources, code, WEB_DIR } from '@/test/source-scan';
 
 import { createFakeDayActions, createFakeProgramActions, type FakeProgramState } from './fakes';
@@ -710,11 +712,17 @@ describe('the fake ProgramActions: workouts and the week', () => {
 describe('the fake ProgramActions: items and athletes', () => {
   it('a new item joins the picker; an existing name selects that item, with its own type', async () => {
     const { actions, state } = builder();
+    // Typed with spaces round it: the answer and the stored item hold the name without them.
     const made = await actions.newItem({
-      name: 'Bear crawl',
+      name: '  Bear crawl ',
       trackingType: TRACKING_TYPE.distance,
     });
-    expect(made).toMatchObject({ ok: true, trackingType: TRACKING_TYPE.distance, existed: false });
+    expect(made).toMatchObject({
+      ok: true,
+      name: 'Bear crawl',
+      trackingType: TRACKING_TYPE.distance,
+      existed: false,
+    });
     expect(state().items.at(-1)).toMatchObject({ name: 'Bear crawl', owner: 'household' });
 
     const pushUps = pickerOptions.find((o) => o.name === 'Push-ups')!;
@@ -724,10 +732,94 @@ describe('the fake ProgramActions: items and athletes', () => {
     ).toEqual({
       ok: true,
       itemPublicId: pushUps.publicId,
+      // The item's own name, not what was typed: the card shows "Push-ups".
+      name: 'Push-ups',
       trackingType: pushUps.trackingType,
       existed: true,
     });
     expect(state().items).toHaveLength(pickerOptions.length + 1);
+  });
+
+  it('a typed alias selects the item it is another name for, and adds nothing', async () => {
+    // The fixture's items carry no aliases, so this seeds one catalog item that does, as the real
+    // picker data will (`MOVEMENT_PICKER_ENTRIES`).
+    const rdl: MovementOptionDTO = {
+      publicId: '019826b4-0000-7000-8000-0000000000d1',
+      name: 'Romanian Deadlift',
+      trackingType: TRACKING_TYPE.weight_reps,
+      owner: 'catalog',
+      group: 'legs',
+      aliases: ['RDL'],
+      unitDefault: null,
+      isBodyweight: false,
+    };
+    const { actions, state } = builder({ items: [...pickerOptions, rdl] });
+    for (const typed of ['RDL', ' rdl ', 'romanian deadlifts']) {
+      expect(
+        await actions.newItem({ name: typed, trackingType: TRACKING_TYPE.check }),
+        typed,
+      ).toEqual({
+        ok: true,
+        itemPublicId: rdl.publicId,
+        name: 'Romanian Deadlift',
+        trackingType: TRACKING_TYPE.weight_reps,
+        existed: true,
+      });
+    }
+    expect(state().items).toHaveLength(pickerOptions.length + 1);
+    // A name that only CONTAINS the alias is a new item: the alias rule is exact.
+    expect(
+      await actions.newItem({ name: 'RDL pause', trackingType: TRACKING_TYPE.weight_reps }),
+    ).toMatchObject({ ok: true, name: 'RDL pause', existed: false });
+  });
+
+  it('a household item named after an alias does not take the alias from the catalog item', async () => {
+    // The picker ranks a catalog item before a household one, so its guard offers Romanian
+    // Deadlift for "rdl"; the answer must be the same item, whichever order the list is in.
+    const catalog: MovementOptionDTO = {
+      publicId: '019826b4-0000-7000-8000-0000000000d1',
+      name: 'Romanian Deadlift',
+      trackingType: TRACKING_TYPE.weight_reps,
+      owner: 'catalog',
+      group: 'legs',
+      aliases: ['RDL'],
+      unitDefault: null,
+      isBodyweight: false,
+    };
+    const stray: MovementOptionDTO = {
+      publicId: '019826b4-0000-7000-8000-0000000000d2',
+      name: 'RDL',
+      trackingType: TRACKING_TYPE.check,
+      owner: 'household',
+      unitDefault: null,
+      isBodyweight: false,
+    };
+    for (const items of [
+      [stray, catalog],
+      [catalog, stray],
+    ]) {
+      const { actions } = builder({ items });
+      expect(
+        await actions.newItem({ name: 'rdl', trackingType: TRACKING_TYPE.check }),
+      ).toMatchObject({ itemPublicId: catalog.publicId, name: 'Romanian Deadlift', existed: true });
+    }
+  });
+
+  it('an option list without the catalog flag is a type error, not a silent tie-break by name', () => {
+    // Pinned here because this is the caller that holds `MovementOptionDTO`s. (When it was written
+    // `pnpm typecheck` did not read the shared package's tests at all; #457 fixed that.)
+    // @ts-expect-error — `MovementOptionDTO` has `owner`, not `isCatalog`; the caller maps it
+    expect(existingItem([...pickerOptions], 'Push-ups')?.name).toBe('Push-ups');
+  });
+
+  it('a name with nothing to match on is refused, so it cannot be added twice', async () => {
+    const { actions, state } = builder();
+    for (const name of ['S', "S's", 's s']) {
+      expect(await actions.newItem({ name, trackingType: TRACKING_TYPE.check }), name).toEqual(
+        refusal('invalid'),
+      );
+    }
+    expect(state().items).toHaveLength(pickerOptions.length);
   });
 
   it('take off ends a program after today: family-program-after-take-off', async () => {

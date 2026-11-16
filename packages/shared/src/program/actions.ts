@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { keyBySelf } from '../enums';
 import type { TrackingType } from '../movements';
-import type { RowAmend, RowResult, RowRetick, RowUntick, RowWrite } from './day-shapes';
+import type { RowAmend, RowRefusal, RowResult, RowRetick, RowUntick, RowWrite } from './day-shapes';
 import type {
   AssignDraft,
   CopyDraft,
@@ -43,6 +43,38 @@ export type ProgramResult<T extends object = object> =
   ({ ok: true } & T) | { ok: false; reason: ProgramRefusal };
 
 /**
+ * **What a transport answers before the action's own work starts**, in the contract's words. A
+ * transport is whatever carries a call to an action: the web app's Server Actions today
+ * (`enterMutation`, `apps/web/app/p/mutation-entry.ts`), an API route later. Each one checks the
+ * caller, then the rate limit, then hands the input to the schema; these are the two refusals that
+ * can come out of the first two checks.
+ *
+ * - **No session answers `not_found`**, the same answer as an id from another household and an id
+ *   that does not exist. A caller must not be able to tell the three apart (ADR 0006: 404, never
+ *   403), so there is no "signed out" or "forbidden" member in either refusal list, and none may be
+ *   added for this.
+ * - **Over the rate limit answers `retry`.** The limit is checked before the input is parsed and
+ *   before anything is read or written, so nothing happened and the same `clientId` may be sent
+ *   again.
+ *
+ * Both words are members of `PROGRAM_REFUSALS` and of `ROW_REFUSALS` (the `satisfies` below is that
+ * check), so one refusal value is a valid `ProgramResult` and a valid `RowResult`.
+ *
+ * An input the schema refuses is the action's own answer, after these: `invalid` for a program
+ * write, `bad_value` for a row write.
+ */
+export const TRANSPORT_REFUSALS = {
+  noSession: 'not_found',
+  rateLimited: 'retry',
+} as const satisfies Record<string, ProgramRefusal & RowRefusal>;
+
+/** A transport's refusal: assignable to every `ProgramResult` and to `RowResult`. */
+export type TransportRefusal = {
+  ok: false;
+  reason: (typeof TRANSPORT_REFUSALS)[keyof typeof TRANSPORT_REFUSALS];
+};
+
+/**
  * Each member's input has a schema in `./program-shapes` (`createProgramSchema`,
  * `renameProgramSchema`, `saveWorkoutSchema`, `weekDraftSchema`, `copyDraftSchema`, `newItemSchema`,
  * `assignDraftSchema`, `takeOffSchema`). A fake and a real action both parse with it and answer
@@ -56,10 +88,28 @@ export interface ProgramActions {
   saveWorkout(draft: WorkoutDraft): Promise<ProgramResult<{ workoutPublicId: string }>>;
   saveWeek(draft: WeekDraft): Promise<ProgramResult>;
   copyWorkout(draft: CopyDraft): Promise<ProgramResult<{ workoutPublicId: string }>>;
-  /** A name that already exists selects that item: `existed` is true and `trackingType` is its own. */
-  newItem(
-    input: NewItem,
-  ): Promise<ProgramResult<{ itemPublicId: string; trackingType: TrackingType; existed: boolean }>>;
+  /**
+   * A name that already names an item selects that item: `existed` is true, and `name` and
+   * `trackingType` are the item's own, not what was typed.
+   *
+   * **"Already names an item" is the picker's rule, the same on the server as in the picker**
+   * (`existingItem` in `./pieces`): the typed name has the same key as an item's name (`push ups`
+   * is Push-ups), or the same key as one of its aliases (`RDL` is Romanian Deadlift). Either selects
+   * that item. It is never a refusal and never a second item: a household must not end up with an
+   * item called "RDL" beside Romanian Deadlift because a stale page or a direct call got past the
+   * picker, which withholds "add as new" for both cases.
+   *
+   * `name` is on every success, so the caller shows the stored name without looking it up: the item
+   * may not be in the list the page loaded, and the typed text is not the stored name (`' rdl '`).
+   */
+  newItem(input: NewItem): Promise<
+    ProgramResult<{
+      itemPublicId: string;
+      name: string;
+      trackingType: TrackingType;
+      existed: boolean;
+    }>
+  >;
   putOn?(draft: AssignDraft): Promise<ProgramResult>;
   takeOff?(input: TakeOff): Promise<ProgramResult>;
 }
