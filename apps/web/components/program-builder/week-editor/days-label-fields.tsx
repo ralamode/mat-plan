@@ -7,6 +7,8 @@ import {
   type Weekday,
 } from '@mat-plan/shared';
 
+import type { ReactNode } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -44,61 +46,100 @@ export function DaysLabelFields({
   /** A refusal of the label (not one line of plain text), said on the field. */
   labelError: string | null;
 }) {
-  const daysHintId = `${idPrefix}-days-hint`;
   return (
     <>
       <SlotLabelField id={`${idPrefix}-label`} label={label} onLabel={onLabel} error={labelError} />
-      <fieldset
-        className="flex flex-col gap-2"
-        aria-describedby={daysHintId}
-        aria-invalid={daysError ? true : undefined}
-      >
-        <legend className="mb-2 text-sm font-medium">{WEEK_COPY.days}</legend>
-        <div className="grid grid-cols-4 gap-2">
-          {MONDAY_FIRST.map((day) => {
-            const has = hasIt.has(day);
-            const checked = has || days.has(day);
-            return (
-              <label
-                key={day}
-                // Stacked: at 360px a column is ~70px, too narrow for a box, "Wed" and "has it"
-                // side by side.
-                className={cn(
-                  'flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1 text-sm',
-                  has && 'text-muted-foreground',
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  aria-disabled={has || undefined}
-                  aria-label={has ? hasItLabel(day) : weekdayName(day)}
-                  onChange={() => {
-                    if (has) return;
-                    const next = new Set(days);
-                    if (next.has(day)) next.delete(day);
-                    else next.add(day);
-                    onDays(next);
-                  }}
-                  // Dimmed, so a day that has it does not look like one the person ticked.
-                  className="size-4 aria-disabled:opacity-50"
-                />
-                <span aria-hidden className="text-center whitespace-nowrap">
-                  {weekdayName(day, 'short')}
-                  {has ? <span className="block text-xs">{WEEK_COPY.hasIt}</span> : null}
-                </span>
-              </label>
-            );
-          })}
-        </div>
+      <DaysFieldset
+        idPrefix={idPrefix}
+        days={days}
+        onDays={onDays}
+        hasIt={hasIt}
+        error={daysError}
+        legend={WEEK_COPY.days}
+        hint={WEEK_COPY.oncePerDay}
+      />
+    </>
+  );
+}
+
+/**
+ * The days, Monday first, in four 44px-tall columns. The week editor's add form says the once-a-day
+ * rule under them; 10b's Copy dialog asks for optional days and says nothing (a new copy has no day
+ * that "has it").
+ */
+export function DaysFieldset({
+  idPrefix,
+  days,
+  onDays,
+  hasIt = new Set(),
+  error = null,
+  legend,
+  hint,
+}: {
+  idPrefix: string;
+  days: ReadonlySet<Weekday>;
+  onDays: (days: Set<Weekday>) => void;
+  hasIt?: ReadonlySet<Weekday>;
+  error?: string | null;
+  legend: ReactNode;
+  /** Under the days; `null` for none. A refusal (`error`) takes its place. */
+  hint: string | null;
+}) {
+  const daysHintId = `${idPrefix}-days-hint`;
+  const said = error ?? hint;
+  return (
+    <fieldset
+      className="flex flex-col gap-2"
+      aria-describedby={said ? daysHintId : undefined}
+      aria-invalid={error ? true : undefined}
+    >
+      <legend className="mb-2 text-sm font-medium">{legend}</legend>
+      <div className="grid grid-cols-4 gap-2">
+        {MONDAY_FIRST.map((day) => {
+          const has = hasIt.has(day);
+          const checked = has || days.has(day);
+          return (
+            <label
+              key={day}
+              // Stacked: at 360px a column is ~70px, too narrow for a box, "Wed" and "has it"
+              // side by side.
+              className={cn(
+                'flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1 text-sm',
+                has && 'text-muted-foreground',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                aria-disabled={has || undefined}
+                aria-label={has ? hasItLabel(day) : weekdayName(day)}
+                onChange={() => {
+                  if (has) return;
+                  const next = new Set(days);
+                  if (next.has(day)) next.delete(day);
+                  else next.add(day);
+                  onDays(next);
+                }}
+                // Dimmed, so a day that has it does not look like one the person ticked.
+                className="size-4 aria-disabled:opacity-50"
+              />
+              <span aria-hidden className="text-center whitespace-nowrap">
+                {weekdayName(day, 'short')}
+                {has ? <span className="block text-xs">{WEEK_COPY.hasIt}</span> : null}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {said ? (
         <p
           id={daysHintId}
-          className={daysError ? 'text-destructive text-sm' : 'text-muted-foreground text-sm'}
+          className={error ? 'text-destructive text-sm' : 'text-muted-foreground text-sm'}
         >
-          {daysError ?? WEEK_COPY.oncePerDay}
+          {said}
         </p>
-      </fieldset>
-    </>
+      ) : null}
+    </fieldset>
   );
 }
 
@@ -111,8 +152,11 @@ export function SlotLabelField({
   label,
   onLabel,
   error,
+  hint = WEEK_COPY.labelHint,
 }: {
   id: string;
+  /** Under the field: the week's "use ↑ ↓" by default; the Copy dialog has no arrows. */
+  hint?: string;
   label: string;
   onLabel: (label: string) => void;
   error: string | null;
@@ -122,7 +166,7 @@ export function SlotLabelField({
       <NameField
         id={id}
         label={WEEK_COPY.label}
-        hint={WEEK_COPY.labelHint}
+        hint={hint}
         value={label}
         max={SLOT_LABEL_MAX}
         placeholder={WEEK_COPY.labelPlaceholder}
