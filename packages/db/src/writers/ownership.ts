@@ -8,6 +8,8 @@ import {
   type HouseholdRole,
   newId,
   PROGRAM_BLOCK_KIND,
+  type ProgramBlockKind,
+  programBlockKindSchema,
   type ProfileKind,
 } from '@mat-plan/shared';
 import type { HouseholdScope, OwnerScope } from '../scope';
@@ -595,7 +597,7 @@ export async function programBlockByClientId(
   exec: Executor,
   scope: HouseholdScope,
   clientId: string,
-): Promise<{ id: number; publicId: string; kind: string; deleted: boolean } | null> {
+): Promise<{ id: number; publicId: string; kind: ProgramBlockKind; deleted: boolean } | null> {
   const [row] = await exec
     .select({
       id: schema.programBlocks.id,
@@ -607,7 +609,13 @@ export async function programBlockByClientId(
     .where(and(programBlockInHousehold(scope), eq(schema.programBlocks.clientId, clientId)))
     .limit(1);
   return row
-    ? { id: row.id, publicId: row.publicId, kind: row.kind, deleted: row.deletedAt !== null }
+    ? {
+        id: row.id,
+        publicId: row.publicId,
+        // CHECK-pinned to PROGRAM_BLOCK_KINDS; parsing narrows it without a cast.
+        kind: programBlockKindSchema.parse(row.kind),
+        deleted: row.deletedAt !== null,
+      }
     : null;
 }
 

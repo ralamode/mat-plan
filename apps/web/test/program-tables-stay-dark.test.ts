@@ -47,7 +47,8 @@ describe('the program tables stay dark (FAM-1 4a-i)', () => {
     'packages/db/src/writers/ownership.ts',
     'packages/db/src/writers/program/',
   ];
-  const HELPERS = /\b(insertProgramBlockOwnedBy|insertWorkoutOwnedBy|programBlockByClientId)\b/;
+  const HELPERS =
+    /\b(insertProgramBlockOwnedBy|insertWorkoutOwnedBy|programBlockByClientId|liveTemplateBlockIn)\b/;
 
   const files = [
     ...globSync('apps/web/**/*.{ts,tsx}', { cwd: REPO }),
