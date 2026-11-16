@@ -1818,11 +1818,16 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
 - [x] **Clerk's data region:** US only; Clerk offers no region choice (its docs, read
       2026-11-16 for `SCALE-2`; recorded in [data-inventory.md](./privacy/data-inventory.md) §7).
 - [ ] **Sentry's data region** (`SCALE-2`): the host of production's `SENTRY_DSN` in Vercel reads
-      `…ingest.us.sentry.io` (US) or `…ingest.de.sentry.io` (EU). Record it in data-inventory.md §7.
-- [ ] **Vercel's function region** (`SCALE-2`): `curl -sI https://<prod-host>/ | grep -i x-vercel-id`
-      shows `<edge>::<function region>::<id>`; expect `iad1`. Or read it in the dashboard.
+      `…ingest.us.sentry.io` (US) or `…ingest.de.sentry.io` (EU); a host with neither segment (the
+      `.env.example` form): read the region in Sentry's organisation settings. Record it in
+      data-inventory.md §7.
+- [ ] **Vercel's function region** (`SCALE-2`): read it in the project's dashboard; that is the
+      authority. ⚠️ An `x-vercel-id` header is only a cross-check, and only on a response a function
+      served: a redirect or cached page shows one region segment, which is the EDGE, and from US
+      East the edge is also `iad1`, so it proves nothing.
 - [ ] **Each processor's data processing agreement** (`SCALE-2`): whether one is offered, which
-      version applies and whether it was accepted. Before the first outside family (Beta 1).
+      version applies and whether it was accepted. Proposed as owed before the first outside family
+      (Beta 1); not yet a Beta 1 exit criterion.
 - [ ] 🔴 **Clerk's retention** for user records and sign-in/session logs → a `data-inventory.md` §8 row.
       `beta-1.md`'s exit criterion requires the notice to ship **with no blanks**, so read it while the
       console is open for the free-tier box rather than adding a fourth "not confirmed".

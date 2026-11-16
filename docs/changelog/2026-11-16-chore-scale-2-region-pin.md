@@ -1,5 +1,5 @@
-- **2026-11-16** — **`SCALE-2`: server functions run in the database's region, and each vendor's
-  region is recorded** ([plan.md → SCALE-2](../plan.md#scale-2)).
+- **2026-11-16** — **`SCALE-2`: server functions run in the database's region, and the vendor
+  regions read so far are recorded** ([plan.md → SCALE-2](../plan.md#scale-2)).
   - **`apps/web/vercel.json`** (new) pins Vercel functions to `iad1` (US East), beside the Neon
     production database in AWS `us-east-1`. Nothing in the tree pinned a region before. A Neon
     project's region cannot change after creation, so the functions follow the database.

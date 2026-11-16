@@ -647,10 +647,9 @@ pinned. Neon, Upstash and Clerk store their data in the US, and Vercel functions
 `iad1`; in production, once the pin is confirmed, the functions, the database and the rate limiter
 are in one AWS region (US East). **This file does not claim that no data leaves the US:** Sentry's
 region has not been read, Google's is not selectable, and GitHub's and Anthropic's were not read.
-The households using the app today are in the US, but nothing enforces that, and the waitlist is
-open to anyone. ⏳ **Whether each vendor offers an agreement, which version applies and whether it
+Nothing restricts where a user is, and the waitlist is open to anyone. ⏳ **Whether each vendor offers an agreement, which version applies and whether it
 was accepted is not recorded for any row.** The owed reads are boxes in
-[runbooks.md](../runbooks.md) → the console checklist. A user outside the US (for example, in the
+[runbooks.md](../runbooks.md) → "The dashboard half". A user outside the US (for example, in the
 UK) would also need a transfer mechanism on each row; that is not planned yet.
 
 **Sentry is deliberately the thin case.** The scrubber strips cookies, denied headers, request bodies,
