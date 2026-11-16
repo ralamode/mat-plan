@@ -1,7 +1,14 @@
-import { addDays, localWeekday, WEEKDAYS, weekdaySchema, type Weekday } from '../../day';
+import {
+  addDays,
+  localWeekday,
+  MONDAY_FIRST,
+  WEEKDAYS,
+  weekdaySchema,
+  type Weekday,
+} from '../../day';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
-import type { DayPlan } from '../day-shapes';
+import type { DayItem, DayPlan, DayWorkout } from '../day-shapes';
 import { TRACKING_TYPE_FIELDS, wholeReps, type RowValues } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import type { ProgramList, ProgramView, WorkoutDraft, WorkoutDraftItem } from '../program-shapes';
@@ -29,17 +36,11 @@ import type {
  * with a logged row, and a rest is carried only for a superset that has an item showing.
  */
 
-type DayWorkout = DayPlan['workouts'][number];
-type DayItem = DayWorkout['items'][number];
-
 /** What a logged row was logged against, frozen when it was logged (plan D7; the prototype's `stamp`). */
 type Stamp = { text: string; name: string; label: string; unit: Unit | null; values: RowValues };
 
 /** A world whose entries carry their stamps. An edit to the program afterwards leaves them alone. */
 export type World = ProtoWorld & { stamps: Record<number, Stamp> };
-
-/** Monday first, as the program page lists a week. */
-const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const satisfies readonly Weekday[];
 
 /** The prototype's name for each type's quantity (`it.load`, `it.sec`, …). */
 const PROTO_FIELD: Record<TrackingType, keyof ProtoValues | null> = {
@@ -404,7 +405,8 @@ export function programView(world: World, programId: string): ProgramView {
       workoutPublicId: fixtureIds.workout(workout.wid),
       name: workout.name,
       itemCount: workout.items.length,
-      usedOn: WEEK_ORDER.filter((k) => program.week[k].some((s) => s.wid === workout.wid)),
+      // Monday first, as the program page lists a week.
+      usedOn: MONDAY_FIRST.filter((k) => program.week[k].some((s) => s.wid === workout.wid)),
       copiedFrom: workout.from ? { programName: workout.from.prog, on: workout.from.on } : null,
     })),
     week: Object.fromEntries(

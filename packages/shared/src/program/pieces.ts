@@ -168,7 +168,7 @@ export type RowValues = z.infer<typeof rowValuesSchema>;
  * **The letters a screen shows (A1, A2, B1) are ordinal, not the key**: the letter is the order in
  * which each group first appears among the items shown, and the number is the item's position among
  * that group's items shown. So when group `a` is gone and group `b` remains, `b`'s items read A1 and
- * A2, as in the prototype.
+ * A2, as in the prototype. `supersetLabels` below is that rule; a screen calls it and writes none.
  */
 export const supersetSchema = z
   .object({
@@ -177,6 +177,45 @@ export const supersetSchema = z
   })
   .nullable();
 export type Superset = z.infer<typeof supersetSchema>;
+
+/** The `n`th superset letter, from 0: A … Z, then AA, AB … (as spreadsheet columns are named). */
+function supersetLetter(n: number): string {
+  let letters = '';
+  for (let rest = n; rest >= 0; rest = Math.floor(rest / 26) - 1) {
+    letters = String.fromCharCode(65 + (rest % 26)) + letters;
+  }
+  return letters;
+}
+
+/**
+ * The label each item shows for its superset (`A1`, `A2`, `B1`), in the items' order: a parallel
+ * array, `null` for an item on its own. The rule above, once, for the editor and the day page.
+ *
+ * - **The letter is ordinal**: A for the first group to appear among `items`, B for the next. The
+ *   `group` key is opaque and never shown, so a group keyed `b` reads A when no group comes before
+ *   it.
+ * - **The number is the item's place among that group's items in `items`**, counted from 1. It is
+ *   NOT `superset.order`: where a day shows only some of a group (a closed day lists logged items
+ *   only), the one item shown reads `A1` even if its `order` is 2.
+ * - Pass the items a screen SHOWS, in the order it shows them: the labels are of that list.
+ *
+ * Total, and it never throws. It labels what it is given and does not judge it: a group of one
+ * reads `A1`, and a group whose items are not neighbours keeps one letter. After Z the letters go
+ * on as AA, AB. A saved workout cannot get there (`MAX_WORKOUT_ITEMS` is 30, and a group has at
+ * least two items, so at most 15 groups); only a draft with more than 26 groups of one can.
+ */
+export function supersetLabels(items: readonly { superset: Superset }[]): (string | null)[] {
+  const letters = new Map<string, string>();
+  const places = new Map<string, number>();
+  return items.map(({ superset }) => {
+    if (!superset) return null;
+    const { group } = superset;
+    if (!letters.has(group)) letters.set(group, supersetLetter(letters.size));
+    const place = (places.get(group) ?? 0) + 1;
+    places.set(group, place);
+    return `${letters.get(group)}${place}`;
+  });
+}
 
 /**
  * Plan §2's table as data: for each tracking type, the fields its prescription has and the one
@@ -245,6 +284,26 @@ export const TRACKING_TYPE_FIELDS: Record<
     unit: null,
   },
 };
+
+/**
+ * The tracking type's quantity out of a list of quantities: the one in the type's slot
+ * (`TRACKING_TYPE_FIELDS[type].slot`), or `null` when the list has none or the type holds none (a
+ * Check, Reps).
+ *
+ * One lookup for a prescription's quantities, a row's logged values and a row's PREVIOUS: the
+ * prescribed text, the fakes and the day screen all read it. It takes anything that carries a
+ * `trackingType` (a `DayItem`, a `WorkoutDraftItem`), so a caller passes the item it has.
+ *
+ * It returns the quantity as it is: a prescribed one may still have `value: null` ("log in this
+ * unit, no target").
+ */
+export function slotQuantity<Q extends { slot: string }>(
+  of: { trackingType: TrackingType },
+  quantities: readonly Q[],
+): Q | null {
+  const { slot } = TRACKING_TYPE_FIELDS[of.trackingType];
+  return quantities.find((q) => q.slot === slot) ?? null;
+}
 
 /** The units a type's quantity may be in: what the editor's unit select offers (plan D27). */
 export function unitsForTrackingType(type: TrackingType): Unit[] {
