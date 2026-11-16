@@ -11,8 +11,16 @@
     "./program/fixtures": "./src/program/fixtures/index.ts",
     "./program/prescribed-text": "./src/program/prescribed-text.ts"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "uuid": "^14.0.3",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26",
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   }
 }

@@ -871,8 +871,9 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   exactly that, three times. **Still handle both** (`=== null || === undefined`) in a writer taking
   values from both zod output and hand-written fixtures — the writer's inner signature deliberately
   permits omission, and the type only covers callers the compiler can see.
-  ⚠️ **`packages/shared` and `packages/engine` have no tsconfig of their own**: they are checked only
-  _transitively_, via the app's imports, so a file nothing imports is still checked by nothing.
+  ⚠️ **`packages/engine` has no tsconfig of its own**: it is checked only _transitively_, via the
+  app's imports, so a file nothing imports is still checked by nothing. `packages/shared` has one
+  (tests included), so a type-level pin in a shared test does fail.
 
 - **A derived column must be derived from the value actually being written.** `entry_set_quantities`
   stores `dimension` alongside `unit` and a composite FK checks the pair. Hard-coding `'mass'` there
