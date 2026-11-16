@@ -382,6 +382,14 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   await section.getByRole('button', { name: /^Change weight/ }).click();
   await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
   await expectNoAxeViolations(page, 'weigh-in (editing)');
+  // V1-24 3b-bw: emptied, Save reads Clear in the destructive style, on the logged row's tint.
+  const editorField = section.getByLabel(/^Weight \(/);
+  await editorField.fill('');
+  const clear = section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel });
+  await expect(clear).toBeVisible();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  await expectNoAxeViolations(page, 'weigh-in (editing, Save reads Clear)');
+  await editorField.fill(widest);
   await expectTapTargets(page, 'weigh-in (editing)');
   await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');
 });

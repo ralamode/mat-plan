@@ -243,7 +243,10 @@ export function BodyweightAmend({
           variant={clears ? 'destructive' : 'default'}
           disabled={pending}
           aria-label={clears && !pending ? BODYWEIGHT_COPY.clearLabel : undefined}
-          className="flex-1"
+          // The destructive variant's fill is translucent, and over the logged row's done tint its
+          // red text drops under AA (a11y.spec.ts scans this state). A solid surface underneath
+          // keeps it on the contrast it was designed for.
+          className={clears ? 'bg-background hover:bg-destructive/10 flex-1' : 'flex-1'}
         >
           {pending ? SAVING_LABEL : clears ? BODYWEIGHT_COPY.clear : AMEND_COPY.save}
         </Button>

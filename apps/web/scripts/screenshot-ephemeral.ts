@@ -733,6 +733,8 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('button', { name: /^Change weight/ }).click();
     await page.getByLabel(/^Weight \(/).fill('');
     await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).waitFor();
+    // Save → Clear is a colour transition (`transition-all`); shoot it settled, not mid-fade.
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   },
   'bodyweight-cleared': async (page) => {
     // Retry-safe across the three widths: only the first finds a Change to clear.
