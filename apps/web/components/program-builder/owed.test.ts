@@ -17,7 +17,6 @@ import { describe, it } from 'vitest';
  */
 
 describe('WorkoutDraft: owed by its consumers', () => {
-  it.todo('8b: linking two neighbours makes a group; the rest field edits the group’s last item');
   it.todo(
     '7b: the workout pages pass program; the editor names it and says who a change applies to',
   );
