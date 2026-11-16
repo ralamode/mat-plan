@@ -1,6 +1,8 @@
-import { ROW_REFUSAL, type RowRefusal } from '@mat-plan/shared';
+import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-plan/shared';
 
+import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
 import { CLOSED_DAY_NOTICE, VALUE_JOINER } from '@/lib/constants';
+import { formatList } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
 
@@ -36,18 +38,13 @@ export const DAY_COPY = {
   },
 } as const;
 
-/** "A", "A and B", "A, B and C". */
-export function listOf(names: readonly string[]): string {
-  if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-}
+/** "Couldn't save. Try again.": a ✓ and a reorder say the same thing when the server refuses. */
+const SAVE_FAILED = 'Couldn’t save. Try again.';
+const STALE = 'This changed since the page loaded.';
 
-/** A weekday's plural name for a bare calendar day, read in UTC so no zone shifts it (`localWeekday`). */
-function weekdaysOf(day: string): string {
-  const name = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(
-    Date.parse(`${day}T00:00:00Z`),
-  );
-  return `${name}s`;
+/** The athlete the plan is for, by name (the plan names its own athlete in `athletes`). */
+export function athleteNameOf(plan: DayPlan): string {
+  return plan.athletes.find((a) => a.profilePublicId === plan.profilePublicId)?.name ?? '';
 }
 
 /**
@@ -65,22 +62,21 @@ export const PROGRAM_COPY = {
   moveUp: (program: string) => `Move ${program} up`,
   moveDown: (program: string) => `Move ${program} down`,
   moved: (program: string, place: number, of: number) => `${program} moved to ${place} of ${of}`,
-  orderFailed: 'Couldn’t save. Try again.',
-  done: 'Done',
+  orderFailed: SAVE_FAILED,
+  /** A reorder refused because the athlete's programs changed elsewhere: the page re-reads them. */
+  orderStale: `${STALE} Here are the programs now.`,
+  done: DAY_COPY.done,
   switcher: 'Switch athlete',
   notYet: 'Not on a program yet. Bodyweight and practice log here.',
   notYetPutOn: (athlete: string) => `Put ${athlete} on a program to see their workouts.`,
-  programs: 'Programs',
+  /** The Programs page's own heading, so the link and the page it opens cannot drift. */
+  programs: BUILDER_COPY.programs,
   notThisDay: 'Not on a program on this day.',
   /** Every program the athlete is on rests this day. */
-  restAll: (day: string) => `Rest day. Nothing is scheduled on ${weekdaysOf(day)}.`,
+  restAll: (day: string) => `Rest day. Nothing is scheduled on ${weekdayName(localWeekday(day))}s.`,
   /** Some programs rest, on a day with two or more. */
-  restSome: (programs: readonly string[]) => `Rest day on ${listOf(programs)}.`,
+  restSome: (programs: readonly string[]) => `Rest day on ${formatList(programs)}.`,
 } as const;
-
-/** The page's notice style (a dashed, muted box), for the notices this lane adds. */
-export const NOTICE_CLASS =
-  'border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm';
 
 /** What the field says when a typed value cannot be sent. The field takes focus. */
 export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
@@ -92,9 +88,7 @@ export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
 /** A refusal as the row shows it. `reload`: the page is out of date, so offer a reload. */
 export type RefusalCopy = { message: string; reload: boolean; focusField: boolean };
 
-const SAVE_FAILED = 'Couldn’t save. Try again.';
 const UNTICK_FAILED = 'Still logged. Couldn’t un-check; try again.';
-const STALE = 'This changed since the page loaded.';
 
 /**
  * Every refusal, for a ✓ (`tick`) and for an un-tick (`untick`). `closed_day` is here for

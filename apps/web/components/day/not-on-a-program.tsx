@@ -1,10 +1,10 @@
 import { ON_PROGRAM, type DayPlan } from '@mat-plan/shared';
 import Link from 'next/link';
 
-import { NAME_WRAP_CLASS, QUIET_LINK_CLASS } from '@/lib/constants';
+import { NAME_WRAP_CLASS, NOTICE_CLASS, QUIET_LINK_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-import { NOTICE_CLASS, PROGRAM_COPY } from './day-copy';
+import { athleteNameOf, PROGRAM_COPY } from './day-copy';
 
 /**
  * Why there are no workouts (FAM-1 step 13d; plan D17): "Not on a program yet" for an athlete who
@@ -22,7 +22,7 @@ export function NotOnAProgram({ plan, programsHref }: { plan: DayPlan; programsH
   if (plan.onProgram === ON_PROGRAM['not-this-day']) {
     return <p className={NOTICE_CLASS}>{PROGRAM_COPY.notThisDay}</p>;
   }
-  const athlete = plan.athletes.find((a) => a.profilePublicId === plan.profilePublicId)?.name;
+  const athlete = athleteNameOf(plan);
   return (
     <p className={cn(NOTICE_CLASS, NAME_WRAP_CLASS)}>
       {PROGRAM_COPY.notYet}

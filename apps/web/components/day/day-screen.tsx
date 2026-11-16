@@ -6,9 +6,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { Announcer } from '@/components/ui/announcer';
 import { Callout } from '@/components/ui/callout';
+import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 import { DayContext, type DayContextValue } from './day-context';
-import { DAY_COPY, NOTICE_CLASS, PROGRAM_COPY } from './day-copy';
+import { DAY_COPY, PROGRAM_COPY } from './day-copy';
 import { rowIsIn, workoutKeyOf } from './use-row';
 import { WorkoutCard } from './workout-card';
 
@@ -98,7 +100,12 @@ function DayBody({ plan, actions }: DayScreenProps) {
           <Callout ref={closedRef} messageId={`${headingId}-closed`} message={DAY_COPY.closed} />
         ) : null}
         {rest ? (
-          <p className={rest.allRest ? NOTICE_CLASS : 'text-muted-foreground text-sm'}>
+          <p
+            className={cn(
+              rest.allRest ? NOTICE_CLASS : 'text-muted-foreground text-sm',
+              NAME_WRAP_CLASS,
+            )}
+          >
             {rest.text}
           </p>
         ) : null}

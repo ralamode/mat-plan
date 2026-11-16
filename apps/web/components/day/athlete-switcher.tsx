@@ -1,7 +1,7 @@
 import type { DayPlan } from '@mat-plan/shared';
 import Link from 'next/link';
 
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { PROGRAM_COPY } from './day-copy';
@@ -37,15 +37,17 @@ export function switcherLabels(athletes: DayPlan['athletes']): string[] {
 export function AthleteSwitcher({
   plan,
   hrefFor,
+  className,
 }: {
   plan: DayPlan;
   hrefFor: (profilePublicId: string) => string;
+  /** The placer's: the day page passes `lg:hidden`, since from `lg` its nav rail lists the athletes. */
+  className?: string;
 }) {
   if (plan.athletes.length < 2) return null;
   const labels = switcherLabels(plan.athletes);
-  // Below `lg` only: from `lg` the nav rail lists the athletes.
   return (
-    <nav aria-label={PROGRAM_COPY.switcher} className="lg:hidden">
+    <nav aria-label={PROGRAM_COPY.switcher} className={className}>
       <ul className="flex flex-wrap gap-2">
         {plan.athletes.map((athlete, index) => {
           const current = athlete.profilePublicId === plan.profilePublicId;
@@ -55,7 +57,8 @@ export function AthleteSwitcher({
                 href={hrefFor(athlete.profilePublicId)}
                 aria-current={current ? 'page' : undefined}
                 className={cn(
-                  'focus-visible:ring-ring/50 inline-flex min-h-11 max-w-full min-w-11 items-center justify-center rounded-full border px-4 text-sm font-medium outline-none focus-visible:ring-3',
+                  FOCUS_TARGET_CLASS,
+                  'inline-flex min-h-11 max-w-full min-w-11 items-center justify-center rounded-full border px-4 text-sm font-medium',
                   NAME_WRAP_CLASS,
                   current
                     ? 'bg-primary text-primary-foreground border-primary'

@@ -36,27 +36,27 @@ adds its files and invariants here.
 
 ## Files
 
-| File                                               | What it is for                                                                                                                                                               |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/day/day-screen.tsx`           | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`.                             |
-| `apps/web/components/day/day-context.tsx`          | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                   |
-| `apps/web/components/day/workout-card.tsx`         | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                         |
-| `apps/web/components/day/item-card.tsx`            | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading and "N logged" until 13b.                          |
-| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b reuses its write state machine per set; the single-number reader moves out then. |
-| `apps/web/components/day/row-values.ts`            | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                                                       |
-| `apps/web/components/day/athlete-switcher.tsx`     | The household's athletes as first-name pills under the `<h1>`; a switch opens that athlete's today. Server-safe (no state).                                                  |
-| `apps/web/components/day/program-line.tsx`         | "Programs: A, B", and the Program order button (two programs that day, a writable day, `reorderPrograms` supplied).                                                          |
-| `apps/web/components/day/program-order-dialog.tsx` | ↑ ↓ per program in a dialog; each tap saves the whole order; taps during a save are sent together.                                                                           |
-| `apps/web/components/day/not-on-a-program.tsx`     | "Not on a program yet" / "on this day". No link until the Programs page exists (`programsHref`).                                                                             |
-| `apps/web/components/day/day-copy.ts`              | Every sentence the screen says, and each refusal's copy.                                                                                                                     |
-| `apps/web/components/day/*.test.ts(x)`             | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                                                      |
-| `apps/web/components/day/owed.test.ts`             | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                         |
-| `apps/web/lib/dal/day/index.ts`                    | A placeholder so the directory exists.                                                                                                                                       |
+| File                                               | What it is for                                                                                                                                                                                                                                                   |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/day/day-screen.tsx`           | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`.                                                                                                                 |
+| `apps/web/components/day/day-context.tsx`          | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                                                                                                       |
+| `apps/web/components/day/workout-card.tsx`         | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                                                                                                             |
+| `apps/web/components/day/item-card.tsx`            | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading and "N logged" until 13b.                                                                                                              |
+| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b reuses its write state machine per set; the single-number reader moves out then.                                                                                     |
+| `apps/web/components/day/row-values.ts`            | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                                                                                                                                           |
+| `apps/web/components/day/athlete-switcher.tsx`     | The household's athletes as first-name pills under the `<h1>`; a switch opens that athlete's today. Server-safe (no state).                                                                                                                                      |
+| `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                     |     |
+| `apps/web/components/day/program-order-dialog.tsx` | `ProgramOrderButton` and the dialog (client code): ↑ ↓ per program; each tap saves the whole order; taps during a save are sent together, and the page's older order cannot undo them; a failure restores the last saved order; focus stays on the arrow tapped. |     |
+| `apps/web/components/day/not-on-a-program.tsx`     | "Not on a program yet" / "on this day". No link until the Programs page exists (`programsHref`).                                                                                                                                                                 |
+| `apps/web/components/day/day-copy.ts`              | Every sentence the screen says, and each refusal's copy.                                                                                                                                                                                                         |
+| `apps/web/components/day/*.test.ts(x)`             | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                                                                                                                                          |
+| `apps/web/components/day/owed.test.ts`             | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                             |
+| `apps/web/lib/dal/day/index.ts`                    | A placeholder so the directory exists.                                                                                                                                                                                                                           |
 
 ## Invariants
 
-1. 🔴 **`DayScreen`, plus three parts the page places** (plan §6, amended for 13d by the
-   maintainer, 2026-11-16). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
+1. 🔴 **`DayScreen`, plus three parts the page places** (departs from plan §6, decided by
+   the maintainer for 13d, 2026-11-16; the plan's amendment, D34, is the roadmap thread's). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
    once, at step 12c, after Bodyweight and Life. v12 puts three things above those sections, so
    they are their own components, given the **same `plan`** (and the same `actions` where they
    write): `AthleteSwitcher({ plan, hrefFor })` under the `<h1>`, then
@@ -68,8 +68,8 @@ adds its files and invariants here.
    and Life before it; those sections and Clear this day are lane S's. Of the plan's own lanes only
    this one edits `page.tsx`, in the order the plan's §6 seam table gives.
 3. 🔴 **A screen writes only through `DayActions`.** A member that is `undefined` is an action not
-   wired yet, and the screen hides its control: Change and Program order arrive that way at 12d
-   and 15c.
+   wired yet, and the screen hides its control: Change arrives that way at 12d, and Program order
+   (in `ProgramLine`, which hides it the same way) at 15c.
 4. 🔴 **No production file imports a fixture or a fake.** They are preview and test data
    ([program-contract.md](./program-contract.md) invariant 4, held by a source scan). A screen's
    own `*.test.tsx` may.
@@ -79,6 +79,9 @@ adds its files and invariants here.
    shows the failure.
 6. **Each screen step is checked against its prototype states** (plan §8), at 360px on the preview
    route. The a11y scan walks every state there, so a step never edits a spec to add one.
+   ⚠️ **13d's three page-placed parts are the exception, for now:** the preview mounts them only
+   once the contract owner wires its day case (after 13d), so their side-by-side and scan are owed
+   before 12c places them (an `it.todo` in `owed.test.ts`).
 7. **The rules every screen step carries** are the plan's (§5, end): keyed components and no full
    redraw, so typed values survive ticking another row; set rows as a list or a table with headers;
    the day label as a heading; one persistent live region; 44px targets; the layout at 360px.

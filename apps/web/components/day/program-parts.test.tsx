@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { ON_PROGRAM, type DayActions, type DayPlan, type ProgramResult } from '@mat-plan/shared';
+import {
+  ON_PROGRAM,
+  PROGRAM_REFUSAL,
+  type DayActions,
+  type DayPlan,
+  type ProgramResult,
+} from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
   futurePreview,
@@ -14,24 +20,28 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
+import { athletePath } from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
-import { PROGRAM_COPY } from './day-copy';
+import { athleteNameOf, PROGRAM_COPY } from './day-copy';
 import { restNotice } from './day-screen';
 import { NotOnAProgram } from './not-on-a-program';
 import { ProgramLine } from './program-line';
 
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+
 afterEach(() => {
   cleanup();
+  refresh.mockReset();
   // The sheet restores itself from `history.state` on mount (sheet.tsx), as sheet.test.tsx resets.
   window.history.replaceState(null, '');
 });
 
-const nameOf = (plan: DayPlan) =>
-  plan.athletes.find((a) => a.profilePublicId === plan.profilePublicId)!.name;
+const nameOf = athleteNameOf;
 
 describe('AthleteSwitcher', () => {
-  const hrefFor = (id: string) => `/p/${id}`;
+  const hrefFor = athletePath;
 
   it('lists every athlete by first name, marks the current one, and opens each one’s today', () => {
     render(<AthleteSwitcher plan={yesterdayHalfDone} hrefFor={hrefFor} />);
@@ -59,6 +69,11 @@ describe('AthleteSwitcher', () => {
     expect(
       switcherLabels([athlete('Sam Lee', 1), athlete('sam Ray', 2), athlete('Ada', 3)]),
     ).toEqual(['Sam Lee', 'sam Ray', 'Ada']);
+  });
+
+  it('takes the placer’s class (the day page hides it where its rail lists the athletes)', () => {
+    render(<AthleteSwitcher plan={yesterdayHalfDone} hrefFor={hrefFor} className="lg:hidden" />);
+    expect(screen.getByRole('navigation').classList.contains('lg:hidden')).toBe(true);
   });
 
   it('is not shown for a household of one', () => {
@@ -94,8 +109,12 @@ describe('NotOnAProgram', () => {
 
 describe('the rest-day notice', () => {
   it('sunday-rest-stretch-only: names the program that rests, as v12 does', () => {
+    const resting = sundayRestStretchOnly.programs.filter(
+      (p) => !sundayRestStretchOnly.workouts.some((w) => w.programPublicId === p.programPublicId),
+    );
+    expect(resting).toHaveLength(1);
     expect(restNotice(sundayRestStretchOnly)).toEqual({
-      text: PROGRAM_COPY.restSome(['Family program']),
+      text: PROGRAM_COPY.restSome(resting.map((p) => p.name)),
       allRest: false,
     });
   });
@@ -114,8 +133,19 @@ describe('the rest-day notice', () => {
     expect(restNotice({ ...sundayRestStretchOnly, workouts: [offWeek] })).toBeNull();
   });
 
-  it('on one program that runs today, there is no rest line', () => {
+  it('when every program has a workout that day, there is no rest line', () => {
     expect(restNotice(todayTwoPrograms)).toBeNull();
+  });
+
+  it('one resting program, alone on the day, says nothing beyond the all-rest line', () => {
+    const one: DayPlan = {
+      ...sundayRestStretchOnly,
+      programs: sundayRestStretchOnly.programs.filter(
+        (p) => !sundayRestStretchOnly.workouts.some((w) => w.programPublicId === p.programPublicId),
+      ),
+      workouts: [],
+    };
+    expect(restNotice(one)?.allRest).toBe(true);
   });
 
   it('never on an older day, where an empty program means skipped, not rest', () => {
@@ -127,7 +157,10 @@ describe('the rest-day notice', () => {
   it('on a look-ahead day it does show, and never for an athlete not on a program', () => {
     const lookAheadRest: DayPlan = { ...futurePreview, workouts: [] };
     expect(restNotice(lookAheadRest)?.text).toBe(PROGRAM_COPY.restAll(futurePreview.day));
-    expect(restNotice({ ...noProgram, onProgram: ON_PROGRAM.never })).toBeNull();
+    // The gate, not an empty program list: a resting day for an athlete not on a program that day.
+    expect(
+      restNotice({ ...sundayRestStretchOnly, workouts: [], onProgram: ON_PROGRAM['not-this-day'] }),
+    ).toBeNull();
   });
 });
 
@@ -135,11 +168,34 @@ describe('ProgramLine and the Program order dialog', () => {
   function mountLine(plan: DayPlan, actions: DayActions = createFakeDayActions(plan).actions) {
     return render(<ProgramLine plan={plan} actions={actions} />);
   }
+  const withReorder = (plan: DayPlan, reorderPrograms: DayActions['reorderPrograms']) => ({
+    ...createFakeDayActions(plan).actions,
+    reorderPrograms,
+  });
   const orderButton = () => screen.getByRole('button', { name: PROGRAM_COPY.order });
   const items = () =>
     within(screen.getByRole('dialog'))
       .getAllByRole('listitem')
       .map((li) => li.querySelector('span')?.textContent);
+  const arrow = (direction: 'up' | 'down', name: string) =>
+    screen.getByRole('button', {
+      name: (direction === 'up' ? PROGRAM_COPY.moveUp : PROGRAM_COPY.moveDown)(name),
+    });
+  const numbered = (programs: DayPlan['currentPrograms']) =>
+    programs.map((p, i) => `${i + 1}. ${p.name}`);
+  /** A reorder whose answers the test hands out, one per call, in order. */
+  function deferredReorder() {
+    const answers: Array<(result: ProgramResult) => void> = [];
+    const reorder = vi.fn<NonNullable<DayActions['reorderPrograms']>>(
+      () => new Promise<ProgramResult>((resolve) => answers.push(resolve)),
+    );
+    const answer = (n: number, result: ProgramResult) => act(async () => answers[n]!(result));
+    return { reorder, answer };
+  }
+  const [FIRST, SECOND] = todayTwoPrograms.currentPrograms as [
+    DayPlan['currentPrograms'][number],
+    DayPlan['currentPrograms'][number],
+  ];
 
   it('names the day’s programs in order; one program reads "Program:"', () => {
     mountLine(todayTwoPrograms);
@@ -147,12 +203,14 @@ describe('ProgramLine and the Program order dialog', () => {
       screen.getByText(PROGRAM_COPY.line(todayTwoPrograms.programs.map((p) => p.name))),
     ).toBeTruthy();
     cleanup();
+    // One program that day, though the athlete is on two now: a line, and no Program order.
     const one = { ...todayTwoPrograms, programs: todayTwoPrograms.programs.slice(0, 1) };
     mountLine(one);
     expect(screen.getByText(/^Program: /)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: PROGRAM_COPY.order })).toBeNull();
   });
 
-  it('shows Program order only with reorderPrograms, two programs that day, and a writable day', () => {
+  it('shows Program order only with reorderPrograms, two current programs, and a writable day', () => {
     const { logRow, untickRow, retickRow } = createFakeDayActions(todayTwoPrograms).actions;
     mountLine(todayTwoPrograms, { logRow, untickRow, retickRow });
     expect(screen.queryByRole('button', { name: PROGRAM_COPY.order })).toBeNull();
@@ -182,78 +240,128 @@ describe('ProgramLine and the Program order dialog', () => {
         name: PROGRAM_COPY.orderTitle(nameOf(todayTwoPrograms)),
       }),
     ).toBeTruthy();
-    expect(items()).toEqual(todayTwoPrograms.currentPrograms.map((p, i) => `${i + 1}. ${p.name}`));
+    expect(items()).toEqual(numbered(todayTwoPrograms.currentPrograms));
   });
 
-  it('a move saves the whole order, keeps focus on the arrow, and says where it went', async () => {
+  it('a move saves the whole order, says where it went, and the end arrows follow', async () => {
     const reorderPrograms = vi.fn(createFakeDayActions(todayTwoPrograms).actions.reorderPrograms);
-    mountLine(todayTwoPrograms, {
-      ...createFakeDayActions(todayTwoPrograms).actions,
-      reorderPrograms,
-    });
+    mountLine(todayTwoPrograms, withReorder(todayTwoPrograms, reorderPrograms));
     fireEvent.click(orderButton());
-    const [first, second] = todayTwoPrograms.currentPrograms;
-    const down = screen.getByRole('button', { name: PROGRAM_COPY.moveDown(first!.name) });
     await act(async () => {
-      down.focus();
-      fireEvent.click(down);
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      fireEvent.click(arrow('down', FIRST.name));
     });
     expect(reorderPrograms).toHaveBeenCalledWith({
       profilePublicId: todayTwoPrograms.profilePublicId,
-      programPublicIds: [second!.programPublicId, first!.programPublicId],
+      programPublicIds: [SECOND.programPublicId, FIRST.programPublicId],
     });
-    expect(items()).toEqual([`1. ${second!.name}`, `2. ${first!.name}`]);
-    expect(document.activeElement?.getAttribute('aria-label')).toBe(
-      PROGRAM_COPY.moveDown(first!.name),
-    );
-    expect(screen.getByText(PROGRAM_COPY.moved(first!.name, 2, 2))).toBeTruthy();
-    // The end arrows follow the new order: the moved program is last, so its ↓ is the dead one.
-    expect(
-      screen
-        .getByRole('button', { name: PROGRAM_COPY.moveDown(first!.name) })
-        .getAttribute('aria-disabled'),
-    ).toBe('true');
-    expect(
-      screen
-        .getByRole('button', { name: PROGRAM_COPY.moveUp(second!.name) })
-        .getAttribute('aria-disabled'),
-    ).toBe('true');
-    expect(
-      screen
-        .getByRole('button', { name: PROGRAM_COPY.moveUp(first!.name) })
-        .getAttribute('aria-disabled'),
-    ).toBeNull();
+    expect(items()).toEqual([`1. ${SECOND.name}`, `2. ${FIRST.name}`]);
+    expect(screen.getByText(PROGRAM_COPY.moved(FIRST.name, 2, 2))).toBeTruthy();
+    expect(arrow('down', FIRST.name).getAttribute('aria-disabled')).toBe('true');
+    expect(arrow('up', SECOND.name).getAttribute('aria-disabled')).toBe('true');
+    expect(arrow('up', FIRST.name).getAttribute('aria-disabled')).toBeNull();
   });
 
   it('the end arrows do nothing and say so', () => {
     const reorderPrograms = vi.fn();
-    mountLine(todayStretchingFirst, {
-      ...createFakeDayActions(todayStretchingFirst).actions,
-      reorderPrograms,
-    });
+    mountLine(todayStretchingFirst, withReorder(todayStretchingFirst, reorderPrograms));
     fireEvent.click(orderButton());
     const [first] = todayStretchingFirst.currentPrograms;
-    const up = screen.getByRole('button', { name: PROGRAM_COPY.moveUp(first!.name) });
+    const up = arrow('up', first!.name);
     expect(up.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(up);
     expect(reorderPrograms).not.toHaveBeenCalled();
   });
 
-  it('a failed save puts the order back and says it could not save', async () => {
-    const refused: ProgramResult = { ok: false, reason: 'retry' };
-    mountLine(todayTwoPrograms, {
-      ...createFakeDayActions(todayTwoPrograms).actions,
-      reorderPrograms: async () => refused,
-    });
+  it('a tap during a save is sent when it settles, and the page’s older order cannot undo it', async () => {
+    const { reorder, answer } = deferredReorder();
+    const view = mountLine(todayTwoPrograms, withReorder(todayTwoPrograms, reorder));
     fireEvent.click(orderButton());
-    const [first] = todayTwoPrograms.currentPrograms;
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: PROGRAM_COPY.moveDown(first!.name) }));
+    fireEvent.click(arrow('down', FIRST.name)); // save 1: [second, first], in flight
+    fireEvent.click(arrow('up', FIRST.name)); // queued: [first, second]
+    expect(reorder).toHaveBeenCalledTimes(1);
+    expect(items()).toEqual(numbered([FIRST, SECOND]));
+
+    await answer(0, { ok: true });
+    expect(reorder).toHaveBeenCalledTimes(2);
+    expect(reorder.mock.calls[1]![0]).toMatchObject({
+      programPublicIds: [FIRST.programPublicId, SECOND.programPublicId],
     });
-    expect(items()).toEqual(todayTwoPrograms.currentPrograms.map((p, i) => `${i + 1}. ${p.name}`));
+    // The page re-reads after save 1 and hands back save 1's order, while save 2 is in flight.
+    const afterOne = { ...todayTwoPrograms, currentPrograms: [SECOND, FIRST] };
+    view.rerender(<ProgramLine plan={afterOne} actions={withReorder(afterOne, reorder)} />);
+    await answer(1, { ok: true });
+    expect(items()).toEqual(numbered([FIRST, SECOND]));
+  });
+
+  it('a refusal after an earlier success puts back the order the server took, not the first one', async () => {
+    let calls = 0;
+    const reorderPrograms = vi.fn(async (): Promise<ProgramResult> =>
+      ++calls === 1 ? { ok: true } : { ok: false, reason: PROGRAM_REFUSAL.retry },
+    );
+    mountLine(todayTwoPrograms, withReorder(todayTwoPrograms, reorderPrograms));
+    fireEvent.click(orderButton());
+    await act(async () => {
+      fireEvent.click(arrow('down', FIRST.name));
+    });
+    await act(async () => {
+      fireEvent.click(arrow('up', FIRST.name));
+    });
+    expect(items()).toEqual(numbered([SECOND, FIRST]));
     expect(screen.getByText(PROGRAM_COPY.orderFailed)).toBeTruthy();
-    // Closing and opening again starts clean: the old failure no longer describes the list.
+  });
+
+  it('a failed save keeps focus on the arrow tapped, even when the revert moves it', async () => {
+    const { reorder, answer } = deferredReorder();
+    mountLine(todayTwoPrograms, withReorder(todayTwoPrograms, reorder));
+    fireEvent.click(orderButton());
+    const down = arrow('down', FIRST.name);
+    down.focus();
+    fireEvent.click(down);
+    // As a browser can, when it re-inserts the moved row.
+    (document.activeElement as HTMLElement).blur();
+    await answer(0, { ok: false, reason: PROGRAM_REFUSAL.retry });
+    expect(items()).toEqual(numbered(todayTwoPrograms.currentPrograms));
+    expect(document.activeElement).toBe(arrow('down', FIRST.name));
+    expect(arrow('down', FIRST.name).getAttribute('aria-describedby')).toBeTruthy();
+  });
+
+  it('a save that throws (a dropped connection) is a failure, not a stuck list', async () => {
+    mountLine(
+      todayTwoPrograms,
+      withReorder(todayTwoPrograms, () => Promise.reject(new Error('offline'))),
+    );
+    fireEvent.click(orderButton());
+    await act(async () => {
+      fireEvent.click(arrow('down', FIRST.name));
+    });
+    expect(items()).toEqual(numbered(todayTwoPrograms.currentPrograms));
+    expect(screen.getByText(PROGRAM_COPY.orderFailed)).toBeTruthy();
+  });
+
+  it('a refusal meaning the programs changed elsewhere re-reads the page instead of "try again"', async () => {
+    mountLine(
+      todayTwoPrograms,
+      withReorder(todayTwoPrograms, async () => ({ ok: false, reason: PROGRAM_REFUSAL.invalid })),
+    );
+    fireEvent.click(orderButton());
+    await act(async () => {
+      fireEvent.click(arrow('down', FIRST.name));
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+  });
+
+  it('a failed save says so; closing and opening again starts clean', async () => {
+    mountLine(
+      todayTwoPrograms,
+      withReorder(todayTwoPrograms, async () => ({ ok: false, reason: PROGRAM_REFUSAL.retry })),
+    );
+    fireEvent.click(orderButton());
+    await act(async () => {
+      fireEvent.click(arrow('down', FIRST.name));
+    });
+    expect(items()).toEqual(numbered(todayTwoPrograms.currentPrograms));
+    expect(screen.getByText(PROGRAM_COPY.orderFailed)).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: PROGRAM_COPY.done }));
     });
