@@ -20,19 +20,21 @@ order, each item with its rows. The lane builds the screen against fixtures and 
 preview route first, then wires the first real ✓.
 
 🚧 **Built up step by step.** Step 13 built the workout cards and the single rows (Check, Duration,
-Count) with their ✓. An item logged set by set shows its heading and "N logged" until 13b. Each later step
-adds its files and invariants here.
+Count) with their ✓; 13d the program line, Program order, the athlete switcher and the notices; 13b
+the set rows, Previous, Add set, supersets and the look-ahead cards. Change (13b-ii) and the wiring
+(12b on) come next; each step adds its files and invariants here.
 
 ## The map
 
-| Step | Adds                                                                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------- |
-| 13   | Workout cards and single rows, the optimistic ✓ and its failure state, in `day-screen.tsx` and its parts.         |
-| 13b  | Set rows, PREVIOUS, "+ Add set", linked supersets, the read-only look-ahead.                                      |
-| 13d  | `components/day/{program-line,program-order-dialog,athlete-switcher}.tsx`; the "not on a program" notices.        |
-| 12b  | `apps/web/app/p/[profileId]/row-actions.ts` (log, un-tick, re-tick) with its registry file; `lib/dal/day/day.ts`. |
-| 12c  | The screen joins `apps/web/app/p/[profileId]/page.tsx`. A seam, shared with lane S, in the plan's §6 order.       |
-| 12d  | Change. 15c: program order. 12f: the old forms' code goes.                                                        |
+| Step   | Adds                                                                                                              |
+| ------ | ----------------------------------------------------------------------------------------------------------------- |
+| 13     | Workout cards and single rows, the optimistic ✓ and its failure state, in `day-screen.tsx` and its parts.         |
+| 13b    | Set rows, PREVIOUS, "+ Add set", linked supersets, the read-only look-ahead (`set-table.tsx`, `row-parts.tsx`).   |
+| 13b-ii | Change: a logged number edited in place, for set rows and single rows (the maintainer split 13b, 2026-11-16).     |
+| 13d    | `components/day/{program-line,program-order-dialog,athlete-switcher}.tsx`; the "not on a program" notices.        |
+| 12b    | `apps/web/app/p/[profileId]/row-actions.ts` (log, un-tick, re-tick) with its registry file; `lib/dal/day/day.ts`. |
+| 12c    | The screen joins `apps/web/app/p/[profileId]/page.tsx`. A seam, shared with lane S, in the plan's §6 order.       |
+| 12d    | Change. 15c: program order. 12f: the old forms' code goes.                                                        |
 
 ## Files
 
@@ -41,30 +43,31 @@ adds its files and invariants here.
 | `apps/web/components/day/day-screen.tsx`           | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`.                                                                                                                 |
 | `apps/web/components/day/day-context.tsx`          | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                                                                                                       |
 | `apps/web/components/day/workout-card.tsx`         | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                                                                                                             |
-| `apps/web/components/day/item-card.tsx`            | One item: its heading, and for a Check, Duration or Count its single row (field, "Last time", ✓). Set-type items: heading and "N logged" until 13b.                                                                                                              |
-| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick: optimistic display, `clientId` per attempt, refusals. 13b reuses its write state machine per set; the single-number reader moves out then.                                                                                     |
-| `apps/web/components/day/row-values.ts`            | Pure: read what was typed (D13's empty ✓), compare and format a row's values. Fields come from `TRACKING_TYPE_FIELDS`.                                                                                                                                           |
+| `apps/web/components/day/item-card.tsx`            | One item: an empty card on a look-ahead day, its single row (field, "Last time", ✓), or its set table.                                                                                                                                                           |
+| `apps/web/components/day/set-table.tsx`            | A set-by-set item's table: Set, Previous, a column per field, ✓; "+ Add set"; every row shown this visit stays for the visit.                                                                                                                                    |
+| `apps/web/components/day/row-parts.tsx`            | What both rows share: the card's classes and tint, the heading (superset label, what logged rows were against), the ✓, a row's message, a number field.                                                                                                          |
+| `apps/web/components/day/use-row.ts`               | One row's ✓, un-tick and re-tick, for a single row or one set: optimistic display, `clientId` per attempt, refusals. Its text is a row's fields (`RowText`).                                                                                                     |
+| `apps/web/components/day/row-values.ts`            | Pure: a row's fields (`fieldsOf`: a load and/or reps), reading what was typed (D13's empty ✓, whole reps), comparing and formatting a row's values in the contract's spelling (`quantityText`).                                                                  |
 | `apps/web/components/day/athlete-switcher.tsx`     | The household's athletes as first-name pills under the `<h1>`; a switch opens that athlete's today. Server-safe (no state).                                                                                                                                      |
-| `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                     |     |
-| `apps/web/components/day/program-order-dialog.tsx` | `ProgramOrderButton` and the dialog (client code): ↑ ↓ per program; each tap saves the whole order; taps during a save are sent together, and the page's older order cannot undo them; a failure restores the last saved order; focus stays on the arrow tapped. |     |
+| `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                     |
+| `apps/web/components/day/program-order-dialog.tsx` | `ProgramOrderButton` and the dialog (client code): ↑ ↓ per program; each tap saves the whole order; taps during a save are sent together, and the page's older order cannot undo them; a failure restores the last saved order; focus stays on the arrow tapped. |
 | `apps/web/components/day/not-on-a-program.tsx`     | "Not on a program yet" / "on this day". No link until the Programs page exists (`programsHref`).                                                                                                                                                                 |
 | `apps/web/components/day/day-copy.ts`              | Every sentence the screen says, and each refusal's copy.                                                                                                                                                                                                         |
 | `apps/web/components/day/*.test.ts(x)`             | The screen's tests over the fixtures and the preview's fake; `row-values.test.ts` for the pure helpers.                                                                                                                                                          |
+| `apps/web/components/day/day-test-utils.tsx`       | The tests' shared harness (mount, queries). It holds no fake: a test file passes `createFakeDayActions` to `makeMount`, since only `*.test.ts(x)` may import the preview's fakes.                                                                                |
 | `apps/web/components/day/owed.test.ts`             | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                             |
 | `apps/web/lib/dal/day/index.ts`                    | A placeholder so the directory exists.                                                                                                                                                                                                                           |
 
 ## Invariants
 
-1. 🔴 **`DayScreen`, plus three parts the page places** (departs from plan §6, decided by
-   the maintainer for 13d, 2026-11-16; the plan's amendment, D34, is the roadmap thread's). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
+1. 🔴 **`DayScreen`, plus three parts the page places** (plan D34, decided by the
+   maintainer for 13d, 2026-11-16). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
    once, at step 12c, after Bodyweight and Life. v12 puts three things above those sections, so
    they are their own components, given the **same `plan`** (and the same `actions` where they
    write): `AthleteSwitcher({ plan, hrefFor, className: 'lg:hidden' })` under the `<h1>` (the
    nav rail lists the athletes from `lg`), then
    `ProgramLine({ plan, actions })` and `NotOnAProgram({ plan, programsHref? })`. Everything else a
-   later step adds lives inside the screen. The preview harness is the contract owner's: it wires the three parts
-   around `DayScreen` in the page's order after 13d merges, and 12c places them on the page. Their
-   props are a contract with the page and the harness: change them through the contract owner.
+   later step adds lives inside the screen. The preview's day case mounts all four in the page's order (the contract owner's, #441), and 12c places them on the page. Their props are a contract with the page and the harness: change them through the contract owner.
 2. 🔴 **The screen is a section, not the page.** The page keeps its `<h1>` and composes Bodyweight
    and Life before it; those sections and Clear this day are lane S's. Of the plan's own lanes only
    this one edits `page.tsx`, in the order the plan's §6 seam table gives.
@@ -73,16 +76,16 @@ adds its files and invariants here.
    (in `ProgramLine`, which hides it the same way) at 15c.
 4. 🔴 **No production file imports a fixture or a fake.** They are preview and test data
    ([program-contract.md](./program-contract.md) invariant 4, held by a source scan). A screen's
-   own `*.test.tsx` may.
+   own `*.test.tsx` may. The tests'
+   shared harness (`day-test-utils.tsx`) holds none either: each test file hands it the fake's
+   factory, and mocks `next/navigation` for the screen's Reload.
 5. **A ✓ is optimistic, and one attempt has one `clientId`** (plan D24, §4). If the write fails
    the row un-ticks, keeps what was typed and says so. When the retry reuses the `clientId`, and
    when a ✓ mints a new one, is invariant 11. `/design/program?screen=day&fixture=today-two-programs&fail=next`
    shows the failure.
 6. **Each screen step is checked against its prototype states** (plan §8), at 360px on the preview
    route. The a11y scan walks every state there, so a step never edits a spec to add one.
-   ⚠️ **13d's three page-placed parts are the exception, for now:** the preview mounts them only
-   once the contract owner wires its day case (after 13d), so their side-by-side and scan are owed
-   before 12c places them (an `it.todo` in `owed.test.ts`).
+   13d's three page-placed parts joined the preview at #441, and their side-by-side was taken in 13b.
 7. **The rules every screen step carries** are the plan's (§5, end): keyed components and no full
    redraw, so typed values survive ticking another row; set rows as a list or a table with headers;
    the day label as a heading; one persistent live region; 44px targets; the layout at 360px.
@@ -125,11 +128,15 @@ adds its files and invariants here.
 
 - The program name is plain text, because the program page is not wired. As in v12, it shows only
   on a day with two programs.
-- A logged number shows as text until Change arrives at 12d.
+- A logged number shows as text until Change arrives at 13b-ii (wired at 12d).
 - An empty ✓ that fails leaves the field empty rather than filling in the target.
-- Until 13b, a set-type item shows "N logged" under its heading, so a closed day does not look
-  empty. It looks done (edge and tint) only when every set shown is
-  logged, as v12's card does.
+- A set-type card looks done (edge and tint) only when every set shown is logged, as v12's does.
+
+**Decided for 13b (maintainer, 2026-11-16):** "+ Add set" adds one row at a time, kept until it is
+ticked and gone on reload (v12 kept it); a look-ahead workout says its size ("6 items"), as v12.
+For 13b-ii: Change edits a logged number in place, with select-all on focus, Escape to revert and a
+visible "Changed 30 → 35 · Undo"; a changeable logged number is a green-edged field (v12's has no
+border).
 
 **Decided for 13d (maintainer, 2026-11-16):** the switcher shows first names in their own row (not
 v12's initials beside the name); a switch opens the athlete's today, as v12 does; Program order
@@ -139,10 +146,8 @@ yesterday and look-ahead days, since on an older day an empty program means skip
 explainer sentence about where a program added later goes is left out until the writer is checked
 against it.
 
-**Known gap, owed by the contract:** a logged value is spelled by `formatValueUnit` (`30 sec`,
-`40 yards`), while the prescription beside it is spelled by `prescribed-text.ts` (`30 s`, `40 yd`).
-The latter's unit spelling is private, and its subpath pulls `csv/` into a client bundle, so one
-client-safe renderer has to come from the contract owner.
+A logged value and a prescription are spelled the same way (`30 s`, `40 yd`): both use the
+contract's `quantityText` (C1, #436).
 
 ## Changing it
 

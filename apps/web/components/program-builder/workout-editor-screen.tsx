@@ -5,9 +5,11 @@ import {
   PROGRAM_REFUSAL,
   WORKOUT_NAME_MAX,
   type ProgramActions,
-  type ProgramList,
+  type ProgramListEntry,
+  supersetLabels,
   type Unit,
   type WorkoutDraft,
+  type WorkoutDraftItem,
 } from '@mat-plan/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,8 +27,12 @@ import {
   fieldsToFixText,
   movedText,
   PENDING_CLASS,
+  linkedText,
   removedText,
   saveRefusal,
+  supersetLetterOf,
+  undoneText,
+  unlinkedText,
   unitChangedText,
   usedByText,
   type MoveDirection,
@@ -40,16 +46,16 @@ import {
   type EditorError,
   type EditorField,
 } from './editor-draft';
-import { ItemCard, type CardControl } from './item-card';
+import { ItemCard, type CardControl, type CardLink } from './item-card';
 import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
-import { normalizeSupersets, supersetLabels } from './supersets';
+import { linkWithNext, normalizeSupersets, unlinkFromNext } from './supersets';
 import { focusField, useAttempt } from './use-attempt';
 
 /**
  * The workout editor: one screen of item cards and one Save (FAM-1 step 8; plan §8 "Workout
- * editor"; the prototype's `vWorkout`). 8b adds linking supersets and their rest; 9 adds the item
+ * editor"; the prototype's `vWorkout`), with superset links and their rest (8b); 9 adds the item
  * picker ("+ Add items").
  *
  * **The screen is the page.** Its route is thin, so the screen renders the page's `<h1>` and its
@@ -72,19 +78,37 @@ export type WorkoutEditorScreenProps = {
   draft: WorkoutDraft;
   picker: MovementPickerData;
   actions: ProgramActions;
-  program?: ProgramList[number];
+  program?: ProgramListEntry;
 };
 
 const HEADING_ID = 'workout-editor-heading';
 const ITEMS_HEADING_ID = 'workout-items';
 const SAVE_ALERT_ID = 'workout-save-alert';
 const DISCARD_QUESTION_ID = 'workout-discard-question';
-/** How soon after a Remove a second one is taken as the same tap. */
-export const REMOVE_DEBOUNCE_MS = 500;
+/**
+ * How soon after a Remove or a link a second one is taken as the same tap: the next card's Remove
+ * slides up under the thumb, and the link control flips to its opposite in place.
+ */
+export const DOUBLE_TAP_MS = 500;
 
-/** Everything typed, as one comparable value: the screen is "changed" when it differs. */
-const snapshot = (name: string, description: string, cards: readonly EditorCard[]) =>
-  JSON.stringify([name, description, cards]);
+/**
+ * Everything typed, as one comparable value: the screen is "changed" when it differs. Group keys
+ * are compared by their order of first appearance, so a key minted by an unlink and relink is not
+ * a change by itself.
+ */
+const snapshot = (name: string, description: string, cards: readonly EditorCard[]) => {
+  const keys = new Map<string, number>();
+  const plain = cards.map((card) => {
+    const superset = card.item.superset;
+    if (!superset) return card;
+    if (!keys.has(superset.group)) keys.set(superset.group, keys.size);
+    return {
+      ...card,
+      item: { ...card.item, superset: { ...superset, group: keys.get(superset.group) } },
+    };
+  });
+  return JSON.stringify([name, description, plain]);
+};
 
 export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorScreenProps) {
   const router = useRouter();
@@ -103,6 +127,20 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const { begin, isCurrent } = useAttempt();
 
   const lastRemoveAt = useRef(0);
+  /** The last link tap per card: a second one on the same card is the same tap. */
+  const lastLinkAt = useRef(new Map<string, number>());
+  /**
+   * The last link or unlink: on which card, the cards before it, and the cards it made. The
+   * opposite tap on the same card, with nothing else changed in between (`cards` is still
+   * `after`, by identity: every other edit makes a new array), puts `before` back exactly. Any
+   * other edit leaves it stale, so it can never bring back a rest over one typed since.
+   */
+  const lastToggle = useRef<{
+    id: string;
+    before: EditorCard[];
+    after: EditorCard[];
+  } | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const controls = useRef(new Map<string, HTMLButtonElement>());
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -113,6 +151,27 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const back = programPath(loaded.draft.programPublicId);
   const dirty = snapshot(name, description, cards) !== loaded.snapshot;
   const labels = supersetLabels(cards.map((card) => card.item));
+  const groupOf = (index: number) => cards[index]?.item.superset?.group ?? null;
+  /** The card's link to the next one, or `null` on the last card. */
+  const linkOf = (index: number): CardLink | null => {
+    const next = cards[index + 1];
+    if (!next) return null;
+    const [a, b] = [groupOf(index), groupOf(index + 1)];
+    const joins =
+      a !== null && b !== null && a !== b
+        ? ([supersetLetterOf(labels[index]!), supersetLetterOf(labels[index + 1]!)] as const)
+        : null;
+    return { linked: a !== null && a === b, joins, next: next.item.itemName };
+  };
+  /** The superset's letter, on its last card only: where the group's rest is edited. */
+  const restLetterOf = (index: number) => {
+    const group = groupOf(index);
+    return group !== null && groupOf(index + 1) !== group
+      ? labels[index]
+        ? supersetLetterOf(labels[index]!)
+        : null
+      : null;
+  };
 
   // The browser's own "leave this page?" while there are changes. The App Router has no hook for
   // its own navigations, so Cancel and the back link ask inline instead (guide invariant 15).
@@ -138,6 +197,11 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const clearError = (card: string | null, field: EditorField) =>
     clearErrors((error) => !(error.card === card && error.field === field));
 
+  /** The next edit clears a status message, so the bar does not stay tall with an old one. */
+  const quiet = () => {
+    if (status.message && status.tone === 'status') report('');
+  };
+
   const updateCard = (id: string, patch: Partial<EditorCard>) =>
     setCards((all) =>
       all.map((card) => (card.item.prescriptionClientId === id ? { ...card, ...patch } : card)),
@@ -161,24 +225,117 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
       report(direction === 'up' ? EDITOR_COPY.alreadyFirst : EDITOR_COPY.alreadyLast);
       return;
     }
-    const id = card.item.prescriptionClientId;
-    const before = control(id, direction)?.getBoundingClientRect().top ?? 0;
     const { settled, change } = settle(
       direction === 'up' ? moveUp(cards, index) : moveDown(cards, index),
     );
-    flushSync(() => setCards(settled));
-    // The same button on the moved card, held where the thumb is: a second tap moves it again.
-    const button = control(id, direction);
+    holdUnderThumb(card.item.prescriptionClientId, direction, settled);
+    report(movedText(card.item.itemName, direction, change));
+  }
+
+  /**
+   * Puts `next` on screen and keeps the tapped control focused and where the thumb is, so a second
+   * tap lands on the same control.
+   */
+  function holdUnderThumb(id: string, which: CardControl, next: EditorCard[]) {
+    const before = control(id, which)?.getBoundingClientRect().top ?? 0;
+    flushSync(() => setCards(next));
+    const button = control(id, which);
     button?.focus({ preventScroll: true });
     const after = button?.getBoundingClientRect().top ?? before;
     if (after !== before) window.scrollBy(0, after - before);
-    report(movedText(card.item.itemName, direction, change));
+    // Never under the save bar, whose status line is about to say what the tap did.
+    const barTop = barRef.current?.getBoundingClientRect().top;
+    const bottom = button?.getBoundingClientRect().bottom;
+    if (barTop !== undefined && bottom !== undefined && bottom > barTop) {
+      window.scrollBy(0, bottom - barTop + 8);
+    }
+  }
+
+  /** Links the card at `index` with the next, or unlinks them. `at` is the tap's time. */
+  function toggleLink(index: number, at: number) {
+    const first = cards[index]!;
+    const second = cards[index + 1]!;
+    const firstId = first.item.prescriptionClientId;
+    const last = lastLinkAt.current.get(firstId);
+    if (last !== undefined && at - last < DOUBLE_TAP_MS) return;
+    lastLinkAt.current.set(firstId, at);
+    const a = first.item.superset?.group ?? null;
+    const b = second.item.superset?.group ?? null;
+    const unlinking = a !== null && a === b;
+
+    // The opposite of the last tap, on the same card, with nothing changed since: undo it.
+    const undo = lastToggle.current;
+    if (undo && undo.id === firstId && undo.after === cards) {
+      lastToggle.current = null;
+      holdUnderThumb(firstId, 'link', undo.before);
+      report(undoneText(!unlinking));
+      return;
+    }
+
+    const items = cards.map((card) => card.item);
+    const letter = (i: number) => (labels[i] ? supersetLetterOf(labels[i]!) : '');
+    const settled = (out: readonly WorkoutDraftItem[]) => {
+      const next = withItems(out);
+      lastToggle.current = { id: firstId, before: cards, after: next };
+      holdUnderThumb(firstId, 'link', next);
+      return supersetLabels(out);
+    };
+
+    if (unlinking) {
+      const result = unlinkFromNext(items, index);
+      const after = settled(result.items);
+      const sides = [index, index + 1].filter((i) => result.items[i]!.superset);
+      const size =
+        sides.length === 1
+          ? result.items.filter(
+              (item) => item.superset?.group === result.items[sides[0]!]!.superset!.group,
+            ).length
+          : null;
+      report(
+        unlinkedText({
+          letter: sides.length === 1 ? supersetLetterOf(after[sides[0]!]!) : letter(index),
+          ended: result.ended,
+          size,
+          droppedRest: result.droppedRest,
+        }),
+      );
+      return;
+    }
+
+    const result = linkWithNext(items, index);
+    const after = settled(result.items);
+    const group = result.items[index]!.superset!.group;
+    report(
+      linkedText({
+        letter: supersetLetterOf(after[index]!),
+        joined: result.merged ? 'groups' : a || b ? 'one' : 'pair',
+        size: result.items.filter((item) => item.superset?.group === group).length,
+        from: result.merged ? [letter(index), letter(index + 1)] : null,
+        dropped: result.droppedRest,
+      }),
+    );
+  }
+
+  const withItems = (out: readonly WorkoutDraftItem[]) =>
+    cards.map((card, i) => ({ ...card, item: out[i]! }));
+
+  /** The group's rest, typed on its last card. */
+  function changeRest(id: string, value: string) {
+    setCards((all) =>
+      all.map((card) =>
+        card.item.prescriptionClientId === id
+          ? { ...card, item: { ...card.item, restAfter: value === '' ? null : value } }
+          : card,
+      ),
+    );
+    clearError(id, 'rest');
+    quiet();
   }
 
   /** `at` is the tap's `event.timeStamp`. */
   function remove(index: number, at: number) {
     // A double tap lands on the next card's Remove, which slides up under the thumb.
-    if (lastRemoveAt.current && at - lastRemoveAt.current < REMOVE_DEBOUNCE_MS) return;
+    if (lastRemoveAt.current && at - lastRemoveAt.current < DOUBLE_TAP_MS) return;
     lastRemoveAt.current = at;
     const card = cards[index]!;
     const neighbour = cards[index + 1] ?? cards[index - 1];
@@ -205,6 +362,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     const typed = card.value.trim();
     updateCard(card.item.prescriptionClientId, { unit });
     clearError(card.item.prescriptionClientId, 'value');
+    quiet();
     if (typed && card.unit && card.unit !== unit && Number.isFinite(Number(typed))) {
       report(unitChangedText(card.item.itemName, Number(typed), card.unit, unit));
     }
@@ -319,6 +477,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
           announce={false}
           onChange={(value) => {
             setName(value);
+            quiet();
             clearError(null, 'name');
           }}
         />
@@ -333,6 +492,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
           multiline
           onChange={(value) => {
             setDescription(value);
+            quiet();
             clearError(null, 'description');
           }}
         />
@@ -347,6 +507,9 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
         >
           {EDITOR_COPY.items}
         </h2>
+        {cards.length > 1 ? (
+          <p className="text-muted-foreground text-sm">{EDITOR_COPY.supersetIntro}</p>
+        ) : null}
         {cards.length ? (
           <ol className="flex flex-col gap-3">
             {cards.map((card, index) => {
@@ -365,11 +528,16 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
                   }}
                   onChange={(field, value) => {
                     updateCard(id, { [field]: value });
+                    quiet();
                     clearError(id, field);
                   }}
                   onUnit={(unit) => changeUnit(card, unit)}
                   onMove={(direction) => move(index, direction)}
                   onRemove={(at) => remove(index, at)}
+                  link={linkOf(index)}
+                  onLink={(at) => toggleLink(index, at)}
+                  restLetter={restLetterOf(index)}
+                  onRest={(value) => changeRest(id, value)}
                 />
               );
             })}
@@ -380,9 +548,13 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
       </section>
 
       {/* The save bar: always in view on a phone, where Save and what it says are. The status
-          line keeps one line's height, so a message does not push the bar up over a card. */}
-      <div className="bg-background sticky bottom-0 flex flex-col gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <StatusLine status={status} alertId={SAVE_ALERT_ID} className="min-h-9 justify-end" />
+          line keeps two lines' height, which a link or unlink message never passes, so one
+          does not push the bar up over a card. */}
+      <div
+        ref={barRef}
+        className="bg-background sticky bottom-0 flex flex-col gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
+        <StatusLine status={status} alertId={SAVE_ALERT_ID} className="min-h-14 justify-end" />
         {leaving ? (
           <div role="group" aria-labelledby={DISCARD_QUESTION_ID} className="flex flex-col gap-2">
             <p id={DISCARD_QUESTION_ID} className="text-sm font-medium">

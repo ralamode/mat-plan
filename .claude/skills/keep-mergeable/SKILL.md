@@ -101,7 +101,7 @@ git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
 pnpm install --frozen-lockfile                # AFTER the merge: main may have changed the lockfile
 pnpm verify && pnpm guides:check
 STATUS_BRANCH="$b" pnpm status:check          # detached worktree: the guard needs the branch name
-bash .claude/skills/hold-the-bar/check.sh origin/main
+bash .claude/skills/hold-the-bar/check.sh   # a stacked PR compares with its base branch
 git diff origin/main HEAD --stat              # only this PR's files; nothing of main's reverted
 git fetch origin "$b" && git merge-base --is-ancestor "origin/$b" HEAD \
   && git push origin "HEAD:$b"                # never --force

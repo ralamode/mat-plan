@@ -28,7 +28,12 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
 import { householdScopeForScript } from './writers/household-scope-script';
-import { inHousehold, movementIsGlobal, movementIsOwned } from './writers/ownership';
+import {
+  inHousehold,
+  movementIsGlobal,
+  movementIsOwned,
+  programBlockIsLegacy,
+} from './writers/ownership';
 import { seedProgramFixtures } from './writers/program/seed-fixtures';
 
 /**
@@ -565,7 +570,9 @@ export async function seedProgram(
         target: [schema.programBlocks.householdId, schema.programBlocks.slug],
         where: isNull(schema.programBlocks.deletedAt),
       });
-    // Re-resolve the block id (just-inserted OR pre-existing) by its natural key.
+    // Re-resolve the block id (just-inserted OR pre-existing) by its natural key — and only a LEGACY
+    // block (FAM-1 4a-i): a template block a household built under the same slug must never be adopted
+    // and filled with seeded prescriptions. The insert above omits `kind`, so it lands `legacy`.
     const [blockRow] = await db
       .select({ id: schema.programBlocks.id })
       .from(schema.programBlocks)
@@ -573,11 +580,15 @@ export async function seedProgram(
         and(
           eq(schema.programBlocks.householdId, household.id),
           eq(schema.programBlocks.slug, block.slug),
+          programBlockIsLegacy(),
           isNull(schema.programBlocks.deletedAt),
         ),
       );
     if (!blockRow)
-      throw new Error(`seedProgram: block "${block.slug}" failed to resolve after upsert`);
+      throw new Error(
+        `seedProgram: block "${block.slug}" failed to resolve after upsert — no live LEGACY block ` +
+          'holds that slug; a household-built (template) block under the same slug would cause this',
+      );
 
     for (const p of block.prescriptions) {
       await db

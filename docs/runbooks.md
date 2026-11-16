@@ -361,7 +361,16 @@ as the `schema.ts` change, and Drizzle names every column on insert, so between 
 migration an insert into the changed table fails `42703` (the FAM-1 plan §3 accepts this window;
 each step's migration header names the statements). The recovery is this re-run; FAM-1 merges
 migrations when nobody is logging. 0022: every movement resolved by name (a strength save with a
-typed name, existing or new) and every `insert into movements` (a new item, the seed).
+typed name, existing or new) and every `insert into movements` (a new item, the seed). 0024: EVERY
+insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll Vercel back to the
+previous deployment (its code works on either schema), then re-run as below. ⚠️ Once the migration is
+observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
+production from following new deployments automatically, so later merges would not go live (unverified
+here; check the Vercel dashboard after a rollback). 🔴 **The window is also a privacy condition:** a
+failed insert's `DrizzleQueryError` carries its `params` (a weigh-in, a note, how a session felt),
+which Sentry's scrubber strips but Next's `console.error` writes to Vercel's runtime logs, kept 24
+hours. If a write failed in the window, record it in the deletion ledger's incident notes
+(`docs/privacy/data-inventory.md` §7) rather than assume the logs are clean.
 
 ---
 
@@ -1259,6 +1268,10 @@ UNION ALL SELECT 'day_readiness', count(*) FROM day_readiness WHERE profile_id I
 UNION ALL SELECT 'ramp_targets', count(*) FROM ramp_targets WHERE profile_id IN (SELECT id FROM p)
 UNION ALL SELECT 'program_blocks', count(*) FROM b
 UNION ALL SELECT 'prescriptions', count(*) FROM prescriptions WHERE block_id IN (SELECT id FROM b)
+-- FAM-1 4a-i: the week template and the workouts, both scoped by block (no deleted_at filter here
+-- either: a hidden slot or workout is still a row the delete must remove).
+UNION ALL SELECT 'block_day_workouts', count(*) FROM block_day_workouts WHERE block_id IN (SELECT id FROM b)
+UNION ALL SELECT 'workouts', count(*) FROM workouts WHERE block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
   WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
     (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
@@ -1275,7 +1288,8 @@ UNION ALL SELECT 'household_members', count(*) FROM household_members
 ```
 
 **Pre-flight integrity — every one of these must return 0, or STOP.** `entries.session_id`,
-`entries.superset_id` and `prescription_targets.prescription_id` are **unscoped FKs, enforced by the
+`entries.superset_id`, `prescription_targets.prescription_id` and, since FAM-1 4a-ii,
+`sessions.workout_id` and `entries.prescription_id` are **unscoped FKs, enforced by the
 writers and not by the schema** (`schema.ts` says so above `supersets`). A stray cross-household row
 either aborts the transaction half-way or makes this procedure delete a row about another family's
 child:
@@ -1305,6 +1319,42 @@ child:
 --       WHERE e.profile_id IN (SELECT id FROM p)
 --         AND m.household_id IS NOT NULL AND m.household_id <> (SELECT id FROM h)
 --       (and the mirror, plus the same pair over `prescriptions` joined through `b`)
+```
+
+```sql
+-- (e) FAM-1 4a-i: a WORKOUT of ANOTHER household copied from one of H's workouts. Its pointer is
+--       `ON DELETE SET NULL`, so step 9b would rewrite that household's row SILENTLY, and its
+--       `copied_from_program_name` is H's typed text, which the delete would leave behind.
+--       The writer refuses a cross-household copy, so a row here is a defect: STOP, and clear both
+--       provenance columns on the other household's row with a correction before this procedure.
+--       SELECT w.id FROM workouts w
+--         JOIN program_blocks b  ON b.id  = w.block_id
+--         JOIN workouts src      ON src.id = w.copied_from_workout_id
+--         JOIN program_blocks sb ON sb.id = src.block_id
+--        WHERE sb.household_id = (SELECT id FROM h) AND b.household_id <> sb.household_id
+--       (`db:verify` proves this join finds a planted row, `verify/schema.ts` → FAM-1 4a-i; it runs on
+--       PGlite, never on production, so THIS is the check against real rows.)
+-- (f) FAM-1 4a-ii: a SESSION of ANOTHER household naming one of H's workouts. Step 9b would SET NULL
+--       its `workout_id` silently, and its `workout_name` (H's typed text) would stay on another
+--       family's child's session, and from step 14 in their export. Step 11b's writer must refuse it
+--       (owed, with a boundary test; no writer exists before 11b), so a row here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
+--       that session (the pairing CHECK allows both NULL) before this procedure.
+--       SELECT s.id FROM sessions s
+--         JOIN profiles pr ON pr.id = s.profile_id
+--         JOIN workouts w ON w.id = s.workout_id
+--         JOIN program_blocks b ON b.id = w.block_id
+--        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
+-- (g) FAM-1 4a-ii: an ENTRY of ANOTHER household naming one of H's prescriptions. Step 9 would SET
+--       NULL its `prescription_id`, and its `prescribed_snapshot` (rendered from H's prescription) and
+--       its superset's `prescription_group` (H's label) would stay. A defect for the same reason:
+--       STOP, and with a correction clear `prescription_id`, `prescribed_snapshot` and the superset's
+--       `prescription_group` on those rows; the decision is to keep none of H's text (A2 §8).
+--       SELECT e.id FROM entries e
+--         JOIN profiles pr ON pr.id = e.profile_id
+--         JOIN prescriptions x ON x.id = e.prescription_id
+--         JOIN program_blocks b ON b.id = x.block_id
+--        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
+--       (`db:verify` proves both joins find a planted row, `verify/schema.ts` → FAM-1 4a-ii.)
 ```
 
 🔴 **Why (d) exists, and why it STAYS although `TEN-2c` closed the writer that minted it.** `TEN-2a`
@@ -1359,8 +1409,9 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write all three out against the same CTEs and read the numbers. (a)–(c) must be zero. For (d), follow
-the repoint above rather than stopping — it is the one pre-flight with a documented remedy.
+Write them all out against the same CTEs and read the numbers. (a)–(c) and (e)–(g) must be zero. For
+(d), follow the repoint above rather than stopping; for (e)–(g), STOP and clear the other household's
+copies of H's text with a correction first, as each says.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 
@@ -1381,7 +1432,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 14 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 16 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -1402,11 +1453,19 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 | 7   | `ramp_targets`          | `profile_id` ∈ H                                               |
 | 8   | `prescription_targets`  | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H |
 | 9   | `prescriptions`         | `block_id` ∈ program_blocks of H                               |
+| 9a  | `block_day_workouts`    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**   |
+| 9b  | `workouts`              | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**   |
 | 10  | `program_blocks`        | `household_id` = H                                             |
 | 11  | **`movements`**         | `household_id` = H — **TEN-2a; see below**                     |
 | 12  | `profiles`              | `household_id` = H                                             |
 | 13  | **`household_members`** | `household_id` = H — **AUTH-1 1b; see below**                  |
 | 14  | `households`            | `id` = H                                                       |
+
+**Steps 9a and 9b are lettered, not numbered**, so every "step 11" and "step 14" cited across the
+repo still names the same table. A week slot references its workout through a composite FK, and a
+workout references its block, both `NO ACTION`: out of order, the delete raises `23503` and the
+transaction rolls back (`db:verify` proves both refusals and the order that commits). Steps 4b and 5
+of FAM-1 add their tables the same way.
 
 Steps 1 and 2 are redundant with the `ON DELETE CASCADE` on `entry_sets.entry_id` and
 `entry_set_quantities.entry_set_id` — written out anyway, because **the counts are the proof** and a
@@ -1489,8 +1548,12 @@ SELECT count(*) FROM movements WHERE household_id = :h_id;              -- must 
 SELECT count(*) FROM movements WHERE household_id IS NULL;              -- must be > 0
 ```
 
-Every FK except the two cascades is `NO ACTION`, so a table this procedure missed would have aborted
-the transaction rather than silently orphaning rows; that is a real safety property, not a hope — and
+Every FK except the two cascades and three `ON DELETE SET NULL` pointers is `NO ACTION`, so a table
+this procedure missed would have aborted the transaction rather than silently orphaning rows; that is
+a real safety property, not a hope. The three SET NULL pointers (`workouts.copied_from_workout_id`,
+FAM-1 4a-i; `sessions.workout_id` and `entries.prescription_id`, 4a-ii) never fire inside this
+procedure, because their child rows are deleted first (steps 3, 5, 9b); a cross-household one is
+what pre-flight (e)–(g) catches, since SET NULL would rewrite it silently — and
 `movements.household_id` is exactly that property firing, which is why step 11 exists.
 
 **6. Delete the Clerk users** (once sign-in is switched on — chunk **1c**, not 1a). Clerk dashboard →

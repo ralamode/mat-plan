@@ -7,6 +7,9 @@ import {
   HOUSEHOLD_ROLE,
   type HouseholdRole,
   newId,
+  PROGRAM_BLOCK_KIND,
+  type ProgramBlockKind,
+  programBlockKindSchema,
   type ProfileKind,
 } from '@mat-plan/shared';
 import type { HouseholdScope, OwnerScope } from '../scope';
@@ -274,10 +277,9 @@ export function movementIsAvailableTo(scope: HouseholdScope) {
  * `scope.householdId`, which is why it belongs in this module — `scope.test.ts` asserts exactly one
  * module does.
  *
- * Its one consumer is `householdHasProgram`, which the day page needs to tell two states apart that
- * look identical to the old query: **"this household programs nothing"** and **"this household
- * programs, but you are an adult so none of it is yours"**. Without it the adult sees an unexplained
- * empty day.
+ * Its consumers: `householdHasProgram` (whose one caller is the add-athlete form,
+ * `apps/web/app/p/new/page.tsx`, wording the Child option by whether the household has a legacy
+ * program), `liveTemplateBlockIn` below, and the template-block helpers.
  */
 export function programBlockInHousehold(scope: HouseholdScope) {
   return eq(schema.programBlocks.householdId, scope.householdId);
@@ -531,4 +533,196 @@ export async function insertProfileOwnedBy(
       householdId: scope.householdId,
     })
     .onConflictDoNothing({ target: schema.profiles.clientId });
+}
+
+// ── FAM-1 step 4a-i: template blocks and their workouts ─────────────────────────────────────────────
+//
+// The two insert helpers lane P's program writers (steps 6a–6c) call. They live HERE because this is
+// the only module that may unwrap `scope.householdId` (`src/scope.test.ts` → `UNWRAPS_SCOPE`); the
+// writers themselves never hold the tenant id. Nothing calls them yet: `apps/web` has no path to these
+// tables until lane P (`apps/web/test/program-tables-stay-dark.test.ts`).
+
+/**
+ * 🔴 **THE legacy-block predicate: `program_blocks.kind = 'legacy'`** (FAM-1 5b; ADR 0007 A2 §1). The
+ * seed's day-role block, read by the newest-block reads (`queries/program-day.ts`) and the only kind
+ * the seed adopts on its re-select (`seed.ts`). Named once so the reads and the seed cannot drift.
+ */
+export function programBlockIsLegacy() {
+  return eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy);
+}
+
+/**
+ * 🔴 **THE template-block predicate: this household's ∧ `kind = template` ∧ live.** The only blocks
+ * that own workouts (ADR 0007 A2 §2). Exported so lane P's writers (rename, save-workout, save-week,
+ * copy, put-on), which arrive by `programPublicId`, apply the SAME rule instead of re-typing three
+ * conjuncts; composed from `programBlockInHousehold` so the household conjunct is written once.
+ * Mutations 46–48 drop each conjunct.
+ */
+export function liveTemplateBlockIn(scope: HouseholdScope) {
+  return and(
+    programBlockInHousehold(scope),
+    eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.template),
+    isNull(schema.programBlocks.deletedAt),
+  );
+}
+
+/**
+ * Insert a TEMPLATE block **owned by `scope`**, arbitrated by `uq_program_blocks_household_client_id`
+ * (FAM-1 4a-i; ADR 0007 A2 §1, §5). The `insertProfileOwnedBy` shape: the insert returns nothing, and
+ * the caller re-reads with {@link programBlockByClientId}, which answers a replay with the first row.
+ *
+ * - **`kind` is set to `template` EXPLICITLY** (A2 §1: never by default; the default is `legacy`,
+ *   which only the seed writes). `program_blocks_template_client_id_check` refuses a template block
+ *   without a `client_id`.
+ * - `public_id` is minted here, and the columns are enumerated, never spread (no mass assignment).
+ * - The conflict target is NAMED and non-partial, so no `where:`. A slug collision
+ *   (`uq_program_blocks_household_slug`) is NOT swallowed: the writer picks a free slug first (D9's
+ *   `-2`, `-3` suffix), and a collision here is a real error.
+ */
+export async function insertProgramBlockOwnedBy(
+  exec: Executor,
+  scope: HouseholdScope,
+  row: { clientId: string; slug: string; name: string; notes: string | null },
+): Promise<void> {
+  await exec
+    .insert(schema.programBlocks)
+    .values({
+      publicId: newId(),
+      householdId: scope.householdId,
+      kind: PROGRAM_BLOCK_KIND.template,
+      clientId: row.clientId,
+      slug: row.slug,
+      name: row.name,
+      notes: row.notes,
+    })
+    .onConflictDoNothing({
+      target: [schema.programBlocks.householdId, schema.programBlocks.clientId],
+    });
+}
+
+/** This household's block holding `clientId`, hidden or not (a hidden block still owns its id), or `null`. */
+export async function programBlockByClientId(
+  exec: Executor,
+  scope: HouseholdScope,
+  clientId: string,
+): Promise<{ id: number; publicId: string; kind: ProgramBlockKind; deleted: boolean } | null> {
+  const [row] = await exec
+    .select({
+      id: schema.programBlocks.id,
+      publicId: schema.programBlocks.publicId,
+      kind: schema.programBlocks.kind,
+      deletedAt: schema.programBlocks.deletedAt,
+    })
+    .from(schema.programBlocks)
+    .where(and(programBlockInHousehold(scope), eq(schema.programBlocks.clientId, clientId)))
+    .limit(1);
+  return row
+    ? {
+        id: row.id,
+        publicId: row.publicId,
+        // CHECK-pinned to PROGRAM_BLOCK_KINDS; parsing narrows it without a cast.
+        kind: programBlockKindSchema.parse(row.kind),
+        deleted: row.deletedAt !== null,
+      }
+    : null;
+}
+
+/** What `insertWorkoutOwnedBy` found or made: the row, whether THIS call created it, and whether it is hidden. */
+export interface WorkoutWrite {
+  id: number;
+  publicId: string;
+  /** `false` for a replay: the row came from an earlier call with this `client_id`, and is returned unchanged. */
+  created: boolean;
+  deleted: boolean;
+}
+
+/**
+ * Insert a workout into a TEMPLATE block **owned by `scope`**, arbitrated by
+ * `uq_workouts_block_client_id` (FAM-1 4a-i; ADR 0007 A2 §2). Returns the row, or `null` when refused.
+ *
+ * 🔴 **A replay is answered FIRST, before any check**: a workout this household already holds under
+ * `(blockId, clientId)` is returned with `created: false`, unchanged (a replay with a different name
+ * does not rename it; the caller's save-workout updates in place), and with its `deleted` flag. So a
+ * replay is never mistaken for a refusal, whatever happened to its block since (AGENTS.md →
+ * Idempotency). `ON CONFLICT (block_id, client_id) DO NOTHING` still covers a race between two first
+ * writes, and the re-select after it returns whichever won.
+ *
+ * 🔴 **Refused (`null`, nothing written)** when `blockId` is not this household's live template block
+ * ({@link liveTemplateBlockIn}), or when `copiedFrom` names a workout outside this household. Those
+ * two rules are not in the schema (A2 §2: "writer, plus `db:verify`").
+ *
+ * ⚠️ **The block is read `FOR SHARE`, which only holds inside the caller's TRANSACTION**: with a bare
+ * `db` handle the lock ends with the statement. A caller that later takes a STRONGER lock on the same
+ * block (an UPDATE of it) must take that first, or two concurrent saves deadlock (40P01). No gate
+ * proves the lock: PGlite has one connection.
+ *
+ * Not one `INSERT … SELECT`: drizzle 0.45's insert builder lists the identity column in a `SELECT`
+ * insert, which Postgres refuses (428C9), and this module writes no raw SQL.
+ */
+export async function insertWorkoutOwnedBy(
+  exec: Executor,
+  scope: HouseholdScope,
+  row: {
+    blockId: number;
+    clientId: string;
+    name: string;
+    description: string | null;
+    /** A copy's provenance (step 10b): the source workout and its program's name, frozen now. */
+    copiedFrom?: { workoutId: number; programName: string };
+  },
+): Promise<WorkoutWrite | null> {
+  const existing = async (): Promise<Omit<WorkoutWrite, 'created'> | undefined> => {
+    const [w] = await exec
+      .select({
+        id: schema.workouts.id,
+        publicId: schema.workouts.publicId,
+        deletedAt: schema.workouts.deletedAt,
+      })
+      .from(schema.workouts)
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
+      .where(
+        and(
+          eq(schema.workouts.blockId, row.blockId),
+          eq(schema.workouts.clientId, row.clientId),
+          programBlockInHousehold(scope),
+        ),
+      );
+    return w && { id: w.id, publicId: w.publicId, deleted: w.deletedAt !== null };
+  };
+
+  const replay = await existing();
+  if (replay) return { ...replay, created: false };
+
+  const [block] = await exec
+    .select({ id: schema.programBlocks.id })
+    .from(schema.programBlocks)
+    .where(and(eq(schema.programBlocks.id, row.blockId), liveTemplateBlockIn(scope)))
+    .for('share');
+  if (!block) return null;
+
+  if (row.copiedFrom) {
+    const [source] = await exec
+      .select({ id: schema.workouts.id })
+      .from(schema.workouts)
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
+      .where(and(eq(schema.workouts.id, row.copiedFrom.workoutId), programBlockInHousehold(scope)));
+    if (!source) return null;
+  }
+
+  const inserted = await exec
+    .insert(schema.workouts)
+    .values({
+      publicId: newId(),
+      clientId: row.clientId,
+      blockId: block.id,
+      name: row.name,
+      description: row.description,
+      copiedFromWorkoutId: row.copiedFrom?.workoutId ?? null,
+      copiedFromProgramName: row.copiedFrom?.programName ?? null,
+    })
+    .onConflictDoNothing({ target: [schema.workouts.blockId, schema.workouts.clientId] })
+    .returning({ id: schema.workouts.id });
+
+  const saved = await existing();
+  return saved ? { ...saved, created: inserted.length > 0 } : null;
 }

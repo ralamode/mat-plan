@@ -156,9 +156,13 @@ Migrate: drizzle-kit generate+migrate ONLY (never push in prod); forward-only; n
 Trust: every Server Action + Route Handler is a PUBLIC endpoint. Re-auth + re-authorize (ownership)
        + zod-validate inside each. Never trust FormData/JSON/searchParams/params/headers.
 DAL:   all DB access via lib/dal/* (server-only). Thin actions/handlers → validate → DAL → revalidate.
-Split: mutations → Server Actions. Reads/external/batch → Route Handlers. /api/sync is a Route Handler.
-Errors: expected → typed envelope { ok:false, error, fieldErrors? } + useActionState (don't throw).
-        unexpected → throw → error.tsx. Never leak internals; return only what the UI needs.
+Contract: ANY request/response change ⇒ its shared zod schema (types via z.infer), same PR. NEW
+        mutations copy FAM-1 (program/actions.ts, rowResultSchema): zod input + response;
+        {ok:true,…} | {ok:false, reason}, refusals never thrown; FormData only at the edge.
+        Unexpected throws to error.tsx; never leak internals. Additive; breaking ⇒ /api/vN,
+        Deprecation/Sunset.
+Time:   lib/dal + writers get day + tz as args; only routes/actions (and their private helpers)
+        read the tz cookie.
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
@@ -291,10 +295,10 @@ movement picker.
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
   **This section is the one list of where each gate runs**; other docs point here rather than
-  restating it. `skills:check`, `guards:test` (all twelve guard self-tests) and `audit:check` run here
+  restating it. `skills:check`, `guards:test` (all thirteen guard self-tests) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
   on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)) — **separately**, as
-  `pnpm status:check $(git merge-base HEAD origin/main)`, and ⚠️ it names the fragment it wants from
+  `pnpm status:check` (on a stacked PR it compares with the parent's branch, as CI does), and ⚠️ it names the fragment it wants from
   the BRANCH (`<date>-<branch-with-slashes-as-dashes>.md`), so a descriptively-named one is found
   and rejected. `actions:check` runs here
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
@@ -401,8 +405,6 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.
-Contract: request/response change ⇒ update shared zod schema (types via z.infer) same PR. Additive by
-  default; breaking ⇒ BREAKING CHANGE footer + /api/vN + Deprecation/Sunset headers.
 Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (mock Clerk auth() +
   Drizzle); async Server Components → Playwright, not Vitest; push logic into the (sync, testable) DAL.
 ```
