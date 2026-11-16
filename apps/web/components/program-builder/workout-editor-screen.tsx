@@ -292,7 +292,6 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
         joined: result.merged ? 'groups' : a || b ? 'one' : 'pair',
         size: members.length,
         from: result.merged ? [letter(index), letter(index + 1)] : null,
-        kept: members.at(-1)!.restAfter,
         dropped: result.droppedRest,
       }),
     );

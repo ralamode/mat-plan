@@ -565,7 +565,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(restIn(cards()[3]!)).toBe('60 s after each round');
       await waitFor(() =>
         expect(screen.getByRole('status').textContent).toBe(
-          'Supersets A and B are now A. Rest kept: “60 s after each round”; removed: “90 s after each round”.',
+          'Supersets A and B are now A. Rest “90 s after each round” removed.',
         ),
       );
     });

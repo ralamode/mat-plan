@@ -313,20 +313,19 @@ export const restForLabel = (letter: string) => `of superset ${letter}`;
 
 /**
  * What a link did, for the status line: by superset letter, never by item names, so it stays one or
- * two lines in the save bar. A join names the rest kept and the one removed.
+ * two lines in the save bar. A join names the rest it removed; the one kept is in the field.
  */
 export function linkedText(link: {
   letter: string;
   joined: 'pair' | 'one' | 'groups';
   size: number;
   from: readonly [string, string] | null;
-  kept: string | null;
   dropped: string | null;
 }): string {
   if (link.joined === 'pair') return `Linked: superset ${link.letter}.`;
   if (link.joined === 'one') return `Linked: superset ${link.letter} now has ${link.size} items.`;
   const done = `Supersets ${link.from![0]} and ${link.from![1]} are now ${link.letter}.`;
-  return link.dropped ? `${done} Rest kept: “${link.kept}”; removed: “${link.dropped}”.` : done;
+  return link.dropped ? `${done} Rest “${link.dropped}” removed.` : done;
 }
 
 /** What an unlink did: the superset ended, an item left it, or it became two. */

@@ -275,9 +275,9 @@ export function ItemCard({
       </div>
 
       {link || restLetter ? (
-        // The card's foot: what joins it to the next card. A full-width rule sets it apart from
-        // the item's own tools above.
-        <div className="-mx-3 flex flex-col gap-3 border-t px-3 pt-3">
+        // The card's foot: what joins it to the next card. A rule sets it apart from the item's
+        // own tools above.
+        <div className="flex flex-col gap-3 border-t pt-3">
           {link ? (
             <div>
               <Button
