@@ -280,6 +280,15 @@ export const profiles = pgTable(
  */
 export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
 
+/**
+ * FAM-1 4a-ii's three arbiters (ADR 0007 A2 §6, A3), named once so step 11b's writer and `hide.ts`'s
+ * restore check match them by const, as they match `BODYWEIGHT_DAY_UNIQUE_INDEX`. Renaming one means
+ * a new migration too.
+ */
+export const SESSION_WORKOUT_DAY_UNIQUE_INDEX = 'uq_sessions_profile_day_workout';
+export const SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX = 'uq_supersets_session_prescription_group';
+export const ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX = 'uq_entries_session_prescription_set';
+
 export const entries = pgTable(
   'entries',
   {
@@ -336,6 +345,23 @@ export const entries = pgTable(
     // pattern as entries_value_source_check / entries_activity_type_id_not_null.
     supersetId: bigint('superset_id', { mode: 'number' }).references(() => supersets.id),
     supersetOrder: integer('superset_order'),
+    // FAM-1 4a-ii (ADR 0007 Amendment 3): the prescription a row was logged against, and which of its
+    // set rows (1-based). Set only by step 11b's row writer; NULL on every other row.
+    //
+    // ⚠️ Invariants the schema cannot hold, owed by the writer (11b, with a boundary test) and the
+    // audits (household here; "the prescription belongs to the session's workout" at 4b, which adds
+    // `prescriptions.workout_id`): the prescription is in the entry profile's household, and in the
+    // workout its session names. Without the second, the row arbiter below cannot stop a twin logged
+    // under another session.
+    //
+    // ⚠️ **"Logged in a program" is `prescription_set IS NOT NULL`, not `prescription_id`**: an
+    // ADR 0008 purge's `ON DELETE SET NULL` clears the id and keeps the set, so a reader that keys on
+    // the id loses that history (PREVIOUS, the export).
+    prescriptionId: bigint('prescription_id', { mode: 'number' }).references(
+      (): AnyPgColumn => prescriptions.id,
+      { onDelete: 'set null' },
+    ),
+    prescriptionSet: integer('prescription_set'),
     valueText: text('value_text'), // free-text / non-numeric metric readings
     context: text('context'), // e.g. warmup/working/amrap qualifier
     scheme: text('scheme'), // e.g. set/rep scheme label
@@ -351,11 +377,41 @@ export const entries = pgTable(
     index('idx_entries_movement').on(t.movementId), // covering index for the movement FK
     index('idx_entries_metric_key').on(t.metricKey), // covering index for the metric_key FK
     index('idx_entries_superset').on(t.supersetId), // covering index for the superset FK (V1-8)
-    // Deterministic order WITHIN a superset — two members can't claim the same slot (V1-8). Mirrors
-    // uq_entry_sets_entry_idx (the ordinal-within-parent idiom).
+    // Deterministic order WITHIN a superset — two members can't claim the same slot (V1-8), for
+    // rows NOT logged against a prescription set. Since FAM-1 4a-ii (D3, A3) a row logged from a
+    // template workout is one entry per ✓ set, so every set of one member shares the place: those rows
+    // (`prescription_set IS NOT NULL`) are kept unique by `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`
+    // instead. The predicate is on the SET, which a purge never clears; on `prescription_id` a purge's
+    // SET NULL would drop two logged sets of one member into this index together and fail.
+    // ⚠️ So two DIFFERENT linked members may share a `superset_order`; nothing here stops it.
     uniqueIndex('uq_entries_superset_order')
       .on(t.supersetId, t.supersetOrder)
-      .where(sql`${t.deletedAt} is null`),
+      .where(sql`${t.deletedAt} is null and ${t.prescriptionSet} is null`),
+    // FAM-1 4a-ii: covers the prescription FK (partial: only linked rows carry one, and the SET NULL
+    // lookup is an equality, which implies NOT NULL).
+    index('idx_entries_prescription')
+      .on(t.prescriptionId)
+      .where(sql`${t.prescriptionId} is not null`),
+    // The row arbiter (A3): one live entry per (session, prescription, set). A second device's ✓
+    // on the same row conflicts here and returns the first; a hidden row frees its place.
+    uniqueIndex(ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX)
+      .on(t.sessionId, t.prescriptionId, t.prescriptionSet)
+      .where(sql`${t.prescriptionId} is not null and ${t.deletedAt} is null`),
+    // 1-based, at most a prescription's set count (MAX_SETS_PER_MOVEMENT, pinned by db:verify).
+    check(
+      'entries_prescription_set_check',
+      sql`${t.prescriptionSet} is null or (${t.prescriptionSet} >= 1 and ${t.prescriptionSet} <= 20)`,
+    ),
+    // One-way on purpose (A3): a purge's SET NULL clears only prescription_id.
+    check(
+      'entries_prescription_needs_set_check',
+      sql`${t.prescriptionId} is null or ${t.prescriptionSet} is not null`,
+    ),
+    // A linked row has a session, so the row arbiter always applies (NULLs are distinct).
+    check(
+      'entries_prescription_needs_session_check',
+      sql`${t.prescriptionId} is null or ${t.sessionId} is not null`,
+    ),
     // 🔴 **NON-partial since V1-9b B0** (ADR 0008 decision 3.4). A `client_id` is the OFFLINE
     // IDENTITY of one write, not a slot: freeing it on a hide makes a soft-deleted row stop being an
     // `ON CONFLICT` target, so a replay from a phone that never saw the hide inserts a TWIN instead
@@ -789,6 +845,17 @@ export const sessions = pgTable(
     // Deliberately NOT a DB CHECK — folding role↔type pairs into the CHECK below would inject extra
     // literals and break db:verify's exact-set assertCheckCoversConst assertion.
     dayRole: text('day_role'),
+    // FAM-1 4a-ii (ADR 0007 A2 §6): the template workout this session logged. IDENTITY only, for
+    // MOT-1's swap and verdict; nothing displays through it. `ON DELETE SET NULL`, so a purged
+    // workout leaves the session. It must name a workout in the session profile's household (writer,
+    // plus the audit db:verify proves and the runbook's pre-flight (f) runs on real rows).
+    workoutId: bigint('workout_id', { mode: 'number' }).references((): AnyPgColumn => workouts.id, {
+      onDelete: 'set null',
+    }),
+    // The workout's name FROZEN at log time: the display, so a rename never rewrites history. It
+    // outlives the workout's rename, hide and purge (the pairing CHECK is one-way). Bounded by
+    // WORKOUT_NAME_MAX like its source.
+    workoutName: text('workout_name'),
     status: text('status').notNull().default('done'), // mirrors SESSION_STATUSES
     source: text('source'),
     feel: text('feel'), // session-grain feel/soreness (spec.md §4)
@@ -805,6 +872,23 @@ export const sessions = pgTable(
     // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
     // applied to the five older arbiters. `write-path.md` invariant 6.
     uniqueIndex('uq_sessions_client_id').on(t.clientId),
+    index('idx_sessions_workout').on(t.workoutId), // covering index for the workout FK (FAM-1 4a-ii)
+    // The append arbiter (A2 §6): one live session per (profile, day, workout), so step 11b appends
+    // later sets to the workout's session that day instead of twinning it. A hidden session frees
+    // its place: ⚠️ a session hide must hide its entries too, or the old session's live rows twin
+    // against the new one's (no session hide exists today).
+    uniqueIndex(SESSION_WORKOUT_DAY_UNIQUE_INDEX)
+      .on(t.profileId, t.activityDate, t.workoutId)
+      .where(sql`${t.workoutId} is not null and ${t.deletedAt} is null`),
+    check(
+      'sessions_workout_name_length_check',
+      sql`${t.workoutName} is null or (char_length(btrim(${t.workoutName})) >= 1 and char_length(${t.workoutName}) <= 30)`,
+    ),
+    // One-way (a purge's SET NULL clears the id, keeps the name), like 4a-i's copy provenance.
+    check(
+      'sessions_workout_named_check',
+      sql`${t.workoutId} is null or ${t.workoutName} is not null`,
+    ),
     check(
       'sessions_session_type_check',
       sql`${t.sessionType} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core', 'workout')`,
@@ -844,6 +928,9 @@ export const supersets = pgTable(
       .references(() => sessions.id),
     label: text('label'), // "DB Bench + Overhead Press" / "light superset"
     note: text('note'),
+    // FAM-1 4a-ii (A2 §6): the prescription's group (`superset_label`, step 4b) this superset was
+    // logged under, so a workout's later sets append to the same superset. NULL on legacy rows.
+    prescriptionGroup: text('prescription_group'),
     ...timestamps,
   },
   (t) => [
@@ -857,6 +944,15 @@ export const supersets = pgTable(
     // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
     // applied to the five older arbiters. `write-path.md` invariant 6.
     uniqueIndex('uq_supersets_client_id').on(t.clientId),
+    // The append arbiter for a workout's superset (A2 §6): one live superset per (session, group).
+    uniqueIndex(SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX)
+      .on(t.sessionId, t.prescriptionGroup)
+      .where(sql`${t.prescriptionGroup} is not null and ${t.deletedAt} is null`),
+    // Bounded like the group label it copies (SLOT_LABEL_MAX, pinned by db:verify); never blank.
+    check(
+      'supersets_prescription_group_length_check',
+      sql`${t.prescriptionGroup} is null or (char_length(btrim(${t.prescriptionGroup})) >= 1 and char_length(${t.prescriptionGroup}) <= 30)`,
+    ),
   ],
 );
 

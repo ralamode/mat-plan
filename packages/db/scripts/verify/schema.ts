@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   DEFAULT_TRACKING_TYPE,
+  MAX_SETS_PER_MOVEMENT,
   FREE_TEXT_NOTE_MAX,
   MOVEMENT_SEED_ROWS,
   newId,
@@ -26,6 +27,11 @@ import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../../src/client';
+import {
+  ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX,
+  SESSION_WORKOUT_DAY_UNIQUE_INDEX,
+  SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX,
+} from '../../src/schema';
 import { seed } from '../../src/seed';
 import { findOrCreateTypedMovement } from '../../src/writers/movement-catalog';
 import {
@@ -61,7 +67,8 @@ import {
  *   `LEGACY_SESSION_TYPES`;
  * - step 4a-i ✅: blocks, slots, identity, the "flagged" audits and the program tables' erasure order
  *   (ADR 0007 Amendment 2 §10), `assertCheckCoversIntConst`, the length CHECKs pinned to their consts;
- * - step 4a-ii: the append arbiters and the row arbiter;
+ * - step 4a-ii ✅: the append arbiters, the row arbiter, the recreated superset-order index under a
+ *   purge, the one-way CHECKs, and the two cross-household audits (ADR 0007 A2 §6, A3);
  * - step 4b: the XOR both ways, slot keys, quantity keys, the scoped `client_id`;
  * - step 5: assignments and erasure.
  *
@@ -73,6 +80,7 @@ import {
 export async function verifySchema(ctx: VerifyContext): Promise<void> {
   await verifyStep3(ctx);
   await verifyStep4ai(ctx);
+  await verifyStep4aii(ctx);
   await verifyStep1();
 }
 
@@ -925,5 +933,373 @@ async function verifyStep1(): Promise<void> {
   });
   console.log(
     '✓ FAM-1 1: the seed writes the program only when asked for fixtures (production never asks)',
+  );
+}
+
+// ── FAM-1 step 4a-ii ────────────────────────────────────────────────────────────────────────────────
+
+/** Sessions whose workout is in ANOTHER household than the session's profile (A2 §6). Runbook pre-flight (f). */
+async function sessionsOnForeignWorkouts(tx: VerifyTx): Promise<number[]> {
+  const res = await tx.execute(sql`
+    SELECT s.id FROM sessions s
+      JOIN profiles p ON p.id = s.profile_id
+      JOIN workouts w ON w.id = s.workout_id
+      JOIN program_blocks b ON b.id = w.block_id
+     WHERE p.household_id <> b.household_id`);
+  return (res as unknown as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+}
+
+/** Entries whose prescription is in ANOTHER household than the entry's profile (A3). Runbook pre-flight (g). */
+async function entriesOnForeignPrescriptions(tx: VerifyTx): Promise<number[]> {
+  const res = await tx.execute(sql`
+    SELECT e.id FROM entries e
+      JOIN profiles p ON p.id = e.profile_id
+      JOIN prescriptions pr ON pr.id = e.prescription_id
+      JOIN program_blocks b ON b.id = pr.block_id
+     WHERE p.household_id <> b.household_id`);
+  return (res as unknown as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
+}
+
+/** Sessions naming a workout whose type is not `workout` (D6). Not a CHECK: A2 §6 does not authorize one. */
+async function workoutSessionsOfAnotherType(tx: VerifyTx): Promise<number[]> {
+  const rows = await tx
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(
+      sql`${schema.sessions.workoutId} is not null and ${schema.sessions.sessionType} is distinct from ${SESSION_TYPE.workout}`,
+    );
+  return rows.map((r) => r.id);
+}
+
+async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  // ── (a) the bounds are pinned to their consts ─────────────────────────────────────────────────────
+  await assertLengthCheckIs('sessions_workout_name_length_check', WORKOUT_NAME_MAX);
+  await assertLengthCheckIs('supersets_prescription_group_length_check', SLOT_LABEL_MAX);
+  await assertLengthCheckIs('entries_prescription_set_check', MAX_SETS_PER_MOVEMENT);
+
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    // A template block and workout in A, and a prescription in that block; an existing strength
+    // entry in a session is the template every probe row is cloned from, so each probe changes only
+    // the columns it is about.
+    const mkWorkout = async (scope: typeof A_SCOPE, slug: string) => {
+      const clientId = newId();
+      await insertProgramBlockOwnedBy(exec, scope, { clientId, slug, name: slug, notes: null });
+      const blockId = (await programBlockByClientId(exec, scope, clientId))!.id;
+      const w = (await insertWorkoutOwnedBy(exec, scope, {
+        blockId,
+        clientId: newId(),
+        name: 'Push day',
+        description: null,
+      }))!;
+      return { blockId, workoutId: w.id };
+    };
+    const a = await mkWorkout(A_SCOPE, 'fam-1-4a-ii-a');
+
+    const [tpl] = await tx
+      .select()
+      .from(schema.entries)
+      .where(
+        sql`${schema.entries.sessionId} is not null and ${schema.entries.movementId} is not null and ${schema.entries.metricKey} is null and ${schema.entries.deletedAt} is null`,
+      )
+      .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
+      .limit(1);
+    assert.ok(tpl, 'FAM-1 4a-ii: a strength entry exists to clone probe rows from');
+    const {
+      id: _id,
+      publicId: _p,
+      clientId: _c,
+      createdAt: _ca,
+      updatedAt: _ua,
+      ...entryBase
+    } = tpl.entries;
+    const profileId = entryBase.profileId;
+    const [{ householdId: entryHousehold }] = await tx
+      .select({ householdId: schema.profiles.householdId })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.id, profileId));
+    const [{ householdId: aHousehold }] = await tx
+      .select({ householdId: schema.programBlocks.householdId })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.id, a.blockId));
+    // The template entry's household must be A's, or the "foreign" audits below would be measuring
+    // the wrong boundary.
+    assert.equal(entryHousehold, aHousehold, "FAM-1 4a-ii: the probe entry is in A's household");
+
+    const prescription = async (blockId: number, idx: number) => {
+      const [row] = await tx
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId,
+          dayRole: 'strength',
+          movementId: entryBase.movementId!,
+          idx,
+        })
+        .returning({ id: schema.prescriptions.id });
+      return row.id;
+    };
+    const pA = await prescription(a.blockId, 900);
+
+    const session = (over: Partial<typeof schema.sessions.$inferInsert> = {}) =>
+      tx
+        .insert(schema.sessions)
+        .values({
+          publicId: newId(),
+          clientId: newId(),
+          profileId,
+          activityDate: '2026-11-16',
+          sessionType: SESSION_TYPE.workout,
+          workoutId: a.workoutId,
+          workoutName: 'Push day',
+          ...over,
+        })
+        .returning({ id: schema.sessions.id });
+    const entry = (over: Partial<typeof schema.entries.$inferInsert>) =>
+      tx
+        .insert(schema.entries)
+        .values({
+          ...entryBase,
+          publicId: newId(),
+          clientId: newId(),
+          supersetId: null,
+          supersetOrder: null,
+          ...over,
+        })
+        .returning({ id: schema.entries.id });
+
+    // ── (b) the session append arbiter, and the frozen name ────────────────────────────────────────
+    const [s1] = await session();
+    await expectRejectedBy(SESSION_WORKOUT_DAY_UNIQUE_INDEX, () => session(), tx);
+    await session({ activityDate: '2026-11-17' }); // another day: accepted
+    await expectRejectedBy(
+      'sessions_workout_named_check',
+      () => session({ activityDate: '2026-11-18', workoutName: null }),
+      tx,
+    );
+    await expectRejectedBy(
+      'sessions_workout_name_length_check',
+      () => session({ activityDate: '2026-11-18', workoutName: astral(WORKOUT_NAME_MAX + 1) }),
+      tx,
+    );
+    const [hiddenDay] = await session({ activityDate: '2026-11-19' });
+    await tx
+      .update(schema.sessions)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.sessions.id, hiddenDay.id));
+    await session({ activityDate: '2026-11-19' }); // a hidden session frees its place
+
+    // ── (c) the superset append arbiter ─────────────────────────────────────────────────────────────
+    const superset = (over: Partial<typeof schema.supersets.$inferInsert> = {}) =>
+      tx
+        .insert(schema.supersets)
+        .values({
+          publicId: newId(),
+          clientId: newId(),
+          sessionId: s1.id,
+          prescriptionGroup: 'A',
+          ...over,
+        })
+        .returning({ id: schema.supersets.id });
+    const [ss] = await superset();
+    await expectRejectedBy(SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX, () => superset(), tx);
+    await superset({ prescriptionGroup: 'B' }); // another group: accepted
+    await expectRejectedBy(
+      'supersets_prescription_group_length_check',
+      () => superset({ prescriptionGroup: ' ' }),
+      tx,
+    );
+
+    // ── (d) the row arbiter, and the one-way CHECKs ─────────────────────────────────────────────────
+    const linked = { sessionId: s1.id, prescriptionId: pA, prescriptionSet: 1 };
+    const [e1] = await entry(linked);
+    await expectRejectedBy(ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX, () => entry(linked), tx); // a second device's ✓
+    await entry({ ...linked, prescriptionSet: 2 }); // the next set: accepted
+    await tx
+      .update(schema.entries)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.entries.id, e1.id));
+    await assert.doesNotReject(
+      tx.transaction(async (sp) => {
+        await sp.insert(schema.entries).values({
+          ...entryBase,
+          publicId: newId(),
+          clientId: newId(),
+          supersetId: null,
+          supersetOrder: null,
+          ...linked,
+        });
+      }),
+      'FAM-1 4a-ii: a hidden row frees its place in the row arbiter',
+    );
+    await expectRejectedBy(
+      'entries_prescription_needs_set_check',
+      () => entry({ sessionId: s1.id, prescriptionId: pA, prescriptionSet: null }),
+      tx,
+    );
+    await expectRejectedBy(
+      'entries_prescription_needs_session_check',
+      () => entry({ sessionId: null, prescriptionId: pA, prescriptionSet: 3 }),
+      tx,
+    );
+    await expectRejectedBy(
+      'entries_prescription_set_check',
+      () => entry({ ...linked, prescriptionSet: 0 }),
+      tx,
+    );
+    await expectRejectedBy(
+      'entries_prescription_set_check',
+      () => entry({ ...linked, prescriptionSet: MAX_SETS_PER_MOVEMENT + 1 }),
+      tx,
+    );
+
+    // ── (e) two sets of one superset member commit, and so does purging their prescription ──────────
+    const pB = await prescription(a.blockId, 901);
+    const member = { sessionId: s1.id, prescriptionId: pB, supersetId: ss.id, supersetOrder: 0 };
+    await tx.insert(schema.entries).values({
+      ...entryBase,
+      publicId: newId(),
+      clientId: newId(),
+      ...member,
+      prescriptionSet: 1,
+    });
+    await assert.doesNotReject(
+      tx.transaction(async (sp) => {
+        await sp.insert(schema.entries).values({
+          ...entryBase,
+          publicId: newId(),
+          clientId: newId(),
+          ...member,
+          prescriptionSet: 2,
+        });
+      }),
+      'FAM-1 4a-ii: two sets of one superset member commit (the superset-order index skips linked rows)',
+    );
+    // ADR 0008's purge: the prescription goes, its entries keep their snapshot and their set number,
+    // and SET NULL leaves both rows at one superset place, which the recreated index must allow.
+    await assert.doesNotReject(
+      tx.transaction(async (sp) => {
+        await sp.delete(schema.prescriptions).where(eq(schema.prescriptions.id, pB));
+      }),
+      'FAM-1 4a-ii: a purge with two logged sets of one superset member commits',
+    );
+    const kept = await tx
+      .select({
+        prescriptionId: schema.entries.prescriptionId,
+        set: schema.entries.prescriptionSet,
+      })
+      .from(schema.entries)
+      .where(eq(schema.entries.supersetId, ss.id));
+    assert.deepEqual(
+      kept.map((k) => [k.prescriptionId, k.set]).sort(),
+      [
+        [null, 1],
+        [null, 2],
+      ],
+      'FAM-1 4a-ii: a purge clears the prescription and keeps each set number',
+    );
+
+    // ── (f) flagged: the cross-household pointers no constraint stops ───────────────────────────────
+    assert.deepEqual(
+      await sessionsOnForeignWorkouts(tx),
+      [],
+      "FAM-1 4a-ii: no session names another household's workout",
+    );
+    assert.deepEqual(
+      await entriesOnForeignPrescriptions(tx),
+      [],
+      "FAM-1 4a-ii: no entry names another household's prescription",
+    );
+    assert.deepEqual(
+      await workoutSessionsOfAnotherType(tx),
+      [],
+      'FAM-1 4a-ii: every session naming a workout is of type workout',
+    );
+    const bLive = await mkWorkout(B_SCOPE, 'fam-1-4a-ii-b2');
+    const pForeign = await prescription(bLive.blockId, 902);
+    const [foreignSession] = await session({
+      activityDate: '2026-11-20',
+      workoutId: bLive.workoutId,
+    });
+    const [foreignEntry] = await entry({
+      sessionId: s1.id,
+      prescriptionId: pForeign,
+      prescriptionSet: 1,
+    });
+    const [otherType] = await session({
+      activityDate: '2026-11-21',
+      sessionType: SESSION_TYPES[0],
+    });
+    assert.deepEqual(
+      await sessionsOnForeignWorkouts(tx),
+      [foreignSession.id],
+      "FAM-1 4a-ii: a session on another household's workout is flagged",
+    );
+    assert.deepEqual(
+      await entriesOnForeignPrescriptions(tx),
+      [foreignEntry.id],
+      "FAM-1 4a-ii: an entry on another household's prescription is flagged",
+    );
+    assert.deepEqual(
+      await workoutSessionsOfAnotherType(tx),
+      [otherType.id],
+      'FAM-1 4a-ii: a workout session of another type is flagged',
+    );
+  });
+  console.log(
+    "✓ FAM-1 4a-ii: the session, superset and row arbiters each refuse a twin and free a hidden place; a linked row names its set and has a session; two sets of one superset member commit, and so does their prescription's purge; cross-household pointers and a mistyped workout session are each flagged",
+  );
+
+  // ── (g) a purged workout leaves its session with the frozen name ──────────────────────────────────
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const clientId = newId();
+    await insertProgramBlockOwnedBy(exec, A_SCOPE, {
+      clientId,
+      slug: 'fam-1-4a-ii-purge',
+      name: 'P',
+      notes: null,
+    });
+    const blockId = (await programBlockByClientId(exec, A_SCOPE, clientId))!.id;
+    const w = (await insertWorkoutOwnedBy(exec, A_SCOPE, {
+      blockId,
+      clientId: newId(),
+      name: 'Legs',
+      description: null,
+    }))!;
+    const [profile] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .innerJoin(
+        schema.programBlocks,
+        eq(schema.programBlocks.householdId, schema.profiles.householdId),
+      )
+      .where(eq(schema.programBlocks.id, blockId))
+      .limit(1);
+    const [s] = await tx
+      .insert(schema.sessions)
+      .values({
+        publicId: newId(),
+        clientId: newId(),
+        profileId: profile.id,
+        activityDate: '2026-11-16',
+        sessionType: SESSION_TYPE.workout,
+        workoutId: w.id,
+        workoutName: 'Legs',
+      })
+      .returning({ id: schema.sessions.id });
+    await tx.delete(schema.workouts).where(eq(schema.workouts.id, w.id));
+    const [after] = await tx
+      .select({ workoutId: schema.sessions.workoutId, workoutName: schema.sessions.workoutName })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, s.id));
+    assert.deepEqual(
+      after,
+      { workoutId: null, workoutName: 'Legs' },
+      'FAM-1 4a-ii: a purged workout leaves its session, with the frozen name',
+    );
+  });
+  console.log(
+    '✓ FAM-1 4a-ii: a purged workout leaves its session with workout_id NULL and the frozen name kept',
   );
 }
