@@ -79,21 +79,23 @@ Tailwind via `@theme inline`. Colors are **OKLCH**.
 colour; a brand-coloured control would need its own, darker token. It needs no `.dark` value (about 6:1
 on the dark background).
 
-`done` (FAM-1) is the app's only success colour, and it means **logged** and nothing else: a
-selected item in a picker uses `primary` or `accent`. The rules a logged row follows, each pinned in
-`app/done-tokens.test.ts` in both themes:
+`done` (FAM-1) is the app's only success colour, and it means **logged**. (The prototype also
+paints the item picker's selected rows with it; whether the picker follows is step 9's call, against
+the same rules.) The rules a logged row follows, with the ratios pinned in `app/done-tokens.test.ts`
+in both themes:
 
 - **The fill carries the state, not the hue.** A ticked ✓ is filled with `done` and is at least 3:1
   against the un-ticked control (`muted`), so it reads in greyscale and to a red-green colour-blind
   eye. It also sets `aria-pressed` and keeps its accessible name. Under `forced-colors` the fill
   disappears, so a ticked ✓ needs a second cue there (a thicker border or a different glyph).
-- **The tint is decoration.** `done-surface` is about 1.1:1 against a card. A done card keeps a
-  `border-done` edge, which is what shows the row's boundary.
+- **The tint is decoration.** `done-surface` is about 1.1:1 against a card in light and 1.3:1 in
+  dark. A done card keeps a `border-done` edge, which is what shows the row's boundary.
 - **Text on the tint** is `card-foreground`, or `done-muted-foreground` for secondary text:
-  `muted-foreground` is 4.27:1 there, under AA. `done` is never text on its own; a word or the ✓
-  goes with it ("Done ✓").
-- **Focus on a ✓** uses a full-opacity `ring-foreground`: `ring` is 2.3:1 on the tint and 2:1 on the
-  fill.
+  `muted-foreground` is 4.27:1 there in light, under AA. `done` is never text on its own; a word or
+  the ✓ goes with it ("Done ✓").
+- **Focus on a ✓ is a full-opacity `ring-foreground` ring OUTSIDE the ✓**, offset onto the tint or
+  the card, where it is at least 3:1 in both themes. Never inset it on the fill: there it is 3.8:1
+  in light but 2.0:1 in dark. `ring` is 2.3:1 on the light tint.
 
 The prototype's light fill was 3.7:1 under white, so the app's is darker. A reskin (UI-3) re-measures
 these pairs, since the candidate sets don't declare them.

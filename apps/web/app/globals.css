@@ -132,7 +132,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --done: oklch(0.75 0.15 150);
   --done-foreground: oklch(0.205 0 0);
-  --done-surface: oklch(0.28 0.05 150);
+  --done-surface: oklch(0.3 0.05 150);
   --done-muted-foreground: oklch(0.708 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
