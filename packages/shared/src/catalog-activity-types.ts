@@ -105,6 +105,17 @@ export const ACTIVITY_TYPE_SEED_ROWS = [
     inputShape: 'single_metric',
     defaultUnit: 'min',
   },
+  {
+    // FAM-1 step 3 (plan §2): the activity of every row logged against a template workout's item.
+    // One type for all seven tracking types: the code branches on `movements.tracking_type`, and the
+    // row's unit rides on the entry. `set_list` because an item's rows are its set rows.
+    publicId: seedPublicId('02b'),
+    key: 'workout_item',
+    label: 'Workout item',
+    category: 'strength',
+    inputShape: 'set_list',
+    defaultUnit: null,
+  },
 ] as const satisfies readonly ActivityTypeSeedRow[];
 
 /** Every activity_type key (keyed-by-self) — the typed key set for ACTIVITY_METRIC_MAP. */

@@ -2,7 +2,12 @@ import { z } from 'zod';
 
 import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
-import { MASS_QUANTITY_CEILING, MAX_STORABLE_QUANTITY, QUANTITY_DECIMALS } from './units';
+import {
+  MASS_QUANTITY_CEILING,
+  MAX_REPS_PER_SET,
+  MAX_STORABLE_QUANTITY,
+  QUANTITY_DECIMALS,
+} from './units';
 
 /** Over the ceiling. Names the likeliest cause now that metres and seconds save (V1-30): a
  *  real 3200 m or 2400 s is usually a unit slip, and the copy must not imply the athlete is wrong. */
@@ -33,7 +38,7 @@ export const numericSetSchema = z.object({
     .number()
     .int('Reps must be a whole number.')
     .positive('Reps must be above 0.')
-    .max(1000),
+    .max(MAX_REPS_PER_SET),
   // 0 is a legitimate weight (bodyweight movement), so a blank string must NOT slip past `.min(0)`
   // as 0 (Number('') === 0) — treat a blank as invalid (NaN fails the range check) on the JSON
   // trust boundary. The browser form marks the input `required`, so this only guards a crafted body.

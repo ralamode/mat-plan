@@ -1,4 +1,5 @@
 import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import type { TrackingType } from '@mat-plan/shared';
 
 import { schema } from '../client';
 import {
@@ -326,7 +327,14 @@ export async function insertHouseholdMember(
 export async function insertMovementOwnedBy(
   exec: Executor,
   scope: HouseholdScope,
-  row: { publicId: string; slug: string; name: string; isBodyweight: boolean },
+  // `trackingType` absent → the column default (FAM-1 step 3; `findOrCreateTypedMovement`).
+  row: {
+    publicId: string;
+    slug: string;
+    name: string;
+    isBodyweight: boolean;
+    trackingType?: TrackingType;
+  },
 ): Promise<void> {
   await exec
     .insert(schema.movements)

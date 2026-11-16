@@ -355,8 +355,13 @@ and `db:seed` runs in the **same job** immediately after `db:migrate`. So a fail
    there (`information_schema.columns`, `pg_indexes`, `pg_constraint`).
 
 **Safety.** Nothing here is destructive. The app keeps serving: a pending migration means prod simply
-does not yet have the new column/index, which is why every migration in this repo ships additive and
-dark ahead of its reader.
+does not yet have the new column/index, which is why most migrations in this repo ship additive and
+dark ahead of their reader. ⚠️ **Not all of them, since FAM-1:** its migrations land in the same PR
+as the `schema.ts` change, and Drizzle names every column on insert, so between the deploy and the
+migration an insert into the changed table fails `42703` (the FAM-1 plan §3 accepts this window;
+each step's migration header names the statements). The recovery is this re-run; FAM-1 merges
+migrations when nobody is logging. 0022: every movement resolved by name (a strength save with a
+typed name, existing or new) and every `insert into movements` (a new item, the seed).
 
 ---
 

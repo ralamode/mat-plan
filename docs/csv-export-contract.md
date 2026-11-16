@@ -115,6 +115,7 @@ the app defines them, following the corpus pattern (value + unit code, no space)
 | `m`   | `20m`                   | **Metres**, never minutes.                                          |
 | `yd`  | `40yd`                  | No space (the `40 yd` in `prescribed` is free text).                |
 | `min` | `3min`                  | **Minutes**.                                                        |
+| `mi`  | `2mi`                   | **Miles** (FAM-1 step 3). No form logged it before FAM-1.           |
 
 ### Timed movements — easy to get wrong
 

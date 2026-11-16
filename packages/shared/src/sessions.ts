@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ENTRY_STATUSES } from './enums';
+import { ENTRY_STATUSES, keyBySelf } from './enums';
 
 /**
  * `session` structural enums (spec.md §4). Text + CHECK (not reference tables).
@@ -10,8 +10,12 @@ import { ENTRY_STATUSES } from './enums';
  * Sessions are first written at V1-8; the CHECKs on `sessions` mirror these lists.
  */
 
-/** The kind of training session — kids' S&C days + Ray's PPL split. */
-export const SESSION_TYPES = [
+/**
+ * The session types that existed before FAM-1: kids' S&C days + the PPL split. `DAY_ROLES`
+ * (`programming.ts`) spreads THIS list, not `SESSION_TYPES`, so a new session type never becomes a day
+ * role and never widens `sessions_day_role_check` / `prescriptions_day_role_check` (FAM-1 plan D6).
+ */
+export const LEGACY_SESSION_TYPES = [
   'strength',
   'conditioning',
   'skill',
@@ -21,9 +25,19 @@ export const SESSION_TYPES = [
   'core',
 ] as const;
 
+/**
+ * Every session type `sessions_session_type_check` accepts (db:verify pins the CHECK to this list).
+ * FAM-1 step 3 appends `workout`: the session a template workout's rows are logged into (plan D6). It
+ * is APPENDED, never inserted, because `SESSION_TYPES[0]` is `DEFAULT_SESSION_TYPE`.
+ */
+export const SESSION_TYPES = [...LEGACY_SESSION_TYPES, 'workout'] as const;
+
 export type SessionType = (typeof SESSION_TYPES)[number];
 
 export const sessionTypeSchema = z.enum(SESSION_TYPES);
+
+/** Branch on a NAMED member (`SESSION_TYPE.workout`), never a bare string (constants convention). */
+export const SESSION_TYPE = keyBySelf(SESSION_TYPES);
 
 /**
  * The default session type — a kids' S&C day is 'strength' (Ray's PPL push/pull/legs come at v2).
@@ -38,7 +52,7 @@ export const DEFAULT_SESSION_TYPE: SessionType = SESSION_TYPES[0];
  * header renders via this map so no component re-types or re-cases a label. (Distinct from
  * `ACTIVITY_CATEGORY_LABELS`, which lacks the PPL push/pull/legs/core types.)
  */
-export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
+export const LEGACY_SESSION_TYPE_LABELS: Record<(typeof LEGACY_SESSION_TYPES)[number], string> = {
   strength: 'Strength',
   conditioning: 'Conditioning',
   skill: 'Skill',
@@ -46,6 +60,12 @@ export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   pull: 'Pull',
   legs: 'Legs',
   core: 'Core',
+};
+
+/** Every session type's label. `DAY_ROLE_LABELS` spreads the LEGACY map, so `workout` is no day role. */
+export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
+  ...LEGACY_SESSION_TYPE_LABELS,
+  workout: 'Workout',
 };
 
 /** Heading for a superset bracket in the Today log (V1-8-3d). A single source so the view and its test
