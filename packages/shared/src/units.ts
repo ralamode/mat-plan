@@ -225,7 +225,10 @@ export const PLAIN_DECIMAL = new RegExp(
   `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,
 );
 
-/** Whether `text` is a plain decimal (`PLAIN_DECIMAL`). `Number(text)` is then finite and not negative. */
+/**
+ * Whether `text` is a plain decimal (`PLAIN_DECIMAL`). `Number(text)` is then not negative and not
+ * `NaN`; it is NOT bounded (a very long run of digits is `Infinity`), so check the unit's ceiling next.
+ */
 export function isPlainDecimal(text: string): boolean {
   return PLAIN_DECIMAL.test(text);
 }
