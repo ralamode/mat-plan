@@ -27,11 +27,5 @@ describe('DayPlan: owed by its consumers', () => {
 });
 
 describe('the constants: owed by their consumers', () => {
-  it.todo('3: the movements.tracking_type CHECK is pinned to TRACKING_TYPES');
-  it.todo('3: (primary, count) and a ceiling for count exist, so a Count in count is storable');
   it.todo('4a-i, 4b: the name and label columns are bounded by the same constants');
-});
-
-describe('prescribedText: owed by its consumers', () => {
-  it.todo('3: a distance in mi renders once mi is a unit');
 });

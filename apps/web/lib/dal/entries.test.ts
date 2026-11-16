@@ -1,4 +1,4 @@
-import { ENTRY_STATUS } from '@mat-plan/shared';
+import { ENTRY_STATUS, TRACKING_TYPE } from '@mat-plan/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
@@ -138,7 +138,9 @@ const dbWithMovements = async (publicIdRow: unknown[] | null) => {
     if (/^select .* from "movements"/.test(sql)) {
       if (/"public_id"/.test(sql)) return publicIdRow === null ? [] : [publicIdRow];
       slugLookups += 1;
-      return slugLookups >= 3 ? [[88]] : []; // 1 = global miss, 2 = own miss, 3 = found after INSERT
+      // 1 = global miss, 2 = own miss, 3 = found after INSERT. The row is (id, tracking_type): the
+      // resolver selects both since FAM-1 step 3.
+      return slugLookups >= 3 ? [[88, TRACKING_TYPE.weight_reps]] : [];
     }
     return [];
   });

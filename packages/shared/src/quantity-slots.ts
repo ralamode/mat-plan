@@ -19,6 +19,7 @@ import type { UnitDimension } from './units';
  * push's AUXILIARY distance. One slot, two roles, no discriminator.
  *
  * So `primary` is "whatever this movement is about", at whichever dimension the movement declares,
+ * a count included (FAM-1's Count type),
  * and there is deliberately **no `height` slot**: a box jump's height IS its primary quantity, and a
  * second slot that could hold the same fact is exactly the ambiguity this design exists to remove.
  */
@@ -52,7 +53,9 @@ export const QUANTITY_SLOT_LABELS: Record<QuantitySlot, string> = {
  * CASCADE`, and `db:seed` runs on every push to main). ADDING one stays cheap.
  */
 export const QUANTITY_SLOT_DIMENSIONS_BY_CODE: Record<QuantitySlot, readonly UnitDimension[]> = {
-  primary: ['mass', 'length', 'time'],
+  // `count` since FAM-1 step 3: a Count item ("Write it") may log a plain number (plan §2, R7). The
+  // legacy strength form does NOT offer it: `LOGGABLE_DIMENSIONS` (`units.ts`) excludes it by name.
+  primary: ['mass', 'length', 'time', 'count'],
   vest: ['mass'],
   ankle: ['mass'],
   wrist: ['mass'],
