@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
+--- a/packages/db/scripts/verify/schema.ts
++++ b/packages/db/scripts/verify/schema.ts
+@@ -2278,7 +2278,7 @@
+   return idsOf(
+     await tx.execute(sql`
+       SELECT b.id FROM program_blocks b
+-       WHERE b.kind = ${PROGRAM_BLOCK_KIND.template} AND b.household_id = ${h}
++       WHERE b.kind = ${PROGRAM_BLOCK_KIND.template}
+          AND EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id)
+          AND NOT EXISTS (SELECT 1 FROM program_assignments a
+                           WHERE a.block_id = b.id AND a.profile_id <> ${p})

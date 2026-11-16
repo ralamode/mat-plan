@@ -1,0 +1,10 @@
+diff --git a/packages/db/migrations/0027_fam1_5_program_assignments.sql b/packages/db/migrations/0027_fam1_5_program_assignments.sql
+--- a/packages/db/migrations/0027_fam1_5_program_assignments.sql
++++ b/packages/db/migrations/0027_fam1_5_program_assignments.sql
+@@ -64,5 +64,5 @@
+ CREATE INDEX "idx_program_assignments_block" ON "program_assignments" USING btree ("block_id");--> statement-breakpoint
+ CREATE INDEX "idx_program_assignments_profile" ON "program_assignments" USING btree ("profile_id");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_program_assignments_profile_block_from" ON "program_assignments" USING btree ("profile_id","block_id","active_from") WHERE "program_assignments"."deleted_at" is null;--> statement-breakpoint
+-CREATE UNIQUE INDEX "uq_program_assignments_profile_block_open" ON "program_assignments" USING btree ("profile_id","block_id") WHERE "program_assignments"."active_to" is null and "program_assignments"."deleted_at" is null;--> statement-breakpoint
++CREATE UNIQUE INDEX "uq_program_assignments_profile_block_open" ON "program_assignments" USING btree ("profile_id","block_id") WHERE "program_assignments"."deleted_at" is null;--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_program_assignments_profile_idx" ON "program_assignments" USING btree ("profile_id","idx") WHERE "program_assignments"."active_to" is null and "program_assignments"."deleted_at" is null;

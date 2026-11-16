@@ -1,0 +1,13 @@
+diff --git a/docs/runbooks.md b/docs/runbooks.md
+--- a/docs/runbooks.md
++++ b/docs/runbooks.md
+@@ -1799,8 +1799,8 @@
+ | 6   | `day_readiness`               | `profile_id` = P                           |
+ | 7   | `ramp_targets`                | `profile_id` = P                           |
+ | 8   | `prescription_targets`        | `profile_id` = P (this arm only)           |
++| 10  | `program_assignments`         | `profile_id` = P                           |
+ | 9   | `program_assignment_weekdays` | `assignment_id` ∈ P's assignments          |
+-| 10  | `program_assignments`         | `profile_id` = P                           |
+ | 11  | `profiles`                    | `id` = P                                   |
+ 
+ **4b. Only if the household chose to remove a program only P was on**, and only for blocks with
