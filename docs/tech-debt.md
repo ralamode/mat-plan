@@ -15,6 +15,23 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A logged quantity's CHECK admits `NaN` (found 2026-11-16, FAM-1 step 4b's panel)
+
+- **What & why it's debt:** `entry_set_quantities_value_num_check` is `CHECK (value_num >= 0)`
+  (migration `0011`). In Postgres a `numeric` `NaN` compares greater than every number, so
+  `'NaN' >= 0` is true and the CHECK passes it. FAM-1's new `prescription_quantities` refuses `NaN`
+  in its own CHECKs (step 4b); the older table on the logging side does not.
+- **Impact:** low. No application path can write it: every quantity reaches the writers through a
+  zod number, which refuses `NaN`, and a typed field is parsed as a plain decimal first. What could
+  write it is a hand-run correction script or a future writer that skips the schema. One such row
+  would sort above every real value and break any total it joins.
+- **Fix:** one small migration that swaps the CHECK for `value_num >= 0 AND value_num <> 'NaN'`
+  (added `NOT VALID`, then validated, per the migration rules), with a `db:verify` row that tries the
+  insert. Look for sibling `>= 0` CHECKs on `numeric` columns in the same pass. **Not in a FAM-1
+  step:** nothing in FAM-1 depends on it and the migration queue is taken until step 5 is applied;
+  it is the first migration after that. Owner: the Platform thread.
+- **Severity:** low.
+
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit
