@@ -1,7 +1,13 @@
-import { PROFILE_KIND, PROFILE_KIND_LABELS } from '@mat-plan/shared';
+import { DEFAULT_BODYWEIGHT_UNIT, PROFILE_KIND, PROFILE_KIND_LABELS } from '@mat-plan/shared';
 import { expect, test, type Page } from '@playwright/test';
 
-import { ADD_ATHLETE_PATH, AMEND_COPY, ATHLETE_FORM_COPY, BODYWEIGHT_COPY } from '../lib/constants';
+import {
+  ADD_ATHLETE_PATH,
+  AMEND_COPY,
+  ATHLETE_FORM_COPY,
+  BODYWEIGHT_COPY,
+  LAST_TIME_PREFIX,
+} from '../lib/constants';
 import {
   bodyweightSection,
   changeWeight,
@@ -44,7 +50,7 @@ test('log with ✓, change, clear with a blank Save, then re-enter, with focus a
   // ── Yesterday first, so today has a "Last time" (a new athlete can view yesterday) ──────────
   const YESTERDAY = '70.5';
   await page.goto(`${route}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
-  await expect(section.getByText(/^Last time/)).toHaveCount(0); // nothing before it
+  await expect(section.getByText(new RegExp(`^${LAST_TIME_PREFIX}`))).toHaveCount(0); // nothing before it
   await logBodyweight(page, YESTERDAY);
   await expect(status).toHaveText(BODYWEIGHT_COPY.announcedLogged);
 
@@ -59,7 +65,9 @@ test('log with ✓, change, clear with a blank Save, then re-enter, with focus a
 
   // ── Change: opens selected, so one digit replaces the value; Cancel hands focus back ────────
   await changeWeight(page, FIRST).click();
-  const editor = section.getByLabel(AMEND_COPY.valueLabel('lb'), { exact: true });
+  const editor = section.getByLabel(AMEND_COPY.valueLabel(DEFAULT_BODYWEIGHT_UNIT), {
+    exact: true,
+  });
   await expect(editor).toBeFocused();
   await editor.press('9'); // replaces the selection
   await expect(editor).toHaveValue('9');
@@ -101,13 +109,15 @@ test('log with ✓, change, clear with a blank Save, then re-enter, with focus a
   await page.goto(`${route}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
   await clearFrom(page, YESTERDAY);
   await expect(field).toBeFocused();
-  await expect(section.getByText(/^Last time/)).toHaveCount(0);
+  await expect(section.getByText(new RegExp(`^${LAST_TIME_PREFIX}`))).toHaveCount(0);
 });
 
 async function clearFrom(page: Page, value: string): Promise<void> {
   const section = bodyweightSection(page);
   await changeWeight(page, value).click();
-  await section.getByLabel(AMEND_COPY.valueLabel('lb'), { exact: true }).fill('');
+  await section
+    .getByLabel(AMEND_COPY.valueLabel(DEFAULT_BODYWEIGHT_UNIT), { exact: true })
+    .fill('');
   await section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).click();
   await expect(section.getByLabel('Weight', { exact: true })).toBeVisible({ timeout: 15_000 });
 }

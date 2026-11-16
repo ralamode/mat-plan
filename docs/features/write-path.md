@@ -29,6 +29,7 @@ owns:
   - packages/db/src/queries/household-profiles.ts
   - packages/db/src/queries/household-scope.ts
   - packages/db/src/queries/export-month.ts
+  - packages/db/src/queries/last-bodyweight.ts
   # V1-22 chunk 2: the ONE renderer for the CSV's `prescribed` column, plus the live-match composer
   # the log-time writer and the export both call — one definition, two packages, and a byte
   # permanence invariant that lives BETWEEN them. No guide owned it when written.
@@ -76,10 +77,12 @@ flowchart LR
   subgraph writer["packages/db/src/writers"]
     TX["CREATE: ONE transaction<br/>profile resolved by public_id IN-TX<br/>per-row ON CONFLICT"]
     UPD["AMEND: ONE guarded UPDATE, no tx<br/>shape + ownership + seen-value in the WHERE<br/>null → re-read, branch"]
+    CLR["CLEAR (blank amend): ONE tx<br/>lock the row FOR UPDATE OF entries<br/>compare unit + seen-value in JS → hideEntries"]
   end
 
   ACTION --> DALFN --> TX --> DB[(postgres)]
   DALFN --> UPD --> DB
+  DALFN --> CLR --> DB
   ACTION -->|"typed envelope<br/>{ok:false, error, fieldErrors?}"| CLIENT
   TX -.->|"throws"| ERRBOUND["error.tsx + Sentry"]
 ```

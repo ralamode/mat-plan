@@ -11,6 +11,7 @@ import {
 
 import {
   ADD_ATHLETE_PATH,
+  AMEND_COPY,
   APP_HOME_PATH,
   BODYWEIGHT_COPY,
   MAIN_CONTENT_ID,
@@ -337,7 +338,7 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
 
     // An empty ✓ is refused in the browser, with the copy and focus on the field (plan W3).
     await tick.click();
-    await expect(section.getByRole('alert')).toContainText('Enter your bodyweight');
+    await expect(section.getByRole('alert')).toContainText(BODYWEIGHT_COPY.blankLog.split('✓')[0]!);
     await expect(input).toBeFocused();
     await expectNoAxeViolations(page, 'weigh-in (empty ✓ refused)');
 
@@ -389,6 +390,12 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   await expect(clear).toBeVisible();
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   await expectNoAxeViolations(page, 'weigh-in (editing, Save reads Clear)');
+  // …and with a field error under it: the error text is the pair the done tint must never carry
+  // (`app/done-tokens.test.ts`), which is why the row drops its tint while the editor is open.
+  await editorField.fill('845');
+  await section.getByRole('button', { name: AMEND_COPY.save }).click();
+  await expect(section.getByRole('alert')).toHaveText(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
+  await expectNoAxeViolations(page, 'weigh-in (editing, a refused value)');
   await editorField.fill(widest);
   await expectTapTargets(page, 'weigh-in (editing)');
   await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');

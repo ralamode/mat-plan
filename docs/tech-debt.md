@@ -609,6 +609,9 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `messageKey`, so a repeated message re-announces) and owns a single-use focus claim. 3b-life moves
   the Life row onto it and retires `saved-announcer.tsx`'s last consumer, leaving `editable-set.tsx`
   and the `StrengthForm` island.
+  ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
+  `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
+  `messageKey` when that lane next touches it.
 - **Severity:** low.
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)

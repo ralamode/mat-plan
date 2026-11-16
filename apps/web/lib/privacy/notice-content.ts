@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-09. This is a beta."
+            "text": "Last updated: 2026-11-16. This is a beta."
           }
         ]
       }
@@ -1533,33 +1533,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and it\n"
+        "text": " on today or yesterday (tap Change, empty the field, tap Clear): that hides it, and the app\n"
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "cannot be put back in the app yet"
+            "text": "does not offer to put a cleared weigh-in back"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", so re-enter the right weight instead. A cleared weigh-in is not\nremoved from the database. The only way anything comes out of the database today is deleting a whole\nathlete or household. "
+        "text": ", so re-enter the right weight instead. Anyone signed\nin to your household can clear any athlete's weigh-in, and the app does not record who did. A cleared\nweigh-in is not removed from the database, and it is "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Nothing automatically clears a hidden row."
+            "text": "not in the export"
           }
         ]
       },
       {
         "k": "text",
-        "text": " You should know that before you\nlog something you might regret."
+        "text": " (ask for a full copy, below,\nand it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Nothing automatically removes a hidden row."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " You should know that before you log\nsomething you might regret."
       }
     ]
   },
@@ -1755,7 +1768,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " and you will be sent a full copy — including what Clerk holds about\nyour login: your email address, your name, your profile picture, your Google account identifier, and when\nyou signed in. And "
+        "text": " and you will be sent a full copy — including anything you have\ncleared or hidden, which the export leaves out, and what Clerk holds about\nyour login: your email address, your name, your profile picture, your Google account identifier, and when\nyou signed in. And "
       },
       {
         "k": "strong",
