@@ -20,6 +20,16 @@ import {
 const HEADING_ID = 'program-whos-on-it';
 
 /**
+ * Focus is still where the tap left it: on the button, or lost because the button unmounted. An
+ * answer that lands after the person has moved on (into Rename, say) must not pull focus away; on
+ * a phone that would close the keyboard mid-word.
+ */
+const focusStayed = (tapped: HTMLElement | undefined) => {
+  const at = document.activeElement;
+  return !at || at === document.body || at === tapped;
+};
+
+/**
  * "Who's on it", with Take off (FAM-1 step 8a; the prototype's `takeoff`).
  *
  * - Take off shows only when the route supplies `takeOff` (step 15 wires it) and the athlete has no
@@ -27,7 +37,8 @@ const HEADING_ID = 'program-whos-on-it';
  * - **Focus has somewhere to go.** The button unmounts on success: someone who had started stays
  *   listed with a last day, so focus moves to their row; someone who had not started leaves the
  *   list, so focus moves to the section's heading. The message is reported after the move, so the
- *   polite announcement is not cut off by it.
+ *   polite announcement is not cut off by it. Only if focus is still where the tap left it: an
+ *   answer that lands after the person moved on leaves their focus alone.
  * - A refusal keeps the button, refocuses it and says so as an alert. While one Take off is
  *   pending, every Take off button is `aria-disabled`.
  */
@@ -49,6 +60,7 @@ export function WhosOnIt({
   async function takeOffAthlete(athlete: ProgramView['athletes'][number]) {
     if (!takeOff || pending) return;
     const started = hasStarted(athlete, program.today);
+    const tapped = buttons.current.get(athlete.profilePublicId);
     setPending(athlete.profilePublicId);
     const result = await takeOff({
       programPublicId: program.programPublicId,
@@ -56,13 +68,13 @@ export function WhosOnIt({
     });
     setPending(null);
     if (!result.ok) {
-      buttons.current.get(athlete.profilePublicId)?.focus();
+      if (focusStayed(tapped)) buttons.current.get(athlete.profilePublicId)?.focus();
       onStatus(takeOffFailedText(athlete.name), 'alert');
       return;
     }
     requestAnimationFrame(() => {
       const row = started ? rows.current.get(athlete.profilePublicId) : null;
-      (row ?? headingRef.current)?.focus();
+      if (focusStayed(tapped)) (row ?? headingRef.current)?.focus();
       onStatus(takenOffText(athlete.name, program.name, started));
     });
   }

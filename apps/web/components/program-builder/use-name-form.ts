@@ -1,7 +1,7 @@
 'use client';
 
 import { PROGRAM_REFUSAL, type ProgramResult } from '@mat-plan/shared';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { nameRefusal } from './builder-text';
 
@@ -17,7 +17,9 @@ export const cleanName = (raw: string) => raw.replace(/\s+/g, ' ').trim();
  *
  * - **An attempt belongs to the form that made it.** `reset()` (Cancel, Escape, a fresh open)
  *   starts a new attempt, and a result that arrives for an older one is dropped: a Cancel mid-save
- *   neither navigates nor leaves an alert on a form opened later.
+ *   neither navigates nor leaves an alert on a form opened later, and nor does leaving the screen.
+ *   ⚠️ Dropping the answer does not cancel the write: a create or rename sent before Cancel may
+ *   still land. The page shows what the server holds once it reloads.
  * - An empty name is refused here, with no call. A refusal focuses the field and scrolls it into
  *   view: on a phone the keyboard covers the bottom of the screen.
  * - `pending` stays set after a success: the caller navigates or closes, and the button must not
@@ -39,6 +41,13 @@ export function useNameForm<T extends object>({
   const [pending, setPending] = useState(false);
   const attempt = useRef(0);
   const fieldRef = useRef<HTMLInputElement>(null);
+  // Leaving the screen ends the attempt too: a create answered after that must not navigate.
+  useEffect(
+    () => () => {
+      attempt.current += 1;
+    },
+    [],
+  );
 
   const refuse = (message: string) => {
     setError(message);

@@ -40,6 +40,9 @@ function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
   };
 }
 
+/** Waits past the status line's clear-then-set frame. */
+const frames = () => new Promise((resolve) => setTimeout(resolve, 60));
+
 const section = (name: string) => screen.getByRole('region', { name });
 /** What the page's alerts say. The status line's alert is mounted empty, so empty ones are skipped. */
 const alerts = () =>
@@ -240,6 +243,8 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.save }));
     expect(screen.queryByLabelText(BUILDER_COPY.programName)).toBeNull();
     expect(renameProgram).not.toHaveBeenCalled();
+    // The status line is set a frame after it is cleared, so look after that frame.
+    await frames();
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
@@ -283,12 +288,35 @@ describe('ProgramScreen (FAM-1 8a)', () => {
       'true',
     );
     fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-    answer({ ok: false, reason: 'name_taken' });
-    await Promise.resolve();
+    // Answered after the reopen, so only the attempt counter can keep it off the new form.
     open();
+    answer({ ok: false, reason: 'name_taken' });
+    await frames();
     const field = screen.getByLabelText(BUILDER_COPY.programName);
     expect(alerts()).toEqual([]);
     expect(field.getAttribute('aria-invalid')).toBeNull();
     expect((field as HTMLInputElement).value).toBe(familyProgram.name);
+  });
+
+  it('a Take off answer that lands while Rename is open leaves focus in the name field', async () => {
+    let answer!: (result: { ok: true }) => void;
+    const takeOff = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    render(
+      <ProgramScreen
+        program={familyProgram}
+        actions={actions({ takeOff: takeOff as ProgramActions['takeOff'] })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete Two') }));
+    fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
+    const field = screen.getByLabelText(BUILDER_COPY.programName);
+    expect(document.activeElement).toBe(field);
+    answer({ ok: true });
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        takenOffText('Athlete Two', familyProgram.name, true),
+      ),
+    );
+    expect(document.activeElement).toBe(field);
   });
 });

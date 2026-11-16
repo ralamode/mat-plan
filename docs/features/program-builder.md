@@ -101,7 +101,11 @@ flowchart LR
    today included: they are on it through today, so an edit now still changes their day.
 10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's
     row, or to the section's heading when they had not started and leave the list. The message is
-    set after the move.
+    set after the move. Focus moves only if it is still where the tap left it: an answer that lands
+    after the person moved on (into Rename, say) leaves their focus alone.
+11. **A name form drops a late answer, but not the write.** Cancel, Escape, a fresh open or
+    leaving the screen ends the attempt, so a late answer neither navigates nor shows an alert. The
+    create or rename it sent may still have landed; 6a and 7a inherit that.
 
 ## Traps
 

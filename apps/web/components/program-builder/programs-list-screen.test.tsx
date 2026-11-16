@@ -181,4 +181,25 @@ describe('ProgramsListScreen (FAM-1 8a)', () => {
     await waitFor(() => expect(createProgram).toHaveBeenCalled());
     expect(createProgram.mock.calls[0]![0].name).toBe('Summer block 2');
   });
+
+  it('a create that lands after leaving the screen does not navigate', async () => {
+    let answer!: (result: { ok: true; programPublicId: string }) => void;
+    const createProgram = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    const { unmount } = render(
+      <ProgramsListScreen
+        programs={programsList}
+        actions={actionsWith(createProgram as ProgramActions['createProgram'])}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.createProgram }));
+    fireEvent.change(screen.getByLabelText(BUILDER_COPY.programName), {
+      target: { value: 'Summer block' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.create }));
+    unmount();
+    answer({ ok: true, programPublicId: NEW_ID });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(push).not.toHaveBeenCalled();
+  });
 });
