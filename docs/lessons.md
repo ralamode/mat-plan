@@ -693,7 +693,7 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   reason" is checkable. **Since 2026-11-16 it also runs the gate once BEFORE mutating**: a gate
   already red can print the `--expect` text on its own (a failing test's name), so the probe read
   "RED for the named reason" on a test that failed with or without the mutation. A red baseline is
-  now DID-NOT-PROVE. ⚠️ **The lesson here is not about probing.** A rule that has to be remembered
+  now DID-NOT-PROVE, and so is a green one whose output already contains `--expect`. ⚠️ **The lesson here is not about probing.** A rule that has to be remembered
   at the moment of risk is not a control; this one was re-derived correctly three times and applied
   wrongly anyway. When a convention keeps failing, the next version of it is a script with a
   self-test, not a better-worded paragraph.

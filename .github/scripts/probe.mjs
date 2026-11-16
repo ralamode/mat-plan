@@ -45,7 +45,9 @@
  * nothing: its failure output can contain the `--expect` text anyway (a test's NAME is printed on
  * failure), so the mutated run reads as "RED for the named reason" while the mutation did nothing.
  * Lane C hit exactly that (2026-11-16): a test red with or without the mutation, reported as caught.
- * So a red baseline is DID-NOT-PROVE, and the mutation is never written. It costs one extra gate run.
+ * So a red baseline is DID-NOT-PROVE, and the mutation is never written. So is a GREEN baseline
+ * whose output already contains `--expect` (a verbose reporter listing passing test names): a red
+ * run could not then show it was that assertion that caught the mutation. It costs one extra run.
  *
  * Exit 0 means the gate was green, then went red for the named reason — the probe passed. Any other
  * outcome exits 1 and says which it was.

@@ -200,8 +200,8 @@ correct list beats a long, noisy one, and a false P0 costs the author an afterno
 - **To check whether an assertion can fail, use `pnpm probe`, not a hand-rolled checkout.** It
   runs the gate once unmutated (it must be green), mutates one literal, runs the gate again, restores
   the file from a snapshot of the tree (**never from `HEAD`**) and verifies the restore — and it
-  reports a red baseline (DID-NOT-PROVE), GREEN, DID-NOT-RUN and "red for the wrong reason" as four
-  distinct failures. ⚠️ Rolling this by hand lost uncommitted work three times in
+  reports a red baseline or one that already prints `--expect` (DID-NOT-PROVE), GREEN, DID-NOT-RUN
+  and "red for the wrong reason" as four distinct failures. ⚠️ Rolling this by hand lost uncommitted work three times in
   one session, which is why the script exists ([lessons.md](../../../docs/lessons.md) → "Guards that
   pass while guarding nothing").
 
