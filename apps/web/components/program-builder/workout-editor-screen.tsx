@@ -65,7 +65,7 @@ import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
 import { linkWithNext, normalizeSupersets, unlinkFromNext } from './supersets';
-import { DOUBLE_TAP_MS, focusField, useAttempt } from './use-attempt';
+import { focusField, holdUnderThumb, isSameTap, useAttempt } from './use-attempt';
 
 /**
  * The workout editor: one screen of item cards and one Save (FAM-1 step 8; plan §8 "Workout
@@ -254,7 +254,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     const { settled, change } = settle(
       direction === 'up' ? moveUp(cards, index) : moveDown(cards, index),
     );
-    holdUnderThumb(card.item.prescriptionClientId, direction, settled);
+    holdCard(card.item.prescriptionClientId, direction, settled);
     report(movedText(card.item.itemName, direction, change));
   }
 
@@ -262,19 +262,12 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
    * Puts `next` on screen and keeps the tapped control focused and where the thumb is, so a second
    * tap lands on the same control.
    */
-  function holdUnderThumb(id: string, which: CardControl, next: EditorCard[]) {
-    const before = control(id, which)?.getBoundingClientRect().top ?? 0;
-    flushSync(() => setCards(next));
-    const button = control(id, which);
-    button?.focus({ preventScroll: true });
-    const after = button?.getBoundingClientRect().top ?? before;
-    if (after !== before) window.scrollBy(0, after - before);
-    // Never under the save bar, whose status line is about to say what the tap did.
-    const barTop = barRef.current?.getBoundingClientRect().top;
-    const bottom = button?.getBoundingClientRect().bottom;
-    if (barTop !== undefined && bottom !== undefined && bottom > barTop) {
-      window.scrollBy(0, bottom - barTop + 8);
-    }
+  function holdCard(id: string, which: CardControl, next: EditorCard[]) {
+    holdUnderThumb(
+      () => control(id, which),
+      () => setCards(next),
+      barRef.current,
+    );
   }
 
   /** Links the card at `index` with the next, or unlinks them. `at` is the tap's time. */
@@ -283,7 +276,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     const second = cards[index + 1]!;
     const firstId = first.item.prescriptionClientId;
     const last = lastLinkAt.current.get(firstId);
-    if (last !== undefined && at - last < DOUBLE_TAP_MS) return;
+    if (isSameTap(last, at)) return;
     lastLinkAt.current.set(firstId, at);
     const a = first.item.superset?.group ?? null;
     const b = second.item.superset?.group ?? null;
@@ -293,7 +286,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     const undo = lastToggle.current;
     if (undo && undo.id === firstId && undo.after === cards) {
       lastToggle.current = null;
-      holdUnderThumb(firstId, 'link', undo.before);
+      holdCard(firstId, 'link', undo.before);
       report(undoneText(!unlinking));
       return;
     }
@@ -303,7 +296,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
     const settled = (out: readonly WorkoutDraftItem[]) => {
       const next = withItems(out);
       lastToggle.current = { id: firstId, before: cards, after: next };
-      holdUnderThumb(firstId, 'link', next);
+      holdCard(firstId, 'link', next);
       return supersetLabels(out);
     };
 
@@ -384,7 +377,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
   /** `at` is the tap's `event.timeStamp`. */
   function remove(index: number, at: number) {
     // A double tap lands on the next card's Remove, which slides up under the thumb.
-    if (lastRemoveAt.current && at - lastRemoveAt.current < DOUBLE_TAP_MS) return;
+    if (isSameTap(lastRemoveAt.current || undefined, at)) return;
     lastRemoveAt.current = at;
     const card = cards[index]!;
     const neighbour = cards[index + 1] ?? cards[index - 1];
