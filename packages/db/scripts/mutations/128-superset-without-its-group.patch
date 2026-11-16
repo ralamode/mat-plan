@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 52c5474a..ba9320f4 100644
+index 4f96cfb1..e17995b7 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -462,7 +462,6 @@ export async function logRow(
+@@ -473,7 +473,6 @@ export async function logRow(
            publicId: newId(),
            clientId: newId(),
            sessionId,
 -          prescriptionGroup: prescription.supersetLabel,
          })
          .onConflictDoNothing();
-       const supersets = await tx
+       supersetId = exactlyOneLive(

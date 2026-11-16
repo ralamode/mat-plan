@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 52c5474a..c75a7f2b 100644
+index 4f96cfb1..77e1dc61 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -328,11 +328,6 @@ export async function logRow(
+@@ -342,11 +342,6 @@ export async function logRow(
        day: write.day,
      });
  
@@ -14,7 +14,7 @@ index 52c5474a..c75a7f2b 100644
      // 4 — the workout.
      const workout = await rowWorkout(tx, profileId, scope, write.workoutPublicId);
      if (!workout) refuse(ROW_REFUSAL.not_found);
-@@ -371,6 +366,8 @@ export async function logRow(
+@@ -385,6 +380,8 @@ export async function logRow(
      const prescription = rows[0];
      if (!prescription) refuse(ROW_REFUSAL.not_found);
      if (prescription.deletedAt !== null) refuse(ROW_REFUSAL.program_changed);

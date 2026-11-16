@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 52c5474a..b718eca0 100644
+index 4f96cfb1..6d957db4 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -98,7 +98,6 @@ async function rowTransaction(
+@@ -99,7 +99,6 @@ async function rowTransaction(
   */
  export function programRowOf(profileId: number, day: string) {
    return and(

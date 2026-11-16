@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/queries/day/scheduled.ts b/packages/db/src/queries/day/scheduled.ts
-index 293d5d68..e321d7b9 100644
+index 69a25275..b02958f2 100644
 --- a/packages/db/src/queries/day/scheduled.ts
 +++ b/packages/db/src/queries/day/scheduled.ts
-@@ -27,7 +27,6 @@ export function scheduledOn(blockId: number, workoutId: number, day: string) {
+@@ -31,7 +31,6 @@ export function scheduledOn(blockId: number, workoutId: number, day: string) {
    return and(
      eq(schema.blockDayWorkouts.blockId, blockId),
      eq(schema.blockDayWorkouts.workoutId, workoutId),

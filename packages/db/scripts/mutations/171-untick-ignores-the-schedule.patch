@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 52c5474a..34bd0ece 100644
+index 4f96cfb1..82b566ff 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -587,7 +587,6 @@ export async function untickRow(
-             .where(scheduledOn(entry.blockId, entry.workoutId, input.day))
-             .limit(1)
-         ).length > 0;
+@@ -592,7 +592,6 @@ export async function untickRow(
+         entry.workoutId !== null &&
+         entry.blockId !== null &&
+         (await isScheduledOn(tx, entry.blockId, entry.workoutId, input.day));
 -      if (!scheduled) refuse(ROW_REFUSAL.not_scheduled);
      }
  

@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
-index f8c99297..3194f420 100644
+index 2bb82ce0..94cf1fcf 100644
 --- a/packages/db/src/writers/hide.ts
 +++ b/packages/db/src/writers/hide.ts
 @@ -300,7 +300,6 @@ const RESTORE_SLOT_INDEXES: readonly string[] = [
