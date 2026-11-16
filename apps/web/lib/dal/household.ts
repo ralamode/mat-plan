@@ -5,11 +5,12 @@ import {
   type HouseholdScope,
   membershipHousehold,
   ownerScope,
+  programBlockInHousehold,
   schema,
   type Membership,
 } from '@mat-plan/db';
 import * as Sentry from '@sentry/nextjs';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, not } from 'drizzle-orm';
 import { cache } from 'react';
 
 import { db } from './db';
@@ -444,12 +445,60 @@ const SCOPE_MISS_OUTCOME = {
 
 type ScopeMissOutcome = (typeof SCOPE_MISS_OUTCOME)[keyof typeof SCOPE_MISS_OUTCOME];
 
+/**
+ * The kinds of id a scoped read can miss on (FAM-1 contract change C11). One word per table the
+ * probe may ask, and the first word of the event's message, so each kind is its own Sentry issue.
+ */
+export const SCOPE_MISS_KIND = {
+  profile: 'profile',
+  program: 'program',
+  workout: 'workout',
+  prescription: 'prescription',
+} as const;
+
+export type ScopeMissKind = (typeof SCOPE_MISS_KIND)[keyof typeof SCOPE_MISS_KIND];
+
 /** The actions that can miss. One string per surface, so a rate alert can key on it. */
 export const SCOPE_MISS_ACTION = {
   resolveProfile: 'resolve_profile',
+  resolveProgram: 'resolve_program',
+  resolveWorkout: 'resolve_workout',
+  resolvePrescription: 'resolve_prescription',
 } as const;
 
 export type ScopeMissAction = (typeof SCOPE_MISS_ACTION)[keyof typeof SCOPE_MISS_ACTION];
+
+/**
+ * Which kind of id each action resolves. `satisfies` makes a new action a compile error until it
+ * names its kind, and `ScopeMissArgs` below reads it, so a caller cannot report a workout id under
+ * the program action.
+ */
+export const SCOPE_MISS_KIND_OF = {
+  resolve_profile: SCOPE_MISS_KIND.profile,
+  resolve_program: SCOPE_MISS_KIND.program,
+  resolve_workout: SCOPE_MISS_KIND.workout,
+  resolve_prescription: SCOPE_MISS_KIND.prescription,
+} as const satisfies Record<ScopeMissAction, ScopeMissKind>;
+
+/**
+ * What a caller hands `reportScopeMiss`: the action, and the PUBLIC id the request asked for with
+ * its kind. The `profilePublicId` form is the one `getProfileByPublicId` has always used, and means
+ * the same as `resource: { kind: 'profile', publicId }`.
+ */
+export type ScopeMissArgs =
+  | {
+      action: typeof SCOPE_MISS_ACTION.resolveProfile;
+      profilePublicId: string;
+      /** One form or the other: an object carrying both would name its id twice. */
+      resource?: never;
+    }
+  | {
+      [A in ScopeMissAction]: {
+        action: A;
+        resource: { kind: (typeof SCOPE_MISS_KIND_OF)[A]; publicId: string };
+        profilePublicId?: never;
+      };
+    }[ScopeMissAction];
 
 /**
  * The event's payload, **exhaustively typed**. `Required<…>` is the point: a field added to this
@@ -477,7 +526,12 @@ type ScopeMissEvent = Required<{
    */
   actor: 'clerk_session';
   action: ScopeMissAction;
-  /** The PUBLIC id the request asked for — already in the URL the caller sent. Never an internal id. */
+  /** Which kind of id `resource` is: a fixed word, never a value from the row (C11). */
+  kind: ScopeMissKind;
+  /**
+   * The PUBLIC id the request asked for: already in the URL or the action arguments the caller
+   * sent. Never an internal id. A profile, program, workout or prescription id, by `kind`.
+   */
   resource: string;
   outcome: ScopeMissOutcome;
 }>;
@@ -493,7 +547,8 @@ type ScopeMissEvent = Required<{
  *
  * ## The five constraints that make this an event rather than noise or a leak
  *
- * 1. **It is emitted from ONE site** — `getProfileByPublicId` in `lib/dal/profiles.ts`, the single
+ * 1. **It is emitted from ONE site per kind of id.** For a profile that is `getProfileByPublicId`
+ *    in `lib/dal/profiles.ts`, the single
  *    resolve point all 11 profile-addressed entry points funnel through. Not from the predicate
  *    (which lives in `packages/db` and must do no IO and hold no request context), and not by
  *    re-resolving at 11 call sites. On a miss every entry point returns before resolving a second
@@ -511,6 +566,34 @@ type ScopeMissEvent = Required<{
  *    error, and must not reach Sentry carrying `params:` (SEC-3).
  * 5. **The payload is built in one place** against an exhaustive type — see `ScopeMissEvent`.
  *
+ * ## Program, workout and prescription ids (FAM-1 contract change C11)
+ *
+ * The same event for the three ids the program builder and the day page are handed, each under its
+ * own message (`program scope miss: …`, `workout scope miss: …`, `prescription scope miss: …`) and
+ * all under the one `scope_outcome` tag. _(maintainer, 2026-11-16, relayed by the FAM-1 board: the
+ * public id is sent under the same rule as a profile's, and each kind has its own message.)_
+ *
+ * - **Call it only when a scoped read found nothing for the id**, from the one DAL function that
+ *   resolves that kind (`lib/dal/program/` for a program or a workout, `lib/dal/day/` for a
+ *   prescription), and hand it an id that already parsed as a uuid: a malformed value throws in
+ *   Postgres, is swallowed below and reports nothing, as `getProfileByPublicId` intends for a
+ *   profile.
+ * - 🔴 **For these three kinds the probe asks "live, in a household that is NOT the caller's", not
+ *   "live anywhere".** A profile's scoped read is `public_id ∧ live ∧ household`, so "missed, yet
+ *   exists" can only mean another household. A program read is narrower than that: it serves
+ *   template programs only, and the day page serves a prescription only to an athlete who is on its
+ *   program that day. So the caller's OWN legacy program, or their own prescription asked for the
+ *   wrong athlete, also misses, and an existence-only probe would report the household probing
+ *   itself. The household half comes from `programBlockInHousehold` (negated), so no `household_id`
+ *   is named in this file, and a workout or a prescription reaches it through its `block_id`.
+ * - **`unknown_resource` therefore means "in no other household"** for these kinds: an id that
+ *   exists nowhere, or the caller's own row that the read did not serve. The event carries the id
+ *   on EVERY outcome, as it always has for a profile, so the household's own program, workout or
+ *   prescription id reaches Sentry at `info` when a page refuses it (a stale link to a program
+ *   since removed, for one). `docs/privacy/data-inventory.md` says so.
+ * - With no scope there is nothing to compare with: the household half is left out and the outcome
+ *   is `no_scope`, bounded per principal exactly as before.
+ *
  * ## Who consumes it
  *
  * `docs/runbooks.md` → "A cross-household scope miss" carries the alert rule. The ADR justifies the
@@ -518,21 +601,74 @@ type ScopeMissEvent = Required<{
  * limit the mutating actions yet, so **the limiter is AUTH-1's** (it re-keys from IP to user id) and
  * the alert is the consumer today.
  */
-export async function reportScopeMiss(args: {
-  action: ScopeMissAction;
-  profilePublicId: string;
-}): Promise<void> {
+export async function reportScopeMiss(args: ScopeMissArgs): Promise<void> {
   try {
+    // The kind is the ACTION's, read from the one table that pairs them, never the caller's word
+    // for it: the types already refuse a mismatch, and this keeps a cast from choosing the table.
+    const resource = {
+      kind: SCOPE_MISS_KIND_OF[args.action],
+      publicId: args.resource ? args.resource.publicId : args.profilePublicId,
+    };
     const scope = await getHouseholdScope();
-    // The ALLOWLISTED UNSCOPED READ. Existence only — `limit(1)` over `public_id`, selecting a
-    // literal rather than a column, so nothing about the row can be returned or logged.
-    const [found] = await db
-      .select({ exists: schema.profiles.publicId })
-      .from(schema.profiles)
-      .where(
-        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
-      )
-      .limit(1);
+    // "In a household that is not the caller's", for the three kinds a program owns. Without a
+    // scope there is no household to compare with, the conjunct is left out, and the outcome below
+    // is `no_scope` whatever the probe finds.
+    const elsewhere = scope ? not(programBlockInHousehold(scope)) : undefined;
+    // The ALLOWLISTED UNSCOPED READ, one per kind. Existence only: `limit(1)` over `public_id`,
+    // selecting the id the caller already sent, so nothing else about the row can be returned or
+    // logged. Only the asked kind's probe runs.
+    const probes = {
+      [SCOPE_MISS_KIND.profile]: () =>
+        db
+          .select({ exists: schema.profiles.publicId })
+          .from(schema.profiles)
+          .where(
+            and(eq(schema.profiles.publicId, resource.publicId), isNull(schema.profiles.deletedAt)),
+          )
+          .limit(1),
+      [SCOPE_MISS_KIND.program]: () =>
+        db
+          .select({ exists: schema.programBlocks.publicId })
+          .from(schema.programBlocks)
+          .where(
+            and(
+              eq(schema.programBlocks.publicId, resource.publicId),
+              isNull(schema.programBlocks.deletedAt),
+              elsewhere,
+            ),
+          )
+          .limit(1),
+      [SCOPE_MISS_KIND.workout]: () =>
+        db
+          .select({ exists: schema.workouts.publicId })
+          .from(schema.workouts)
+          .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
+          .where(
+            and(
+              eq(schema.workouts.publicId, resource.publicId),
+              isNull(schema.workouts.deletedAt),
+              elsewhere,
+            ),
+          )
+          .limit(1),
+      [SCOPE_MISS_KIND.prescription]: () =>
+        db
+          .select({ exists: schema.prescriptions.publicId })
+          .from(schema.prescriptions)
+          .innerJoin(
+            schema.programBlocks,
+            eq(schema.programBlocks.id, schema.prescriptions.blockId),
+          )
+          .where(
+            and(
+              eq(schema.prescriptions.publicId, resource.publicId),
+              isNull(schema.prescriptions.deletedAt),
+              elsewhere,
+            ),
+          )
+          .limit(1),
+    } satisfies Record<ScopeMissKind, () => Promise<unknown[]>>;
+    const [found] = await probes[resource.kind]();
 
     const outcome: ScopeMissOutcome = !scope
       ? SCOPE_MISS_OUTCOME.noScope
@@ -543,7 +679,8 @@ export async function reportScopeMiss(args: {
     const event: ScopeMissEvent = {
       actor: 'clerk_session',
       action: args.action,
-      resource: args.profilePublicId,
+      kind: resource.kind,
+      resource: resource.publicId,
       outcome,
     };
 
@@ -555,9 +692,9 @@ export async function reportScopeMiss(args: {
       outcome !== SCOPE_MISS_OUTCOME.noScope ||
       shouldReportUnresolved((await getCurrentUser())?.userId ?? null, outcome)
     ) {
-      Sentry.captureMessage(`profile scope miss: ${outcome}`, {
+      Sentry.captureMessage(`${event.kind} scope miss: ${outcome}`, {
         level: outcome === SCOPE_MISS_OUTCOME.crossHousehold ? 'warning' : 'info',
-        tags: { scope_outcome: outcome, scope_action: event.action },
+        tags: { scope_outcome: outcome, scope_action: event.action, scope_kind: event.kind },
         contexts: { scope_miss: { ...event } },
       });
     }

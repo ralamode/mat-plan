@@ -1010,11 +1010,32 @@ dormant, a `claude-code-action` bump doesn't need step 6's re-read; activation d
 
 ## A cross-household scope miss (the TEN-1 alert)
 
-**What fired.** A Sentry event `profile scope miss: cross_household`. The server was asked for a
-profile `public_id` that **exists**, but not in the household the request resolved to. The caller got
+**What fired.** A Sentry event `profile scope miss: cross_household`, or since FAM-1 the same
+message for a `program`, a `workout` or a `prescription` (the table below). The server was asked for
+a `public_id` that **exists**, but not in the household the request resolved to. The caller got
 a 404 (page / export handler) or the shared `No profile found…` envelope (a Server Action) — ADR 0006
 → "What a wrong-household request returns". Nothing leaked; this is the signal that the refusal
 happened.
+
+**Four kinds of id since FAM-1** (contract change C11; the maintainer's decision, 2026-11-16). The
+same event is raised for a program, a workout and a prescription id, each under its own message, so
+each kind is its own Sentry issue:
+
+| Message                                    | The id that was asked for                          | `scope_kind`   | `scope_action`         |
+| ------------------------------------------ | -------------------------------------------------- | -------------- | ---------------------- |
+| `profile scope miss: cross_household`      | an athlete's                                       | `profile`      | `resolve_profile`      |
+| `program scope miss: cross_household`      | a program's (the program builder)                  | `program`      | `resolve_program`      |
+| `workout scope miss: cross_household`      | a workout's (the program builder)                  | `workout`      | `resolve_workout`      |
+| `prescription scope miss: cross_household` | one item of a workout's (a ✓ or a Change on a day) | `prescription` | `resolve_prescription` |
+
+All four carry the tag `scope_outcome: cross_household`. The program builder's pages and actions and
+the day page's row actions begin calling it in FAM-1 steps 7a and 12b; until those merge, only the
+profile event can fire.
+
+For the three new kinds `cross_household` means exactly **"a live row with this id exists in a
+household that is not the caller's"**. The caller's own id that the page does not serve (an older
+seeded program, or an item asked for an athlete who is not on its program) is reported as
+`unknown_resource`, at `info`, and is not a probe.
 
 **Why the event exists at all.** The scoped predicate (`public_id ∧ deleted_at IS NULL ∧
 household_id = scope`) returns "no row" for both _"unknown id"_ and _"exists elsewhere"_, so the
@@ -1026,16 +1047,27 @@ household conjunct and emits one structured event.
 
 | Field     | Value                                                                          |
 | --------- | ------------------------------------------------------------------------------ |
-| Filter    | `message` contains `profile scope miss: cross_household`                       |
+| Filter    | `message` contains `scope miss: cross_household` (all four kinds)              |
 | Threshold | **more than 3 events in 1 hour** — one is a stale bookmark, a burst is a probe |
 | Action    | email the maintainer                                                           |
+
+⚠️ **The filter was `profile scope miss: cross_household` before C11.** A rule still set to that text
+keeps firing for profiles and is **silent for the three new kinds**. Change the rule's filter text in
+Sentry to `scope miss: cross_household`, which every one of the four messages contains.
+
+⚠️ **The threshold counts each kind on its own.** An issue alert counts events per issue, and each
+kind's message is its own issue, so three profile events and three program events in an hour send
+nothing. Counting the four together would take a metric alert on the tag
+`scope_outcome:cross_household`, which is not set up. Not verified against this project's Sentry
+settings: read the rule there before relying on either statement.
 
 **What the event carries, and what it deliberately does not.** `actor` — **`clerk_session` since
 `AUTH-1` 1c-3b**; it was `gate_session` while the gate was the only door, and it is a **constant
 either way, never the user id**, because a requester id in a third-party store is the same
 cross-tenant linkage the owning household id is forbidden for. Filter on the current value: an alert
-triaged against the old one returns nothing. Plus `action`, `resource` (the `public_id` the caller
-already sent) and `outcome`. **No name, no logged value, no `params:` tail** (SEC-3: drizzle's
+triaged against the old one returns nothing. Plus `action`, `kind` (one of the four fixed words
+above), `resource` (the `public_id` the caller already sent: a profile's, a program's, a workout's
+or a prescription's) and `outcome`. **No name, no logged value, no `params:` tail** (SEC-3: drizzle's
 `DrizzleQueryError` message embeds query parameters and has shipped a kid's bodyweight to Sentry
 once) and **not the owning household's id** — a requester→owner mapping in a third-party store would
 be a cross-tenant linkage over minors' health data.

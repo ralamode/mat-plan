@@ -704,6 +704,19 @@ query strings, Server-Action form data, stack-frame variables, everything after 
 household text: added before FAM-1's first free-text length CHECKs could be hit). The honest claim is **"designed and tested to carry no personal data", not "cannot"**
 — an unexpected string in an error message is still possible.
 
+**One identifier is sent to Sentry on purpose: the public id in a scope-miss event.** When a
+signed-in request asks for an id and the scoped read finds nothing for it,
+`apps/web/lib/dal/household.ts` → `reportScopeMiss` sends one event carrying that **public id** (the random id already in the URL or
+the request the caller sent), a fixed word for its kind, a fixed word for the action, and the
+outcome. It has carried an **athlete's** public id since TEN-1 (ADR 0006, obligation 3); **since
+FAM-1 contract change C11 it also carries a program's, a workout's or a prescription's**, under the
+same rule _(maintainer's decision, 2026-11-16)_. It never carries a name, a logged value, either
+household's id, the requester's account id or an internal id, and it is sent only on a miss, so an
+id reaches Sentry only when a request for it was refused. **That includes an id of the household's
+own that the page does not serve**: a stale link to a program since removed, or an item asked for
+an athlete who is not on its program, sends that id at `info` with the outcome `unknown_resource`. Retention is Sentry's, in §8. The alert
+that reads it is in [runbooks.md](../runbooks.md) → "A cross-household scope miss".
+
 **One thing the code does not guarantee:** TLS. `client.ts` **upgrades** an `sslmode` that is already
 present to `verify-full`, and explicitly does not invent one if absent; nothing validates that
 `DATABASE_URL` carries it. Whether production is `verify-full` is an environment fact to confirm, not a
