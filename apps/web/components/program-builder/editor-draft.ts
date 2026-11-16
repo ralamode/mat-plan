@@ -1,19 +1,17 @@
 import {
   FREE_TEXT_NOTE_MAX,
-  MAX_SETS_PER_MOVEMENT,
   QUANTITY_DECIMALS,
   quantityCeiling,
+  saveWorkoutSchema,
   TRACKING_TYPE_FIELDS,
-  UNIT_LABELS,
-  unitsForTrackingType,
   wholeReps,
+  workoutDraftItemSchema,
   type Unit,
   type WorkoutDraft,
   type WorkoutDraftItem,
 } from '@mat-plan/shared';
 
-import { QUANTITY_LABELS } from './builder-text';
-import { cleanName } from './use-name-form';
+import { cleanName, EDITOR_ERRORS, quantityLabel } from './builder-text';
 
 /**
  * The workout editor's draft as typed, and the one step that turns it back into a `WorkoutDraft`
@@ -27,7 +25,10 @@ export type EditorCard = {
   sets: string;
   reps: string;
   value: string;
-  /** The quantity's unit: the type's fixed one, the loaded one, or the first the type allows. */
+  /**
+   * The quantity's unit: the type's fixed one, else the one loaded, else `null` until the person
+   * chooses. Never a default the machine picks: the unit is what a kid logs in (plan D27).
+   */
   unit: Unit | null;
   notes: string;
 };
@@ -37,16 +38,6 @@ export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | '
 
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
-
-export const EDITOR_ERRORS = {
-  name: 'Give the workout a name, then Save.',
-  sets: `Sets: a whole number from 1 to ${MAX_SETS_PER_MOVEMENT}.`,
-  reps: 'Reps: a whole number, or leave it blank.',
-  value: (label: string) => `${label}: a number like 22.5, or leave it blank.`,
-  ceiling: (label: string, ceiling: number, unit: string) =>
-    `${label}: at most ${ceiling} ${unit}.`,
-  tooLong: `At most ${FREE_TEXT_NOTE_MAX} characters.`,
-} as const;
 
 /**
  * A plain decimal with at most `QUANTITY_DECIMALS` places: `5`, `5.5`, `.5`; not `-5`, `1e3` or
@@ -58,11 +49,10 @@ const PLAIN_DECIMAL = new RegExp(
   `^(\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?|\\.\\d{1,${QUANTITY_DECIMALS}})$`,
 );
 
-/** The unit a card starts in. */
 function startingUnit(item: WorkoutDraftItem): Unit | null {
   const { slot, unit } = TRACKING_TYPE_FIELDS[item.trackingType];
   if (!slot) return null;
-  return unit ?? item.quantities[0]?.unit ?? unitsForTrackingType(item.trackingType)[0] ?? null;
+  return unit ?? item.quantities[0]?.unit ?? null;
 }
 
 export function toCards(draft: WorkoutDraft): EditorCard[] {
@@ -89,15 +79,18 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   const errors: EditorError[] = [];
   const refuse = (field: EditorField, message: string) => errors.push({ card: id, field, message });
 
+  // Sets: required on a set-based type when saving (the contract owner, 2026-11-16), within the
+  // contract's own bound.
   let sets: number | null = null;
   if (fields.sets) {
     const typed = card.sets.trim();
-    const n = Number(typed);
-    if (!/^\d+$/.test(typed) || n < 1 || n > MAX_SETS_PER_MOVEMENT)
+    const parsed = workoutDraftItemSchema.shape.sets.safeParse(Number(typed));
+    if (!/^\d+$/.test(typed) || !parsed.success || parsed.data === null) {
       refuse('sets', EDITOR_ERRORS.sets);
-    else sets = n;
+    } else sets = parsed.data;
   }
 
+  // Reps: a whole number or blank _(maintainer, 2026-11-16)_.
   let targetReps: string | null = null;
   if (fields.reps) {
     const typed = card.reps.trim();
@@ -109,22 +102,27 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   }
 
   const quantities: WorkoutDraftItem['quantities'] = [];
-  if (fields.slot && card.unit) {
+  const label = quantityLabel(card.item.trackingType) ?? '';
+  if (fields.slot) {
     const typed = card.value.trim();
-    let value: number | null = null;
-    if (typed) {
-      const ceiling = quantityCeiling(card.unit);
-      const n = Number(typed);
-      const label = QUANTITY_LABELS[card.item.trackingType] ?? '';
-      if (!PLAIN_DECIMAL.test(typed)) refuse('value', EDITOR_ERRORS.value(label));
-      // A unit with no declared ceiling refuses: no bound is not "no cap" (`quantityCeiling`).
-      else if (ceiling === undefined || n > ceiling) {
-        const unitName = UNIT_LABELS[card.unit].toLowerCase();
-        refuse('value', EDITOR_ERRORS.ceiling(label, ceiling ?? 0, unitName));
-      } else value = n;
+    // Loaded with no quantity and left alone: saved with none, not with a unit nobody chose.
+    const untouched =
+      !typed && card.item.quantities.length === 0 && card.unit === startingUnit(card.item);
+    if (!untouched) {
+      let value: number | null = null;
+      if (typed) {
+        const ceiling = card.unit ? quantityCeiling(card.unit) : undefined;
+        if (!PLAIN_DECIMAL.test(typed)) refuse('value', EDITOR_ERRORS.value(label));
+        else if (!card.unit) refuse('value', EDITOR_ERRORS.unit(label));
+        // A unit with no declared ceiling refuses: no bound is not "no cap" (`quantityCeiling`).
+        else if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));
+        else if (Number(typed) > ceiling) {
+          refuse('value', EDITOR_ERRORS.ceiling(label, ceiling, card.unit));
+        } else value = Number(typed);
+      }
+      // A blank value under a chosen unit: "log in this unit, no target" (plan D2).
+      if (card.unit) quantities.push({ slot: fields.slot, unit: card.unit, value });
     }
-    // A blank value: "log in this unit, no target" (plan D2).
-    quantities.push({ slot: fields.slot, unit: card.unit, value });
   }
 
   const notes = cleanNote(card.notes);
@@ -135,7 +133,9 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
 
 /**
  * What Save sends, or every refusal in screen order. The writer refuses the same things
- * (`invalid`), so a refusal here is what keeps `invalid` from being the normal path.
+ * (`invalid`), so a refusal here is what keeps `invalid` from being the normal path. The result is
+ * parsed by `saveWorkoutSchema` last: a draft the contract would refuse is never sent, and comes
+ * back with no field to blame (`errors: []`).
  */
 export function readDraft(
   draft: WorkoutDraft,
@@ -154,9 +154,14 @@ export function readDraft(
     return read.item;
   });
   if (errors.length) return { ok: false, errors };
-  return { ok: true, draft: { ...draft, name, description, items } };
+  const out = { ...draft, name, description, items };
+  if (!saveWorkoutSchema.safeParse(out).success) return { ok: false, errors: [] };
+  return { ok: true, draft: out };
 }
 
 /** The id of one field's input, so a refusal can focus it. */
 export const fieldId = (card: string | null, field: EditorField) =>
   card ? `card-${card}-${field}` : `workout-${field}`;
+
+/** The id of a card's unit select. */
+export const unitFieldId = (card: string) => `${fieldId(card, 'value')}-unit`;

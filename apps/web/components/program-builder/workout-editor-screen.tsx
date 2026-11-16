@@ -2,6 +2,7 @@
 
 import {
   FREE_TEXT_NOTE_MAX,
+  PROGRAM_REFUSAL,
   WORKOUT_NAME_MAX,
   type ProgramActions,
   type ProgramList,
@@ -10,14 +11,16 @@ import {
 } from '@mat-plan/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS, NAV_LINK_CLASS, SAVING_LABEL } from '@/lib/constants';
 import type { MovementPickerData } from '@/lib/movements/movement-option';
+import { moveDown, moveUp } from '@/lib/routine/editor';
 
 import {
+  BUILDER_COPY,
   EDITOR_COPY,
   fieldsToFixText,
   movedText,
@@ -26,6 +29,8 @@ import {
   saveRefusal,
   unitChangedText,
   usedByText,
+  type MoveDirection,
+  type SupersetChange,
 } from './builder-text';
 import {
   fieldId,
@@ -40,6 +45,7 @@ import { NameField } from './name-field';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
 import { normalizeSupersets, supersetLabels } from './supersets';
+import { focusField, useAttempt } from './use-attempt';
 
 /**
  * The workout editor: one screen of item cards and one Save (FAM-1 step 8; plan §8 "Workout
@@ -47,18 +53,20 @@ import { normalizeSupersets, supersetLabels } from './supersets';
  * picker ("+ Add items").
  *
  * **The screen is the page.** Its route is thin, so the screen renders the page's `<h1>` and its
- * top-level blocks, inside the shell's one `<main>`. It adds no landmark of its own around them.
+ * top-level blocks, inside the shell's one `<main>`. Its `<form>` is unnamed, so it adds no landmark.
  *
- * - `draft` is what the editor loads and what Save sends (`saveWorkout`), under the draft's own
- *   `workoutClientId`, so a retried Save replays the same attempt.
+ * - `draft` is read **once**, when the editor opens: what it loaded, what "changed" compares with,
+ *   and the ids Save sends (its `workoutClientId`, so a retried Save replays the same attempt). A
+ *   later `draft` from a refreshed page does not move them.
  * - `program` names the program in the back link and says who a change applies to. **Optional**:
- *   the preview route does not pass it yet (the maintainer kept the harness as it is, 2026-11-16),
- *   and 7b's page does. Without it the link reads "← Program" and the line is not shown.
+ *   the preview route does not pass it yet (the maintainer kept the harness as it is, 2026-11-16);
+ *   7b's page must (`owed.test.ts`). Without it the link reads "← Program" and the line is hidden.
  * - `picker` is the item picker's data (step 9).
  *
  * Decided at step 8 _(maintainer, 2026-11-16)_: a superset is kept well formed after every move
  * and remove (`normalizeSupersets`); Remove has no undo but Cancel, as the prototype; leaving with
- * changes asks first; Reps are a whole number. Enter never saves: Save is the button.
+ * changes asks first; Reps are a whole number; Sets are required. Enter never saves: Save is the
+ * button.
  */
 export type WorkoutEditorScreenProps = {
   draft: WorkoutDraft;
@@ -67,11 +75,12 @@ export type WorkoutEditorScreenProps = {
   program?: ProgramList[number];
 };
 
+const HEADING_ID = 'workout-editor-heading';
 const ITEMS_HEADING_ID = 'workout-items';
+const SAVE_ALERT_ID = 'workout-save-alert';
 const DISCARD_QUESTION_ID = 'workout-discard-question';
 /** How soon after a Remove a second one is taken as the same tap. */
-const REMOVE_DEBOUNCE_MS = 500;
-const SAVE_ALERT_ID = 'workout-save-alert';
+export const REMOVE_DEBOUNCE_MS = 500;
 
 /** Everything typed, as one comparable value: the screen is "changed" when it differs. */
 const snapshot = (name: string, description: string, cards: readonly EditorCard[]) =>
@@ -79,40 +88,34 @@ const snapshot = (name: string, description: string, cards: readonly EditorCard[
 
 export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorScreenProps) {
   const router = useRouter();
-  const initialCards = useMemo(() => toCards(draft), [draft]);
-  const initial = useMemo(
-    () => snapshot(draft.name, draft.description ?? '', initialCards),
-    [draft, initialCards],
-  );
-  const [name, setName] = useState(draft.name);
-  const [description, setDescription] = useState(draft.description ?? '');
-  const [cards, setCards] = useState(initialCards);
+  // The draft as opened, held for the life of the screen.
+  const [loaded] = useState(() => {
+    const cards = toCards(draft);
+    return { draft, cards, snapshot: snapshot(draft.name, draft.description ?? '', cards) };
+  });
+  const [name, setName] = useState(loaded.draft.name);
+  const [description, setDescription] = useState(loaded.draft.description ?? '');
+  const [cards, setCards] = useState(loaded.cards);
   const [errors, setErrors] = useState<EditorError[]>([]);
   const [pending, setPending] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const { status, report } = useStatusLine();
+  const { begin, isCurrent } = useAttempt();
 
-  const attempt = useRef(0);
   const lastRemoveAt = useRef(0);
   const controls = useRef(new Map<string, HTMLButtonElement>());
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  /** What asked "Discard?": Keep editing returns there. */
+  const leftFrom = useRef<HTMLElement | null>(null);
   const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
 
-  const back = programPath(draft.programPublicId);
-  const dirty = snapshot(name, description, cards) !== initial;
+  const back = programPath(loaded.draft.programPublicId);
+  const dirty = snapshot(name, description, cards) !== loaded.snapshot;
   const labels = supersetLabels(cards.map((card) => card.item));
 
-  // Leaving the screen ends a Save in flight: its answer must not navigate afterwards.
-  useEffect(
-    () => () => {
-      attempt.current += 1;
-    },
-    [],
-  );
-
   // The browser's own "leave this page?" while there are changes. The App Router has no hook for
-  // its own navigations, so Cancel and the back link ask inline instead.
+  // its own navigations, so Cancel and the back link ask inline instead (guide invariant 15).
   useEffect(() => {
     if (!dirty || pending) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -125,47 +128,51 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
   const errorOn = (field: EditorField) =>
     errors.find((error) => error.card === null && error.field === field)?.message ?? null;
 
-  /** Drops a field's refusal once it is edited; the bar's alert goes with the last one. */
-  const clearError = (card: string | null, field: EditorField) => {
-    const left = errors.filter((error) => !(error.card === card && error.field === field));
+  /** Drops refusals once their field is edited; the bar's alert goes with the last one. */
+  const clearErrors = (keep: (error: EditorError) => boolean) => {
+    const left = errors.filter(keep);
     if (left.length === errors.length) return;
     setErrors(left);
     if (!left.length && status.tone === 'alert') report('');
   };
+  const clearError = (card: string | null, field: EditorField) =>
+    clearErrors((error) => !(error.card === card && error.field === field));
 
   const updateCard = (id: string, patch: Partial<EditorCard>) =>
     setCards((all) =>
       all.map((card) => (card.item.prescriptionClientId === id ? { ...card, ...patch } : card)),
     );
 
-  /** Re-forms the supersets after a move or a remove, and counts the groups that ended. */
-  const settle = (next: EditorCard[]) => {
-    const groups = (list: readonly EditorCard[]) =>
-      new Set(list.flatMap((card) => (card.item.superset ? [card.item.superset.group] : []))).size;
-    const { items } = normalizeSupersets(next.map((card) => card.item));
-    const settled = next.map((card, index) => ({ ...card, item: items[index]! }));
-    return { settled, ended: Math.max(0, groups(next) - groups(settled)) };
+  /** Re-forms the supersets after a move or a remove, and says what changed. */
+  const settle = (next: EditorCard[]): { settled: EditorCard[]; change: SupersetChange } => {
+    const result = normalizeSupersets(next.map((card) => card.item));
+    const settled = next.map((card, index) => ({ ...card, item: result.items[index]! }));
+    const change = {
+      ended: result.ended,
+      left: result.left.map((index) => next[index]!.item.itemName),
+      droppedRests: result.droppedRests.length,
+    };
+    return { settled, change };
   };
 
-  function move(index: number, direction: 'up' | 'down') {
+  function move(index: number, direction: MoveDirection) {
     const card = cards[index]!;
-    const to = direction === 'up' ? index - 1 : index + 1;
-    if (to < 0 || to >= cards.length) {
+    if (direction === 'up' ? index === 0 : index === cards.length - 1) {
       report(direction === 'up' ? EDITOR_COPY.alreadyFirst : EDITOR_COPY.alreadyLast);
       return;
     }
     const id = card.item.prescriptionClientId;
     const before = control(id, direction)?.getBoundingClientRect().top ?? 0;
-    const next = [...cards];
-    [next[index], next[to]] = [next[to]!, next[index]!];
-    const { settled, ended } = settle(next);
+    const { settled, change } = settle(
+      direction === 'up' ? moveUp(cards, index) : moveDown(cards, index),
+    );
     flushSync(() => setCards(settled));
     // The same button on the moved card, held where the thumb is: a second tap moves it again.
     const button = control(id, direction);
     button?.focus({ preventScroll: true });
     const after = button?.getBoundingClientRect().top ?? before;
     if (after !== before) window.scrollBy(0, after - before);
-    report(movedText(card.item.itemName, direction, ended));
+    report(movedText(card.item.itemName, direction, change));
   }
 
   /** `at` is the tap's `event.timeStamp`. */
@@ -175,55 +182,70 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
     lastRemoveAt.current = at;
     const card = cards[index]!;
     const neighbour = cards[index + 1] ?? cards[index - 1];
-    const { settled, ended } = settle(cards.filter((_, i) => i !== index));
+    const rest = cards.filter((_, i) => i !== index);
+    // The group's rest was on the removed card: it passes to the group's new last member.
+    const group = card.item.superset?.group;
+    if (card.item.restAfter && group) {
+      const heir = rest.findLastIndex((other) => other.item.superset?.group === group);
+      if (heir >= 0) {
+        rest[heir] = {
+          ...rest[heir]!,
+          item: { ...rest[heir]!.item, restAfter: card.item.restAfter },
+        };
+      }
+    }
+    const { settled, change } = settle(rest);
     flushSync(() => setCards(settled));
-    setErrors((all) => all.filter((error) => error.card !== card.item.prescriptionClientId));
+    clearErrors((error) => error.card !== card.item.prescriptionClientId);
     const target = neighbour ? control(neighbour.item.prescriptionClientId, 'remove') : null;
     (target ?? itemsHeadingRef.current)?.focus();
-    report(removedText(card.item.itemName, ended));
+    report(removedText(card.item.itemName, change));
   }
 
   function changeUnit(card: EditorCard, unit: Unit) {
     const typed = card.value.trim();
     updateCard(card.item.prescriptionClientId, { unit });
-    if (typed && card.unit && card.unit !== unit) {
-      report(unitChangedText(card.item.itemName, typed, card.unit, unit));
+    clearError(card.item.prescriptionClientId, 'value');
+    if (typed && card.unit && card.unit !== unit && Number.isFinite(Number(typed))) {
+      report(unitChangedText(card.item.itemName, Number(typed), card.unit, unit));
     }
   }
 
+  /** Shows the refusals, says `message` in the bar, and focuses the first refused field. */
   function refuse(found: EditorError[], message: string) {
-    setErrors(found);
+    flushSync(() => setErrors(found));
     report(message, 'alert');
     const first = found[0];
-    const field = first ? document.getElementById(fieldId(first.card, first.field)) : null;
-    field?.focus();
-    field?.scrollIntoView?.({ block: 'center' });
+    if (first) focusField(document.getElementById(fieldId(first.card, first.field)));
   }
 
   async function save() {
     if (pending) return;
-    const read = readDraft(draft, { name, description, cards });
+    const read = readDraft(loaded.draft, { name, description, cards });
     if (!read.ok) {
+      if (!read.errors.length) return refuse([], saveRefusal(PROGRAM_REFUSAL.invalid));
       const nameOnly = read.errors.length === 1 && read.errors[0]!.field === 'name';
       refuse(read.errors, nameOnly ? read.errors[0]!.message : fieldsToFixText(read.errors.length));
       return;
     }
-    const mine = ++attempt.current;
+    const mine = begin();
     setPending(true);
     report('');
     const result = await actions.saveWorkout(read.draft);
-    if (mine !== attempt.current) return;
+    if (!isCurrent(mine)) return;
     // `pending` stays set on success: the page changes, and Save must not read as ready again.
     if (result.ok) return router.push(back);
     setPending(false);
     const message = saveRefusal(result.reason);
-    if (result.reason === 'name_taken') {
-      refuse([{ card: null, field: 'name', message }], message);
-    } else refuse([], message);
+    refuse(
+      result.reason === PROGRAM_REFUSAL.name_taken ? [{ card: null, field: 'name', message }] : [],
+      message,
+    );
   }
 
-  function leave() {
+  function leave(from: HTMLElement | null) {
     if (!dirty) return router.push(back);
+    leftFrom.current = from;
     report('');
     flushSync(() => setLeaving(true));
     keepEditingRef.current?.focus();
@@ -231,7 +253,7 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
 
   function keepEditing() {
     flushSync(() => setLeaving(false));
-    cancelRef.current?.focus();
+    (leftFrom.current?.isConnected ? leftFrom.current : cancelRef.current)?.focus();
   }
 
   /**
@@ -255,7 +277,6 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
         void save();
       }}
       onKeyDown={holdEnter}
-      aria-labelledby="workout-editor-heading"
       noValidate
     >
       <div className="flex flex-col gap-2">
@@ -263,16 +284,23 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
           href={back}
           className={NAV_LINK_CLASS}
           onClick={(event) => {
-            // A new tab (cmd or ctrl) leaves this one as it is.
+            // A new tab (cmd, ctrl or shift) leaves this one as it is.
             if (!dirty || event.metaKey || event.ctrlKey || event.shiftKey) return;
             event.preventDefault();
-            leave();
+            leave(event.currentTarget);
           }}
         >
-          {program ? `← ${program.name}` : EDITOR_COPY.backToProgram}
+          {program ? (
+            <>
+              <span aria-hidden>← </span>
+              <span className={NAME_WRAP_CLASS}>{program.name}</span>
+            </>
+          ) : (
+            EDITOR_COPY.backToProgram
+          )}
         </Link>
-        <h1 id="workout-editor-heading" className="text-2xl font-semibold tracking-tight">
-          {draft.workoutPublicId ? EDITOR_COPY.editWorkout : EDITOR_COPY.newWorkout}
+        <h1 id={HEADING_ID} className="text-2xl font-semibold tracking-tight">
+          {loaded.draft.workoutPublicId ? EDITOR_COPY.editWorkout : EDITOR_COPY.newWorkout}
         </h1>
         {program ? (
           <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
@@ -352,9 +380,10 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
         )}
       </section>
 
-      {/* The save bar: always in view on a phone, where Save and what it says are. */}
+      {/* The save bar: always in view on a phone, where Save and what it says are. The status
+          line keeps one line's height, so a message does not push the bar up over a card. */}
       <div className="bg-background sticky bottom-0 flex flex-col gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <StatusLine status={status} alertId={SAVE_ALERT_ID} />
+        <StatusLine status={status} alertId={SAVE_ALERT_ID} className="min-h-9 justify-end" />
         {leaving ? (
           <div role="group" aria-labelledby={DISCARD_QUESTION_ID} className="flex flex-col gap-2">
             <p id={DISCARD_QUESTION_ID} className="text-sm font-medium">
@@ -372,8 +401,8 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
               </Button>
               <Button
                 type="button"
-                variant="destructive"
-                className="flex-1"
+                variant="outline"
+                className="text-destructive flex-1"
                 onClick={() => router.push(back)}
               >
                 {EDITOR_COPY.discard}
@@ -382,8 +411,13 @@ export function WorkoutEditorScreen({ draft, actions, program }: WorkoutEditorSc
           </div>
         ) : (
           <div className="flex gap-2">
-            <Button ref={cancelRef} type="button" variant="ghost" onClick={leave}>
-              {EDITOR_COPY.cancel}
+            <Button
+              ref={cancelRef}
+              type="button"
+              variant="ghost"
+              onClick={(event) => leave(event.currentTarget)}
+            >
+              {BUILDER_COPY.cancel}
             </Button>
             <Button
               type="submit"

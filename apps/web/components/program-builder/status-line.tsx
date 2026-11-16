@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 export type StatusTone = 'status' | 'alert';
 export type Status = { message: string; tone: StatusTone };
@@ -31,11 +32,22 @@ const BANNER_CLASS = `rounded-lg px-3 py-2 text-sm font-medium ${NAME_WRAP_CLASS
  * The line itself: a polite `Announcer` and a `role="alert"`, both always mounted and with no
  * height while empty (as `Announcer` asks). A refusal the person must act on is the alert.
  */
-export function StatusLine({ status, alertId }: { status: Status; alertId?: string }) {
+export function StatusLine({
+  status,
+  alertId,
+  className = 'contents',
+}: {
+  status: Status;
+  alertId?: string;
+  /**
+   * The box around the two regions. `contents` (the default) leaves them as their parent's own
+   * children, as on the program page; the editor's save bar gives them one line's height.
+   */
+  className?: string;
+}) {
   const shown = (tone: StatusTone) => (status.tone === tone ? status.message : '');
-  // One box, so a column's gap is paid once for both regions.
   return (
-    <div className="flex flex-col">
+    <div className={cn('flex flex-col', className)}>
       <Announcer
         message={shown('status')}
         className={shown('status') ? `${BANNER_CLASS} bg-muted` : 'h-0'}
@@ -43,7 +55,11 @@ export function StatusLine({ status, alertId }: { status: Status; alertId?: stri
       <p
         id={alertId}
         role="alert"
-        className={shown('alert') ? `${BANNER_CLASS} bg-destructive/10 text-destructive` : 'h-0'}
+        // Body text on the tint: the destructive red on it measured 3.97:1, under AA. The red
+        // border carries the signal.
+        className={
+          shown('alert') ? `${BANNER_CLASS} border-destructive bg-destructive/10 border` : 'h-0'
+        }
       >
         {shown('alert')}
       </p>

@@ -4,6 +4,14 @@ import type { Ref } from 'react';
 
 import { INPUT_CLASS } from '@/lib/constants';
 
+import { FieldLabel } from './field-label';
+
+/**
+ * A field's input styling here: the app's `INPUT_CLASS`, with a placeholder at the muted text's
+ * contrast (the default grey measured 3.74:1 on white).
+ */
+export const FIELD_CLASS = `${INPUT_CLASS} placeholder:text-muted-foreground w-full min-w-0`;
+
 /**
  * A short text field with its counter and its refusal (FAM-1 lane B): a program's or a workout's
  * name, and, `multiline`, a workout's description or an item's instructions. Still one line of text
@@ -26,6 +34,7 @@ export function NameField({
   optional = false,
   multiline = false,
   announce = true,
+  hint,
 }: {
   ref?: Ref<HTMLInputElement>;
   id: string;
@@ -44,9 +53,13 @@ export function NameField({
    * (the workout editor's save bar): one announcement per Save, not two.
    */
   announce?: boolean;
+  /** A sentence that says what the field is for, read with it (never only a placeholder). */
+  hint?: string;
 }) {
   const counterId = `${id}-count`;
   const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const described = [hint ? hintId : null, counterId, error ? errorId : null].filter(Boolean);
   const common = {
     value,
     maxLength: max,
@@ -54,21 +67,20 @@ export function NameField({
     enterKeyHint: 'done' as const,
     onChange: (event: { target: { value: string } }) => onChange(event.target.value),
     'aria-invalid': error ? true : undefined,
-    'aria-describedby': error ? `${counterId} ${errorId}` : counterId,
+    'aria-describedby': described.join(' '),
   };
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <FieldLabel htmlFor={id} optional={optional}>
         {label}
-        {optional ? <span className="text-muted-foreground font-normal"> (optional)</span> : null}
-      </label>
+      </FieldLabel>
+      {hint ? (
+        <p id={hintId} className="text-muted-foreground text-sm">
+          {hint}
+        </p>
+      ) : null}
       {multiline ? (
-        <textarea
-          id={id}
-          rows={2}
-          {...common}
-          className={`${INPUT_CLASS} h-auto w-full resize-y py-2`}
-        />
+        <textarea id={id} rows={2} {...common} className={`${FIELD_CLASS} h-auto resize-y py-2`} />
       ) : (
         <input
           ref={ref}
@@ -76,7 +88,7 @@ export function NameField({
           type="text"
           autoComplete="off"
           {...common}
-          className={`${INPUT_CLASS} w-full`}
+          className={FIELD_CLASS}
         />
       )}
       <p id={counterId} className="text-muted-foreground text-xs">

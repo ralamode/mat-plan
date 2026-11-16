@@ -1,8 +1,18 @@
-import { MAX_SETS_PER_MOVEMENT, quantityCeiling, saveWorkoutSchema } from '@mat-plan/shared';
+import {
+  MAX_SETS_PER_MOVEMENT,
+  QUANTITY_SLOT,
+  quantityCeiling,
+  saveWorkoutSchema,
+  TRACKING_TYPE_FIELDS,
+  TRACKING_TYPES,
+  unitsForTrackingType,
+  type WorkoutDraft,
+} from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
-import { EDITOR_ERRORS, readDraft, toCards, type EditorCard } from './editor-draft';
+import { EDITOR_ERRORS, quantityLabel } from './builder-text';
+import { readDraft, toCards, type EditorCard } from './editor-draft';
 
 const typed = (cards: EditorCard[], name = heavyADraft.name) => ({
   name,
@@ -14,64 +24,124 @@ const withCard = (index: number, patch: Partial<EditorCard>) =>
   toCards(heavyADraft).map((card, i) => (i === index ? { ...card, ...patch } : card));
 const errorsOf = (result: ReturnType<typeof readDraft>) =>
   result.ok ? [] : result.errors.map(({ field, message }) => [field, message]);
+const saved = (result: ReturnType<typeof readDraft>) => {
+  if (!result.ok) throw new Error(`refused: ${JSON.stringify(result.errors)}`);
+  return result.draft;
+};
+const WEIGHT = quantityLabel('weight_reps')!;
+
+/**
+ * One item of every tracking type, built from a heavy-a item, with the fields each type uses: a
+ * draft the contract accepts, so the editor must save it untouched.
+ */
+const everyType: WorkoutDraft = {
+  ...heavyADraft,
+  items: TRACKING_TYPES.map((trackingType, i) => {
+    const { sets, reps, slot } = TRACKING_TYPE_FIELDS[trackingType];
+    return {
+      ...heavyADraft.items[0]!,
+      prescriptionClientId: `00000000-0000-7000-8000-0000000090${String(i).padStart(2, '0')}`,
+      itemName: trackingType,
+      trackingType,
+      sets: sets ? 3 : null,
+      targetReps: reps ? '8' : null,
+      quantities: slot ? [{ slot, unit: unitsForTrackingType(trackingType)[0]!, value: 10 }] : [],
+      superset: null,
+      restAfter: null,
+    };
+  }),
+};
 
 describe('the editor’s draft', () => {
   it('loads and saves heavy-a-draft unchanged, and what it saves passes saveWorkoutSchema', () => {
-    const read = readDraft(heavyADraft, typed(toCards(heavyADraft)));
-    expect(read).toEqual({ ok: true, draft: heavyADraft });
-    expect(saveWorkoutSchema.safeParse(read.ok && read.draft).success).toBe(true);
+    const draft = saved(readDraft(heavyADraft, typed(toCards(heavyADraft))));
+    expect(draft).toEqual(heavyADraft);
+    expect(saveWorkoutSchema.safeParse(draft).success).toBe(true);
+  });
+
+  it('saves one item of every tracking type untouched, with sets only where the type has them', () => {
+    const draft = saved(
+      readDraft(everyType, { name: 'Every type', description: '', cards: toCards(everyType) }),
+    );
+    expect(draft.items).toEqual(everyType.items);
+    expect(saveWorkoutSchema.safeParse(draft).success).toBe(true);
+  });
+
+  it('an item loaded with no quantity is saved with none, not with a unit nobody chose', () => {
+    const bare = {
+      ...everyType,
+      items: everyType.items.map((item) => ({ ...item, quantities: [] })),
+    };
+    const draft = saved(readDraft(bare, { name: 'Bare', description: '', cards: toCards(bare) }));
+    expect(draft.items.map((item) => item.quantities)).toEqual(bare.items.map(() => []));
+    // A number typed with no unit chosen asks for the unit.
+    const count = toCards(bare).find((card) => card.item.trackingType === 'count')!;
+    expect(
+      errorsOf(
+        readDraft(bare, { name: 'Bare', description: '', cards: [{ ...count, value: '5' }] }),
+      ),
+    ).toEqual([['value', EDITOR_ERRORS.unit(quantityLabel('count')!)]]);
   });
 
   it('a new workout needs a name, and saves with no items', () => {
     expect(errorsOf(readDraft(newWorkoutEmpty, { name: ' ', description: '', cards: [] }))).toEqual(
       [['name', EDITOR_ERRORS.name]],
     );
-    const read = readDraft(newWorkoutEmpty, { name: ' Heavy  B ', description: '', cards: [] });
-    expect(read).toEqual({
-      ok: true,
-      draft: { ...newWorkoutEmpty, name: 'Heavy B', description: null, items: [] },
-    });
+    expect(
+      saved(readDraft(newWorkoutEmpty, { name: ' Heavy  B ', description: '', cards: [] })),
+    ).toEqual({ ...newWorkoutEmpty, name: 'Heavy B', description: null, items: [] });
   });
 
-  it('Sets is a whole number from 1 to the limit, on a set-based type', () => {
+  it('Sets is a whole number from 1 to the limit, both ends included', () => {
     for (const sets of ['', '0', '2.5', String(MAX_SETS_PER_MOVEMENT + 1)]) {
       expect(errorsOf(readDraft(heavyADraft, typed(withCard(0, { sets }))))).toEqual([
         ['sets', EDITOR_ERRORS.sets],
       ]);
     }
-    const read = readDraft(heavyADraft, typed(withCard(0, { sets: ' 5 ' })));
-    expect(read.ok && read.draft.items[0]!.sets).toBe(5);
+    for (const sets of [1, MAX_SETS_PER_MOVEMENT]) {
+      expect(
+        saved(readDraft(heavyADraft, typed(withCard(0, { sets: ` ${sets} ` })))).items[0]!.sets,
+      ).toBe(sets);
+    }
   });
 
   it('Reps is a whole number or blank; "10 per side" belongs in the instructions', () => {
     expect(errorsOf(readDraft(heavyADraft, typed(withCard(0, { reps: '10 per side' }))))).toEqual([
       ['reps', EDITOR_ERRORS.reps],
     ]);
-    const read = readDraft(heavyADraft, typed(withCard(0, { reps: '' })));
-    expect(read.ok && read.draft.items[0]!.targetReps).toBeNull();
+    expect(
+      saved(readDraft(heavyADraft, typed(withCard(0, { reps: '' })))).items[0]!.targetReps,
+    ).toBeNull();
   });
 
-  it('a quantity is a plain number under its unit’s ceiling; blank keeps the unit with no target', () => {
+  it('a quantity is a plain number up to its unit’s ceiling; blank keeps the unit with no target', () => {
     for (const value of ['-5', '1e3', '25 lb', '2.5555']) {
       expect(errorsOf(readDraft(heavyADraft, typed(withCard(0, { value }))))).toEqual([
-        ['value', EDITOR_ERRORS.value('Weight')],
+        ['value', EDITOR_ERRORS.value(WEIGHT)],
       ]);
     }
     const ceiling = quantityCeiling('lb')!;
     expect(
       errorsOf(readDraft(heavyADraft, typed(withCard(0, { value: String(ceiling + 1) })))),
-    ).toEqual([['value', EDITOR_ERRORS.ceiling('Weight', ceiling, 'pounds')]]);
-    const blank = readDraft(heavyADraft, typed(withCard(0, { value: '', unit: 'kg' })));
-    expect(blank.ok && blank.draft.items[0]!.quantities).toEqual([
-      { slot: 'primary', unit: 'kg', value: null },
-    ]);
+    ).toEqual([['value', EDITOR_ERRORS.ceiling(WEIGHT, ceiling, 'lb')]]);
+    expect(
+      saved(readDraft(heavyADraft, typed(withCard(0, { value: String(ceiling) })))).items[0]!
+        .quantities,
+    ).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: ceiling }]);
+    expect(
+      saved(readDraft(heavyADraft, typed(withCard(0, { value: '', unit: 'kg' })))).items[0]!
+        .quantities,
+    ).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'kg', value: null }]);
   });
 
   it('instructions are one line: a typed line break is a space, and blank is null', () => {
-    const read = readDraft(heavyADraft, typed(withCard(0, { notes: 'Feet flat.\nTwo down. ' })));
-    expect(read.ok && read.draft.items[0]!.notes).toBe('Feet flat. Two down.');
-    const blank = readDraft(heavyADraft, typed(withCard(0, { notes: '  ' })));
-    expect(blank.ok && blank.draft.items[0]!.notes).toBeNull();
+    expect(
+      saved(readDraft(heavyADraft, typed(withCard(0, { notes: 'Feet flat.\nTwo down. ' }))))
+        .items[0]!.notes,
+    ).toBe('Feet flat. Two down.');
+    expect(
+      saved(readDraft(heavyADraft, typed(withCard(0, { notes: '  ' })))).items[0]!.notes,
+    ).toBeNull();
   });
 
   it('every refusal is listed, in screen order', () => {
@@ -79,7 +149,16 @@ describe('the editor’s draft', () => {
     expect(errorsOf(readDraft(heavyADraft, typed(cards, '')))).toEqual([
       ['name', EDITOR_ERRORS.name],
       ['sets', EDITOR_ERRORS.sets],
-      ['value', EDITOR_ERRORS.value('Seconds')],
+      ['value', EDITOR_ERRORS.value(quantityLabel('time_sets')!)],
     ]);
+  });
+});
+
+describe('quantityLabel', () => {
+  it('names a field exactly where the type has a quantity; a fixed unit names its own', () => {
+    for (const type of TRACKING_TYPES) {
+      expect(quantityLabel(type) !== null).toBe(TRACKING_TYPE_FIELDS[type].slot !== null);
+    }
+    expect(quantityLabel('duration')).toBe('Minutes');
   });
 });

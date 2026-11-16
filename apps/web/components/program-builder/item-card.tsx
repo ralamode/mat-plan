@@ -4,45 +4,66 @@ import {
   FREE_TEXT_NOTE_MAX,
   TRACKING_TYPE_FIELDS,
   TRACKING_TYPE_LABELS,
+  UNIT_DIMENSION_BY_CODE,
   UNIT_LABELS,
-  unitsOfDimension,
+  unitsForTrackingType,
   type Unit,
   type UnitDimension,
 } from '@mat-plan/shared';
 
 import { Button } from '@/components/ui/button';
+import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 
 import {
   EDITOR_COPY,
   moveLabel,
   PENDING_CLASS,
-  QUANTITY_LABELS,
+  quantityLabel,
   removeLabel,
   supersetSpoken,
+  UNIT_GROUP_LABELS,
+  type MoveDirection,
 } from './builder-text';
-import { fieldId, type EditorCard, type EditorError, type EditorField } from './editor-draft';
-import { NameField } from './name-field';
+import {
+  fieldId,
+  unitFieldId,
+  type EditorCard,
+  type EditorError,
+  type EditorField,
+} from './editor-draft';
+import { FieldLabel } from './field-label';
+import { FIELD_CLASS, NameField } from './name-field';
 
 /** A card's controls the screen refocuses after a move or a remove. */
-export type CardControl = 'up' | 'down' | 'remove';
+export type CardControl = MoveDirection | 'remove';
 
-/** An optgroup's name, where a type's unit can be of several dimensions (a Count). */
-const DIMENSION_LABELS: Partial<Record<UnitDimension, string>> = {
-  mass: 'Weight',
-  length: 'Distance',
-  time: 'Time',
-  count: 'Count',
-};
+/** The units the select offers (`unitsForTrackingType`), grouped by dimension for a Count. */
+function unitGroups(type: Parameters<typeof unitsForTrackingType>[0]) {
+  const groups = new Map<UnitDimension, Unit[]>();
+  for (const unit of unitsForTrackingType(type)) {
+    const dimension = UNIT_DIMENSION_BY_CODE[unit];
+    groups.set(dimension, [...(groups.get(dimension) ?? []), unit]);
+  }
+  return [...groups];
+}
+
+const unitOptions = (units: readonly Unit[]) =>
+  units.map((unit) => (
+    <option key={unit} value={unit}>
+      {UNIT_LABELS[unit]}
+    </option>
+  ));
 
 /**
  * One item's card in the workout editor (FAM-1 step 8; the prototype's `.ed-card`): its name and
  * type, its fields by type (`TRACKING_TYPE_FIELDS`), its instructions, and Up, Down, Remove.
  *
- * - **The fields sit two to a row.** At 360px a card's content box is about 300px: four fields in
- *   one row leave 43px of text, so a weight and its unit select don't fit (plan §8 records the
- *   difference from the prototype's one row).
+ * - **The fields sit two to a row on a phone.** At 360px a card's content box is about 300px: four
+ *   fields in one row leave 43px of text, so a weight and its unit select don't fit (guide
+ *   invariant 14). From `sm` they sit in one row, as the prototype's.
+ * - Everything under the card's heading is one group named by it, so five "Instructions" fields
+ *   are told apart.
  * - The ends are `aria-disabled`, never `disabled`, so focus stays on the button (the routine
  *   editor's rule). The screen says "Already first." instead.
  * - The tools are two groups, reorder left and Remove right, so 8b's superset control can go
@@ -69,7 +90,7 @@ export function ItemCard({
   controlRef: (control: CardControl, node: HTMLButtonElement | null) => void;
   onChange: (field: Exclude<EditorField, 'name' | 'description'>, value: string) => void;
   onUnit: (unit: Unit) => void;
-  onMove: (direction: 'up' | 'down') => void;
+  onMove: (direction: MoveDirection) => void;
   /** With the tap's `event.timeStamp`, so the screen can tell a double tap. */
   onRemove: (at: number) => void;
 }) {
@@ -79,6 +100,8 @@ export function ItemCard({
   const headingId = `card-${id}-heading`;
   const errorOf = (field: EditorField) => errors.find((error) => error.field === field) ?? null;
   const errorId = (field: EditorField) => `${fieldId(id, field)}-error`;
+  const quantity = quantityLabel(item.trackingType);
+  const groups = fields.slot && !fields.unit ? unitGroups(item.trackingType) : [];
 
   const numberField = (
     field: 'sets' | 'reps' | 'value',
@@ -87,10 +110,9 @@ export function ItemCard({
     optional: boolean,
   ) => (
     <div className="flex min-w-0 flex-col gap-1">
-      <label htmlFor={fieldId(id, field)} className="text-sm font-medium">
+      <FieldLabel htmlFor={fieldId(id, field)} optional={optional}>
         {fieldLabel}
-        {optional ? <span className="text-muted-foreground font-normal"> (optional)</span> : null}
-      </label>
+      </FieldLabel>
       <input
         id={fieldId(id, field)}
         type="text"
@@ -101,13 +123,11 @@ export function ItemCard({
         onChange={(event) => onChange(field, event.target.value)}
         aria-invalid={errorOf(field) ? true : undefined}
         aria-describedby={errorOf(field) ? errorId(field) : undefined}
-        className={`${INPUT_CLASS} w-full min-w-0`}
+        className={FIELD_CLASS}
       />
     </div>
   );
 
-  const units = fields.unit ? [] : fields.dimensions.map((d) => [d, unitsOfDimension(d)] as const);
-  const quantityLabel = QUANTITY_LABELS[item.trackingType];
   const shownErrors = (['sets', 'reps', 'value'] as const).flatMap((field) => {
     const error = errorOf(field);
     return error ? [{ field, message: error.message }] : [];
@@ -135,99 +155,97 @@ export function ItemCard({
         </span>
       </div>
 
-      {fields.sets || fields.reps || quantityLabel ? (
-        <div role="group" aria-labelledby={headingId} className="flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {fields.sets ? numberField('sets', card.sets, EDITOR_COPY.sets, false) : null}
-            {fields.reps ? numberField('reps', card.reps, EDITOR_COPY.reps, true) : null}
-            {quantityLabel ? numberField('value', card.value, quantityLabel, true) : null}
-            {units.length ? (
-              <div className="flex min-w-0 flex-col gap-1">
-                <label htmlFor={fieldId(id, 'value') + '-unit'} className="text-sm font-medium">
-                  {EDITOR_COPY.unit}
-                </label>
-                <select
-                  id={fieldId(id, 'value') + '-unit'}
-                  value={card.unit ?? ''}
-                  onChange={(event) => onUnit(event.target.value as Unit)}
-                  className={`${INPUT_CLASS} w-full min-w-0`}
-                >
-                  {units.length === 1
-                    ? units[0]![1].map((unit) => (
-                        <option key={unit} value={unit}>
-                          {UNIT_LABELS[unit]}
-                        </option>
-                      ))
-                    : units.map(([dimension, list]) => (
-                        <optgroup key={dimension} label={DIMENSION_LABELS[dimension] ?? dimension}>
-                          {list.map((unit) => (
-                            <option key={unit} value={unit}>
-                              {UNIT_LABELS[unit]}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                </select>
-              </div>
-            ) : null}
+      <div role="group" aria-labelledby={headingId} className="flex flex-col gap-3">
+        {fields.sets || fields.reps || quantity ? (
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {fields.sets ? numberField('sets', card.sets, EDITOR_COPY.sets, false) : null}
+              {fields.reps ? numberField('reps', card.reps, EDITOR_COPY.reps, true) : null}
+              {quantity ? numberField('value', card.value, quantity, true) : null}
+              {groups.length ? (
+                <div className="flex min-w-0 flex-col gap-1">
+                  <FieldLabel htmlFor={unitFieldId(id)}>{EDITOR_COPY.unit}</FieldLabel>
+                  <select
+                    id={unitFieldId(id)}
+                    value={card.unit ?? ''}
+                    onChange={(event) => onUnit(event.target.value as Unit)}
+                    className={FIELD_CLASS}
+                  >
+                    {card.unit ? null : (
+                      <option value="" disabled>
+                        {EDITOR_COPY.chooseUnit}
+                      </option>
+                    )}
+                    {groups.length === 1
+                      ? unitOptions(groups[0]![1])
+                      : groups.map(([dimension, units]) => (
+                          <optgroup
+                            key={dimension}
+                            label={UNIT_GROUP_LABELS[dimension] ?? dimension}
+                          >
+                            {unitOptions(units)}
+                          </optgroup>
+                        ))}
+                  </select>
+                </div>
+              ) : null}
+            </div>
+            {shownErrors.map(({ field, message }) => (
+              <p key={field} id={errorId(field)} className="text-destructive text-sm">
+                {message}
+              </p>
+            ))}
           </div>
-          {shownErrors.map(({ field, message }) => (
-            <p key={field} id={errorId(field)} className="text-destructive text-sm">
-              {message}
-            </p>
-          ))}
-        </div>
-      ) : (
-        <p className="text-muted-foreground text-sm">{EDITOR_COPY.checkHint}</p>
-      )}
+        ) : (
+          <p className="text-muted-foreground text-sm">{EDITOR_COPY.checkHint}</p>
+        )}
 
-      <NameField
-        id={fieldId(id, 'notes')}
-        label={EDITOR_COPY.instructions}
-        value={card.notes}
-        max={FREE_TEXT_NOTE_MAX}
-        onChange={(value) => onChange('notes', value)}
-        error={errorOf('notes')?.message ?? null}
-        placeholder={EDITOR_COPY.instructionsPlaceholder}
-        optional
-        multiline
-        announce={false}
-      />
+        <NameField
+          id={fieldId(id, 'notes')}
+          label={EDITOR_COPY.instructions}
+          hint={EDITOR_COPY.instructionsHint}
+          value={card.notes}
+          max={FREE_TEXT_NOTE_MAX}
+          onChange={(value) => onChange('notes', value)}
+          error={errorOf('notes')?.message ?? null}
+          optional
+          multiline
+          announce={false}
+        />
 
-      {item.restAfter ? (
-        <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-          {EDITOR_COPY.rest} {item.restAfter}
-        </p>
-      ) : null}
+        {item.restAfter ? (
+          <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+            {EDITOR_COPY.rest} {item.restAfter}
+          </p>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-center gap-1">
-        {(['up', 'down'] as const).map((direction) => {
-          const atEnd = direction === 'up' ? isFirst : isLast;
-          return (
-            <Button
-              key={direction}
-              ref={(node) => controlRef(direction, node)}
-              type="button"
-              variant="ghost"
-              className={`min-w-11 ${PENDING_CLASS}`}
-              aria-label={moveLabel(direction, item.itemName)}
-              aria-disabled={atEnd || undefined}
-              onClick={() => onMove(direction)}
-            >
-              <span aria-hidden>{direction === 'up' ? '↑ ' : '↓ '}</span>
-              {direction === 'up' ? EDITOR_COPY.up : EDITOR_COPY.down}
-            </Button>
-          );
-        })}
+        {(['up', 'down'] as const).map((direction) => (
+          <Button
+            key={direction}
+            ref={(node) => controlRef(direction, node)}
+            type="button"
+            variant="ghost"
+            className={`min-w-11 ${PENDING_CLASS}`}
+            aria-label={moveLabel(direction, item.itemName)}
+            aria-disabled={(direction === 'up' ? isFirst : isLast) || undefined}
+            onClick={() => onMove(direction)}
+          >
+            <span aria-hidden>{direction === 'up' ? '↑ ' : '↓ '}</span>
+            {EDITOR_COPY[direction]}
+          </Button>
+        ))}
         <Button
           ref={(node) => controlRef('remove', node)}
           type="button"
           variant="ghost"
           className="text-destructive ml-auto min-w-11"
           aria-label={removeLabel(item.itemName)}
-          // A held Enter repeats the click on the next card's Remove, which takes focus.
+          // A held Enter repeats the click on the next card's Remove, which takes focus. Other
+          // held keys (Tab, arrows) pass.
           onKeyDown={(event) => {
-            if (event.repeat) event.preventDefault();
+            if (event.repeat && event.key === 'Enter') event.preventDefault();
           }}
           onClick={(event) => onRemove(event.timeStamp)}
         >
