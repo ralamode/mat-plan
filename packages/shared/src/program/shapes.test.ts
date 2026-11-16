@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { WEEKDAYS } from '../day';
 import {
+  DEFAULT_TRACKING_TYPE,
   TRACKING_TYPE,
   TRACKING_TYPE_LABELS,
   TRACKING_TYPES,
@@ -104,6 +105,16 @@ describe('the constants the lanes build against (contract pins)', () => {
       expect(trackingTypeSchema.safeParse(type).success).toBe(true);
     }
     expect(trackingTypeSchema.safeParse('weight').success).toBe(false);
+  });
+
+  it('defaults an item with no type named to Weight × reps, one of the seven', async () => {
+    // A contract pin: this is the `movements.tracking_type` column's default (migration 0022), so
+    // changing it is a migration. `packages/db/src/tracking-type-default.test.ts` holds the two equal.
+    expect(DEFAULT_TRACKING_TYPE).toBe('weight_reps');
+    expect(DEFAULT_TRACKING_TYPE).toBe(TRACKING_TYPE.weight_reps);
+    expect(TRACKING_TYPES).toContain(DEFAULT_TRACKING_TYPE);
+    expect(trackingTypeSchema.parse(DEFAULT_TRACKING_TYPE)).toBe(DEFAULT_TRACKING_TYPE);
+    expect((await import('../index')).DEFAULT_TRACKING_TYPE).toBe(DEFAULT_TRACKING_TYPE);
   });
 
   it('states plan §2’s table as data: each type’s fields', () => {

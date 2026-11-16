@@ -7,6 +7,17 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## Database / migrations
 
+- **A migration that merged after another one, but was generated before it, never runs on prod, and
+  nothing says so.** → drizzle's migrator applies a migration only when its journal `when` is later
+  than the newest one applied (`created_at < folderMillis`, drizzle-orm `pg-core/dialect.js`), and a
+  fresh database (`db:verify`, the e2e smoke) applies everything, so only prod skips it. CI's
+  forward-only guard now fails a journal out of time order (#428). → **Regenerate on top of main**
+  with the db-migration skill's recipe. ⚠️ It took four attempts to get that recipe right (#428,
+  #429, #431, each found by running it on a simulated race): a plain `git checkout` of `meta/` keeps
+  a renumbered snapshot of yours, `--no-overlay` still keeps an untracked one, and a refused merge
+  or a schema resolved "ours" regenerates against an old main. Each time the new `.sql` carried, or
+  dropped, main's DDL. → Run a recovery recipe end to end in a scratch clone before trusting it.
+
 - **A microsecond-precision proof cannot fail on PGlite, because its `now()` is milliseconds.**
   → `V1-9b` B1-1b's whole point is that a hide token must stay TEXT: Postgres stores `timestamptz` to
   microseconds, a JS `Date` holds milliseconds, so a token round-tripped through `new Date(...)` no

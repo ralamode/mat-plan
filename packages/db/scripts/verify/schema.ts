@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import {
   MOVEMENT_SEED_ROWS,
   newId,
+  PROGRAM_SEED,
+  SEED_HOUSEHOLD_PUBLIC_ID,
   QUANTITY_SLOT,
   SESSION_TYPE,
   SESSION_TYPES,
@@ -13,7 +15,10 @@ import {
 } from '@mat-plan/shared';
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+
 import { schema } from '../../src/client';
+import { seed } from '../../src/seed';
 import { findOrCreateTypedMovement } from '../../src/writers/movement-catalog';
 import {
   insertMovementOwnedBy,
@@ -54,6 +59,7 @@ import {
  */
 export async function verifySchema(ctx: VerifyContext): Promise<void> {
   await verifyStep3(ctx);
+  await verifyStep1();
 }
 
 /** Thrown to roll a probe transaction back; anything else propagates. */
@@ -308,5 +314,89 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
   });
   console.log(
     '✓ FAM-1 3: findOrCreateTypedMovement types a new item, and returns an existing one (own or built-in) with its own type',
+  );
+}
+
+/**
+ * FAM-1 step 1 (plan D10): the program fixtures are written ONLY when the seed is asked for them.
+ *
+ * In a rolled-back transaction: hard-delete the seed household's program (targets → prescriptions →
+ * blocks; nothing else references them), then `seed(…, { fixtures: false })` must leave it empty and
+ * `seed(…, { fixtures: true })` must put `PROGRAM_SEED` back, every block, prescription and target.
+ * The seed runs on the transaction's own handle (PGlite has one connection).
+ */
+async function verifyStep1(): Promise<void> {
+  const seedBlocks = PROGRAM_SEED.filter((b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID);
+  assert.ok(seedBlocks.length > 0, 'FAM-1 1: PROGRAM_SEED has a block for the seed household');
+  const expected = {
+    blocks: seedBlocks.map((b) => b.slug).sort(),
+    prescriptions: seedBlocks.reduce((n, b) => n + b.prescriptions.length, 0),
+    targets: seedBlocks.reduce(
+      (n, b) => n + b.prescriptions.reduce((m, p) => m + p.targets.length, 0),
+      0,
+    ),
+  };
+
+  await rolledBack(async (tx) => {
+    const [household] = await tx
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+    assert.ok(household, 'FAM-1 1: the seed household exists');
+
+    const blocksOf = tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.householdId, household.id));
+    const prescriptionsOf = tx
+      .select({ id: schema.prescriptions.id })
+      .from(schema.prescriptions)
+      .where(inArray(schema.prescriptions.blockId, blocksOf));
+
+    /** What the seed household's program holds now: block slugs, and the live rows under them. */
+    const program = async () => {
+      const blocks = await tx
+        .select({ slug: schema.programBlocks.slug })
+        .from(schema.programBlocks)
+        .where(eq(schema.programBlocks.householdId, household.id));
+      const [p] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.prescriptions)
+        .where(inArray(schema.prescriptions.blockId, blocksOf));
+      const [t] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.prescriptionTargets)
+        .where(inArray(schema.prescriptionTargets.prescriptionId, prescriptionsOf));
+      return { blocks: blocks.map((b) => b.slug).sort(), prescriptions: p.n, targets: t.n };
+    };
+
+    await tx
+      .delete(schema.prescriptionTargets)
+      .where(inArray(schema.prescriptionTargets.prescriptionId, prescriptionsOf));
+    await tx.delete(schema.prescriptions).where(inArray(schema.prescriptions.blockId, blocksOf));
+    await tx.delete(schema.programBlocks).where(eq(schema.programBlocks.householdId, household.id));
+    assert.deepEqual(
+      await program(),
+      { blocks: [], prescriptions: 0, targets: 0 },
+      'FAM-1 1: the seed household holds no program before the seed runs',
+    );
+
+    const seedDb = tx as unknown as NodePgDatabase<typeof schema>;
+    await seed(seedDb, { fixtures: false });
+    assert.deepEqual(
+      await program(),
+      { blocks: [], prescriptions: 0, targets: 0 },
+      'FAM-1 1: seed({ fixtures: false }) writes no program, which is how production seeds',
+    );
+
+    await seed(seedDb, { fixtures: true });
+    assert.deepEqual(
+      await program(),
+      expected,
+      'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
+    );
+  });
+  console.log(
+    '✓ FAM-1 1: the seed writes the program only when asked for fixtures (production never asks)',
   );
 }

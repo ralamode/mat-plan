@@ -176,9 +176,13 @@ jobs:
 
           Each meta/NNNN_snapshot.json must have prevId == the PREVIOUS snapshot's id.
           drizzle only walks this chain when appending, so a break is silent until the
-          NEXT migration fails to generate. Fix by setting the offending prevId to the
-          id of the snapshot before it — the snapshot files are NOT applied to prod and
-          are safe to repair.
+          NEXT migration fails to generate. Outside a merge with main (the two-pass
+          add-or-drop in the db-migration skill), fix it by setting the offending prevId to
+          the id of the snapshot before it — the snapshot files are NOT applied to prod and
+          are safe to repair. NOT after merging main or after a regenerate: then a
+          snapshot of yours main lacks is probably still in meta/, and the .sql may hold
+          main's DDL. Don't hand-edit the prevId; follow .claude/skills/db-migration/SKILL.md
+          -> "Regenerate on top of main".
           CHAINMSG
           fi
 
@@ -187,13 +191,8 @@ jobs:
             cat <<'ORDERMSG'
 
           The migration was generated before another one that merged first. Regenerate it on
-          top of current main: merge main in, take main's meta/ as it is
-          (`git checkout origin/main -- packages/db/migrations/meta`; a snapshot of the same
-          number is MAIN's, so never delete it), delete only your own .sql, then
-          `pnpm --filter @mat-plan/db db:generate --name <id>_<slug>` and re-apply its
-          hand-hardening (db-migration skill). A hand-written migration with no schema change:
-          `pnpm --filter @mat-plan/db db:generate --custom --name <id>_<slug>`, then paste the
-          SQL back. Never edit a `when` by hand.
+          top of current main: follow .claude/skills/db-migration/SKILL.md -> "Regenerate on
+          top of main" (one command per line there). Never edit a `when` by hand.
           ORDERMSG
           fi
 
@@ -572,7 +571,9 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: |
           pnpm --filter @mat-plan/db db:migrate
-          pnpm --filter @mat-plan/db db:seed
+          # FAM-1 D10: the smoke's database gets the program fixtures. The seed itself refuses the flag
+          # unless the URL is local or the preview database (packages/db/src/seed.ts).
+          SEED_FIXTURES=1 pnpm --filter @mat-plan/db db:seed
           # AUTH-1 1c-4a — the bypass principal needs a MEMBERSHIP row, not just an id: from 1c-4 the
           # household scope is derived from it. CI does not go through `scripts/embedded-pg.ts`, so it
           # needs its own call, exactly as it needs its own bypass injection below.

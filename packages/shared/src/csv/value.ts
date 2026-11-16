@@ -1,26 +1,13 @@
+import { formatNumeric, SECONDS_SUFFIX } from '../quantity-spelling';
 import { type Unit, UNIT_DIMENSION_BY_CODE, type UnitDimension } from '../units';
 
 /**
- * Render a Postgres `numeric` the way the corpus writes numbers (V1-13).
- *
- * ⚠️ **drizzle returns `numeric` as a STRING**, not a number — deliberately, so precision survives.
- * So a logged `70` reads back `"70.000"` and a logged `67.5` reads back `"67.500"`. Without this,
- * **every load value in the export is wrong**, not just `weight_lb`. (The draft plan scoped the
- * trailing-zero problem to bodyweight alone; the engineering panel caught it.)
- *
- * **Decimal-aware, deliberately.** A naive `replace(/0+$/, '')` turns `90` into `9`. Only zeros
- * *after a decimal point* are insignificant, and the point goes too once nothing follows it.
- *
- * Ray's ruling (2026-09-24) on the loss this accepts: _"we can assume .0 if no tenth or decimal is
- * used"_ — so a typed `92.0` exports as `92` and a reader takes a bare integer to mean `.0`. The
- * corpus really does contain `92.0` and `74.0`, and the precision is already gone at the form
- * boundary (`bodyweight.ts` coerces to a number), so nothing downstream could have recovered it.
+ * `formatNumeric` (a Postgres `numeric` as the corpus writes numbers) lives in
+ * `../quantity-spelling` since FAM-1 contract change C1, so the program contract's client-safe
+ * text can share it without importing `csv/`. Re-exported here unchanged: every caller of
+ * `@mat-plan/shared/csv` and of `./value` reads it as before.
  */
-export function formatNumeric(value: string | number): string {
-  const raw = String(value).trim();
-  if (!raw.includes('.')) return raw;
-  return raw.replace(/\.?0+$/, '') || '0';
-}
+export { formatNumeric };
 
 /**
  * How each unit is written INSIDE a `load` value.
@@ -38,7 +25,7 @@ export const CSV_UNIT_SUFFIX: Record<Unit, string | null> = {
   lb: '', // bare — the implicit unit of the whole column
   in: 'in', // 30in / 36in, no space
   ft: 'ft', // 50ft
-  sec: 's', // 20s — NOT `sec`
+  sec: SECONDS_SUFFIX, // 20s — NOT `sec`
   // APP-DEFINED (V1-30): no corpus spelling exists. The rules (`kg` never bare, `m` = metres,
   // `min` = minutes) are docs/csv-export-contract.md → "App-defined spellings".
   kg: 'kg',
