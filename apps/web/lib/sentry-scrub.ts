@@ -111,12 +111,14 @@ const QUERY_PARAMS_TAIL = /(^|\n|\\n)[ \t]*params:[\s\S]*$/;
 const DB_DETAIL_TAIL = /(^|\n|\\n)[ \t]*DETAIL:[\s\S]*$/;
 
 /**
- * Postgres's own detail sentences, and `util.inspect`'s `detail: '…'` entry, wherever they appear
+ * Postgres's own detail sentences, and `util.inspect`'s `detail: '…'` entry (inspect picks `'`, `"`
+ * or a backtick to fit the string, so a row with an apostrophe prints in double quotes), wherever they appear
  * inside a longer string. Each is cut to the end of its line AND through every `'…' +` continuation
  * line that `util.inspect` splits a long value into: a row's text can itself hold `)` or a newline, so
  * no closing bracket or quote is trusted.
  */
-const DB_DETAIL_PHRASE = /(Failing row contains \(|Key \(|detail: ')(?:[^\n]*' \+\n)*[^\n]*/g;
+const DB_DETAIL_PHRASE =
+  /(Failing row contains \(|Key \(|detail: ['"`])(?:[^\n]*['"`] \+\n)*[^\n]*/g;
 
 /** Object keys that carry values: drizzle's query `params`, and Postgres's `detail` (the row). */
 const VALUE_KEYS = new Set(['params', 'detail']);

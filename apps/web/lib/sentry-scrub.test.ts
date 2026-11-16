@@ -436,6 +436,14 @@ describe('scrubSentryEvent — a rejected row never leaves the server (Postgres 
       'a long, multi-line detail inspect splits into continuation lines',
       `Failing row contains (42, 7, ${'Saturday hill sprints '.repeat(6)}with (a)\npartner, null).`,
     ],
+    [
+      'a long, multi-line detail with an apostrophe, which inspect prints in double quotes',
+      `Failing row contains (42, 7, ${"Sam's Saturday hill sprints ".repeat(6)}with (a)\npartner, null).`,
+    ],
+    [
+      'a long, multi-line detail with both quote kinds, which inspect prints in backticks',
+      `Failing row contains (42, 7, ${'Sam\'s "Saturday hill sprints" '.repeat(6)}with (a)\npartner, null).`,
+    ],
   ])('a printed DatabaseError (util.format) loses %s, and keeps its code', (_what, detail) => {
     const log = beforeSendLogScrubbed({
       level: 'error',
