@@ -5,7 +5,7 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
 } from './seed-ids';
-import { PROFILE_KIND, type ProfileKind } from './enums';
+import { keyBySelf, PROFILE_KIND, type ProfileKind } from './enums';
 import {
   LEGACY_SESSION_TYPE_LABELS,
   LEGACY_SESSION_TYPES,
@@ -126,7 +126,8 @@ export const DAY_ROLE_LABELS: Record<DayRole, string> = {
 /**
  * The limits of a program a household builds itself (FAM-1 plan D5; the accepted prototype's
  * counters). App-input limits: step 0a names them so the builder, the writers and the contract shapes
- * in `./program/` read one number each; the columns they bound arrive with steps 4a-i and 4b.
+ * in `./program/` read one number each. The columns they bound carry a length CHECK pinned to the same
+ * number by `db:verify` (workouts and week slots since step 4a-i; prescriptions from 4b).
  *
  * `SLOT_LABEL_MAX` also bounds the two other short texts an author types beside a workout: a
  * superset's group name and its "rest after" (FAM-1 plan §4). Sets per item reuse
@@ -141,6 +142,23 @@ export const MAX_WORKOUT_ITEMS = 30;
  * limit, not the label's, so the two can move apart.
  */
 export const TARGET_REPS_MAX = 20;
+
+/**
+ * The two kinds of program block (ADR 0007 Amendment 2 §1; FAM-1 step 4a-i). `program_blocks.kind`'s
+ * CHECK is pinned to this list by `db:verify`.
+ *
+ * - `legacy`: today's `day_role` block, written only by the seed. It keeps the newest-block read
+ *   (`programDayRows`) and is never migrated. The column's default, so the seed's insert omits it.
+ * - `template`: a program a household builds in the app, reached only through an assignment. The
+ *   program writer sets it **explicitly** (`insertProgramBlockOwnedBy`), never by default.
+ *
+ * (Named `PROGRAM_BLOCK_KINDS`, not the ADR's `BLOCK_KINDS`: that name is taken, Amendment 3.)
+ */
+export const PROGRAM_BLOCK_KINDS = ['legacy', 'template'] as const;
+export type ProgramBlockKind = (typeof PROGRAM_BLOCK_KINDS)[number];
+export const programBlockKindSchema = z.enum(PROGRAM_BLOCK_KINDS);
+/** Branch on a NAMED member (`PROGRAM_BLOCK_KIND.template`), never a bare string. */
+export const PROGRAM_BLOCK_KIND = keyBySelf(PROGRAM_BLOCK_KINDS);
 
 /**
  * What the week editor offers for a slot's label (FAM-1 plan D8). Suggestions only: a label is
@@ -262,6 +280,11 @@ function fixed(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
  * [docs/programs/kids-sc-foundation-archived.md](../../../docs/programs/kids-sc-foundation-archived.md)
  * and can be re-seeded when it returns. Both cannot be active at once, because `programDayRows` picks
  * the newest block per day-role.
+ *
+ * 🔴 **Test databases only, since FAM-1 step 1 (plan D10).** `seed(db, { fixtures: true })` writes this
+ * (CI's smoke, the preview database, the local harnesses); production's seed does not, so an edit
+ * here never reaches production. Production keeps the block it already holds; change it there with a
+ * `db:correct` correction until the program builder ships (`docs/features/programming.md`).
  */
 export const PROGRAM_SEED: readonly ProgramBlockSeedRow[] = [
   {
