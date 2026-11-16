@@ -662,7 +662,11 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
           'Unlinked: superset A now has 2 items.',
         ),
       );
-      // The first item split off and linked again: a new key underneath, the same workout.
+      // An edit between the taps (made and undone) means the relink is a plain link, under a new
+      // group key: still the same workout, so Cancel goes straight back.
+      const sets = within(cards()[0]!).getByLabelText(EDITOR_COPY.sets);
+      fireEvent.change(sets, { target: { value: '9' } });
+      fireEvent.change(sets, { target: { value: String(bench!.sets) } });
       await pause();
       fireEvent.click(linkButton('Pull-up'));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
@@ -817,6 +821,18 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       fireEvent.click(button);
       expect(scrollBy).toHaveBeenCalledWith(0, 32);
       scrollBy.mockRestore();
+    });
+
+    it('changing a unit with no number typed clears a status message', async () => {
+      editor();
+      fireEvent.change(within(cards()[0]!).getByLabelText(/^Weight/), { target: { value: '' } });
+      fireEvent.click(linkButton('Hollow-body hold'));
+      await waitFor(() => expect(screen.getByRole('status').textContent).not.toBe(''));
+      fireEvent.change(within(cards()[0]!).getByLabelText(EDITOR_COPY.unit), {
+        target: { value: 'kg' },
+      });
+      await frames();
+      expect(screen.getByRole('status').textContent).toBe('');
     });
   });
 });

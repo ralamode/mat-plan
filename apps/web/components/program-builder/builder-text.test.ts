@@ -7,6 +7,8 @@ import {
   cleanName,
   copiedFromText,
   nameRefusal,
+  supersetLetterOf,
+  supersetSpoken,
   takenOffText,
   usedByText,
   weekdayName,
@@ -78,5 +80,11 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
 
   it('a name is sent the way it is stored: whitespace runs as one space, trimmed', () => {
     expect(cleanName('  Summer\t block\n ')).toBe('Summer block');
+  });
+
+  it('a superset’s letter is the label without its number, past Z too', () => {
+    expect(supersetLetterOf('A2')).toBe('A');
+    expect(supersetLetterOf('AA12')).toBe('AA');
+    expect(supersetSpoken('AA2')).toBe('Superset AA, item 2');
   });
 });

@@ -148,7 +148,7 @@ flowchart LR
     the next item's name (up to 100 characters at 360px); its accessible name adds both items, its own first ("Superset with next: DB bench press and Pull-up"). It sits in
     its own row below the tools, and the rest field last in the card, so what a link moves is
     always below the tapped control, which is held where the thumb is and kept clear of the save
-    bar. The status line names supersets by letter ("Linked: superset B now has 3 items."), never
+    bar. A link or unlink message names supersets by letter ("Linked: superset B now has 3 items."), never
     items by name, and the next edit clears it; the bar keeps two lines for it. Also unlike v12:
     the link control has a link glyph and sits in the card's foot under a rule; the placeholder is
     "e.g. 90 s after each round"; the hint ("A superset is items done back to back…") sits under
