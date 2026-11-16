@@ -379,7 +379,9 @@ now and dearer once FAM-1's lanes have written their actions and reads, or once 
   existing transaction. ⚠️ **If it is (1), check what else runs as that role:** a role-level timeout
   also bounds the migration runner, `db:seed` and any backfill, which need their own session-level
   override on the unpooled connection. A second attempt owes a `docs/lessons.md` entry. A migration
-  owes the `db-migration` skill and the db-safety lens. _(Beta 0.)_
+  owes the `db-migration` skill and the db-safety lens. _(Beta 0.)_ **Plan:**
+  [scale-3-statement-timeout.md](./plans/scale-3-statement-timeout.md) (the role-level default; probe
+  results in the plan; the seed gets no override, reasoned there).
 - <a id="scale-4"></a>**SCALE-4 — the rules that are written down but not wired (one docs PR).** Nine
   places where a doc states something the code does not do. For each, fix the claim (mark it "planned,
   not wired yet" with its owner row) or fix the code; almost always the claim. The nine: `Intl`
