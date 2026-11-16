@@ -204,7 +204,9 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
     Three limits, each on purpose: the options passed must carry `isCatalog` (the picker's
     tie-break, so the type requires it); a name whose key is empty (`S`) is refused by
-    `newItemSchema`, since it could be matched to nothing; and the check is a read before the
+    `newItemSchema`, since it could be matched to nothing, with a sentence a form shows as it is
+    (`NEW_ITEM_NAME_MESSAGES.noKey`: "Give the item a longer name."; only a name of the letter `s`
+    alone reaches it, so it must not ask for a letter); and the check is a read before the
     insert, so two calls in the same moment with names that share a key but not a slug can both
     insert (plan D25).
 

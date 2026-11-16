@@ -1,0 +1,21 @@
+diff --git a/packages/db/src/writers/program/create-program.ts b/packages/db/src/writers/program/create-program.ts
+index 51a54ae6..269d9bf4 100644
+--- a/packages/db/src/writers/program/create-program.ts
++++ b/packages/db/src/writers/program/create-program.ts
+@@ -41,13 +41,13 @@ export async function createProgram(
+       : { ok: true, programPublicId: block.publicId };
+   };
+ 
+-  const replay = await answer();
+-  if (replay) return replay;
+-
+   if (await programNameTaken(exec, scope, name, { exceptClientId: clientId })) {
+     return { ok: false, reason: PROGRAM_REFUSAL.name_taken };
+   }
+ 
++  const replay = await answer();
++  if (replay) return replay;
++
+   const slug = await freeProgramSlug(exec, scope, name);
+   await lostSlugRace(exec, (tx) =>
+     insertProgramBlockOwnedBy(tx, scope, { clientId, slug, name, notes: null }),

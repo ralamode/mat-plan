@@ -1,0 +1,17 @@
+diff --git a/packages/db/src/writers/program/create-program.ts b/packages/db/src/writers/program/create-program.ts
+index 51a54ae6..51feeaf8 100644
+--- a/packages/db/src/writers/program/create-program.ts
++++ b/packages/db/src/writers/program/create-program.ts
+@@ -49,9 +49,9 @@ export async function createProgram(
+   }
+ 
+   const slug = await freeProgramSlug(exec, scope, name);
+-  await lostSlugRace(exec, (tx) =>
+-    insertProgramBlockOwnedBy(tx, scope, { clientId, slug, name, notes: null }),
+-  );
++  await exec.transaction(async (tx) => {
++    await insertProgramBlockOwnedBy(tx, scope, { clientId, slug, name, notes: null });
++  });
+ 
+   return (await answer()) ?? { ok: false, reason: PROGRAM_REFUSAL.retry };
+ }
