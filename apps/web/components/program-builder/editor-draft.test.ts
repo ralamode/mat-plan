@@ -154,6 +154,14 @@ describe('the editor’s draft', () => {
   });
 });
 
+describe('the contract’s last word', () => {
+  it('a draft the contract refuses is never sent, and blames no field', () => {
+    // Two cards with one id: every field is fine, and `workoutDraftSchema` still refuses it.
+    const [first] = toCards(heavyADraft);
+    expect(readDraft(heavyADraft, typed([first!, first!]))).toEqual({ ok: false, errors: [] });
+  });
+});
+
 describe('quantityLabel', () => {
   it('names a field exactly where the type has a quantity; a fixed unit names its own', () => {
     for (const type of TRACKING_TYPES) {

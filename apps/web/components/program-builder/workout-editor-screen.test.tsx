@@ -441,4 +441,27 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       heavyADraft.workoutClientId,
     );
   });
+
+  it('removing the card that holds a group’s rest hands the rest to the group’s new last card', async () => {
+    // A group of three: bench, pull-up, goblet squat, with the rest on the goblet squat.
+    const [bench, pullUp, goblet] = heavyADraft.items;
+    const three = {
+      ...heavyADraft,
+      items: [
+        { ...bench!, superset: { group: 'a', order: 1 }, restAfter: null },
+        { ...pullUp!, superset: { group: 'a', order: 2 }, restAfter: null },
+        { ...goblet!, superset: { group: 'a', order: 3 }, restAfter: '90 s after each round' },
+      ],
+    };
+    const all = editor({}, three);
+    fireEvent.click(screen.getByRole('button', { name: removeLabel('Goblet squat') }));
+    expect(within(cards()[1]!).getByText(/90 s after each round/)).toBeTruthy();
+    save();
+    await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
+    const sent = vi.mocked(all.saveWorkout).mock.calls[0]![0].items;
+    expect(sent.map((item) => [item.superset, item.restAfter])).toEqual([
+      [{ group: 'a', order: 1 }, null],
+      [{ group: 'a', order: 2 }, '90 s after each round'],
+    ]);
+  });
 });
