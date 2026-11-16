@@ -180,7 +180,11 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
 
   it('Enter in a field does not save', () => {
     const all = editor();
-    fireEvent.keyDown(screen.getByLabelText(EDITOR_COPY.workoutName), { key: 'Enter' });
+    // jsdom never submits from a key press, so what is checked is that Enter's default is stopped.
+    const field = screen.getByLabelText(EDITOR_COPY.workoutName);
+    field.focus();
+    expect(fireEvent.keyDown(field, { key: 'Enter' })).toBe(false);
+    expect(document.activeElement).not.toBe(field);
     expect(all.saveWorkout).not.toHaveBeenCalled();
   });
 
@@ -204,7 +208,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
   it('↓ moves a card, keeps the superset well formed, and focus stays on the same button', async () => {
     editor();
     const down = screen.getByRole('button', { name: moveLabel('down', 'DB bench press') });
-    down.focus();
+    // Nothing focused, as Safari leaves it after a tap: the editor must put focus on the button.
     fireEvent.click(down);
     expect(cardNames().slice(0, 2)).toEqual([
       'Superset A, item 1: Pull-up',
