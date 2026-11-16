@@ -134,9 +134,9 @@ describe('the constants the lanes build against (contract pins)', () => {
       for (const offered of unitsForTrackingType(type)) {
         expect(dimensions).toContain(UNIT_DIMENSION_BY_CODE[offered]);
       }
-      // Every pairing but a Count's plain count is storable today; step 3 adds (primary, count).
+      // Every pairing is storable: step 3 added (primary, count), the last one missing.
       for (const dimension of dimensions) {
-        if (slot && dimension !== 'count') expect(slotAcceptsDimension(slot, dimension)).toBe(true);
+        if (slot) expect(slotAcceptsDimension(slot, dimension)).toBe(true);
       }
     }
   });
@@ -147,7 +147,14 @@ describe('the constants the lanes build against (contract pins)', () => {
     expect(unitsForTrackingType(TRACKING_TYPE.weight_reps)).toEqual(['lb', 'kg']);
     expect(unitsForTrackingType(TRACKING_TYPE.duration)).toEqual(['min']);
     expect(unitsForTrackingType(TRACKING_TYPE.time_sets)).toEqual(['sec']);
-    expect(unitsForTrackingType(TRACKING_TYPE.distance)).toEqual(['in', 'cm', 'ft', 'm', 'yd']);
+    expect(unitsForTrackingType(TRACKING_TYPE.distance)).toEqual([
+      'in',
+      'cm',
+      'ft',
+      'm',
+      'yd',
+      'mi',
+    ]);
     expect(unitsForTrackingType(TRACKING_TYPE.count)).toEqual([
       'lb',
       'kg',
@@ -156,6 +163,7 @@ describe('the constants the lanes build against (contract pins)', () => {
       'ft',
       'm',
       'yd',
+      'mi',
       'sec',
       'min',
       'count',

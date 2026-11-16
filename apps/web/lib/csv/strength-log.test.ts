@@ -245,7 +245,7 @@ describe('the unit tripwire — refuse, never convert', () => {
   });
 
   // THE contract pin (AGENTS.md → constants: the literal belongs on the assertion side, exactly once).
-  // Corpus-observed: lb (bare), in, ft, sec → s. App-defined in V1-30: kg, cm, m, yd, min.
+  // Corpus-observed: lb (bare), in, ft, sec → s. App-defined in V1-30: kg, cm, m, yd, min; FAM-1: mi.
   it('spells every unit exactly as the contract says', () => {
     expect(CSV_UNIT_SUFFIX).toEqual({
       lb: '',
@@ -255,6 +255,7 @@ describe('the unit tripwire — refuse, never convert', () => {
       ft: 'ft',
       m: 'm',
       yd: 'yd',
+      mi: 'mi',
       sec: 's',
       min: 'min',
       count: null,
