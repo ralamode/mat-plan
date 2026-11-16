@@ -123,8 +123,11 @@ flowchart LR
     pair to whichever group either is in, and two groups become one under the earlier key; **the
     later group's rest is kept** and a different earlier one is named as dropped. An unlink splits
     the group between the two cards and **copies the rest to both sides**, so it is lost only when
-    neither side stays a superset. Unlink then link gives back the same draft (the earlier key is
-    reused), so Cancel does not ask. The rest is edited on the group's last card, labelled "Rest"
+    neither side stays a superset. **The opposite tap undoes a tap**: a rest a card lost as a group's
+    last item (a join, or an unlink that ended the group) is held aside, outside the draft, and
+    given back when that card is a group's last again; and "changed" compares group keys by order
+    of first appearance, so a key minted on the way is not a change. Unlink after Join, or Link
+    after Unlink, gives back the same draft, and Cancel does not ask. The rest is edited on the group's last card, labelled "Rest"
     (the day page prints "Rest " before it), and cleaned at Save like a note.
 13. **The editor refuses on the client what the writer refuses**, field by field (`readDraft`), so
     `invalid` is not the normal path: Sets 1..`MAX_SETS_PER_MOVEMENT` on a set-based type, Reps a
@@ -144,7 +147,12 @@ flowchart LR
     link control reads "Superset with next", "Unlink from next" or "Join supersets A and B", never
     the next item's name (up to 100 characters at 360px); its accessible name adds it. It sits in
     its own row below the tools, and the rest field last in the card, so what a link moves is
-    always below the tapped control. Three 8b answers differ from v12, as plan §8 records: an unlink
+    always below the tapped control, which is held where the thumb is and kept clear of the save
+    bar. The status line names supersets by letter ("Linked: superset B now has 3 items."), never
+    items by name, and the next edit clears it; the bar keeps two lines for it. Also unlike v12:
+    the link control has a link glyph and sits in the card's foot under a rule; the placeholder is
+    "e.g. 90 s after each round"; the hint ("A superset is items done back to back…") sits under
+    Items, not below the list. Three 8b answers differ from v12, as plan §8 records: an unlink
     copies the rest to both sides (v12: the first part only); a join keeps the later group's rest
     and names the dropped one (v12: the earlier one, silently); the field is "Rest", e.g. "90 s
     after each round" (v12: "Rest after each round", e.g. "90 s"). **7b must pass `program`** (`owed.test.ts`).

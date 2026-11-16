@@ -169,7 +169,8 @@ export const EDITOR_COPY = {
   instructionsHint: 'Shown with the item, every time.',
   rest: 'Rest',
   restPlaceholder: 'e.g. 90 s after each round',
-  supersetIntro: 'Link items done back to back into a superset.',
+  supersetIntro:
+    'A superset is items done back to back. Tap “Superset with next” under an item; add a third the same way.',
   linkNext: 'Superset with next',
   unlinkNext: 'Unlink from next',
   up: 'Up',
@@ -310,30 +311,36 @@ export const linkLabel = (visible: string, next: string) => `${visible}: ${next}
 /** A rest field's name, told apart from the others by its superset's letter. */
 export const restForLabel = (letter: string) => `of superset ${letter}`;
 
-/** What a link did, for the status line. */
-export function linkedText(
-  first: string,
-  second: string,
-  how: { joined: 'pair' | 'one' | 'groups'; droppedRest: string | null },
-): string {
-  const done =
-    how.joined === 'groups'
-      ? 'Two supersets are now one.'
-      : how.joined === 'one'
-        ? `${second} joined ${first}’s superset.`
-        : `${first} and ${second} are a superset.`;
-  return how.droppedRest ? `${done} The rest “${how.droppedRest}” was dropped.` : done;
+/**
+ * What a link did, for the status line: by superset letter, never by item names, so it stays one or
+ * two lines in the save bar. A join names the rest kept and the one removed.
+ */
+export function linkedText(link: {
+  letter: string;
+  joined: 'pair' | 'one' | 'groups';
+  size: number;
+  from: readonly [string, string] | null;
+  kept: string | null;
+  dropped: string | null;
+}): string {
+  if (link.joined === 'pair') return `Linked: superset ${link.letter}.`;
+  if (link.joined === 'one') return `Linked: superset ${link.letter} now has ${link.size} items.`;
+  const done = `Supersets ${link.from![0]} and ${link.from![1]} are now ${link.letter}.`;
+  return link.dropped ? `${done} Rest kept: “${link.kept}”; removed: “${link.dropped}”.` : done;
 }
 
-/** What an unlink did. */
-export function unlinkedText(
-  first: string,
-  second: string,
-  ended: { droppedRest: string | null } | null,
-): string {
-  const done = `${first} and ${second} are no longer linked.`;
-  if (!ended) return done;
-  return ended.droppedRest
-    ? `${done} The superset ended, and its rest “${ended.droppedRest}” with it.`
-    : `${done} The superset ended.`;
+/** What an unlink did: the superset ended, an item left it, or it became two. */
+export function unlinkedText(unlink: {
+  letter: string;
+  ended: boolean;
+  left: string | null;
+  droppedRest: string | null;
+}): string {
+  if (unlink.ended) {
+    const done = `Unlinked: superset ${unlink.letter} ended.`;
+    return unlink.droppedRest ? `${done} Rest removed: “${unlink.droppedRest}”.` : done;
+  }
+  return unlink.left
+    ? `Unlinked: ${unlink.left} left superset ${unlink.letter}.`
+    : `Unlinked: superset ${unlink.letter} is now two.`;
 }

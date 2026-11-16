@@ -12,6 +12,8 @@ import {
   type UnitDimension,
 } from '@mat-plan/shared';
 
+import { Link2, Unlink2 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -160,7 +162,9 @@ export function ItemCard({
     <li
       className={cn(
         'flex flex-col gap-3 rounded-lg border p-3',
-        label && 'border-l-primary border-l-4',
+        // The 4px rule takes 3px more than a plain border: the padding gives them back, so the
+        // fields do not shift sideways on a link.
+        label && 'border-l-primary border-l-4 pl-[9px]',
       )}
     >
       <div className="flex flex-wrap items-baseline gap-x-2">
@@ -270,43 +274,53 @@ export function ItemCard({
         </Button>
       </div>
 
-      {link ? (
-        <div>
-          <Button
-            ref={(node) => controlRef('link', node)}
-            type="button"
-            variant="outline"
-            className="min-w-11"
-            aria-label={linkLabel(linkText(link), link.next)}
-            onKeyDown={(event) => {
-              if (event.repeat && event.key === 'Enter') event.preventDefault();
-            }}
-            onClick={(event) => onLink(event.timeStamp)}
-          >
-            {linkText(link)}
-          </Button>
-        </div>
-      ) : null}
+      {link || restLetter ? (
+        // The card's foot: what joins it to the next card. A full-width rule sets it apart from
+        // the item's own tools above.
+        <div className="-mx-3 flex flex-col gap-3 border-t px-3 pt-3">
+          {link ? (
+            <div>
+              <Button
+                ref={(node) => controlRef('link', node)}
+                type="button"
+                variant="ghost"
+                className="min-w-11"
+                aria-label={linkLabel(linkText(link), link.next)}
+                onKeyDown={(event) => {
+                  if (event.repeat && event.key === 'Enter') event.preventDefault();
+                }}
+                onClick={(event) => onLink(event.timeStamp)}
+              >
+                {link.linked ? <Unlink2 aria-hidden /> : <Link2 aria-hidden />}
+                {linkText(link)}
+              </Button>
+            </div>
+          ) : null}
 
-      {/* The group's rest, last in the card: what moves in and out of a card on a link sits
+          {/* The group's rest, last in the card: what moves in and out of a card on a link sits
           below the tapped control, so the control never moves under the thumb. */}
-      {restLetter ? (
-        <NameField
-          id={fieldId(id, 'rest')}
-          label={
-            <>
-              {EDITOR_COPY.rest}
-              <span className="sr-only"> {restForLabel(restLetter)}</span>
-            </>
-          }
-          value={item.restAfter ?? ''}
-          max={SLOT_LABEL_MAX}
-          placeholder={EDITOR_COPY.restPlaceholder}
-          onChange={onRest}
-          error={errorOf('rest')?.message ?? null}
-          optional
-          announce={false}
-        />
+          {restLetter ? (
+            <NameField
+              id={fieldId(id, 'rest')}
+              label={
+                <>
+                  {EDITOR_COPY.rest}
+                  <span className="text-muted-foreground font-normal">
+                    {' '}
+                    {restForLabel(restLetter)}
+                  </span>
+                </>
+              }
+              value={item.restAfter ?? ''}
+              max={SLOT_LABEL_MAX}
+              placeholder={EDITOR_COPY.restPlaceholder}
+              onChange={onRest}
+              error={errorOf('rest')?.message ?? null}
+              optional
+              announce={false}
+            />
+          ) : null}
+        </div>
       ) : null}
     </li>
   );

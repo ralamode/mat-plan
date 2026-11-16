@@ -550,9 +550,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(cardNames()[4]).toBe('Superset B, item 3: Hollow-body hold');
       expect(restIn(cards()[4]!)).toBe('60 s after each round');
       await waitFor(() =>
-        expect(screen.getByRole('status').textContent).toBe(
-          'Hollow-body hold joined Sprawls’s superset.',
-        ),
+        expect(screen.getByRole('status').textContent).toBe('Linked: superset B now has 3 items.'),
       );
     });
 
@@ -567,7 +565,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(restIn(cards()[3]!)).toBe('60 s after each round');
       await waitFor(() =>
         expect(screen.getByRole('status').textContent).toBe(
-          'Two supersets are now one. The rest “90 s after each round” was dropped.',
+          'Supersets A and B are now A. Rest kept: “60 s after each round”; removed: “90 s after each round”.',
         ),
       );
     });
@@ -578,7 +576,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(cardNames().slice(0, 2)).toEqual(['DB bench press', 'Pull-up']);
       await waitFor(() =>
         expect(screen.getByRole('status').textContent).toBe(
-          'DB bench press and Pull-up are no longer linked. The superset ended, and its rest “90 s after each round” with it.',
+          'Unlinked: superset A ended. Rest removed: “90 s after each round”.',
         ),
       );
     });
@@ -615,6 +613,64 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       fireEvent.click(linkButton('Goblet squat'));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
       expect(push).toHaveBeenCalledWith(BACK);
+    });
+
+    const pause = () => new Promise((resolve) => setTimeout(resolve, DOUBLE_TAP_MS + 20));
+
+    it('Unlink straight after Join gives each superset back its own rest', async () => {
+      editor();
+      fireEvent.click(linkButton('Goblet squat'));
+      await pause();
+      fireEvent.click(linkButton('Goblet squat'));
+      expect(restIn(cards()[1]!)).toBe('90 s after each round');
+      expect(restIn(cards()[3]!)).toBe('60 s after each round');
+      fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+      expect(push).toHaveBeenCalledWith(BACK);
+    });
+
+    it('a pair unlinked and linked again gets its rest back, and nothing has changed', async () => {
+      editor();
+      fireEvent.click(linkButton('Pull-up'));
+      await pause();
+      fireEvent.click(linkButton('Pull-up'));
+      expect(restIn(cards()[1]!)).toBe('90 s after each round');
+      fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+      expect(push).toHaveBeenCalledWith(BACK);
+    });
+
+    it('an unlink that leaves one item says who left', async () => {
+      const [bench, pullUp, goblet] = heavyADraft.items;
+      editor(
+        {},
+        {
+          ...heavyADraft,
+          items: [
+            { ...bench!, superset: { group: 'a', order: 1 }, restAfter: null },
+            { ...pullUp!, superset: { group: 'a', order: 2 }, restAfter: null },
+            { ...goblet!, superset: { group: 'a', order: 3 }, restAfter: '90 s after each round' },
+          ],
+        },
+      );
+      fireEvent.click(linkButton('Pull-up'));
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toBe(
+          'Unlinked: DB bench press left superset A.',
+        ),
+      );
+      // The first item split off and linked again: a new key underneath, the same workout.
+      await pause();
+      fireEvent.click(linkButton('Pull-up'));
+      fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
+      expect(push).toHaveBeenCalledWith(BACK);
+    });
+
+    it('the next edit clears a status message', async () => {
+      editor();
+      fireEvent.click(linkButton('Hollow-body hold'));
+      await waitFor(() => expect(screen.getByRole('status').textContent).not.toBe(''));
+      fireEvent.change(screen.getByLabelText(EDITOR_COPY.workoutName), { target: { value: 'B' } });
+      await frames();
+      expect(screen.getByRole('status').textContent).toBe('');
     });
   });
 });
