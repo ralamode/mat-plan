@@ -15,6 +15,36 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
+
+- **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit
+check`), and AGENTS.md → "Database / migration PR rules" named it first among the CI gates since
+  the bootstrap commit. No workflow and no `pnpm verify` step runs it. It is the check that reports a
+  snapshot chain two migrations both claim as parent, so the forward-only guard's inline chain check
+  in `ci.yml` is the only backstop for that collision. AGENTS.md no longer claims it (this entry's
+  PR); the gate table above did not list it either.
+- **Impact:** low today. Two FAM-1 lanes now share the migration queue, which is when parent
+  collisions happen, and the inline chain check and the journal-order check (#428) catch the cases
+  seen so far.
+- **Fix:** wire `pnpm --filter @mat-plan/db check` into `ci.yml`'s DB step beside the drift guard,
+  or delete the script and say the inline check is the gate. One PR either way.
+- **Severity:** low.
+
+### The preview database can skip a migration main later merges (found 2026-11-16, #428 review)
+
+- **What & why it's debt:** `.github/workflows/migrate-preview.yml` documents refreshing the
+  preview database from a branch by running `packages/db/scripts/migrate.ts` locally against the
+  preview direct string. That records the branch migration's journal `when` as the preview's newest
+  `created_at`. drizzle applies a migration only when its `when` is later than that, so a migration
+  from main with an older `when` that merges afterwards is skipped on preview with no error. A branch
+  migration later regenerated (the journal-order recipe in #428) has a new `when` and hash, so it
+  applies a second time on preview after it merges.
+- **Impact:** the preview database is seed-only (OPS-1), so no person's data is affected; a preview
+  can run on a schema that disagrees with main's until it is reset.
+- **Fix:** say in the workflow comment and the OPS-1 runbook section that a preview refreshed from a
+  branch is reset from main afterwards, or stop recommending the branch refresh.
+- **Severity:** low.
+
 ### The old log forms are unmounted, not deleted, and older days have no in-app fix (added 2026-11-15)
 
 - **What & why it's debt:** V1-24 3b-page took the Check-ins form, the Strength section (form,

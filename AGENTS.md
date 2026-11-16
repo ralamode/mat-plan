@@ -417,7 +417,7 @@ Workflow: edit schema → drizzle-kit generate → COMMIT the generated .sql (th
   buys nothing — 0009's own comment reaches the same conclusion).
 Where it runs: GitHub Actions is the SINGLE migrator, on merge to main, against the DIRECT/unpooled
   Neon string. NEVER in the Vercel build (concurrent preview builds would race / DDL the wrong DB).
-CI gates: drizzle-kit check + `generate` leaves a clean tree (drift guard) + `db:verify` on PGlite +
+CI gates: `generate` leaves a clean tree (drift guard) + `db:verify` on PGlite +
   Squawk on new migrations + the e2e job's migrate+seed against an empty Postgres service. Where each
   gate runs, and which is NOT wired: "Local hooks vs CI merge-gates" above.
 Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside
