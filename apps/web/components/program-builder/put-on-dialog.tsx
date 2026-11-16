@@ -11,20 +11,17 @@ import {
 import { useRouter } from 'next/navigation';
 import { useId, useRef, useState } from 'react';
 
-import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import {
-  BUILDER_COPY,
   candidateOnLabel,
   fromText,
   keepsText,
   lastDayText,
   orderHintText,
-  PENDING_CLASS,
   PUT_ON_COPY,
   putOnTitle,
   startedText,
@@ -32,6 +29,7 @@ import {
   startLabel,
   switchHintText,
 } from './builder-text';
+import { SheetFormFooter } from './sheet-form-footer';
 import { useAttempt } from './use-attempt';
 
 const SHEET_ID = 'put-on';
@@ -47,7 +45,7 @@ function workoutsOn(program: ProgramView, day: string): string[] {
 
 /** The first day from `day` (within a week) the program has a workout on. */
 function firstWorkoutDay(program: ProgramView, day: string) {
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i < 7; i++) {
     const next = addDays(day, i);
     const workouts = workoutsOn(program, next);
     if (workouts.length) return { day: next, workouts };
@@ -88,22 +86,24 @@ export function PutOn({
   const [pending, setPending] = useState(false);
   const said = useRef<string | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const everyoneOn = useRef<HTMLParagraphElement>(null);
   const { begin, isCurrent, cancel } = useAttempt();
   const ids = useId();
   const messageId = `${ids}-message`;
   const effectId = `${ids}-effect`;
 
   const lastDays = new Map(program.athletes.map((a) => [a.profilePublicId, a.lastDay]));
-  const addable = program.candidates.filter((c) => !c.on);
+  // Someone on it with a last day (taken off) can be put back on: that undoes the Take off (C15).
+  const offered = (c: ProgramView['candidates'][number]) =>
+    !c.on || !!lastDays.get(c.profilePublicId);
+  const addable = program.candidates.filter(offered);
   const ticked = program.candidates.filter((c) => picked.has(c.profilePublicId));
-  const keeps = [...new Set(ticked.flatMap((c) => c.keeps))];
+  const keeps = [
+    ...new Set(ticked.flatMap((c) => c.keeps).filter((name) => name !== program.name)),
+  ];
   const tomorrow = addDays(program.today, 1);
   const from = when === 'today' ? program.today : tomorrow;
   const effectWorkouts = workoutsOn(program, from);
-
-  if (!addable.length) {
-    return <p className="text-muted-foreground text-sm">{PUT_ON_COPY.everyoneOn}</p>;
-  }
 
   function openDialog() {
     setPicked(new Set());
@@ -125,15 +125,24 @@ export function PutOn({
     const mine = begin();
     setPending(true);
     setMessage('');
-    const result = await putOn({
-      programPublicId: program.programPublicId,
-      profilePublicIds: ticked.map((c) => c.profilePublicId),
-      from,
-    });
+    let result: Awaited<ReturnType<typeof putOn>>;
+    try {
+      result = await putOn({
+        programPublicId: program.programPublicId,
+        profilePublicIds: ticked.map((c) => c.profilePublicId),
+        from,
+      });
+    } catch {
+      // A dropped connection is a retry, as the week editor's saves.
+      result = { ok: false, reason: PROGRAM_REFUSAL.retry };
+    }
     if (!isCurrent(mine)) return;
     setPending(false);
     if (!result.ok) {
-      if (result.reason === PROGRAM_REFUSAL.retry) return setMessage(PUT_ON_COPY.failed);
+      // `invalid` too: a dialog left open past midnight sends a start that is now yesterday.
+      if (result.reason === PROGRAM_REFUSAL.retry || result.reason === PROGRAM_REFUSAL.invalid) {
+        return setMessage(PUT_ON_COPY.failed);
+      }
       said.current = PUT_ON_COPY.stale;
       setOpen(false);
       router.refresh();
@@ -150,55 +159,47 @@ export function PutOn({
 
   return (
     <>
-      <Button
-        ref={trigger}
-        type="button"
-        variant={program.athletes.length ? 'outline' : 'default'}
-        className="h-auto min-h-11 whitespace-normal"
-        aria-haspopup="dialog"
-        onClick={openDialog}
-      >
-        {PUT_ON_COPY.open}
-      </Button>
+      {/* The Sheet stays mounted when the last person is put on: only the trigger becomes a line,
+          so the sheet closes (and pops its history entry) and focus has somewhere to return. */}
+      {addable.length ? (
+        <Button
+          ref={trigger}
+          type="button"
+          variant={program.athletes.length ? 'outline' : 'default'}
+          className="h-auto min-h-11 whitespace-normal"
+          aria-haspopup="dialog"
+          onClick={openDialog}
+        >
+          {PUT_ON_COPY.open}
+        </Button>
+      ) : (
+        <p
+          ref={everyoneOn}
+          tabIndex={-1}
+          className={`text-muted-foreground rounded-sm text-sm ${FOCUS_TARGET_CLASS}`}
+        >
+          {PUT_ON_COPY.everyoneOn}
+        </p>
+      )}
       <Sheet
         id={SHEET_ID}
         open={open}
         onOpenChange={close}
         title={putOnTitle(program.name)}
-        returnFocusTo={trigger}
+        returnFocusTo={addable.length ? trigger : everyoneOn}
         onReturned={() => {
           if (said.current) onStatus(said.current);
           said.current = null;
         }}
         footer={
-          <div className="flex flex-col gap-2">
-            <Announcer
-              id={messageId}
-              message={message}
-              className={cn('text-sm font-medium', message ? 'min-h-5' : 'h-0')}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="submit"
-                form={FORM_ID}
-                size="lg"
-                className={`h-auto min-h-11 w-full text-base whitespace-normal ${PENDING_CLASS}`}
-                aria-disabled={!ticked.length || pending || undefined}
-                aria-describedby={messageId}
-              >
-                {pending ? PUT_ON_COPY.starting_ : startLabel(ticked.length, program.name)}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full text-base"
-                onClick={() => close(false)}
-              >
-                {BUILDER_COPY.cancel}
-              </Button>
-            </div>
-          </div>
+          <SheetFormFooter
+            formId={FORM_ID}
+            messageId={messageId}
+            message={message}
+            action={pending ? PUT_ON_COPY.startPending : startLabel(ticked.length, program.name)}
+            inactive={!ticked.length || pending}
+            onCancel={() => close(false)}
+          />
         }
       >
         <form
@@ -214,6 +215,7 @@ export function PutOn({
             <legend className="mb-2 text-sm font-medium">{PUT_ON_COPY.who}</legend>
             {program.candidates.map((c) => {
               const lastDay = lastDays.get(c.profilePublicId);
+              const fixed = !offered(c);
               const hint = c.on
                 ? lastDay
                   ? lastDayText(lastDay)
@@ -224,20 +226,20 @@ export function PutOn({
                   key={c.profilePublicId}
                   className={cn(
                     'flex min-h-11 items-start gap-3 rounded-lg border px-3 py-2',
-                    c.on && 'text-muted-foreground',
+                    fixed && 'text-muted-foreground',
                   )}
                 >
                   <input
                     type="checkbox"
                     className="mt-1 size-4 shrink-0 aria-disabled:opacity-50"
-                    checked={c.on || picked.has(c.profilePublicId)}
-                    aria-disabled={c.on || undefined}
+                    checked={fixed || picked.has(c.profilePublicId)}
+                    aria-disabled={fixed || undefined}
                     // Its name is the person; what they keep is its description, read after.
-                    aria-label={c.on ? candidateOnLabel(c.name, hint) : undefined}
-                    aria-labelledby={c.on ? undefined : `${ids}-${c.profilePublicId}-name`}
-                    aria-describedby={c.on ? undefined : `${ids}-${c.profilePublicId}`}
+                    aria-label={fixed ? candidateOnLabel(c.name, hint) : undefined}
+                    aria-labelledby={fixed ? undefined : `${ids}-${c.profilePublicId}-name`}
+                    aria-describedby={fixed ? undefined : `${ids}-${c.profilePublicId}`}
                     onChange={() => {
-                      if (c.on) return;
+                      if (fixed) return;
                       const next = new Set(picked);
                       if (next.has(c.profilePublicId)) next.delete(c.profilePublicId);
                       else next.add(c.profilePublicId);

@@ -2,10 +2,13 @@
 import { addDays, PROGRAM_REFUSAL, type ProgramActions, type ProgramView } from '@mat-plan/shared';
 import { familyProgram, familyProgramAfterTakeOff } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }) }));
+
+import { createFakeProgramActions, type FakeProgramState } from '@/app/design/program/fakes';
 
 import {
   candidateOnLabel,
@@ -15,6 +18,7 @@ import {
   PUT_ON_COPY,
   putOnTitle,
   startedText,
+  startEffectText,
   startLabel,
   switchHintText,
 } from './builder-text';
@@ -85,11 +89,17 @@ describe('Put someone on (FAM-1 10b)', () => {
     expect(within(dialog()).getByText(keepsText(adult.keeps))).toBeTruthy();
   });
 
-  it('someone taken off reads their last day, not "on it"', () => {
-    page({}, familyProgramAfterTakeOff);
+  it('someone taken off reads their last day and can be put back on (C15)', async () => {
+    const all = page({}, familyProgramAfterTakeOff);
     openDialog();
     const off = familyProgramAfterTakeOff.athletes.find((a) => a.lastDay)!;
-    expect(box(candidateOnLabel(off.name, lastDayText(off.lastDay!)))).toBeTruthy();
+    const offBox = box(off.name);
+    expect(offBox.getAttribute('aria-disabled')).toBeNull();
+    expect(within(dialog()).getByText(lastDayText(off.lastDay!))).toBeTruthy();
+    fireEvent.click(offBox);
+    fireEvent.click(start(1));
+    await waitFor(() => expect(all.putOn).toHaveBeenCalled());
+    expect(vi.mocked(all.putOn!).mock.calls[0]![0].profilePublicIds).toEqual([off.profilePublicId]);
   });
 
   it('Start sends who and from; the bar says it once focus is back', async () => {
@@ -126,7 +136,14 @@ describe('Put someone on (FAM-1 10b)', () => {
     expect(today.textContent).toContain('already logged today stays');
     fireEvent.click(within(dialog()).getByRole('radio', { name: /^Tomorrow/ }));
     // Sunday has nothing: it names the first day that does.
-    expect(within(dialog()).getByText(/^Tomorrow: nothing from this program/)).toBeTruthy();
+    expect(
+      within(dialog()).getByText(
+        startEffectText('tomorrow', [], {
+          day: addDays(familyProgram.today, 2),
+          workouts: ['Morning habits', 'Heavy A'],
+        }),
+      ),
+    ).toBeTruthy();
   });
 
   it('ticking someone who keeps another program explains the order, and how to switch', () => {
@@ -162,5 +179,30 @@ describe('Put someone on (FAM-1 10b)', () => {
     page({}, everyone);
     expect(screen.queryByRole('button', { name: PUT_ON_COPY.open })).toBeNull();
     expect(screen.getByText(PUT_ON_COPY.everyoneOn)).toBeTruthy();
+  });
+
+  it('putting the last person on closes the sheet properly and still says so', async () => {
+    // The real preview fake, so the page's program changes under the open sheet.
+    const back = vi.mocked(window.history.back);
+    const seed: FakeProgramState = { programs: [], program: familyProgram, items: [] };
+    function Harness() {
+      const [state, setState] = useState(seed);
+      const [fake] = useState(() => createFakeProgramActions(seed, setState));
+      return <ProgramScreen program={state.program!} actions={fake.actions} />;
+    }
+    render(<Harness />);
+    openDialog();
+    fireEvent.click(box(adult.name));
+    fireEvent.click(start(1));
+    await waitFor(() => expect(screen.getByText(PUT_ON_COPY.everyoneOn)).toBeTruthy());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The sheet closed as a sheet: its history entry was popped.
+    expect(back).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        startedText([adult.name], familyProgram.name, familyProgram.today, familyProgram.today),
+      ),
+    );
+    expect(document.activeElement).toBe(screen.getByText(PUT_ON_COPY.everyoneOn));
   });
 });

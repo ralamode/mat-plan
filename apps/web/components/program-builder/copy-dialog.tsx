@@ -1,12 +1,16 @@
 'use client';
 
 import {
+  copyName,
   foldName,
   MONDAY_FIRST,
   newId,
   PROGRAM_REFUSAL,
   slotLabelSchema,
+  WORKOUT_NAME_MAX,
+  workoutNameSchema,
   type ProgramActions,
+  type ProgramResult,
   type ProgramView,
   type Weekday,
 } from '@mat-plan/shared';
@@ -14,33 +18,32 @@ import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
-import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
-import { cn } from '@/lib/utils';
 
 import {
-  BUILDER_COPY,
   COPY_COPY,
   copiedText,
-  copyName,
+  copyTakenElsewhereText,
   copyTakenText,
   copyTitle,
   doubleText,
-  PENDING_CLASS,
   putOnInsteadText,
   targetPeopleText,
   thisProgramOption,
   WEEK_COPY,
 } from './builder-text';
 import { FieldLabel } from './field-label';
+import { NameField } from './name-field';
 import { workoutPath } from './routes';
-import { useAttempt } from './use-attempt';
+import { SheetFormFooter } from './sheet-form-footer';
+import { focusField, useAttempt } from './use-attempt';
 import { DaysFieldset, SlotLabelField } from './week-editor/days-label-fields';
 
 const SHEET_ID = 'copy-workout';
 const FORM_ID = 'copy-workout-form';
 const TO_ID = 'copy-workout-to';
+const NAME_ID = 'copy-workout-name';
 
 type Workout = ProgramView['workouts'][number];
 
@@ -56,17 +59,7 @@ function labelIn(program: ProgramView, workoutPublicId: string): string {
 /**
  * "Copy to…" (FAM-1 step 10b; the prototype's `openCopy`): one Sheet for every workout row, opened
  * on the one tapped, with focus returned to that row's button. It makes an independent workout.
- *
- * - **To starts on "Choose a program"** unless only one is offered (UX panel, 2026-11-16, as the
- *   week editor's workout select): a copy cannot be deleted, so nothing is chosen for the parent.
- *   Under it, who is on that program and will see it.
- * - **Days are optional**; the label shows once a day is ticked, prefilled from this program's week
- *   only when the copy stays in it (another program's slots mean other things).
- * - **A copy into this program** is named "Heavy A (copy)"; when that name is taken it says so and
- *   Copy stays inactive (no name field until the contract's `CopyDraft` has one).
- * - Someone on both programs who already does this workout on a picked day is named.
- * - One `clientId` per attempt, reused on a retry. Refusals are said in the footer; the success
- *   line goes to the page's bar from `onReturned`, and a copy into this program takes focus.
+ * The rules are the guide's invariant 18 (`docs/features/program-builder.md`).
  */
 export function CopyWorkout({
   program,
@@ -96,10 +89,16 @@ export function CopyWorkout({
   const [to, setTo] = useState(only);
   const [days, setDays] = useState<Set<Weekday>>(new Set());
   const [label, setLabel] = useState('');
+  // What the label holds because it was prefilled, so a change of To replaces only that.
+  const [prefilled, setPrefilled] = useState('');
   const [labelError, setLabelError] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  // The other program that refused this copy's name: the Name field shows for it from then on.
+  const [refusedIn, setRefusedIn] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [pending, setPending] = useState(false);
-  // One attempt's id, reused on a retry; a new workout opened is a new attempt.
+  // One attempt's id, reused on a retry; a new opening is a new attempt.
   const [clientId, setClientId] = useState(newId);
   const said = useRef<{ text: string; focus: string | null } | null>(null);
   const { begin, isCurrent, cancel } = useAttempt();
@@ -107,15 +106,27 @@ export function CopyWorkout({
   const messageId = `${ids}-message`;
   const peopleId = `${ids}-people`;
 
+  /** The label for a program: this program's slot label, or none (another program's slots differ). */
+  const prefillFor = (programId: string) =>
+    workout && programId === program.programPublicId
+      ? labelIn(program, workout.workoutPublicId)
+      : '';
+
   // A new workout opens a fresh dialog: nothing chosen, a new attempt.
   const [seen, setSeen] = useState<Workout | null>(null);
   if (workout !== seen) {
     setSeen(workout);
     if (workout) {
+      const first =
+        only === program.programPublicId ? labelIn(program, workout.workoutPublicId) : '';
       setTo(only);
       setDays(new Set());
-      setLabel(only === program.programPublicId ? labelIn(program, workout.workoutPublicId) : '');
+      setLabel(first);
+      setPrefilled(first);
       setLabelError(null);
+      setName(copyName(workout.name));
+      setNameError(null);
+      setRefusedIn(null);
       setMessage('');
       setPending(false);
       setClientId(newId());
@@ -124,36 +135,46 @@ export function CopyWorkout({
 
   const same = to === program.programPublicId;
   const target = options.find((o) => o.programPublicId === to);
-  const name = workout ? copyName(workout.name) : '';
-  // The writers' own name rule (plan D5): two names a person would read as the same one.
-  const taken = same && program.workouts.some((w) => foldName(w.name) === foldName(name));
+  // The Name field: always for a copy here (C15), and for another program once it refused the name.
+  const naming = same || (!!refusedIn && refusedIn === to);
+  const current = new Set(program.athletes.filter((a) => !a.lastDay).map((a) => a.profilePublicId));
   const people = !target
     ? []
     : same
-      ? program.athletes.map((a) => a.name)
+      ? program.athletes.filter((a) => !a.lastDay).map((a) => a.name)
       : program.candidates.filter((c) => c.keeps.includes(target.name)).map((c) => c.name);
   // Someone on both programs who already does this workout on a picked day (not for a copy here).
   const doubles =
     !workout || same || !target
       ? []
       : program.candidates
-          .filter((c) => c.on && c.keeps.includes(target.name))
+          .filter((c) => current.has(c.profilePublicId) && c.keeps.includes(target.name))
           .map((c) => ({
             name: c.name,
-            on: MONDAY_FIRST.filter(
-              (d) =>
-                days.has(d) &&
-                program.week[d].some((s) => s.workoutPublicId === workout.workoutPublicId),
-            ),
+            on: workout.usedOn.filter((d) => days.has(d as Weekday)),
           }))
           .filter((d) => d.on.length);
 
   function choose(next: string) {
     setTo(next);
     setMessage('');
-    // The prefill belongs to this program's week; another program's slots mean other things.
-    if (workout && !label) {
-      setLabel(next === program.programPublicId ? labelIn(program, workout.workoutPublicId) : '');
+    setNameError(null);
+    // Replace the label only if it is still the prefill: what the person typed stays theirs.
+    if (label === '' || label === prefilled) {
+      const fill = prefillFor(next);
+      setLabel(fill);
+      setPrefilled(fill);
+    }
+  }
+
+  async function attempt(
+    draft: Parameters<typeof copyWorkout>[0],
+  ): Promise<ProgramResult<{ workoutPublicId: string }>> {
+    try {
+      return await copyWorkout(draft);
+    } catch {
+      // A dropped connection is a retry, as the week editor's saves.
+      return { ok: false, reason: PROGRAM_REFUSAL.retry };
     }
   }
 
@@ -161,22 +182,32 @@ export function CopyWorkout({
     if (!workout || pending) return;
     if (!target) {
       setMessage(COPY_COPY.chooseFirst);
-      return document.getElementById(TO_ID)?.focus();
+      return focusField(document.getElementById(TO_ID));
     }
-    if (taken) return setMessage(copyTakenText(name));
+    const named = naming ? workoutNameSchema.safeParse(name) : null;
+    if (named && !named.success) {
+      setNameError(named.error.issues[0]?.message ?? WEEK_COPY.labelInvalid);
+      return focusField(document.getElementById(NAME_ID));
+    }
+    const copyAs = named?.success ? named.data : workout.name;
+    if (same && program.workouts.some((w) => foldName(w.name) === foldName(copyAs))) {
+      setNameError(copyTakenText(copyAs));
+      return focusField(document.getElementById(NAME_ID));
+    }
     const parsed = slotLabelSchema.safeParse(days.size ? label : '');
     if (!parsed.success) {
       setLabelError(WEEK_COPY.labelInvalid);
-      return document.getElementById(`${ids}-label`)?.focus();
+      return focusField(document.getElementById(`${ids}-label`));
     }
     const weekdays = MONDAY_FIRST.filter((d) => days.has(d));
     const mine = begin();
     setPending(true);
     setMessage('');
-    const result = await copyWorkout({
+    const result = await attempt({
       clientId,
       workoutPublicId: workout.workoutPublicId,
       toProgramPublicId: target.programPublicId,
+      ...(named?.success ? { name: named.data } : {}),
       weekdays,
       label: parsed.data,
     });
@@ -184,27 +215,36 @@ export function CopyWorkout({
     setPending(false);
     if (!result.ok) {
       if (result.reason === PROGRAM_REFUSAL.retry) return setMessage(COPY_COPY.failed);
-      if (result.reason === PROGRAM_REFUSAL.name_taken) return setMessage(copyTakenText(name));
+      if (result.reason === PROGRAM_REFUSAL.name_taken) {
+        // The field shows, prefilled, with what was refused said on it; Copy is pressed again.
+        if (!same) setRefusedIn(target.programPublicId);
+        setNameError(same ? copyTakenText(copyAs) : copyTakenElsewhereText(target.name, copyAs));
+        requestAnimationFrame(() => focusField(document.getElementById(NAME_ID)));
+        return;
+      }
       said.current = { text: COPY_COPY.stale, focus: null };
       onClose();
       router.refresh();
       return;
     }
     said.current = {
-      text: copiedText(workout.name, target.name, weekdays, same),
+      text: copiedText(copyAs, target.name, weekdays, same),
       focus: same ? workoutPath(program.programPublicId, result.workoutPublicId) : null,
     };
     onClose();
   }
+
+  const close = () => {
+    cancel();
+    onClose();
+  };
 
   return (
     <Sheet
       id={SHEET_ID}
       open={!!workout}
       onOpenChange={(next) => {
-        if (next) return;
-        cancel();
-        onClose();
+        if (!next) close();
       }}
       title={workout ? copyTitle(workout.name) : ''}
       returnFocusTo={returnFocusTo}
@@ -217,37 +257,14 @@ export function CopyWorkout({
         onStatus(done.text);
       }}
       footer={
-        <div className="flex flex-col gap-2">
-          <Announcer
-            id={messageId}
-            message={message}
-            className={cn('text-sm font-medium', message ? 'min-h-5' : 'h-0')}
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="submit"
-              form={FORM_ID}
-              size="lg"
-              className={`w-full text-base ${PENDING_CLASS}`}
-              aria-disabled={!target || taken || pending || undefined}
-              aria-describedby={messageId}
-            >
-              {pending ? COPY_COPY.copying : COPY_COPY.copy}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="w-full text-base"
-              onClick={() => {
-                cancel();
-                onClose();
-              }}
-            >
-              {BUILDER_COPY.cancel}
-            </Button>
-          </div>
-        </div>
+        <SheetFormFooter
+          formId={FORM_ID}
+          messageId={messageId}
+          message={message}
+          action={pending ? COPY_COPY.copying : COPY_COPY.copy}
+          inactive={!target || pending}
+          onCancel={close}
+        />
       }
     >
       <form
@@ -278,10 +295,23 @@ export function CopyWorkout({
           </select>
           {target ? (
             <p id={peopleId} className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-              {taken ? copyTakenText(name) : targetPeopleText(target.name, people)}
+              {targetPeopleText(target.name, people)}
             </p>
           ) : null}
         </div>
+        {naming ? (
+          <NameField
+            id={NAME_ID}
+            label={COPY_COPY.name}
+            value={name}
+            max={WORKOUT_NAME_MAX}
+            onChange={(next) => {
+              setName(next);
+              setNameError(null);
+            }}
+            error={nameError}
+          />
+        ) : null}
         <DaysFieldset
           idPrefix={ids}
           days={days}
@@ -297,11 +327,15 @@ export function CopyWorkout({
           }
           hint={null}
         />
-        {doubles.map((d) => (
-          <p key={d.name} className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>
-            {doubleText(d.name, workout!.name, d.on, program.name)}
-          </p>
-        ))}
+        {/* Heard as well as seen: the warning that matters most here. */}
+        <Announcer
+          message={
+            workout
+              ? doubles.map((d) => doubleText(d.name, workout.name, d.on, program.name)).join(' ')
+              : ''
+          }
+          className={doubles.length ? `text-sm font-medium ${NAME_WRAP_CLASS}` : 'h-0'}
+        />
         {days.size ? (
           <SlotLabelField
             id={`${ids}-label`}

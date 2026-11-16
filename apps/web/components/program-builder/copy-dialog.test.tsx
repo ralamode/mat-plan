@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  copyName,
   PROGRAM_REFUSAL,
   WORKOUT_NAME_MAX,
   type ProgramActions,
@@ -14,7 +15,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 import {
   COPY_COPY,
   copiedText,
-  copyName,
+  copyTakenElsewhereText,
   copyTakenText,
   copyTitle,
   copyToLabel,
@@ -105,7 +106,7 @@ describe('Copy to a program (FAM-1 10b)', () => {
     );
   });
 
-  it('into this program: the label is prefilled from its week; a taken copy name stops Copy', () => {
+  it('into this program: a Name field, prefilled; a taken name is said on it and nothing is sent', () => {
     const taken = {
       ...familyProgram,
       workouts: [
@@ -115,16 +116,85 @@ describe('Copy to a program (FAM-1 10b)', () => {
     };
     const all = page({}, taken);
     openCopy();
+    // No Name field for another program until it refuses the name.
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    expect(within(dialog()).queryByLabelText(/^Name/)).toBeNull();
     fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
     expect(within(dialog()).getByRole('option', { name: thisProgramOption(familyProgram.name) }));
-    expect(within(dialog()).getByText(copyTakenText(copyName(heavyA.name)))).toBeTruthy();
-    expect(copyButton().getAttribute('aria-disabled')).toBe('true');
+    const name = within(dialog()).getByLabelText(/^Name/) as HTMLInputElement;
+    expect(name.value).toBe(copyName(heavyA.name));
     fireEvent.click(day(1));
     expect((within(dialog()).getByLabelText(/^Label/) as HTMLInputElement).value).toBe(
       'After school',
     );
     fireEvent.click(copyButton());
+    expect(within(dialog()).getByText(copyTakenText(copyName(heavyA.name)))).toBeTruthy();
+    expect(document.activeElement).toBe(name);
     expect(all.copyWorkout).not.toHaveBeenCalled();
+  });
+
+  it('into this program, the name typed is the one sent, and the bar names it', async () => {
+    const all = page();
+    openCopy();
+    fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
+    fireEvent.change(within(dialog()).getByLabelText(/^Name/), { target: { value: 'Heavy A2' } });
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(all.copyWorkout).mock.calls[0]![0].name).toBe('Heavy A2');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        copiedText('Heavy A2', familyProgram.name, [], true),
+      ),
+    );
+  });
+
+  it('another program that has the name refuses it: the Name field shows, prefilled, said why', async () => {
+    const all = page({
+      copyWorkout: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.name_taken })
+        .mockResolvedValue({ ok: true, workoutPublicId: 'new' }),
+    });
+    openCopy();
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    fireEvent.click(copyButton());
+    const name = await within(dialog()).findByLabelText(/^Name/);
+    expect((name as HTMLInputElement).value).toBe(copyName(heavyA.name));
+    expect(
+      within(dialog()).getByText(copyTakenElsewhereText(adultsOwn!.name, heavyA.name)),
+    ).toBeTruthy();
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(all.copyWorkout).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(all.copyWorkout).mock.calls[1]![0].name).toBe(copyName(heavyA.name));
+  });
+
+  it('a label prefilled from this program does not follow the copy to another one', () => {
+    page();
+    openCopy();
+    fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    fireEvent.click(day(1));
+    expect((within(dialog()).getByLabelText(/^Label/) as HTMLInputElement).value).toBe('');
+  });
+
+  it('each opening is a new attempt: two copies send two client ids', async () => {
+    const all = page();
+    for (let i = 0; i < 2; i++) {
+      openCopy();
+      fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+      fireEvent.click(copyButton());
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    }
+    const [first, second] = vi.mocked(all.copyWorkout).mock.calls.map(([d]) => d.clientId);
+    expect(second).not.toBe(first);
+  });
+
+  it('a copy that throws (a dropped connection) is a retry: the dialog stays and says so', async () => {
+    page({ copyWorkout: vi.fn().mockRejectedValue(new Error('Failed to fetch')) });
+    openCopy();
+    fireEvent.change(to(), { target: { value: adultsOwn!.programPublicId } });
+    fireEvent.click(copyButton());
+    await waitFor(() => expect(within(dialog()).getByText(COPY_COPY.failed)).toBeTruthy());
   });
 
   it('a copy’s name stays within WORKOUT_NAME_MAX', () => {
@@ -162,7 +232,7 @@ describe('Copy to a program (FAM-1 10b)', () => {
     expect(second).toBe(first);
   });
 
-  it('Cancel closes with focus back on the row’s "Copy to…"; a new open is a new attempt', async () => {
+  it('Cancel closes with focus back on the row’s "Copy to…"', async () => {
     const all = page();
     openCopy();
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Cancel' }));

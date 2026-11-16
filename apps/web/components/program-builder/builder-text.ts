@@ -11,7 +11,6 @@ import {
   SLOT_LABEL_MAX,
   TRACKING_TYPE_FIELDS,
   UNIT_LABELS,
-  WORKOUT_NAME_MAX,
   type ProgramRefusal,
   type ProgramView,
   type TrackingType,
@@ -545,7 +544,7 @@ export const PUT_ON_COPY = {
   noProgramYet: 'no program yet',
   pickSomeone: 'Pick someone first',
   start: 'Start',
-  starting_: 'Starting…',
+  startPending: 'Starting…',
   failed: 'Couldn’t start them. Try again.',
   stale: 'This program changed somewhere else. It now shows the latest; no one was started.',
 } as const;
@@ -606,6 +605,7 @@ export const COPY_COPY = {
   separate: 'The copy is separate: editing one never changes the other.',
   copy: 'Copy',
   copying: 'Copying…',
+  name: 'Name',
   failed: 'Couldn’t copy it. Try again.',
   stale: 'This program changed somewhere else. It now shows the latest; nothing was copied.',
 } as const;
@@ -615,17 +615,11 @@ export const copyToLabel = (workout: string) => `${COPY_COPY.open} a program: ${
 export const copyTitle = (workout: string) => `Copy ${workout}`;
 export const thisProgramOption = (program: string) => `This program: ${program}`;
 
-/**
- * A copy's name in the same program, within `WORKOUT_NAME_MAX`. ⚠️ The server's rule, repeated:
- * the preview fake (`app/design/program/fakes.ts`) holds the other copy, and neither file is
- * shared code lane B may edit. The contract step that adds a name to `CopyDraft` (maintainer,
- * 2026-11-16) retires this: the dialog then sends the name it shows.
- */
-const COPY_SUFFIX = ' (copy)';
-export const copyName = (name: string) =>
-  `${name.slice(0, WORKOUT_NAME_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
 export const copyTakenText = (name: string) =>
-  `There’s already a ${name}. Rename it first, then copy again.`;
+  `There’s already a ${name} here. Give the copy another name.`;
+/** A copy to another program keeps its name; that program already has one. */
+export const copyTakenElsewhereText = (program: string, name: string) =>
+  `${program} already has a ${name}. Give the copy another name.`;
 
 /** Who sees the copy: the people on the target program. */
 export const targetPeopleText = (program: string, people: readonly string[]) =>
@@ -651,6 +645,6 @@ export function copiedText(
 ): string {
   const on = days.length ? `, on ${formatList(days.map((d) => weekdayName(d, 'short')))}` : '';
   return sameProgram
-    ? `${copyName(workout)} added${on}.`
+    ? `${workout} added${on}.`
     : `${workout} copied to ${target}${on}. Editing one won’t change the other.`;
 }

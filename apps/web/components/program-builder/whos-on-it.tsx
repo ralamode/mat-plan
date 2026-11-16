@@ -1,6 +1,6 @@
 'use client';
 
-import { hasStarted, type ProgramActions, type ProgramView } from '@mat-plan/shared';
+import type { ProgramActions, ProgramView } from '@mat-plan/shared';
 import { useRef, useState } from 'react';
 
 import { PutOn } from './put-on-dialog';
@@ -63,7 +63,6 @@ export function WhosOnIt({
 
   async function takeOffAthlete(athlete: ProgramView['athletes'][number]) {
     if (!takeOff || pending) return;
-    const started = hasStarted(athlete, program.today);
     const tapped = buttons.current.get(athlete.profilePublicId);
     setPending(athlete.profilePublicId);
     const result = await takeOff({
@@ -76,6 +75,9 @@ export function WhosOnIt({
       onStatus(takeOffFailedText(athlete.name), 'alert');
       return;
     }
+    // What Take off did, from its answer (C15): a last day means they stay listed until then; none
+    // means they never started and leave the list (a start dated today included).
+    const started = result.lastDay !== null;
     requestAnimationFrame(() => {
       const row = started ? rows.current.get(athlete.profilePublicId) : null;
       if (focusStayed(tapped)) (row ?? headingRef.current)?.focus();

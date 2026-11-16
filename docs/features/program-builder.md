@@ -114,7 +114,9 @@ flowchart LR
 9. **"Used by … Changes apply to …" counts everyone in `athletes`**, someone whose last day is
    today included: they are on it through today, so an edit now still changes their day.
 10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's
-    row, or to the section's heading when they had not started and leave the list. The message is
+    row, or to the section's heading when they leave the list. Which one, and the message, come from
+    Take off's answer (`lastDay`, C15): a day means they come off after it, `null` that they never
+    start (a start dated today included). Never from the screen's own reading of the dates. The message is
     set after the move. Focus moves only if it is still where the tap left it: an answer that lands
     after the person moved on (into Rename, say) leaves their focus alone.
 11. **A name form, and the editor's Save, drop a late answer, but not the write** (`useAttempt`).
@@ -245,23 +247,31 @@ flowchart LR
     - **Each is one `Sheet` (`variant="sheet"`) with a constant id**, its action a `type=submit`
       button in the footer (action first, Cancel last). Its own refusals are said in a visible
       footer `Announcer` tied to the action; the success line goes to the page's bar from
-      `onReturned`, once focus is back. A stale refusal closes, refreshes and says nothing was done.
+      `onReturned`, once focus is back. A stale refusal closes, refreshes and says nothing was done; a
+      throw (a dropped connection) is a `retry`. The Sheet stays mounted when its trigger goes (the
+      last person put on): it closes as a sheet, and focus returns to the line that replaced it.
     - **Copy's To starts on "Choose a program"** unless only one is offered: a copy cannot be
       deleted. Under it, who is on that program. Days are optional; the label shows once a day is
       ticked, prefilled from this program's week only when the copy stays in it. Someone on both
-      programs who already does the workout on a picked day is named. A copy into this program is
-      "Heavy A (copy)" within `WORKOUT_NAME_MAX`; a taken name is said and Copy stays inactive
-      until C15 brings a Name field. One `clientId` per opening, reused on a retry. "Put them on it
+      programs who already does the workout on a picked day is named, and heard. **A Name field**
+      (C15) shows for a copy into this program, and for another program once it answers
+      `name_taken`; it is prefilled with the shared `copyName` ("Heavy A (copy)", within
+      `WORKOUT_NAME_MAX`), and a name already in this program is said on it before anything is
+      sent. A label typed by the person stays when To changes; only the prefill follows it. One
+      `clientId` per opening, reused on a retry. "Put them on it
       instead" shows only when `putOn` is wired and the copy goes elsewhere.
-    - **Put on lists every candidate**: someone on it is ticked and inactive ("on it", or their last
-      day once taken off), the rest say what they keep, stacked under the name. **Starting** is two
+    - **Put on lists every candidate**: someone on it is ticked and inactive ("on it"); someone taken
+      off shows their last day and can be ticked, which undoes the Take off (C15); the rest say what
+      they keep, stacked under the name. **Starting** is two
       radios, Today or Tomorrow, with a line saying what that day changes from this program's week.
       Start names its count and is inactive until someone new is ticked. The order and "to switch
       instead" lines show only when someone ticked keeps another program. With everyone on it, the
-      button is replaced by a line saying so. A start today is undoable the same day (lane P, 6d).
+      button is replaced by a line saying so. A start today is undoable the same day: Take off
+      removes it when nothing is logged (C15).
     - Differences from v12, each a decision above: To has no default; who will see a copy; the
       double-workout warning; the label only after a day; Starting as radios with what it changes;
-      the hints shown only when they apply; Start's count; "last day …" in place of "on it".
+      the hints shown only when they apply; Start's count; "last day …", tickable, in place of "on it";
+      the Name field.
 
 ## Traps
 

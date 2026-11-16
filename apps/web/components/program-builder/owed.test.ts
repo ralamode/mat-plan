@@ -38,9 +38,6 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 });
 
 describe('CopyDraft: owed by its consumers', () => {
-  it.todo(
-    'C15: Copy shows a Name field, prefilled "Heavy A (copy)", when To is this program, and after a name_taken into another program (maintainer, 2026-11-16); copyName in builder-text then goes',
-  );
   it.todo('7a: copyWorkout passes the inherited action matrix');
 });
 
@@ -54,8 +51,5 @@ describe('ProgramActions and DayActions: owed by their consumers', () => {
   );
   it.todo(
     '7b: the e2e opens the Copy and Put-on dialogs at 360px and runs axe, tap targets and overflow',
-  );
-  it.todo(
-    'C15: Put on lets a "last day today" athlete be ticked; putting them on undoes the Take off (maintainer, 2026-11-16)',
   );
 });
