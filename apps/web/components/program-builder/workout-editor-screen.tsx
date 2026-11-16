@@ -170,7 +170,13 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
   const addItemsRef = useRef<HTMLButtonElement>(null);
   /** Where focus goes when the picker closes: "+ Add items", or the first card it added. */
   const pickerReturn = useRef<HTMLElement | null>(null);
-  const pickerOptions = [...picker.options, ...made];
+  // An item made here is kept until the route's own list has it (a reload, or the preview's fake,
+  // which adds it at once); then it is listed once, from there.
+  const listed = new Set(picker.options.map((option) => option.publicId));
+  const pickerOptions = [
+    ...picker.options,
+    ...made.filter((option) => !listed.has(option.publicId)),
+  ];
 
   const back = programPath(loaded.draft.programPublicId);
   const dirty = snapshot(name, description, cards) !== loaded.snapshot;

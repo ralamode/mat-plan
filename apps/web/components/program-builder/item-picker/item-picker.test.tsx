@@ -415,5 +415,30 @@ describe('the item picker (FAM-1 9)', () => {
         expect(screen.getByRole('status').textContent).toBe(capText(MAX_WORKOUT_ITEMS)),
       );
     });
+
+    it('an item made here is listed once, when the route’s own list has it too', async () => {
+      const all = actions();
+      const view = render(
+        <WorkoutEditorScreen
+          draft={newWorkoutEmpty}
+          picker={{ options: pickerOptions }}
+          actions={all}
+        />,
+      );
+      openForm();
+      fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+        target: { value: 'reps' },
+      });
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+      await waitFor(() => expect(row('Bear crawl')).toBeTruthy());
+      const withNew: MovementOptionDTO[] = [
+        ...pickerOptions,
+        { ...pickerOptions[0]!, publicId: NEW_ID, name: 'Bear crawl', trackingType: 'reps' },
+      ];
+      view.rerender(
+        <WorkoutEditorScreen draft={newWorkoutEmpty} picker={{ options: withNew }} actions={all} />,
+      );
+      expect(within(sheet()).getAllByRole('checkbox', { name: /^Bear crawl/ })).toHaveLength(1);
+    });
   });
 });

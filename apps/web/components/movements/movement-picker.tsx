@@ -170,13 +170,16 @@ export function MovementPicker({
     if (open) setQuery('');
   }
 
-  // Multi: back from the caller's takeover (the new-item form), the list starts unfiltered, so the
-  // item just made or selected is in view. Adjusted during render, as above.
+  // Multi: the search is cleared when the caller's takeover (the new-item form) OPENS, not when it
+  // closes. The deferred query then settles while the form is up, so the list is whole the moment
+  // the form goes: the row the caller focuses is the one that stays. Cleared on close instead, a
+  // browser drew the row first among the matches and then again in the full list, and focus went
+  // with the first one (jsdom settles the deferred value at once, so only a browser shows it).
   const inTakeover = !!multiple?.takeover;
   const [wasTakeover, setWasTakeover] = useState(inTakeover);
   if (inTakeover !== wasTakeover) {
     setWasTakeover(inTakeover);
-    if (!inTakeover) setQuery('');
+    if (inTakeover) setQuery('');
   }
 
   // 🔴 **The search box takes focus only when there is no on-screen keyboard to raise** (criterion

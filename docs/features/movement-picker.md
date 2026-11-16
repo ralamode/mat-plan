@@ -134,8 +134,7 @@ path and **creating** the deliberate one.
       builder's copy;
     - the caller's `footerAction` sits above the picker's own Close, which stays last;
     - `notice` takes the status region until the caller clears it (`onQueryChange` fires on every
-      search change); `takeover` replaces the search and the list (the caller's form), and coming
-      back from it clears the search;
+      search change); `takeover` replaces the search and the list (the caller's form), and opening it clears the search, so the list is whole when the form closes and the row the caller focuses stays put;
     - the search's label and placeholder are the caller's (`searchLabel`, `searchPlaceholder`);
     - a ticked row is outlined (`aria-checked:border-foreground`), never filled: muted text on the
       accent fill is under AA. Rows carry `data-option-id`, and the create button has
