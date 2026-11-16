@@ -1389,6 +1389,8 @@ child:
 --       its superset's `prescription_group` (H's label) would stay. A defect for the same reason:
 --       STOP, and with a correction clear `prescription_id`, `prescribed_snapshot` and the superset's
 --       `prescription_group` on those rows; the decision is to keep none of H's text (A2 §8).
+--       Step 11b's writer refuses it: the prescription must be in the workout it names, and the
+--       workout in the profile's own household (`verify/day.ts` 6c and 4d, mutations 112 and 111).
 --       SELECT e.id FROM entries e
 --         JOIN profiles pr ON pr.id = e.profile_id
 --         JOIN prescriptions x ON x.id = e.prescription_id
