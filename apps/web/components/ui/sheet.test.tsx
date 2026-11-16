@@ -29,12 +29,16 @@ function Harness({
   status,
   withLink,
   consumerClose,
+  compactBelow,
+  onReturned,
 }: {
   variant?: 'sheet' | 'dialog';
   footer?: React.ReactNode;
   status?: string;
   withLink?: boolean;
   consumerClose?: boolean;
+  compactBelow?: number;
+  onReturned?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -65,6 +69,8 @@ function Harness({
           )
         }
         status={status}
+        compactBelow={compactBelow}
+        onReturned={onReturned}
       >
         <p>Body</p>
         {withLink ? <a href="/elsewhere">Create a program</a> : null}
@@ -249,6 +255,19 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('calls onReturned once, AFTER focus is back on the trigger, and not on open', async () => {
+    let focusedAtCall: Element | null = null;
+    const onReturned = vi.fn(() => {
+      focusedAtCall = document.activeElement;
+    });
+    render(<Harness onReturned={onReturned} />);
+    const trigger = openAndCapture();
+    expect(onReturned).not.toHaveBeenCalled();
+    await closeVia(() => fireEvent.click(headerClose()));
+    expect(onReturned).toHaveBeenCalledTimes(1);
+    expect(focusedAtCall).toBe(trigger);
+  });
+
   it('returns focus on Escape too', async () => {
     render(<Harness />);
     const trigger = openAndCapture();
@@ -366,6 +385,22 @@ describe('Sheet — the keyboard geometry', () => {
     // and `nowrap` wins, so a long name stays on one line while the keyboard is up.
     const title = document.getElementById(dialog().getAttribute('aria-labelledby')!)!;
     expect(title.className).toContain('truncate');
+  });
+
+  it('keeps a one-button footer pinned at 520px under the default threshold', () => {
+    withVisualViewport(520);
+    render(<Harness footer={<button type="button">Add</button>} />);
+    openAndCapture();
+    const body = dialog().querySelector('.overflow-y-auto')!;
+    expect(body.contains(screen.getByRole('button', { name: 'Add' }))).toBe(false);
+  });
+
+  it('`compactBelow` raises the threshold for a taller footer: at 520px it scrolls with the body', () => {
+    withVisualViewport(520);
+    render(<Harness compactBelow={580} footer={<button type="button">Add</button>} />);
+    openAndCapture();
+    const body = dialog().querySelector('.overflow-y-auto')!;
+    expect(body.contains(screen.getByRole('button', { name: 'Add' }))).toBe(true);
   });
 
   /**
