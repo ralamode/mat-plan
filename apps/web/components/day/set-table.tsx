@@ -15,7 +15,7 @@ import { useDay } from './day-context';
 import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, fieldText, valueParts, type RowField } from './row-values';
-import { useChange } from './use-change';
+import { rowIdProps, useChange } from './use-change';
 import { rowAccess, rowName, useRow } from './use-row';
 import {
   CARD_CLASS,
@@ -237,7 +237,7 @@ function SetRow({
 
   return (
     <>
-      <tr data-row-id={rowId}>
+      <tr {...rowIdProps(rowId)}>
         <th scope="row" className="py-1 text-left font-normal tabular-nums">
           {row.set}
         </th>
@@ -306,12 +306,19 @@ function SetRow({
         ))}
         <td className="py-1">
           <div className="flex justify-center">
-            <Tick r={r} change={change} label={name} errorId={errorId} tickRef={tickRef} />
+            <Tick
+              r={r}
+              change={change}
+              described={status}
+              label={name}
+              errorId={errorId}
+              tickRef={tickRef}
+            />
           </div>
         </td>
       </tr>
       {status ? (
-        <tr data-row-id={rowId}>
+        <tr {...rowIdProps(rowId)}>
           <td colSpan={fields.length + (showPrevious ? 3 : 2)} className="pb-1">
             <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
           </td>

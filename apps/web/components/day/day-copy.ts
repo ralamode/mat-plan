@@ -1,8 +1,8 @@
 import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-plan/shared';
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
-import { CLOSED_DAY_NOTICE, VALUE_JOINER } from '@/lib/constants';
-import { formatList } from '@/lib/i18n/plural';
+import { CLOSED_DAY_NOTICE, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
+import { formatList, plural } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
 
@@ -25,6 +25,8 @@ export const DAY_COPY = {
   set: 'Set',
   previous: 'Previous',
   reps: 'Reps',
+  /** A number of reps in a sentence: `8 reps`, `1 rep`. */
+  repsCount: (count: number) => plural(count, { one: '1 rep', other: `${count} reps` }),
   noPrevious: 'none',
   addSet: '+ Add set',
   /** "+ Add set" for a screen reader, which hears several on one page: which item it adds to. */
@@ -62,8 +64,10 @@ export const DAY_COPY = {
       not_a_number: (kept: string) => `Kept ${kept}: numbers only.`,
       out_of_range: (kept: string, typed: string) => `Kept ${kept}. ${typed} won’t work.`,
     },
-    undo: 'Undo',
+    undo: UNDO_LABEL,
     cancel: 'Cancel',
+    /** A failed save, still typed: send it again. */
+    retry: 'Try again',
     /** The ✓'s description while a logged number is being changed: the ✓ saves it. */
     tickSaves: 'The ✓ saves the change.',
   },
@@ -71,6 +75,7 @@ export const DAY_COPY = {
     logged: (name: string) => `${name} logged`,
     changed: (name: string, from: string, to: string) => `${name} changed from ${from} to ${to}`,
     changedBack: (name: string, to: string) => `${name} changed back to ${to}`,
+    cancelled: (name: string) => `${name}: change cancelled`,
     unticked: (name: string) => `${name} un-checked`,
     failed: (name: string, message: string) => `${name}: ${message}`,
   },
@@ -127,6 +132,12 @@ export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
 export type RefusalCopy = { message: string; reload: boolean; focusField: boolean };
 
 const UNTICK_FAILED = 'Still logged. Couldn’t un-check; try again.';
+/** A write that can be tried again, by kind; a Change's own line says what is still stored. */
+const RETRY_COPY: Record<RowWriteKind, string> = {
+  tick: SAVE_FAILED,
+  untick: UNTICK_FAILED,
+  amend: SAVE_FAILED,
+};
 
 /**
  * Every refusal, for a ✓ (`tick`), an un-tick (`untick`) and a Change (`amend`). `closed_day` is here for
@@ -136,11 +147,7 @@ export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCop
   switch (reason) {
     case ROW_REFUSAL.retry:
     case ROW_REFUSAL.own_hidden:
-      return {
-        message: write === 'tick' ? SAVE_FAILED : UNTICK_FAILED,
-        reload: false,
-        focusField: false,
-      };
+      return { message: RETRY_COPY[write], reload: false, focusField: false };
     case ROW_REFUSAL.bad_value:
       // A Change is checked before it is sent, so a refused one means the item changed under the
       // page (its unit, say): a reload, not the number.

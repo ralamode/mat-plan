@@ -44,16 +44,25 @@ export const TICK_FOCUS_CLASS =
   'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
 /**
- * A logged number that Change can edit (13b-ii; maintainer, 2026-11-16): a green-edged field, so a
- * bordered well means editable and a read-only day's plain text does not. The ✓'s foreground outline,
- * since `INPUT_CLASS`'s `ring-ring/50` is under 3:1 on the tint.
+ * A field's focus ring: the ✓'s foreground outline, since `INPUT_CLASS`'s `ring-ring/50` is under 3:1
+ * on the tint, with a 1px offset so the ring (4px) stays inside the 4px between two fields.
+ */
+const FIELD_FOCUS_CLASS = `focus-visible:ring-0 ${TICK_FOCUS_CLASS.replace(
+  'focus-visible:outline-offset-2',
+  'focus-visible:outline-offset-1',
+)}`;
+
+/**
+ * A logged number that Change can edit (13b-ii; maintainer, 2026-11-16): a green-edged field in the
+ * card's own logged look, so a bordered well means editable and a read-only day's plain text does
+ * not.
  *
  * 🔴 **Only while it holds the stored number.** Typed over, it is a plain field with a heavier
  * `foreground` border (a width cue that survives forced colours): a number that is not saved must
- * never wear the logged look (invariant 10).
+ * never wear the logged look (invariant 16).
  */
-export const LOGGED_FIELD_CLASS = `bg-done-surface border-done focus-visible:ring-0 ${TICK_FOCUS_CLASS}`;
-export const CHANGED_FIELD_CLASS = `bg-background border-2 border-foreground focus-visible:ring-0 ${TICK_FOCUS_CLASS}`;
+export const LOGGED_FIELD_CLASS = `${TINT_CLASS} ${LOGGED_CARD_CLASS} ${FIELD_FOCUS_CLASS}`;
+export const CHANGED_FIELD_CLASS = `bg-background border-2 border-foreground ${FIELD_FOCUS_CLASS}`;
 /** A button on the tint (Undo, Cancel, "+ Add set"): the ✓'s outline, not `Button`'s faint ring. */
 export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
 
@@ -114,34 +123,36 @@ export function ItemHeading({
 
 /**
  * The ✓ of a row that can be written, or the static tick of one that cannot. `change` is the row's
- * Change (13b-ii), whose ✓ saves an open edit and never un-ticks one (`use-change.ts`).
+ * Change (13b-ii), whose ✓ saves an open edit and never un-ticks one (`use-change.ts`). `described`:
+ * the row's line is showing (`hasRowStatus`), so the ✓ points at it.
  */
 export function Tick({
   r,
   change,
+  described,
   label,
   errorId,
   tickRef,
 }: {
   r: ReturnType<typeof useRow>;
-  change?: RowChange;
+  change: RowChange;
+  described: boolean;
   label: string;
   errorId: string;
   tickRef: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const described = r.error !== null || change?.was != null || change?.line != null;
   if (r.canWrite) {
     return (
       <button
         ref={tickRef}
         type="button"
-        // Safari does not focus a tapped button: focus it here, or a field the ✓ replaces would
-        // take focus with it to the page.
-        onPointerDown={change?.notePress}
-        onKeyDown={change?.noteKey}
+        // Safari does not focus a tapped button, so its press is noted before the field's blur.
+        onPointerDown={change.notePress}
+        onKeyDown={change.noteKey}
+        // Focus the ✓ here, or a field the ✓ replaces would take focus with it to the page.
         onClick={() => {
           tickRef.current?.focus();
-          void (change ? change.pressTick() : r.press());
+          void change.pressTick();
         }}
         aria-pressed={r.logged !== null}
         aria-label={DAY_COPY.logLabel(label)}
@@ -222,6 +233,28 @@ export function useFocusRefusedField(
 }
 
 /** A number field of a row: its name, placeholder, and Enter as the ✓. */
+/** A field's name ends with what it holds: the unit spoken (`pounds`), or `reps`. */
+export function fieldSpoken(item: DayItem, field: RowField): string {
+  return field === 'reps' ? DAY_COPY.reps.toLowerCase() : unitSpoken(item.unit!);
+}
+
+/** The attributes every number field of a row shares: a ✓'s field and a Change's alike. */
+export function numberFieldProps(field: RowField, last: boolean) {
+  return {
+    type: 'text',
+    inputMode: field === 'reps' ? 'numeric' : 'decimal',
+    enterKeyHint: last ? 'done' : 'next',
+    autoComplete: 'off',
+  } as const;
+}
+
+/** Enter on a field before the row's last: the next field of the same table row ("next" on a phone). */
+export function focusNextField(input: HTMLInputElement) {
+  const row = input.closest('tr');
+  const inputs = row ? [...row.querySelectorAll('input')] : [];
+  inputs[inputs.indexOf(input) + 1]?.focus();
+}
+
 export function RowInput({
   r,
   item,
@@ -245,14 +278,11 @@ export function RowInput({
   last?: boolean;
 }) {
   const invalid = r.error?.invalid === true && (r.error.field ?? field) === field;
-  const spoken = field === 'reps' ? DAY_COPY.reps.toLowerCase() : unitSpoken(item.unit!);
+  const spoken = fieldSpoken(item, field);
   return (
     <input
       ref={inputRef}
-      type="text"
-      inputMode={field === 'reps' ? 'numeric' : 'decimal'}
-      enterKeyHint={last ? 'done' : 'next'}
-      autoComplete="off"
+      {...numberFieldProps(field, last)}
       value={r.text[field]}
       onChange={(e) => r.setText(field, e.target.value)}
       // Enter on the last field is the ✓. The field goes while the ✓ is in flight, so focus moves to
@@ -262,9 +292,7 @@ export function RowInput({
         if (e.key !== 'Enter') return;
         if (!last) {
           e.preventDefault();
-          const row = e.currentTarget.closest('tr');
-          const inputs = row ? [...row.querySelectorAll('input')] : [];
-          inputs[inputs.indexOf(e.currentTarget) + 1]?.focus();
+          focusNextField(e.currentTarget);
           return;
         }
         tickRef.current?.focus();

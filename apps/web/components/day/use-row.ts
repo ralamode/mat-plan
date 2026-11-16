@@ -20,6 +20,7 @@ import {
   EMPTY_TEXT,
   fieldsOf,
   readTyped,
+  sameText,
   sameValues,
   textOf,
   type RowField,
@@ -28,11 +29,9 @@ import {
 } from './row-values';
 
 /**
- * One row's ✓, un-tick and re-tick (FAM-1 step 13; plan D13, D20, D24).
- *
- * **The write state machine is what 13b reuses per set.** The field's text and `readTyped` are a
- * single row's (one number); 13b's set rows, which read reps and a load, will pass their own
- * reader, so that part moves out of this hook then.
+ * One row's writes: ✓, un-tick, re-tick and a Change's amend (FAM-1 steps 13, 13b and 13b-ii; plan
+ * D13, D20, D24). The same hook serves a single row and each set of a set table; a Change's editing
+ * is `use-change.ts`, which calls `amend` here.
  *
  * **What the row shows** is the page's data (`row.logged`) corrected by what this page visit did:
  * - a ✓ in flight shows as logged at once (optimistic, D24);
@@ -52,7 +51,7 @@ import {
 type Logged = { entryPublicId: string; values: RowValues };
 /**
  * - `logged`: this visit's ✓ or re-tick, until the page's data shows the entry. A ✓ after an
- *   un-tick may answer with the SAME entry id (the writer revives the hidden entry, contract C9),
+ *   un-tick may answer with the SAME entry id (a writer may revive the hidden entry rather than add one),
  *   so data still showing that entry with the numbers it held before the ✓ (`planValues`) has not
  *   caught up, and the override holds.
  * - `amended`: this visit's Change (13b-ii). An amend keeps the entry's id, so the data showing the
@@ -60,7 +59,7 @@ type Logged = { entryPublicId: string; values: RowValues };
  *   data moves on from what it held at the time (another phone changed the row since).
  * - `unticked`: this visit's un-tick, with the token a re-tick needs. `sawEmpty` records that the
  *   page's data has shown the set empty since: until then, data still showing the entry is data
- *   that has not caught up; after it, the entry shown again (the same id under C9: another phone's
+ *   that has not caught up; after it, the entry shown again (possibly the same id: another phone's
  *   ✓, or this phone's ✓ whose answer was lost) is the truth, and the override ends.
  */
 type Override =
@@ -260,26 +259,22 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     );
     setPending(null);
     if (result.ok) {
-      setOverride({
-        kind: 'amended',
-        entryPublicId: result.entryPublicId,
-        values: result.values,
-        planValues: fromPlan?.values ?? null,
-      });
+      setOverride(storedFrom(result, 'amended'));
       setError(null);
     } else if (result.reason === ROW_REFUSAL.closed_day) {
-      setError(null);
-      day.closeDay();
+      closeDay();
     }
     return result;
   }
 
+  /** A `closed_day` from any write: the page turns read-only, and the row's message goes. */
+  function closeDay() {
+    setError(null);
+    day.closeDay();
+  }
+
   function fail(reason: RowRefusal, write: RowWriteKind) {
-    if (reason === ROW_REFUSAL.closed_day) {
-      setError(null);
-      day.closeDay();
-      return;
-    }
+    if (reason === ROW_REFUSAL.closed_day) return closeDay();
     const copy = refusalCopy(reason, write);
     showError({
       message: copy.message,
@@ -295,9 +290,13 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     day.announce(message);
   }
 
-  function loggedFrom(result: RowResult & { ok: true }): Override {
+  /** What a write stored, held until the page's data shows it (`logged`, or `amended`). */
+  function storedFrom(
+    result: RowResult & { ok: true },
+    kind: 'logged' | 'amended' = 'logged',
+  ): Override {
     return {
-      kind: 'logged',
+      kind,
       entryPublicId: result.entryPublicId,
       values: result.values,
       planValues: fromPlan?.values ?? null,
@@ -324,7 +323,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     if (result.ok) {
       setAttempt(null);
       setTextState(EMPTY_TEXT);
-      succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
+      succeed(storedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
     // A `clientId` refused as `own_hidden` is not sent again: the next try mints a new one.
@@ -345,7 +344,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setPending(null);
     if (result.ok) {
       setTextState(EMPTY_TEXT);
-      succeed(loggedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
+      succeed(storedFrom(result), DAY_COPY.announce.logged(rowName(item, row)));
       return;
     }
     // The token is gone (a reload would show the row empty): log it as a new ✓ instead.
@@ -394,7 +393,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       // Re-tick when nothing new was typed: no field (a Check, a removed prescription), the field
       // untouched since the un-tick, or the same number typed again in the same unit.
       const kept = textOf(item, unticked.values);
-      const untouched = !hasField || (text.quantity === kept.quantity && text.reps === kept.reps);
+      const untouched = !hasField || sameText(text, kept);
       const read = hasField ? readTyped(item, text) : null;
       const same = read?.ok && !read.empty && sameValues(read.values, unticked.values);
       if (untouched || same) return retick(unticked, unticked.hiddenAt);

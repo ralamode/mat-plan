@@ -103,8 +103,10 @@ export const tick = (el: HTMLElement) => within(el).getByRole('button', { name: 
 export const field = (el: HTMLElement) => within(el).getByRole<HTMLInputElement>('textbox');
 export const status = () => screen.getByRole('status').textContent?.replace(/ $/, '');
 
+/** A tap in a browser's order: pointer-down (while the field still has focus), focus, click. */
 export async function press(button: HTMLElement) {
   await act(async () => {
+    fireEvent.pointerDown(button);
     button.focus();
     fireEvent.click(button);
   });

@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
-import { card, makeMount, press, status } from './day-test-utils';
+import { card, held, makeMount, press, status } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
 import { unitSpoken } from './row-values';
 
@@ -103,11 +103,10 @@ describe('Change: where it applies', () => {
     const kg: DayPlan = structuredClone(yesterdayHalfDone);
     const item = kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!;
     item.unit = 'kg';
-    const { actions } = mount(kg, { change: true });
+    mount(kg, { change: true });
     const rowOne = loggedRow();
     expect(within(rowOne).queryAllByRole('textbox')).toHaveLength(0);
     expect(rowOne.textContent).toContain('27.5 lb');
-    expect(actions.amendRow).not.toHaveBeenCalled();
   });
 });
 
@@ -231,7 +230,8 @@ describe('Change: the ✓ in Safari’s order (Safari does not focus a tapped bu
 
   it('🔴 the same number retyped then a ✓ tap keeps the set logged', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
-    type(reps(), '8');
+    type(reps(), '9'); // typed, then typed back: the row is not dirty, but an edit is open
+    fireEvent.change(reps(), { target: { value: '8' } });
     await safariTap(reps(), benchTick());
     expect(actions.untickRow).not.toHaveBeenCalled();
     expect(benchTick().getAttribute('aria-pressed')).toBe('true');
@@ -352,11 +352,10 @@ describe('Change: Undo and what the row shows after', () => {
     await leave(load());
     expect(within(bench()).getByText(DAY_COPY.change.changed('27.5 lb', '35 lb'))).toBeTruthy();
     await press(button(DAY_COPY.change.undo));
-    expect(actions.amendRow).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        values: expect.objectContaining({ quantities: [expect.objectContaining({ value: 27.5 })] }),
-      }),
-    );
+    expect(actions.amendRow.mock.lastCall![0]).toMatchObject({
+      entryPublicId: actions.amendRow.mock.calls[0]![0].entryPublicId,
+      values: { reps: 8, quantities: [{ unit: 'lb', value: 27.5 }] },
+    });
     expect(load().value).toBe('27.5');
     expect(within(bench()).getByText(DAY_COPY.change.changedBack('27.5 lb × 8'))).toBeTruthy();
     expect(document.activeElement).toBe(benchTick());
@@ -403,7 +402,7 @@ describe('Change: Undo and what the row shows after', () => {
   });
 });
 
-describe('a ✓ after an un-tick that answers with the same entry (contract C9)', () => {
+describe('a ✓ after an un-tick that answers with the same entry (a writer that revives it)', () => {
   it('shows the new number while the page’s data still holds the old one', async () => {
     const splits = yesterdayHalfDone.workouts
       .find((w) => w.name === 'Morning habits')!
@@ -434,7 +433,7 @@ describe('a ✓ after an un-tick that answers with the same entry (contract C9)'
   });
 });
 
-describe('an un-tick that the page’s data has caught up with (contract C9: the same id comes back)', () => {
+describe('an un-tick that the page’s data has caught up with (the same id may come back)', () => {
   const MORNING = 'Morning habits';
   const SPLITS = 'Splits stretch';
   const splitsOf = (plan: DayPlan) =>
@@ -485,5 +484,181 @@ describe('an un-tick that the page’s data has caught up with (contract C9: the
     expect(tickButton().getAttribute('aria-pressed')).toBe('true');
     expect(el().textContent).toContain('6 min');
     expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+});
+
+describe('Change: the ✓ and Cancel in a browser’s order', () => {
+  it('🔴 an unlogged set: a number typed, then the ✓ tapped, logs it on the first tap', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    const field3 = within(bench()).getByRole<HTMLInputElement>('textbox', {
+      name: DAY_COPY.fieldLabel(setLabel(3), SPOKEN.lb),
+    });
+    type(field3, '30');
+    fireEvent.pointerDown(benchTick(3));
+    await press(benchTick(3));
+    expect(actions.logRow).toHaveBeenCalledTimes(1);
+  });
+  it('🔴 Cancel tapped in Safari’s order sends nothing', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '35');
+    await safariTap(load(), button(DAY_COPY.change.cancel));
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('27.5');
+  });
+});
+
+describe('Change: review fixes', () => {
+  it('a keyboard press on the ✓ reads the row as it is, whatever a pointer noted', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(reps(), '9');
+    fireEvent.change(reps(), { target: { value: '8' } }); // typed back: an edit, nothing dirty
+    fireEvent.pointerDown(benchTick()); // a press that never became a click
+    await act(async () => {
+      benchTick().focus();
+      fireEvent.keyDown(benchTick(), { key: ' ' });
+      fireEvent.click(benchTick());
+    });
+    expect(actions.untickRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ✓ tapped while a Change is in flight neither un-ticks nor sends twice', async () => {
+    const gate = held();
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (a) => ({ amendRow: (input) => gate.after(() => a.amendRow(input)) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    await act(async () => {
+      fireEvent.pointerDown(benchTick());
+      fireEvent.click(benchTick());
+    });
+    await gate.resolve();
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    expect(actions.untickRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+  });
+
+  it('a failed save offers Try again, which sends it again', async () => {
+    let calls = 0;
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async (input) =>
+          ++calls === 1 ? { ok: false, reason: ROW_REFUSAL.retry } : amendOk(input),
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    await press(button(DAY_COPY.change.retry));
+    expect(actions.amendRow).toHaveBeenCalledTimes(2);
+    expect(within(bench()).getByText(DAY_COPY.change.changed('27.5 lb', '30 lb'))).toBeTruthy();
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+
+  it('typing the stored number back after a failed save clears the failure', async () => {
+    mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false, reason: ROW_REFUSAL.retry }) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    type(load(), '27.5');
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+    expect(within(bench()).queryByText(DAY_COPY.change.failed('27.5 lb × 8'))).toBeNull();
+  });
+
+  it('a failed Undo keeps Undo to try again, and is not counted as not saved', async () => {
+    let calls = 0;
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async (input) =>
+          ++calls === 2 ? { ok: false, reason: ROW_REFUSAL.retry } : amendOk(input),
+      }),
+    });
+    type(load(), '35');
+    await leave(load());
+    await press(button(DAY_COPY.change.undo));
+    expect(within(bench()).getByText(DAY_COPY.change.undoFailed('35 lb × 8'))).toBeTruthy();
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+    await press(button(DAY_COPY.change.undo));
+    expect(actions.amendRow).toHaveBeenCalledTimes(3);
+    expect(load().value).toBe('27.5');
+  });
+
+  it('a kept field is said beside the Change that did save', async () => {
+    mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => reps().focus());
+    fireEvent.change(reps(), { target: { value: 'eight' } });
+    await leave(reps());
+    expect(
+      within(bench()).getByText(
+        `${DAY_COPY.change.changed('27.5 lb', '30 lb')}. ${DAY_COPY.change.kept.not_a_number('8 reps')}`,
+      ),
+    ).toBeTruthy();
+  });
+
+  it('a kept line goes once the field is typed in again', async () => {
+    mount(yesterdayHalfDone, { change: true });
+    const over = '5000';
+    type(load(), over);
+    await leave(load());
+    const kept = DAY_COPY.change.kept.out_of_range('27.5 lb', over);
+    expect(within(bench()).getByText(kept)).toBeTruthy();
+    type(load(), '3');
+    expect(within(bench()).queryByText(kept)).toBeNull();
+  });
+
+  it('another phone’s Change also retires Undo’s baseline: the next Change starts from its number', async () => {
+    const control = mount(yesterdayHalfDone, { change: true, wrap: () => ({ amendRow: amendOk }) });
+    type(load(), '30');
+    await leave(load());
+    const next: DayPlan = structuredClone(control.plan);
+    const logged = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!.logged!;
+    logged.values = {
+      ...logged.values,
+      quantities: [{ ...logged.values.quantities[0]!, value: 40 }],
+    };
+    act(() => control.setPlan(next));
+    type(load(), '45');
+    await leave(load());
+    expect(within(bench()).getByText(DAY_COPY.change.changed('40 lb', '45 lb'))).toBeTruthy();
+  });
+
+  it('only the fields typed in are sent as typed: another phone’s reps are not sent back', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    const next: DayPlan = structuredClone(control.plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.reps = 10;
+    act(() => control.setPlan(next));
+    await leave(load());
+    expect(control.actions.amendRow.mock.lastCall![0].values).toMatchObject({
+      reps: 10,
+      quantities: [{ value: 30 }],
+    });
+  });
+
+  it('a Change refused because the day closed turns the page read-only', async () => {
+    mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false, reason: ROW_REFUSAL.closed_day }) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    expect(screen.getByText(DAY_COPY.closed)).toBeTruthy();
+    expect(within(bench()).queryAllByRole('textbox')).toHaveLength(0);
+  });
+
+  it('Cancel is announced', async () => {
+    mount(yesterdayHalfDone, { change: true });
+    type(load(), '35');
+    await press(button(DAY_COPY.change.cancel));
+    expect(status()).toBe(DAY_COPY.announce.cancelled(setLabel(1)));
   });
 });

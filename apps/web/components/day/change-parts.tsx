@@ -9,11 +9,14 @@ import { cn } from '@/lib/utils';
 import { DAY_COPY } from './day-copy';
 import {
   CHANGED_FIELD_CLASS,
+  fieldSpoken,
+  focusNextField,
   LOGGED_FIELD_CLASS,
+  numberFieldProps,
   ON_TINT_BUTTON_FOCUS_CLASS,
   RowMessage,
 } from './row-parts';
-import { unitSpoken, type RowField } from './row-values';
+import { type RowField } from './row-values';
 import type { RowChange } from './use-change';
 import type { useRow } from './use-row';
 
@@ -24,8 +27,8 @@ import type { useRow } from './use-row';
 /**
  * A logged number that can be changed. Focus selects all of it, so typing replaces the number rather
  * than appending to it ("30" then "35" must never become "3035"). Escape reverts; Enter in the row's
- * last field saves; leaving the row saves (`use-change.ts`). While a Change is in flight the field is
- * read-only and keeps focus, so there is never a second write behind it.
+ * last field saves and moves focus to the ✓; leaving the row saves (`use-change.ts`). While a Change
+ * is in flight the field is read-only, so there is never a second write behind it.
  */
 export function ChangeInput({
   change,
@@ -51,18 +54,17 @@ export function ChangeInput({
   className: string;
   last?: boolean;
 }) {
-  const spoken = field === 'reps' ? DAY_COPY.reps.toLowerCase() : unitSpoken(item.unit!);
   return (
     <input
       ref={inputRef}
-      type="text"
-      inputMode={field === 'reps' ? 'numeric' : 'decimal'}
-      enterKeyHint={last ? 'done' : 'next'}
-      autoComplete="off"
+      {...numberFieldProps(field, last)}
       value={change.text[field]}
       readOnly={change.pending}
       onChange={(e) => change.setText(field, e.target.value)}
       onFocus={(e) => {
+        change.noteFocus();
+        // A half-typed number keeps its caret (focus coming back from another app, say).
+        if (change.fieldDirty(field)) return;
         const el = e.currentTarget;
         const atFocus = el.value;
         el.select();
@@ -85,16 +87,14 @@ export function ChangeInput({
         if (e.key !== 'Enter') return;
         e.preventDefault();
         if (!last) {
-          const row = e.currentTarget.closest('tr');
-          const inputs = row ? [...row.querySelectorAll('input')] : [];
-          inputs[inputs.indexOf(e.currentTarget) + 1]?.focus();
+          focusNextField(e.currentTarget);
           return;
         }
         // Focus goes to the ✓ first, as a ✓'s Enter does, so a read-only field never holds it.
         tickRef.current?.focus();
         void change.commit();
       }}
-      aria-label={DAY_COPY.fieldLabel(name, spoken)}
+      aria-label={DAY_COPY.fieldLabel(name, fieldSpoken(item, field))}
       aria-describedby={described ? lineId : undefined}
       className={cn(
         INPUT_CLASS,
@@ -107,8 +107,10 @@ export function ChangeInput({
 
 /**
  * The line under a row: its error (with Reload, as before), or Change's line. While a number is
- * typed over: "Not saved. Was 30 lb." and Cancel, which is a phone's Escape. After a save: "Changed
- * 30 → 35" and Undo. Focus goes to the ✓ before a button that is about to go.
+ * typed over: "Not saved. Was 30 lb." and Cancel, which is a phone's Escape. A failed save adds
+ * "Try again". After a save: "Changed 30 → 35" and Undo, which stays beside a failed Undo. Focus goes
+ * to the ✓ before a button that is about to go. Each button is described by the line, so a screen
+ * reader hears which row's Undo or Cancel it is.
  *
  * Not a live region: the page's one announcer speaks every change (`day.announce`).
  */
@@ -123,18 +125,50 @@ export function RowStatus({
   lineId: string;
   tickRef: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const cancel = change.dirty ? (
+  const buttonProps = {
+    type: 'button',
+    variant: 'outline',
+    size: 'sm',
+    className: ON_TINT_BUTTON_FOCUS_CLASS,
+    'aria-describedby': lineId,
+  } as const;
+  const retry = change.canRetry ? (
     <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className={ON_TINT_BUTTON_FOCUS_CLASS}
+      {...buttonProps}
+      aria-disabled={change.pending || undefined}
       onClick={() => {
         tickRef.current?.focus();
-        change.revert();
+        void change.commit();
       }}
     >
-      {DAY_COPY.change.cancel}
+      {DAY_COPY.change.retry}
+    </Button>
+  ) : null;
+  // No Cancel while the Change is in flight: it could not stop the write.
+  const cancel =
+    change.dirty && !change.pending ? (
+      <Button
+        {...buttonProps}
+        // Safari: the field's blur comes before this click and must not send what Cancel discards.
+        onPointerDown={change.noteCancel}
+        onClick={() => {
+          tickRef.current?.focus();
+          change.revert();
+        }}
+      >
+        {DAY_COPY.change.cancel}
+      </Button>
+    ) : null;
+  const undo = change.canUndo ? (
+    <Button
+      {...buttonProps}
+      aria-disabled={change.pending || undefined}
+      onClick={() => {
+        tickRef.current?.focus();
+        void change.undo();
+      }}
+    >
+      {DAY_COPY.change.undo}
     </Button>
   ) : null;
 
@@ -142,7 +176,9 @@ export function RowStatus({
     return (
       <div className="flex flex-wrap items-center gap-2">
         <RowMessage r={r} errorId={lineId} tickRef={tickRef} />
+        {retry}
         {cancel}
+        {undo}
       </div>
     );
   }
@@ -155,21 +191,7 @@ export function RowStatus({
         {change.was ? <span className="sr-only"> {DAY_COPY.change.tickSaves}</span> : null}
       </p>
       {cancel}
-      {!change.dirty && change.line?.canUndo ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={ON_TINT_BUTTON_FOCUS_CLASS}
-          aria-disabled={change.pending || undefined}
-          onClick={() => {
-            tickRef.current?.focus();
-            void change.undo();
-          }}
-        >
-          {DAY_COPY.change.undo}
-        </Button>
-      ) : null}
+      {undo}
     </div>
   );
 }

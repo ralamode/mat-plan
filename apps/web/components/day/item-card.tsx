@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, formatRowValues, unitSuffix, type RowField } from './row-values';
-import { useChange } from './use-change';
+import { rowIdProps, useChange } from './use-change';
 import { useRow } from './use-row';
 import {
   CARD_CLASS,
@@ -104,7 +104,7 @@ function SingleItem({
 
   return (
     <li
-      data-row-id={rowId}
+      {...rowIdProps(rowId)}
       className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}
     >
       <ItemHeading item={item} label={label} onTint={onTint} />
@@ -162,7 +162,14 @@ function SingleItem({
             ) : null}
           </>
         ) : null}
-        <Tick r={r} change={change} label={item.name} errorId={errorId} tickRef={tickRef} />
+        <Tick
+          r={r}
+          change={change}
+          described={status}
+          label={item.name}
+          errorId={errorId}
+          tickRef={tickRef}
+        />
       </div>
       <div className="mt-2 empty:hidden">
         <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />

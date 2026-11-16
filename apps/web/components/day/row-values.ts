@@ -8,12 +8,15 @@ import {
   slotQuantity,
   TRACKING_TYPE_FIELDS,
   UNIT_LABELS,
+  UNIT_SINGULAR_LABELS,
   type DayItem,
   type RowValues,
   type Unit,
 } from '@mat-plan/shared';
 
 import { VALUE_JOINER } from '@/lib/constants';
+
+import { DAY_COPY } from './day-copy';
 
 /**
  * What a day row's fields mean, as pure functions (FAM-1 steps 13 and 13b): read what was typed,
@@ -93,11 +96,9 @@ export function readTyped(
         continue;
       }
       empty = false;
-      // Whole reps as typed: digits only (`8`, not `8.0` or `8 reps`).
-      if (!isWholeNumber(typed)) return { ok: false, problem: 'not_a_number', field };
-      const reps = repsSchema.safeParse(Number(typed));
-      if (!reps.success) return { ok: false, problem: 'out_of_range', field };
-      values.reps = shown.reps = reps.data;
+      const reps = readNumber(item, field, typed);
+      if (!reps.ok) return { ok: false, problem: reps.problem, field };
+      values.reps = shown.reps = reps.value;
       continue;
     }
     const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
@@ -109,14 +110,9 @@ export function readTyped(
       continue;
     }
     empty = false;
-    if (!isPlainDecimal(typed)) return { ok: false, problem: 'not_a_number', field };
-    const value = Number(typed);
-    // A unit with no declared ceiling refuses (`quantityCeiling`'s rule): no bound is not "no cap".
-    const ceiling = quantityCeiling(item.unit);
-    if (ceiling === undefined || value > ceiling) {
-      return { ok: false, problem: 'out_of_range', field };
-    }
-    const quantity = { slot, unit: item.unit, value };
+    const read = readNumber(item, field, typed);
+    if (!read.ok) return { ok: false, problem: read.problem, field };
+    const quantity = { slot, unit: item.unit, value: read.value };
     values.quantities.push(quantity);
     shown.quantities.push(quantity);
   }
@@ -124,6 +120,11 @@ export function readTyped(
     return { ok: false, problem: 'out_of_range', field: fieldsOf(item)[0] ?? 'quantity' };
   }
   return { ok: true, values, shown, empty };
+}
+
+/** Two rows' fields hold the same text. */
+export function sameText(a: RowText, b: RowText): boolean {
+  return a.quantity === b.quantity && a.reps === b.reps;
 }
 
 /** Two rows hold the same numbers: `5` and `5.0` are one value. Order of quantities is ignored. */
@@ -198,7 +199,10 @@ export function unitSpoken(unit: Unit): string {
 /** Why a changed field kept its logged number (13b-ii): blank, not a number, or out of range. */
 export type KeptField = { field: RowField; problem: TypedProblem; typed: string };
 
-/** Reads one typed number the way a ✓ does: digits for reps, a plain decimal under the ceiling. */
+/**
+ * One typed number, for a ✓ (`readTyped`) and a Change (`readAmend`) alike: whole digits for reps
+ * (`8`, not `8.0` or `8 reps`), a plain decimal under the unit's ceiling for a quantity.
+ */
 function readNumber(
   item: DayItem,
   field: RowField,
@@ -273,7 +277,7 @@ export function readAmend(
 
 /** One field of a row's values as words on the screen: `25 lb`, `8 reps`, `30 s`. */
 export function fieldValueText(item: DayItem, values: RowValues, field: RowField): string {
-  if (field === 'reps') return values.reps === undefined ? '' : `${values.reps} reps`;
+  if (field === 'reps') return values.reps === undefined ? '' : DAY_COPY.repsCount(values.reps);
   const quantity = slotQuantity(item, values.quantities);
   return quantity ? quantityText(quantity.value, quantity.unit) : '';
 }
@@ -283,7 +287,9 @@ export function fieldValueText(item: DayItem, values: RowValues, field: RowField
  * `8` in a sentence says nothing).
  */
 export function valuesText(values: RowValues): string {
-  if (values.quantities.length === 0 && values.reps !== undefined) return `${values.reps} reps`;
+  if (values.quantities.length === 0 && values.reps !== undefined) {
+    return DAY_COPY.repsCount(values.reps);
+  }
   return formatRowValues(values);
 }
 
@@ -300,7 +306,7 @@ export function changedText(
     (field) => fieldValueText(item, from, field) !== fieldValueText(item, to, field),
   );
   if (moved.length === 1 && moved[0] === 'reps') {
-    return { from: String(from.reps ?? ''), to: `${to.reps ?? ''} reps` };
+    return { from: String(from.reps ?? ''), to: DAY_COPY.repsCount(to.reps ?? 0) };
   }
   if (moved.length === 1) {
     return {
@@ -313,9 +319,11 @@ export function changedText(
 
 /** A row's values as a screen reader should hear them: `25 pounds, 8 reps`, never `lb × 8`. */
 export function spokenValues(values: RowValues): string {
-  const parts = values.quantities.map((q) =>
-    q.unit === 'count' ? String(q.value) : `${q.value} ${unitSpoken(q.unit)}`,
-  );
-  if (values.reps !== undefined) parts.push(`${values.reps} reps`);
+  const parts = values.quantities.map((q) => {
+    if (q.unit === 'count') return String(q.value);
+    const singular = q.value === 1 ? UNIT_SINGULAR_LABELS[q.unit] : null;
+    return `${q.value} ${singular ?? unitSpoken(q.unit)}`;
+  });
+  if (values.reps !== undefined) parts.push(DAY_COPY.repsCount(values.reps));
   return parts.join(', ');
 }
