@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { schema } from '../../client';
 import type { Executor } from '../../writers/executor';
+import { assignmentOnDay } from '../program-assignments';
 
 /**
  * **Is this workout on its block's week on this day?** One rule for the row writer
@@ -21,13 +22,6 @@ import type { Executor } from '../../writers/executor';
  * join (12a).
  */
 export function scheduledOn(blockId: number, workoutId: number, day: string) {
-  // OWED(step 5): the assignment conjunct, "the athlete is on this block on this day"
-  // (`program_assignments`, FAM-1 plan §5 step 5; 11b plan step 8, patch P20, proof 6d). The table
-  // does not exist yet, so a workout on the week answers as scheduled for ANY athlete of the
-  // household. 11b merges only after step 5 is applied (plan M7), and this conjunct lands with it.
-  // ⚠️ When it lands, `verify/day.ts` changes with it: the fixture assigns every athlete that ticks
-  // (proof 3c's sibling as well as the athlete), and proof 6d adds an athlete of H who is NOT
-  // assigned, which must answer `program_changed`.
   return and(
     eq(schema.blockDayWorkouts.blockId, blockId),
     eq(schema.blockDayWorkouts.workoutId, workoutId),
@@ -52,4 +46,33 @@ export async function isScheduledOn(
     .where(scheduledOn(blockId, workoutId, day))
     .limit(1);
   return slot !== undefined;
+}
+
+/**
+ * **Is this athlete on this program on this day?** FAM-1 11b plan step 8 (§5: "a template block
+ * the athlete is on that day"), through step 5's one spelling of the range, `assignmentOnDay`
+ * (`queries/program-assignments.ts`), never a re-typed `active_to` comparison.
+ *
+ * It judges the assignment row only. The caller has already proved the athlete live and in scope
+ * (`isLiveProfile`) and the block a live template block of the same household (`rowWorkout`), which
+ * is the parent rule `assignmentOnDay`'s docblock asks for.
+ *
+ * ⚠️ **On the program, not due on the weekday.** It uses `assignmentOnDay`, not `assignmentDueOn`:
+ * the plan's rule is "on that day", and every put-on writes all seven weekday rows (§5 step 6c), so
+ * the two agree for every assignment FAM-1 makes. If ASSIGN-1 lets an athlete drop weekdays, this
+ * and 12a's resolver move to `assignmentDueOn` together, or the page and the ✓ disagree.
+ */
+export async function isOnProgramThatDay(
+  exec: Executor,
+  profileId: number,
+  blockId: number,
+  day: string,
+): Promise<boolean> {
+  const a = schema.programAssignments;
+  const [row] = await exec
+    .select({ id: a.id })
+    .from(a)
+    .where(and(eq(a.profileId, profileId), eq(a.blockId, blockId), assignmentOnDay(day)))
+    .limit(1);
+  return row !== undefined;
 }

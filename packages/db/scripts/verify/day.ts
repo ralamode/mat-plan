@@ -144,6 +144,10 @@ async function fixture(tx: VerifyTx) {
   const sibling = await profile(h.id, 'Verify 11b Sibling');
   const archived = await profile(h.id, 'Verify 11b Archived', true);
   const foreigner = await profile(f.id, 'Verify 11b Foreigner');
+  // 6d: athletes of H who are NOT on the block on the proof day.
+  const unassigned = await profile(h.id, 'Verify 11b Unassigned');
+  const takenOff = await profile(h.id, 'Verify 11b Taken Off');
+  const elsewhere = await profile(h.id, 'Verify 11b Elsewhere');
 
   const movement = async (householdId: number, trackingType: TrackingType, slug: string) => {
     const [row] = await tx
@@ -307,6 +311,34 @@ async function fixture(tx: VerifyTx) {
     .set({ deletedAt: new Date() })
     .where(eq(schema.workouts.id, fwHidden.id));
 
+  // Step 5: who is on which program. Every athlete that ticks is assigned (the athlete and the
+  // sibling to H's block, the foreigner to F's), from well before the proof day and still open, so
+  // YESTERDAY and DAY are both on it. 6d's three athletes are not on H's block on DAY.
+  let assignIdx = 0;
+  const assign = (
+    profileId: number,
+    blockId: number,
+    activeFrom: string,
+    activeTo: string | null,
+  ) =>
+    tx.insert(schema.programAssignments).values({
+      publicId: newId(),
+      profileId,
+      blockId,
+      idx: assignIdx++,
+      activeFrom,
+      activeTo,
+    });
+  const LONG_AGO = addDays(DAY, -30);
+  await assign(athlete.id, block, LONG_AGO, null);
+  await assign(athlete.id, hiddenBlock, LONG_AGO, null);
+  await assign(sibling.id, block, LONG_AGO, null);
+  await assign(archived.id, block, LONG_AGO, null);
+  await assign(foreigner.id, fBlock, LONG_AGO, null);
+  await assign(takenOff.id, block, LONG_AGO, YESTERDAY); // its last day was yesterday
+  const otherBlock = await mkTemplateBlock(exec, H_SCOPE, 'verify-11b-h-other');
+  await assign(elsewhere.id, otherBlock, LONG_AGO, null); // on a program, but not this one
+
   const [activity] = await tx
     .select({ id: schema.activityTypes.id })
     .from(schema.activityTypes)
@@ -425,6 +457,9 @@ async function fixture(tx: VerifyTx) {
     sibling,
     archived,
     foreigner,
+    unassigned,
+    takenOff,
+    elsewhere,
     moves,
     w1,
     w2,
@@ -1024,7 +1059,21 @@ async function verifyRowWriter(): Promise<void> {
     );
   });
 
-  // 6d · OWED(step 5): an athlete of H not on the block that day → program_changed (P20).
+  // ── 6d · not on the program that day → program_changed (P20 182, 183) ──────────────────────────
+  await proof('6d: an athlete not on the program that day', async (f) => {
+    for (const [who, why] of [
+      [f.unassigned, 'an athlete on no program'],
+      [f.takenOff, 'an athlete taken off yesterday'],
+      [f.elsewhere, 'an athlete on another program'],
+    ] as const) {
+      expectRefused(
+        await f.tick({ profilePublicId: who.publicId, prescriptionPublicId: f.p.check.publicId }),
+        ROW_REFUSAL.program_changed,
+        `FAM-1 11b 6d: ${why} is program_changed`,
+      );
+      assert.equal(await f.countEntries(who.id), 0, `FAM-1 11b 6d: nothing was written for ${why}`);
+    }
+  });
 
   // ── (f) · F's profile under F's scope, naming H's workout → not_found, nothing written ───────────
   await proof('(f): another household’s profile naming this household’s workout', async (f, tx) => {

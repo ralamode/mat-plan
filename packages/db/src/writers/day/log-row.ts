@@ -30,7 +30,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../../client';
 import { schema } from '../../client';
-import { isScheduledOn } from '../../queries/day/scheduled';
+import { isOnProgramThatDay, isScheduledOn } from '../../queries/day/scheduled';
 import { readRowValues } from '../../queries/day/stored-row-values';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
@@ -419,9 +419,11 @@ export async function logRow(
       refuse(ROW_REFUSAL.not_scheduled);
     }
 
-    // 8 — OWED(step 5): the athlete is on this program on this day → else `program_changed`. Lands
-    //     inside `scheduledOn` with `program_assignments` (plan M7, P20, proof 6d; see the marker
-    //     in `queries/day/scheduled.ts` for the proofs that change with it).
+    // 8 — the athlete is on this program on this day (step 5's assignment) → else `program_changed`,
+    //     which is how the fake answers a workout missing from the athlete's day.
+    if (!(await isOnProgramThatDay(tx, profileId, workout.blockId, write.day))) {
+      refuse(ROW_REFUSAL.program_changed);
+    }
 
     // 9 — a set past 1 only on a type with set rows.
     if (write.set > 1 && !hasSetRows(trackingType)) refuse(ROW_REFUSAL.bad_value);
