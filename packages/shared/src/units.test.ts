@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT } from './bodyweight';
 import { buildBodyweight } from './csv/bodyweight';
-import { EXPORTABLE_UNITS } from './csv/value';
+import { CSV_UNIT_SUFFIX, EXPORTABLE_UNITS } from './csv/value';
+import { TRACKING_TYPE, TRACKING_TYPES } from './movements';
+import { TRACKING_TYPE_FIELDS, unitsForTrackingType } from './program/pieces';
+import { prescribedText } from './program/prescribed-text';
+import { QUANTITY_SLOT, QUANTITY_SLOT_ROWS, slotAcceptsDimension } from './quantity-slots';
 import { sessionMovementSchema } from './strength-session';
 import {
   isLoggableUnit,
@@ -13,6 +17,7 @@ import {
   UNIT_CODES,
   unitsOfDimension,
   MASS_QUANTITY_CEILING,
+  MAX_REPS_PER_SET,
   MAX_STORABLE_QUANTITY,
   UNIT_LABELS,
   quantityCeiling,
@@ -134,5 +139,54 @@ describe('UNIT_SINGULAR_LABELS', () => {
     // Only the irregular singular is new data; English cannot derive `foot` from `feet`.
     expect(UNIT_LABELS.ft.toLowerCase()).toBe('feet');
     expect(UNIT_LABELS.in.toLowerCase()).toBe('inches');
+  });
+});
+
+/**
+ * FAM-1 step 3 — the reference data the seven tracking types need (plan §2, "Reference data owed by
+ * step 3"). These replace three of lane A's lines in `program/owed.test.ts`.
+ */
+describe('FAM-1 step 3: every tracking type is storable', () => {
+  const offeredByAType = [...new Set(TRACKING_TYPES.flatMap(unitsForTrackingType))];
+
+  // Without a cap, a quantity in that unit is REFUSED (quantityCeiling's contract), so a Count in
+  // `count` would be unloggable. Derived from what the editor offers plus what the old form offers.
+  it.each([...new Set([...offeredByAType, ...LOGGABLE_UNITS])])(
+    '%s has a ceiling that fits numeric(8,3)',
+    (u) => {
+      const cap = quantityCeiling(u);
+      expect(cap, `no ceiling declared for ${u}`).toBeDefined();
+      expect(cap!).toBeLessThanOrEqual(MAX_STORABLE_QUANTITY);
+    },
+  );
+
+  it('(primary, count) and a ceiling for count exist, so a Count in count is storable', () => {
+    expect(TRACKING_TYPE_FIELDS[TRACKING_TYPE.count].slot).toBe(QUANTITY_SLOT.primary);
+    expect(unitsForTrackingType(TRACKING_TYPE.count)).toContain('count');
+    expect(slotAcceptsDimension(QUANTITY_SLOT.primary, UNIT_DIMENSION.count)).toBe(true);
+    expect(QUANTITY_SLOT_ROWS).toContainEqual({ code: 'primary', dimension: 'count' });
+    expect(quantityCeiling('count')).toBe(MAX_REPS_PER_SET);
+  });
+
+  // Every pair a type can prescribe is a seeded slot pair, so the composite FK never refuses one.
+  it.each([...TRACKING_TYPES])('%s: each unit it offers is legal in its slot', (type) => {
+    const { slot } = TRACKING_TYPE_FIELDS[type];
+    for (const u of unitsForTrackingType(type)) {
+      expect(slot && slotAcceptsDimension(slot, UNIT_DIMENSION_BY_CODE[u])).toBe(true);
+    }
+  });
+
+  it('a distance in mi renders once mi is a unit', () => {
+    expect(unitsForTrackingType(TRACKING_TYPE.distance)).toContain('mi');
+    expect(
+      prescribedText({
+        trackingType: TRACKING_TYPE.distance,
+        sets: null,
+        targetReps: null,
+        quantities: [{ slot: QUANTITY_SLOT.distance, unit: 'mi', value: 2 }],
+      }),
+    ).toBe('2 mi');
+    expect(CSV_UNIT_SUFFIX.mi).toBe('mi');
+    expect(UNIT_SINGULAR_LABELS.mi).toBe('mile');
   });
 });

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/movement-catalog.ts b/packages/db/src/writers/movement-catalog.ts
+--- a/packages/db/src/writers/movement-catalog.ts
++++ b/packages/db/src/writers/movement-catalog.ts
+@@ -129,7 +129,7 @@ export async function findOrCreateTypedMovement(
+   const ownRow = await movementWhere(
+     and(eq(schema.movements.slug, slug), movementInHousehold(scope)),
+   );
+-  if (ownRow !== undefined) return ownRow;
++  if (ownRow !== undefined) return { ...ownRow, trackingType: trackingType ?? ownRow.trackingType };
+ 
+   // (3) …then insert into it. The arbiter is `uq_movements_household_slug`, whose predicate the
+   // insert repeats literally — see `insertMovementOwnedBy`.

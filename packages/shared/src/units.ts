@@ -55,6 +55,8 @@ export const UNIT_CODES = [
   'ft',
   'm',
   'yd',
+  // FAM-1 step 3 (plan §2, D27): a run's distance. Appended, like every code since GAP-3.
+  'mi',
 ] as const;
 
 export type Unit = (typeof UNIT_CODES)[number];
@@ -74,6 +76,7 @@ export const UNIT_LABELS: Record<Unit, string> = {
   ft: 'Feet',
   m: 'Metres',
   yd: 'Yards',
+  mi: 'Miles',
 };
 
 /**
@@ -94,6 +97,7 @@ export const UNIT_DIMENSION_BY_CODE: Record<Unit, UnitDimension> = {
   ft: 'length',
   m: 'length',
   yd: 'length',
+  mi: 'length',
 };
 
 /** Rows for the `units` reference-table seed (idempotent). */
@@ -116,11 +120,17 @@ export function unitsOfDimension(dimension: UnitDimension): Unit[] {
  * slot" is true by construction rather than by a reviewer noticing. A fourth dimension added there
  * shows up here, in the form's picker and in the composite FK, with no second edit.
  *
- * Excludes `count`, `bool` and `timing` because no slot accepts them: a rep count is not a load, a
- * checkbox is not a measurement, and a clock reading is not a duration.
+ * Excludes `bool` and `timing` because no slot accepts them: a checkbox is not a measurement, and a
+ * clock reading is not a duration.
+ *
+ * ⚠️ **Excludes `count` BY NAME, although the primary slot accepts it since FAM-1 step 3.** A Count
+ * item (plan §2) logs a plain number through the new day page, which reads `TRACKING_TYPE_FIELDS`. The
+ * legacy strength form and its write path (`loggableUnitSchema`) stay as they were: a rep count is not
+ * a load there, and the CSV export has no spelling for `count` (`csv/value.ts`).
  */
-export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] =
-  QUANTITY_SLOT_DIMENSIONS_BY_CODE[QUANTITY_SLOT.primary];
+export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] = QUANTITY_SLOT_DIMENSIONS_BY_CODE[
+  QUANTITY_SLOT.primary
+].filter((d) => d !== UNIT_DIMENSION.count);
 
 export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension);
 
@@ -206,6 +216,7 @@ export const UNIT_SINGULAR_LABELS: Record<Unit, string | null> = {
   ft: 'foot',
   m: 'metre',
   yd: 'yard',
+  mi: 'mile',
 };
 
 /**
@@ -238,6 +249,9 @@ export const MAX_STORABLE_QUANTITY = 99_999.999;
 
 export const MASS_QUANTITY_CEILING = 2000;
 
+/** The most reps one set may log (`strength.ts`), and the ceiling of the `count` unit below. */
+export const MAX_REPS_PER_SET = 1000;
+
 export const MAX_QUANTITY_BY_UNIT: Partial<Record<Unit, number>> = {
   lb: MASS_QUANTITY_CEILING,
   kg: MASS_QUANTITY_CEILING,
@@ -248,6 +262,10 @@ export const MAX_QUANTITY_BY_UNIT: Partial<Record<Unit, number>> = {
   ft: 5_280,
   yd: 5_280,
   m: 10_000,
+  // FAM-1 step 3. `mi`: 100 is past any run a family logs; `count`: the rep cap, so a Count of a
+  // number is bounded the way a rep count already is.
+  mi: 100,
+  count: MAX_REPS_PER_SET,
 };
 
 /**

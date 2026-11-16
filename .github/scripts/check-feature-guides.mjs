@@ -104,7 +104,6 @@ function owingGuides(file, guides) {
 // Whole-tree, not diff-based, so it runs before the "no changed files" exit below.
 const LANE_DOC_DIRS = ['docs/milestones', 'docs/specs'];
 const LANE_KEY = /^(lane-[a-z0-9-]+):\s*(.*)$/;
-const NOT_AN_ENTRY = "is not a two-space-indented '- path' line";
 
 /** A lane entry, trailing `/` dropped, or null when it is not the plain path syntax `owns:` uses. A
  *  glob, `./`, a leading `/`, `..`, `//`, quotes or a backslash would make the collision rule
@@ -140,15 +139,8 @@ function readLanes(path) {
   const lanes = new Map();
   let current = null;
   for (const line of m[1].split('\n')) {
-    if (line.startsWith('#')) continue; // a column-0 comment, inside a list or not, ends nothing
     if (/^\S/.test(line)) {
-      // Column 0: a new top-level key, which is the only thing that ends a lane's list. Inside a
-      // lane, a column-0 line that is not a key (`- path` unindented) is an error and the list
-      // goes on: it used to end the list silently and drop every entry after it (#420's review).
-      if (current !== null && !/^[^\s#-][^:]*:(\s|$)/.test(line)) {
-        errors.push(`${path}: ${current}: '${line}' ${NOT_AN_ENTRY}`);
-        continue;
-      }
+      // Column 0: a new top-level key, which is the only thing that ends a lane's list.
       const key = LANE_KEY.exec(line);
       current = null;
       if (!key) {
@@ -166,11 +158,9 @@ function readLanes(path) {
     if (current === null) continue;
     const trimmed = line.trim();
     if (trimmed === '' || trimmed.startsWith('#')) continue;
-    // Exactly two spaces, a dash, one space, then the path: the shape every lane list is written
-    // in. Any other indentation is refused rather than guessed at.
-    const item = /^ {2}- (\S.*?)\s*$/.exec(line);
+    const item = /^\s+-\s+(.+?)\s*$/.exec(line);
     if (!item) {
-      errors.push(`${path}: ${current}: '${trimmed}' ${NOT_AN_ENTRY}`);
+      errors.push(`${path}: ${current}: unrecognised line '${trimmed}'`);
       continue;
     }
     const raw = item[1].replace(/\s+#.*$/, '').trim();

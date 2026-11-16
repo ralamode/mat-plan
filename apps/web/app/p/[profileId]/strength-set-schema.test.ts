@@ -199,9 +199,13 @@ describe('strengthSetSchema — free text is gone, not merely discouraged', () =
 });
 
 describe('LOGGABLE_UNITS is DERIVED, so it cannot drift from the slot vocabulary', () => {
-  it("is exactly the primary slot's dimensions, expanded to their units", () => {
-    expect([...LOGGABLE_DIMENSIONS]).toEqual([
-      ...QUANTITY_SLOT_DIMENSIONS_BY_CODE[QUANTITY_SLOT.primary],
+  // The contract pin, once (AGENTS.md → constants). Since FAM-1 step 3 the primary slot also accepts
+  // `count` (a Count item's plain number); the legacy form does not offer it, by name (`units.ts`).
+  it("is the primary slot's dimensions but count, expanded to their units", () => {
+    expect([...LOGGABLE_DIMENSIONS]).toEqual(['mass', 'length', 'time']);
+    expect([...QUANTITY_SLOT_DIMENSIONS_BY_CODE[QUANTITY_SLOT.primary]]).toEqual([
+      ...LOGGABLE_DIMENSIONS,
+      'count',
     ]);
     expect([...LOGGABLE_UNITS]).toEqual(LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension));
   });

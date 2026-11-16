@@ -681,6 +681,11 @@ export const movements = pgTable(
     pattern: text('pattern'), // mirrors MOVEMENT_PATTERNS (nullable)
     unitDefault: text('unit_default').references(() => units.code),
     isBodyweight: boolean('is_bodyweight').notNull().default(false),
+    // FAM-1 step 3 (plan D1, D25): how the item is logged; mirrors shared TRACKING_TYPES (pinned by
+    // db:verify). Set ONCE: built-ins by migration 0022's typing, a new item when it is made
+    // (`findOrCreateMovement`). Nothing retypes a row. The default is what an item made in the old
+    // strength form gets.
+    trackingType: text('tracking_type').notNull().default('weight_reps'),
     videoUrl: text('video_url'),
     cues: text('cues'),
     ...timestamps,
@@ -690,6 +695,10 @@ export const movements = pgTable(
     check(
       'movements_pattern_check',
       sql`${t.pattern} in ('squat', 'hinge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'lunge', 'jump', 'core', 'carry', 'isolation')`,
+    ),
+    check(
+      'movements_tracking_type_check',
+      sql`${t.trackingType} in ('check', 'count', 'reps', 'weight_reps', 'duration', 'time_sets', 'distance')`,
     ),
     // TEN-2c: a GLOBAL row must carry a `pattern` — i.e. it must be the kind of row only a human
     // curating `MOVEMENT_SEED_ROWS` can author, because `findOrCreateMovement` writes neither
@@ -763,7 +772,7 @@ export const sessions = pgTable(
       .references(() => profiles.id),
     activityDate: date('activity_date').notNull(), // declared date (not device clock)
     loggedAt: timestamp('logged_at', { withTimezone: true }), // device clock, informational
-    sessionType: text('session_type'), // mirrors SESSION_TYPES (nullable)
+    sessionType: text('session_type'), // mirrors SESSION_TYPES (nullable); 'workout' since FAM-1 step 3 (D6)
     // GAP-1 P0-1: WHICH PROGRAMMED DAY this session was (mirrors shared DAY_ROLES). Distinct from
     // `session_type` on purpose — session_type is what a session IS, day_role is which program day it
     // fulfilled — and DAY_ROLES is a superset carrying strength_a/b/c, which session_type cannot express.
@@ -795,7 +804,7 @@ export const sessions = pgTable(
     uniqueIndex('uq_sessions_client_id').on(t.clientId),
     check(
       'sessions_session_type_check',
-      sql`${t.sessionType} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core')`,
+      sql`${t.sessionType} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core', 'workout')`,
     ),
     check('sessions_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
     // Inlines the shared DAY_ROLES literals (a CHECK can't import a const); db:verify pins the accepted

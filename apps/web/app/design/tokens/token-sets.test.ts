@@ -7,7 +7,6 @@ import { describe, expect, it } from 'vitest';
 import { MIN_TAP_TARGET_PX } from '@/lib/constants';
 
 import { AA_LARGE, AA_NORMAL, parseOklch, ratioOf, withAlpha } from './contrast';
-import { blockOf } from './css-block';
 import {
   CONTROL_SET_ID,
   EXCLUDED_TOKENS,
@@ -39,6 +38,34 @@ const APP_DIR = join(HERE, '..', '..');
  *  not satisfy an assertion (the same trick `pages-need-a-session.test.ts` uses on source). */
 const css = readFileSync(join(HERE, 'token-sets.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 const globals = readFileSync(join(APP_DIR, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+/**
+ * Every `--token: value;` declaration inside the first RULE whose selector is `selector`.
+ *
+ * "Whose selector is", not "which contains the text": `globals.css:5` is
+ * `@custom-variant dark (&:is(.dark *));`, so a naive `indexOf('.dark')` finds that line and then
+ * parses the `@theme inline` block that follows it — scoring the dark palette against the wrong
+ * values while looking perfectly green. So the match requires the next non-space character to be `{`.
+ */
+function blockOf(source: string, selector: string): Record<string, string> | null {
+  let start = -1;
+  for (let i = source.indexOf(selector); i >= 0; i = source.indexOf(selector, i + 1)) {
+    if (/^\s*\{/.test(source.slice(i + selector.length))) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const open = source.indexOf('{', start);
+  const close = source.indexOf('}', open);
+  if (open < 0 || close < 0) return null;
+  const body = source.slice(open + 1, close);
+  const out: Record<string, string> = {};
+  for (const [, name, value] of body.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
+    out[name!] = value!.trim();
+  }
+  return out;
+}
 
 const lightBlock = (id: string) => blockOf(css, `[data-tokens='${id}']`);
 const darkBlock = (id: string) => blockOf(css, `.dark [data-tokens='${id}']`);

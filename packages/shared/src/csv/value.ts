@@ -45,6 +45,7 @@ export const CSV_UNIT_SUFFIX: Record<Unit, string | null> = {
   cm: 'cm',
   m: 'm',
   yd: 'yd',
+  mi: 'mi', // FAM-1 step 3
   min: 'min',
   // No form offers these (they are not LOGGABLE_UNITS). `null` means "cannot appear in a load", which
   // `assertExportableUnit` turns into a loud refusal rather than a plausible-looking wrong number.

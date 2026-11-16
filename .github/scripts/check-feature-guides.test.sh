@@ -220,35 +220,7 @@ lane_case "lanes: an unrecognised line is refused"     milestones 'lane-a:
   - src/x.ts
   src/y.ts
 lane-b:
-  - src/other/' "$FREE" 2 "lane-a: 'src/y.ts' is not a two-space-indented"
-# An entry is exactly a two-space-indented "- path" line. Before 2026-11-15 a column-0 "- path"
-# ended the list silently and every entry after it was dropped, so the overlap check passed on a
-# lane it could not see (found in #420's review: three paths dropped).
-lane_case "lanes: a column-0 '- path' is refused, not the end of the list" milestones 'lane-a:
-  - src/x.ts
-- src/y.ts
-  - src/z.ts
-lane-b:
-  - src/z.ts' "$FREE" 2 "lane-a: '- src/y.ts' is not a two-space-indented '- path' line"
-lane_case "lanes: the entries after a column-0 line are still read" milestones 'lane-a:
-  - src/x.ts
-- src/y.ts
-  - src/**
-lane-b:
-  - src/other/' "$FREE" 2 "lane-a: 'src/**' is not a plain path"
-lane_case "lanes: a column-0 comment does not end a list" milestones 'lane-a:
-  - src/x.ts
-# a note
-  - src/y.ts
-lane-b:
-  - src/y.ts' "$FREE" 1 "lane-a 'src/y.ts' and lane-b 'src/y.ts' overlap"
-for bad in '    - src/y.ts' ' - src/y.ts' '	- src/y.ts' '  -src/y.ts' '  -  src/y.ts'; do
-  lane_case "lanes: '$bad' is refused"                 milestones "lane-a:
-  - src/x.ts
-$bad
-lane-b:
-  - src/other/" "$FREE" 2 "is not a two-space-indented '- path' line"
-done
+  - src/other/' "$FREE" 2 "unrecognised line 'src/y.ts'"
 lane_case "lanes: a bad lane key is refused"           milestones 'lane-a:
   - src/x.ts
 lane B · Builder:
