@@ -325,8 +325,9 @@ describe('reportScopeMiss — the miss-path event', () => {
   });
 
   it('🔴 cross_household is NOT bounded — capping the signal would defeat the event', async () => {
-    // ADR 0006 obligation 3 exists to make this one noticeable, and `runbooks.md`'s alert rule is
-    // "more than 3 events in 1 hour" — a bound here would make that rule unreachable.
+    // ADR 0006 obligation 3 exists to make this one noticeable. The runbook's alert fires on the
+    // issue, and an operator tells a stale bookmark from a probe by the issue's events and their
+    // ids: a bound here would hide exactly that count.
     const calls = await missTwice([[11, HOUSEHOLD_ROLE.owner]], true);
     expect(tagged(calls, 'cross_household')).toHaveLength(2);
   });

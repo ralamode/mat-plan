@@ -1050,23 +1050,37 @@ server cannot tell them apart — which made the threat model's #1 risk the one 
 signal. On a miss only, `apps/web/lib/dal/household.ts` → `reportScopeMiss` re-resolves without the
 household conjunct and emits one structured event.
 
-**The alert rule** (Sentry → Alerts → new issue alert):
+**The alert** (Sentry → Monitors → Alerts, where Sentry now keeps them; created 2026-11-17 UTC):
 
-| Field     | Value                                                                          |
-| --------- | ------------------------------------------------------------------------------ |
-| Filter    | `message` contains `scope miss: cross_household` (all four kinds)              |
-| Threshold | **more than 3 events in 1 hour** — one is a stale bookmark, a burst is a probe |
-| Action    | email the maintainer                                                           |
+| Field    | Value                                                                                |
+| -------- | ------------------------------------------------------------------------------------ |
+| Name     | "Scope miss: cross-household probe (any kind)" (alert `6358619`), project `mat-plan` |
+| Triggers | a new issue is created · an issue escalates · a resolved issue regresses             |
+| Filter   | the event's `message` contains `scope miss: cross_household` (all four kinds)        |
+| Action   | notify the issue's suggested assignees, else the recently active members             |
+| Throttle | none: it notifies on every trigger                                                   |
 
-⚠️ **The filter was `profile scope miss: cross_household` before C11.** A rule still set to that text
-keeps firing for profiles and is **silent for the three new kinds**. Change the rule's filter text in
-Sentry to `scope miss: cross_household`, which every one of the four messages contains.
+🔴 **There was no such alert before 2026-11-17 (UTC).** This section described one from `TEN-1` on,
+with a threshold of "more than 3 events in 1 hour". Sentry held only its default alert for
+high-priority issues, and a scope miss is a `warning`, so **nothing ever notified anyone**. The
+alert above was created that day by the maintainer's session, not edited from an older one. A
+`cross_household` event raised before then was recorded and not alerted on: to know whether one
+happened, open the issue and read its events; an empty inbox says nothing. **If such an issue
+already exists and is unresolved, resolve it now**: it is not new, so a further event on it would
+not notify unless Sentry calls it an escalation; resolved, the next event regresses it and does.
 
-⚠️ **The threshold counts each kind on its own.** An issue alert counts events per issue, and each
-kind's message is its own issue, so three profile events and three program events in an hour send
-nothing. Counting the four together would take a metric alert on the tag
-`scope_outcome:cross_household`, which is not set up. Not verified against this project's Sentry
-settings: read the rule there before relying on either statement.
+⚠️ **It fires per ISSUE, not per event, and has no hourly threshold.** Sentry groups events by
+message and the code sets no fingerprint, so each kind's message should be its own issue; check
+under Issues, since the grouping is Sentry's. The first `cross_household` event of a kind creates
+the issue and notifies. A later event on that issue notifies only if Sentry marks the issue as
+escalating, or if the issue had been resolved and so regresses. Two things follow:
+
+- **Resolve the issue when triage is done.** An issue left unresolved is quiet for the next probe
+  of that kind, unless Sentry calls it an escalation.
+- **The count is yours to read.** Nothing counts "3 in an hour" for you: open the issue and look at
+  its events and their `resource` values (Triage, below). Counting events, or the four kinds
+  together, would take a metric alert on the tag `scope_outcome:cross_household`, which is not set
+  up.
 
 **What the event carries, and what it deliberately does not.** `actor` — **`clerk_session` since
 `AUTH-1` 1c-3b**; it was `gate_session` while the gate was the only door, and it is a **constant
@@ -1131,14 +1145,41 @@ in **their own** household, and the server refused because they are not the owne
 alert above covers an id reached from the wrong household. This one is _inside_ the caller's own
 household, so every tenancy predicate matched and `reportScopeMiss` is silent by design.
 
-| Filter | `message` is `athlete authority refused`                              |
-| ------ | --------------------------------------------------------------------- |
-| Tags   | `authority_outcome: owner_only` · `authority_action: archive_profile` |
+**The alert** (Sentry → Monitors → Alerts; created 2026-11-17 UTC):
+
+| Field    | Value                                                                              |
+| -------- | ---------------------------------------------------------------------------------- |
+| Name     | "Owner-only athlete action refused (PROF-1)" (alert `6358648`), project `mat-plan` |
+| Triggers | a new issue is created · an issue escalates · a resolved issue regresses           |
+| Filter   | the event's `message` contains `athlete authority refused`                         |
+| Action   | notify the issue's suggested assignees, else the recently active members           |
+| Throttle | none: it notifies on every trigger                                                 |
+
+The event's tags are `authority_outcome: owner_only` and `authority_action: archive_profile`; the
+alert filters on the message, not on them.
+
+🔴 **There was no such alert before 2026-11-17 (UTC)**, for the reason the scope-miss section above
+gives: Sentry held only its default alert for high-priority issues, and this event is a `warning`.
+It was created that day by the maintainer's session. A refusal before then was recorded and not
+alerted on. **If the issue already exists and is unresolved, resolve it now**, so that the next
+refusal regresses it and notifies.
+
+⚠️ **It fires per ISSUE, not per event.** Every refusal carries the same message, so they should
+be one issue (Sentry groups by message; check under Issues): the first creates it and notifies, and
+a later one notifies only if Sentry calls the issue escalating or the issue had been resolved.
+**Resolve the issue when triage is done**, or the next refusal is quiet.
+
+⚠️ **How many events to expect.** The app reports this event at most once per account per server
+instance, and not at all once the per-principal bound it shares with the unresolved-scope events
+fills (100 keys, held in memory; it emits `report_cap_reached` first). A caller with no user id
+shares one key. And the event carries no account id. So several events mean several accounts or
+several instances, and Sentry cannot tell which: read the count as "this happened more than once",
+never as "one account tried N times".
 
 **What makes it interesting rather than noise:** the UI renders **no Archive control for a member**,
 so this path cannot be reached by using the app. Reaching it takes a crafted POST. One event is
 plausible as a stale tab (a member whose role changed mid-session, once `INVITE-1` can change roles);
-a burst from one account is someone probing an owner-only control.
+repeated events are someone probing an owner-only control (from how many accounts, the events cannot say).
 
 ⚠️ **The event deliberately carries no athlete name, no athlete id, no household id and no Clerk
 id** — the same constraints as `ScopeMissEvent`, for the same reasons (minors' data; a public repo;
@@ -1160,7 +1201,7 @@ SELECT household_id, role, created_at
 2. **The member should be an owner.** There is no in-app role change until `INVITE-1`; today that is
    a data correction, and it is a **privileged** one — promoting an account to owner grants archive
    over every athlete in the household. Treat it as such.
-3. **A burst from one account with no plausible explanation** → treat as probing. The data is safe
+3. **Repeated events with no plausible explanation** → treat as probing. The data is safe
    (the predicate matched 0 rows), so this is an investigation, not an incident.
 
    ⚠️ It should be unreachable: `uq_household_members_clerk_user` is partial-unique on
