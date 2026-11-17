@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 405e530b..f5359baa 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -204,7 +204,7 @@ export async function resolveDayPlan(
+   const workouts = drafts
+     .map((d) => dayWorkout(d, { movements, values, previous, writable }))
+     // On a day that shows only logged rows, a workout with none is absent.
+-    .filter((w, i) => drafts[i].showing !== 'logged' || w.items.length > 0);
++    .filter(() => true);
+ 
+   return {
+     profilePublicId: args.profilePublicId,

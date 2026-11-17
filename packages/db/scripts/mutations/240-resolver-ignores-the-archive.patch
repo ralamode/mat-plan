@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 405e530b..f0dc8fa8 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -93,7 +93,7 @@ export async function resolveDayPlan(
+ 
+   // R1: future first (the preview, archived or not); else writable only inside the window and not
+   // archived (`rowDayOpen`, the writer's own rule); else logged rows only.
+-  const writable = rowDayOpen(day, today, profile.archivedAt);
++  const writable = rowDayOpen(day, today, null);
+   const future = day > today;
+   const scheduledShowing: Showing = future ? 'preview' : writable ? 'all' : 'logged';
+ 

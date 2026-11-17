@@ -1,0 +1,29 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 405e530b..a3a24128 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -168,7 +168,7 @@ export async function resolveDayPlan(
+         // C21: an id only for what is live. A program's id only while it is one of the day's
+         // programs (live, so in `programs`); a workout's only while it and its program are live.
+         const programPublicId =
+-          first.workoutBlockId !== null ? (programOfBlock.get(first.workoutBlockId) ?? null) : null;
++          first.scopedProgramPublicId;
+         return {
+           programPublicId,
+           workoutPublicId:
+@@ -318,6 +318,7 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
+       publicId: w.publicId,
+       description: w.description,
+       blockId: w.blockId,
++      programPublicId: sql<string>`${b.publicId}`.as('program_public_id'),
+       live: sql<boolean>`${workoutIsLive()}`.as('workout_live'),
+     })
+     .from(w)
+@@ -348,6 +349,7 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
+       workoutDescription: scopedWorkout.description,
+       workoutLive: scopedWorkout.live,
+       workoutBlockId: scopedWorkout.blockId,
++      scopedProgramPublicId: scopedWorkout.programPublicId,
+       prescriptionId: scopedPrescription.id,
+       prescriptionPublicId: scopedPrescription.publicId,
+     })

@@ -1,12 +1,11 @@
-diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 4f96cfb1..a4c6b3a1 100644
---- a/packages/db/src/writers/day/log-row.ts
-+++ b/packages/db/src/writers/day/log-row.ts
-@@ -149,7 +149,6 @@ async function openRowDay(
-     .where(isLiveProfile(args.profilePublicId, args.scope))
-     .limit(1);
-   if (!profile) refuse(ROW_REFUSAL.not_found);
--  if (profile.archivedAt !== null) refuse(ROW_REFUSAL.closed_day);
-   if (!inWritableWindow(args.day, args.today)) refuse(ROW_REFUSAL.closed_day);
-   return profile.id;
+diff --git a/packages/db/src/queries/day/day-window.ts b/packages/db/src/queries/day/day-window.ts
+index d40a8c61..e1362dba 100644
+--- a/packages/db/src/queries/day/day-window.ts
++++ b/packages/db/src/queries/day/day-window.ts
+@@ -10,5 +10,5 @@ import { inWritableWindow } from '@mat-plan/shared';
+  * `archivedAt` is the profile's `archived_at`; the caller has read it inside the scope.
+  */
+ export function rowDayOpen(day: string, today: string, archivedAt: Date | null): boolean {
+-  return archivedAt === null && inWritableWindow(day, today);
++  return inWritableWindow(day, today);
  }

@@ -1,10 +1,10 @@
 diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
-index 9d1a35a1..0dc1e2a0 100644
+index 405e530b..0459cb4f 100644
 --- a/packages/db/src/queries/day/day-plan.ts
 +++ b/packages/db/src/queries/day/day-plan.ts
-@@ -337,7 +337,6 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
-         isNotNull(e.movementId),
-         isNull(e.deletedAt),
+@@ -364,7 +364,6 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
+         // profile never lends its frozen name.
+         or(isNull(e.sessionId), eq(s.profileId, profileId)),
          or(isNull(s.workoutId), isNotNull(scopedWorkout.id)),
 -        or(isNull(e.prescriptionId), isNotNull(scopedPrescription.id)),
        ),

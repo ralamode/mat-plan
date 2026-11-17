@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
-index 9d1a35a1..0ee0168e 100644
+index 405e530b..0e6dcdb0 100644
 --- a/packages/db/src/queries/day/day-plan.ts
 +++ b/packages/db/src/queries/day/day-plan.ts
-@@ -335,7 +335,6 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
+@@ -359,7 +359,6 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
        and(
          programRowOf(profileId, day),
          isNotNull(e.movementId),
 -        isNull(e.deletedAt),
-         or(isNull(s.workoutId), isNotNull(scopedWorkout.id)),
-         or(isNull(e.prescriptionId), isNotNull(scopedPrescription.id)),
-       ),
+         // The entry's session is this athlete's own (runbook pre-flight (i)): a session of another
+         // profile never lends its frozen name.
+         or(isNull(e.sessionId), eq(s.profileId, profileId)),
