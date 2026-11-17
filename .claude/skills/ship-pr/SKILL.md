@@ -37,8 +37,13 @@ table (it is the one source for which shapes auto-resolve), then `git add <files
 
 ## 2. Local gates, cheapest first
 
+What each gate covers, where it runs, and **when to run it locally at all** is one list:
+[AGENTS.md](../../../AGENTS.md) → "Local hooks vs CI merge-gates". One heavy local run at a time,
+machine-wide; anything heavy that is not on that list's run-locally side goes to CI: push, and let it
+gate.
+
 ```bash
-pnpm verify              # format:check → lint → typecheck → test → db:verify → … → audit:check (~35s)
+pnpm verify              # the list's `verify` chain (until DX-18 PR 2 puts db:mutations in CI)
 pnpm guides:check        # feature guide touched with every owned file it covers (a stacked PR compares with its base branch, as CI does)
 bash .claude/skills/hold-the-bar/check.sh   # the diff did not quietly lower the bar
 ```
@@ -48,6 +53,15 @@ the gate login, bodyweight logging, day navigation, the CSV export, a11y):
 
 ```bash
 pnpm e2e:local           # minutes; throwaway embedded Postgres, never touches Neon
+```
+
+**Filtered commands**, for the one thing you are working on (never a full run to "see"):
+
+```bash
+pnpm --filter web exec vitest run <path> -t "<name>"            # one file, or one test by name
+pnpm --filter web exec vitest run ../../packages/shared/src     # one package
+pnpm test:changed                                               # what this branch reaches (pre-push runs it)
+pnpm e2e:local e2e/<spec>.ts -g "<name>"                        # one Playwright spec or test
 ```
 
 A red gate: grep [docs/lessons.md](../../../docs/lessons.md) for the symptom **before** debugging.
@@ -130,7 +144,8 @@ silently skip it.
 - **Never write the literal skip-CI marker in a commit message**, not even when describing it. GitHub
   and Vercel match it anywhere in the head commit and a squash carries it onto `main`
   (see lessons.md → "GitHub / PRs").
-- Hooks: pre-commit runs lint-staged; pre-push runs typecheck + tests. Don't `--no-verify` past them.
+- Hooks: pre-commit runs lint-staged; pre-push runs `pnpm typecheck && pnpm test:changed` (the tests
+  the branch reaches). Don't `--no-verify` past them.
   If a hook is wrong, fix the hook.
 
 ## 7. Open the PR
@@ -209,5 +224,7 @@ else. Before stopping:
   about exactly this. (#132)
 - A `ci-skip-e2e`, `docs-skip-feature-map` or `docs-skip-changelog` label applied with no one-line
   reason in the PR. (hypothesis)
-- Pushing to fix CI one round at a time when `pnpm verify` / `pnpm e2e:local` would have caught it
-  locally. (hypothesis)
+- Running the whole suite, `pnpm verify` or `pnpm e2e:local` locally just to see whether CI will pass,
+  while other lanes share the machine. Under a load average near 200, tests time out at their limits
+  and read as failures, and one run steals another's slot. Run the filtered command for what you
+  changed, push, and let CI gate the rest. (maintainer, 2026-11-17)
