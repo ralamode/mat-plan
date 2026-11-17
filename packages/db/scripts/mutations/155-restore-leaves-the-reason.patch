@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..ff13b183 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -524,7 +524,7 @@ async function restoreOne(
+   //     restores through here) never trips the live-row CHECK (B2-0).
+   const restored = await exec
+     .update(schema.entries)
+-    .set(UNHIDE)
++    .set({ deletedAt: null })
+     .where(and(eq(schema.entries.id, item.id), hiddenUnder(args.hiddenAt)))
+     .returning({ id: schema.entries.id });
+ 
