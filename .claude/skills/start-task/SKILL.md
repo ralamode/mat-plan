@@ -82,6 +82,9 @@ globs, **feature guides included**) is the one that actually fails, and a shared
 contract and an approved prototype all pass it without noticing. When a gate fails, pick an order and
 write the reason into the roadmap's "In flight", rather than discovering it in a merge.
 
+Lanes also share **one machine**: one heavy local run at a time. What to run locally and what to leave
+to CI is [AGENTS.md](../../../AGENTS.md) → "Local hooks vs CI merge-gates" ("When to run locally").
+
 ## 5. Scope check
 
 At ~4h/wk, the one-concern / <400-line target is a real constraint. If the task clearly exceeds it,

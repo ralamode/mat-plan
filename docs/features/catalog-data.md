@@ -30,6 +30,7 @@ it is approved, one batch PR at a time.
 | Batch | Family                            | Entries |
 | ----- | --------------------------------- | ------- |
 | 1     | Mobility and stretching           | 50      |
+| 2     | Core, carries and sleds           | 58      |
 | 5     | Conditioning machines and running | 54      |
 
 ## How a batch arrives
