@@ -716,6 +716,13 @@ do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prin
   (FAM-1 6b, #522: stopping a background `pnpm verify` left `261` in `erasure/graph.ts`, and its
   `sh -c` chain kept running). After stopping one, end the chain's processes, then run the check
   above and `git apply -R` what it prints.
+  → **Fixed in the runner (2026-11-17):** a patch was left applied because the runner had no signal
+  handling and ran `db:verify` with `spawnSync`, which blocks the event loop, so even a handler could
+  not have run while the gate did (where every kill lands). It now restores on SIGINT/SIGTERM/SIGHUP,
+  ends the gate's process group, recovers a `kill -9`'d run from a journal, and refuses a second run
+  in one worktree (`packages/db/scripts/mutations/README.md` → "Stopping a run"). Seen first when a
+  `pkill -f mutations.mjs` stopped every worktree's run at once. **Never stop a gate by pattern
+  (`pkill -f`):** it reaches other sessions' runs; stop your own by its pid.
 
 - 🔴 **A merge commit carried conflict markers, and Prettier hid them.** FAM-1 6b (#522): a merge's
   output was cut short (`| tail -3`), only one of two conflicts was read, and `git add -A` committed

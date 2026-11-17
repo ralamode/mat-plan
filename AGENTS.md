@@ -297,7 +297,7 @@ movement picker.
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
   **This section is the one list of where each gate runs**; other docs point here rather than
-  restating it. `skills:check`, `guards:test` (all fourteen guard self-tests) and `audit:check` run here
+  restating it. `skills:check`, `guards:test` (all fifteen guard self-tests) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
   on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)) — **separately**, as
   `pnpm status:check` (on a stacked PR it compares with the parent's branch, as CI does), and ⚠️ it names the fragment it wants from
