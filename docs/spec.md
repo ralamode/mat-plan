@@ -131,7 +131,7 @@ CHECK. All rows household-scoped for DAL authz.
 
 **Mapping both systems:** kids strength `back-squat 3×3 "65/65/65"` → session → entry(raw_load, movement)
 → 3 entry_set (derived); export re-emits `raw_load` verbatim → lossless. Checkins/bodyweight/
-calisthenics/habits → entry(metric_key or unit=bool). Life activities → one-tap entry(unit=timing|bool).
+calisthenics/habits → entry(metric_key or unit=bool). Life activities → wrestling practice, typed minutes (unit=min, V1-24 3b-life-b); Wake is no longer logged.
 Ray's PPL → session(feel, soreness) → superset → entry → entry_set.
 
 ### 4a. Validation — ERD + worked coverage

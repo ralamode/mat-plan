@@ -65,7 +65,8 @@ describe('LifeSection — its states', () => {
   it('writable and nothing logged: the practice button, and no Wake', () => {
     render(section());
     expect(screen.getByRole('heading', { name: LIFE_COPY.heading })).toBeTruthy();
-    expect(screen.getByRole('button', { name: practiceLabel })).toBeTruthy();
+    expect(screen.getByRole('button', { name: PRACTICE_COPY.logLabel })).toBeTruthy();
+    expect(screen.getByLabelText(PRACTICE_COPY.fieldLabel)).toBeTruthy();
     expect(screen.queryByRole('button', { name: wakeLabel })).toBeNull();
     expect(screen.queryByText(LIFE_COPY.noneOnClosedDay)).toBeNull();
   });
@@ -77,7 +78,7 @@ describe('LifeSection — its states', () => {
     // Two lines (plan A1): siblings in one column, never one run of text.
     expect(label.parentElement).toBe(value.parentElement);
     expect(label.parentElement!.className).toContain('flex-col');
-    expect(screen.queryByRole('button', { name: practiceLabel })).toBeNull();
+    expect(screen.queryByRole('button', { name: PRACTICE_COPY.logLabel })).toBeNull();
     expect(screen.queryByText(LIFE_COPY.noneOnClosedDay)).toBeNull();
   });
 
@@ -137,7 +138,8 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
 
   it("a log is announced from the action's result and hands focus to the row's Change", async () => {
     const { rerender } = render(section());
-    await submit(practiceLabel);
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '90' } });
+    await submit(PRACTICE_COPY.logLabel);
     expect(logLifeActivitiesAction).toHaveBeenCalledOnce();
     expect(screen.getByRole('status').textContent).toBe(LIFE_COPY.announced(practiceLabel));
     rerender(section({ logged: [practice(90)] }));
@@ -176,7 +178,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     );
   });
 
-  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning button', async () => {
+  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning field', async () => {
     const { rerender } = render(section({ logged: [practice(90)] }));
     open(90);
     fireEvent.change(field(), { target: { value: '' } });
@@ -186,7 +188,8 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     const status = screen.getByRole('status');
     expect(status.textContent).toBe(PRACTICE_COPY.announcedCleared(minutes(90)));
     expect(status.className).not.toContain('sr-only');
-    const returning = screen.getByRole('button', { name: practiceLabel });
+    // The typed field returns, takes focus, and is described by the shown line.
+    const returning = screen.getByLabelText(PRACTICE_COPY.fieldLabel);
     expect(document.activeElement).toBe(returning);
     // …and it is described by the shown line, so arriving focus reads what was cleared.
     expect(returning.getAttribute('aria-describedby')).toBe(status.id);
@@ -239,11 +242,52 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     expect(screen.getByRole('alert').textContent).toBe(copy());
   });
 
-  it("a refused log is the island's alert, with focus kept in the island", async () => {
-    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({ ok: false, error: 'Not saved.' });
+  it("a refused log is the island's alert, read as the ✓'s name, and describes the field", async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.notSaved,
+    });
     render(section());
-    await submit(practiceLabel);
-    expect(screen.getByRole('alert').textContent).toBe('Not saved.');
+    const minutesField = screen.getByLabelText(PRACTICE_COPY.fieldLabel);
+    fireEvent.change(minutesField, { target: { value: '90' } });
+    await submit(PRACTICE_COPY.logLabel);
+    const alert = screen.getByRole('alert');
+    // "Tap ✓ to try again." reads as the button's name in place of the hidden glyph.
+    expect(alert.textContent).toBe(
+      PRACTICE_COPY.notSaved.replace('✓', `✓${PRACTICE_COPY.logLabel}`),
+    );
+    expect(minutesField.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
+    expect(document.activeElement).toBe(minutesField);
+  });
+
+  it('day_taken: the form is replaced by the other row, and focus reaches its Change', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.dayTaken(60),
+      dayTaken: true,
+    });
+    const { rerender } = render(section());
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '60' } });
+    await submit(PRACTICE_COPY.logLabel);
+    rerender(section({ logged: [practice(90)] }));
+    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.dayTaken(60));
+    expect(document.activeElement).toBe(changeButton(90));
+    // The editor opens on the OTHER number (90), so the alert naming 60 stays while it is open
+    // (maintainer, 2026-11-16); Cancel drops it.
+    open(90);
+    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.dayTaken(60));
+    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('any other refusal is dropped when Change opens: it no longer describes the screen', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({ ok: false, error: 'Not saved.' });
+    const { rerender } = render(section());
+    fireEvent.change(screen.getByLabelText(PRACTICE_COPY.fieldLabel), { target: { value: '60' } });
+    await submit(PRACTICE_COPY.logLabel);
+    rerender(section({ logged: [practice(90)] }));
+    open(90);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('a practice row with no value, or in another unit, shows no Change (the endpoint would refuse it)', () => {

@@ -550,8 +550,9 @@ The shapes those lanes agree on, the fakes and the preview route are
      practice holds `practiceSlot`) → **`own_hidden`** (this profile's hidden row holds the id; the day
      is free) → **`conflict`** (any other holder) → the throw. The day decides before `own_hidden`, as
      bodyweight's slot does. The bodyweight and strength inserts cannot hit this index (their metric
-     is never `practice_minutes`). Until 3b-life-b, `logLifeActivitiesAction` answers `day_taken` as
-     `ok`: the ✓ writes a constant, so the other phone's row already says what the tap meant.
+     is never `practice_minutes`). Since 3b-life-b, `logLifeActivitiesAction` (typed minutes, practice only)
+     refuses `day_taken`, `conflict` and `own_hidden`, each with its own copy, and the form mints a new
+     `client_id` on any refusal.
      The two caveats below apply to it as well.
    - **Two caveats that would silently change it:** (1) under **REPEATABLE READ / SERIALIZABLE**, DO
      NOTHING against a conflicting row the snapshot cannot see raises a serialization failure (40001)
@@ -704,20 +705,23 @@ The shapes those lanes agree on, the fakes and the preview route are
 through instead of collapsing it to `created`. The one that matters is **`own_hidden`** — this
 athlete's own _deleted_ row holds the submitted `client_id`, so nothing was written:
 
-| Path                      | Before                                                        | Now                                                                     |
-| ------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `logLifeActivitiesAction` | **discarded the result entirely** and returned `{ ok: true }` | `own_hidden` → `{ ok: false, error: HIDE_COPY.loggedThenDeleted }`      |
-| `logCheckinsAction`       | `created: false` on every item → "already logged"             | `own_hidden` → `fieldErrors[<field>]`, naming the row that did not save |
+| Path                      | Before                                                        | Now                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `logLifeActivitiesAction` | **discarded the result entirely** and returned `{ ok: true }` | Since V1-24 3b-life-b only `created`/`replay` are `ok`: `own_hidden`, `day_taken` and `conflict` are refusals with `PRACTICE_COPY` copy |
+| `logCheckinsAction`       | `created: false` on every item → "already logged"             | `own_hidden` → `fieldErrors[<field>]`, naming the row that did not save                                                                 |
 
-🔴 **`conflict` and `own_hidden` are NOT the same answer.** A `conflict` is another profile's row and
-a life double-tap is a genuine replay — the end state is what the person wanted, so it stays
-`ok: true`. `own_hidden` is their own deleted row: the end state is _not_ what they wanted, and
-`ok` there is the lie B1-1 was written to remove (criterion 9).
+🔴 **`conflict` and `own_hidden` are NOT the same answer.** `own_hidden` is their own deleted row:
+the end state is _not_ what they wanted, and `ok` there is the lie B1-1 was written to remove
+(criterion 9). A `conflict` is a different row holding the id. Since 3b-0 the writer only calls a
+same-profile, same-metric, same-day holder a `replay`, so a genuine double-tap is a `replay`; and
+since 3b-life-b (Wake gone, so no midnight retry lands there) the life action refuses `conflict` too
+_(maintainer, 2026-11-16)_.
 
 ⚠️ **A `client_id` must not outlive the row it was minted for**, and the lifetime is the FORM's job,
-not the server's. `life-form.tsx` keys each button `${day}:${activity}`, and since V1-24 3b-page it
-mounts only while the day has no row for that activity, so a logged row's id leaves with the button
-(the bodyweight row keys its form on the day and unmounts it while a value shows, the same rule); the server never mints one on the person's behalf, because
+not the server's. `life-form.tsx`'s practice form is keyed `form-${day}` (since V1-24 3b-life-b) and
+mounts only while the day has no practice, so a logged row's id leaves with the form, and it mints a
+new id on any refusal (the bodyweight row keys its form on the day and unmounts it while a value
+shows, the same rule); the server never mints one on the person's behalf, because
 it cannot tell a fresh intent from a replay — and a v1.5 sync replay that silently resurrected a row
 deleted on another device would be the worst outcome in this feature. The per-form lifetime table is
 in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.md` owns the rest.

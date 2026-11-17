@@ -142,8 +142,8 @@ describe('NEUTRAL_DEFAULT_KEYS — the first-run fallback', () => {
 
     for (const key of NEUTRAL_DEFAULT_KEYS) {
       const { namespace, catalogKey } = parseRoutineKey(key);
-      // No life activity either: `wrestling_practice`'s one tap writes DEFAULT_PRACTICE_MINUTES, the
-      // maintainer's club's session length, with no number on the button and no in-app undo.
+      // No life activity either: whether a new household sees wrestling practice by default is the
+      // neutral default's own call (catalog.ts), not decided by V1-24 3b-life's typed minutes.
       expect(namespace).not.toBe('life');
       if (namespace !== 'checkin' || catalogKey === null) continue;
       expect(excluded.has(fieldByKey.get(catalogKey)?.activityKey ?? '')).toBe(false);

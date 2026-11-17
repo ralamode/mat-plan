@@ -109,7 +109,10 @@ export function ItemCard({
   errors: readonly EditorError[];
   controlRef: (control: CardControl, node: HTMLButtonElement | null) => void;
   /** The card's typed fields; the rest has its own `onRest`, since it lives on the item. */
-  onChange: (field: Exclude<EditorField, 'name' | 'description' | 'rest'>, value: string) => void;
+  onChange: (
+    field: Exclude<EditorField, 'name' | 'description' | 'rest' | 'unit'>,
+    value: string,
+  ) => void;
   onUnit: (unit: Unit) => void;
   onMove: (direction: MoveDirection) => void;
   /** With the tap's `event.timeStamp`, so the screen can tell a double tap. */
@@ -156,7 +159,7 @@ export function ItemCard({
     </div>
   );
 
-  const shownErrors = (['sets', 'reps', 'value'] as const).flatMap((field) => {
+  const shownErrors = (['sets', 'reps', 'value', 'unit'] as const).flatMap((field) => {
     const error = errorOf(field);
     return error ? [{ field, message: error.message }] : [];
   });
@@ -204,6 +207,8 @@ export function ItemCard({
                     id={unitFieldId(id)}
                     value={card.unit ?? ''}
                     onChange={(event) => onUnit(event.target.value as Unit)}
+                    aria-invalid={errorOf('unit') ? true : undefined}
+                    aria-describedby={errorOf('unit') ? errorId('unit') : undefined}
                     className={FIELD_CLASS}
                   >
                     {card.unit ? null : (
