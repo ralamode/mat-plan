@@ -4,6 +4,7 @@
 > 12a. Branch: `feat/fam-1-12a-day-resolver`. Lane E ([day-writers.md](../features/day-writers.md)).
 > **Rev 3, approved** by the maintainer (2026-11-17, relayed by the board: "Approve"), with the
 > split (§ Split), the archived athlete's day (R1) and the left-the-week label (R2) decided the same day.
+> **Rev 4 adds § 12a-ii (a draft, in review)**: the replays of the four `before` fixtures 12a-i left.
 
 ## Goal
 
@@ -230,6 +231,99 @@ That is 9, numbered from 230 (lane E's block 230–259).
   two can differ, in 11b's 4d (`rowWorkout`, mutation 111).
 
 Run `pnpm verify`. There is no UI.
+
+## 12a-ii: the replays (rev 4 addendum, draft)
+
+12a-i merged as #505 (2026-11-17). This section is 12a-ii's plan. It changes no resolver code. A
+difference a replay finds is a 12a-i defect, fixed here with its own patch, or a contract question
+for the roadmap thread.
+
+**What it proves.** These are the four `before` fixtures 12a-i left. The two archive-only fixtures
+are already proved in 12a-i's `verifyRules`.
+
+| Fixture                          | The change, made with                                                                                          | Writer on main?        | What only this replay reaches                                                                                          |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `yesterday-edited-after-logging` | `saveWorkout` (6a-ii) on Heavy A (pull-up removed, the bench press 3 sets at 30) and Morning (push-ups 2 sets) | yes (#491)             | R4: a removed prescription's rows are their own item; a logged set beyond a reduced count; the closed-day heading rule |
+| `closed-day-program-since-left`  | `saveWorkout` (6a-ii): Morning habits renamed Morning routine                                                  | yes (#491)             | R2: a closed day shows the frozen `sessions.workout_name`; R6: a program since left sorts after the current ones       |
+| `workout-left-the-week`          | `saveWeek` (6b): Heavy A off Saturday                                                                          | no: #522, open         | a logged workout that left the week, with no label (C18) and its ids kept                                              |
+| `today-stretching-first`         | 6d's reorder of an athlete's programs                                                                          | no: 6d, not yet opened | program order follows the athlete's, and a label never sorts                                                           |
+
+**The harness** is in `verify/day-plan.ts`, beside 12a-i's seeder.
+
+1. Seed `before` with 12a-i's `seedWorld`, unchanged except for one thing. The seeder records each
+   workout's and prescription's `client_id` in the id map, under `fixtureIds.workoutClient` and
+   `fixtureIds.prescriptionClient`. Those are the ids `workoutDraft` puts in a draft. The values
+   are still `newId()`: the fixture's own UUIDs are never written, because `client_id` is globally
+   unique and two seeds of one world would collide.
+2. Log `before`'s entries through `logRow`, as 12a-i does. `world`'s entries are `before`'s, stamps
+   included (C17).
+3. Make the change with the real writer, under the seeded scope:
+   - `saveWorkout(translate(workoutDraft(world, prog, wid)))` for each workout whose draft differs
+     between `before` and `world`. A replay that touches no workout fails, so the replay cannot be
+     a no-op.
+   - `saveWeek(translate(weekDraftOf(world, prog)))`. `weekDraftOf` is a local helper, about eight
+     lines, that maps `program.week` to `WeekDraft['days']` (Q4).
+   - 6d's reorder, through its API as merged.
+   - Each writer must answer `ok`. A refusal fails the proof with the writer's reason.
+4. Resolve with `world.today` and deep-equal the translated fixture, exactly as 12a-i does. Where
+   the day is writable, also run C1's round trip.
+
+**Fixture selection** works by test, not by list, as in 12a-i. 12a-ii proves the sources with
+`before !== null` that are not in `ARCHIVE_ONLY_FIXTURES`. A fixture whose writer has not merged is
+listed in one constant, `AWAITING_WRITER`, which starts as `today-stretching-first` and
+`workout-left-the-week`. The PR stays a draft until that constant is empty, and `owed.test.ts` keeps
+those fixtures' `it.todo` lines until then.
+
+**Extra proofs** (from the plan's 12a-ii row):
+
+- **A removed prescription whose movement is in the workout again stays its own item:** after the
+  pull-up is removed, a second `saveWorkout` adds the pull-up back as a new card, with a new
+  `prescriptionClientId`. The old rows are a removed item. The new card is a live item with no
+  logged rows.
+- **Progress does not count removed items' rows:** read on `yesterday-edited-after-logging`, which
+  closes the owed line `12a-ii: progress does not count removed items’ rows`.
+- **One movement twice in a workout:** 12a-i has no proof of this. It is proved here through
+  `saveWorkout`, with two cards of one movement, each with its own rows and its own PREVIOUS per set
+  (rule 5: they share PREVIOUS by set number, decided by first logged, which is a known limit).
+  ⚠️ _Unverified:_ that `saveWorkout` takes two cards of one movement. The probe is the proof's own
+  first save. If the writer refuses, the state is unreachable through the app, and the proof plants
+  it instead, saying so.
+
+**Mutations** come from lane E's 251–259. One patch for each rule a replay is the first proof to
+reach, only where no 12a-i patch already reddens on it:
+
+- R2's frozen name (the live name used instead);
+- R4's grouping key (by movement instead of `prescription_id`);
+- progress counting removed items' rows;
+- R6's tail (programs since left sorted by their `idx` as if current).
+
+Each patch's `.expect` names a 12a-ii assertion.
+
+**Files:**
+
+- E `scripts/verify/day-plan.ts`: the replay, `weekDraftOf`, the extra proofs.
+- E `scripts/verify/fixture-groups.ts`: `AWAITING_WRITER`.
+- E `src/writers/day/owed.test.ts`: lines deleted as each is proved.
+- N mutation patches, 251 onwards, plus their README rows.
+- E `docs/features/day-writers.md`: the proof map.
+- E `docs/tech-debt.md`: the direct-insert seeder entry notes that 12a-ii now edits through the
+  writers. Seeding stays direct until 6c's `seedProgramFixtures`.
+- A changelog fragment.
+
+No file of lane P's, lane A's or the contract owner's is touched.
+
+**Questions:**
+
+- **Q4 (contract owner, not blocking):** should `weekDraft(world, programId)` sit beside
+  `workoutDraft` in the fixtures module? Recommendation: no, keep the local helper, since 12a-ii is
+  its one consumer.
+- **Q5 (contract owner, only if it happens):** does a replay's ids match the fixture's? If
+  `saveWorkout` mints a new row where the fixture keeps the old prescription id (D19: an item swap
+  mints, a sets or load edit does not), the proof says so, and the fixture or the writer is wrong.
+  That is raised, never patched around.
+
+**Gates:** #491 (merged); #522 (6b) for `workout-left-the-week`; 6d for `today-stretching-first`.
+**Gates next:** 15.
 
 ## Risks
 
