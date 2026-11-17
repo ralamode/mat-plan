@@ -341,7 +341,8 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - **The plan carries no `archived` field.** The page has the fact from the profile and says
       it once, in its own notice (maintainer, 2026-11-17: "One merged notice"; a field was
       proposed as C19 and dropped, #509). The preview harness shows that notice from the
-      fixture's world, in the page's words (C20). A future day is the same for an archived
+      fixture's world, in the page's words (C20), with "Household settings" as plain text: a
+      link there would leave the preview route (invariant 7). A future day is the same for an archived
       athlete as for anyone: `fixtures.test.ts` holds that.
     - `DayPlan.athletes` is the switcher's list: the household's athletes who are not archived,
       as the picker lists them. An archived athlete is not in it on their own day either, so a
