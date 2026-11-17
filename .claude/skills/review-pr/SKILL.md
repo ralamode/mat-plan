@@ -85,7 +85,8 @@ pushed after the review's SHA was read, so those checks describe the new head, n
 Say so rather than grading this head on them.
 
 A red CI job is automatically a P0 finding. Use `debug-ci-failure` to find the cause. Don't re-run
-`pnpm verify` unless CI didn't run.
+`pnpm verify` unless CI didn't run: what runs locally is one list, [AGENTS.md](../../../AGENTS.md) →
+"Local hooks vs CI merge-gates".
 
 ## 3. The rubric
 
@@ -275,7 +276,7 @@ except:
 
 "Fix the P0s" means: check out the PR branch in a **fresh worktree** (never the prefetched `head/`,
 whose `*.pr-data` renames a `git add -A` would commit as deletions), fix each P0 as its own commit (`fix(<scope>): …`),
-re-run `pnpm verify`, and reply on the PR with what each commit addressed. P1s only when asked. For
+re-run the gates that list puts locally (filtered to what you fixed; CI gates the rest), and reply on the PR with what each commit addressed. P1s only when asked. For
 a **baseline audit**, P0s become backlog rows or a single `fix/` PR, one concern each (use
 `start-task`).
 

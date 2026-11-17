@@ -522,6 +522,15 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Vitest / RTL (component tests)
 
+- **Load timeouts that look like failures.** → Several lanes ran `pnpm verify`, `pnpm e2e:local`,
+  `db:mutations` and the pre-push suite on one machine at once (2026-11-17, a load average around
+  200). Tests failed at vitest's 5s default and Playwright waits expired, across unrelated files,
+  and read as defects in whichever PR was being checked. → **Re-run the one test alone**
+  (`pnpm --filter web exec vitest run <path> -t "<name>"`, or `pnpm e2e:local e2e/<spec>.ts -g
+"<name>"`). If it passes alone, it was load; say so, and never pad its timeout. **Attribute it
+  before calling it a defect**: a real bug fails alone too. The prevention is to stop running heavy
+  gates locally at all ([AGENTS.md](../AGENTS.md) → "Local hooks vs CI merge-gates"; DX-18).
+
 - **A test that taps twice "straight after" in real time fails on a busy machine.** → A double-tap
   guard compares the taps' `event.timeStamp`s, so "within 500ms" in a test depends on how loaded the
   machine is: with three suites at once, two consecutive `fireEvent.click`s were more than 500ms apart.

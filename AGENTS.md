@@ -284,20 +284,32 @@ movement picker.
 
 - **pre-commit (husky + lint-staged):** the conflict-marker guard on the index (DX-17), then ESLint +
   Prettier on **staged files only**. Never put whole-project checks here.
-- **pre-push:** `pnpm typecheck` + affected tests — **four** `tsc --noEmit` projects: `apps/web`,
-  `packages/db` (`src/**` + `scripts/**`), `packages/evals` and `packages/shared` (`src/**`, its
-  `*.test.ts` included). ⚠️ **Not the whole repo:** `packages/engine` has no tsconfig and is checked
-  only _transitively_, through the app's imports.
+- **pre-push:** `pnpm typecheck && pnpm test:changed`. Typecheck is **four** `tsc --noEmit` projects:
+  `apps/web`, `packages/db` (`src/**` + `scripts/**`), `packages/evals` and `packages/shared` (`src/**`,
+  its `*.test.ts` included). ⚠️ **Not the whole repo:** `packages/engine` has no tsconfig and is checked
+  only _transitively_, through the app's imports. `test:changed` runs the tests the branch reaches
+  (`vitest --changed` against the PR base, plus the filesystem scanners), and the whole suite when a
+  lockfile, manifest or tsconfig changed ([script](./.github/scripts/test-changed.mjs)). A courtesy,
+  not a gate: CI runs every test.
+- **When to run locally** (DX-18, [plan](./docs/plans/dx-18-heavy-runs-to-ci.md)): one heavy local run
+  at a time, machine-wide. Run locally to write code (one file, one probe), debug a CI failure,
+  `pnpm probe`, edit CI itself, during an Actions outage, for `pnpm dev`, and for production
+  operations (corrections; never tests against production). **Everything else heavy runs on CI:
+  push, and let it gate.** Until DX-18 PR 2 puts the mutation proof in CI, a diff touching
+  `packages/db/**`, `packages/shared/**`, the lockfile or a manifest still runs `db:mutations`
+  locally. The filtered commands (one test, one package, one spec) are in
+  [debug-ci-failure](./.claude/skills/debug-ci-failure/SKILL.md) and
+  [ship-pr](./.claude/skills/ship-pr/SKILL.md).
 - **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
-  says nothing about it), **~40s** warm:
-  `format:check` → `lint` → `typecheck` → `test` → `db:verify` → `db:mutations` → `skills:check`
+  says nothing about it):
+  `format:check` → `lint` → `typecheck` → `test` → `eval` → `db:verify` → `db:mutations` → `skills:check`
   (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist; each red flag cites its incident) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
   **This section is the one list of where each gate runs**; other docs point here rather than
-  restating it. `skills:check`, `guards:test` (all fifteen guard self-tests) and `audit:check` run here
+  restating it. `skills:check`, `guards:test` (every guard self-test `package.json` lists) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
   on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)) — **separately**, as
   `pnpm status:check` (on a stacked PR it compares with the parent's branch, as CI does), and ⚠️ it names the fragment it wants from
@@ -306,8 +318,8 @@ movement picker.
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
   workflow changes), the one gate whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
-  **Not covered by it:** `next build` (CI-only), the Playwright smoke (next bullet), gitleaks, and the
-  forward-only guard (a diff-against-base check).
+  **Not covered by it:** `next build` (CI-only), the Playwright smoke (next bullet), gitleaks, Squawk,
+  and the forward-only guard (Squawk and the guard are diff-against-base checks on new migrations).
 - **`pnpm e2e:local` — the Playwright smoke on a throwaway DB.** Not inside `verify` (minutes; it
   builds the prod app); run it before a PR that touches a flow the smoke covers. It boots an ephemeral
   `embedded-postgres`, migrates + seeds exactly as CI does, runs `playwright test` against it, and

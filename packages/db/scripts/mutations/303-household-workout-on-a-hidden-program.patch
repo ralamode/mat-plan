@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/queries/program/exists.ts b/packages/db/src/queries/program/exists.ts
+index d7156beb..08e4a95e 100644
+--- a/packages/db/src/queries/program/exists.ts
++++ b/packages/db/src/queries/program/exists.ts
+@@ -5,7 +5,7 @@ import { uuidSchema } from '@mat-plan/shared';
+ import { schema } from '../../client';
+ import type { HouseholdScope } from '../../scope';
+ import type { Executor } from '../../writers/executor';
+-import { liveTemplateBlockIn } from '../../writers/ownership';
++import { liveTemplateBlockIn, templateBlockIn } from '../../writers/ownership';
+ 
+ /**
+  * Scoped existence reads for the program builder's DAL (FAM-1 lane B's 7a-i asked for them): whether
+@@ -87,7 +87,7 @@ export async function workoutInHousehold(
+       and(
+         eq(schema.workouts.publicId, workoutPublicId),
+         isNull(schema.workouts.deletedAt),
+-        liveTemplateBlockIn(scope),
++        templateBlockIn(scope),
+       ),
+     )
+     .limit(1);

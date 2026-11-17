@@ -15,6 +15,7 @@
     "lint": "pnpm --filter web lint",
     "typecheck": "pnpm --filter web typecheck && pnpm --filter @mat-plan/db typecheck && pnpm --filter @mat-plan/evals typecheck && pnpm --filter @mat-plan/shared typecheck",
     "test": "pnpm --filter web test",
+    "test:changed": "node .github/scripts/test-changed.mjs",
     "e2e:local": "pnpm --filter web e2e:local",
     "db:generate": "pnpm --filter @mat-plan/db db:generate",
     "privacy:generate": "pnpm --filter web privacy:generate",
@@ -35,7 +36,7 @@
     "audit:check": "node .github/scripts/check-audit.mjs",
     "preview:check": "node .github/scripts/check-preview-isolation.mjs",
     "preview:purge": "node .github/scripts/purge-vercel-previews.mjs",
-    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/resolve-pr-base.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh && bash .github/scripts/check-action-pins.test.sh && bash .github/scripts/check-audit.test.sh && bash .github/scripts/check-preview-isolation.test.sh && bash .github/scripts/check-feature-guides.test.sh && bash .github/scripts/default-base.test.sh && bash .github/scripts/probe.test.sh && bash .github/scripts/check-conflict-markers.test.sh && bash packages/db/scripts/mutations.test.sh",
+    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/resolve-pr-base.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh && bash .github/scripts/check-action-pins.test.sh && bash .github/scripts/check-audit.test.sh && bash .github/scripts/check-preview-isolation.test.sh && bash .github/scripts/check-feature-guides.test.sh && bash .github/scripts/default-base.test.sh && bash .github/scripts/probe.test.sh && bash .github/scripts/check-conflict-markers.test.sh && bash .github/scripts/test-changed.test.sh && bash packages/db/scripts/mutations.test.sh",
     "eval": "pnpm --filter @mat-plan/evals eval"
   },
   "devDependencies": {
