@@ -135,6 +135,15 @@ flowchart TD
     movement today. The step that first does (RETIRE-1) decides: check availability only for new cards
     and changed items, or drop such cards from the read.
 
+15. **A writer reads its ids from the parsed draft, and the parse has already lower-cased them**
+    (contract change C25, [program-contract.md](./program-contract.md) invariant 26). Postgres
+    compares a uuid in any case and answers in lower case, while a writer's maps and `===` do not,
+    so one spelling has to hold from the parse on. `saveWorkout` did this itself until C25 and no
+    longer does; do not add a second lower-casing or a second "no two the same" check to a writer,
+    and do not read an id from the raw `input` after parsing it. The two 6a-ii proofs (an upper-case
+    save, and two cards whose ids differ only in case) still run the writer against the database;
+    mutation patches `142` and `143` now break the schema to redden them.
+
 ## Changing it
 
 Start from the step's row in the plan (§5) and the decisions it cites (D19 for matching a saved

@@ -1,0 +1,13 @@
+diff --git a/packages/shared/src/program/pieces.ts b/packages/shared/src/program/pieces.ts
+index 506729ab..eda4564a 100644
+--- a/packages/shared/src/program/pieces.ts
++++ b/packages/shared/src/program/pieces.ts
+@@ -62,7 +62,7 @@ import {
+  * It changes nothing for an id the app made: `newId`, `crypto.randomUUID` and Postgres all write
+  * lower case.
+  */
+-export const lowerCaseUuidSchema = uuidSchema.toLowerCase();
++export const lowerCaseUuidSchema = uuidSchema;
+ 
+ const ONE_LINE = 'one line of text, with no control characters';
+ /**
