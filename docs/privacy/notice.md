@@ -159,8 +159,9 @@ recording anywhere. The honest version is **"designed and tested to carry none o
 
 One thing is sent on purpose: when a signed-in request asks for an athlete, a program, a workout or
 a workout item that the app will not show it, the app sends Sentry a security event with that item's
-random id and nothing else about it: no name and nothing that was logged. This is how an attempt to
-reach another family's data gets noticed.
+id and whether it belongs to another household. The id is a random-looking code that also shows when
+the item was created. The event carries no name and nothing that was logged. This is how an attempt
+to reach another family's data gets noticed.
 
 **No tracking.** No advertising network, no analytics product, no social buttons, no third-party
 fonts. **One** thing is not this app, and it is not tracking: **Clerk's code loads on every page,
