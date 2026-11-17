@@ -8,6 +8,8 @@ vi.mock('../db', () => ({ db: { the: 'db' } }));
 vi.mock('../household', () => ({ getHouseholdScope: vi.fn() }));
 vi.mock('../catalog', () => ({ getActivityTypeIdByKey: vi.fn(async () => ACTIVITY_TYPE_ID) }));
 vi.mock('../profiles', () => ({ listProfiles: vi.fn(async () => ATHLETES) }));
+// Which id missed is `report-miss.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
+vi.mock('./report-miss', () => ({ reportRowMiss: vi.fn(async () => {}) }));
 vi.mock('@mat-plan/db', () => ({
   resolveDayPlan: vi.fn(async () => RESOLVED),
   logRow: vi.fn(async () => LOGGED),
@@ -22,6 +24,7 @@ import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
 import { getDayPlan, logDayRow, retickDayRow, untickDayRow } from './day';
+import { reportRowMiss } from './report-miss';
 
 /**
  * The day DAL (FAM-1 step 12b). Lane E's resolver and writers are mocked: what they decide (the
@@ -145,6 +148,23 @@ describe('the row writes (FAM-1 12b)', () => {
     expect(await logDayRow(write, TODAY)).toEqual(refused);
     expect(await untickDayRow(untick, TODAY)).toEqual(refused);
     expect(await retickDayRow(retick, TODAY)).toEqual(refused);
+  });
+
+  it('a ✓ the writer answers not_found asks which id missed, with the scope and the write; nothing else does', async () => {
+    const notFound = { ok: false, reason: ROW_REFUSAL.not_found } as const;
+    vi.mocked(logRow).mockResolvedValueOnce(notFound);
+    expect(await logDayRow(write, TODAY)).toEqual(notFound);
+    expect(vi.mocked(reportRowMiss).mock.calls).toEqual([[SCOPE, write]]);
+
+    vi.mocked(reportRowMiss).mockClear();
+    vi.mocked(logRow).mockResolvedValueOnce({ ok: false, reason: ROW_REFUSAL.slot_taken });
+    await logDayRow(write, TODAY);
+    await logDayRow(write, TODAY);
+    vi.mocked(untickRow).mockResolvedValueOnce(notFound);
+    vi.mocked(retickRow).mockResolvedValueOnce(notFound);
+    await untickDayRow(untick, TODAY);
+    await retickDayRow(retick, TODAY);
+    expect(reportRowMiss).not.toHaveBeenCalled();
   });
 
   it('no household is not_found, and no writer runs', async () => {

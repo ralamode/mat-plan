@@ -18,6 +18,7 @@ import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { listProfiles } from '../profiles';
 import { quietDbErrors } from '../quiet-db-errors';
+import { reportRowMiss } from './report-miss';
 
 /**
  * The day page's data access (FAM-1 step 12b; [guide](../../../../../docs/features/day-page.md)):
@@ -64,7 +65,12 @@ export async function logDayRow(write: RowWrite, today: string): Promise<RowResu
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
   const activityTypeId = await getActivityTypeIdByKey(ACTIVITY_TYPE_KEYS.workout_item);
-  return quietDbErrors('logRow', () => logRow(db, { scope, today, activityTypeId, write }));
+  const result = await quietDbErrors('logRow', () =>
+    logRow(db, { scope, today, activityTypeId, write }),
+  );
+  // A miss reports which of the ✓'s ids is not the household's (`report-miss.ts`), on that path only.
+  if (!result.ok && result.reason === ROW_REFUSAL.not_found) await reportRowMiss(scope, write);
+  return result;
 }
 
 /**
