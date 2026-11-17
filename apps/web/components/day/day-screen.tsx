@@ -7,6 +7,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Announcer } from '@/components/ui/announcer';
 import { Callout } from '@/components/ui/callout';
 import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
+import { localDayIso } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 import { DayContext, type DayContextValue } from './day-context';
@@ -33,6 +34,40 @@ import { WorkoutCard } from './workout-card';
  * ids every week, so without the key a failure on Monday would show on Tuesday.
  */
 export type DayScreenProps = { plan: DayPlan; actions: DayActions };
+
+/**
+ * 🔴 **Pins the viewed day in the URL before a write, once the device's day has moved past the
+ * page's** (FAM-1 12c; UX panel, all three lenses). On the bare path (`/p/<id>`, no `?d=`) the page
+ * renders "today". A ✓ just after local midnight re-renders the page in the action's own response
+ * (`revalidatePath`), which would compute the NEW today, remount the screen on it and lose every
+ * typed number and failure mid-workout. Pinning AFTER the first write is too late: that write's
+ * response is the jump. So the pin goes on just before the send, and only when midnight has passed
+ * (the device's local day is not `plan.today`); a tab that never crossed midnight keeps its bare
+ * URL, so tomorrow morning it opens on tomorrow. `replaceState` is synced into Next's router, so no
+ * navigation happens. ⚠️ Unverified until 12c's e2e: that a Server Action's revalidated render
+ * reads the replaced URL.
+ */
+export function pinDayBeforeWrite(plan: Pick<DayPlan, 'day' | 'today'>): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.has('d')) return;
+  const deviceToday = localDayIso(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  if (deviceToday === plan.today) return;
+  url.searchParams.set('d', plan.day);
+  window.history.replaceState(null, '', url);
+}
+
+/** Each of the screen's writes, pinning the day first (`pinDayBeforeWrite`). */
+function pinned(actions: DayActions, plan: Pick<DayPlan, 'day' | 'today'>): DayActions {
+  const pin = () => pinDayBeforeWrite(plan);
+  return {
+    logRow: (input) => (pin(), actions.logRow(input)),
+    untickRow: (input) => (pin(), actions.untickRow(input)),
+    retickRow: (input) => (pin(), actions.retickRow(input)),
+    ...(actions.amendRow ? { amendRow: (input) => (pin(), actions.amendRow!(input)) } : {}),
+    ...(actions.reorderPrograms ? { reorderPrograms: actions.reorderPrograms } : {}),
+  };
+}
 
 export function DayScreen({ plan, actions }: DayScreenProps) {
   return <DayBody key={`${plan.profilePublicId}/${plan.day}`} plan={plan} actions={actions} />;
@@ -67,11 +102,12 @@ function DayBody({ plan, actions }: DayScreenProps) {
   // One object per change of what it holds. With the cards memoised, an announce or a failure
   // re-renders this section and the cards whose props changed, not every row (13b brings dozens).
   const readOnly = !plan.writable || closed;
+  const { day: viewedDay, today } = plan;
   const day: DayContextValue = useMemo(
     () => ({
       profilePublicId: plan.profilePublicId,
-      day: plan.day,
-      actions,
+      day: viewedDay,
+      actions: pinned(actions, { day: viewedDay, today }),
       readOnly,
       // A live region announces a change: the same sentence twice in a row would be silent, so
       // the second one carries a no-break space (U+00A0), which is not collapsed as a space is.
@@ -79,9 +115,14 @@ function DayBody({ plan, actions }: DayScreenProps) {
       setRowFailed,
       // The notice takes focus, which reads it; the live region would say it a second time.
       closeDay: () => setClosed(true),
-      reload: () => router.refresh(),
+      // A reload after midnight would show the new today: the day is pinned first (a `closed_day`
+      // two midnights on reloads too, UX panel 12c).
+      reload: () => {
+        pinDayBeforeWrite({ day: viewedDay, today });
+        router.refresh();
+      },
     }),
-    [plan.profilePublicId, plan.day, actions, readOnly, setRowFailed, router],
+    [plan.profilePublicId, viewedDay, today, actions, readOnly, setRowFailed, router],
   );
 
   const many = plan.programs.length > 1;
