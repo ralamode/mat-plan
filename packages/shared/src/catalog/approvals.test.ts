@@ -294,5 +294,8 @@ describe('the record files only grow (V4, the merge-base check)', () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
-  });
+    // Ten child processes (git, node). On a machine running several lanes' gates at once this
+    // went past the default five seconds (5.7 s at a load average near 190), so it has its own
+    // limit; it takes about a second on an idle one.
+  }, 30_000);
 });

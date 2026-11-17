@@ -20,7 +20,7 @@ import { MOVEMENT_SEED_ROWS } from './catalog-movements';
  * browsable — it still resolves by id and by typed name — and the key-set test below fails until
  * someone chooses, which is the point: an ungrouped movement is a decision, not a default.
  *
- * ⚠️ **Provisional until PICK-1 chunk 0.** The grouping and the six aliases come from the approved
+ * ⚠️ **Provisional until PICK-1 chunk 0.** The grouping and the aliases come from the approved
  * prototype (`docs/prototypes/crud-1/index.html`, v8/v9); chunk 0 is the maintainer's confirmation
  * pass, and it edits a TypeScript map rather than running a migration.
  */
@@ -67,8 +67,12 @@ type MovementPickerEntry = {
  * are Legs. Each is a movement whose `pattern` (`carry`, `hinge`, `jump`, `isolation`) says nothing
  * about which drawer a person would look in.
  *
- * The six aliases are the prototype's, and each is a thing typed on a phone between sets:
- * `RDL`, `BSS`, `OHP`, `DB bench`, `KB`, `hip thrust`.
+ * The four aliases are the prototype's, and each is a thing typed on a phone between sets:
+ * `RDL`, `BSS`, `OHP`, `hip thrust`. The prototype's other two, `DB bench` and `KB`, are equipment
+ * short forms, retired once `shortFormHit` withholds "use as typed" (C30; CAT-3 spec P3, in B1). ⚠️ So
+ * `kb` and `db bench` alone still list KB Swings and Dumbbell Bench Press (Enter picks the one
+ * match), but no longer withhold "use as typed": neither spells a whole movement once expanded.
+ * A short form that does (`bb curl` for Barbell Curls) withholds it through `shortFormHit`.
  */
 /**
  * Every seeded slug, as a union — `'box_jump' | 'bb_bench' | …` — read off `MOVEMENT_SEED_ROWS`
@@ -85,7 +89,7 @@ type SeededMovementSlug = (typeof MOVEMENT_SEED_ROWS)[number]['slug'];
 export const MOVEMENT_PICKER_ENTRIES: Readonly<Record<SeededMovementSlug, MovementPickerEntry>> = {
   // ── Push ──────────────────────────────────────────────────────────────────────
   bb_bench: { group: 'push' },
-  dumbbell_bench_press: { group: 'push', aliases: ['DB bench'] },
+  dumbbell_bench_press: { group: 'push' },
   overhead_shoulder_press: { group: 'push', aliases: ['OHP'] },
   dips: { group: 'push' },
   lateral_raises: { group: 'push' },
@@ -112,7 +116,7 @@ export const MOVEMENT_PICKER_ENTRIES: Readonly<Record<SeededMovementSlug, Moveme
   'trap-bar_deadlift': { group: 'legs' },
   broad_jump: { group: 'legs' },
   barbell_hip_thrust: { group: 'legs', aliases: ['hip thrust'] },
-  kb_swings: { group: 'legs', aliases: ['KB'] },
+  kb_swings: { group: 'legs' },
   'single-leg_hip_thrusts': { group: 'legs' },
   // ── Core ──────────────────────────────────────────────────────────────────────
   pallof_press: { group: 'core' },
