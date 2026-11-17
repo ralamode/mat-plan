@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
-index e2478779..a63fda84 100644
+index bf6ed0be..09684ef8 100644
 --- a/packages/db/src/writers/hide.ts
 +++ b/packages/db/src/writers/hide.ts
-@@ -364,7 +364,7 @@ async function dropReasonOfItemsLeftHidden(
+@@ -366,7 +366,7 @@ async function dropReasonOfItemsLeftHidden(
    const leftHidden = results
      .filter((r) => r.reason === RESTORE_REASON.slot_taken)
      .map((r) => r.entryPublicId);
 -  if (leftHidden.length === 0) return;
 +  if (leftHidden.length >= 0) return;
-   await exec
-     .update(schema.entries)
-     .set({ hideReason: null })
+   // Ownership in the subselect (the internal-id rule); the token and the reason on the OUTER row, so
+   // an UPDATE that waited on a row lock re-checks them against the row's newest version (READ
+   // COMMITTED re-evaluates the target's own WHERE, not a subselect's snapshot).
