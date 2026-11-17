@@ -469,7 +469,7 @@ describe('scrubSentryEvent — a rejected row never leaves the server (Postgres 
 describe('scrubSentryEvent — no public id leaves except the deliberate one (C11 review, 2026-11-16)', () => {
   const ATHLETE = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f8091';
   const PROGRAM = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f80ff';
-  const page = `https://www.mat-plan.dev/p/${ATHLETE}?d=2026-11-16`;
+  const page = `https://www.mat-plan.dev/p/${ATHLETE}?d=2026-11-16`; // the query: a precaution, see scrubUrl
 
   /**
    * Shaped from `@sentry/nextjs@11.10.0`'s `captureRequestError`: Next's `onRequestError` hook puts
@@ -533,6 +533,18 @@ describe('scrubSentryEvent — no public id leaves except the deliberate one (C1
     } as unknown as Event);
     expect(event.contexts?.scope_miss).toMatchObject({ resource: PROGRAM });
     expect(event.request?.url).toBe('https://www.mat-plan.dev/programs/:id');
+  });
+
+  it('masks the transaction name the HTTP server integration sets (GET /p/<id>)', () => {
+    const event = scrubSentryEvent({ transaction: `GET /p/${ATHLETE}` } as Event);
+    expect(event.transaction).toBe('GET /p/:id');
+  });
+
+  it('puts back only a well-formed UUID as the scope-miss resource', () => {
+    const event = scrubSentryEvent({
+      contexts: { scope_miss: { resource: `not-an-id /p/${ATHLETE}` } },
+    } as unknown as Event);
+    expect(event.contexts?.scope_miss).toMatchObject({ resource: 'not-an-id /p/:id' });
   });
 
   it('leaves strings with no UUID alone', () => {

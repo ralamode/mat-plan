@@ -139,23 +139,26 @@ function stripQueryParams<T>(value: T): T {
 /**
  * 🔴 **No public id leaves in a string, except the one sent on purpose.** App routes carry an
  * athlete's public id in the PATH (`/p/<id>`), and the SDK copies the path into the request URL,
- * `contexts.request` and Next's `contexts.nextjs.request_path` (set by `captureRequestError` with
- * only the query string removed); exception messages can carry a row's `client_id` too. Before this,
+ * the transaction name (`GET /p/<id>`, `http/server-subscription.js`) and Next's
+ * `contexts.nextjs.request_path` (set by `captureRequestError`); exception messages can carry a
+ * row's `client_id` too. Before this,
  * every error report from an athlete's page carried their id (found in C11's review, 2026-11-16; it
  * predates C11). Masking by KEY missed `request_path` on the first try, so this masks every UUID in
  * every string the scrub walks, and `scrubSentryEvent` exempts the one deliberate id
  * (`contexts.scope_miss.resource`, from `reportScopeMiss`) by putting it back afterwards.
  */
 const UUID_ANYWHERE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const UUID_EXACT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function maskIds<T>(value: T): T {
   return (typeof value === 'string' ? value.replace(UUID_ANYWHERE, ':id') : value) as T;
 }
 
 /**
- * A URL with its id masked and its QUERY cut. `urlQueryParams: false` drops `request.query_string`,
- * but the SDK still writes the full URL, query included, into `request.url`, `contexts.request.url`
- * and a navigation breadcrumb, and the day page's `?d=<yyyy-mm-dd>` is in that query.
+ * A URL with its id masked and its query cut. ⚠️ **The query cut is a PRECAUTION, not a fix:** the
+ * SDK already sends `request.url` through `filterUrlQuery` (`requestdata.js`), so the day page's
+ * `?d=` never reached Sentry (verified in #498's review). It stays so that a path or a future
+ * integration that writes a full URL cannot bring a query back.
  */
 const URL_FIELDS = new Set(['url', 'from', 'to']);
 function scrubUrl<T>(value: T): T {
@@ -260,8 +263,8 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   // paths and scrubbing one would leave the other.
   //
   // This lands in 1c-1, BEFORE any session exists, so there is no window in which an identified
-  // event could be sent. `tags.scope_outcome` and `householdId` are unaffected — those are the
-  // observability this app does want, and neither names a person.
+  // event could be sent. `tags.scope_outcome` is unaffected — the observability this app does want,
+  // and it names no one. (This said `householdId` too; nothing sends one.)
   delete event.user;
   if (event.contexts) delete event.contexts.user;
 
@@ -280,7 +283,10 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
     }
   }
 
-  if (scopeMiss && typeof deliberateId === 'string') scopeMiss.resource = deliberateId;
+  // Only a well-formed UUID is put back: anything else stays scrubbed, whatever a caller passed.
+  if (scopeMiss && typeof deliberateId === 'string' && UUID_EXACT.test(deliberateId)) {
+    scopeMiss.resource = deliberateId;
+  }
 
   return event;
 }
