@@ -1,5 +1,5 @@
 import { addDays, isoDayDiff } from '@mat-plan/shared';
-import { athletePath, TICK_FOCUS_CLASS } from '@/lib/constants';
+import { athletePath, LOOK_AHEAD_DAYS, TICK_FOCUS_CLASS } from '@/lib/constants';
 import Link from 'next/link';
 
 import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
@@ -25,7 +25,8 @@ import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
  *   writable day, or the arrows would disable a day the resolver would render (and the server would
  *   accept).
  * - **Forward:** to today, and past it only as look-ahead: one day further while the athlete is on
- *   a program the next day (`DayPlan.canGoForward`, the resolver's). A future day already being
+ *   a program the next day (`DayPlan.canGoForward`, the resolver's), and never past today plus
+ *   `LOOK_AHEAD_DAYS`. A future day already being
  *   viewed, and the days between it and today, stay reachable.
  * - **The viewed day is always reachable**, so the strip always carries one `aria-current`.
  */
@@ -40,8 +41,11 @@ export function dayNavBounds(args: {
   const effectiveFloor = isoDayDiff(floor, earliestWritable) < 0 ? floor : earliestWritable;
   // The furthest forward day: today, the viewed day if it is later, then one more on look-ahead.
   const viewedOrToday = isoDayDiff(day, today) > 0 ? day : today;
-  const forwardLimit =
+  const stepped =
     canGoForward && isoDayDiff(addDays(day, 1), today) > 0 ? addDays(day, 1) : viewedOrToday;
+  // Never past the horizon (`LOOK_AHEAD_DAYS`, maintainer 2026-11-17), whatever the program holds.
+  const horizon = addDays(today, LOOK_AHEAD_DAYS);
+  const forwardLimit = isoDayDiff(stepped, horizon) > 0 ? horizon : stepped;
   const reachable = (d: string) =>
     d === day || (isoDayDiff(d, effectiveFloor) >= 0 && isoDayDiff(d, forwardLimit) <= 0);
   return {

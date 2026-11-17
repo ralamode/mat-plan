@@ -1050,6 +1050,13 @@ export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPu
  * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
  * on it can be logged or changed, so the sentence says that and names the two days that can.
  */
+/**
+ * How far past today the day page looks ahead (FAM-1 12c; maintainer, 2026-11-17: "6 days ahead",
+ * the rest of the coming week). The forward arrow and the week strip stop at today plus this, and a
+ * later `?d=` renders today. Look-ahead is read-only, so this bounds a view, never a write.
+ */
+export const LOOK_AHEAD_DAYS = 6;
+
 export const CLOSED_DAY_NOTICE =
   'This day is read-only. Only today and yesterday can be logged or changed.';
 

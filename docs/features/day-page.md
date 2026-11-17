@@ -178,7 +178,9 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
 21. **A future day is look-ahead, and only while on a program** (D32, plan §9). `dayNavBounds`
     sets both arrows and the week strip from `DayPlan.canGoForward`; `resolveViewedDay` passes a
     future `?d=` through and the page renders today instead unless the athlete is on a program
-    that day. A future day renders no Bodyweight or Life and no ✓.
+    that day, and never past today plus `LOOK_AHEAD_DAYS` (6, the rest of the coming week;
+    maintainer, 2026-11-17), past which a `?d=` renders today. A future day renders no Bodyweight or
+    Life and no ✓.
 22. **A write in flight looks pending and warns before the page is left** (maintainer,
     2026-11-17: "Warn + record"). A pending ✓ has a dashed border, `aria-busy` and "Saving…";
     `beforeunload` asks while any row's write is in flight. ⚠️ **Recorded gap:** iOS ignores

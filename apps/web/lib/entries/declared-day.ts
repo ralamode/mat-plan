@@ -9,6 +9,7 @@ import {
 } from '@mat-plan/shared';
 
 import { getActiveLocalDay } from '@/lib/active-timezone';
+import { LOOK_AHEAD_DAYS } from '@/lib/constants';
 
 /** Shown when a form submits a day too far from the server's active-tz today (a stale tab). */
 export const DECLARED_DAY_CLOSED_ERROR = 'That day is no longer open for logging. Reload the page.';
@@ -93,7 +94,7 @@ export function dayPageFlags(day: string, today: string, archived: boolean) {
  * **A future day passes through** (FAM-1 12c, look-ahead), and the PAGE decides whether to show it:
  * only while the athlete is on a program that day (plan §9, "goes forward only while the athlete is
  * on a program the next day"); otherwise it renders today, as this function once did for every
- * future day. **The past is floored at the profile's first day**, so a kid tapping `‹` cannot walk
+ * future day. A day more than `LOOK_AHEAD_DAYS` ahead renders today here. **The past is floored at the profile's first day**, so a kid tapping `‹` cannot walk
  * back into 2019 and conclude the app is broken.
  */
 export function resolveViewedDay(
@@ -113,7 +114,9 @@ export function resolveViewedDay(
     isoDayDiff(profileFirstDay, earliestWritable) < 0 ? profileFirstDay : earliestWritable;
   const parsed = isoDaySchema.safeParse(requested);
   if (!parsed.success) return today;
-  if (isoDayDiff(parsed.data, today) > 0) return parsed.data; // look-ahead: the page checks it
+  const ahead = isoDayDiff(parsed.data, today);
+  if (ahead > LOOK_AHEAD_DAYS) return today; // past the look-ahead horizon (maintainer, 2026-11-17)
+  if (ahead > 0) return parsed.data; // look-ahead: the page checks the athlete is on a program
   if (isoDayDiff(parsed.data, floor) < 0) return floor; // never before the profile existed
   return parsed.data;
 }

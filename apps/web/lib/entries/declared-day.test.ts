@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { LOOK_AHEAD_DAYS } from '@/lib/constants';
+
 import { dayPageFlags, isWritableDay, resolveViewedDay, WRITABLE_DAY_RADIUS } from './declared-day';
 
 // ── V1-15: which day the PAGE renders ──────────────────────────────────────────────────────────
@@ -28,6 +30,14 @@ describe('resolveViewedDay', () => {
   it('passes a future day through for the page to check', () => {
     expect(resolveViewedDay('2026-10-05', TODAY, FLOOR)).toBe('2026-10-05');
     expect(isWritableDay('2026-10-05', TODAY)).toBe(false);
+  });
+
+  // The look-ahead horizon (maintainer, 2026-11-17: "6 days ahead"): +6 renders, +7 is today.
+  it('renders up to LOOK_AHEAD_DAYS ahead, and today past it', () => {
+    expect(LOOK_AHEAD_DAYS).toBe(6);
+    expect(resolveViewedDay('2026-10-06', TODAY, FLOOR)).toBe('2026-10-06'); // +6
+    expect(resolveViewedDay('2026-10-07', TODAY, FLOOR)).toBe(TODAY); // +7
+    expect(resolveViewedDay('9999-12-31', TODAY, FLOOR)).toBe(TODAY);
   });
 
   it('floors at the profile’s first day, so `‹` cannot walk into 2019', () => {

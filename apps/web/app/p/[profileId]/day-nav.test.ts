@@ -34,6 +34,15 @@ describe('dayNavBounds', () => {
     expect(off.reachable('2026-11-20')).toBe(true); // the viewed day always carries aria-current
   });
 
+  it('never past today + LOOK_AHEAD_DAYS, on a program every day (maintainer, 2026-11-17)', () => {
+    const five = bounds('2026-11-23', true); // today + 5
+    expect(five.canGoForward).toBe(true);
+    const six = bounds('2026-11-24', true); // today + 6
+    expect(six.canGoForward).toBe(false);
+    expect(six.reachable('2026-11-25')).toBe(false);
+    expect(bounds(TODAY, true).reachable('2026-11-24')).toBe(false); // only a day at a time
+  });
+
   it('a past day reaches forward to today only, whatever tomorrow holds', () => {
     const b = bounds('2026-11-10', true);
     expect(b.reachable(TODAY)).toBe(true);
