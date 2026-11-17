@@ -522,7 +522,8 @@ The shapes those lanes agree on, the fakes and the preview route are
    - **life activities** → `own_hidden`; since B1-2 the action refuses with
      `HIDE_COPY.loggedThenDeleted` rather than reporting success.
      🔴 **All four were a silent TWIN before B0**, which is the defect, so a refusal — even an ugly one
-     — is the improvement. `V1-9b` B1-2 is what turns each into a typed envelope.
+     — is the improvement. Strength and bodyweight keep the throw (the plan's Decision 7 cut a typed
+     replay-of-hidden); #387 gave check-ins and life their typed refusals.
      **Still true for a PARTIAL index, of which several remain on `deleted_at`:** the predicate must be
      repeated or Postgres rejects the statement outright. drizzle:
      `onConflictDoUpdate({ target, targetWhere })`.

@@ -8,6 +8,8 @@ owns:
   - apps/web/app/p/[profileId]/clear-day-actions.registry.ts
   - apps/web/app/p/[profileId]/clear-day-actions.test.ts
   - packages/shared/src/clear-day-shapes.ts
+  - packages/shared/src/clear-day-shapes.test.ts
+  - apps/web/lib/dal/entries-restore-clear.test.ts
   - packages/shared/src/hide.ts
 ---
 
@@ -23,7 +25,7 @@ says the same thing; if these two ever disagree, the inventory is right. [ADR 00
 [the plan](../plans/v1-9b-delete-and-restore.md) holds the decisions and their alternatives.
 
 🔴 **Read this before touching anything that reads `entries`.** The invariants here live _between_
-files — one writer, one tombstone-returning reader (plus the clear's day-only pre-read), and every other query in the repo obliged to
+files — one writer, one tombstone-returning reader of VALUES (`hidden-entries.ts`), one of a clear's token and count (`clear-events.ts`, B1-2), plus the clear's day-only pre-read, and every other query in the repo obliged to
 filter. None of them can be checked by looking at a single file.
 
 ## The file map
@@ -147,9 +149,9 @@ is for program rows only _(maintainer, 2026-11-16)_.
   is wrong until `PRIV-3` ships the purge.
 - **A hidden row HOLDS its `client_id`** (non-partial since B0), so a replay of a hidden write
   conflicts rather than twinning. `writers/checkin.ts` reports that as `own_hidden`; the strength and
-  bodyweight paths still throw (Decision 7), and B1-2 maps it.
+  bodyweight paths still throw, kept as a throw by Decision 7 (no typed replay-of-hidden).
 - **Don't add `includeHidden` to a live reader.** A read of a tombstone's VALUES belongs in
-  `queries/hidden-entries.ts`; a write path that must see a hidden row to answer a replay (the clear's
+  `queries/hidden-entries.ts`, and a read of a clear's token and count in `queries/clear-events.ts`; a write path that must see a hidden row to answer a replay (the clear's
   pre-read, `writers/single-value.ts`) returns the day and nothing more. A flag on a live reader is how
   a deleted set reaches the CSV the export exists for.
 - **`activity_date` is a plain `DATE`.** `hiddenDayCounts` returns it as text; mapping it through a

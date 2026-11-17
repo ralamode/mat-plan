@@ -377,7 +377,12 @@ the clear is one item, with no restore offered for it.
 **Clear this day (V1-9b B2-0).** `clearDay` hides every live entry of the day as one event and
 stamps each `hide_reason = 'clear_day'`; `restoreClear` brings back exactly that event's rows. Both
 work out the rows on the server (no id list, no cap). Every un-hide sets `UNHIDE`, so the reason
-leaves with the tombstone, and a CHECK refuses a live row that kept one.
+leaves with the tombstone, and a CHECK refuses a live row that kept one. **B1-2:** one predicate
+(`clearEventOn`, `queries/clear-events.ts`) serves `clearDay`'s replay, `restoreClear` and the
+banner's read `clearEventsForDay` (every clear of a day, newest first, as a token and a count), so the
+banner offers exactly what Restore all restores. Restore all's action answers counts, counted in the
+DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. The diagram below gains
+the banner when B2 renders it.
 
 ```mermaid
 sequenceDiagram
