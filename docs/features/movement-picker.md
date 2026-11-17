@@ -3,7 +3,6 @@ feature: The movement picker (choose, or create by typing)
 owns:
   - apps/web/components/movements/
   - apps/web/lib/movements/
-  - packages/shared/src/movement-search.ts
   - packages/shared/src/movement-picker-catalog.ts
   # PR 4 adds `packages/db/src/queries/movement-options.ts` (Decision 5's two reads). It is NOT
   # listed yet: `guides:check` fails a guide that claims a path which does not exist, so the entry
@@ -35,15 +34,15 @@ path and **creating** the deliberate one.
 
 ## The map
 
-| File                                                | What                                                                                                                                                                                |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`. Pure, no React, no DB.                                                                |
-| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                |
-| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them. |
-| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                                                                      |
-| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                     |
-| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                       |
-| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                             |
+| File                                                | What                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
+| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                                                                                                                               |
+| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                |
+| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                     |
+| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                    |
+| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                                                                                                                                      |
+| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                                                                                                                                            |
 
 ## Invariants
 

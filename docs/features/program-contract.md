@@ -10,6 +10,22 @@ owns:
   # `program/` because the CSV reads them too, and owned here so a change to either is a contract
   # change: they are the bytes frozen on every logged row.
   - packages/shared/src/quantity-spelling.ts
+  # CAT-3's contract (the movement library): listed file by file, never the `catalog/` prefix,
+  # because `catalog/data/` is the data lane's and gets its own guide with the first batch.
+  - packages/shared/src/catalog/index.ts
+  - packages/shared/src/catalog/vocabulary.ts
+  - packages/shared/src/catalog/entry.ts
+  - packages/shared/src/catalog/fixture.ts
+  - packages/shared/src/catalog/approvals.ts
+  - packages/shared/src/catalog/approvals.test.ts
+  - packages/shared/src/catalog/catalog.test.ts
+  - packages/shared/src/catalog/owed.test.ts
+  - .github/scripts/check-catalog-append-only.mjs
+  # The search the picker and `existingItem` share. Moved here from movement-picker.md at CAT-3
+  # C0a: the contract's next chunk adds the library's search beside `matchMovementOptions`.
+  - packages/shared/src/movement-search.ts
+  # Source-reading helpers for the contract's own scans (lifted from `quantity-text.test.ts`).
+  - packages/shared/src/test-support/source-graph.ts
 ---
 
 # The program contract
@@ -93,6 +109,7 @@ safe in a `'use client'` component; those two are the proof modules' and come fr
 | `TRANSPORT_REFUSALS`, `TransportRefusal`                                                                             | `packages/shared/src/program/actions.ts`                                          | What a transport answers before the action runs: no session is `not_found`, over the rate limit is `retry`. A real action hands it to `enterMutation` and returns the refusal untouched (invariant 14).                                                                                                                                                                                                                                                      |
 | `existingItem(options, name)`                                                                                        | `packages/shared/src/program/pieces.ts`                                           | The item a typed name already names, or `undefined`: its name's key or one of its aliases matches (`push ups` is Push-ups, `RDL` is Romanian Deadlift). Each option carries `isCatalog` (required: the picker's tie-break). The one rule for "this item exists" in `newItem`, for the real writer and the fake; it is the picker's `exact` or `aliasHit` (invariant 15).                                                                                     |
 | `fillRowValues(item, typed, target)`                                                                                 | `packages/shared/src/program/pieces.ts`                                           | What a ✓ or a Change stores, or `null` for `bad_value`: typed numbers, else the prescription's (an amend passes `target: null`). The one value-fill rule, for the row writer, the amend and the fake (invariant 16).                                                                                                                                                                                                                                         |
+| `loggedRowUnit(trackingType, logged)`                                                                                | `packages/shared/src/program/pieces.ts`                                           | The unit a logged row's numbers are in: its stored quantity's, `null` for a type with none. What a Change is judged in (invariant 27).                                                                                                                                                                                                                                                                                                                       |
 | `prescribedTarget(targetReps, quantities)`, `PrescribedTarget`                                                       | `packages/shared/src/program/pieces.ts`                                           | A prescription's numbers as `DayItem.target` holds them: whole-number reps or `null`; a quantity with a `valueMax` (a range) has `value: null`. The day's read and the row writer both build the target with it.                                                                                                                                                                                                                                             |
 | `entryUnitFor(type, prescribedUnit)`, `ENTRY_UNIT_WITHOUT_QUANTITY`                                                  | `packages/shared/src/program/pieces.ts`                                           | The unit a logged row's entry stores: `bool` for a Check, `count` for Reps, else the prescribed unit (plan §2). For the row writer and the export.                                                                                                                                                                                                                                                                                                           |
 | `itemUnit(trackingType, quantities)`                                                                                 | `packages/shared/src/program/pieces.ts`                                           | The unit an item logs in, which is `DayItem.unit`: `null` for a Check or Reps, the type's fixed unit, else the prescription's unit in the type's slot. One definition for the day's read and the row writer, because `fillRowValues` refuses a quantity in any other unit.                                                                                                                                                                                   |
@@ -383,6 +400,19 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     id and scans both files for the case-keeping schema; a schema added with an id belongs in its
     table. Nothing changes for an id the app made (`newId`, `crypto.randomUUID` and Postgres all
     write lower case). A writer may still lower-case for itself; it is then doing nothing.
+27. 🔴 **A Change is judged in the unit the row was logged in, never the item's unit now**
+    (`loggedRowUnit`, contract change C28, from step 11c's plan). Saving a workout can edit a
+    prescription's unit in place, so a row logged in lb can sit under an item that now reads kg.
+    A Change fixes a number; it does not restate one in a new unit. Judged against the item, a
+    kg number would be stored on a row still labelled lb: a load in the wrong unit. So an amend
+    passes `fillRowValues` the row's own unit (`{ trackingType, unit: loggedRowUnit(…) }`, with
+    no target), in the fake as in the writer: the lb row is changed in lb and a kg number answers
+    `bad_value`. A new ✓ is not a Change and is still in the item's unit. The day screen is
+    stricter and offers no Change at all on a row logged in another unit than the item's.
+    **A row that does not hold what its type now logs has no unit to be changed in**
+    (`loggedRowUnit` is `null`: no quantity in the type's slot, or one in a unit the type cannot
+    be in), so a Change that sends a quantity for it is `bad_value`. No FAM-1 screen changes an
+    item's type (plan D25), so nothing makes such a row today.
 
 ## Traps
 
@@ -394,6 +424,58 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 - **`packages/shared` has no typecheck project of its own** ([AGENTS.md](../../AGENTS.md) → "Local
   hooks vs CI merge-gates"). Its files are checked through what `apps/web` and `packages/db` import.
 - **The fixtures are deep-frozen.** Clone one before changing it (`structuredClone`); the fakes do.
+
+## The movement library's contract (CAT-3)
+
+The second contract this guide owns. [Its spec](../specs/cat-3-movement-library.md) is the source of
+truth; this section is the map. The library's lanes (schema, data, picker) meet at these files as
+FAM-1's lanes meet at the program shapes, and the same rule holds: **no lane edits a file listed
+here; a change goes through the contract owner.**
+
+| File                                            | What it holds                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT` (52 codes), `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels), `MEDIA_KINDS`, and `QUERY_SHORT_FORMS`. In the root barrel.                                                                               |
+| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id), `catalogInstructionsSchema`, `catalogMediaSchema`, their caps, and `requiresNoEquipment`. In the root barrel.                                                              |
+| `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries) and `CATALOG_FIXTURE_IDS`. The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                  |
+| `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                        |
+| `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide. |
+| `.github/scripts/check-catalog-append-only.mjs` | The step in CI's quality job that compares the two record files with the PR's base (`pnpm catalog:check` locally).                                                                                                                                         |
+| `packages/shared/src/catalog/catalog.test.ts`   | Criteria V1 to V3, V5, V6 and D2, and what the fixture covers. `approvals.test.ts` holds V4 and D3 (the lockfile, the approvals, the merge-base comparison). `owed.test.ts` lists the criteria no test holds yet.                                          |
+
+Invariants (the spec's rules, as they bind code here):
+
+1. **A vocabulary is one const array**, and `EQUIPMENT`, `MUSCLES` and `MODALITIES` become stored
+   data when the schema lane's tables ship: from then on a new, renamed or removed member is a
+   migration, never an edit to `vocabulary.ts` alone.
+2. **An entry has no id and no source.** `catalogMovementSchema` is strict. A catalog row's
+   `public_id` is minted when it is seeded; the library is authored and reviewed in-house.
+3. **A slug is set once.** It is `movementSlug` of the name or of an alias: a corrected name keeps
+   its slug and the old name becomes an alias. It holds no comma and no line break, because the
+   CSV export prints it. `shipped.json` pins every shipped slug to its tracking type.
+4. **"No equipment" is computed** (`requiresNoEquipment`: the required set is empty) and stored
+   nowhere. A scan of every package's source, the migrations and the app holds that nothing is
+   named `noEquipment` or `no_equipment`, so the picker's filter switch needs another name.
+5. **Every entry, and every edit to one, needs an approval line.** `approved.json` holds the
+   SHA-256 of each entry the maintainer approved, by batch; an entry whose content has no matching
+   hash fails `approvals.test.ts`, whichever field changed. Both record files only grow, which the
+   merge-base check holds; a base it cannot read fails the check. A batch PR is merged by the
+   maintainer. **An entry is written exactly as it parses** (no stray spaces): the hash and the
+   seed read it as written.
+6. **The library stays out of the browser.** The root barrel reaches the vocabularies and the
+   entry schema and never `catalog/data/` or `approvals.ts` (a scan). Import the data through its
+   subpath, on the server.
+7. **`CATALOG_FIXTURE` shares no slug and no name key with the legacy `MOVEMENT_SEED_ROWS`, and no
+   alias with the legacy picker's**, which a fixtures database also holds until those lists are
+   retired. So its short alias is `SLRDL`, not `RDL`.
+8. **A data file imports the entry type and its own directory, nothing else**: `catalog/data/`
+   holds literal entries, never code.
+9. **Instructions are our own words, written as they will be read; media is reserved.** An
+   entry's optional `instructions` is one or more plain lines (no blank line, no space at a line's
+   end, at most `CATALOG_INSTRUCTIONS_MAX` characters, **no character a reader cannot see and no
+   web address**), reviewed and hashed with the entry. Its
+   optional `media` is a kind and a key into the app's own store, **never a URL**, and no entry in
+   the library or the fixture may set it until a media plan lifts that test. Both stay in the
+   const and are read by slug, like aliases: no column holds them.
 
 ## Changing it
 
