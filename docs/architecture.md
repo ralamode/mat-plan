@@ -521,7 +521,8 @@ blocks of the scope and of the athlete's own household; what was logged comes fr
 program rows, whose workout and prescription pointers are resolved through scoped subqueries. A
 pointer that is set but does not resolve in scope (runbook pre-flight (f), (g)), or a session of
 another profile ((i)), drops the row; a NULL one (a purge) keeps it with null ids. A logged workout of
-a hidden program or a hidden workout carries an id only for what is still live (C21). A weigh-in, a practice or a check-in never enters a `DayPlan`
+a hidden program or a hidden workout carries an id only for what is still live (C21); a live one logged
+on a day no assignment covers any more keeps its ids, read from the live block (C24). A weigh-in, a practice or a check-in never enters a `DayPlan`
 (E4). Every rule has a `db:verify` proof in `scripts/verify/day-plan.ts`, against the contract's
 fixtures with ids mapped exactly.
 

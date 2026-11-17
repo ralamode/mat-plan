@@ -141,10 +141,13 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
 19. **E7 — exports**: `resolveDayPlan` and its type, by name only.
     **C21 — ids only for what is live**: a logged workout under a hidden program or a hidden workout
     shows like one that left the week, but built from its entries alone (no description, every item a
-    removed item, progress 0 of 0; mutation 248), with
-    `programPublicId` only for a program in `programs` and `workoutPublicId` only for a live workout of
-    such a program. Mutation 247; `verify/day-plan.ts`'s `resolve()` asserts the invariant on every
-    read.
+    removed item, progress 0 of 0; mutation 248), with `programPublicId` only while its block is live
+    and `workoutPublicId` only while the workout and its block are (mutation 247).
+    **C24 — the ids come from the live block, not the day's assignments**: a live workout of a live
+    program, logged on a day no live assignment covers any more, shows as left the week with both
+    ids, its description, live items and count, and its program is not in `programs` (mutation 250).
+    So only a SCHEDULED workout's program is always one of `programs`; `verify/day-plan.ts`'s
+    `resolve()` asserts that on every read.
 20. **R1 in one place**: `future` first (the preview, no rows, archived or not; mutation 239); else
     `writable = rowDayOpen(day, today, archivedAt)` (`queries/day/day-window.ts`, the writer's rule
     too; mutation 240 drops the archive at the resolver's call); else logged rows only, and a workout
