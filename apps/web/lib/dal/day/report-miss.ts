@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { prescriptionLiveIn, type HouseholdScope } from '@mat-plan/db';
+import { prescriptionLiveIn, workoutInHousehold, type HouseholdScope } from '@mat-plan/db';
 import type { RowWrite } from '@mat-plan/shared';
 
 import { db } from '../db';
@@ -11,11 +11,10 @@ import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../househol
  * change C11; plan row 12b). The day DAL calls it ONLY after the row writer has answered
  * `not_found`, so a ✓ that saves never pays for these reads.
  *
- * - **In the writer's order, and only the first miss** (board, 2026-11-17), as `reportProgramMiss`
- *   does: a prescription of a workout that is not the household's would otherwise be reported twice.
- *   ⚠️ Today only the prescription half exists (`prescriptionLiveIn`, #527). The workout half, lane
- *   P's `workoutInHousehold`, goes FIRST when it lands; until then a probed workout whose
- *   prescription is the household's own is answered `not_found` and not reported.
+ * - **The workout first, then the prescription, and only the first miss** (board, 2026-11-17), as
+ *   `reportProgramMiss` does: a prescription of a workout that is not the household's would
+ *   otherwise be reported twice. The reads are lane P's `workoutInHousehold` (#545) and lane E's
+ *   `prescriptionLiveIn` (#527).
  * - **Found** means the miss was something else (the athlete is not on that program that day, a
  *   foreign held `clientId`): nothing is reported, since the id named nothing outside the household.
  *   `reportScopeMiss` itself tells `cross_household` from `unknown_resource`.
@@ -29,6 +28,13 @@ export async function reportRowMiss(
   write: Pick<RowWrite, 'workoutPublicId' | 'prescriptionPublicId'>,
 ): Promise<void> {
   try {
+    if (!(await workoutInHousehold(db, scope, write.workoutPublicId))) {
+      await reportScopeMiss({
+        action: SCOPE_MISS_ACTION.resolveWorkout,
+        resource: { kind: SCOPE_MISS_KIND.workout, publicId: write.workoutPublicId },
+      });
+      return;
+    }
     if (!(await prescriptionLiveIn(db, scope, write.prescriptionPublicId))) {
       await reportScopeMiss({
         action: SCOPE_MISS_ACTION.resolvePrescription,

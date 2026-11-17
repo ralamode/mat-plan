@@ -7,5 +7,6 @@
   mounts the screen. The helper that keeps a failed query's data out of the runtime log
   (`quietDbErrors`) moves to `lib/dal/` and now covers the row writes too. On the screen, a ✓ the
   server refuses as `bad_value` now offers Reload instead of asking for a new number (the screen
-  already checked that number), and a `closed_day` reloads the page's data. No schema change, no
-  new dependency.
+  already checked that number), and a `closed_day` reloads the page's data. A ✓ naming another
+  household's workout or prescription reports which one missed, once. No schema change, no new
+  dependency.
