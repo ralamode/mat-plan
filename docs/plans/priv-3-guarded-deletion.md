@@ -460,8 +460,8 @@ athlete erasure by hand: 4b cannot follow a script that has already committed.
 
 Mutation numbers come from the block the FAM-1 board assigned to this track, **260–289** (2026-11-17),
 taken in PR order. `verifyErasure` is a fifth module called **last** in `verify.ts:9864-9867` (**waiting on
-the board**: the comment there says lanes add no call; PR 1 does not merge until the board's answer
-is recorded here with its date); last means step 5's assertions see an
+the roadmap thread's ruling**, since the comment there says lanes add no call; PR 1 does not start
+until it is recorded here with its date); last means step 5's assertions see an
 athlete-grain defect first, so this plan's own mutations target household-grain tables and household
 arms, and each `.expect` is confirmed by running `pnpm db:mutations` before it is committed.
 
@@ -675,23 +675,25 @@ restore branch, never from git.
 
   Both belong to the `PRIV-1` sign-off pass.
 
-## Open questions (maintainer)
+## Maintainer decisions
 
-Ids are kept from the first draft; answered ones stay listed.
+All answered _(maintainer, 2026-11-17, relayed by the FAM-1 board)_ unless dated otherwise. Ids are
+kept from the first draft.
 
-1. **Q1. The target channel.** Recommendation: **the environment, read by a hidden prompt** (D1). The
-   alternative is flags (PR 0).
-2. **Q2. `N`.** Recommendation: **30 days**; the alternative is 14. It is set in PR 4.
-3. **Q3. A household that leaves without asking.** Recommendation: **nothing automatic during the
-   beta**; the notice already commits to asking once when the beta ends. Revisit before self-serve
-   sign-up.
-4. **Q4. Does PR 3 ship inside Beta 0?** **Answered: yes** _(maintainer, 2026-11-14)_; the notice
-   promises it.
-5. **Q5. How a seed id is deleted.** **Answered by `OPS-2` Q2** _(maintainer, 2026-11-16)_: re-key
-   first, then an ordinary hard delete (D6).
-6. **Q6. Script step 5's optional program removal (4b)?** Recommendation: **yes, as PR 3b**, a guarded
-   transaction after the athlete erasure commits (D7). The alternative: when a household answers
-   "remove", the whole athlete erasure is typed by hand.
+1. **Q1. The target channel: the environment, read by a hidden prompt** (D1). No PR 0. PR 2b replaces
+   README `:80-83`'s flag commitment with an Amendment, and re-states "needs a flag" in the row and
+   `beta-1.md`.
+2. **Q2. `N` = 30 days**, set in PR 4 with the restore window and the notice change.
+3. **Q3. Nothing automatic during the beta** for a household that leaves without asking; the notice's
+   ask-once-at-the-end stands. Revisit before self-serve sign-up.
+4. **Q4. PR 3 ships in Beta 0** _(2026-11-14; confirmed 2026-11-17)_.
+5. **Q5. Re-key first, then an ordinary hard delete** _(`OPS-2` Q2, 2026-11-16)_ (D6).
+6. **Q6. Script the program removal as PR 3b** (D7).
+
+**Still open, not the maintainer's:** the fifth `verify` module call is a harness change, which the
+FAM-1 board has sent to the roadmap thread (contract owner of 0c). PR 1 does not start until it rules.
+Guest slots: PRs 1, 2a and 3 enter lane A's files and `write-path.md` after lane A's `VALIDATE` PR
+merges, and PRs 1, 2b and 3 take the privacy-docs queue in turn, ordered by the board.
 
 ## Review-response log (adversarial panel)
 

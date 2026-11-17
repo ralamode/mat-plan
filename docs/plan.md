@@ -2320,9 +2320,9 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   📐 **Planned 2026-11-13, refreshed 2026-11-17** ([plan](./plans/priv-3-guarded-deletion.md); a
   six-lens panel; plan only): one proved list of per-household tables, a delete core, and dry-run-first
   `erase-household` and `erase-athlete` corrections over it, with the purge window `N` a deferred
-  section. ⚠️ The plan recommends reading the target from the environment through a hidden prompt
-  rather than the `--household` flag above (its Q1); the paragraph above is not re-worded until Q1 is
-  answered.
+  section (`N` = 30 days). ⚠️ **The target is read from the environment through a hidden prompt, not
+  the `--household` flag above** _(maintainer, 2026-11-17, Q1)_; PR 2b re-words the paragraph above
+  when it lands.
 
   **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
   long as the household is active.** There is no rolling window and no summarize-then-discard step:
