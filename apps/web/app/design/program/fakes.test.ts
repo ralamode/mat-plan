@@ -1270,6 +1270,48 @@ describe('the fake ProgramActions: items and athletes', () => {
 });
 
 describe('the fakes: rules found in review', () => {
+  it('an id is one id in either case: a replay, and two cards (C25)', async () => {
+    // The fixtures' ids are all digits, so the ids here are the ones a client mints. Postgres reads
+    // the two spellings as one uuid; the schemas hand the fakes one spelling, so they do too.
+    const quiet = '0193a2b4-7c5d-7e8f-9a0b-1c2d3e4f5a6b';
+    const shouted = quiet.toUpperCase();
+    expect(shouted).not.toBe(quiet);
+
+    // createProgram: the second call is the first one again, not a second program of that name.
+    const { actions, state, view } = builder();
+    const created = await actions.createProgram({ clientId: quiet, name: 'Off season' });
+    expect(created.ok).toBe(true);
+    expect(await actions.createProgram({ clientId: shouted, name: 'Off season' })).toEqual(created);
+    expect(state().programs.filter((p) => p.name === 'Off season')).toHaveLength(1);
+
+    // saveWorkout: a new workout replayed under the other spelling is saved once.
+    const draft = { ...newWorkoutEmpty, name: 'Mobility', workoutClientId: shouted };
+    const saved = await actions.saveWorkout(draft);
+    expect(saved.ok).toBe(true);
+    expect(await actions.saveWorkout({ ...draft, workoutClientId: quiet })).toEqual(saved);
+    expect(view().workouts.filter((w) => w.name === 'Mobility')).toHaveLength(1);
+
+    // saveWorkout: two cards under one id, spelled two ways, are refused as two cards under one id.
+    const [first, second] = heavyADraft.items;
+    if (!first || !second) throw new Error('heavy-a-draft needs two cards');
+    const cards = (a: string, b: string) => ({
+      ...heavyADraft,
+      items: [
+        { ...first, prescriptionClientId: a },
+        { ...second, prescriptionClientId: b },
+      ],
+    });
+    expect(await actions.saveWorkout(cards(quiet, shouted))).toEqual(refusal('invalid'));
+    expect((await actions.saveWorkout(cards(quiet, newId()))).ok).toBe(true);
+
+    // logRow: a ✓ replayed under the other spelling answers as the first did.
+    const { actions: rows, plan } = day(heavyASupersets);
+    const write = { ...tick(heavyASupersets, 'DB bench press'), clientId: shouted };
+    const logged = succeeded(await rows.logRow(write));
+    expect(await rows.logRow({ ...write, clientId: quiet })).toEqual(logged);
+    expect(itemOf(plan(), 'DB bench press').item.rows.filter((r) => r.logged)).toHaveLength(1);
+  });
+
   it('a name is taken whatever its case or spacing: "heavy a" beside "Heavy A"', async () => {
     const { actions } = builder();
     const { programPublicId } = familyProgram;

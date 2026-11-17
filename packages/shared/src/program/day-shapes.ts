@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { isoDaySchema } from '../date';
 import { keyBySelf } from '../enums';
 import { hiddenAtSchema } from '../hide';
-import { uuidSchema } from '../id';
 import { movementLabelSchema, trackingTypeSchema } from '../movements';
 import { MAX_HOUSEHOLD_ATHLETES } from '../profiles';
 import { SLOT_LABEL_MAX } from '../programming';
@@ -11,6 +10,7 @@ import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import { unitSchema } from '../units';
 import {
   athleteLabelSchema,
+  lowerCaseUuidSchema,
   nullableNoteSchema,
   prescribedQuantitiesSchema,
   prescribedTextSchema,
@@ -64,7 +64,7 @@ const dayRowSchema = z.object({
   /** `prescribedText` here is what the row was logged against, frozen (plan D7). */
   logged: z
     .object({
-      entryPublicId: uuidSchema,
+      entryPublicId: lowerCaseUuidSchema,
       values: rowValuesSchema,
       prescribedText: prescribedTextSchema,
     })
@@ -73,8 +73,8 @@ const dayRowSchema = z.object({
 
 const dayItemSchema = z.object({
   /** `null`: a logged row whose prescription has since been removed. Such an item has no `notes`. */
-  prescriptionPublicId: uuidSchema.nullable(),
-  itemPublicId: uuidSchema,
+  prescriptionPublicId: lowerCaseUuidSchema.nullable(),
+  itemPublicId: lowerCaseUuidSchema,
   name: movementLabelSchema,
   trackingType: trackingTypeSchema,
   /**
@@ -129,8 +129,8 @@ const dayWorkoutSchema = z.object({
    * still says what the assignments say: if that was the athlete's only program that day, they
    * are not on a program, and the logged workout shows beneath that line.
    */
-  programPublicId: uuidSchema.nullable(),
-  workoutPublicId: uuidSchema.nullable(),
+  programPublicId: lowerCaseUuidSchema.nullable(),
+  workoutPublicId: lowerCaseUuidSchema.nullable(),
   /**
    * The heading of the workout's slot on the week, or `null` when the slot has none. **`null` for
    * a workout that left the week**: the label was the slot's, and the slot is gone _(maintainer,
@@ -193,7 +193,7 @@ const dayWorkoutSchema = z.object({
  * composed beside the day screen.
  */
 export const dayPlanSchema = z.object({
-  profilePublicId: uuidSchema,
+  profilePublicId: lowerCaseUuidSchema,
   day: isoDaySchema,
   /**
    * The athlete's today, so the screen can say Today, Yesterday or Tomorrow. The DAL works it out
@@ -221,7 +221,7 @@ export const dayPlanSchema = z.object({
    * resolver.
    */
   athletes: z
-    .array(z.object({ profilePublicId: uuidSchema, name: athleteLabelSchema }))
+    .array(z.object({ profilePublicId: lowerCaseUuidSchema, name: athleteLabelSchema }))
     .max(MAX_HOUSEHOLD_ATHLETES),
   onProgram: onProgramSchema,
   /** Look-ahead goes forward only while the athlete is on a program the next day. */
@@ -308,11 +308,11 @@ export type DayRow = z.infer<typeof dayRowSchema>;
  *   must first keep the replaced ids.
  */
 export const rowWriteSchema = z.object({
-  clientId: uuidSchema,
-  profilePublicId: uuidSchema,
+  clientId: lowerCaseUuidSchema,
+  profilePublicId: lowerCaseUuidSchema,
   day: isoDaySchema,
-  workoutPublicId: uuidSchema,
-  prescriptionPublicId: uuidSchema,
+  workoutPublicId: lowerCaseUuidSchema,
+  prescriptionPublicId: lowerCaseUuidSchema,
   set: setNumberSchema,
   values: rowValuesSchema,
 });
@@ -324,9 +324,9 @@ export type RowWrite = z.infer<typeof rowWriteSchema>;
  * `closed_day`, and one naming an entry that is not this athlete's on that day answers `not_found`.
  */
 export const rowUntickSchema = z.object({
-  profilePublicId: uuidSchema,
+  profilePublicId: lowerCaseUuidSchema,
   day: isoDaySchema,
-  entryPublicId: uuidSchema,
+  entryPublicId: lowerCaseUuidSchema,
 });
 export type RowUntick = z.infer<typeof rowUntickSchema>;
 
@@ -337,9 +337,9 @@ export type RowUntick = z.infer<typeof rowUntickSchema>;
  * another entry holds.
  */
 export const rowRetickSchema = z.object({
-  profilePublicId: uuidSchema,
+  profilePublicId: lowerCaseUuidSchema,
   day: isoDaySchema,
-  entryPublicId: uuidSchema,
+  entryPublicId: lowerCaseUuidSchema,
   hiddenAt: hiddenAtSchema,
 });
 export type RowRetick = z.infer<typeof rowRetickSchema>;
@@ -358,8 +358,8 @@ export type RowRetick = z.infer<typeof rowRetickSchema>;
  * entry, knows the type. The schema checks that each number given is a number in range.
  */
 export const rowAmendSchema = z.object({
-  profilePublicId: uuidSchema,
-  entryPublicId: uuidSchema,
+  profilePublicId: lowerCaseUuidSchema,
+  entryPublicId: lowerCaseUuidSchema,
   values: rowValuesSchema,
 });
 export type RowAmend = z.infer<typeof rowAmendSchema>;
@@ -386,7 +386,7 @@ export const ROW_REFUSAL = keyBySelf(ROW_REFUSALS);
 export const rowResultSchema = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(true),
-    entryPublicId: uuidSchema,
+    entryPublicId: lowerCaseUuidSchema,
     values: rowValuesSchema,
     hiddenAt: hiddenAtSchema.optional(),
   }),

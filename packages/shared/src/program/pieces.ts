@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { uuidSchema } from '../id';
 import { matchMovementOptions, type MatchableMovement } from '../movement-search';
 import { TRACKING_TYPES, type TrackingType } from '../movements';
 import { PROFILE_NAME_MAX } from '../profiles';
@@ -38,11 +39,30 @@ import {
  * writers, the day page and the day writers. **A shape change after chunk 0 goes through the contract
  * owner**, and the lanes reading it wait.
  *
- * Every id is a public id (`uuidSchema`), every day is `isoDaySchema`, and every string is bounded by
- * a named limit. The bounds here are structural (what can be stored); what is plausible or allowed
+ * Every id is `lowerCaseUuidSchema` (below), every day is `isoDaySchema`, and every string is bounded
+ * by a named limit. The bounds here are structural (what can be stored); what is plausible or allowed
  * for a given item (a unit's ceiling, a type's fields) is the writers' check, answered as a typed
  * refusal.
  */
+
+/**
+ * Every id in this contract, a public id or a client id: any uuid, **handed back in lower case**
+ * (contract change C25, from FAM-1 step 6a-ii's review).
+ *
+ * `uuidSchema` takes a uuid in either case and hands it back as written. Postgres reads the two
+ * spellings as one uuid and always answers in lower case, while everything in JS that compares ids
+ * (`===`, a `Map`, a `Set`, the "no two the same" checks in `./program-shapes`) reads them as two.
+ * So an id written in upper case could pass a distinctness check beside its lower-case twin, or
+ * miss a replay it should have matched. Lower-casing where the id is parsed gives one spelling to
+ * every reader after the parse: the schemas' own checks, the preview's fakes and the writers.
+ *
+ * ⚠️ Only for a reader of the PARSED value. Code that parses and then reads the raw input again
+ * still sees the spelling it was sent.
+ *
+ * It changes nothing for an id the app made: `newId`, `crypto.randomUUID` and Postgres all write
+ * lower case.
+ */
+export const lowerCaseUuidSchema = uuidSchema.toLowerCase();
 
 const ONE_LINE = 'one line of text, with no control characters';
 /**
