@@ -185,7 +185,7 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   `packages/db/scripts/verify.ts` re-adds the constraint by hand in its V1-1b simulation: A1
   changes it to the same exported SQL fragment and compares `pg_get_constraintdef` with the
   migration's (without the `NOT VALID` the simulation appends).
-- **S6.** No module in `apps/` shall read the new tables or column until P9
+- **S6.** No module in `apps/` shall read the new tables or column until P11
   (`apps/web/test/program-tables-stay-dark.test.ts`'s pattern), and A1's migration shall carry a
   deploy-window header: Drizzle names every column on insert ([lessons](../lessons.md), "shipped
   dark fails `42703`").
@@ -342,8 +342,8 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   shall be replaced by a generic program built from `CATALOG_FIXTURE`, and nothing in `packages/`
   or `apps/` shall import those three symbols (an import scan, which is what finds the readers:
   today they include `seed.ts`, `programming.ts`, `verify.ts`, `verify/schema.ts`, `registry.ts`,
-  `movement-search.test.ts`, `movement-picker.test.tsx`, `contract.test.ts` and the two
-  strength-form tests).
+  `verify/program.ts`, `movement-picker-catalog.ts`, `movement-search.test.ts`,
+  `movement-picker.test.tsx`, `contract.test.ts` and `strength-form-scaffold.test.ts`).
 
 ## The data contract
 
