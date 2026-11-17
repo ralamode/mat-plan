@@ -176,7 +176,8 @@ export async function resolveDayPlan(
           // R2: a workout that left the week has no label.
           label: null,
           liveName: null,
-          description: first.workoutDescription,
+          // C21: a hidden program's or workout's has none; one that only left the week keeps it.
+          description: first.workoutLive ? first.workoutDescription : null,
           scheduled: false,
           showing: 'logged' as const,
           prescriptions:

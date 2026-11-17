@@ -1021,6 +1021,17 @@ async function verifyRules(): Promise<void> {
         left && !left.scheduled && left.label === null,
         'FAM-1 12a hidden: a workout that left the week still shows its logged rows (non-vacuity)',
       );
+      // C21: it is still live, unlike a hidden one: its description, its live items and its count.
+      const heavyADraft = workoutDraft(H_WORLD, 'p1', 'w2');
+      assert.deepEqual(
+        [
+          left.description,
+          left.items.every((it) => it.prescriptionPublicId !== null),
+          left.progress.total,
+        ],
+        [heavyADraft.description, true, 4 + 4 + 3 + 3 + 3],
+        'FAM-1 12a C21: a workout that only left the week keeps its description, live items and count',
+      );
       await hideEntries(asTx(sp), {
         profilePublicId: H.profiles.get('a1')!.publicId,
         scope: H_SCOPE,
@@ -1298,6 +1309,7 @@ async function verifyRules(): Promise<void> {
     const fromEntriesAlone = (w: DayWorkout | undefined) =>
       w !== undefined &&
       w.label === null &&
+      w.description === null &&
       w.progress.done === 0 &&
       w.progress.total === 0 &&
       w.items.length > 0 &&
