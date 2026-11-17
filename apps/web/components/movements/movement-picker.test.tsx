@@ -7,7 +7,7 @@ import {
   type MovementPickerGroup,
 } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -309,9 +309,10 @@ describe('the status region (criterion 46)', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
     type('zzzzz');
-    expect(status()).toContain(COPY.statusNoMatches);
+    expect(status()).toBe(COPY.statusNoMatches);
     type('farmers walk');
-    expect(status()).toContain('some of your words');
+    // Farmer Carry and Walking Lunge, written out.
+    expect(status()).toBe(COPY.statusNone(0, 2));
   });
 
   it('carries the ONE reason "use as typed" is unavailable', () => {
@@ -465,7 +466,7 @@ describe('Enter in the search box (panel 2 · 3)', () => {
     const onPick = vi.fn();
     render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
     open();
-    type('zercher squat'); // no match at all — the only thing offered is creation
+    type('zercher squat'); // no match: some-words rows only, and creation
     pressEnter();
     expect(onPick).not.toHaveBeenCalled();
   });
@@ -725,12 +726,41 @@ describe('multi-select', () => {
     const create = screen.getByRole('button', { name: 'New item: bulgarain' });
     const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
     expect(hint?.textContent).toBe(COPY.similarListed('Bulgarian Split Squat', 'below'));
+    expect(create.getAttribute('data-variant')).toBe('ghost');
     expect(box('Bulgarian Split Squat')).toBeTruthy();
     // Enter selects nothing: a similar name is a guess (P5).
     fireEvent.keyDown(search('Search items'), { key: 'Enter' });
     expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('false');
   });
+
+  it('several some-words rows name no movement under the create button', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    // No near miss (no `z…` word), three some-words rows: none of them is "the one".
+    type('zercher squat', 'Search items');
+    const create = screen.getByRole('button', { name: 'New item: zercher squat' });
+    expect(create.getAttribute('aria-describedby')).toBeNull();
+    expect(create.getAttribute('data-variant')).toBe('ghost');
+  });
 });
+
+/**
+ * The picker's own modules, read as source, comments out (the shared scans' `code()` convention).
+ * ⚠️ cwd-relative paths, as in the scan above: under jsdom `import.meta.url` is not a `file:` URL.
+ */
+const PICKER_DIRS = ['components/movements', 'lib/movements'];
+const pickerSources = () =>
+  PICKER_DIRS.flatMap((dir) =>
+    readdirSync(dir)
+      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .map((f) => {
+        const path = `${dir}/${f}`;
+        const source = readFileSync(path, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+        return { path, source };
+      }),
+  );
 
 describe('search (CAT-3 B1: short forms and similar names)', () => {
   it('a short form finds the movement it stands for: "bb curl" is Barbell Curls (P3)', () => {
@@ -749,7 +779,7 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
     type('bulgarain');
     expect(headings()).toEqual([COPY.near]);
     expect(screen.getByRole('button', { name: /^Bulgarian Split Squat/ })).toBeTruthy();
-    expect(status()).toBe(`${COPY.statusNoMatches} ${COPY.statusNear(1)}`);
+    expect(status()).toBe(COPY.statusNone(1, 0));
   });
 
   it('🔴 similar names come first, and a row in both lists is shown and counted once (P5)', () => {
@@ -764,9 +794,7 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
     expect(near!.textContent).toContain('Bulgarian Split Squat');
     expect(some!.textContent).not.toContain('Bulgarian Split Squat');
     // Written out, not counted from the rows: Back Squat and Front Squat.
-    expect(status()).toBe(
-      `${COPY.statusNoMatches} ${COPY.statusNear(1)} ${COPY.statusSomeWords(2)}`,
-    );
+    expect(status()).toBe(COPY.statusNone(1, 2));
   });
 
   it('🔴 Enter never picks a similar name (P5)', () => {
@@ -779,40 +807,90 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
+  it('on a touch screen, Enter over listed rows puts the keyboard away; over nothing it does not', () => {
+    // jsdom has no `matchMedia`, so the picker takes the coarse-pointer path here.
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bulgarain');
+    act(() => search().focus());
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(document.activeElement).not.toBe(search());
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    type('zzzzz');
+    act(() => search().focus());
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(document.activeElement).toBe(search());
+  });
+
   it('"use as typed" stays offered, and its hint names the similar movement first (P5)', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
     type('bulgarain');
     const create = screen.getByRole('button', { name: COPY.asTyped('bulgarain') });
-    const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
-    expect(hint?.textContent).toBe(
-      `${COPY.similarListed('Bulgarian Split Squat', 'above')} ${COPY.asTypedHint('bulgarain')}`,
-    );
+    const hint = () => document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint()?.textContent).toBe(COPY.asTypedHintNear('Bulgarian Split Squat', 'bulgarain'));
     // Quiet while something is listed: the loud one is for a list with nothing in it (UX2 B1).
-    // `outline` is the variant that draws the border; the quiet (`ghost`) one has none.
-    expect(create.className).not.toMatch(/\bborder-border\b/);
+    expect(create.getAttribute('data-variant')).toBe('ghost');
     type('zzzzz');
-    expect(screen.getByRole('button', { name: COPY.asTyped('zzzzz') }).className).toMatch(
-      /\bborder-border\b/,
-    );
+    expect(
+      screen.getByRole('button', { name: COPY.asTyped('zzzzz') }).getAttribute('data-variant'),
+    ).toBe('outline');
   });
 
-  it('🔴 the query never leaves the device (P6): no URL, action, storage or log carries it', () => {
-    // A source scan: the picker keeps the text in its own state and hands nobody the text.
-    const source = readFileSync('components/movements/movement-picker.tsx', 'utf8');
-    for (const leak of [
-      /\bfetch\(/,
-      /\bconsole\./,
-      /\buseRouter\b|\buseSearchParams\b|\busePathname\b/,
-      /\bwindow\.(?:location|history)\b|\bhistory\.(?:push|replace)State\b/,
-      /\b(?:local|session)Storage\b|\bindexedDB\b|\bdocument\.cookie\b/,
-      /\bnavigator\.sendBeacon\b|\bXMLHttpRequest\b|\bWebSocket\b/,
-      /\bSentry\b|@sentry\//,
-      /new RegExp\(/,
-    ])
-      expect(source, String(leak)).not.toMatch(leak);
-    // The one callback that fires on every keystroke is handed nothing.
-    expect(source).toMatch(/onQueryChange\?\.\(\)/);
-    expect(source).not.toMatch(/onQueryChange\?\.\([^)]/);
+  it('several some-words rows name no movement in the hint: plain warning only', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('zercher squat');
+    const create = screen.getByRole('button', { name: COPY.asTyped('zercher squat') });
+    const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent).toBe(COPY.asTypedHint('zercher squat'));
+  });
+
+  it('🔴 the picker sends the query nowhere itself (P6): imports, network, URL, storage, logs', () => {
+    // P6 says the query never leaves the device. The picker keeps it in its own state; what it hands
+    // its callers is `createLabel` (every render: the caller's own words, pure) and, on a tap, a
+    // deliberate create (`onCreate`, `onPick({ kind: 'typed' })`). The caller's side is
+    // `item-picker.test.tsx`'s. ⚠️ Holds while the app has no browser Sentry: a client init must
+    // keep Replay off or `maskAllInputs` on.
+    const sources = pickerSources();
+    expect(sources.map((s) => s.path)).toContain('components/movements/movement-picker.tsx');
+    // An allowlist, so an import that could send the text (a Server Action, a helper that does)
+    // fails here and forces the question, which a list of banned names never does.
+    const ALLOWED = new Set([
+      'react',
+      '@mat-plan/shared',
+      '@/components/ui/button',
+      '@/components/ui/sheet',
+      '@/lib/constants',
+      '@/lib/utils',
+      '@/lib/i18n/plural',
+      '@/lib/movements/movement-option',
+      '@/lib/movements/movement-picker-copy',
+    ]);
+    for (const { path, source } of sources) {
+      const specifiers = [
+        ...source.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(?\s*['"]([^'"]+)['"]/g),
+      ].map((m) => m[1] ?? m[2]);
+      expect(
+        specifiers.filter((spec) => !ALLOWED.has(spec!)),
+        path,
+      ).toEqual([]);
+      for (const leak of [
+        /'use server'/,
+        /\bfetch\(/,
+        /\bconsole\./,
+        /\buseRouter\b|\buseSearchParams\b|\busePathname\b/,
+        /\bwindow\.(?:location|history)\b|\bhistory\.(?:push|replace)State\b/,
+        /\b(?:local|session)Storage\b|\bindexedDB\b|\bdocument\.cookie\b/,
+        /\bnavigator\.sendBeacon\b|\bXMLHttpRequest\b|\bWebSocket\b/,
+        /\bSentry\b|@sentry\//,
+        /new RegExp\(/,
+      ])
+        expect(source, `${path}: ${String(leak)}`).not.toMatch(leak);
+    }
+    // The callback that fires on every keystroke is handed nothing.
+    const picker = sources.find((s) => s.path.endsWith('movement-picker.tsx'))!.source;
+    expect(picker).toMatch(/onQueryChange\?\.\(\)/);
+    expect(picker).not.toMatch(/onQueryChange\?\.\([^)]/);
   });
 });

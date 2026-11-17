@@ -22,9 +22,26 @@ describe('MOVEMENT_PICKER_COPY — the counted sentences', () => {
     expect(COPY.statusSomeWords(3)).toBe('3 movements match some of your words.');
   });
 
-  it('statusNear counts similar names, both ways (CAT-3 P5)', () => {
+  it("statusNear counts similar names, both ways, with the heading's noun (CAT-3 P5)", () => {
     expect(COPY.statusNear(1)).toBe('1 similar name.');
     expect(COPY.statusNear(2)).toBe('2 similar names.');
+    // A screen-reader user matches the count to the heading: renaming one alone fails here.
+    expect(COPY.statusNear(2).toLowerCase()).toContain(COPY.near.toLowerCase());
+  });
+
+  it('statusNone says "No matches." once, then each list, similar names first', () => {
+    expect(COPY.statusNone(0, 0)).toBe('No matches.');
+    expect(COPY.statusNone(1, 0)).toBe('No matches. 1 similar name.');
+    expect(COPY.statusNone(0, 2)).toBe('No matches. 2 movements match some of your words.');
+    expect(COPY.statusNone(1, 2)).toBe(
+      'No matches. 1 similar name. 2 movements match some of your words.',
+    );
+  });
+
+  it('asTypedHintNear names the movement and what to do, then keeps the permanence warning', () => {
+    expect(COPY.asTypedHintNear('Bulgarian Split Squat', 'bulgarain')).toBe(
+      `"Bulgarian Split Squat" is above. Tap it if that's the one. ${COPY.asTypedHint('bulgarain')}`,
+    );
   });
 
   it('saveCreates names every movement, conjugates both ways, and joins the list properly', () => {

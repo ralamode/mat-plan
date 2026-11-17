@@ -16,6 +16,35 @@ import { formatList, plural, quote } from '@/lib/i18n/plural';
  * built at the call site is how the same sentence ends up phrased two ways on two screens. The
  * pluralisation lives here too, for the same reason.
  */
+/** See `asTypedHint` below for why every word of it is load-bearing. */
+const asTypedHintText = (name: string) =>
+  `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
+
+const statusNoMatches = 'No matches.';
+/**
+ * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
+ * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
+ * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
+ * forms are named categories rather than a comparison, and a locale with more of them adds keys
+ * here instead of needing this sentence rewritten.
+ */
+const statusSomeWords = (n: number) =>
+  `${plural(n, {
+    one: `${n} movement matches`,
+    other: `${n} movements match`,
+  })} some of your words.`;
+/** The near misses' count: the same noun as the `near` heading (a test holds the two together). */
+const statusNear = (n: number) =>
+  plural(n, { one: `${n} similar name.`, other: `${n} similar names.` });
+/**
+ * Leads the create hint while a similar name is listed (UX panel, B1): the button carries the
+ * person's own spelling, so the hint next to it names the movement they may mean and says what to
+ * do, without claiming a typo. `where` is where the list sits from the button: above the footer in
+ * single mode, below the top in multi.
+ */
+const similarListed = (name: string, where: 'above' | 'below') =>
+  `${quote(name)} is ${where}. Tap it if that's the one.`;
+
 export const MOVEMENT_PICKER_COPY = {
   /** The sheet's title on the log form. `D2`'s editor passes its own. */
   title: 'Choose a movement',
@@ -71,24 +100,21 @@ export const MOVEMENT_PICKER_COPY = {
    * precisely why it has to be a rule rather than a thing noticed later.
    */
   statusCount: (n: number) => plural(n, { one: `${n} match.`, other: `${n} matches.` }),
-  statusNoMatches: 'No matches.',
+  statusNoMatches,
+  statusSomeWords,
+  statusNear,
   /**
-   * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
-   * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
-   * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
-   * forms are named categories rather than a comparison, and a locale with more of them adds keys
-   * here instead of needing this sentence rewritten.
+   * The status with no matches (CAT-3 P5): "No matches." once, then each list's own count, similar
+   * names first, each only when it holds a row.
    */
-  statusSomeWords: (n: number) =>
-    `${plural(n, {
-      one: `${n} movement matches`,
-      other: `${n} movements match`,
-    })} some of your words.`,
-  /**
-   * The near misses' count, after `statusNoMatches` and before `statusSomeWords` (CAT-3 P5: each
-   * counted apart). The same noun as the heading, so a screen-reader user can match the two.
-   */
-  statusNear: (n: number) => plural(n, { one: `${n} similar name.`, other: `${n} similar names.` }),
+  statusNone: (near: number, someWords: number) =>
+    [
+      statusNoMatches,
+      near > 0 ? statusNear(near) : null,
+      someWords > 0 ? statusSomeWords(someWords) : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
 
@@ -110,15 +136,12 @@ export const MOVEMENT_PICKER_COPY = {
    * PR that edits this string; promising it now would be the app telling someone a recovery exists
    * when it does not.
    */
-  asTypedHint: (name: string) =>
-    `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`,
+  asTypedHint: asTypedHintText,
 
-  /**
-   * Leads the create hint while a similar name is listed (UX panel, B1): the button carries the
-   * person's own spelling, so the hint next to it names the movement they may mean. `where` is
-   * where the list sits from the button: above the footer in single mode, below the top in multi.
-   */
-  similarListed: (name: string, where: 'above' | 'below') => `${quote(name)} is listed ${where}.`,
+  similarListed,
+  /** Single mode's footer hint while a similar name is listed: the name, then the warning. */
+  asTypedHintNear: (similar: string, typed: string) =>
+    `${similarListed(similar, 'above')} ${asTypedHintText(typed)}`,
 
   // ── The card, and the Save line (PR 4 renders these; the strings live here) ─────────────────────
   /** The Movement field's button when no movement is chosen yet. */

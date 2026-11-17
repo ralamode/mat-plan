@@ -5,6 +5,7 @@
   **Similar names** section (interim wording; the prototype settles it) lists the near misses above
   "Matches some of your words", with a row in both shown and counted once. The status says "No
   matches." once and counts each list; Enter never picks a similar name; the create button stays
-  quiet while anything is listed, and its hint names the closest movement. "Already listed" still
-  reads the plain match, so what can be added as typed is unchanged. A source test holds that the
-  query never leaves the device. No schema change, no new dependency.
+  quiet while anything is listed, and its hint names the similar movement. "Already listed" still
+  reads the plain match, so what can be added as typed is unchanged. The picker sends the query
+  nowhere itself (an import allowlist and a source scan), and searching in the item picker runs no
+  action until a person taps Create. No schema change, no new dependency.

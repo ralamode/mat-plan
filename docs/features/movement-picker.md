@@ -31,18 +31,19 @@ path and **creating** the deliberate one.
   picker ([program-builder.md](./program-builder.md)). The single-pick mode is unchanged.
 - **PR 4** — mounts it in the log form, adds Decision 5's two reads, and owes a UX panel plus
   three-width screenshots.
+- **CAT-3 B1** — the list reads the library's search (short forms, similar names); invariant 13.
 
 ## The map
 
-| File                                                | What                                                                                                                                                                                                                                                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
-| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                                                                                                                               |
-| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                |
-| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                     |
-| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                    |
-| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                                                                                                                                      |
-| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                                                                                                                                            |
+| File                                                | What                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`, and CAT-3's `searchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
+| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                                                                                                                                                                    |
+| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                                                     |
+| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                                                          |
+| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                                                         |
+| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                                                                                                                                                                           |
+| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                                                                                                                                                                                 |
 
 ## Invariants
 
@@ -134,7 +135,7 @@ path and **creating** the deliberate one.
     - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts ("2 movements match some of your words") and `movementNameSchema`'s messages;
     - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
     - `onReturned` passes through to the sheet: the caller's moment for a page-level message after a close;
-    - `matchPickerOptions` and `listedAs` are the one place a `MovementOptionDTO` becomes what the matcher reads; the caller's "is this already an item" asks `listedAs`, never a copy;
+    - `matchable` is the one place a `MovementOptionDTO` becomes what the matcher reads; `matchPickerOptions`, `searchPickerOptions` and `listedAs` all read through it, and the caller's "is this already an item" asks `listedAs`, never a copy;
     - `onToggle` says how a row was ticked (`'enter'` from the search), so the caller can say what a focusless Enter did;
     - `notice` takes the status region until the caller clears it (`onQueryChange` fires on every
       search change); `takeover` replaces the search, the list AND the footer (the caller's form; its exits are the header's ✕ and the caller's own Cancel), and opening it clears the search, so the list is whole when the form closes and the row the caller focuses stays put;
@@ -144,26 +145,36 @@ path and **creating** the deliberate one.
       `PICKER_CREATE_ID`, so the caller can put focus back on them.
 
 13. **The list reads the library's search; "already listed" still reads the plain match** (CAT-3
-    B1, [spec](../specs/cat-3-movement-library.md) § Search). `searchPickerOptions` feeds the list:
-    short forms (`bb curl` → Barbell Curls) and, when nothing matches, **Similar names** (near
-    misses) above "Matches some of your words". `matchPickerOptions` and `listedAs` stay on
-    `matchMovementOptions`, and the search's `exact`/`aliasHit` equal theirs (P1), so "use as
-    typed" is withheld by the same rule as the item form and the server's `existingItem`. Then:
-    - a row in both lists is shown and counted once, under Similar names (P5);
-    - the status says "No matches." once, then each list's count, similar names first;
-    - Enter never picks a similar name or a some-words row; on a phone it only puts the keyboard
-      away so the list shows;
-    - the create button stays quiet while either list holds a row, and its hint names the closest
-      one (`similarListed`), visible and tied to the button by `aria-describedby`: in multi mode the
-      button sits above the list (invariant 12), so that hint is what reaches a keyboard first;
-    - the query never leaves the device (P6): a source scan bans network, router, storage, logging
-      and `new RegExp` in the component, and `onQueryChange` is handed nothing.
+    B1). What the list shows is [spec](../specs/cat-3-movement-library.md) P3 to P5; what lives
+    between files here:
+    - `searchPickerOptions` feeds the list, while `matchPickerOptions` and `listedAs` stay on
+      `matchMovementOptions`. The search's `exact`/`aliasHit` equal theirs (P1), so "use as typed"
+      is withheld by the same rule as the item form and the server's `existingItem`.
+    - **The dedupe is the component's**, not the contract's: a row in `near` is dropped from
+      `someWords` before anything (heading, count, hint, button) reads either.
+    - **The create hint names a near miss only** (`similar = near[0]`), never the first of several
+      some-words rows, which would point a new movement at an arbitrary one. It is visible and tied
+      to the button by `aria-describedby`: in multi mode the button sits above the list
+      (invariant 12), so the hint is what reaches a keyboard first.
+    - **The query stays in the picker** (P6). Its modules import only an allowlist, and a scan bans
+      network, router, storage, logging and `new RegExp`. It reaches its callers through
+      `createLabel` (every render, so it must be pure), `onQueryChange` (handed nothing) and, on a
+      tap, the deliberate create (`onCreate`, `onPick({ kind: 'typed' })`), which is the caller's
+      to send. `item-picker.test.tsx` holds that searching runs no action. ⚠️ It holds while the app
+      has no browser Sentry.
+    - **Cost:** `searchMovementOptions` over 500 options takes at most about 7.6 ms a call on a
+      desktop CPU (M1 Pro, Node 26, worst of eight queries: `kettelbell swingg`), on the deferred
+      value. Not measured on a phone; the spec's fallback (`near` after a pause) is not needed at
+      that figure.
 
-    ⚠️ **"Similar names" is interim.** The prototype (P0) owns the heading's final wording. Not
-    "Close spellings" (the ✕ and the last button say "Close"), not "Did you mean" (it tells a
-    correct new name it is a typo). ⚠️ **A short form can still be added as typed** next to the
-    movement it found (`db row` beside Dumbbell row): P1 pins that a short form never makes a name
-    "already listed", and changing that is the contract's, with the server's `existingItem`.
+    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. **Open after B1**, each with its
+    owner:
+    - the heading's wording, and what a mid-typo keystroke shows (`bulgara` finds nothing yet): P0;
+    - whether a short form's exact hit (`db row` beside Dumbbell row) withholds "use as typed", and
+      so whether the `KB` and `DB bench` aliases can retire (P3): the contract, with `existingItem`;
+    - a near hit through an alias shows its group tag, not "also called": the contract (the result
+      does not say which alias matched);
+    - "did you mean" on a new item's name: `PICK-2` (spec § Interactions).
 
 ## Traps
 
@@ -189,8 +200,8 @@ path and **creating** the deliberate one.
 
 ## What is NOT covered by jsdom — all PR 4, in a browser
 
-The component's 42 cases cover list composition, tag precedence, Enter semantics, the status shape,
-the footer's states and the two source scans. They deliberately **do not** claim:
+The component's cases cover list composition, tag precedence, Enter semantics, the status shape,
+the footer's states and the source scans. They deliberately **do not** claim:
 
 - any of Decision 8's **360px width arithmetic** — jsdom applies no Tailwind, so `min-h-12`, the tag
   wrap and "Overhead Shoulder Press" beside a group tag are all unmeasured here;

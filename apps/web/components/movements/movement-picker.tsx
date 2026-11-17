@@ -69,9 +69,16 @@ export type MultiPick = {
   readonly selected: readonly string[];
   /** `via` is `'enter'` for the search's Enter, where no row has focus to say what happened. */
   onToggle: (option: MovementOptionDTO, via?: 'tap' | 'enter') => void;
-  /** The typed text, trimmed (`''` from the plain "+ New item"). Never fired from Enter. */
+  /**
+   * The typed text, trimmed (`''` from the plain "+ New item"). Never fired from Enter. A person's
+   * deliberate create: from here the caller owns where the name goes (CAT-3 P6 is about the search).
+   */
   onCreate: (typed: string) => void;
-  /** The create button's words: `''` gives the plain one, a name gives "New item: “Bear Crawl”". */
+  /**
+   * The create button's words: `''` gives the plain one, a name gives "New item: “Bear Crawl”".
+   * ⚠️ **Called on every render with the live query, so it must be pure** (CAT-3 P6: the query
+   * never leaves the device). It is the one prop the search text reaches before a tap.
+   */
   createLabel: (typed: string) => string;
   /** Shown under the create button when nothing matches at all. */
   noMatchHint: string;
@@ -115,6 +122,7 @@ export type MovementPickerProps = {
   onReturned?: () => void;
 } & (
   | {
+      /** `typed` is a deliberate "use as typed" tap: the caller owns where the name goes (P6). */
       onPick: (
         picked: { kind: 'existing'; option: MovementOptionDTO } | { kind: 'typed'; name: string },
       ) => void;
@@ -320,8 +328,12 @@ export function MovementPicker({
   const someWords = result.someWords.map((m) => m.option).filter((o) => !nearIds.has(o.publicId));
   /** Anything listed for the query: what makes the create button the quiet one (UX2 B1, P5). */
   const hasCandidates = matches.length > 0 || near.length > 0 || someWords.length > 0;
-  /** The row the create hint names: the closest similar name, else the first some-words row. */
-  const similar = near[0] ?? someWords[0];
+  /**
+   * The row the create hint names: the closest similar name, and only that. A some-words row is not
+   * similar, and naming the first of several (by name) would point a new movement at an arbitrary
+   * one (review of B1: `zercher squat` named Back Squat).
+   */
+  const similar = near[0];
   // Enter picks `matches[0]` iff unambiguous. Two `exact` hits resolve to the first — catalog-first by
   // Decision 4's tie rule, which is also the row the status names. A similar name and a some-words
   // row NEVER pick (P5): a typo and Enter must not choose a guess.
@@ -349,13 +361,7 @@ export function MovementPicker({
     const count =
       matches.length > 0
         ? COPY.statusCount(matches.length)
-        : [
-            COPY.statusNoMatches,
-            near.length > 0 ? COPY.statusNear(near.length) : null,
-            someWords.length > 0 ? COPY.statusSomeWords(someWords.length) : null,
-          ]
-            .filter(Boolean)
-            .join(' ');
+        : COPY.statusNone(near.length, someWords.length);
     const reason =
       (result.exact || result.aliasHit) && matches[0]
         ? COPY.statusAlreadyListed(matches[0].name)
@@ -428,8 +434,8 @@ export function MovementPicker({
                 e.preventDefault();
                 if (!enterTarget) {
                   // Nothing to pick. On a phone the Search key still puts the keyboard away, so
-                  // the similar names it is covering show (UX panel, B1).
-                  if (!prefersKeyboardFocus && (near.length > 0 || someWords.length > 0)) {
+                  // the rows it is covering show: several matches, similar names, some-words.
+                  if (!prefersKeyboardFocus && hasCandidates) {
                     e.currentTarget.blur();
                   }
                   return;
@@ -514,10 +520,12 @@ export function MovementPicker({
                 >
                   {COPY.asTyped(deferredTrimmed)}
                 </Button>
-                <p id={TYPED_HINT_ID} className="text-muted-foreground text-xs">
+                {/* `wrap-anywhere`: the hint quotes the typed name, up to MOVEMENT_NAME_MAX with no
+                    space, and must wrap at 360px as the button above it does. */}
+                <p id={TYPED_HINT_ID} className="text-muted-foreground text-sm wrap-anywhere">
                   {typedNameIssue ??
                     (similar
-                      ? `${COPY.similarListed(similar.name, 'above')} ${COPY.asTypedHint(deferredTrimmed)}`
+                      ? COPY.asTypedHintNear(similar.name, deferredTrimmed)
                       : COPY.asTypedHint(deferredTrimmed))}
                 </p>
               </>
