@@ -6,21 +6,24 @@
 
 ## Where this sits
 
-- **Pillar:** privacy and operations (`PRIV-3`'s owner). **Milestone:** Beta 0, the fresh start
-  before FAM-1's trial week ([CAT-3 spec](../specs/cat-3-movement-library.md) → "The fresh start,
-  in order", step 7).
+- **Pillar:** privacy and operations (`PRIV-3`'s owner). **Milestone:**
+  [Beta 0](../milestones/beta-1.md), the fresh start before FAM-1's trial week
+  ([CAT-3 spec](../specs/cat-3-movement-library.md) → "The fresh start, in order", step 7).
 - **This PR:** the one tool that can make a household on purpose. The app cannot create one, and
-  the production seed stops writing one at `OPS-2` PR 1. After the fresh start has erased the seeded
-  household, this is how the household's adult accounts get a household to sign in to.
+  the production seed stops writing one at `OPS-2` PR 1. After the fresh start has erased the
+  seeded household, this is how the household's adult accounts get a household to sign in to.
 - **Next:** R0 (the one-shot erasure of the seeded household, after `PRIV-3` 2a), then R1 (the
   runbook section and step 5's correction), then R2, the fresh start itself, on the maintainer's go.
-- **Gated on:** nothing to build. It **must be merged before R2**. It touches two seam files
-  (`packages/db/scripts/corrections/registry.ts`, `packages/shared/src/seed-ids.ts`) and the
-  `db:verify` seams, so **the FAM-1 board gives it its turn**.
+- **Gated on:** nothing to build. It **must be merged before R2**, and **must not be applied in
+  production before `OPS-2` PR 1 is deployed** (D10). It edits seam files
+  (`packages/db/scripts/corrections/registry.ts`, `packages/shared/src/seed-ids.ts`,
+  `packages/db/scripts/verify.ts`, `packages/db/scripts/mutations/`), so **the FAM-1 board gives it
+  its turn**.
 
 _Roadmap alignment (2026-11-17): advances `PRIV-3` and `CAT-3` chunk RC; answers `ID-1`'s six
-keep-open items below (it writes `household_members`); gates R1 and R2; checked against the private
-roadmap, nothing else to add._
+keep-open items below (it writes `household_members`); an app path that creates a household belongs
+to the invite row in [beta-1.md](../milestones/beta-1.md) ("A new user gets a new, empty household"),
+not here; gates R1 and R2; checked against the private roadmap, nothing else to add._
 
 ## Goal
 
@@ -44,209 +47,346 @@ From the spec's RC row, verbatim:
 Done when:
 
 - `db:correct` lists `create-household-<date>`. Its dry run writes nothing and prints one line: how
-  many households it would create (1) and how many accounts it would bind.
+  many households it would create (1), and how many accounts it would bind.
 - `--apply` creates exactly one `households` row and one `household_members` row per account. Every
-  `public_id` is freshly minted, none is in `SEED_PUBLIC_IDS`, and every member's role is `owner`
+  `public_id` is freshly minted and none is in `SEED_PUBLIC_IDS`. Every member's role is `owner`
   (Q1).
-- A second `--apply` with the same accounts changes nothing and says so.
-- An account that is malformed, is the e2e fixture principal on a non-local database, is listed
-  twice, or already has a live membership makes the run **refuse and write nothing**. The refusal
-  names positions ("account 2 of 2"), never an id.
-- No line of its output, **on any path including a database error**, contains an input account id.
-- `household-claim-2026-10-25` refuses a household `public_id` in `SEED_PUBLIC_IDS` on a non-local
-  database, while the e2e harness, CI's smoke step and a developer's local claim keep working (D6).
-- `db:verify` proves that every household and profile the fixture seed writes is in
-  `SEED_PUBLIC_IDS`.
+- The run refuses and writes nothing when any account:
+  - is malformed;
+  - is listed twice;
+  - is the e2e fixture principal on a non-local database;
+  - already has a live membership (D4).
+
+  It also refuses when the target is the preview database (D5). A refusal names positions and
+  counts ("account 2 of 2"), never an id.
+
+- No line of its output, **on any path, a database error included**, contains an input account id.
+  That covers the message, the `cause` and the stack.
+- `household-claim-2026-10-25` refuses a household `public_id` that is in `SEED_PUBLIC_IDS` unless
+  the target is local or the preview database (D6). The e2e harness, CI's smoke step, a developer's
+  local claim and a preview claim keep working, and so does every `db:verify` case.
+- Each new refusal is proven **wired into its correction** in `db:verify`, not only unit-tested (D9).
+- `db:verify` holds the seed to `SEED_PUBLIC_IDS` in both directions.
 
 ## Design
 
-**D1. Input: the environment only, read through a hidden prompt.** The accounts come from
-`CREATE_HOUSEHOLD_CLERK_USER_IDS`, a space-separated list of `user_…` ids, which the runbook's step
-fills with `read -rs` and `export`, then `unset`s afterwards. This is the channel `PRIV-3` Q1 settled
-for erasure targets _(maintainer, 2026-11-17)_, and the reasoning behind `householdClaim` carries
-over: a command line is visible through `ps`, a process's environment only to its owner, and a Clerk
-id is a stable third-party account id for a named adult (`data-inventory.md` §1a). There is no flag
-and no `--household`: **the correction has no household input at all**, so it cannot be pointed at
-the wrong one.
+**D1. Input: the environment only, never exported.** The accounts come from one variable, named by an
+exported constant `CREATE_HOUSEHOLD_ACCOUNTS_ENV = 'CREATE_HOUSEHOLD_CLERK_USER_IDS'`. Its value is a
+list of `user_…` ids separated by whitespace. The runbook step (R1) reads it with
+`read -rs ids`, then passes it **on the one command**,
+`CREATE_HOUSEHOLD_CLERK_USER_IDS="$ids" pnpm --filter @mat-plan/db db:correct …`, then runs
+`unset ids`. This is `PRIV-3` D1's channel: the value is passed inline, never `export`ed, so later
+child processes of the shell never see it. A command line is visible through `ps`; a process's
+environment is readable only by its owner. A Clerk id is a stable third-party account id for a named
+adult (`data-inventory.md` §1a). There is no flag and **no household input at all**, so the
+correction cannot be pointed at the wrong household.
 
-**D2. The checks factored out of `householdClaim`, into a module of their own.** A NEW file,
-`packages/db/scripts/corrections/accounts.ts`, holds three pure functions, each with a unit test:
+**D2. What is factored out of `householdClaim`, and where it goes.** Everything is grouped by job,
+so that `PRIV-3` 2b reuses it rather than writing a second copy:
 
-- `parseAccountList(raw)` splits and trims the list. An empty list, or an id listed twice, is a
-  refusal.
-- `accountIssue(id, position)` returns the reason an id cannot be bound, or `null`: the `user_`
-  shape check, then `fixtureBindIsAllowed` (imported from `target-url.ts`, unchanged). Its message
-  names the position, never the id.
-- `isSeedPublicId(id)` reads `SEED_PUBLIC_IDS`.
+- **`packages/shared/src/clerk.ts` (NEW)** holds one bounded pattern,
+  `CLERK_USER_ID_PATTERN = /^user_[A-Za-z0-9]{1,64}$/`. Both `householdClaim`'s shape check (today
+  `startsWith('user_')`) and the correction use it, and so does `apps/web/lib/env.ts`'s
+  `BYPASS_ID_RE`. That makes one rule out of three. The length bound is the one `env.ts`'s own note
+  asks for, and a comma-pasted `user_a,user_b` or a zero-width character now fails the pattern.
+- **`packages/db/scripts/corrections/target-url.ts` (EDIT)** gains:
+  - `correctionTargetIsLocal()`, which is `isLocalDbHost(correctionTargetUrl() ?? '')`;
+  - `correctionTargetIsPreview()`, which is `namesPreviewDatabase(databaseNameOf(url))`;
+  - `seedHouseholdClaimIsAllowed(publicId)` (D6).
 
-`householdClaim` calls `accountIssue` for its shape and fixture checks instead of its inline
-`assert` and `if`. Its own messages and its full-id dry-run line stay as they are, because they are
-its documented behaviour (rule 9's redaction note covers them), and it gains D6. The new correction
-calls the same functions. That is the "factored out" the spec asks for, with one definition of what
-a bindable account is.
+  `fixtureBindIsAllowed` now calls `correctionTargetIsLocal()`. Their tests go in
+  `target-url.test.ts`, which already holds the local-`DATABASE_URL`-beside-production-unpooled
+  case.
 
-**D3. One transaction, the check inside it, and a database backstop.** `run` opens one
-`db.transaction` (README rule 7). Inside it:
+- **`packages/db/scripts/corrections/accounts.ts` (NEW)** holds three things:
+  - `parseAccountList(raw)` splits on `/\s+/`. It refuses an empty list and a repeated id.
+  - `accountIssue(id)` returns a **reason code**, `'shape' | 'fixture-remote' | null`. It checks the
+    pattern, then `fixtureBindIsAllowed`.
+  - `liveMembershipsOf(exec, ids)` is the membership read `householdClaim` hand-writes, for a list.
+    Its predicate repeats the partial index's own (`clerk_user_id IN … AND deleted_at IS NULL`).
+    It deliberately does **not** use `membershipHousehold`
+    (`packages/db/src/queries/household-membership.ts`): that query also requires the household to
+    be live and stops at two rows, so a member of a soft-deleted household would pass the check and
+    then fail on the index.
 
-1. It counts the live `household_members` rows whose `clerk_user_id` is in the list. If any exist,
-   it branches as D4 says.
-2. It inserts the household:
-   `{ publicId: newId(), name: HOUSEHOLD_DEFAULT_NAME, synthetic: false }`.
+  Each correction renders the reason code in its own words. `createHousehold` gives positions only.
+  `householdClaim` keeps its current fixture text (`verify.ts` (6f) matches it). Its shape message
+  drops the echoed value, since that is most likely a pasted email, and keeps the "should look like"
+  wording that (6b) matches. It also keeps its current order, fixture check first.
+
+- **`packages/db/scripts/corrections/redact.ts` (NEW)** holds two things:
+  - `CorrectionRefusal`, an `Error` subclass whose message is built only from counts and positions.
+  - `redactedFailure(name, err)`. It returns `CorrectionRefusal`s unchanged. Every other error
+    becomes `new Error(`${name} failed and rolled back: ${code} ${constraint}`)`, with no `cause`.
+    `code` and `constraint` are read from `err.cause`, because `DrizzleQueryError` has no `code` of
+    its own. Neither field holds a bound parameter, and the constraint name is what distinguishes a
+    lost race (`uq_household_members_clerk_user`) from anything else. Nothing else is read:
+    `cause.detail` carries `Key (clerk_user_id)=(user_…)`. This is the shape `PRIV-3` 2b's
+    redacted catch planned (code plus constraint). **2b adopts this module and does not write its
+    own**, and R0 records that in `PRIV-3`'s plan.
+
+`SEED_PUBLIC_IDS` is read as `SEED_PUBLIC_IDS.has(id)`, with no wrapper, as every
+`MOVEMENT_SEED_PUBLIC_IDS` reader does.
+
+**D3. One transaction, the check inside it, and the index behind it.** The whole body of `run`, the
+dry run's reads included, sits in one `try` whose `catch` is `redactedFailure` (D2). Inside it, one
+`db.transaction` (README rule 7) does three things:
+
+1. `liveMembershipsOf(tx, ids)`. If it finds any, the run refuses (D4).
+2. It inserts the household, `{ publicId: newId(), name: HOUSEHOLD_DEFAULT_NAME }`.
+   ⚠️ **`synthetic` is not named**: the column defaults to `false`, and
+   `apps/web/lib/household-synthetic-is-dark.test.ts` fails any script that names it.
 3. It inserts one member per account through `insertHouseholdMember(tx, scope, …)`, the writer
    `householdClaim` uses, with `scope = householdScopeForScript(<the new id>)`.
 
-Two concurrent runs could both pass step 1. The partial unique index on live
-`household_members.clerk_user_id` (`schema.ts` → `householdMembers`) then fails the second run with
-`23505`, and its transaction rolls back whole. So the check is the readable refusal, and the index
-is what makes it true. `db:verify` proves the index refuses a second live membership (it does today,
-for AUTH-1). This plan adds no lock.
+The dry run runs step 1 and stops. If two runs overlap on an account, both pass step 1. The second
+then blocks on the first's uncommitted entry in the partial unique index
+`uq_household_members_clerk_user`, fails `23505` when the first commits, and rolls back whole,
+household row included. Its redacted message names the constraint. **PGlite has one connection**, so
+`db:verify` proves the index's serial refusal (as it does today for AUTH-1), not the race itself. No
+lock is added.
 
-**D4. A second run: done means "no change", anything partial means refuse.** README rule 2 asks for
-re-runs to be no-ops, but this correction has no "value corrected from" to guard on, so the state of
-the accounts is the guard:
+**D4. Any live membership means refuse, and a second run is a refusal that writes nothing.** This
+correction has nothing it corrects _from_, so the accounts are the guard. If any listed account has
+a live membership, the run throws a `CorrectionRefusal`, for example: _"2 of 2 accounts already have
+a live membership; nothing written. If an earlier `--apply` of this correction succeeded, this step
+is done."_ That meets README rule 2's purpose: a re-run can make no second write. It needs no extra
+query to recognise a finished run, so no state can be reported as success by mistake (a
+soft-deleted household, a household with other members, the seed household). The runner prints a
+thrown refusal as a refusal, so it never shows "✓ applied 1 change(s)".
 
-| What the count finds                                                                                                                       | Result                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| No account has a live membership                                                                                                           | Create (dry run: "would create")                   |
-| Every account is a live member of **one** household, that household's live members are exactly these accounts, and its id is not a seed id | `already done: 1 household, N accounts; no change` |
-| Anything else (some bound, bound to two households, or a household with other members too)                                                 | Refuse, with counts                                |
+**D5. The target is checked as well as printed.** The runner already prints `target: <host>`. The
+correction also refuses on two targets: the preview database (`correctionTargetIsPreview()`), since
+that estate is seed-only and must hold no real account id, and the fixture principal on any
+non-local target (D2). The production database is named `mat_plan` like a local one, so it cannot
+be recognised positively. The operator reading the host line is the remaining check, and R1's
+runbook step says so.
 
-Since every write happens in one transaction, the third row cannot come from a half-finished run of
-this correction. It means an operator error or another writer, and that must not read like success.
+**D6. `householdClaim` refuses a seed household id, except where the seed's fixtures may live.** The
+spec says "refusal of any id in it". Read literally, that breaks callers that claim
+`SEED_HOUSEHOLD_PUBLIC_ID` on purpose:
 
-**D5. Output: counts only, and errors stripped of their parameters.** Every line is a count or a
-position. The spec requires it (R2: _"prints counts only (no account id, no household id)"_), and
-unlike `householdClaim` the operator here has nothing to check an id against except the value they
-just typed. ⚠️ **A database error would leak anyway:** drizzle's `DrizzleQueryError` carries the
-bound parameters in its message, and `correct.ts` prints a thrown error's message. `PRIV-3` 2b
-builds the runner-wide redacted catch for `kind: 'erasure'`, but RC lands before 2b. So `run` wraps
-its transaction in a `try`/`catch` that rethrows
-`new Error('create-household failed and rolled back: <SQLSTATE or the error class>')`, **without**
-`cause`. A unit test throws a `DrizzleQueryError`-shaped error holding an id and asserts that the
-rethrown message does not contain it.
+- `linkFixtureMember` (`apps/web/scripts/embedded-pg.ts`);
+- CI's smoke step (`ci.yml`);
+- a developer's local claim (runbooks);
+- a claim on the preview database, the only way anyone gets a membership there since AUTH-1 1c-4;
+- `db:verify` (6e), which claims the seeded household and, in CI, runs with **no** database URL
+  set.
 
-**D6. `householdClaim` refuses a seed household id, on a non-local database only.** The spec says
-"refusal of any id in it" with no exception, but read literally that **breaks three callers today**.
-`linkFixtureMember` (`apps/web/scripts/embedded-pg.ts`), CI's smoke step (`ci.yml`) and the
-runbook's developer step all claim `SEED_HOUSEHOLD_PUBLIC_ID` on a local database, on purpose. So the
-refusal mirrors `fixtureBindIsAllowed`'s rule: a seed household id may be claimed only when
-`isLocalDbHost(correctionTargetUrl())` is true. It is one more pure function in `accounts.ts`, with
-its unit tests driving the same environments `target-url.test.ts` uses, the
-local-`DATABASE_URL`-beside-production-unpooled case included. In production this means nobody can
-bind an account to the seeded household again, before or after the fresh start. Rows that already
-exist are unaffected. (Q2 asks the roadmap thread to confirm this reading.)
+So `seedHouseholdClaimIsAllowed(publicId)` is true unless the id is in `SEED_PUBLIC_IDS` **and** the
+target is neither local nor the preview. That mirrors the rule `seed.ts` already applies to fixtures
+(`namesPreviewDatabase`). It runs first, beside the fixture check and before the membership read. Its
+message names no id. (6e) is pointed at a second, non-seed household, so its "bound elsewhere"
+assertion no longer depends on the environment. The result: no account can be bound to the seeded
+household in production again, before or after the fresh start. Existing rows are unaffected. Q2
+asks the roadmap thread to confirm this reading.
 
-**D7. `SEED_PUBLIC_IDS`, and the proof that keeps it whole.** The set is added to
-`packages/shared/src/seed-ids.ts`: the household and the three profiles, as
-`ReadonlySet<string>`, the pattern of `MOVEMENT_SEED_PUBLIC_IDS`. Movement ids stay in their own
-set. A `db:verify` case, in `packages/db/scripts/verify/erasure.ts` as a new section, seeds with
-fixtures and asserts that every `households.public_id` and `profiles.public_id` the seed wrote is in
-the set, so a fourth seeded athlete cannot slip past. A mutation proves it (D9). This is the
-assertion `PRIV-3`'s plan put in 2b (2S9); R0 moves the set here, so its proof comes with it.
+**D7. `SEED_PUBLIC_IDS`, built from the existing constants, held equal to what the seed writes.**
+`seed-ids.ts` gains
+`SEED_PUBLIC_IDS: ReadonlySet<string> = new Set([SEED_HOUSEHOLD_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_3_PUBLIC_ID])`.
+No UUID is re-typed. Movement ids keep their own set. The proof goes where the seed-only state still
+exists: `verify.ts`'s post-seed snapshot (`households`, `profiles`, about line 240). Its hand-written
+list of three becomes "the household and profile `public_id`s, as a set, equal `SEED_PUBLIC_IDS`",
+checked in both directions. That is one statement of what the seed writes, not three, and an extra
+seeded athlete fails it. (`verify/erasure.ts` runs on a database that is no longer pristine, so a
+proof there could only be vacuous or false.)
 
 **D8. The household's name: a fixed, neutral constant.** `households.name` is `NOT NULL` and is read
-nowhere in `apps/` or `packages/db/src` (checked: no reader). The seed writes the literal `'Home'`.
-This PR makes that the second writer, so the literal becomes `HOUSEHOLD_DEFAULT_NAME = 'Home'` in
-`packages/shared/src/seed-ids.ts`, and both writers import it. No name is asked for, so no personal
-data is typed in.
+nowhere in `apps/` or `packages/db/src`. `HOUSEHOLD_DEFAULT_NAME = 'Home'` goes in
+`packages/shared/src/enums.ts`, beside `HOUSEHOLD_ROLE`, because it names real households, not seed
+rows. The correction imports it. **`seed.ts` is not edited**: `OPS-2` PR 1 rewrites that insert,
+and it adopts the constant then. That is a pass-back to `OPS-2`. No name is asked for, so no
+personal data is typed in.
 
-**D9. Mutations, from `PRIV-3`'s block (271 onwards, after PR 1's 260–270):**
+**D9. Proofs of the wiring, and five mutations.** These are `db:verify` cases beside the AUTH-1 1b
+block in `verify.ts`, where the claim correction's composition proofs (6a–6f) already live. Each
+pins the environment in a `try`/`finally`, through a local `withEnv(vars, fn)` (its third use in
+that file). Each `run` goes through the harness's `orFail`, so a thrown error fails a named
+assertion:
 
-- 271 `create-skips-the-membership-check`: the count in D3 is removed. The second-run proof goes
-  red: it creates a second household.
-- 272 `create-binds-as-member`: the role is changed. The role assertion goes red.
-- 273 `create-reuses-a-seed-id`: the household `publicId` is set to `SEED_HOUSEHOLD_PUBLIC_ID`. The
-  proof that no new id is in the set goes red.
-- 274 `seed-ids-forget-a-profile`: a profile is removed from `SEED_PUBLIC_IDS`. D7's proof goes red.
-- 275 `create-prints-an-id`: one account id is added to the count line. The "no input id in the
-  output" proof goes red.
+- (6g) `householdClaim` on `SEED_HOUSEHOLD_PUBLIC_ID`, with both database URLs removed, refuses with
+  D6's message.
+- (6h) `createHousehold`: the dry run writes nothing, and apply then creates 1 household and 2 owner
+  members, none with a seed id.
+- (6i) A second apply with the same accounts refuses with D4's counts.
+- (6j) `[a fixture-shaped real id, E2E_SESSION_BYPASS_USER]` with both URLs removed refuses at
+  position 2 and writes nothing.
+- (6k) No line, message, `cause` or stack from (6h)–(6j) contains either input id.
 
-Each `.expect` names the first assertion it fails, as PR 1's do. D2's, D5's and D6's guards are
-unit-tested in vitest, which the mutation gate does not cover.
+Mutations, `PRIV-3`'s block from 271 (after PR 1's 260–270). Each `.expect` names the first
+assertion it fails:
+
+- 271 `create-skips-the-membership-check`: the second apply now hits `23505` and throws the redacted
+  error instead of D4's refusal. **(6i) goes red.**
+- 272 `create-skips-the-account-check`: the `accountIssue` call is removed from `createHousehold`.
+  **(6j) goes red.**
+- 273 `claim-allows-a-seed-household`: the D6 call is removed from `householdClaim`. **(6g) goes
+  red.**
+- 274 `seed-ids-forget-a-profile`: a profile is removed from `SEED_PUBLIC_IDS`. **D7's equality goes
+  red.**
+- 275 `create-prints-an-id`: one input id is appended to the count line. **(6k) goes red.**
+
+The catch's wiring is proven in vitest, because `db:verify` cannot force a database error past the
+count. `accounts.test.ts` calls `createHousehold.run` with a stub whose `transaction` rejects with a
+real `DrizzleQueryError` (from `drizzle-orm`) wrapping a pg-shaped `23505` that carries `detail`. It
+asserts the message, `cause` and stack contain no input id. Deleting the `try` turns it red.
+
+**D10. Not before `OPS-2` PR 1.** Until `OPS-2` PR 1 is deployed, `seed.ts` skips its household
+insert whenever a live household exists, then throws _"refusing to seed into a household this seed
+does not own"_. After the erasure and this correction, every `migrate.yml` run would therefore fail
+its seed, before the movement catalog is written. So the correction's docblock and R1's runbook step
+both say that `--apply` in production comes only after `OPS-2` PR 1 is deployed. The spec's
+preconditions already require it; this repeats it where the operator reads.
 
 ## File-by-file
 
-| Path                                                     | Change | What & why                                                                                                                                                                          |
-| -------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/scripts/corrections/accounts.ts`            | NEW    | `parseAccountList`, `accountIssue`, `isSeedPublicId`, `seedHouseholdClaimIsAllowed`, `redactedFailure` (D2, D5, D6)                                                                 |
-| `packages/db/scripts/corrections/accounts.test.ts`       | NEW    | Unit tests for each, including the mixed-environment case and the redaction                                                                                                         |
-| `packages/db/scripts/corrections/registry.ts` (**seam**) | EDIT   | `createHousehold` entry (D1, D3 to D5); `householdClaim` calls `accountIssue` and gains D6; both added to `CORRECTIONS`                                                             |
-| `packages/shared/src/seed-ids.ts` (**seam**)             | EDIT   | `SEED_PUBLIC_IDS`, `HOUSEHOLD_DEFAULT_NAME` (D7, D8)                                                                                                                                |
-| `packages/db/src/seed.ts` (**seam**)                     | EDIT   | `'Home'` becomes `HOUSEHOLD_DEFAULT_NAME`: one line                                                                                                                                 |
-| `packages/db/scripts/verify/erasure.ts`                  | EDIT   | The RC section: dry run writes nothing; apply creates 1 and N; second run no change; bound elsewhere refuses and writes nothing; no input id in any line; D7's seed-set proof       |
-| `packages/db/scripts/verify.ts` (**seam**)               | EDIT   | AUTH-1 1b's assertion text "the claim correction is the only writer" becomes "the two account corrections are the only writers" (its check is unchanged: the seed writes no member) |
-| `packages/db/scripts/mutations/271…275`                  | NEW    | D9, plus the README rows                                                                                                                                                            |
-| `packages/db/scripts/corrections/README.md`              | EDIT   | The Applied row (`pending`, with no target, like `household-claim`'s); a note that neither correction's targets are ever recorded                                                   |
-| `docs/privacy/data-inventory.md`                         | EDIT   | §1a: a second path writes `household_members.clerk_user_id`, run by the operator, input from the environment, output counts only                                                    |
-| `docs/features/erasure.md`                               | EDIT   | The guide that owns `verify/erasure.ts`: the RC section and why it lives there                                                                                                      |
-| `docs/plan.md`                                           | EDIT   | `PRIV-3`'s row links this plan                                                                                                                                                      |
-| `docs/changelog/<date>-db-priv-3-rc-create-household.md` | NEW    | The fragment                                                                                                                                                                        |
+| Path                                                               | Change | What & why                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/clerk.ts` (+ `index.ts` export)               | NEW    | `CLERK_USER_ID_PATTERN` (D2)                                                                                                                                                                                                                                                                              |
+| `packages/shared/src/clerk.test.ts`                                | NEW    | Pattern cases: a comma, a tab, a zero-width character, 65 characters, a good id                                                                                                                                                                                                                           |
+| `packages/shared/src/enums.ts`                                     | EDIT   | `HOUSEHOLD_DEFAULT_NAME` (D8). Its "first caller at COACH-1" note is untouched                                                                                                                                                                                                                            |
+| `packages/shared/src/seed-ids.ts` (**seam**)                       | EDIT   | `SEED_PUBLIC_IDS` (D7). The `("Home")` prose names the constant                                                                                                                                                                                                                                           |
+| `apps/web/lib/env.ts`                                              | EDIT   | `BYPASS_ID_RE` becomes the shared pattern: one line                                                                                                                                                                                                                                                       |
+| `packages/db/scripts/corrections/accounts.ts` + `.test.ts`         | NEW    | D2's three functions, `CREATE_HOUSEHOLD_ACCOUNTS_ENV`, and the vitest catch-wiring case (D9)                                                                                                                                                                                                              |
+| `packages/db/scripts/corrections/redact.ts` + `.test.ts`           | NEW    | `CorrectionRefusal`, `redactedFailure` (D2)                                                                                                                                                                                                                                                               |
+| `packages/db/scripts/corrections/target-url.ts` + `.test.ts`       | EDIT   | `correctionTargetIsLocal`, `correctionTargetIsPreview`, `seedHouseholdClaimIsAllowed`; `fixtureBindIsAllowed` reuses the first                                                                                                                                                                            |
+| `packages/db/scripts/corrections/registry.ts` (**seam**)           | EDIT   | `createHousehold` (D1, D3–D5, D10; its docblock shows the inline `read -rs` form). `householdClaim` uses the pattern, `accountIssue` and D6. "This is the only writer of `household_members`" and the "PRIV-3 converts this entry to flags" promise are corrected                                         |
+| `packages/db/scripts/correct.ts`                                   | EDIT   | One comment: "no correction binds one" has been false since `householdClaim`                                                                                                                                                                                                                              |
+| `packages/db/scripts/verify.ts` (**seam**)                         | EDIT   | D7's equality; (6e) on a non-seed household; (6g)–(6k); `withEnv`; AUTH-1 1b's "the claim correction is the only writer" comment and message become "the two account corrections"                                                                                                                         |
+| `packages/db/scripts/mutations/271…275` + README rows (**seam**)   | NEW    | D9                                                                                                                                                                                                                                                                                                        |
+| `packages/db/src/schema.ts` (**seam**), `householdMembers` comment | EDIT   | Comment only: "only writer" prose, and the ID-1 pointer (item 3, below)                                                                                                                                                                                                                                   |
+| `apps/web/scripts/embedded-pg.ts`                                  | EDIT   | Docblock: the "a second writer would make … false" argument is restated now that a second writer exists                                                                                                                                                                                                   |
+| `apps/web/test/fixture-member-is-contained.test.ts`                | EDIT   | Docblock, and a new `it`: no workflow names `db:correct create-household-` or `CREATE_HOUSEHOLD_CLERK_USER_IDS`, the name derived from the registry                                                                                                                                                       |
+| `packages/db/scripts/corrections/README.md`                        | EDIT   | The Applied row (`pending`). The note becomes "neither target nor count is recorded, and nothing goes to the deletion ledger". Lines 80–83's flags promise becomes a dated amendment: the environment is the settled channel (`PRIV-3` Q1), which moves this amendment out of 2b                          |
+| `docs/privacy/data-inventory.md`                                   | EDIT   | §1a: a second writer of `household_members.clerk_user_id` (operator-run, environment input, counts-only output); the `households` row becomes "a fixed `'Home'` from every writer; no app writer or reader", and `households.name` joins re-review trigger 3's unused columns; the dated §1a re-read line |
+| `docs/plan.md`                                                     | EDIT   | `PRIV-3`'s row links this plan and says it now hosts the household-creating correction too                                                                                                                                                                                                                |
+| `docs/changelog/<date>-db-priv-3-rc-create-household.md`           | NEW    | The fragment                                                                                                                                                                                                                                                                                              |
 
-**Why the proofs live in `verify/erasure.ts` and not a sixth module.** The harness ruling for
-`PRIV-3` PR 1 set five modules with erasure last, and a sixth needs lane A's agreement. The fresh
-start is `PRIV-3`'s, and this correction exists only so that an erased household can be replaced.
-The section is headed as such. (The alternative is a `verify/households.ts` module, if lane A would
-rather keep `erasure.ts` to deletion.)
+**Size:** about 370 lines.
+
+- Code, about 230: the three modules with their tests about 140, the `createHousehold` entry with
+  its docblock about 70, and the `verify.ts` cases about 70, less the lines they replace.
+- Five mutations, about 80.
+- Docs, about 60.
+
+## What R1 must carry (the runbook step this correction runs in)
+
+- The ids come from **the production instance's Clerk dashboard, read at step 7**. Not from a query
+  before R0 (the result would land in `~/.psql_history` or a note), and not from a development
+  instance, whose ids are a separate user pool.
+- They are entered only through `read -rs`, then passed inline on the one command, then `unset`.
+  Never the `VAR=… cmd` form with the value typed in (it lands in `~/.zsh_history`), and never a file.
+  ⚠️ The existing claim recipe (`runbooks.md`, the AUTH-1 checklist) types the id inline; R1 does not
+  copy it.
+- Before the dry run, the operator says how many accounts they meant, and checks that the dry run's
+  count matches. The output is counts only, so it is safe to paste once the `target:` line is
+  trimmed.
+- `OPS-2` PR 1 is deployed (D10). The `target:` host is production's.
 
 ## Test plan
 
-- **Unit (vitest):** `accounts.test.ts` covers each function: an empty list; a repeated id; a
-  `user_` shape refusal; the fixture principal locally (allowed) and remotely (refused); a seed
-  household id locally (allowed) and on production's unpooled URL beside a local `DATABASE_URL`
-  (refused); a redacted failure that contains no id and has no `cause`.
-- **`db:verify` (PGlite), in `erasure.ts`'s RC section, inside `rolledBack`:** a dry run leaves both
-  table counts equal; apply with two fixture-shaped ids creates 1 household and 2 owner members with
-  no seed id; a second apply returns "no change"; a third run with one of the two ids plus a new one
-  refuses and writes nothing; the line set contains neither input id; D7's seed-set proof.
-- **Mutations:** 271 to 275 RED under `pnpm db:mutations`.
+- **Unit (vitest):**
+  - `clerk.test.ts`: the pattern.
+  - `accounts.test.ts`: the list parsing (empty, repeated id, whitespace kinds); `accountIssue`'s
+    codes; the catch-wiring case (D9).
+  - `redact.test.ts`: a refusal passes through; a foreign error loses every id and its `cause`.
+  - `target-url.test.ts`: the three predicates, the mixed-environment case and a preview URL.
+  - `fixture-member-is-contained.test.ts`: the workflow pin.
+
+  Fixture account literals are visibly synthetic (`user_rcfixture000a`, `user_rcfixture000b`), never
+  copied from any dashboard.
+
+- **`db:verify` (PGlite):** D7's equality; (6e) re-pointed; (6g)–(6k).
+- **Mutations:** 271–275 RED under `pnpm db:mutations`.
 - **The harness still claims:** `pnpm e2e:local`, because D6 touches the path `linkFixtureMember`
   takes. CI's smoke step is the second witness.
 - `pnpm verify` and `pnpm status:check` before the PR.
 
 ## Risks / rollback
 
-- **The correction runs against the wrong database.** It goes through `correctionTargetUrl`, like
-  every correction, and its dry run prints the target host (the runner already does). The runbook
-  (R1) has the operator read that line before `--apply`. The fixture principal cannot be bound
-  remotely (D2).
-- **An id leaks into a public log.** Production runs are by hand, never in CI. The output is counts
-  only and errors are stripped (D5), and a mutation and a unit test pin both.
-- **D6 breaks the e2e harness.** The local exception is the whole design, and `e2e:local` plus CI's
-  smoke step prove it before merge.
-- **Two runs at once.** The unique index rolls one back (D3).
-- **Rollback:** it is a new correction. Revert the PR. A household it already created is deleted by
-  `PRIV-3`'s erasure, not by hand.
+- **The wrong target:** the correction refuses the preview (D5). The fixture principal cannot be
+  bound remotely (D2). The operator reads `target:` before `--apply`. Production cannot be
+  recognised by its database name, so that last check is a person's.
+- **An id in a public log:**
+  - Production runs are by hand, and the workflow pin stops a CI step from running this correction.
+  - The output is counts only, and errors are redacted (D2, D3), with (6k), mutation 275 and the
+    vitest wiring case behind both.
+- **D6 breaks a caller:** the exception covers local and preview; (6e) no longer depends on the
+  environment; `e2e:local` and CI's smoke prove the harness.
+- **The seed throws after the fresh start:** D10.
+- **Two runs at once:** the index rolls one back (D3).
+- **Rollback:** this is a new correction, so revert the PR. A household it already created is
+  removed by `PRIV-3`'s erasure, not by hand.
 
 ## Out of scope
 
-- Any app path that creates a household (no backlog row asks for one in Beta 0).
-- Inviting or removing a member later, and any role other than `owner` (`COACH-1` gives `member`
-  its first caller).
-- The runbook section that runs this (R1) and the erasure that comes before it (R0).
-- Converting `householdClaim` to flags (`PRIV-3` Q1 settled on the environment).
+- An app path that creates a household: the invite row in [beta-1.md](../milestones/beta-1.md).
+- Inviting or removing a member later, and any role but `owner` (`COACH-1` gives `member` its first
+  caller).
+- The runbook section (R1) and the erasure before it (R0).
+- `householdClaim`'s own read-then-insert outside a transaction. Under a concurrent claim its
+  `23505` prints parameters, and that is for `PRIV-3` 2b's runner-wide catch, which adopts
+  `redact.ts`.
 
 ## Open questions
 
 - **Q1 (the maintainer's, through the roadmap thread):** what role does each account get?
   **Recommended: `owner` for all.** The authority model is "anyone in the household records and
-  corrects; the owner decides who belongs to it" (`ID-1`, item 5's note), the app never branches on
-  role today, and `member` has no defined meaning until `COACH-1`. The alternative is the first
-  account `owner` and the rest `member`, which would give `member` a meaning nobody has designed.
-- **Q2 (the roadmap thread's, a reading of the spec):** is D6's local-only exception the intended
-  meaning of "refusal of any id in it"? A literal reading breaks the e2e harness, CI's smoke and the
-  developer's claim.
+  corrects; the owner decides who belongs to it" (`ID-1`, item 5's note). The app never branches on
+  role today, and `member` has no defined meaning until `COACH-1`. The alternative, the first account
+  `owner` and the rest `member`, would give `member` a meaning nobody has designed.
+- **Q2 (the roadmap thread's, a reading of the spec):** is D6, which refuses a seed household id
+  except on a local or preview target, the meaning of "refusal of any id in it"? A literal reading
+  breaks the e2e harness, CI's smoke, the developer's claim, the preview's claim and a `db:verify`
+  case.
 
 ## ID-1's six keep-open items
 
-| #   | Item                                                | This plan                                                                                                                                               |
-| --- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | The principal is a login, never a profile           | Binds logins to a household. Writes no profile and ties none to a login                                                                                 |
-| 2   | Every access decision through `getHouseholdScope()` | No access decision here: an operator script. The app's resolver is unchanged                                                                            |
-| 3   | Two memberships throwing is not the model           | It refuses an account with a live membership because the unique index would anyway. It assumes nothing about one household per person beyond that index |
-| 4   | Nothing pins an athlete to a household              | Creates no profile and no `(household_id, profile)` key                                                                                                 |
-| 5   | No age-based permission logic                       | None: roles only                                                                                                                                        |
-| 6   | Roles stay a const plus a CHECK                     | Uses `HOUSEHOLD_ROLE.owner` and adds no role                                                                                                            |
+| #   | Item                                                | This plan                                                                                                                                                                                                                                                                                                           |
+| --- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | The principal is a login, never a profile           | Binds logins to a household. It writes no profile and ties none to a login                                                                                                                                                                                                                                          |
+| 2   | Every access decision through `getHouseholdScope()` | No access decision here: an operator script. The app's resolver is unchanged                                                                                                                                                                                                                                        |
+| 3   | Two memberships throwing is not the model           | The refusal is **policy**: an operator script never gives a bound account a second household. Only D3's race backstop relies on the partial unique index. If ID-1 relaxes that index (guardians, coaches), this correction is revisited, and a one-line pointer in `schema.ts`'s `householdMembers` comment says so |
+| 4   | Nothing pins an athlete to a household              | It creates no profile and no `(household_id, profile)` key                                                                                                                                                                                                                                                          |
+| 5   | No age-based permission logic                       | None: roles only                                                                                                                                                                                                                                                                                                    |
+| 6   | Roles stay a const plus a CHECK                     | It uses `HOUSEHOLD_ROLE.owner` and adds no role                                                                                                                                                                                                                                                                     |
 
 ## Review-response log (adversarial panel)
 
-_Pending._
+> Panel cost: correctness 120k · 5m58s, scope 77k · 3m09s, architecture 112k · 4m53s, reuse 110k ·
+> 4m45s, security 102k · 5m02s, privacy 89k · 4m14s, DB-safety 115k · 5m15s.
+> Models: high-stakes (it writes sign-in accounts in production) · every lens: opus, under the Fable
+> spend cap until 2026-11-19 03:00 ET.
+
+Lenses: C correctness, S scope, A architecture, R reuse, X security, P privacy, D DB-safety.
+
+| #   | Lens          | Critique (short)                                                                                                                                                  | Verdict                | Resolution                                                                                                                                                                                      |
+| --- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | A, D          | `synthetic: false` fails `household-synthetic-is-dark.test.ts`                                                                                                    | **accepted**           | D3: the field is omitted; the column defaults to `false`                                                                                                                                        |
+| B2  | X, A, D, C    | Both new refusals were unit-tested only; deleting a call leaves everything green ((6f)'s lesson)                                                                  | **accepted**           | D9: (6g) and (6j) in `db:verify`, mutations 272 and 273; the catch's wiring in vitest                                                                                                           |
+| B3  | C, X, D       | D6 breaks `db:verify` (6e) in CI (no URL set, so non-local) and shuts off preview claims                                                                          | **accepted**           | D6: allowed on local or preview, run first; (6e) re-pointed at a non-seed household; Q2 names every caller                                                                                      |
+| 1   | C, X, A, D, P | D5's catch rewrites the correction's own refusals; SQLSTATE is on `cause`; `detail` carries the id                                                                | **accepted**           | D2: `CorrectionRefusal` passes through; code and constraint only, read from `cause`; no `detail`, no `cause`                                                                                    |
+| 2   | C             | The catch must cover the dry run's reads too                                                                                                                      | **accepted**           | D3: one `try` around the whole body                                                                                                                                                             |
+| 3   | P, R, D       | The redacted message drops what makes a failure diagnosable; use 2b's shape                                                                                       | **accepted**           | D2: code plus constraint, 2b's planned shape                                                                                                                                                    |
+| 4   | C, X, D, S    | Mutations 271 and 273 would fail on a thrown error, not on the named assertion                                                                                    | **accepted**           | D9: `orFail` throughout; 271 re-described; 273 replaced (a seed id as the household's id is a change nobody makes by accident)                                                                  |
+| 5   | S             | Five mutations is more than the safety needs; cut the role and seed-id-reuse ones                                                                                 | **accepted, re-spent** | The two cut. Their slots now prove the two wiring refusals, which the panel found unproven (B2). Still five                                                                                     |
+| 6   | S, C, D       | D4's "already done" branch: extra query, untested conditions, a soft-deleted household reads as done; the runner prints "applied 1 change"                        | **accepted**           | D4: any live membership refuses, with a message that says a finished run looks like this                                                                                                        |
+| 7   | C, R, A, D    | D7's proof cannot see the seed's writes on a non-pristine database; it duplicates `verify.ts`'s snapshot list                                                     | **accepted**           | D7: `verify.ts`'s snapshot list becomes equality with the set, built from the existing constants                                                                                                |
+| 8   | R, A, S       | `accounts.ts` mixed three jobs, two of them 2b's; `isSeedPublicId` wraps `.has`                                                                                   | **accepted**           | D2: `redact.ts`, `target-url.ts` and `accounts.ts` by job; 2b adopts `redact.ts`; no wrapper                                                                                                    |
+| 9   | R, S, A, P    | `accountIssue`'s positional messages contradicted "householdClaim's messages stay"; the order differs                                                             | **accepted**           | D2: a reason code each caller renders; the claim keeps its order and the text (6b) and (6f) match; its echoed value is dropped                                                                  |
+| 10  | R             | The membership read is the part to factor out; don't use `membershipHousehold`                                                                                    | **accepted**           | D2: `liveMembershipsOf`, with why `membershipHousehold` is wrong here                                                                                                                           |
+| 11  | X, C          | `startsWith('user_')` lets a comma-pasted pair through; `env.ts` has a stricter rule                                                                              | **accepted**           | D2: one bounded shared pattern, used in three places; split on `/\s+/`                                                                                                                          |
+| 12  | X             | A wrong-target run puts real ids into the preview estate                                                                                                          | **accepted, narrowed** | D5: the preview is refused by name. `EXPECTED_DB_ENV` was not added: production cannot be confirmed positively by name either, so a second variable would add an input without a positive check |
+| 13  | X             | "Never in CI" was written but not checked                                                                                                                         | **accepted**           | The workflow pin in `fixture-member-is-contained.test.ts`                                                                                                                                       |
+| 14  | S, A          | Editing `seed.ts` collides with `OPS-2` PR 1 and breaks mutation 10's patch                                                                                       | **accepted**           | D8: `seed.ts` untouched; the constant goes in `enums.ts`; pass-back to `OPS-2`                                                                                                                  |
+| 15  | D             | Applied in production before `OPS-2` PR 1, the seed throws on every `migrate.yml` run                                                                             | **accepted**           | D10, Risks, R1's list                                                                                                                                                                           |
+| 16  | A, X          | D1 said `export`; `PRIV-3` D1 says never exported                                                                                                                 | **accepted**           | D1: inline on the one command, then `unset`; the variable name is a const                                                                                                                       |
+| 17  | P             | The inventory's `households.name` row describes free text nobody can enter                                                                                        | **accepted**           | The inventory row and re-review trigger 3. `notice.md` unchanged: it over-discloses, which is the safe direction                                                                                |
+| 18  | P             | R1 is handed the runbook without the obligations that keep ids out of history                                                                                     | **accepted**           | "What R1 must carry"                                                                                                                                                                            |
+| 19  | P             | The Applied row must not record how many accounts were bound                                                                                                      | **accepted**           | README note                                                                                                                                                                                     |
+| 20  | R, A, P, C, S | "Only writer" prose and the flags promise go stale in files not listed                                                                                            | **accepted**           | The file table: `registry.ts`, `schema.ts`, `verify.ts`, `embedded-pg.ts`, the test docblock, the inventory, README 80–83                                                                       |
+| 21  | A             | ID-1 item 3's reasoning leaned on the index item 3 says not to rely on                                                                                            | **accepted**           | The table, and a pointer in `schema.ts`                                                                                                                                                         |
+| 22  | A             | The proofs belong next to the claim's, not in `erasure.ts`                                                                                                        | **accepted**           | D9: beside (6a)–(6f) in `verify.ts`; no sixth module and no change to `erasure.md`                                                                                                              |
+| 23  | S             | No size estimate                                                                                                                                                  | **accepted**           | About 370 lines                                                                                                                                                                                 |
+| 24  | X             | `correct.ts`'s "no correction binds one" comment is false                                                                                                         | **accepted**           | One-line comment fix                                                                                                                                                                            |
+| N   | various       | Fixture literals visibly synthetic (P); "out of scope" should cite the invite row (A); link the milestone (A); PGlite proves the index serially, not the race (D) | **accepted**           | Test plan; Out of scope; Where this sits; D3                                                                                                                                                    |
