@@ -2,8 +2,8 @@
 
 > Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step
 > 11c, decisions D20 and D35. Branch: `feat/fam-1-11c-amend-row`. Lane E
-> ([day-writers.md](../features/day-writers.md)). **Rev 3**, after a six-lens panel and a re-review (§
-> Review-response log). **Split** _(maintainer, 2026-11-17, relayed by the board)_: 11c-i is Change, 11c-ii is the revive, under this one plan.
+> ([day-writers.md](../features/day-writers.md)). **Rev 3, approved** by the maintainer (2026-11-17, relayed by the board), after a six-lens
+> panel and a re-review (§ Review-response log). **Split** _(maintainer, 2026-11-17, relayed by the board)_: 11c-i is Change, 11c-ii is the revive, under this one plan.
 
 ## Goal
 
@@ -285,7 +285,7 @@ is A1's. The remaining differences:
 - **Q3, decided: split** _(maintainer, 2026-11-17, relayed by the board)_. **11c-i** is Change
   (S1–S4, A1–A8, `updateEntrySetRows`, the two owed lines, mutations 348–356); it lands S1 first and
   gates 12b's Change action. **11c-ii** is the revive (R1–R8, the 10 and 3b rewrites, the claim
-  rewording, mutations 341–347 and 357). This PR (#533) carries the plan and 11c-i; 11c-ii is its own PR.
+  rewording, mutations 341–347 and 357). This plan merges on its own (#533); 11c-i and 11c-ii are each their own PR.
 - **Q4 (contract owner):** align the fake's `amendRow` to check the stored unit (A5)?
 
 ## Review-response log
