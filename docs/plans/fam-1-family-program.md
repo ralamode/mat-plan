@@ -716,20 +716,20 @@ paragraph merged by hand, but only one of their PRs is in review at a time.
 
 **Waves: what runs at the same time.** A wave is about one PR per lane. Lane A sets the pace.
 
-| Wave | Contract | A · schema | P · program data    | E · day data | B · builder | C · day page       | S · single values |
-| ---- | -------- | ---------- | ------------------- | ------------ | ----------- | ------------------ | ----------------- |
-| 0    | 2, 0a–0c |            |                     |              |             |                    |                   |
-| 1    |          | 3          |                     |              | 8a          | 13                 | 3b-page           |
-| 2    |          | 4a-i, 1    |                     |              | 8           | 13b                | 3b-bw             |
-| 3    |          | 4a-ii, 5b  |                     |              | 8b          | 13d, 13b-ii        |                   |
-| 4    |          | 4b         |                     | 11a          | 9           |                    |                   |
-| 5    |          | 5          | 6a-i, 6a-ii, 6a-iii | 11b (draft)  | 10          |                    |                   |
-| 6    |          |            | 6b                  | 11b          | 10b         |                    | 3b-0              |
-| 7    |          |            | 6c                  | 12a-i        | 7a-i, 7a-ii |                    | 3b-life, B2-0     |
-| 8    |          |            | 6d                  | 14, 11c      | 7b          | 12b                | B1-2              |
-| 9    |          |            |                     | 12a-ii       |             | **12c** (skeleton) |                   |
-| 10   |          |            |                     |              | **15**      | 12d                | B2                |
-| 11   |          |            |                     |              |             | 15c, 12f           |                   |
+| Wave | Contract | A · schema | P · program data    | E · day data      | B · builder | C · day page       | S · single values |
+| ---- | -------- | ---------- | ------------------- | ----------------- | ----------- | ------------------ | ----------------- |
+| 0    | 2, 0a–0c |            |                     |                   |             |                    |                   |
+| 1    |          | 3          |                     |                   | 8a          | 13                 | 3b-page           |
+| 2    |          | 4a-i, 1    |                     |                   | 8           | 13b                | 3b-bw             |
+| 3    |          | 4a-ii, 5b  |                     |                   | 8b          | 13d, 13b-ii        |                   |
+| 4    |          | 4b         |                     | 11a               | 9           |                    |                   |
+| 5    |          | 5          | 6a-i, 6a-ii, 6a-iii | 11b (draft)       | 10          |                    |                   |
+| 6    |          |            | 6b                  | 11b               | 10b         |                    | 3b-0              |
+| 7    |          |            | 6c                  | 12a-i             | 7a-i, 7a-ii |                    | 3b-life, B2-0     |
+| 8    |          |            | 6d                  | 14, 11c-i, 11c-ii | 7b          | 12b                | B1-2              |
+| 9    |          |            |                     | 12a-ii            |             | **12c** (skeleton) |                   |
+| 10   |          |            |                     |                   | **15**      | 12d                | B2                |
+| 11   |          |            |                     |                   |             | 15c, 12f           |                   |
 
 Lane S's two migrations are drawn in waves 6 and 7, after lane A's chain, as the latest they need go;
 by §6's rule either may go earlier, in a gap between lane A's.
@@ -813,7 +813,7 @@ step named owns the same proof against the real thing.
 | Typed numbers survive ticking another row                                                                                                                                | 13                              |
 | Un-tick leaves no tomb; re-tick restores it, on today and yesterday; a day before yesterday is read-only: no ✓, no Change, no Clear                                      | 11b, 12b, 13; 3b-page           |
 | A non-number is refused by the field, which takes focus                                                                                                                  | 11b, 13                         |
-| Change keeps the old number if the new one is blank or not a number                                                                                                      | 11c, 12d, 13b                   |
+| Change keeps the old number if the new one is blank or not a number                                                                                                      | 11c-i, 12d, 13b                 |
 | Bodyweight and practice: one row, Change only, a blank Change clears, never a tomb, even after clear and re-log                                                          | 3b-bw, 3b-life, 3b-0 (lane S)   |
 | Clear day names what it hides; Restore all skips what was logged again and says how many                                                                                 | B2-0, B2 (lane S); 11b for rows |
 | After an edit, a logged row keeps its prescription; an item removed since still shows its logged row, without its instructions; a set beyond a reduced count still shows | 6a, 11b, 12a-ii, 13b            |

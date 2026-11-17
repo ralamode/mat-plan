@@ -146,7 +146,7 @@ a description until it has its own row.
 > 🔴 **Do not copy a step's label from this chart or table.** Several ids mean something else in the
 > plan: here 11a is "log writer, new kinds" and 11b is "strength writer on workouts"; in the plan
 > 11a is a refactor that extracts the session helpers, **11b is the one row writer for every type**,
-> and 11c is Change. A PR
+> and 11c-i is Change (11c-ii is the revive). A PR
 > title, a branch name or a step note takes its id and its wording from the plan's §5 _(a lane copied
 > the old labels by mistake, 2026-11-16)_.
 
