@@ -243,11 +243,7 @@ export function ItemCard({
             </div>
             {card.dropped && quantity ? (
               <p id={droppedId} className="text-muted-foreground text-sm">
-                {droppedText(
-                  quantity,
-                  card.dropped,
-                  TRACKING_TYPE_FIELDS[card.item.trackingType].unit,
-                )}
+                {droppedText(card.dropped, TRACKING_TYPE_FIELDS[card.item.trackingType].unit)}
               </p>
             ) : null}
             {shownErrors.map(({ field, message }) => (

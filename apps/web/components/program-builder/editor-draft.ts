@@ -43,7 +43,7 @@ export type EditorCard = {
    * `bool`): shown on the card as what it was, never put in the field and never converted (the
    * machine never authors a load, plan D27). Cleared on the first edit of the number or the unit.
    */
-  dropped: { value: number | null; unit: Unit } | null;
+  dropped: { value: number; unit: Unit } | null;
 };
 
 /** A field of a card, or of the workout, that can be refused. */
@@ -68,7 +68,9 @@ function loadedQuantity(item: WorkoutDraftItem): Pick<EditorCard, 'value' | 'uni
   return {
     value: holds && stored.value != null ? String(stored.value) : '',
     unit: fields.unit ?? (holds ? stored.unit : null),
-    dropped: stored && !holds ? { value: stored.value, unit: stored.unit } : null,
+    // Only a number is lost: a unit with no number held nothing a person typed.
+    dropped:
+      stored && !holds && stored.value != null ? { value: stored.value, unit: stored.unit } : null,
   };
 }
 

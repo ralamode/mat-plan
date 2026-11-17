@@ -918,12 +918,36 @@ describe('a loaded number the card cannot hold', () => {
     editor({}, odd);
     const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
     const label = quantityLabel('weight_reps')!;
-    const note = droppedText(label, { value: 5, unit: 'bool' }, null);
+    // The words, pinned once: what it was, and what to do.
+    const note = 'This was saved as 5 done / not done. Choose a unit and enter it again.';
+    expect(droppedText({ value: 5, unit: 'bool' }, null)).toBe(note);
     const said = within(card).getByText(note);
     const field = within(card).getByLabelText(new RegExp(`^${label}`)) as HTMLInputElement;
     expect(field.value).toBe('');
     expect(field.getAttribute('aria-describedby')).toContain(said.id);
     fireEvent.change(field, { target: { value: '25' } });
     expect(within(card).queryByText(note)).toBeNull();
+  });
+
+  it('goes when a unit is chosen too; a fixed-unit item’s note says its own unit', () => {
+    expect(droppedText({ value: 30, unit: 'sec' }, 'min')).toBe(
+      'This was saved as 30 seconds, which this item can’t hold. Enter it in minutes.',
+    );
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const odd = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) =>
+        item === bench
+          ? { ...item, quantities: [{ ...item.quantities[0]!, unit: 'bool' as const, value: 5 }] }
+          : item,
+      ),
+    };
+    editor({}, odd);
+    const note = droppedText({ value: 5, unit: 'bool' }, null);
+    expect(screen.getByText(note)).toBeTruthy();
+    fireEvent.change(document.getElementById(unitFieldId(bench.prescriptionClientId))!, {
+      target: { value: 'kg' },
+    });
+    expect(screen.queryByText(note)).toBeNull();
   });
 });

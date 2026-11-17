@@ -659,16 +659,10 @@ export function copiedText(
  * A loaded number the card cannot hold (FAM-1 editor): what it was, and what to do. Information
  * only; the field stays empty for a person to type (plan D27).
  */
-export function droppedText(
-  label: string,
-  was: { value: number | null; unit: Unit },
-  fixedUnit: Unit | null,
-): string {
-  const it =
-    was.value == null
-      ? `in ${UNIT_LABELS[was.unit] ?? was.unit}`
-      : formatValueUnit(was.value, was.unit);
+export function droppedText(was: { value: number; unit: Unit }, fixedUnit: Unit | null): string {
+  const unit = (u: Unit) => (UNIT_LABELS[u] ?? u).toLowerCase();
+  const saved = `This was saved as ${was.value} ${unit(was.unit)}`;
   return fixedUnit
-    ? `${label} was ${it}, which this item can’t hold. Enter it in ${UNIT_LABELS[fixedUnit] ?? fixedUnit}.`
-    : `${label} was ${it}. Choose a unit and enter it again.`;
+    ? `${saved}, which this item can’t hold. Enter it in ${unit(fixedUnit)}.`
+    : `${saved}. Choose a unit and enter it again.`;
 }
