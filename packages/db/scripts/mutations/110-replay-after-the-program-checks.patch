@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 845a1a22..082945ad 100644
+index 411b53f3..f0d13563 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -293,11 +293,6 @@ export async function logRow(
+@@ -235,11 +235,6 @@ export async function logRow(
        day: write.day,
      });
  
@@ -14,12 +14,12 @@ index 845a1a22..082945ad 100644
      // 4 — the workout.
      const workout = await rowWorkout(tx, profileId, scope, write.workoutPublicId);
      if (!workout) refuse(ROW_REFUSAL.not_found);
-@@ -336,6 +331,8 @@ export async function logRow(
-     const prescription = rows[0];
-     if (!prescription) refuse(ROW_REFUSAL.not_found);
-     if (prescription.deletedAt !== null) refuse(ROW_REFUSAL.program_changed);
+@@ -250,6 +245,8 @@ export async function logRow(
+       prescription: { publicId: write.prescriptionPublicId },
+       workoutId: workout.id,
+     });
 +    const earlier = await classifyRowHolder(tx, profileId, write);
 +    if (earlier.held) return answerHolder(tx, earlier);
-     // Its live quantities as numbers; two in one slot throw (`liveQuantities`, E5).
-     const quantities = liveQuantities(prescription.id, rows);
  
+     // 7 — on the workout's week on this day.
+     if (!(await isScheduledOn(tx, workout.blockId, workout.id, write.day))) {

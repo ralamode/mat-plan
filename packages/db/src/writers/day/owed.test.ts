@@ -4,7 +4,7 @@ import { describe, it } from 'vitest';
 import { ARCHIVE_ONLY_FIXTURES } from '../../../scripts/verify/fixture-groups';
 
 /**
- * The tests lane E (day data) still owes the program contract, tagged by step: 12a-ii, 11c and 14
+ * The tests lane E (day data) still owes the program contract, tagged by step: 12a-ii and 14
  * (FAM-1 plan §4: "`it.todo` lists of the tests each consumer still owes").
  *
  * Each line comes from its step's Tests column in plan §5 or from §8's behaviour table. **The lane
@@ -28,11 +28,6 @@ describe('DayPlan: owed by its consumers', () => {
     it.todo(`12a-ii: the resolver, on the seeded state, deep-equals ${name}`);
   }
   it.todo('12a-ii: progress does not count removed items’ rows');
-});
-
-describe('RowAmend: owed by its consumers', () => {
-  it.todo('11c: amend a row of each tracking type');
-  it.todo('11c: a non-number is refused; a day before yesterday is refused');
 });
 
 describe('prescribedText: owed by its consumers', () => {

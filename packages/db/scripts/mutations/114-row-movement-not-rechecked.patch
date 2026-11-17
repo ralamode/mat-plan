@@ -1,13 +1,13 @@
-diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 4f96cfb1..2b80bde2 100644
---- a/packages/db/src/writers/day/log-row.ts
-+++ b/packages/db/src/writers/day/log-row.ts
-@@ -409,7 +409,7 @@ export async function logRow(
-     const [movement] = await tx
-       .select({ name: schema.movements.name, trackingType: schema.movements.trackingType })
-       .from(schema.movements)
--      .where(and(eq(schema.movements.id, prescription.movementId), movementIsAvailableTo(scope)))
-+      .where(eq(schema.movements.id, prescription.movementId))
-       .limit(1);
-     if (!movement) refuse(ROW_REFUSAL.not_found);
-     const trackingType = trackingTypeSchema.parse(movement.trackingType);
+diff --git a/packages/db/src/writers/day/row-steps.ts b/packages/db/src/writers/day/row-steps.ts
+index 862fa27b..411bd94c 100644
+--- a/packages/db/src/writers/day/row-steps.ts
++++ b/packages/db/src/writers/day/row-steps.ts
+@@ -166,7 +166,7 @@ export async function rowItem(
+   const [movement] = await exec
+     .select({ name: schema.movements.name, trackingType: schema.movements.trackingType })
+     .from(schema.movements)
+-    .where(and(eq(schema.movements.id, prescription.movementId), movementIsAvailableTo(scope)))
++    .where(eq(schema.movements.id, prescription.movementId))
+     .limit(1);
+   if (!movement) refuse(ROW_REFUSAL.not_found);
+   // A prescription's movement is NOT NULL on a program row; `movementId` was read above.

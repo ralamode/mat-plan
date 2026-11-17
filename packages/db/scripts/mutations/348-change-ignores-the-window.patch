@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
+index 0c724670..73480bf4 100644
+--- a/packages/db/src/writers/day/amend-row.ts
++++ b/packages/db/src/writers/day/amend-row.ts
+@@ -79,7 +79,6 @@ export async function amendRow(
+     if (!entry || entry.deletedAt !== null) refuse(ROW_REFUSAL.not_found);
+ 
+     // 3 — the window, from the entry's own day; an archived athlete's day is read-only.
+-    if (!rowDayOpen(entry.day, args.today, profile.archivedAt)) refuse(ROW_REFUSAL.closed_day);
+ 
+     // 4 — the workout. A purged one (`ON DELETE SET NULL`) is off the week, as `untickRow` has it.
+     if (entry.workoutId === null) refuse(ROW_REFUSAL.not_scheduled);
