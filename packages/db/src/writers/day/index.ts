@@ -1,8 +1,6 @@
 /**
- * The day page's writers: the one row writer for every tracking type, and Change.
- *
- * FAM-1 lane E's directory ([guide](../../../../../docs/features/day-writers.md), plan §6). This file
- * is a placeholder so the path exists before the lane's first step: `guides:check` refuses a guide
- * that owns a path that is not there. The lane's first real module may replace it.
+ * The day page's writers (FAM-1 lane E, [guide](../../../../../docs/features/day-writers.md)): the
+ * one row writer for every tracking type, with its un-tick and re-tick (11b). Change (`amendRow`)
+ * arrives at 11c.
  */
-export {};
+export { logRow, retickRow, untickRow } from './log-row';

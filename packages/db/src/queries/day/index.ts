@@ -1,8 +1,7 @@
 /**
- * The day page's reads: the day resolver (`DayPlan`) and PREVIOUS.
- *
- * FAM-1 lane E's directory ([guide](../../../../../docs/features/day-writers.md), plan §6). This file
- * is a placeholder so the path exists before the lane's first step: `guides:check` refuses a guide
- * that owns a path that is not there. The lane's first real module may replace it.
+ * The day page's reads (FAM-1 lane E, [guide](../../../../../docs/features/day-writers.md)): the
+ * schedule conjunct and the stored values of a logged row, which the row writer (11b) uses and the
+ * day resolver (12a) will. 12a adds the resolver and PREVIOUS here.
  */
-export {};
+export * from './scheduled';
+export * from './stored-row-values';
