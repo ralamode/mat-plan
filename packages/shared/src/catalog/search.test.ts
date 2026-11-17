@@ -142,7 +142,12 @@ describe('with no short form, the matches are matchMovementOptions’ (P2)', () 
   it('the same rows in the same order, plus only rows found by part of another name', () => {
     let compared = 0;
     let added = 0;
-    for (const query of QUERIES.filter((q) => !hasShortForm(q))) {
+    // Each alias's first word, so some queries find a row by part of another name.
+    const aliasParts = CATALOG_FIXTURE.flatMap((entry) =>
+      entry.aliases.map((alias) => foldMovementQuery(alias).split(' ')[0] ?? ''),
+    ).filter((word) => word.length >= 3);
+    expect(aliasParts.length).toBeGreaterThan(2);
+    for (const query of [...QUERIES, ...aliasParts].filter((q) => !hasShortForm(q))) {
       const typed = matchMovementOptions(LIBRARY, query);
       const found = search(query, LIBRARY);
       const extra = found.matches.filter((option) => !typed.matches.includes(option));
@@ -165,7 +170,8 @@ describe('with no short form, the matches are matchMovementOptions’ (P2)', () 
     // An accent and a full-width letter fold to the short form; a digit beside it does not.
     expect(hasShortForm('db2 row')).toBe(false);
     expect(hasShortForm('dbrow')).toBe(false);
-    expect(added).toBeGreaterThanOrEqual(0);
+    // Some of those queries did find a row through its alias and nowhere else.
+    expect(added).toBeGreaterThan(0);
   });
 });
 
@@ -195,6 +201,42 @@ describe('best match first (P2)', () => {
       'Heavy trap bar carry',
       'Strapbar hold',
     ]);
+  });
+
+  it('🔴 two spellings of one name tie on length: the library’s is first whichever was typed', () => {
+    for (const [library, household] of [
+      ['Push-ups', 'Pushups'],
+      ['Pushups', 'Push-ups'],
+      ['Push ups', 'Push-Ups'],
+    ] as const) {
+      const lib: Option = { slug: 'lib', name: library, isCatalog: true, aliases: [] };
+      const own: Option = { slug: 'own', name: household, isCatalog: false, aliases: [] };
+      for (const typed of [library, household, 'pushups', 'push up']) {
+        for (const list of [
+          [lib, own],
+          [own, lib],
+        ]) {
+          expect(search(typed, list).matches, `${library} / ${household} / ${typed}`).toEqual([
+            lib,
+            own,
+          ]);
+          expect(matchMovementOptions(list, typed).matches[0]).toBe(lib);
+        }
+      }
+    }
+    // The same for an alias written two ways.
+    const a: Option = { slug: 'a', name: 'Alpha', isCatalog: false, aliases: ['Pressup'] };
+    const b: Option = { slug: 'b', name: 'Beta', isCatalog: true, aliases: ['Press-up'] };
+    expect(search('press up', [a, b]).matches).toEqual([b, a]);
+  });
+
+  it('two names that fold alike are ordered by the name as written, and one option is one row', () => {
+    const one: Option = { slug: 'one', name: 'Twin move', isCatalog: true, aliases: [] };
+    const two: Option = { slug: 'two', name: 'Twin-moves', isCatalog: true, aliases: [] };
+    expect(search('twin', [two, one]).matches).toEqual(search('twin', [one, two]).matches);
+    expect(search('twin', [one, one, two]).matches).toHaveLength(2);
+    expect(search('twni', [one, one, two]).near).toHaveLength(2);
+    expect(search('twin zzzz', [one, one, two]).someWords).toHaveLength(2);
   });
 
   it('within one quality: the shorter name, then the library’s before a household’s, then by name', () => {
@@ -335,6 +377,61 @@ describe('an abbreviation that spells a movement is that movement (P1)', () => {
   it('lists that movement first', () => {
     expect(search('db row', options).matches[0]).toBe(row);
   });
+
+  it('🔴 an abbreviation and the words it stands for mean the same movement', () => {
+    // A movement's own name before another movement's other name, through a short form too.
+    const bent: Option = {
+      slug: 'bent',
+      name: 'Bent row',
+      isCatalog: true,
+      aliases: ['Dumbbell row'],
+    };
+    const household: Option = {
+      slug: 'mine',
+      name: 'Barbell bench',
+      isCatalog: false,
+      aliases: [],
+    };
+    for (const list of [
+      [bent, row, bench, household],
+      [household, bench, row, bent],
+    ]) {
+      expect(search('db row', list).shortFormHit, 'db row').toBe(row);
+      expect(search('dumbbell row', list).matches[0], 'dumbbell row').toBe(row);
+      expect(search('db row', list).matches.slice(0, 2)).toEqual([row, bent]);
+      expect(search('bb bench', list).shortFormHit, 'bb bench').toBe(household);
+      expect(search('barbell bench', list).matches[0], 'barbell bench').toBe(household);
+    }
+  });
+
+  it('🔴 a short-form row of a better quality comes before a typed row of a worse one (P3)', () => {
+    // "db" is only in the middle of "Deadbug"; the dumbbell movements start with the word it means.
+    const bug: Option = { slug: 'bug', name: 'Bedbug hold', isCatalog: true, aliases: [] };
+    const curl: Option = { slug: 'curl', name: 'Dumbbell curl', isCatalog: true, aliases: [] };
+    const incline: Option = {
+      slug: 'inc',
+      name: 'Incline dumbbell press',
+      isCatalog: true,
+      aliases: [],
+    };
+    const own: Option = { slug: 'own', name: 'DB special', isCatalog: false, aliases: [] };
+    expect(names(matchMovementOptions([bug, curl, incline, own], 'db').matches)).toEqual([
+      'DB special',
+      'Bedbug hold',
+    ]);
+    for (const list of [
+      [bug, curl, incline, own, row],
+      [row, own, incline, curl, bug],
+    ]) {
+      expect(names(search('db', list).matches)).toEqual([
+        'DB special', // starts with what was typed
+        'Dumbbell row', // starts with what it stands for; the shorter of the two
+        'Dumbbell curl',
+        'Incline dumbbell press', // a word starts with it
+        'Bedbug hold', // only holds the letters
+      ]);
+    }
+  });
 });
 
 describe('equipment short forms (P3)', () => {
@@ -358,7 +455,7 @@ describe('equipment short forms (P3)', () => {
     expect(search('adb row').matches).toEqual([]);
   });
 
-  it('🔴 rows found only through a short form come after the rows the typed words find', () => {
+  it('🔴 within one quality, a row found through a short form comes after a typed one', () => {
     const own: Option = { slug: 'own', name: 'DB special', isCatalog: false, aliases: [] };
     const found = search('db', [...OPTIONS, own]);
     expect(names(found.matches)).toEqual([

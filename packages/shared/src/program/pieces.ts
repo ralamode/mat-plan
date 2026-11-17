@@ -397,7 +397,8 @@ export function existingItem<T extends MatchableMovement & { readonly isCatalog:
   name: string,
 ): T | undefined {
   const found = searchMovementOptions(options, { query: name });
-  // An exact name or an exact alias is always the first row: nothing else has that quality.
+  // An exact name or an exact alias as typed is always the first row: only a row a short form
+  // spells shares its quality, and that row comes after it.
   if (found.exact || found.aliasHit !== null) return found.matches[0];
   return found.shortFormHit ?? undefined;
 }

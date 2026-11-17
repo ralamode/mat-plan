@@ -110,10 +110,33 @@ describe('existingItem: the item a typed name already names', () => {
     expect(existingItem([...options, own], 'db row')?.id).toBe('own');
   });
 
-  it('a part of another name finds a movement in the picker and names no item here', () => {
-    // `roman` and `rd` reach Romanian Deadlift in the list; neither is that item's name.
-    for (const typed of ['roman', 'rd', 'rdl x'])
-      expect(existingItem(OPTIONS, typed)).toBeUndefined();
+  it('a part of a name, or of another name, finds a movement in the picker and names no item here', () => {
+    const press = {
+      id: 'ohp',
+      name: 'Overhead press',
+      isCatalog: true,
+      aliases: ['Military press'],
+    };
+    const options = [...OPTIONS, press];
+    for (const typed of ['roman', 'military', 'milit', 'overhead', 'rdl x']) {
+      expect(searchMovementOptions(options, { query: typed }).matches.length, typed).toBe(
+        typed === 'rdl x' ? 0 : 1,
+      );
+      expect(existingItem(options, typed), typed).toBeUndefined();
+    }
+    expect(existingItem(options, 'military press')?.id).toBe('ohp');
+  });
+
+  it('two spellings of one name: the catalog item, whichever spelling is typed', () => {
+    const own = { id: 'own', name: 'Pushups', isCatalog: false };
+    for (const options of [
+      [own, ...OPTIONS],
+      [...OPTIONS, own],
+    ]) {
+      for (const typed of ['Push-ups', 'Pushups', 'push ups']) {
+        expect(existingItem(options, typed)?.id, typed).toBe('pushups');
+      }
+    }
   });
 
   it('honours every alias the catalog declares', () => {

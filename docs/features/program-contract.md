@@ -255,8 +255,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 
 15. **`newItem` makes no second item for a name or an alias that already names one in the
     household's list, and it answers with the item's own name.** A typed name that `existingItem` matches selects that item
-    (`existed: true`); it is not a refusal. The picker withholds "add as new" for the same cases
-    (`exact`, `aliasHit` and, from C30, `shortFormHit`: `db row` is Dumbbell row), so the client's guard and the server's answer
+    (`existed: true`); it is not a refusal. The picker withholds "add as new" for `exact` and
+    `aliasHit`; `existingItem` also answers, from C30, for `shortFormHit` (`db row` is Dumbbell
+    row), which the pickers read once they call `searchMovementOptions` (CAT-3 chunk B1). So the client's guard and the server's answer
     are one rule: the guard saves a round trip, the server holds when the page is stale or the call
     did not come from the picker. `name` is on every success (the stored name, which is not always
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
@@ -482,13 +483,17 @@ Invariants (the spec's rules, as they bind code here):
     three** (CAT-3 spec P1; contract change C30). `exact` and `aliasHit` are always
     `matchMovementOptions`' own, for the query as typed. `shortFormHit` is the movement the query
     spells once its short forms are expanded: `db row` is Dumbbell row _(maintainer, 2026-11-17)_.
-    Any of the three withholds "Use as typed", and `existingItem` (`program/pieces.ts`) returns
+    Any of the three means the movement is already in the list: a picker on
+    `searchMovementOptions` withholds "Use as typed" (today's two pickers still call
+    `matchMovementOptions` and read the first two; CAT-3 chunk B1 moves them), and `existingItem`
+    (`program/pieces.ts`) returns
     that item. Nothing else does: part of an alias and a near miss find a movement and still let
     a household make its own item of that name.
 11. **Best match first, one rule for every list** (spec P2). A match has a quality: it is the
     query; it starts with it; a word of it starts with it; it only holds the letters mid-word.
     Within one quality: found by its own name, then by another name, then through a short form;
-    then the shorter spelling that matched; then a catalog row before a household's; then by
+    then the shorter spelling that matched, counted without its spaces (`Push-ups` and `Pushups`
+    tie, so the catalog's is first whichever was typed); then a catalog row before a household's; then by
     name. A movement is listed once, by its best way of being found. `matchMovementOptions`
     orders by this rule, and with no short form and no alias matched as typed
     `searchMovementOptions`' `matches` and `someWords` are its own. 🔴 **`existingItem` returns
@@ -498,7 +503,11 @@ Invariants (the spec's rules, as they bind code here):
     catalog's item won that case.
 12. **A short form is equipment, not a movement.** `QUERY_SHORT_FORMS` expands a whole query word
     inside the search only: never in `movementNameKey`, and never as an entry's alias. A row
-    found that way has the quality its expanded words would have had.
+    found that way has the quality its expanded words would have had, and among such rows one
+    whose name the words spell comes before one whose alias they spell, so `db row` and
+    `dumbbell row` mean the same movement. The two old picker aliases that are short forms (`KB`,
+    `DB bench`, in `movement-picker-catalog.ts`) are retired by the chunk that moves the pickers
+    onto `searchMovementOptions` (B1), not before: today's pickers do not expand a short form.
 13. **Part of another name finds a movement, and never outranks an own name** (spec P17). From
     three letters, a query whose every word is in an alias finds the movement; the alias's best
     quality is "a word starts with it". `foundByAlias` gives the alias a row was found through
@@ -509,7 +518,7 @@ Invariants (the spec's rules, as they bind code here):
     of an alias that starts alike: one edit from four letters (a four-letter word needs its
     first two letters to agree), two from nine; three letters or fewer are never a near miss. Or
     the same test on the whole query and a whole name or alias with the spaces out. The edit
-    count is banded (about five cells a row). The search reads `MOVEMENT_NAME_MAX` characters of
+    count is banded (it computes about five cells a row). The search reads `MOVEMENT_NAME_MAX` characters of
     a query; a query of more than `SEARCH_WORDS_MAX` words gets the plain match only; and it
     builds no `RegExp` from a query or a name.
 
