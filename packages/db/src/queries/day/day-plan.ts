@@ -172,14 +172,13 @@ export async function resolveDayPlan(
       .filter(([key]) => !slots.some((s) => `w:${s.workoutId}` === key))
       .map(([, rows]) => {
         const [first] = rows;
-        // C21: an id only for what is live. A program's id only while it is one of the day's
-        // programs (live, so in `programs`); a workout's only while it and its program are live.
-        const programPublicId =
-          first.workoutBlockId !== null ? (programOfBlock.get(first.workoutBlockId) ?? null) : null;
+        // C21: an id only for what is live: the program's while its block is live, the workout's
+        // while it and its block are. C24: read from the live block itself, not the day's
+        // assignments, so a live workout logged on a day no assignment covers any more keeps both
+        // (its program is then not in `programs`).
         return {
-          programPublicId,
-          workoutPublicId:
-            programPublicId !== null && first.workoutLive ? first.workoutPublicId : null,
+          programPublicId: first.blockLive ? first.programPublicId : null,
+          workoutPublicId: first.workoutLive ? first.workoutPublicId : null,
           // R2: a workout that left the week has no label.
           label: null,
           liveName: null,
@@ -326,6 +325,8 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
       publicId: w.publicId,
       description: w.description,
       blockId: w.blockId,
+      programPublicId: sql<string>`${b.publicId}`.as('program_public_id'),
+      blockLive: sql<boolean>`(${b.deletedAt} is null)`.as('block_live'),
       live: sql<boolean>`${workoutIsLive()}`.as('workout_live'),
     })
     .from(w)
@@ -356,6 +357,8 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
       workoutDescription: scopedWorkout.description,
       workoutLive: scopedWorkout.live,
       workoutBlockId: scopedWorkout.blockId,
+      programPublicId: scopedWorkout.programPublicId,
+      blockLive: scopedWorkout.blockLive,
       prescriptionId: scopedPrescription.id,
       prescriptionPublicId: scopedPrescription.publicId,
     })

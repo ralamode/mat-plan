@@ -330,12 +330,15 @@ async function resolve(
   assert.ok(plan, `FAM-1 12a: ${athlete} resolves on ${day}`);
   // The contract's own schema, so a field the fixtures never reach is still the right shape.
   const parsed = asJson(dayPlanSchema.omit({ athletes: true }).parse(plan));
-  // C21: a non-null `programPublicId` names one of the day's programs.
+  // A SCHEDULED workout's program is one of the day's programs. (A logged workout that is not
+  // scheduled may name a live program no assignment covers that day, C24.)
   const programs = new Set(parsed.programs.map((p) => p.programPublicId));
   assert.deepEqual(
-    parsed.workouts.filter((w) => w.programPublicId !== null && !programs.has(w.programPublicId)),
+    parsed.workouts.filter(
+      (w) => w.scheduled && (w.programPublicId === null || !programs.has(w.programPublicId)),
+    ),
     [],
-    'FAM-1 12a C21: every workout’s programPublicId names one of the day’s programs',
+    'FAM-1 12a: every scheduled workout’s programPublicId names one of the day’s programs',
   );
   return parsed;
 }
@@ -1380,6 +1383,45 @@ async function verifyRules(): Promise<void> {
       );
     });
     console.log('✓ FAM-1 12a C21: a hidden program or workout carries no live id');
+
+    // ── C24: a live workout logged on a day no assignment covers any more keeps its ids ─────────
+    await inSavepoint(tx, async (sp) => {
+      // Athlete One logged Heavy A and Morning habits yesterday; then their Family program
+      // assignment is soft-deleted. Both are live, so both show as left the week, ids kept.
+      await sp
+        .update(schema.programAssignments)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(schema.programAssignments.profileId, H.profiles.get('a1')!.id),
+            eq(schema.programAssignments.blockId, H.blocks.get('p1')!),
+          ),
+        );
+      const plan = await resolve(sp, H, 'a1', YESTERDAY);
+      const p1 = H.ids.get(fixtureIds.program('p1'));
+      const heavyA = workoutOf(plan, H, 'w2');
+      const heavyADraft = workoutDraft(H_WORLD, 'p1', 'w2');
+      assert.deepEqual(
+        heavyA && {
+          ids: [heavyA.programPublicId, heavyA.workoutPublicId],
+          shown: [heavyA.scheduled, heavyA.label, heavyA.name, heavyA.description],
+          live: heavyA.items.every((it) => it.prescriptionPublicId !== null),
+          total: heavyA.progress.total,
+        },
+        {
+          ids: [p1, H.ids.get(fixtureIds.workout('w2'))],
+          shown: [false, null, HEAVY_A, heavyADraft.description],
+          live: true,
+          total: 4 + 4 + 3 + 3 + 3,
+        },
+        'FAM-1 12a C24: a live workout on a day no assignment covers shows as left the week, ids kept',
+      );
+      assert.ok(
+        !plan.programs.some((p) => p.programPublicId === p1),
+        'FAM-1 12a C24: the program no assignment covers is not one of the day’s programs',
+      );
+    });
+    console.log('✓ FAM-1 12a C24: a workout no assignment covers keeps its ids');
 
     // ── Look-ahead (canGoForward) ───────────────────────────────────────────────────────────────
     await inSavepoint(tx, async (sp) => {
