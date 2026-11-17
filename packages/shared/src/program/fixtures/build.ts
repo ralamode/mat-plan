@@ -38,7 +38,15 @@ import type {
  */
 
 /** What a logged row was logged against, frozen when it was logged (plan D7; the prototype's `stamp`). */
-type Stamp = { text: string; name: string; label: string; unit: Unit | null; values: RowValues };
+export type Stamp = {
+  text: string;
+  name: string;
+  /** The workout's name when the row was logged: what the session freezes (`sessions.workout_name`). */
+  workout: string;
+  label: string;
+  unit: Unit | null;
+  values: RowValues;
+};
 
 /** A world whose entries carry their stamps. An edit to the program afterwards leaves them alone. */
 export type World = ProtoWorld & { stamps: Record<number, Stamp> };
@@ -140,6 +148,7 @@ export function stamped(world: ProtoWorld): World {
     stamps[entry.n] = {
       text: prescribedText(draftItem(world, workout, item)),
       name: world.catalog[item.iid].name,
+      workout: workout.name,
       label: slot?.label ?? '',
       unit: unitOf(world, item),
       values: rowValues(world, item, entry.v),
@@ -223,15 +232,24 @@ function dayWorkout(
   for (const item of workout.items) {
     const draft = draftItem(world, workout, item);
     const mine = logged.filter((e) => e.iid === item.iid);
-    const count = TRACKING_TYPE_FIELDS[draft.trackingType].sets
-      ? Math.max(item.sets ?? 1, ...mine.map((e) => e.set))
-      : 1;
-    progress.total += count;
+    // Every prescribed set, plus each LOGGED set beyond them (`DayItem.rows`): an added set is a row
+    // only while it is logged, so a gap below a logged extra set is not a row and is not counted.
+    // A type with one row (a Check, a Count, a Duration) has exactly that row.
+    const hasSets = TRACKING_TYPE_FIELDS[draft.trackingType].sets;
+    const prescribed = hasSets ? (item.sets ?? 1) : 1;
+    const sets = [
+      ...Array.from({ length: prescribed }, (_, i) => i + 1),
+      ...mine
+        .map((e) => e.set)
+        .filter((set) => hasSets && set > prescribed)
+        .sort((a, b) => a - b),
+    ];
+    progress.total += sets.length;
     progress.done += mine.length;
     const rows =
       showing === 'preview'
         ? []
-        : Array.from({ length: count }, (_, i) => i + 1)
+        : sets
             .map((set) => {
               const entry = mine.find((e) => e.set === set);
               return {
@@ -243,18 +261,19 @@ function dayWorkout(
             .filter((row) => showing === 'all' || row.logged !== null);
     if (showing === 'logged' && rows.length === 0) continue;
 
-    const live = prescribedText(draft);
-    // Where only logged rows show, the heading is what they were logged against.
-    const loggedAgainst =
-      showing === 'logged'
-        ? mine.map((e) => stampOf(world, e).text).find((t) => t !== live)
-        : undefined;
+    // Where only logged rows show, the heading is what the item's first-logged row was logged
+    // against (`DayItem.prescribedText`); each row still carries its own.
+    const [firstLoggedRow] = [...mine].sort((x, y) => x.n - y.n);
+    const heading =
+      showing === 'logged' && firstLoggedRow
+        ? stampOf(world, firstLoggedRow).text
+        : prescribedText(draft);
     items.push({
       prescriptionPublicId: fixtureIds.prescription(workout.wid, item.iid),
       itemPublicId: draft.itemPublicId,
       name: draft.itemName,
       trackingType: draft.trackingType,
-      prescribedText: loggedAgainst ?? live,
+      prescribedText: heading,
       target: prescribedTarget(draft.targetReps, draft.quantities),
       notes: draft.notes,
       unit: unitOf(world, item),
@@ -290,11 +309,17 @@ function dayWorkout(
   // carried only for a group that has an item showing: no rest for a superset that is not there.
   const groupSize = (group: string) => workout.items.filter((it) => it.ss === group).length;
   const shownGroups = new Set(items.map((it) => it.superset?.group));
+  // Where only logged rows show, the name is the session's frozen one (`sessions.workout_name`,
+  // plan D7: the page and the export agree), so a later rename does not rewrite an old day. Here
+  // that is the first logged row's stamp: every stamp of a day carries the same workout name.
+  const [firstLogged] = [...logged].sort((a, b) => a.n - b.n);
+  const frozenName =
+    showing === 'logged' && firstLogged ? stampOf(world, firstLogged).workout : null;
   return {
     programPublicId: fixtureIds.program(program.id),
     workoutPublicId: fixtureIds.workout(workout.wid),
     label: slot.label || null,
-    name: workout.name,
+    name: frozenName ?? workout.name,
     description: workout.desc || null,
     scheduled,
     progress,
@@ -310,8 +335,18 @@ function dayWorkout(
 export function dayPlan(world: World, athlete: string, day: string): DayPlan {
   const writable = isWritable(world, day);
   const future = day > world.today;
-  const on = onPrograms(world, athlete, day);
   const current = currentPrograms(world, athlete);
+  // One order for `programs` and for `workouts`: the programs the athlete is on this day, the
+  // current ones in their own order, then any they have since come off, in theirs
+  // (`DayPlan.programs`). **Current is a property of a program, not of an assignment row**: an
+  // athlete taken off a program and put on it again is on a current program on a day of the
+  // earlier stretch too, so this matches by program.
+  const orderOf = (a: { prog: string }) => current.findIndex((c) => c.prog === a.prog);
+  const onThatDay = onPrograms(world, athlete, day);
+  const on = [
+    ...onThatDay.filter((a) => orderOf(a) >= 0).sort((x, y) => orderOf(x) - orderOf(y)),
+    ...onThatDay.filter((a) => orderOf(a) < 0),
+  ];
 
   // The athlete's program order, then each program's own week order. A label never sorts.
   const slots = on.flatMap((a) => {
@@ -343,7 +378,7 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
     currentPrograms: current.map((a) => programRef(world, a.prog)),
     programs: on.map((a) => {
-      const order = current.indexOf(a);
+      const order = orderOf(a);
       return { ...programRef(world, a.prog), order: order < 0 ? null : order };
     }),
     workouts: slots
