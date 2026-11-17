@@ -286,6 +286,25 @@ export function programBlockInHousehold(scope: HouseholdScope) {
 }
 
 /**
+ * `households.id = <scope>` — THE household row itself (`PRIV-3`). Here because it unwraps
+ * `scope.householdId`, which only this module may do. Its one consumer is the erasure graph
+ * (`src/erasure/graph.ts`); no writer reads a household row through it.
+ */
+export function householdRowIs(scope: HouseholdScope) {
+  return eq(schema.households.id, scope.householdId);
+}
+
+/**
+ * `household_members.household_id = <scope>` — every membership of this household, hidden ones
+ * included (`PRIV-3`). Prefixed per the convention above: the table carries its own
+ * `household_id`. Its one consumer is the erasure graph; `membershipHousehold` resolves a principal
+ * by Clerk id and never needs it.
+ */
+export function householdMemberInHousehold(scope: HouseholdScope) {
+  return eq(schema.householdMembers.householdId, scope.householdId);
+}
+
+/**
  * AUTH-1 1b — bind a Clerk account to a household. **Ships dark: nothing reads the row until 1c.**
  *
  * 🔴 **This lives HERE, not in the `writers/household-members.ts` the plan proposed.** A scoped

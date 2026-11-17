@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -142,14 +142,14 @@
+   },
+   { table: schema.sessions, householdRows: sessionRows },
+   {
+-    table: schema.dayReadiness,
+-    householdRows: (s) => sql`${schema.dayReadiness.profileId} IN ${profilesOf(s)}`,
+-  },
+-  {
+     table: schema.rampTargets,
+     householdRows: (s) => sql`${schema.rampTargets.profileId} IN ${profilesOf(s)}`,
+   },
+   {
++    table: schema.dayReadiness,
++    householdRows: (s) => sql`${schema.dayReadiness.profileId} IN ${profilesOf(s)}`,
++  },
++  {
+     // AND: a target of H's athlete on another household's prescription is matched by neither.
+     table: schema.prescriptionTargets,
+     householdRows: (s) =>

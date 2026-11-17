@@ -366,6 +366,10 @@ The shapes those lanes agree on, the fakes and the preview route are
    `householdHasProgram`, and it reads `scope.householdId` — which is why it lives in that module and
    nowhere else.
 
+   `householdRowIs(scope)` and `householdMemberInHousehold(scope)` (`PRIV-3` PR 1) are two more
+   leaves of the same kind, for the `households` row and its `household_members`. Their only
+   consumer is the erasure graph ([erasure.md](./erasure.md)); no writer calls them.
+
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
    `profilePublicId`, not `profileId`.
@@ -1069,7 +1073,7 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
 - **⚠️ FAM-1's new `db:verify` proofs do not go in `verify.ts` (step 0c).** That file was the one
   place every data lane would append to, so each lane has a proof module beside it:
   `packages/db/scripts/verify/{schema,program,day,single-values}.ts` (lanes A, P, E and S; each
-  header names its owner and steps). `verify.ts` calls each once, **last**, so a lane's rows cannot
+  header names its owner and steps), and `verify/erasure.ts` after them ([erasure.md](./erasure.md)). `verify.ts` calls each once, **last**, so a lane's rows cannot
   change what an older whole-table assertion counts, and a lane's proof cannot become the first
   failure under an existing mutation patch. The database, `expectRejectedBy`,
   `assertCheckCoversConst` and the catalog readers moved, bodies unchanged, to `verify/harness.ts`;
