@@ -5,7 +5,9 @@
 
   `test-changed.mjs` now:
   - traces only the `base...HEAD` diff, with `vitest related` on absolute paths;
-  - reports local changes as untested.
+  - reports local changes as untested;
+  - outside CI, when a trigger file changes, says "full suite due: CI runs it" and runs only the
+    related tests and the scanners, so a push never runs the whole suite on the shared machine.
 
   The self-test gains a case for each, plus one that the run never uses `--changed`. No roadmap item
   moved.

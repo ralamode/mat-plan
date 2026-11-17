@@ -127,9 +127,11 @@ export function scanners(root) {
 /** The plan for a change: what runs, and why. Pure, so the self-test can assert on it. */
 export function select(changed, scannerFiles) {
   const trigger = changed.find((f) => FORCE_RERUN.some((re) => re.test(basename(f))));
-  if (trigger) return { mode: 'full', reason: `${trigger} forces a full run` };
   const traced = changed.filter((f) => TRACED.test(f));
   const scan = changed.every(inert) ? [] : scannerFiles;
+  // A full run still carries the related tests and the scanners: outside CI they are what runs.
+  if (trigger)
+    return { mode: 'full', reason: `${trigger} forces a full run`, traced, scanners: scan };
   if (!traced.length && !scan.length) {
     return { mode: 'none', reason: 'no tests reached by this change' };
   }
@@ -139,11 +141,15 @@ export function select(changed, scannerFiles) {
 function print(plan, base) {
   console.log(`mode: ${plan.mode}`);
   if (plan.reason) console.log(`reason: ${plan.reason}`);
-  if (plan.mode !== 'changed') return;
+  if (plan.mode === 'none') return;
+  if (plan.mode === 'full' && !inCI()) console.log('local: full suite due: CI runs it');
   console.log(`base: ${base}`);
   for (const f of plan.traced) console.log(`traced: ${f}`);
   for (const f of plan.scanners) console.log(`scanner: ${f}`);
 }
+
+/** On a CI runner (one machine per job), the full suite may run; on a shared machine it never does. */
+const inCI = () => Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
 
 const vitest = (root, args) =>
   spawnSync('pnpm', ['--filter', 'web', 'exec', 'vitest', 'run', ...args], {
@@ -186,8 +192,13 @@ function main(argv) {
     return 0;
   }
   if (plan.mode === 'full') {
-    console.log(`test-changed: ${plan.reason}; a full run is due, running the whole suite.`);
-    return vitest(root, []);
+    if (inCI()) {
+      console.log(`test-changed: ${plan.reason}; running the whole suite.`);
+      return vitest(root, []);
+    }
+    // 🔴 Heavy runs go to CI (the maintainer's rule, DX-18): a push never runs the whole suite
+    // locally. The related tests and the scanners still run; CI's quality job runs everything.
+    console.log(`test-changed: ${plan.reason}; full suite due: CI runs it.`);
   }
   console.log(
     `test-changed: ${plan.traced.length} changed file(s) traced against ${base}, plus ` +

@@ -536,7 +536,8 @@ access token`, which reads like a permissions problem with the repo. The cause w
   `vitest --changed` adds staged, unstaged and untracked files to the `ref...HEAD` diff, so a mutation
   patch left applied, or any local edit, widened what the hook ran. → The pre-push
   (`test-changed.mjs`) now traces the **committed** diff only, with `vitest related` on absolute
-  paths, and reports local changes as untested. A push sends commits, so the hook tests commits.
+  paths, and reports local changes as untested. A push sends commits, so the hook tests commits. Outside CI a due full run
+  (a trigger file changed) is left to CI: "full suite due: CI runs it".
 
 - **A test that taps twice "straight after" in real time fails on a busy machine.** → A double-tap
   guard compares the taps' `event.timeStamp`s, so "within 500ms" in a test depends on how loaded the
