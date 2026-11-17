@@ -284,6 +284,15 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * ⚠️ **"Both depths" was never enough anyway:** the CRUD-1 spec puts V1-22's program edit actions
    * under `app/p/[profileId]/program/`, a THIRD depth. The alias is depth-independent.
    */
+  /** One action's Sentry wrap: its own name, then straight to the async callback (no options object). */
+  const sentryWrap = (name: string) =>
+    new RegExp(
+      `Sentry\\.withServerActionInstrumentation\\(\\s*(['"\`])${name}\\1\\s*,\\s*async\\b`,
+      'g',
+    );
+  /** Sentry as a namespace import, so the wrap above is the only way in. */
+  const SENTRY_IMPORT = /^import \* as Sentry from '@sentry\/nextjs';$/m;
+
   const ENTRY_IMPORT = /import\s*\{\s*enterMutation\s*\}\s*from\s*'@\/app\/p\/mutation-entry'/;
   /**
    * 🔴 **The one source-half conjunct the collapse WEAKENED, restored.** Before it, the gate was one
@@ -328,6 +337,7 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(modules.sort()).toEqual([
       'app/p/[profileId]/actions.ts', // the per-athlete day actions
       'app/p/profile-actions.ts', // athlete management (PROF-1)
+      'app/programs/actions.ts', // the program builder (FAM-1 7a-i)
     ]);
   });
 
@@ -356,6 +366,21 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
 
   const guarded = modules.filter((rel) => !ALLOWLIST.includes(rel));
 
+  it('the Sentry wrap check refuses the options form, another name and no wrap at all', () => {
+    const one = (body: string, name = 'saveAction') => (body.match(sentryWrap(name)) ?? []).length;
+    expect(
+      one(`return await Sentry.withServerActionInstrumentation('saveAction', async () => {`),
+    ).toBe(1);
+    expect(
+      one(`Sentry.withServerActionInstrumentation(\n    'saveAction',\n    async () => {`),
+    ).toBe(1);
+    expect(
+      one(`Sentry.withServerActionInstrumentation('saveAction', { headers }, async () => {`),
+    ).toBe(0);
+    expect(one(`Sentry.withServerActionInstrumentation('otherAction', async () => {`)).toBe(0);
+    expect(one(`return await save();`)).toBe(0);
+  });
+
   it('something is actually being guarded after the allowlist is subtracted', () => {
     expect(guarded.length).toBeGreaterThan(0);
   });
@@ -377,6 +402,20 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(report(ENTRY_REFUSAL), 'actions that call enterMutation but drop its refusal').toEqual(
       [],
     );
+    // Sentry: each action is wrapped exactly once, under its own name, in the two-argument form
+    // `(name, async () => …)`. The options form `(name, { headers, formData, recordResponse }, cb)`
+    // is how a request's cookie or a form's body would reach a captured event (plan row 7a; the
+    // scrubber is the defence in depth, `lib/sentry-scrub.ts`).
+    expect(
+      slices
+        .filter(({ name, body }) => (body.match(sentryWrap(name)) ?? []).length !== 1)
+        .map(({ name }) => name),
+      'actions not wrapped exactly once as withServerActionInstrumentation(<their name>, async …)',
+    ).toEqual([]);
+    expect(
+      SENTRY_IMPORT.test(src),
+      `${rel} must import Sentry as \`import * as Sentry from '@sentry/nextjs'\` (an aliased import would escape the scan)`,
+    ).toBe(true);
     // A local function of the same name would satisfy the slice scan above and check nothing.
     expect(
       ENTRY_IMPORT.test(src),

@@ -19,7 +19,7 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 10b.** The Programs list, the program page with its week editor and its
+🚧 **Built through step 10b; 7a-i wires create, rename and save a workout to the database, with no page calling them until 7b.** The Programs list, the program page with its week editor and its
 Copy and Put-on dialogs, and the workout editor with its supersets and its item picker are real
 screens on the preview route. Each
 step below adds its files and its invariants here.
@@ -83,8 +83,12 @@ flowchart LR
 | `apps/web/components/program-builder/supersets.ts`                      | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                                                                                                                                                       |
 | `apps/web/components/program-builder/*.test.ts(x)`                      | Each screen's and module's tests, beside it.                                                                                                                                                                                                                            |
 | `apps/web/components/program-builder/owed.test.ts`                      | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                    |
-| `apps/web/app/programs/index.ts`                                        | A placeholder so the directory exists. Not a route.                                                                                                                                                                                                                     |
-| `apps/web/lib/dal/program/index.ts`                                     | A placeholder so the directory exists.                                                                                                                                                                                                                                  |
+| `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. No page imports it until 7b.                                                                                                                          |
+| `apps/web/app/programs/actions.registry.ts`                             | Each action's refusal set and scope, read by the boundary matrices ([write-path.md](./write-path.md) invariant 1).                                                                                                                                                      |
+| `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                    |
+| `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported.                                                                                                                                                                        |
+| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                    |
+| `apps/web/lib/dal/program/quiet-db-errors.ts`                           | `quietDbErrors`: a thrown error is rethrown as `ProgramWriteError`, keeping only the operation, the error's type, the SQLSTATE and the stack's frame lines.                                                                                                             |
 
 ## Invariants
 
@@ -103,8 +107,9 @@ flowchart LR
 5. **The rules every screen step carries** are the plan's (§5, end): keyed components and no full
    redraw; a counter outside its label, linked by `aria-describedby`; week days as headings; 44px
    targets; the layout at 360px.
-6. **The DAL resolves the household scope itself.** Every function under `lib/dal/program/` calls
-   `getHouseholdScope()` and returns a contract shape. The tenancy scan (`lib/dal/scoped.test.ts`)
+6. **The DAL resolves the household scope itself.** Every function under `lib/dal/program/` that
+   reaches the database calls `getHouseholdScope()`, or takes the `HouseholdScope` its caller
+   resolved (`reportProgramMiss`); `quiet-db-errors.ts` touches no data. The tenancy scan (`lib/dal/scoped.test.ts`)
    reaches sub-directories, so it holds this directory to that. [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
@@ -279,6 +284,15 @@ flowchart LR
       double-workout warning; the label only after a day; Starting as radios with what it changes;
       the hints shown only when they apply; Start's count; "last day …", tickable, in place of "on it";
       the Name field.
+
+19. 🔴 **The actions and the program DAL** (step 7a-i; engineering panel, 2026-11-16):
+    - Only `lib/dal/program/` imports lane P's writers and reads; everything else reaches them
+      through it (`apps/web/test/program-tables-stay-dark.test.ts`).
+    - A miss is reported only after a writer or read has said "not here", never on a success, and
+      once per request: the program first, then the workout; an item's miss reports nothing. A
+      failed check reports nothing and never changes the answer.
+    - No page or component imports `app/programs/actions.ts` until 7b, which owes the notice and
+      inventory sentences that test lists (`OWED_AT_7B`).
 
 ## Traps
 
