@@ -250,7 +250,7 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## The schedule: in a row, and in lanes
 
-The same 48 PRs drawn twice: one after another, and in the lanes of
+The same 49 PRs drawn twice: one after another, and in the lanes of
 [the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
 PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
 Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
@@ -267,10 +267,10 @@ gantt
   Lane A's 7 PRs               :r1, 5, 12
   Lane P's 6 PRs               :r2, 12, 18
   Lane E's 5 PRs               :r3, 18, 23
-  Lane B's 9 PRs               :r4, 23, 32
-  Lane C's 9 PRs               :r5, 32, 41
-  Lane S's 7 PRs               :r6, 41, 48
-  All 48 PRs merged            :milestone, rm, 48, 48
+  Lane B's 10 PRs              :r4, 23, 33
+  Lane C's 9 PRs               :r5, 33, 42
+  Lane S's 7 PRs               :r6, 42, 49
+  All 49 PRs merged            :milestone, rm, 49, 49
 
   section Contract
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
@@ -301,7 +301,7 @@ gantt
   9 picker                     :b4, 4, 5
   10 week editor               :b5, 5, 6
   10b dialogs                  :b6, 6, 7
-  7a actions                   :b7, 7, 8
+  7a-i, 7a-ii actions          :b7, 7, 8
   7b pages                     :b8, 8, 9
   15 put on, take off          :crit, b9, 10, 11
 
@@ -331,7 +331,7 @@ gantt
 
 **What it shows**
 
-- **In a row, 48 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
+- **In a row, 49 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
@@ -341,8 +341,9 @@ gantt
 - **Lane B has slack** (waves 7 to 9), and lanes B, C and S do their first six waves before any
   program data exists.
 - **6a is three PRs since 2026-11-16** (6a-i, 6a-ii, 6a-iii). The row above counts them; the lanes
-  picture keeps them in 6a's one slot. If each takes a full PR-length, 7a (which needs all three)
-  starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
+  picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
+  one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's three takes a full PR-length, 7a-ii
+  (which needs 6b and 6a-iii) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
 - **Grey is merged.** The contract's five PRs and the plan update were opened and merged on
   2026-11-15, partly in parallel themselves; lane S's 3b-page merged the same day (#418).
