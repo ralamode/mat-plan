@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/queries/day/scheduled.ts b/packages/db/src/queries/day/scheduled.ts
-index 69a25275..b02958f2 100644
+index a0baf5cf..a3466cdb 100644
 --- a/packages/db/src/queries/day/scheduled.ts
 +++ b/packages/db/src/queries/day/scheduled.ts
-@@ -31,7 +31,6 @@ export function scheduledOn(blockId: number, workoutId: number, day: string) {
+@@ -13,7 +13,6 @@ import { assignmentCurrentAsOf, assignmentOnDay } from '../program-assignments';
+  */
+ export function weekSlotOn(day: string) {
    return and(
-     eq(schema.blockDayWorkouts.blockId, blockId),
-     eq(schema.blockDayWorkouts.workoutId, workoutId),
 -    eq(schema.blockDayWorkouts.weekday, localWeekday(day)),
      isNull(schema.blockDayWorkouts.deletedAt),
    );

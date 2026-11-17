@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 9d1a35a1..fd303634 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -334,7 +334,6 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
+     .where(
+       and(
+         programRowOf(profileId, day),
+-        isNotNull(e.movementId),
+         isNull(e.deletedAt),
+         or(isNull(s.workoutId), isNotNull(scopedWorkout.id)),
+         or(isNull(e.prescriptionId), isNotNull(scopedPrescription.id)),
