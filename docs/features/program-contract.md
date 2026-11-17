@@ -163,9 +163,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
 2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
    `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
-   transcription to equal them. A fixture is changed by changing the prototype first. **Three
+   transcription to equal them. A fixture is changed by changing the prototype first. **Five
    fixtures are not prototype states and say so**: `every-type-once`,
-   `closed-day-program-since-left` (C17) and `archived-athlete-today` (C18). Each is the
+   `closed-day-program-since-left` (C17), `archived-athlete-today` (C18),
+   `closed-day-nothing-logged` and `archived-athlete-nothing-logged` (C22). Each is the
    prototype's data arranged to reach a rule no prototype state reaches. **And one field of one
    fixture differs from the prototype's own state, by the maintainer's decision** (2026-11-17):
    the workout that left the week in `workout-left-the-week` has no label, where v12 shows the

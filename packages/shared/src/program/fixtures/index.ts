@@ -214,6 +214,15 @@ export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
     FIXTURE_TODAY,
     seeded,
   ),
+  'closed-day-nothing-logged': from(seeded, 'a1', SINCE_LEFT_DAY),
+  'archived-athlete-nothing-logged': from(
+    edit(seeded, (world) => {
+      for (const athlete of world.athletes) if (athlete.id !== 'a1') athlete.archived = true;
+    }),
+    'a2',
+    FIXTURE_TODAY,
+    seeded,
+  ),
   'future-preview': from(seeded, 'a1', '2026-11-16'),
   'every-type-once': from(everyTypeWorld(), 'a1', FIXTURE_TODAY),
 } satisfies Record<string, DayPlanFixtureSource>);
@@ -304,6 +313,22 @@ export const closedDayProgramSinceLeft: DayPlan = built('closed-day-program-sinc
  * shows, with no PREVIOUS, and the workouts they did not log are absent.
  */
 export const archivedAthleteToday: DayPlan = built('archived-athlete-today');
+
+/**
+ * A closed Tuesday on which Athlete One was on the Family program and logged nothing: no workouts
+ * at all, since a closed day lists only what was logged. NOT a prototype state (C22): the day
+ * screen's line for it, "No workouts logged on <day>.", needs a state to render _(maintainer,
+ * 2026-11-17)_.
+ */
+export const closedDayNothingLogged: DayPlan = built('closed-day-nothing-logged');
+
+/**
+ * Athlete Two's today after Athlete Two and Adult One were archived, with nothing logged: no
+ * workouts, and a switcher's list of one, Athlete One, who is not the athlete on the page. NOT a
+ * prototype state (C22). It is the household the switcher's rule is for: it shows whenever there
+ * is another athlete to go to _(maintainer, 2026-11-17)_, and here there is exactly one.
+ */
+export const archivedAthleteNothingLogged: DayPlan = built('archived-athlete-nothing-logged');
 
 /** "Athlete One · look ahead to Monday": a future day. Items and prescriptions, no rows. */
 export const futurePreview: DayPlan = built('future-preview');
@@ -456,6 +481,8 @@ export const DAY_PLAN_FIXTURES = {
   'closed-day-logged-only': closedDayLoggedOnly,
   'closed-day-program-since-left': closedDayProgramSinceLeft,
   'archived-athlete-today': archivedAthleteToday,
+  'closed-day-nothing-logged': closedDayNothingLogged,
+  'archived-athlete-nothing-logged': archivedAthleteNothingLogged,
   'future-preview': futurePreview,
   'every-type-once': everyTypeOnce,
 } as const satisfies Record<keyof typeof DAY_PLAN_FIXTURE_SOURCES, DayPlan>;
