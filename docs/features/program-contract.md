@@ -351,6 +351,14 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - A workout that left the week has `label: null`. The label is its slot's heading; the
       database keeps the workout's name on the session and has nowhere to keep that label.
 
+25. **An id in a `DayWorkout` is one the household can use now** (contract change C21, from 12a-i's
+    code review). `programPublicId` is non-null only for a live program, which is then in
+    `DayPlan.programs`; `workoutPublicId` only for a live workout of a live program. Hidden or
+    purged, the id is `null` and the frozen name remains. A logged workout that is no longer live
+    shows like one that left the week, with every item built from its entries alone and
+    `progress` 0 of 0, so a hidden program's own text never reappears. No FAM-1 action hides a
+    program, and no fixture holds this: the day resolver's own proof does.
+
 ## Traps
 
 - **`@mat-plan/shared`'s root barrel does not export the fixtures or `prescribedText`.** They are

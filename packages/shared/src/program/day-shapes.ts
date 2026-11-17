@@ -104,7 +104,18 @@ const dayItemSchema = z.object({
 });
 
 const dayWorkoutSchema = z.object({
-  /** Both ids are `null` once the program or the workout is purged; the frozen `name` remains. */
+  /**
+   * **An id here is one the household can use now.** `programPublicId` is non-null only for a
+   * live program, and then that program is in `DayPlan.programs`; `workoutPublicId` only for a
+   * live workout of a live program. Once the program or the workout is hidden or purged its id is
+   * `null` and the frozen `name` remains (contract change C21). A hidden workout under a live
+   * program keeps `programPublicId`.
+   *
+   * **A logged workout that is no longer live shows like one that left the week**: `scheduled:
+   * false`, no `label`, no `description`, every item built from its entries alone as a removed
+   * item is, and `progress` 0 of 0. So nothing of a hidden program's own text reappears. Hiding is
+   * reversible and the plan is a read: un-hide the program and the ids are back.
+   */
   programPublicId: uuidSchema.nullable(),
   workoutPublicId: uuidSchema.nullable(),
   /**
