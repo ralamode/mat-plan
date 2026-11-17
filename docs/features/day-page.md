@@ -48,7 +48,7 @@ edited in place. The wiring (12b on) comes next; each step adds its files and in
 | `apps/web/components/day/row-parts.tsx`            | What both rows share: the card's classes and tint, the heading (superset label, what logged rows were against), the ✓, a row's message, a number field.                                                                                                                                                                                                                                                                                                                 |
 | `apps/web/components/day/use-row.ts`               | One row's writes (✓, un-tick, re-tick, a Change's `amend`), for a single row or one set: optimistic display, `clientId` per attempt, refusals, and the overrides that hold what this visit wrote until the page's data shows it (invariant 11). Its text is a row's fields (`RowText`).                                                                                                                                                                                 |
 | `apps/web/components/day/use-change.ts`            | Change (13b-ii): a logged row's edit, when it is sent, Undo's baseline, the line under the row, and what the ✓ means during an edit.                                                                                                                                                                                                                                                                                                                                    |
-| `apps/web/components/day/change-parts.tsx`         | Change's field (select-all on focus, Escape, Enter) and the line under a row ("Not saved. Was 30 lb." with Cancel; "Changed 30 → 35" with Undo; or the row's error).                                                                                                                                                                                                                                                                                                    |
+| `apps/web/components/day/change-parts.tsx`         | Change's field (select-all on focus, Escape, Enter) and the line under a row ("Not saved. Was 30 lb." with an icon-only ✕ under the row's ✓; "Changed 30 → 35" with Undo; or the row's error).                                                                                                                                                                                                                                                                          |
 | `apps/web/components/day/row-values.ts`            | Pure: a row's fields (`fieldsOf`: a load and/or reps), reading what was typed (`readTyped`, D13's empty ✓; `readAmend`, a Change), one number reader for both; what a ✓ stores and whether a Change can be sent are judged by the writer's own rule, the contract's `fillRowValues` (C10), so the screen cannot accept what the writer refuses; `canChangeValues` (the unit rule), comparing and formatting a row's values in the contract's spelling (`quantityText`). |
 | `apps/web/components/day/athlete-switcher.tsx`     | The household's athletes as first-name pills under the `<h1>`; a switch opens that athlete's today. Server-safe (no state).                                                                                                                                                                                                                                                                                                                                             |
 | `apps/web/components/day/program-line.tsx`         | "Programs: A, B" (renders on the server), and Program order when the day has two programs, the athlete is on two now, the day is writable and `reorderPrograms` is supplied.                                                                                                                                                                                                                                                                                            |
@@ -132,8 +132,8 @@ edited in place. The wiring (12b on) comes next; each step adds its files and in
     a change that is still open or does nothing. A keyboard press reads the row as it is.
 16. 🔴 **A number that is not saved never looks logged** (invariant 10's rule for Change). Typed
     over, a field drops the green edge (`CHANGED_FIELD_CLASS`) and the row says "Not saved. Was
-    30 lb." with Cancel; a failed save keeps the typed number, says "Couldn't save. Still 30 lb."
-    with Try again and Cancel, and counts as not saved (a failed Undo does not count: nothing typed
+    30 lb." with a ✕ (cancel); a failed save keeps the typed number, says "Couldn't save. Still
+    30 lb." with Try again and the ✕, and counts as not saved (a failed Undo does not count: nothing typed
     is lost). A saved Change shows its numbers until the page's data shows them too (the `amended`
     override in `use-row.ts`), and another phone's Change retires the line and its Undo.
 
@@ -166,8 +166,10 @@ border).
 
 **Decided for 13b-ii (maintainer, 2026-11-16, after the UX panel):** Undo returns the numbers from
 before the first Change this visit (a typo between two changes never comes back). While a logged
-number is typed over, the row says "Not saved. Was 30 lb." with a Cancel, since phones have no
-Escape key. No trace of a Change shows after a reload; an "edited" marker is a contract question for
+number is typed over, the row says "Not saved. Was 30 lb." with a cancel, since phones have no
+Escape key. **It is an icon-only ✕** (lane S's `InlineEditActions`, its ✕-alone form),
+at the right end of that line, directly under the row's ✓ _(maintainer, 2026-11-17, from three
+options captured at 360px)_; why there: `RowStatus` in `change-parts.tsx`. No trace of a Change shows after a reload; an "edited" marker is a contract question for
 later. Also different from v12: a Change is sent once per row, when focus leaves the row from one of its fields (v12 per field);
 the ✓ during an edit saves it (v12 un-ticked); a number is checked as a ✓'s is (v12 took anything
 `+v` reads, such as `1e3`); and a row logged in another unit stays text.
