@@ -15,6 +15,24 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The strength fix-a-set path can change a program row on any day (found 2026-11-17, FAM-1 11c's panel)
+
+- **What & why it's debt:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`)
+  edits any LIVE set of the profile, on any day, through `ownedEntryIds`. A program row of the
+  Weight × reps type passes its shape guards (mass, done, not bodyweight), so a crafted fix-a-set
+  request can change a program row's numbers outside D20's writable window (today and yesterday).
+  The day page's own Change (`amendRow`, 11c-i) keeps the window; this older path does not.
+- **Reach:** within the household only, and on the athlete's own history: `ownedEntryIds` rides
+  `isLiveProfile(profilePublicId, scope)`, so another household's set is never reached. A household member
+  corrects with the same authority as logging and hiding (ADR 0008 Decision 4; revisited after
+  AUTH-1); what is missing is
+  the window, not the ownership.
+- **The fix:** the fix-a-set path refuses a program row (`programRow()`, i.e. `entries.prescription_set IS NOT NULL`, which a
+  purge leaves set) whose day is outside `rowDayOpen`. A `db:verify` boundary proof, a purged row
+  (`prescription_id` NULL) among its cases, and a mutation.
+- **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
+- **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
+
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
