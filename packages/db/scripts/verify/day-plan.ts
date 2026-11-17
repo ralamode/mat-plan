@@ -38,6 +38,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { resolveDayPlan, type ResolvedDayPlan } from '../../src/queries/day/day-plan';
+import { prescriptionLiveIn } from '../../src/queries/day/prescription-live-in';
 import type { HouseholdScope } from '../../src/scope';
 import { logRow, untickRow } from '../../src/writers/day/log-row';
 import { hideEntries } from '../../src/writers/hide';
@@ -1564,5 +1565,88 @@ async function verifyRules(): Promise<void> {
       );
     });
     console.log('✓ FAM-1 12a E4: bodyweight, practice and check-in never enter a DayPlan');
+
+    // ── prescriptionLiveIn: 12b's scope-miss read, the same `false` for every miss ──
+    await inSavepoint(tx, async (sp) => {
+      const pId = H.prescriptions.get('w2:dbbench')!;
+      const publicId = H.ids.get(fixtureIds.prescription('w2', 'dbbench'))!;
+      const blockId = H.blocks.get('p1')!;
+      const isIn = (scope: HouseholdScope, id = publicId) =>
+        prescriptionLiveIn(asTx(sp), scope, id);
+      assert.equal(await isIn(H_SCOPE), true, 'FAM-1 12b: prescriptionLiveIn finds its own');
+      assert.equal(
+        await isIn(F_SCOPE),
+        false,
+        "FAM-1 12b: prescriptionLiveIn: F does not find H's prescription",
+      );
+      // The id is compared by value, so a later text or JS-side comparison fails here (C25).
+      assert.equal(
+        await isIn(H_SCOPE, publicId.toUpperCase()),
+        true,
+        'FAM-1 12b: prescriptionLiveIn: an upper-case spelling of its own id is found',
+      );
+      assert.equal(
+        await isIn(H_SCOPE, 'not-a-uuid'),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a malformed id is false',
+      );
+      assert.equal(
+        await isIn(H_SCOPE, newId()),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: an unknown id is false',
+      );
+      // A live prescription of a LIVE legacy block of H's own: not a program the day page logs to.
+      const [legacy] = await sp
+        .insert(schema.programBlocks)
+        .values({
+          publicId: newId(),
+          householdId: H.householdId,
+          slug: 'verify-12b-legacy',
+          name: 'Legacy program',
+          kind: PROGRAM_BLOCK_KIND.legacy,
+        })
+        .returning({ id: schema.programBlocks.id });
+      const [legacyRx] = await sp
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId: legacy.id,
+          dayRole: 'strength',
+          movementId: H.movements.get('dbbench')!,
+          idx: 0,
+          sets: 3,
+        })
+        .returning({ publicId: schema.prescriptions.publicId });
+      assert.equal(
+        await isIn(H_SCOPE, legacyRx.publicId),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a prescription of a legacy program is false',
+      );
+      await sp
+        .update(schema.prescriptions)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.prescriptions.id, pId));
+      assert.equal(
+        await isIn(H_SCOPE),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a hidden prescription is false',
+      );
+      await sp
+        .update(schema.prescriptions)
+        .set({ deletedAt: null })
+        .where(eq(schema.prescriptions.id, pId));
+      await sp
+        .update(schema.programBlocks)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.programBlocks.id, blockId));
+      assert.equal(
+        await isIn(H_SCOPE),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a prescription of a hidden program is false',
+      );
+    });
+    console.log(
+      '✓ FAM-1 12b: prescriptionLiveIn (own, other household, malformed, legacy, hidden, hidden program)',
+    );
   });
 }
