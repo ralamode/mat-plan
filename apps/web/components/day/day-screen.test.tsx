@@ -23,6 +23,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
+import { SAVING_LABEL } from '@/lib/constants';
 
 import { DAY_COPY, PROGRAM_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { nothingLoggedNotice, restNotice } from './day-notices';
@@ -132,6 +133,29 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     expect(control.actions.untickRow).not.toHaveBeenCalled();
     await gate.resolve();
     expect(tick(splits).getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('a ✓ still being sent looks pending, says Saving, and warns before the page is left (12c)', async () => {
+    const gate = held();
+    mount(todayTwoPrograms, {
+      wrap: (a) => ({ logRow: (input) => gate.after(() => a.logRow(input)) }),
+    });
+    const splits = card('Morning habits', 'Splits stretch');
+    const leave = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(leave()).toBe(false);
+    await press(tick(splits));
+    expect(tick(splits).getAttribute('aria-busy')).toBe('true');
+    expect(tick(splits).className).toContain('border-dashed');
+    expect(within(tick(splits)).getByText(SAVING_LABEL)).toBeTruthy();
+    expect(leave()).toBe(true);
+    await gate.resolve();
+    expect(tick(splits).getAttribute('aria-busy')).toBeNull();
+    expect(within(tick(splits)).queryByText(SAVING_LABEL)).toBeNull();
+    expect(leave()).toBe(false);
   });
 
   it('logs what was typed, and focus stays on the ✓', async () => {

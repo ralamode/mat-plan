@@ -81,18 +81,29 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const [message, setMessage] = useState('');
   const closedRef = useRef<HTMLDivElement>(null);
 
-  // A row's effect depends on this, so it keeps one identity for the life of the day.
+  // A row's effect depends on these, so each keeps one identity for the life of the day.
   const setRowFailed = useCallback(
-    (rowKey: string, isFailed: boolean) =>
-      setFailed((was) => {
-        if (was.has(rowKey) === isFailed) return was;
-        const next = new Set(was);
-        if (isFailed) next.add(rowKey);
-        else next.delete(rowKey);
-        return next;
-      }),
+    (rowKey: string, isFailed: boolean) => setFailed((was) => toggled(was, rowKey, isFailed)),
     [],
   );
+  const [inFlight, setInFlight] = useState<ReadonlySet<string>>(() => new Set());
+  const setRowPending = useCallback(
+    (rowKey: string, isPending: boolean) => setInFlight((was) => toggled(was, rowKey, isPending)),
+    [],
+  );
+
+  // 🔴 **A ✓ still waiting to send is lost if the page is left** (FAM-1 12c; maintainer,
+  // 2026-11-17: "Warn + record"). The browser's own leave-page prompt, while any write is in flight.
+  // ⚠️ iOS Safari ignores `beforeunload`, and switching athlete is an in-app navigation, which no
+  // prompt covers: a write that fails after the screen has gone is not reported, and the row reads
+  // un-ticked when the athlete is opened again (recorded in the day-page guide).
+  const writing = inFlight.size > 0;
+  useEffect(() => {
+    if (!writing) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [writing]);
 
   // The ✓ that met `closed_day` is gone, so focus would drop to the page: it goes to the notice.
   useEffect(() => {
@@ -113,6 +124,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
       // the second one carries a no-break space (U+00A0), which is not collapsed as a space is.
       announce: (next) => setMessage((was) => (was === next ? `${next}\u00a0` : next)),
       setRowFailed,
+      setRowPending,
       // The notice takes focus, which reads it; the live region would say it a second time.
       closeDay: () => setClosed(true),
       // A reload after midnight would show the new today: the day is pinned first (a `closed_day`
@@ -122,7 +134,16 @@ function DayBody({ plan, actions }: DayScreenProps) {
         router.refresh();
       },
     }),
-    [plan.profilePublicId, viewedDay, today, actions, readOnly, setRowFailed, router],
+    [
+      plan.profilePublicId,
+      viewedDay,
+      today,
+      actions,
+      readOnly,
+      setRowFailed,
+      setRowPending,
+      router,
+    ],
   );
 
   const many = plan.programs.length > 1;
@@ -172,4 +193,13 @@ function DayBody({ plan, actions }: DayScreenProps) {
       </section>
     </DayContext>
   );
+}
+
+/** `was` with `key` in it or not, the same set when nothing changes (so no re-render). */
+function toggled(was: ReadonlySet<string>, key: string, on: boolean): ReadonlySet<string> {
+  if (was.has(key) === on) return was;
+  const next = new Set(was);
+  if (on) next.add(key);
+  else next.delete(key);
+  return next;
 }

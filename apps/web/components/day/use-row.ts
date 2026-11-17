@@ -244,6 +244,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     return () => setRowFailed(rowKey, false);
   }, [notSaved, rowKey, setRowFailed]);
 
+  // A write in flight warns before the page is left (FAM-1 12c, maintainer 2026-11-17): Server
+  // Actions are sent one at a time, so ✓s tapped in a burst wait their turn and would be lost.
+  const { setRowPending } = day;
+  const inFlight = pending !== null;
+  useEffect(() => {
+    if (!inFlight) return;
+    setRowPending(rowKey, true);
+    return () => setRowPending(rowKey, false);
+  }, [inFlight, rowKey, setRowPending]);
+
   /** Typing over a refused number clears the refusal: the field is being fixed. */
   function setText(field: RowField, next: string) {
     setTextState((was) => ({ ...was, [field]: next }));

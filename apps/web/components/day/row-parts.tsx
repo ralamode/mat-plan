@@ -4,7 +4,7 @@ import { type DayItem } from '@mat-plan/shared';
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, NAME_WRAP_CLASS, SAVING_LABEL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
@@ -157,10 +157,14 @@ export function Tick({
         aria-pressed={r.logged !== null}
         aria-label={DAY_COPY.logLabel(label)}
         aria-disabled={r.pending || undefined}
+        aria-busy={r.pending || undefined}
         aria-describedby={described ? errorId : undefined}
         className={cn(
           TICK_FOCUS_CLASS,
           TICK_CLASS,
+          // FAM-1 12c: a ✓ still being sent does not look saved. A dashed border, not a fade (a
+          // faded glyph fails contrast) and not colour alone (forced colours keep a border style).
+          r.pending && 'border-dashed',
           // Ticked: the `done` fill carries the state (at least 3:1 against an un-ticked ✓), and
           // under forced colours, where fills vanish, a heavier border does. Un-ticked: a muted
           // glyph, as v12's is.
@@ -170,6 +174,7 @@ export function Tick({
         )}
       >
         <span aria-hidden="true">✓</span>
+        {r.pending ? <span className="sr-only">{SAVING_LABEL}</span> : null}
       </button>
     );
   }
