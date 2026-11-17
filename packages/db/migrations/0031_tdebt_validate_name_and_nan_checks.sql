@@ -25,7 +25,9 @@
 -- never the row: an existing row violates it (the plan's merge-condition read finds it).
 -- ⚠️ Hiding that row does not clear it: a soft delete is an UPDATE, and the CHECK refuses it
 -- (db:verify proves this). The guarded correction must repair the value in the same UPDATE (a name
--- trimmed to 1..60 characters; a reading set to a valid number or NULL), then re-dispatch migrate.yml.
+-- shortened or replaced to 1..60 non-blank characters; entries.value_num set to a valid number or
+-- NULL; a NaN quantity or ramp target set to a valid number, both columns being NOT NULL), then
+-- re-dispatch migrate.yml.
 -- A 55P03 needs nothing but the re-run. No request-path statement depends on this file: the app keeps
 -- serving throughout.
 SET lock_timeout = '5s';--> statement-breakpoint
