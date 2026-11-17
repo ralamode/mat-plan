@@ -211,7 +211,13 @@ export type PrescriptionSeedRow = z.infer<typeof prescriptionSeedRowSchema>;
 export const programBlockSeedRowSchema = z.object({
   householdPublicId: z.string(),
   slug: z.string(),
-  name: z.string(),
+  // The database bounds every block's name (`program_blocks_name_length_check`); a seed name past it
+  // would fail the fixture seed with 23514 instead of here.
+  // Mirrors the CHECK on the RAW value the seed inserts: at most PROGRAM_NAME_MAX, and not blank.
+  name: z
+    .string()
+    .max(PROGRAM_NAME_MAX)
+    .refine((s) => s.trim() !== ''),
   notes: z.string().nullable(),
   prescriptions: z.array(prescriptionSeedRowSchema),
 });
