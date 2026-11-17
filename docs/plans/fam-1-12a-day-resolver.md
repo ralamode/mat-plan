@@ -329,9 +329,9 @@ policy: a patch only where no fixture's deep-equal goes red.
 **Files:**
 
 - E `scripts/verify/day-plan.ts`: the harness and the proofs above.
-- E `scripts/verify/fixture-groups.ts`: `REPLAY_FIXTURES`, `REPLAY_FIXTURE_COUNT`, and the draft-only
-  `AWAITING_WRITER`.
-- E `src/writers/day/owed.test.ts`: reads `REPLAY_FIXTURES`; the progress line goes; Q6's 6d line is added.
+- E `scripts/verify/fixture-groups.ts`: `REPLAY_FIXTURES`, `REPLAY_FIXTURE_COUNT` (and, from the
+  code review, `FIXED_WORLD_FIXTURES`; `AWAITING_WRITER` was never needed, see Built).
+- E `src/writers/day/owed.test.ts`: the replay loop and the progress line go; Q6's 6d line is added.
 - N mutation patches 255–259 and 340, plus their README rows.
 - E `docs/features/day-writers.md`: the proof map.
 - E `docs/tech-debt.md`: the direct-insert entry rewritten.
@@ -379,7 +379,7 @@ grouping must match R4's key: when 14 is built, it reads the grouping helper rat
 None. The split, the archived athlete's day (R1) and the left-the-week label (R2) were decided by the
 maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
 
-**Mutation numbers:** lane E holds 120, 187–199 and 230–259 (the board, 2026-11-17).
+**Mutation numbers:** lane E holds 120, 187–199, 230–259, 340–359 and 360–379 (the board, 2026-11-17).
 
 ## Review-response log
 
@@ -496,3 +496,10 @@ maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
 - **The R4 text proof uses a second bench card**, which also serves as the one-movement-twice
   proof. The pull-up has no load to change.
 - **No resolver code changed**, and no replay found a difference from its fixture.
+- **From the code review (correctness, reuse; Opus 5.5):** the reorder goes through lane P's
+  `shiftIntoBand`, and its density check reads the OPEN assignments, as Q6 condition 1 says; the
+  classifier runs before seeding and compares each workout's `from` and rests, and its refusal is
+  proved (an archive throws by name); a replayed workout's saved name is read back; the R4 blocks
+  pass their savepoint's own executor; "each card has its own rows" compares entry ids;
+  12a-i's compare and round trip are shared (`proveFixture`, and `roundTrip` covers an all-logged
+  day); `FIXED_WORLD_FIXTURES` is derived, and the three groups are asserted to cover every source.

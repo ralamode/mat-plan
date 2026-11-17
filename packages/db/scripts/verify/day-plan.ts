@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ACTIVITY_TYPE_KEYS,
   addDays,
+  type DayItem,
   type DayPlan,
   dayPlanSchema,
   type DayWorkout,
@@ -37,7 +38,7 @@ import {
   workoutDraft,
   workoutOf as protoWorkoutOf,
 } from '@mat-plan/shared/program/fixtures';
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { resolveDayPlan, type ResolvedDayPlan } from '../../src/queries/day/day-plan';
@@ -52,19 +53,21 @@ import {
   programBlockByClientId,
 } from '../../src/writers/ownership';
 import { saveWeek, saveWorkout } from '../../src/writers/program';
+import { shiftIntoBand } from '../../src/writers/program/shift-band';
 import { insertEntrySetRows } from '../../src/writers/session-rows';
 import { activityTypeIdOf, expectOk, inSavepoint } from './day';
 import { asDb, asTx, rolledBack, type VerifyTx } from './harness';
 import {
   ARCHIVE_ONLY_FIXTURES,
   FIXED_WORLD_FIXTURE_COUNT,
+  FIXED_WORLD_FIXTURES,
   REPLAY_FIXTURE_COUNT,
   REPLAY_FIXTURES,
 } from './fixture-groups';
 import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './schema';
 
 /**
- * `db:verify` proofs for **the day resolver** (FAM-1 step 12a-i; plan
+ * `db:verify` proofs for **the day resolver** (FAM-1 steps 12a-i and 12a-ii; plan
  * `docs/plans/fam-1-12a-day-resolver.md` → § Test plan). Owner: lane E. Called from `./day.ts`,
  * after the row writer's proofs, so a mutation patch of 11b still fails on its own assertion first.
  *
@@ -75,8 +78,9 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  * - **Programs, workouts, the week, prescriptions, quantities and assignments by direct insert, in
  *   REVERSE order**, so no internal id matches an `idx` and an order taken from ids goes red. Each
  *   assignment gets its seven weekday rows, as a put-on writes them. ⚠️ A world's `assign.to` is the
- *   first day OFF; `active_to` is the inclusive last day, so `to − 1`. The direct inserts fold into
- *   lane P's `seedProgramFixtures` at 6c (`docs/tech-debt.md`).
+ *   first day OFF; `active_to` is the inclusive last day, so `to − 1`. The inserts stay direct
+ *   because ids must run opposite to `idx`, which `saveWorkout` cannot write; 12a-ii's calibration
+ *   save keeps them honest (`docs/tech-debt.md`).
  * - **Entries through the real row writer**, `logRow`, in DESCENDING entry order `n` (so ids run
  *   opposite to `n`), each with `today` set to its own day so the window lets it through. Then each
  *   `created_at` is set to a hand-written stamp that RISES with `n`: "first logged" is `n` in a
@@ -91,10 +95,11 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  * an unlogged row ticks through `logRow` with the returned ids, a logged set answers `slot_taken`,
  * and a returned `entryPublicId` un-ticks through `untickRow`.
  *
- * 12a-i proves the eleven fixtures whose `before` is `null`, chosen by that test, not by a list,
- * and in `verifyRules` the two whose only change is an archive (`archived-athlete-today`,
- * `archived-athlete-nothing-logged`). The other four of the six with a `before` are 12a-ii's: they
- * need the program edits replayed after logging.
+ * 12a-i proves the eleven fixtures whose `before` is `null`, and in `verifyRules` the two whose only
+ * change is an archive. **12a-ii** replays the other four (`verifyReplays`): `before` seeded and
+ * logged, a calibration save, the change made with lane P's writers, then the same comparison; and
+ * `verifyReplayRules` proves what only a replay reaches (plan § 12a-ii). The groups are
+ * `./fixture-groups.ts`'s, derived from the sources.
  */
 export async function verifyDayPlan(): Promise<void> {
   await verifyFixtures();
@@ -368,9 +373,13 @@ async function resolve(
 type FixtureName = keyof typeof DAY_PLAN_FIXTURE_SOURCES;
 
 async function verifyFixtures(): Promise<void> {
-  // 12a-i's set: the fixtures with no `before`, by that test.
-  const names = (Object.keys(DAY_PLAN_FIXTURE_SOURCES) as FixtureName[]).filter(
-    (name) => DAY_PLAN_FIXTURE_SOURCES[name].before === null,
+  // 12a-i's set: the fixtures with no `before` (`fixture-groups.ts`). The three groups cover every
+  // source exactly once.
+  const names = FIXED_WORLD_FIXTURES;
+  assert.deepEqual(
+    [...FIXED_WORLD_FIXTURES, ...ARCHIVE_ONLY_FIXTURES, ...REPLAY_FIXTURES].sort(),
+    Object.keys(DAY_PLAN_FIXTURE_SOURCES).sort(),
+    'FAM-1 12a: every fixture is in exactly one group (fixed world, archive-only, replay)',
   );
   assert.ok(
     names.includes('closed-day-logged-only'),
@@ -408,16 +417,15 @@ async function verifyFixtures(): Promise<void> {
         activityTypeId,
       );
       for (const name of group) {
-        const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
-        const actual = await resolve(tx, seeded, athlete, day, world.today);
-        const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[name] as DayPlan;
-        assert.deepStrictEqual(
-          actual,
-          asJson(translate(fixture, seeded.ids, name)),
-          `FAM-1 12a: the resolver, on the seeded state, deep-equals ${name}`,
-        );
-        if (actual.writable && actual.workouts.length > 0) {
-          await roundTrip(tx, seeded, name, actual, activityTypeId);
+        if (
+          await proveFixture(
+            tx,
+            seeded,
+            name,
+            activityTypeId,
+            'FAM-1 12a: the resolver, on the seeded state',
+          )
+        ) {
           roundTrips += 1;
         }
         console.log(`✓ FAM-1 12a: the resolver deep-equals ${name}, ids mapped exactly`);
@@ -428,8 +436,36 @@ async function verifyFixtures(): Promise<void> {
 }
 
 /**
+ * One fixture on a seeded state: resolve it, deep-equal the translated fixture under `title`, and,
+ * on a writable day with workouts, run C1's round trip. Answers whether it round-tripped. Shared by
+ * 12a-i's fixtures and 12a-ii's replays; `title` keeps each assertion's text (the `.expect` lines).
+ */
+async function proveFixture(
+  tx: VerifyTx,
+  seeded: Seeded,
+  name: FixtureName,
+  activityTypeId: number,
+  title: string,
+): Promise<boolean> {
+  const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
+  const actual = await resolve(tx, seeded, athlete, day, world.today);
+  const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[name] as DayPlan;
+  assert.deepStrictEqual(
+    actual,
+    asJson(translate(fixture, seeded.ids, name)),
+    `${title}, deep-equals ${name}`,
+  );
+  if (!actual.writable || actual.workouts.length === 0) return false;
+  await roundTrip(tx, seeded, name, actual, activityTypeId);
+  return true;
+}
+
+/**
  * C1's round trip: the ids the resolver returned are the writers' ids. An unlogged row ticks through
- * `logRow` (`ok`), a logged set answers `slot_taken`, and a returned `entryPublicId` un-ticks.
+ * `logRow` (`ok`), a logged set answers `slot_taken`, and a returned `entryPublicId` un-ticks. On a
+ * day whose scheduled rows are all logged (12a-ii's `workout-left-the-week`), a returned scheduled
+ * entry un-ticks, and each returned entry of a workout that left the week answers `not_scheduled`,
+ * not `not_found`: its ids are the writer's own (`untickRow` finds the entry before the schedule).
  */
 async function roundTrip(
   tx: VerifyTx,
@@ -446,7 +482,10 @@ async function roundTrip(
   const all = scheduled.flatMap(rowsOf);
   const unlogged = all.find((r) => r.row.logged === null);
   const logged = all.find((r) => r.row.logged !== null);
-  assert.ok(unlogged, `FAM-1 12a ${name}: a writable fixture has an unlogged row`);
+  if (!unlogged) {
+    await allLoggedRoundTrip(tx, seeded, name, plan, logged?.row.logged?.entryPublicId);
+    return;
+  }
   await inSavepoint(tx, async (sp) => {
     const tick = (r: NonNullable<typeof unlogged>) =>
       logRow(asDb(sp), {
@@ -1676,6 +1715,44 @@ function expectProgramOk(r: ProgramResult<object>, title: string): void {
   assert.ok(r.ok, `${title} — the writer refused: ${JSON.stringify(r)}`);
 }
 
+/**
+ * C1's round trip where every scheduled row is logged (see `roundTrip`): a returned scheduled entry
+ * un-ticks, and each returned entry of a workout that left the week answers `not_scheduled`.
+ */
+async function allLoggedRoundTrip(
+  tx: VerifyTx,
+  seeded: Seeded,
+  name: string,
+  plan: ResolvedDayPlan,
+  scheduledEntry: string | undefined,
+): Promise<void> {
+  const untick = (x: VerifyTx, entryPublicId: string) =>
+    untickRow(asDb(x), {
+      scope: seeded.scope,
+      today: plan.today,
+      input: { profilePublicId: plan.profilePublicId, day: plan.day, entryPublicId },
+    });
+  assert.ok(scheduledEntry, `FAM-1 12a ${name}: a writable fixture has a scheduled row`);
+  await inSavepoint(tx, async (sp) => {
+    expectOk(
+      await untick(sp, scheduledEntry),
+      `FAM-1 12a ${name}: a returned scheduled entryPublicId un-ticks`,
+    );
+  });
+  const left = plan.workouts
+    .filter((w) => !w.scheduled)
+    .flatMap((w) => w.items.flatMap((item) => (item.prescriptionPublicId ? item.rows : [])))
+    .filter((row) => row.logged !== null);
+  assert.ok(left.length > 0, `FAM-1 12a ${name}: a workout that left the week has logged rows`);
+  for (const row of left) {
+    assert.deepEqual(
+      await untick(tx, row.logged!.entryPublicId),
+      { ok: false, reason: ROW_REFUSAL.not_scheduled },
+      `FAM-1 12a ${name}: a returned entry of a workout that left the week is not_scheduled`,
+    );
+  }
+}
+
 /** What changed between a fixture's `before` and its `world`, in the three kinds a replay makes. */
 type Change =
   | { kind: 'workout'; prog: string; wid: string }
@@ -1683,9 +1760,10 @@ type Change =
   | { kind: 'order'; athlete: string };
 
 /**
- * Plan § 12a-ii, step 4: **classify the change.** Any difference the harness cannot replay with a
- * writer throws, naming it, so a fixture that grows a new kind of edit fails here and not as a
- * confusing deep-equal.
+ * Plan § 12a-ii, step 4: **classify the change.** A difference the harness cannot replay with a
+ * writer throws, naming it: the athletes, the catalog, the entries, today, a program's shell (its
+ * name, its workouts, each workout's `from` and rests), or an assignment's dates. A workout's own
+ * fields are compared through its `workoutDraft`, and a week through `programView`.
  */
 function classify(before: World, world: World, name: string): Change[] {
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -1699,7 +1777,11 @@ function classify(before: World, world: World, name: string): Change[] {
     unreplayable('entries'); // C17: `world`'s entries are `before`'s, stamps included
   }
   const shell = (w: World) =>
-    w.programs.map((p) => ({ id: p.id, name: p.name, workouts: p.workouts.map((x) => x.wid) }));
+    w.programs.map((p) => ({
+      id: p.id,
+      name: p.name,
+      workouts: p.workouts.map((x) => ({ wid: x.wid, from: x.from, rests: x.rests })),
+    }));
   if (!same(shell(before), shell(world))) unreplayable('programs or their workouts');
 
   const changes: Change[] = [];
@@ -1726,17 +1808,11 @@ function classify(before: World, world: World, name: string): Change[] {
 }
 
 /**
- * Plan § 12a-ii, steps 4 and 5: **replay each change with its writer**, under the seeded scope.
- * Returns how many writes it made; zero fails the caller's proof.
+ * Plan § 12a-ii, step 5: **replay each change with its writer**, under the seeded scope. A workout's
+ * save is read back: its name is the world's, so a save that did nothing visible fails here, not
+ * only where a later read happens to show it.
  */
-async function replay(
-  tx: VerifyTx,
-  seeded: Seeded,
-  before: World,
-  world: World,
-  name: string,
-): Promise<number> {
-  const changes = classify(before, world, name);
+async function replay(tx: VerifyTx, seeded: Seeded, world: World, changes: Change[], name: string) {
   for (const change of changes) {
     if (change.kind === 'workout') {
       expectProgramOk(
@@ -1746,6 +1822,15 @@ async function replay(
           translate(workoutDraft(world, change.prog, change.wid), seeded.ids, name),
         ),
         `FAM-1 12a-ii ${name}: saveWorkout replays ${change.wid}`,
+      );
+      const [saved] = await tx
+        .select({ name: schema.workouts.name })
+        .from(schema.workouts)
+        .where(eq(schema.workouts.id, seeded.workouts.get(change.wid)!));
+      assert.equal(
+        saved?.name,
+        protoWorkoutOf(programOf(world, change.prog), change.wid).name,
+        `FAM-1 12a-ii ${name}: ${change.wid} is saved as the world has it`,
       );
     } else if (change.kind === 'week') {
       expectProgramOk(
@@ -1759,16 +1844,20 @@ async function replay(
       await reorder(tx, seeded, world, change.athlete, name);
     }
   }
-  return changes.length;
 }
 
 /**
- * The reorder, by a direct `idx` update (the board's Q6, 2026-11-17; 6d's writer is not built). In
- * two steps through a band, so no two live rows ever share an `idx`; then the board's condition 1:
- * the athlete's live assignments have dense `idx` values from 0, a state 6d's writer could leave.
+ * The reorder, by a direct `idx` update (the board's Q6, 2026-11-17; 6d's writer is not built),
+ * through lane P's own band (`shiftIntoBand`), so no two live rows ever share an `idx`. Then the
+ * board's condition 1: the athlete's OPEN assignments, the rows the order index covers, have dense
+ * `idx` values from 0, a state 6d's writer could leave.
  */
 async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: string, name: string) {
   const profileId = seeded.profiles.get(athlete)!.id;
+  const live = and(
+    eq(schema.programAssignments.profileId, profileId),
+    isNull(schema.programAssignments.deletedAt),
+  );
   const rows = await tx
     .select({
       id: schema.programAssignments.id,
@@ -1776,19 +1865,8 @@ async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: stri
       activeFrom: schema.programAssignments.activeFrom,
     })
     .from(schema.programAssignments)
-    .where(
-      and(
-        eq(schema.programAssignments.profileId, profileId),
-        isNull(schema.programAssignments.deletedAt),
-      ),
-    );
-  const BAND = 1000;
-  for (const row of rows) {
-    await tx
-      .update(schema.programAssignments)
-      .set({ idx: sql`${schema.programAssignments.idx} + ${BAND}` })
-      .where(eq(schema.programAssignments.id, row.id));
-  }
+    .where(live);
+  await shiftIntoBand(asTx(tx), schema.programAssignments, live);
   for (const [idx, a] of (world.assign[athlete] ?? []).entries()) {
     const row = rows.find(
       (r) => r.blockId === seeded.blocks.get(a.prog) && r.activeFrom === a.from,
@@ -1799,27 +1877,23 @@ async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: stri
       .set({ idx })
       .where(eq(schema.programAssignments.id, row.id));
   }
-  const after = await tx
+  const open = await tx
     .select({ idx: schema.programAssignments.idx })
     .from(schema.programAssignments)
-    .where(
-      and(
-        eq(schema.programAssignments.profileId, profileId),
-        isNull(schema.programAssignments.deletedAt),
-      ),
-    )
+    .where(and(live, isNull(schema.programAssignments.activeTo)))
     .orderBy(schema.programAssignments.idx);
   assert.deepEqual(
-    after.map((r) => r.idx),
-    after.map((_, i) => i),
-    `FAM-1 12a-ii ${name}: the reorder leaves dense idx from 0, as 6d's writer would (Q6)`,
+    open.map((r) => r.idx),
+    open.map((_, i) => i),
+    `FAM-1 12a-ii ${name}: the reorder leaves dense idx from 0 on the open assignments, as 6d's writer would (Q6)`,
   );
 }
 
 /**
  * Plan § 12a-ii, step 2: **calibrate.** Save every workout of `before` through `saveWorkout`,
  * unchanged, and the resolved day must not move: the seeder's direct inserts and the writer's rows
- * agree, so a later difference is the edit's.
+ * agree, so a later difference is the edit's. (After the entries are logged, since `seedWorld` logs
+ * them; the check is the same.)
  */
 async function calibrate(tx: VerifyTx, seeded: Seeded, before: World, name: string, at: Seat) {
   const was = await resolve(tx, seeded, at.athlete, at.day, at.today);
@@ -1846,61 +1920,18 @@ async function calibrate(tx: VerifyTx, seeded: Seeded, before: World, name: stri
 type Seat = { athlete: string; day: string; today: string };
 
 /**
- * Seed `name`'s `before`, log its entries (the seeder does), calibrate, then replay its change.
- * Returns the seeded state, now `world`.
+ * Classify `name`'s change FIRST (so an unreplayable fixture fails by name), then seed its `before`
+ * (the seeder logs its entries), calibrate, and replay. Returns the seeded state, now `world`.
  */
 async function seedAndReplay(tx: VerifyTx, name: FixtureName, activityTypeId: number) {
   const { world, before, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
   assert.ok(before, `FAM-1 12a-ii ${name}: a replay fixture has a before`);
+  const changes = classify(before as World, world as World, name);
+  assert.ok(changes.length > 0, `FAM-1 12a-ii ${name}: the replay makes a change`);
   const seeded = await seedWorld(tx, before as World, `${name}-ii`, activityTypeId);
   await calibrate(tx, seeded, before as World, name, { athlete, day, today: world.today });
-  const writes = await replay(tx, seeded, before as World, world as World, name);
-  assert.ok(writes > 0, `FAM-1 12a-ii ${name}: the replay made a change`);
+  await replay(tx, seeded, world as World, changes, name);
   return seeded;
-}
-
-/**
- * C1's round trip on a replayed day. Where a scheduled row is unlogged, 12a-i's `roundTrip`.
- * Otherwise (every scheduled row logged, as `workout-left-the-week`), a returned scheduled
- * `entryPublicId` un-ticks, and an entry of a workout that left the week answers `not_scheduled`,
- * not `not_found`: its returned ids are the writer's own.
- */
-async function replayRoundTrip(
-  tx: VerifyTx,
-  seeded: Seeded,
-  name: string,
-  plan: ResolvedDayPlan,
-  activityTypeId: number,
-): Promise<void> {
-  const rowsOf = (w: DayWorkout) =>
-    w.items.flatMap((item) => (item.prescriptionPublicId === null ? [] : item.rows));
-  const scheduled = plan.workouts.filter((w) => w.scheduled && w.workoutPublicId !== null);
-  if (scheduled.flatMap(rowsOf).some((row) => row.logged === null)) {
-    await roundTrip(tx, seeded, name, plan, activityTypeId);
-    return;
-  }
-  const untick = (entryPublicId: string) =>
-    untickRow(asDb(tx), {
-      scope: seeded.scope,
-      today: plan.today,
-      input: { profilePublicId: plan.profilePublicId, day: plan.day, entryPublicId },
-    });
-  await inSavepoint(tx, async () => {
-    const logged = scheduled.flatMap(rowsOf).find((row) => row.logged !== null);
-    assert.ok(logged, `FAM-1 12a-ii ${name}: a scheduled row is logged`);
-    expectOk(
-      await untick(logged.logged!.entryPublicId),
-      `FAM-1 12a-ii ${name}: a returned scheduled entryPublicId un-ticks`,
-    );
-  });
-  const left = plan.workouts.filter((w) => !w.scheduled).flatMap(rowsOf);
-  for (const row of left.filter((r) => r.logged !== null)) {
-    assert.deepEqual(
-      await untick(row.logged!.entryPublicId),
-      { ok: false, reason: ROW_REFUSAL.not_scheduled },
-      `FAM-1 12a-ii ${name}: a returned entry of a workout that left the week is not_scheduled`,
-    );
-  }
 }
 
 async function verifyReplays(): Promise<void> {
@@ -1909,40 +1940,51 @@ async function verifyReplays(): Promise<void> {
     REPLAY_FIXTURE_COUNT,
     `FAM-1 12a-ii: ${REPLAY_FIXTURE_COUNT} fixtures are replayed`,
   );
+  // The classifier's refusal is reachable: an archive is not a program edit.
+  assert.throws(
+    () => {
+      const { before, world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
+      classify(before as World, world as World, 'archived-athlete-today');
+    },
+    /unreplayable change: athletes/,
+    'FAM-1 12a-ii: a change no writer replays (an archive) throws by name',
+  );
   for (const name of REPLAY_FIXTURES) {
     await rolledBack(async (tx) => {
       const activityTypeId = await workoutItemTypeId(tx);
       const seeded = await seedAndReplay(tx, name, activityTypeId);
-      const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
-      const actual = await resolve(tx, seeded, athlete, day, world.today);
-      const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[name] as DayPlan;
-      assert.deepStrictEqual(
-        actual,
-        asJson(translate(fixture, seeded.ids, name)),
-        `FAM-1 12a-ii: the resolver, on the replayed state, deep-equals ${name}`,
+      await proveFixture(
+        tx,
+        seeded,
+        name,
+        activityTypeId,
+        'FAM-1 12a-ii: the resolver, on the replayed state',
       );
-      if (actual.writable && actual.workouts.length > 0) {
-        await replayRoundTrip(tx, seeded, name, actual, activityTypeId);
-      }
     });
     console.log(`✓ FAM-1 12a-ii: the replayed state deep-equals ${name}, ids mapped exactly`);
   }
 }
+
+// The rules only a replay reaches use these, on a seeded state, with the executor they are given
+// (a savepoint's own `sp`, so a refusal inside one rolls back with it).
+
+/** The day's workout `wid`, by the id the seeder returned. */
+function workoutOnDay(plan: ResolvedDayPlan, seeded: Seeded, wid: string): DayWorkout {
+  const id = seeded.ids.get(fixtureIds.workout(wid));
+  const w = plan.workouts.find((x) => x.workoutPublicId === id);
+  assert.ok(w, `FAM-1 12a-ii: ${wid} is on the day`);
+  return w;
+}
+
+/** A workout's items of movement `key`, live and removed. */
+const itemsOf = (w: DayWorkout, seeded: Seeded, key: FixtureItemKey) =>
+  w.items.filter((item) => item.itemPublicId === seeded.ids.get(fixtureIds.item(key)));
 
 /**
  * The rules only a replay reaches (plan § 12a-ii, the proofs table), each with its own mutation
  * (`scripts/mutations/README.md`, 255–259 and 340).
  */
 async function verifyReplayRules(): Promise<void> {
-  const workoutIn = (plan: ResolvedDayPlan, seeded: Seeded, wid: string) => {
-    const id = seeded.ids.get(fixtureIds.workout(wid));
-    const w = plan.workouts.find((x) => x.workoutPublicId === id);
-    assert.ok(w, `FAM-1 12a-ii: ${wid} is on the day`);
-    return w;
-  };
-  const itemsOf = (w: DayWorkout, seeded: Seeded, key: FixtureItemKey) =>
-    w.items.filter((item) => item.itemPublicId === seeded.ids.get(fixtureIds.item(key)));
-
   // ── R2, writable half: a writable day shows the live name after a rename ────────────────────────
   await rolledBack(async (tx) => {
     const name = 'closed-day-program-since-left';
@@ -1953,20 +1995,24 @@ async function verifyReplayRules(): Promise<void> {
     const plan = await resolve(tx, seeded, 'a1', YESTERDAY, world.today);
     assert.ok(plan.writable, 'FAM-1 12a-ii R2: yesterday is writable (non-vacuity)');
     assert.equal(
-      workoutIn(plan, seeded, 'w1').name,
+      workoutOnDay(plan, seeded, 'w1').name,
       renamed,
       'FAM-1 12a-ii R2: a writable day shows the live name after a rename',
     );
   });
   console.log('✓ FAM-1 12a-ii R2: the live name on a writable day, the frozen one on a closed day');
 
-  // ── the closed-day heading: the first-logged row's snapshot, not the live text ─────────────────
+  // ── the closed-day heading, and R4, on ONE replayed `yesterday-edited-after-logging` ───────────
   await rolledBack(async (tx) => {
     const name = 'yesterday-edited-after-logging';
-    const seeded = await seedAndReplay(tx, name, await workoutItemTypeId(tx));
+    const activityTypeId = await workoutItemTypeId(tx);
+    const seeded = await seedAndReplay(tx, name, activityTypeId);
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES[name];
+
+    // The closed-day heading: the first-logged row's snapshot, not the live text.
     const closed = await resolve(tx, seeded, 'a1', YESTERDAY, addDays(FIXTURE_TODAY, 1));
     assert.equal(closed.writable, false, 'FAM-1 12a-ii heading: two days back is closed');
-    const [bench] = itemsOf(workoutIn(closed, seeded, 'w2'), seeded, 'dbbench');
+    const [bench] = itemsOf(workoutOnDay(closed, seeded, 'w2'), seeded, 'dbbench');
     assert.ok(bench, 'FAM-1 12a-ii heading: the bench press was logged that day');
     // The text before the edit is what the seeded day showed for it (`yesterday-half-done`).
     const textOf = (fixture: FixtureName) => {
@@ -1989,15 +2035,10 @@ async function verifyReplayRules(): Promise<void> {
       bench.rows.map(() => logged),
       'FAM-1 12a-ii heading: each row keeps its own logged text',
     );
-  });
-  console.log('✓ FAM-1 12a-ii heading: a closed day heads an item with what it was logged against');
+    console.log(
+      '✓ FAM-1 12a-ii heading: a closed day heads an item with what it was logged against',
+    );
 
-  // ── R4: a removed prescription's rows are their OWN item; its key; its text; one movement twice ─
-  await rolledBack(async (tx) => {
-    const name = 'yesterday-edited-after-logging';
-    const activityTypeId = await workoutItemTypeId(tx);
-    const seeded = await seedAndReplay(tx, name, activityTypeId);
-    const { world, before } = DAY_PLAN_FIXTURE_SOURCES[name];
     const heavyA = (w: World) => translate(workoutDraft(w, 'p1', 'w2'), seeded.ids, name);
     /** A card of `key` as `from` had it, under a NEW client id: a card added back, or a second one. */
     const newCard = (from: World, key: FixtureItemKey, over: Partial<WorkoutDraftItem> = {}) => {
@@ -2006,15 +2047,15 @@ async function verifyReplayRules(): Promise<void> {
       )!;
       return { ...card, prescriptionClientId: newId(), superset: null, restAfter: null, ...over };
     };
-    const save = async (items: WorkoutDraftItem[], title: string) =>
+    const save = async (x: VerifyTx, items: WorkoutDraftItem[], title: string) =>
       expectProgramOk(
-        await saveWorkout(asTx(tx), seeded.scope, { ...heavyA(world as World), items }),
+        await saveWorkout(asTx(x), seeded.scope, { ...heavyA(world as World), items }),
         `FAM-1 12a-ii R4: ${title}`,
       );
-    const read = () => resolve(tx, seeded, 'a1', YESTERDAY, world.today);
-    const tick = async (prescriptionPublicId: string, set: number) =>
+    const read = (x: VerifyTx) => resolve(x, seeded, 'a1', YESTERDAY, world.today);
+    const tick = async (x: VerifyTx, prescriptionPublicId: string, set: number) =>
       expectOk(
-        await logRow(asDb(tx), {
+        await logRow(asDb(x), {
           scope: seeded.scope,
           today: world.today,
           activityTypeId,
@@ -2031,12 +2072,13 @@ async function verifyReplayRules(): Promise<void> {
         `FAM-1 12a-ii R4: set ${set} ticks`,
       );
     const edited = heavyA(world as World).items;
+    const loggedIds = (item: DayItem) =>
+      item.rows.flatMap((r) => (r.logged ? [r.logged.entryPublicId] : [])).sort();
 
-    await inSavepoint(tx, async () => {
+    await inSavepoint(tx, async (sp) => {
       // The pull-up, removed by the edit, added back as a new card.
-      const back = newCard(before as World, 'pullup');
-      await save([...edited, back], 'the pull-up is added back');
-      const pulls = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'pullup');
+      await save(sp, [...edited, newCard(before as World, 'pullup')], 'the pull-up is added back');
+      const pulls = itemsOf(workoutOnDay(await read(sp), seeded, 'w2'), seeded, 'pullup');
       const live = pulls.filter((i) => i.prescriptionPublicId !== null);
       const removed = pulls.filter((i) => i.prescriptionPublicId === null);
       assert.deepEqual(
@@ -2051,9 +2093,9 @@ async function verifyReplayRules(): Promise<void> {
       );
 
       // R4's key: a set logged on the new card, then that card removed too: two removed items.
-      await tick(live[0]!.prescriptionPublicId!, 1);
-      await save(edited, 'the added-back card is removed again');
-      const again = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'pullup');
+      await tick(sp, live[0]!.prescriptionPublicId!, 1);
+      await save(sp, edited, 'the added-back card is removed again');
+      const again = itemsOf(workoutOnDay(await read(sp), seeded, 'w2'), seeded, 'pullup');
       assert.equal(
         again.filter((i) => i.prescriptionPublicId === null).length,
         2,
@@ -2061,14 +2103,14 @@ async function verifyReplayRules(): Promise<void> {
       );
     });
 
-    await inSavepoint(tx, async () => {
+    await inSavepoint(tx, async (sp) => {
       // One movement twice: a second bench card beside the first.
       const second = newCard(world as World, 'dbbench');
-      await save([...edited, second], 'a second card of one movement');
-      const benches = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'dbbench');
+      await save(sp, [...edited, second], 'a second card of one movement');
+      const benches = itemsOf(workoutOnDay(await read(sp), seeded, 'w2'), seeded, 'dbbench');
       assert.equal(benches.length, 2, 'FAM-1 12a-ii twice: both cards are items');
       const [first, other] = benches;
-      const loggedBefore = first!.rows.filter((r) => r.logged !== null).length;
+      const firstIds = loggedIds(first!);
       for (const row of other!.rows) {
         const twin = first!.rows.find((r) => r.set === row.set);
         if (twin) {
@@ -2082,31 +2124,31 @@ async function verifyReplayRules(): Promise<void> {
 
       // R4's text: set 2 logged, the card's load changed in place, set 1 logged, the card removed.
       const id = other!.prescriptionPublicId!;
-      await tick(id, 2);
+      const two = await tick(sp, id, 2);
       const heavier = {
         ...second,
         quantities: second.quantities.map((q) => ({ ...q, value: 40 })),
       };
-      await save([...edited, heavier], 'the second card is re-saved at 40');
-      await tick(id, 1);
-      const both = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'dbbench');
-      assert.equal(
-        both
-          .find((i) => i.prescriptionPublicId !== other!.prescriptionPublicId)!
-          .rows.filter((r) => r.logged !== null).length,
-        loggedBefore,
+      await save(sp, [...edited, heavier], 'the second card is re-saved at 40');
+      const one = await tick(sp, id, 1);
+      const both = itemsOf(workoutOnDay(await read(sp), seeded, 'w2'), seeded, 'dbbench');
+      const mine = both.find((i) => i.prescriptionPublicId === id)!;
+      const theirs = both.find((i) => i.prescriptionPublicId !== id)!;
+      assert.deepEqual(
+        [loggedIds(mine), loggedIds(theirs)],
+        [[one.entryPublicId, two.entryPublicId].sort(), firstIds],
         'FAM-1 12a-ii twice: each card has its own rows',
       );
-      await save(edited, 'the second card is removed');
-      const [gone] = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'dbbench').filter(
+      await save(sp, edited, 'the second card is removed');
+      const [gone] = itemsOf(workoutOnDay(await read(sp), seeded, 'w2'), seeded, 'dbbench').filter(
         (i) => i.prescriptionPublicId === null,
       );
       assert.ok(gone, 'FAM-1 12a-ii R4: the removed card is an item');
-      const textOf = (set: number) => gone.rows.find((r) => r.set === set)!.logged!.prescribedText;
-      assert.notEqual(textOf(1), textOf(2), 'FAM-1 12a-ii R4: the two sets differ (non-vacuity)');
+      const textAt = (set: number) => gone.rows.find((r) => r.set === set)!.logged!.prescribedText;
+      assert.notEqual(textAt(1), textAt(2), 'FAM-1 12a-ii R4: the two sets differ (non-vacuity)');
       assert.equal(
         gone.prescribedText,
-        textOf(1),
+        textAt(1),
         'FAM-1 12a-ii R4: a removed item’s text is its lowest set’s, not its first logged',
       );
     });
