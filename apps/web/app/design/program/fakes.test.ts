@@ -1147,9 +1147,10 @@ describe('the fake ProgramActions: items and athletes', () => {
     ).toMatchObject({ ok: true, name: 'RDL pause', existed: false });
   });
 
-  it('a household item named after an alias does not take the alias from the catalog item', async () => {
-    // The picker ranks a catalog item before a household one, so its guard offers Romanian
-    // Deadlift for "rdl"; the answer must be the same item, whichever order the list is in.
+  it('a household item named after an alias is what that name means, as in the picker', async () => {
+    // The picker lists a movement's own name before another movement's alias (CAT-3 spec P2,
+    // contract change C30), so its guard offers the household's "RDL" for "rdl"; the answer must
+    // be the same item, whichever order the list is in. (Until C30 both gave the catalog's.)
     const catalog: MovementOptionDTO = {
       publicId: '019826b4-0000-7000-8000-0000000000d1',
       name: 'Romanian Deadlift',
@@ -1175,6 +1176,10 @@ describe('the fake ProgramActions: items and athletes', () => {
       const { actions } = builder({ items });
       expect(
         await actions.newItem({ name: 'rdl', trackingType: TRACKING_TYPE.check }),
+      ).toMatchObject({ itemPublicId: stray.publicId, name: 'RDL', existed: true });
+      // The catalog's item is still itself by its own name.
+      expect(
+        await actions.newItem({ name: 'romanian deadlift', trackingType: TRACKING_TYPE.check }),
       ).toMatchObject({ itemPublicId: catalog.publicId, name: 'Romanian Deadlift', existed: true });
     }
   });
