@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createProgram, renameProgram, saveWorkout } from '@mat-plan/db';
+import { createProgram, renameProgram, saveWorkout, type HouseholdScope } from '@mat-plan/db';
 import {
   PROGRAM_REFUSAL,
   type CreateProgram,
@@ -12,6 +12,7 @@ import {
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from './quiet-db-errors';
+import { reportProgramMiss } from './resolve';
 
 /**
  * The program builder's writes, each through the caller's household (FAM-1 step 7a-i). The actions
@@ -26,11 +27,23 @@ import { quietDbErrors } from './quiet-db-errors';
  * - **A thrown database error carries no data out** (`quietDbErrors`): the runtime log must never
  *   hold a prescription's notes.
  *
- * ⚠️ The miss-path report (ADR 0006: which program or workout id missed, through `reportScopeMiss`)
- * is added once this branch has contract change C11 and lane P's scoped existence reads.
+ * - **A `not_found` for an id the input carries is reported** (`reportProgramMiss`: which program
+ *   or workout id missed, once), on that path only. Create carries no id, so nothing is reported.
  */
 
 const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
+
+const isNotFound = (result: ProgramResult<object>) =>
+  !result.ok && result.reason === PROGRAM_REFUSAL.not_found;
+
+/** The miss, reported for the ids the input carries, and the contract's one answer for it. */
+async function missed(
+  scope: HouseholdScope | null,
+  ids: Parameters<typeof reportProgramMiss>[1],
+): Promise<typeof NOT_FOUND> {
+  await reportProgramMiss(scope, ids);
+  return NOT_FOUND;
+}
 
 export async function createHouseholdProgram(
   input: CreateProgram,
@@ -42,14 +55,16 @@ export async function createHouseholdProgram(
 
 export async function renameHouseholdProgram(input: RenameProgram): Promise<ProgramResult> {
   const scope = await getHouseholdScope();
-  if (!scope) return NOT_FOUND;
-  return quietDbErrors('renameProgram', () => renameProgram(db, scope, input));
+  if (!scope) return missed(scope, input);
+  const result = await quietDbErrors('renameProgram', () => renameProgram(db, scope, input));
+  return isNotFound(result) ? missed(scope, input) : result;
 }
 
 export async function saveHouseholdWorkout(
   draft: WorkoutDraft,
 ): Promise<ProgramResult<{ workoutPublicId: string }>> {
   const scope = await getHouseholdScope();
-  if (!scope) return NOT_FOUND;
-  return quietDbErrors('saveWorkout', () => saveWorkout(db, scope, draft));
+  if (!scope) return missed(scope, draft);
+  const result = await quietDbErrors('saveWorkout', () => saveWorkout(db, scope, draft));
+  return isNotFound(result) ? missed(scope, draft) : result;
 }

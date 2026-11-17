@@ -11,6 +11,8 @@ vi.mock('@mat-plan/db', () => ({
   saveWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
   readWorkoutDraft: vi.fn(async () => null),
 }));
+// Which id missed is `resolve.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
+vi.mock('./resolve', () => ({ reportProgramMiss: vi.fn(async () => {}) }));
 
 import { createProgram, readWorkoutDraft, renameProgram, saveWorkout } from '@mat-plan/db';
 
@@ -18,6 +20,7 @@ import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { ProgramWriteError } from './quiet-db-errors';
 import { getWorkoutDraft } from './reads';
+import { reportProgramMiss } from './resolve';
 import { createHouseholdProgram, renameHouseholdProgram, saveHouseholdWorkout } from './writes';
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
@@ -54,6 +57,36 @@ describe('the program DAL (FAM-1 7a-i)', () => {
     });
     expect(saveWorkout).not.toHaveBeenCalled();
     expect(createProgram).not.toHaveBeenCalled();
+    // Save carries ids, so its miss is reported with no scope; create carries none.
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([[null, heavyADraft]]);
+  });
+
+  it('a writer’s not_found reports which id missed, once, and is still not_found', async () => {
+    const notFound = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
+    vi.mocked(saveWorkout).mockResolvedValueOnce(notFound);
+    expect(await saveHouseholdWorkout(heavyADraft)).toEqual(notFound);
+    vi.mocked(renameProgram).mockResolvedValueOnce(notFound);
+    const rename = { programPublicId: PROGRAM_ID, name: 'A' };
+    expect(await renameHouseholdProgram(rename)).toEqual(notFound);
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [SCOPE, heavyADraft],
+      [SCOPE, rename],
+    ]);
+  });
+
+  it('a success, or any other refusal, reports nothing', async () => {
+    await saveHouseholdWorkout(heavyADraft);
+    vi.mocked(renameProgram).mockResolvedValueOnce({
+      ok: false,
+      reason: PROGRAM_REFUSAL.name_taken,
+    });
+    await renameHouseholdProgram({ programPublicId: PROGRAM_ID, name: 'A' });
+    vi.mocked(createProgram).mockResolvedValueOnce({
+      ok: false,
+      reason: PROGRAM_REFUSAL.not_found,
+    });
+    await createHouseholdProgram({ clientId: WORKOUT_ID, name: 'A' });
+    expect(reportProgramMiss).not.toHaveBeenCalled();
   });
 
   it('a writer’s refusal comes back unchanged', async () => {
@@ -81,17 +114,32 @@ describe('the program DAL (FAM-1 7a-i)', () => {
     expect(await getWorkoutDraft(PROGRAM_ID, '7')).toBeNull();
     expect(readWorkoutDraft).not.toHaveBeenCalled();
     expect(getHouseholdScope).not.toHaveBeenCalled();
+    // Not a uuid is not a probe of an id: nothing is reported.
+    expect(reportProgramMiss).not.toHaveBeenCalled();
     await getWorkoutDraft(PROGRAM_ID, WORKOUT_ID);
     expect(vi.mocked(readWorkoutDraft).mock.calls[0]).toEqual([
       db,
       SCOPE,
       { programPublicId: PROGRAM_ID, workoutPublicId: WORKOUT_ID },
     ]);
+    // The read found nothing (the mock's null): the miss is reported with the route's ids.
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [SCOPE, { programPublicId: PROGRAM_ID, workoutPublicId: WORKOUT_ID }],
+    ]);
   });
 
-  it('the editor’s read with no household is null, with no query', async () => {
+  it('the editor’s read that finds the workout reports nothing', async () => {
+    vi.mocked(readWorkoutDraft).mockResolvedValueOnce(heavyADraft);
+    expect(await getWorkoutDraft(PROGRAM_ID, WORKOUT_ID)).toBe(heavyADraft);
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('the editor’s read with no household is null, with no query, and the miss reported', async () => {
     vi.mocked(getHouseholdScope).mockResolvedValue(null);
     expect(await getWorkoutDraft(PROGRAM_ID, WORKOUT_ID)).toBeNull();
     expect(readWorkoutDraft).not.toHaveBeenCalled();
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [null, { programPublicId: PROGRAM_ID, workoutPublicId: WORKOUT_ID }],
+    ]);
   });
 });
