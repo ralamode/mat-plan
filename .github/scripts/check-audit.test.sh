@@ -121,6 +121,7 @@ TODAY=2026-12-17
 expect "the expiry day itself still passes" 0 "EXCEPTED" <<<"$HIGH"
 TODAY=2026-12-18
 expect "the day after expiry fails" 1 "expired on 2026-12-17" <<<"$HIGH"
+expect "the day after expiry, the advisory itself blocks again" 1 "1 high/critical advisory(ies)" <<<"$HIGH"
 TODAY=2026-11-17
 expect "a stale entry fails (the advisory is gone)" 1 "is stale" <<EOF
 {"advisories":{},$(meta 0 0 0 0 0)}
