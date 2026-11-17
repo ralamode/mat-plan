@@ -54,6 +54,7 @@ import {
   assignDraftSchema,
   copyDraftSchema,
   createProgramSchema,
+  emptyWeek,
   newItemSchema,
   programOrderSchema,
   programViewSchema,
@@ -379,6 +380,18 @@ describe('WeekDraft and ProgramView', () => {
     expect(saves(days('l'.repeat(SLOT_LABEL_MAX + 1)))).toBe(false);
     const blank = weekDraftSchema.parse({ programPublicId: A_PROGRAM, days: days('  ') });
     expect(blank.days[0]).toEqual([{ workoutPublicId: A_WORKOUT, label: null }]);
+  });
+
+  it('starts an empty week with every weekday, each with nothing on it (C26)', () => {
+    const empty = emptyWeek();
+    expect(Object.keys(empty).map(Number)).toEqual([...WEEKDAYS]);
+    expect(Object.values(empty)).toEqual(WEEKDAYS.map(() => []));
+    expect(weekDraftSchema.parse({ programPublicId: A_PROGRAM, days: empty }).days).toEqual(empty);
+    // A new object and new arrays every call: filling one week leaves the next one empty.
+    empty[1].push({ workoutPublicId: A_WORKOUT, label: null });
+    expect(emptyWeek()[1]).toEqual([]);
+    expect(emptyWeek()).not.toBe(emptyWeek());
+    expect(new Set(Object.values(emptyWeek())).size).toBe(WEEKDAYS.length);
   });
 
   it('lets a workout run at most once on a day', () => {
