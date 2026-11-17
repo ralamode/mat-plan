@@ -228,7 +228,7 @@ describe('saveWorkoutSchema: the unit rule', () => {
     for (const draft of Object.values(WORKOUT_DRAFT_FIXTURES)) {
       for (const item of draft.items) {
         if (TRACKING_TYPE_FIELDS[item.trackingType].slot === null) continue;
-        expect(itemUnit(item.trackingType, item.quantities), item.name).not.toBeNull();
+        expect(itemUnit(item.trackingType, item.quantities), item.itemName).not.toBeNull();
       }
     }
   });
