@@ -21,10 +21,14 @@ import { keyBySelf } from '../enums';
  * One code per thing a person owns or has access to. `machine` is any selectorised machine that has
  * no code of its own; `anchor` is a fixed point for a band or the feet; `ball` is any small ball.
  * A sled's tow strap comes with `sled`; the two ropes are two things to own, so there is no plain
- * `rope`. `any_weight` is a load of the athlete's own choosing (a plate, a dumbbell, a vest): for a
- * movement that is the same whatever the weight is made of, such as a weighted plank _(maintainer,
- * 2026-11-17: "Just weight, they can choose how to add the weight")_. An entry that needs one
- * particular tool still names that tool.
+ * `rope`.
+ *
+ * **`any_weight` is a load of the athlete's own choosing, simply held or set in place**: a plate
+ * on the back for a weighted plank, whatever is to hand for a weighted sit-up _(maintainer,
+ * 2026-11-17: "Just weight, they can choose how to add the weight")_. **Where the way the load is
+ * carried is part of the movement, the entry names that tool:** a belt for a load hung from the
+ * hips (a weighted pull-up or dip), a vest for one worn on the body (a weighted push-up). Where
+ * neither reading is plainly right, the batch's review asks the maintainer.
  *
  * ⚠️ **A required set cannot say "this or that".** A goblet squat names one of dumbbell and
  * kettlebell, and a filter for the other does not show it (spec rule 8, a known limit).

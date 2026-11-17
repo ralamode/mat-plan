@@ -401,7 +401,8 @@ Starting lists, final in C0a's own review (a code is the lower-case word with un
 
 - **Equipment:** barbell, EZ bar, trap bar, plates, dumbbell, kettlebell, medicine ball, sandbag,
   weight vest, ankle weights, wrist weights, weight belt, any weight (a load of the athlete's own
-  choosing, for a movement that is the same whatever the weight is made of), bench, rack, pull-up bar, dip bars,
+  choosing, simply held or set in place; an entry names a belt or a vest where the way the load
+  is carried is part of the movement), bench, rack, pull-up bar, dip bars,
   rings, parallettes, suspension trainer, band, cable machine, machine (any other selectorised
   machine), landmine, box, step, wall, sled (its tow strap included), battle rope, climbing rope,
   heavy bag, mat, foam roller, exercise ball, ab wheel, jump rope, air bike, rowing machine, ski
