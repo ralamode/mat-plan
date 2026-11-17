@@ -139,13 +139,22 @@ describe('what the server and "Use as typed" read (P1)', () => {
 });
 
 describe('with no short form, the matches are matchMovementOptions’ (P2)', () => {
-  it('the same rows in the same order, and the same some-words', () => {
+  it('the same rows in the same order, plus only rows found by part of another name', () => {
     let compared = 0;
+    let added = 0;
     for (const query of QUERIES.filter((q) => !hasShortForm(q))) {
       const typed = matchMovementOptions(LIBRARY, query);
       const found = search(query, LIBRARY);
-      expect(found.matches, query).toEqual(typed.matches);
-      expect(found.someWords, query).toEqual(typed.someWords);
+      const extra = found.matches.filter((option) => !typed.matches.includes(option));
+      // Every typed row is there, in the plain match's own order relative to the others.
+      expect(
+        found.matches.filter((option) => typed.matches.includes(option)),
+        query,
+      ).toEqual(typed.matches);
+      // Anything else was found through an alias, and says which.
+      for (const option of extra) expect(found.foundByAlias.has(option), query).toBe(true);
+      if (extra.length === 0) expect(found.someWords, query).toEqual(typed.someWords);
+      added += extra.length;
       compared += 1;
     }
     expect(compared).toBeGreaterThan(60);
@@ -156,6 +165,175 @@ describe('with no short form, the matches are matchMovementOptions’ (P2)', () 
     // An accent and a full-width letter fold to the short form; a digit beside it does not.
     expect(hasShortForm('db2 row')).toBe(false);
     expect(hasShortForm('dbrow')).toBe(false);
+    expect(added).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('best match first (P2)', () => {
+  const only = (...list: (string | Option)[]): Option[] =>
+    list.map((item) =>
+      typeof item === 'string' ? { slug: item, name: item, isCatalog: true, aliases: [] } : item,
+    );
+
+  it('🔴 exact, then starts with it, then a word starts with it, then mid-word', () => {
+    const options = only(
+      'Machine-assisted pull-up',
+      'Weighted chin-up',
+      'Chin tuck',
+      'Chin-up',
+      'Chin',
+    );
+    const wanted = ['Chin', 'Chin-up', 'Chin tuck', 'Weighted chin-up', 'Machine-assisted pull-up'];
+    expect(names(matchMovementOptions(options, 'chin').matches)).toEqual(wanted);
+    expect(names(search('chin', options).matches)).toEqual(wanted);
+    expect(names(search('chin', [...options].reverse()).matches)).toEqual(wanted);
+  });
+
+  it('a compact query that starts at a word is a word-start match, not a mid-word one', () => {
+    const options = only('Heavy trap bar carry', 'Strapbar hold');
+    expect(names(matchMovementOptions(options, 'trapbar').matches)).toEqual([
+      'Heavy trap bar carry',
+      'Strapbar hold',
+    ]);
+  });
+
+  it('within one quality: the shorter name, then the library’s before a household’s, then by name', () => {
+    const own: Option = { slug: 'own', name: 'Ring row', isCatalog: false, aliases: [] };
+    const options = [own, ...only('Seal row', 'Ring row', 'Band row', 'Bent-over row')];
+    // Four names of one length: the library's three by name, then the household's; the longer last.
+    expect(search('row', options).matches.map((o) => o.slug)).toEqual([
+      'Band row',
+      'Ring row',
+      'Seal row',
+      'own',
+      'Bent-over row',
+    ]);
+  });
+
+  it('a movement’s own name before another movement’s other name, at the top too', () => {
+    const household: Option = { slug: 'stray', name: 'RDL', isCatalog: false, aliases: [] };
+    const library: Option = {
+      slug: 'lib',
+      name: 'Romanian deadlift',
+      isCatalog: true,
+      aliases: ['RDL'],
+    };
+    const found = search('rdl', [library, household]);
+    expect(found.matches.map((o) => o.slug)).toEqual(['stray', 'lib']);
+    expect([found.exact, found.aliasHit]).toEqual([true, 'RDL']);
+    expect(found.foundByAlias.get(library)).toBe('RDL');
+    expect(found.foundByAlias.has(household)).toBe(false);
+  });
+});
+
+describe('part of another name finds the movement (P17)', () => {
+  const press: Option = {
+    slug: 'ohp',
+    name: 'Overhead press',
+    isCatalog: true,
+    aliases: ['OHP', 'Military press'],
+  };
+  const pushUp: Option = { slug: 'pu', name: 'Push-up', isCatalog: true, aliases: ['Press-up'] };
+  const others: Option[] = ['Z press', 'Bench press', 'Pallof press', 'Military drill'].map(
+    (name) => ({
+      slug: name,
+      name,
+      isCatalog: true,
+      aliases: [],
+    }),
+  );
+  const options = [press, pushUp, ...others];
+
+  it('from three letters, and the row says which name', () => {
+    const found = search('milit', [press, pushUp]);
+    expect(names(found.matches)).toEqual(['Overhead press']);
+    expect(found.foundByAlias.get(press)).toBe('Military press');
+    expect(names(search('mi', [press, pushUp]).matches)).toEqual([]);
+    expect(names(search('mil', [press, pushUp]).matches)).toEqual(['Overhead press']);
+  });
+
+  it('🔴 never makes the name "already in the list"', () => {
+    for (const query of ['military', 'milit', 'press-u', 'oh']) {
+      const found = search(query, options);
+      expect([found.exact, found.aliasHit, found.shortFormHit], query).toEqual([false, null, null]);
+    }
+    // The whole other name still does, as before.
+    expect(search('military press', options).aliasHit).toBe('Military press');
+  });
+
+  it('🔴 another name never outranks a movement’s own name of the same quality', () => {
+    // "Press-up" STARTS with the query; the presses only have a word that starts with it.
+    expect(names(search('press', options).matches)).toEqual([
+      'Z press',
+      'Bench press',
+      'Pallof press',
+      'Overhead press',
+      'Push-up',
+    ]);
+    // A name that starts with the query still comes before any of them.
+    expect(names(search('military', options).matches)).toEqual([
+      'Military drill',
+      'Overhead press',
+    ]);
+  });
+
+  it('counts as a match: nothing is offered as a near miss or as some of your words', () => {
+    const found = search('military', [press, pushUp]);
+    expect(found.someWords).toEqual([]);
+    expect(found.near).toEqual([]);
+  });
+
+  it('lists a movement once, by its best way of being found', () => {
+    // "press" is in Overhead press's own name and in its alias.
+    const found = search('press', [press]);
+    expect(names(found.matches)).toEqual(['Overhead press']);
+    expect(found.foundByAlias.has(press)).toBe(false);
+  });
+
+  it('past the word cap, an exact alias still says which row it belongs to', () => {
+    const long = Array.from({ length: SEARCH_WORDS_MAX + 1 }, () => 'ab').join(' ');
+    const item: Option = { slug: 'x', name: 'Other', isCatalog: true, aliases: [long] };
+    const own: Option = { slug: 'y', name: long, isCatalog: false, aliases: [] };
+    const found = search(long, [item, own]);
+    expect(found.matches.map((o) => o.slug)).toEqual(['y', 'x']);
+    expect([...found.foundByAlias]).toEqual([[item, long]]);
+  });
+
+  it('is not read past the word cap', () => {
+    // Short words, so the length cut does not get there first.
+    const repeated = (count: number) => Array.from({ length: count }, () => 'mil').join(' ');
+    expect(names(search(repeated(SEARCH_WORDS_MAX), [press]).matches)).toEqual(['Overhead press']);
+    expect(search(repeated(SEARCH_WORDS_MAX + 1), [press]).matches).toEqual([]);
+  });
+});
+
+describe('an abbreviation that spells a movement is that movement (P1)', () => {
+  const row: Option = { slug: 'row', name: 'Dumbbell row', isCatalog: true, aliases: [] };
+  const bench: Option = {
+    slug: 'bench',
+    name: 'Bench press',
+    isCatalog: true,
+    aliases: ['Barbell bench'],
+  };
+  const options = [row, bench, ...OPTIONS.filter((o) => o.name !== 'Dumbbell row')];
+
+  it('🔴 shortFormHit is the movement the expanded words spell, by name or by alias', () => {
+    expect(search('db row', options).shortFormHit).toBe(row);
+    expect(search('DB rows', options).shortFormHit).toBe(row);
+    expect(search('bb bench', options).shortFormHit).toBe(bench);
+    expect(search('bb bench', options).foundByAlias.get(bench)).toBe('Barbell bench');
+  });
+
+  it('is null for a part of a name, for no short form, and for a name as typed', () => {
+    for (const query of ['db', 'db ro', 'db row pause', 'dumbbell row', 'row', 'kb row', '']) {
+      expect(search(query, options).shortFormHit, query).toBeNull();
+    }
+    // The name as typed is `exact`, which is the plain match's signal.
+    expect(search('dumbbell row', options).exact).toBe(true);
+  });
+
+  it('lists that movement first', () => {
+    expect(search('db row', options).matches[0]).toBe(row);
   });
 });
 
@@ -233,13 +411,28 @@ describe('near misses (P4)', () => {
   it.each([
     ['dress', 'the first letter must agree, so not a press'],
     ['split', 'three edits from squat'],
-    ['hand', 'four letters: never a near miss, so not a hang'],
+    ['hng', 'three letters: never a near miss'],
+    ['rusg', 'four letters, and the first letter differs'],
+    ['pisg', 'four letters, and the second letter differs'],
+    ['sprat', 'two edits in five letters, so not a squat'],
     ['siutcsae', 'two edits in an eight-letter word'],
     ['zzzzzz', 'nothing like it'],
     ['kb swnig', 'a short word that is in no name'],
   ])('%j finds nothing (%s)', (query) => {
     expect(search(query).matches).toEqual([]);
     expect(search(query).near).toEqual([]);
+  });
+
+  it('🔴 a four-letter word may be one edit off, when its first two letters agree', () => {
+    // The maintainer's rule (2026-11-17). It overturns "a four-letter word is never a near miss".
+    expect(names(search('hanf').near).sort()).toEqual(['Dead hang', 'Hang power clean']);
+    expect(names(search('pusg').near)).toEqual(expect.arrayContaining(['Incline push-up']));
+    expect(names(search('hand').near).sort()).toEqual(['Dead hang', 'Hang power clean']);
+    expect(names(search('chim').near)).toEqual(expect.arrayContaining(['Chin-up']));
+    // The second letter must agree for four letters; from five, only the first.
+    expect(search('hing').near).toEqual([]);
+    expect(names(search('plnak').near)).toEqual(['Side plank']);
+    expect(names(search('alnk side').near)).toEqual([]);
   });
 
   it('allows two edits from nine letters, and one below', () => {
@@ -274,6 +467,16 @@ describe('near misses (P4)', () => {
       typeof item === 'string' ? { slug: item, name: item, isCatalog: true, aliases: [] } : item,
     );
 
+  it('says which alias a near miss was found through, and nothing for one found by its name', () => {
+    const viaAlias = search('strcit press', LIBRARY);
+    const [overhead] = viaAlias.near;
+    expect(overhead?.name).toBe('Overhead press');
+    expect(overhead && viaAlias.foundByAlias.get(overhead)).toBe('Strict press');
+    const viaName = search('dedlift', LIBRARY);
+    expect(viaName.near.length).toBeGreaterThan(0);
+    expect(viaName.foundByAlias.size).toBe(0);
+  });
+
   it('🔴 lists the closest first: one edit before two', () => {
     // Alphabetical order would put the two-edit name first.
     const options = only('Dandlifft', 'Deadlift');
@@ -300,17 +503,21 @@ describe('near misses (P4)', () => {
     expect(names(search('chinnup', only('Chin-up')).near)).toEqual(['Chin-up']);
   });
 
-  it('🔴 a short word must be part of the NAME: an alias does not stand in for it', () => {
+  it('🔴 a word of three letters must be part of the NAME; a longer one may be near an alias', () => {
     const item: Option = {
       slug: 'x',
       name: 'Lying extension',
       isCatalog: true,
       aliases: ['Skull crusher'],
     };
-    // `skul` is four letters: never a near miss, and it is in no name.
-    expect(search('skul extension', [item]).near).toEqual([]);
-    // Five letters or more may be a near miss of an alias's word.
-    expect(names(search('skulll extension', [item]).near)).toEqual(['Lying extension']);
+    // `sku` is three letters: never a near miss, and it is in no name.
+    expect(search('sku extension', [item]).near).toEqual([]);
+    // Four letters or more may be a near miss of an alias's word, and the result says which alias.
+    for (const typo of ['skul extension', 'skulll extension']) {
+      const found = search(typo, [item]);
+      expect(names(found.near), typo).toEqual(['Lying extension']);
+      expect(found.foundByAlias.get(item), typo).toBe('Skull crusher');
+    }
   });
 
   it('lists the closest first, and is the same whatever order the options come in', () => {
@@ -348,6 +555,44 @@ describe('the edit count', () => {
     expect(editsWithin(b, a, 5)).toBe(edits);
   });
 
+  it('🔴 agrees with a plain, unbounded count on thousands of pairs, at every limit', () => {
+    // The banded count fills only the cells near the diagonal; this is the whole table.
+    const plain = (a: string, b: string): number => {
+      const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+        Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+      );
+      for (let i = 1; i <= a.length; i += 1) {
+        for (let j = 1; j <= b.length; j += 1) {
+          let v = Math.min(
+            d[i - 1]![j]! + 1,
+            d[i]![j - 1]! + 1,
+            d[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+          );
+          if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+            v = Math.min(v, d[i - 2]![j - 2]! + 1);
+          d[i]![j] = v;
+        }
+      }
+      return d[a.length]![b.length]!;
+    };
+    let seed = 20261117;
+    const next = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const word = () => Array.from({ length: next(9) }, () => 'abc'[next(3)]).join('');
+    let checked = 0;
+    for (let i = 0; i < 6000; i += 1) {
+      const a = word();
+      const b = word();
+      for (const max of [0, 1, 2, 3]) {
+        expect(editsWithin(a, b, max), `${a} ${b} ${max}`).toBe(Math.min(plain(a, b), max + 1));
+        checked += 1;
+      }
+    }
+    expect(checked).toBe(24000);
+  });
+
   it('answers one more than the limit for anything further, however far', () => {
     expect(editsWithin('kitten', 'sitting', 2)).toBe(3);
     expect(editsWithin('a', 'a'.repeat(50), 2)).toBe(3);
@@ -382,6 +627,8 @@ describe('bounded (P6, the contract’s half)', () => {
     expect(search(thirteen, options)).toEqual({
       ...matchMovementOptions(options, thirteen),
       near: [],
+      shortFormHit: null,
+      foundByAlias: new Map(),
     });
     expect(search(thirteen, options).matches).toEqual([]);
     // The same for a near miss: `prss` is word thirteen and is in no name.

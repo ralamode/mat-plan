@@ -109,6 +109,169 @@ export type MovementMatchResult<T> = {
 const MIN_SOME_WORDS_LENGTH = 3;
 
 /**
+ * How well a spelling answers a query (CAT-3 spec P2), best first:
+ * 0 it IS the query (its key, or an alias's key); 1 it starts with the query; 2 every query word
+ * starts one of its words, or the compact query starts at one of its words (`trapbar`); 3 it only
+ * holds the query's letters in the middle of a word (`chin` in `maCHINe`).
+ */
+type Quality = 0 | 1 | 2 | 3;
+
+/** How a row was found. Within one quality: by its own name, then by another name, then through a short form. */
+const FOUND_BY = { name: 0, alias: 1, shortForm: 2 } as const;
+type FoundBy = (typeof FOUND_BY)[keyof typeof FOUND_BY];
+
+type Prepared<T> = {
+  readonly option: T;
+  readonly folded: string;
+  readonly compact: string;
+  readonly aliases: readonly { readonly text: string; readonly folded: string }[];
+};
+
+type Row<T> = {
+  readonly option: T;
+  /** The option's folded name: the last tie-break, so the order never depends on input order. */
+  readonly folded: string;
+  readonly quality: Quality;
+  readonly by: FoundBy;
+  /** The length of the spelling that matched: the name, or the alias it was found through. */
+  readonly length: number;
+  /** The alias it was found through, as authored; `null` when it was found by its own name. */
+  readonly alias: string | null;
+};
+
+function prepare<T extends MatchableMovement>(options: readonly T[]): Prepared<T>[] {
+  return options.map((option) => {
+    const folded = foldMovementQuery(option.name);
+    return {
+      option,
+      folded,
+      compact: folded.replaceAll(' ', ''),
+      aliases: (option.aliases ?? []).map((text) => ({ text, folded: foldMovementQuery(text) })),
+    };
+  });
+}
+
+/** Quality 1 to 3 of one folded spelling for a folded query, or `null` when it does not match. */
+function spellingQuality(
+  spelling: string,
+  words: readonly string[],
+  folded: string,
+): 1 | 2 | 3 | null {
+  const key = folded.replaceAll(' ', '');
+  const compact = spelling.replaceAll(' ', '');
+  if (!(words.every((word) => spelling.includes(word)) || compact.includes(key))) return null;
+  if (spelling.startsWith(folded) || compact.startsWith(key)) return 1;
+  const own = spelling.split(' ');
+  const everyWordStartsOne = words.every((word) => own.some((w) => w.startsWith(word)));
+  const compactStartsAtAWord = own.some((_, i) => own.slice(i).join('').startsWith(key));
+  return everyWordStartsOne || compactStartsAtAWord ? 2 : 3;
+}
+
+/**
+ * The rows a folded query finds by NAME, or by an alias that is exactly the query: the plain match.
+ * `by` is what a caller says these rows were found by (the typed words, or a short form's).
+ */
+function plainRows<T extends MatchableMovement>(
+  prepared: readonly Prepared<T>[],
+  folded: string,
+  by: FoundBy,
+): Row<T>[] {
+  const key = folded.replaceAll(' ', '');
+  const words = folded.split(' ');
+  const rows: Row<T>[] = [];
+  for (const p of prepared) {
+    if (p.compact === key) {
+      rows.push({
+        option: p.option,
+        folded: p.folded,
+        quality: 0,
+        by,
+        length: p.folded.length,
+        alias: null,
+      });
+      continue;
+    }
+    const hit = p.aliases.find((alias) => alias.folded.replaceAll(' ', '') === key);
+    if (hit) {
+      // An exact alias is the query itself: quality 0, and found by another name.
+      const foundBy = by === FOUND_BY.name ? FOUND_BY.alias : by;
+      rows.push({
+        option: p.option,
+        folded: p.folded,
+        quality: 0,
+        by: foundBy,
+        length: hit.folded.length,
+        alias: hit.text,
+      });
+      continue;
+    }
+    const quality = spellingQuality(p.folded, words, folded);
+    if (quality !== null) {
+      rows.push({
+        option: p.option,
+        folded: p.folded,
+        quality,
+        by,
+        length: p.folded.length,
+        alias: null,
+      });
+    }
+  }
+  return rows;
+}
+
+/**
+ * Best match first (CAT-3 spec P2): the quality; then own name, another name, a short form; then
+ * the shorter spelling that matched; then a catalog row before a household's; then by name.
+ *
+ * ⚠️ **The last term compares the FOLDED strings, not `name.localeCompare(name)`.** A bare
+ * `localeCompare` reads the HOST's locale, so the same catalog sorted on a phone and in a Vitest
+ * run can disagree. Folded keys are lowercase and diacritic-free, so `<`/`>` is deterministic. A
+ * second locale makes this an `Intl.Collator` built from the REQUEST locale and threaded in
+ * (`I18N-1`), never read from the host again.
+ */
+function bestFirst<T extends MatchableMovement>(a: Row<T>, b: Row<T>): number {
+  return (
+    a.quality - b.quality ||
+    a.by - b.by ||
+    a.length - b.length ||
+    Number(b.option.isCatalog ?? false) - Number(a.option.isCatalog ?? false) ||
+    (a.folded < b.folded ? -1 : a.folded > b.folded ? 1 : 0)
+  );
+}
+
+/** One row a movement: its best way of being found. Then best first. */
+function ranked<T extends MatchableMovement>(rows: readonly Row<T>[]): Row<T>[] {
+  const best = new Map<T, Row<T>>();
+  for (const row of rows) {
+    const held = best.get(row.option);
+    if (!held || bestFirst(row, held) < 0) best.set(row.option, row);
+  }
+  return [...best.values()].sort(bestFirst);
+}
+
+/** Options holding ANY query word of three letters or more, by name: the fallback list. */
+function someWordsOf<T extends MatchableMovement>(
+  prepared: readonly Prepared<T>[],
+  words: readonly string[],
+): T[] {
+  return prepared
+    .filter((p) =>
+      words.some((word) => word.length >= MIN_SOME_WORDS_LENGTH && p.folded.includes(word)),
+    )
+    .map((p): Row<T> => ({
+      option: p.option,
+      folded: p.folded,
+      quality: 3,
+      by: FOUND_BY.name,
+      length: 0,
+      alias: null,
+    }))
+    .sort(bestFirst)
+    .map((row) => row.option);
+}
+
+/**
  * Match `options` against a typed `query` — pure, deterministic, and the input to everything the
  * picker shows.
  *
@@ -120,15 +283,18 @@ const MIN_SOME_WORDS_LENGTH = 3;
  *
  * ⚠️ **Test 2 is not redundant.** Someone typing `trapbar` or `medball` — no space, which is how
  * these get typed on a phone — fails test 1, because `trapbar` is not a substring of
- * `trap bar deadlift`. Dropping it makes two seeded movements unreachable by their obvious query.
+ * `trap bar deadlift`. Dropping it makes movements unreachable by their obvious query.
  *
  * **`someWords` only when `matches` is empty** _(UX3 6)_: `farmers walk` finds no movement, and
  * offering Farmer Carry under "matches some of your words" is better than an empty sheet over a
  * movement that exists. The 3-letter floor keeps `a` and `db` from pulling in the whole catalog.
  *
- * **Order:** alias hit, then exact, then prefix, then the rest by name; catalog before household on a
- * tie. Deterministic because the picker's option list is read from the database and a stable order is
- * what makes the first row safe to pick with Enter.
+ * **Order: best match first** (CAT-3 spec P2, the maintainer's decision of 2026-11-17, which
+ * replaced "alias or exact, then prefix, then the rest by name"). An exact name or an exact
+ * alias; then a name that starts with the query; then a name where every query word starts a
+ * word; then a name that holds the letters only mid-word (`chin` in `Machine-assisted`). Within
+ * one of those: own name before another name, the shorter spelling, a catalog row before a
+ * household's, then by name. Deterministic, because the first row is what Enter picks.
  *
  * **`exact` and `aliasHit` are what WITHHOLD "use as typed"** _(UX3 B2, UX1 3)_ — typing `rdl` must
  * offer Romanian Deadlift, never mint a household movement called "rdl" that nothing can delete.
@@ -138,76 +304,47 @@ export function matchMovementOptions<T extends MatchableMovement>(
   query: string,
 ): MovementMatchResult<T> {
   const folded = foldMovementQuery(query);
-  const key = movementNameKey(query);
-  if (folded === '') return { matches: [], someWords: [], aliasHit: null, exact: false };
+  if (folded === '') return NO_MATCH;
+  return plainMatch(prepare(options), folded).result;
+}
 
-  const words = folded.split(' ');
-  const prepared = options.map((option) => {
-    const optionFolded = foldMovementQuery(option.name);
-    return {
-      option,
-      folded: optionFolded,
-      compact: optionFolded.replaceAll(' ', ''),
-      key: movementNameKey(option.name),
-      // The alias that hit, found ONCE, here — `aliasHit`, the match test and the rank all read it,
-      // and so does the picker's tag, via the result. One expression of the rule.
-      matchedAlias: (option.aliases ?? []).find((a) => movementNameKey(a) === key),
-    };
-  });
+const NO_MATCH = { matches: [], someWords: [], aliasHit: null, exact: false } as const;
 
-  const exact = prepared.some((p) => p.key === key);
-  const aliasHit = prepared.find((p) => p.matchedAlias !== undefined)?.matchedAlias ?? null;
-
-  const matched = prepared.filter(
-    (p) =>
-      words.every((word) => p.folded.includes(word)) ||
-      p.compact.includes(key) ||
-      p.matchedAlias !== undefined,
-  );
-
-  // Rank: an alias hit or an exact key first, then a name that STARTS with the query, then the rest.
-  // Within a rank, by name, catalog before household — so the order never depends on query order or
-  // on how the database happened to return the rows.
-  const rank = (p: (typeof prepared)[number]): number => {
-    if (p.matchedAlias !== undefined || p.key === key) return 0;
-    if (p.folded.startsWith(folded) || p.compact.startsWith(key)) return 1;
-    return 2;
+/** The plain match of a folded, non-empty query, with the rows it was built from. */
+function plainMatch<T extends MatchableMovement>(
+  prepared: readonly Prepared<T>[],
+  folded: string,
+): { readonly rows: readonly Row<T>[]; readonly result: MovementMatchResult<T> } {
+  const rows = ranked(plainRows(prepared, folded, FOUND_BY.name));
+  const matches = rows.map((row) => row.option);
+  const result = {
+    matches,
+    someWords: matches.length > 0 ? [] : someWordsOf(prepared, folded.split(' ')),
+    // The alias of the best row that was found by one: the same row the picker tags.
+    aliasHit: rows.find((row) => row.quality === 0 && row.alias !== null)?.alias ?? null,
+    exact: rows.some((row) => row.quality === 0 && row.alias === null),
   };
-  // ⚠️ **The last term compares the FOLDED strings, not `name.localeCompare(name)`.** A bare
-  // `localeCompare` reads the HOST's locale, so the same catalog sorted on a phone and in a Vitest
-  // run can disagree — under a comment two lines up promising the order never depends on anything
-  // but the data. Folded keys are lowercase and diacritic-free, so `<`/`>` is both deterministic and
-  // the comparison a reader expects. A second locale makes this an `Intl.Collator` built from the
-  // REQUEST locale and threaded in (`I18N-1`), never read from the host again.
-  const byRankThenName = (a: (typeof prepared)[number], b: (typeof prepared)[number]): number =>
-    rank(a) - rank(b) ||
-    Number(b.option.isCatalog ?? false) - Number(a.option.isCatalog ?? false) ||
-    (a.folded < b.folded ? -1 : a.folded > b.folded ? 1 : 0);
+  return { rows, result };
+}
 
-  const matches = [...matched].sort(byRankThenName).map((p) => p.option);
-
-  const someWords =
-    matches.length > 0
-      ? []
-      : [...prepared]
-          .filter((p) =>
-            words.some((word) => word.length >= MIN_SOME_WORDS_LENGTH && p.folded.includes(word)),
-          )
-          .sort(byRankThenName)
-          .map((p) => p.option);
-
-  return { matches, someWords, aliasHit, exact };
+/** The alias each of these rows was found through, for the rows that were found through one. */
+function aliasesOf<T>(rows: readonly Row<T>[]): Map<T, string> {
+  const found = new Map<T, string>();
+  for (const row of rows) if (row.alias !== null) found.set(row.option, row.alias);
+  return found;
 }
 
 /**
- * The most words a query may have for the short-form and near-miss passes to run at all (CAT-3
- * spec P6). A name is at most `MOVEMENT_NAME_MAX` characters, and nobody types a twelve-word
- * movement: the cap bounds the near-miss work per keystroke whatever is pasted into the field.
+ * The most words a query may have for the short-form, other-name and near-miss passes to run at
+ * all (CAT-3 spec P6). A name is at most `MOVEMENT_NAME_MAX` characters, and nobody types a
+ * twelve-word movement: the cap bounds the work per keystroke whatever is pasted into the field.
  */
 export const SEARCH_WORDS_MAX = 12;
 
-/** A query word shorter than this is never matched by a near miss: `hand` is not `hang`. */
-const NEAR_MIN_LENGTH = 5;
+/** A query must have this many letters before part of another name finds a movement (spec P17). */
+const ALIAS_PART_MIN_LENGTH = 3;
+/** A word shorter than this is never a near miss: three letters must be typed as they are. */
+const NEAR_MIN_LENGTH = 4;
 /** From this length a word may be two edits away, not one. */
 const NEAR_TWO_EDITS_FROM = 9;
 
@@ -218,22 +355,37 @@ function editsAllowed(word: string): 0 | 1 | 2 {
 }
 
 /**
+ * Whether `candidate` may be what `word` was meant to be, before any edit is counted: the same
+ * first letter, and for a four-letter word the same first two (the maintainer's rule of
+ * 2026-11-17: `pusg` is a push-up, `pisg` is not).
+ */
+function startsAlike(word: string, candidate: string): boolean {
+  if (candidate[0] !== word[0]) return false;
+  return word.length !== NEAR_MIN_LENGTH || candidate[1] === word[1];
+}
+
+/**
  * The edits between two folded words: an insert, a delete, a substitute, or a swap of two
  * neighbours, each one edit (the "optimal string alignment" distance). **Bounded:** the answer is
- * exact up to `max` and `max + 1` for anything further, and it stops as soon as that is certain.
+ * exact up to `max` and `max + 1` for anything further.
  *
- * Plain loops over arrays. Nothing here builds a `RegExp` from a query or a name (spec P6).
+ * **Banded:** two spellings within `max` edits differ by at most `max` in every prefix's length,
+ * so only the cells within `max` of the diagonal are filled: about `(2·max + 1)` a row, whatever
+ * the lengths. Plain loops over arrays. Nothing here builds a `RegExp` from a query or a name
+ * (spec P6).
  */
 export function editsWithin(a: string, b: string, max: number): number {
   const beyond = max + 1;
   if (Math.abs(a.length - b.length) > max) return beyond;
   let twoBack: number[] = [];
-  let previous: number[] = Array.from({ length: b.length + 1 }, (_, j) => j);
-  let previousBest = 0;
+  let previous: number[] = Array.from({ length: b.length + 1 }, (_, j) => (j <= max ? j : beyond));
   for (let i = 1; i <= a.length; i += 1) {
-    const row: number[] = [i];
-    let best = i;
-    for (let j = 1; j <= b.length; j += 1) {
+    const row: number[] = new Array<number>(b.length + 1).fill(beyond);
+    if (i <= max) row[0] = i;
+    let best = row[0] ?? beyond;
+    const from = Math.max(1, i - max);
+    const to = Math.min(b.length, i + max);
+    for (let j = from; j <= to; j += 1) {
       const same = a[i - 1] === b[j - 1];
       let edits = Math.min(
         (previous[j] ?? beyond) + 1,
@@ -243,15 +395,14 @@ export function editsWithin(a: string, b: string, max: number): number {
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
         edits = Math.min(edits, (twoBack[j - 2] ?? beyond) + 1);
       }
-      row.push(edits);
+      row[j] = Math.min(edits, beyond);
       if (edits < best) best = edits;
     }
-    // A cell reads from this row, the last one and (for a swap) the one before: once two rows in a
-    // row are past the limit, nothing below can come back under it.
-    if (best > max && previousBest > max) return beyond;
+    // Every cell reads from this row or the two before it; a swap costs at least what the cell
+    // diagonally above it does. So a row with nothing within the limit ends the search.
+    if (best > max) return beyond;
     twoBack = previous;
     previous = row;
-    previousBest = best;
   }
   return Math.min(previous[b.length] ?? beyond, beyond);
 }
@@ -262,35 +413,51 @@ export type MovementSearchResult<T> = MovementMatchResult<T> & {
    * empty**, and never what Enter picks (CAT-3 spec P4, P5). Closest first.
    */
   readonly near: readonly T[];
+  /**
+   * The option the query spells once its short forms are expanded (`db row` for Dumbbell row), or
+   * `null` (spec P1). 🔴 **It withholds "Use as typed" exactly as `exact` and `aliasHit` do**: an
+   * abbreviation that spells a movement is that movement (the maintainer, 2026-11-17).
+   */
+  readonly shortFormHit: T | null;
+  /**
+   * For a row found through another name, that alias as authored: an exact alias, part of one
+   * (spec P17), or an alias's word a near miss needed (P4). The row says "also called …". A row
+   * found by its own name is not in the map.
+   */
+  readonly foundByAlias: ReadonlyMap<T, string>;
 };
 
 /**
- * The movement library's search (CAT-3 spec, chunk C0b-1): {@link matchMovementOptions}, plus two
- * things a library of hundreds needs that a list of thirty-five did not.
+ * The movement library's search (CAT-3 spec, chunks C0b-1 and C30): {@link matchMovementOptions},
+ * plus what a library of hundreds needs that a list of thirty-five did not.
  *
  * 1. **Equipment short forms** (`QUERY_SHORT_FORMS`: `db`, `kb`, `bb`, `ez`, `trx`). A query word
- *    that is one is also read as the words it stands for: `db row` finds Dumbbell row. Rows found
- *    only that way come after the others and count as matches.
- * 2. **Near misses** (`near`): when nothing matches, the options the query is a typo of.
+ *    that is one is also read as the words it stands for: `db row` finds Dumbbell row. Such a row
+ *    has the quality its expanded words would have had, and within that quality comes after rows
+ *    found by name or by another name (P3).
+ * 2. **Part of another name** (P17). From three letters, a query whose every word is in one of an
+ *    option's aliases finds it: `military` finds Overhead press, also called Military press. 🔴 An
+ *    alias matched this way is never better than "a word starts with it": another name does not
+ *    outrank a movement's own name of the same quality.
+ * 3. **Near misses** (`near`): when nothing matches, the options the query is a typo of.
  *
- * 🔴 **`exact` and `aliasHit` are `matchMovementOptions`' own, for the query as typed** (P1). They
- * are what withholds "Use as typed", and the server's `existingItem` reads the same two: neither a
- * short form nor a near miss may ever make a name "already in the list". `db` is not Dumbbell.
+ * 🔴 **`exact` and `aliasHit` are `matchMovementOptions`' own, for the query as typed** (P1), and
+ * `shortFormHit` is the third signal beside them. Any of the three means the movement is already
+ * in the list; the server's `existingItem` answers the same three. A near miss or part of an alias
+ * never does: `skull` finds a movement and still lets a household make an item called "skull".
  *
- * **With no short form in the query, `matches` and `someWords` are `matchMovementOptions`' too**
- * (P2): the same rows in the same order.
+ * **With no short form in the query and no alias matched as typed, `matches` and `someWords` are
+ * `matchMovementOptions`' too** (P2): the same rows in the same order.
  *
- * **A near miss, for one option** (P4): every query word is either part of its name, or (five
- * letters or more) within one edit of a word of its name or of an alias that starts with the same
- * letter; two edits from nine letters. Or the same test on the whole query and the whole name or
- * alias with the spaces out (`chinnup` for Chin-up). A word under five letters is never a near
- * miss, so `hand` does not find a hang; the first letter must agree, so `dress` does not find a
- * press. A query made only of short words has no near miss.
+ * **A near miss, for one option** (P4): every query word is either part of its name, or within its
+ * edits of a word of its name or of an alias that starts alike: one edit from four letters (with
+ * the first two letters agreeing for a four-letter word), two from nine. Or the same test on the
+ * whole query and the whole name or alias with the spaces out (`chinnup` for Chin-up). A word of
+ * three letters or fewer is never a near miss.
  *
  * **Bounded** (P6): the query is cut to `MOVEMENT_NAME_MAX` characters before anything reads it,
- * and a query of more than `SEARCH_WORDS_MAX` words gets the plain match only: no short form is
- * expanded and no near miss is looked for. It is pure and runs on the
- * device: the query goes nowhere.
+ * and a query of more than `SEARCH_WORDS_MAX` words gets the plain match only. It is pure and
+ * runs on the device: the query goes nowhere.
  *
  * `search` is an object because the filters join it in the next chunk (C0b-2).
  */
@@ -298,27 +465,57 @@ export function searchMovementOptions<T extends MatchableMovement>(
   options: readonly T[],
   search: { readonly query: string },
 ): MovementSearchResult<T> {
-  const query = search.query.trim().slice(0, MOVEMENT_NAME_MAX);
-  const typed = matchMovementOptions(options, query);
-
-  const words = foldMovementQuery(query).split(' ').filter(Boolean);
+  const folded = foldMovementQuery(search.query.trim().slice(0, MOVEMENT_NAME_MAX));
+  if (folded === '') {
+    return { ...NO_MATCH, near: [], shortFormHit: null, foundByAlias: new Map() };
+  }
+  const prepared = prepare(options);
+  const { rows: typedRows, result: typed } = plainMatch(prepared, folded);
+  const words = folded.split(' ');
   // 🔴 A query of more words than the cap gets the plain match and nothing added. Reading only its
   // first words would let a row "match" without a word that was typed.
-  if (words.length > SEARCH_WORDS_MAX) return { ...typed, near: [] };
-  const expanded = words.flatMap((word) => shortFormWords(word) ?? [word]);
-  const hasShortForm = expanded.length !== words.length || expanded.some((w, i) => w !== words[i]);
-  const viaShortForm = hasShortForm ? matchMovementOptions(options, expanded.join(' ')) : null;
-
-  const matches = viaShortForm ? inOrder(typed.matches, viaShortForm.matches) : typed.matches;
-  if (matches.length > 0) {
-    return { matches, someWords: [], near: [], aliasHit: typed.aliasHit, exact: typed.exact };
+  if (words.length > SEARCH_WORDS_MAX) {
+    return { ...typed, near: [], shortFormHit: null, foundByAlias: aliasesOf(typedRows) };
   }
+
+  const expanded = words.flatMap((word) => shortFormWords(word) ?? [word]);
+  const expandedFolded = expanded.join(' ');
+  const hasShortForm = expandedFolded !== folded;
+
+  const rows: Row<T>[] = [...typedRows];
+  const viaShortForm = hasShortForm ? plainRows(prepared, expandedFolded, FOUND_BY.shortForm) : [];
+  rows.push(...viaShortForm);
+  if (folded.replaceAll(' ', '').length >= ALIAS_PART_MIN_LENGTH)
+    rows.push(...aliasPartRows(prepared, words, folded));
+
+  const all = ranked(rows);
+  const matches = all.map((row) => row.option);
+  const shortFormHit = ranked(viaShortForm.filter((row) => row.quality === 0))[0]?.option ?? null;
+  const foundByAlias = aliasesOf(all);
+
+  if (matches.length > 0) {
+    return {
+      matches,
+      someWords: [],
+      near: [],
+      aliasHit: typed.aliasHit,
+      exact: typed.exact,
+      shortFormHit,
+      foundByAlias,
+    };
+  }
+  const near = nearMisses(prepared, expanded);
+  for (const miss of near) if (miss.alias !== null) foundByAlias.set(miss.option, miss.alias);
   return {
     matches,
-    someWords: viaShortForm ? inOrder(typed.someWords, viaShortForm.someWords) : typed.someWords,
-    near: nearMisses(options, expanded),
+    someWords: hasShortForm
+      ? inOrder(typed.someWords, someWordsOf(prepared, expanded))
+      : typed.someWords,
+    near: near.map((miss) => miss.option),
     aliasHit: typed.aliasHit,
     exact: typed.exact,
+    shortFormHit,
+    foundByAlias,
   };
 }
 
@@ -335,62 +532,117 @@ function inOrder<T>(first: readonly T[], then: readonly T[]): readonly T[] {
   return [...first, ...then.filter((option) => !seen.has(option))];
 }
 
-function nearMisses<T extends MatchableMovement>(
-  options: readonly T[],
+/**
+ * Rows found by PART of an alias (spec P17): every query word is in the alias. The alias's own
+ * quality is capped at 2, "a word starts with it", so it never ranks with names that start with
+ * the query. An alias that IS the query is the plain match's (quality 0), not this.
+ */
+function aliasPartRows<T extends MatchableMovement>(
+  prepared: readonly Prepared<T>[],
   words: readonly string[],
-): readonly T[] {
+  folded: string,
+): Row<T>[] {
+  const rows: Row<T>[] = [];
+  for (const p of prepared) {
+    for (const alias of p.aliases) {
+      if (!words.every((word) => alias.folded.includes(word))) continue;
+      const own = spellingQuality(alias.folded, words, folded);
+      if (own === null) continue;
+      const quality: Quality = own === 1 ? 2 : own;
+      rows.push({
+        option: p.option,
+        folded: p.folded,
+        quality,
+        by: FOUND_BY.alias,
+        length: alias.folded.length,
+        alias: alias.text,
+      });
+    }
+  }
+  return rows;
+}
+
+type NearMiss<T> = { option: T; folded: string; edits: number; alias: string | null };
+
+function nearMisses<T extends MatchableMovement>(
+  prepared: readonly Prepared<T>[],
+  words: readonly string[],
+): NearMiss<T>[] {
   if (!words.some((word) => editsAllowed(word) > 0)) return [];
   const compact = words.join('');
-  const found: { option: T; folded: string; edits: number }[] = [];
-  for (const option of options) {
-    const folded = foldMovementQuery(option.name);
-    const spellings = [folded, ...(option.aliases ?? []).map(foldMovementQuery)];
-    const edits = Math.min(wordEdits(words, folded, spellings), compactEdits(compact, spellings));
-    if (Number.isFinite(edits)) found.push({ option, folded, edits });
+  const found: NearMiss<T>[] = [];
+  for (const p of prepared) {
+    const byWords = wordEdits(words, p);
+    const byCompact = compactEdits(compact, p);
+    const best = byCompact.edits < byWords.edits ? byCompact : byWords;
+    if (Number.isFinite(best.edits)) found.push({ option: p.option, folded: p.folded, ...best });
   }
-  return found
-    .sort(
-      (a, b) =>
-        a.edits - b.edits ||
-        Number(b.option.isCatalog ?? false) - Number(a.option.isCatalog ?? false) ||
-        (a.folded < b.folded ? -1 : a.folded > b.folded ? 1 : 0),
-    )
-    .map((entry) => entry.option);
+  return found.sort(
+    (a, b) =>
+      a.edits - b.edits ||
+      Number(b.option.isCatalog ?? false) - Number(a.option.isCatalog ?? false) ||
+      (a.folded < b.folded ? -1 : a.folded > b.folded ? 1 : 0),
+  );
 }
+
+const NO_MISS = { edits: Infinity, alias: null } as const;
 
 /**
  * The edits it takes for EVERY query word to be in this option: none for a word that is part of
- * its name, else the fewest edits to a word of its name or of an alias that starts with the same
- * letter. `Infinity` when any word is neither.
+ * its name, else the fewest edits to a word of its name, else to a word of an alias (the alias is
+ * then what the row was found through). `Infinity` when any word is neither.
  */
-function wordEdits(words: readonly string[], name: string, spellings: readonly string[]): number {
-  const candidates = spellings.flatMap((spelling) => spelling.split(' '));
+function wordEdits<T>(
+  words: readonly string[],
+  p: Prepared<T>,
+): { edits: number; alias: string | null } {
+  const nameWords = p.folded.split(' ');
   let total = 0;
+  let through: string | null = null;
   for (const word of words) {
-    if (name.includes(word)) continue;
+    if (p.folded.includes(word)) continue;
     const allowed = editsAllowed(word);
-    if (allowed === 0) return Infinity;
-    let fewest = allowed + 1;
-    for (const candidate of candidates) {
-      if (candidate[0] !== word[0]) continue;
-      fewest = Math.min(fewest, editsWithin(word, candidate, allowed));
+    if (allowed === 0) return NO_MISS;
+    let fewest = fewestEdits(word, nameWords, allowed);
+    if (fewest > allowed) {
+      for (const alias of p.aliases) {
+        const edits = fewestEdits(word, alias.folded.split(' '), allowed);
+        if (edits < fewest) {
+          fewest = edits;
+          through = alias.text;
+        }
+      }
     }
-    if (fewest > allowed) return Infinity;
+    if (fewest > allowed) return NO_MISS;
     total += fewest;
   }
-  return total;
+  return { edits: total, alias: through };
 }
 
-/** The same test on the whole query and a whole name or alias, spaces out. `Infinity` for none. */
-function compactEdits(compact: string, spellings: readonly string[]): number {
-  const allowed = editsAllowed(compact);
-  if (allowed === 0) return Infinity;
-  let fewest = Infinity;
-  for (const spelling of spellings) {
-    const candidate = spelling.replaceAll(' ', '');
-    if (candidate[0] !== compact[0]) continue;
-    const edits = editsWithin(compact, candidate, allowed);
-    if (edits <= allowed) fewest = Math.min(fewest, edits);
+/** The fewest edits from `word` to any candidate that starts alike; `allowed + 1` when none is within `allowed`. */
+function fewestEdits(word: string, candidates: readonly string[], allowed: number): number {
+  let fewest = allowed + 1;
+  for (const candidate of candidates) {
+    if (!startsAlike(word, candidate)) continue;
+    fewest = Math.min(fewest, editsWithin(word, candidate, allowed));
   }
   return fewest;
+}
+
+/** The same test on the whole query and a whole name or alias, spaces out. */
+function compactEdits<T>(compact: string, p: Prepared<T>): { edits: number; alias: string | null } {
+  const allowed = editsAllowed(compact);
+  if (allowed === 0) return NO_MISS;
+  const own = startsAlike(compact, p.compact)
+    ? editsWithin(compact, p.compact, allowed)
+    : allowed + 1;
+  if (own <= allowed) return { edits: own, alias: null };
+  let best: { edits: number; alias: string | null } = NO_MISS;
+  for (const alias of p.aliases) {
+    const candidate = alias.folded.replaceAll(' ', '');
+    if (!startsAlike(compact, candidate)) continue;
+    const edits = editsWithin(compact, candidate, allowed);
+    if (edits <= allowed && edits < best.edits) best = { edits, alias: alias.text };
+  }
+  return best;
 }
