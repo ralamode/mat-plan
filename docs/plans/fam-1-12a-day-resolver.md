@@ -234,101 +234,133 @@ Run `pnpm verify`. There is no UI.
 
 ## 12a-ii: the replays (rev 4 addendum, draft)
 
-12a-i merged as #505 (2026-11-17). This section is 12a-ii's plan. It changes no resolver code. A
-difference a replay finds is a 12a-i defect, fixed here with its own patch, or a contract question
-for the roadmap thread.
+12a-i merged as #505 (2026-11-17). This is 12a-ii's plan, reshaped by the panel (§ Review-response
+log, round 4). It changes no resolver code. A difference a replay finds is a 12a-i defect (fixed
+here, with its own patch) or a contract question for the roadmap thread.
 
-**What it proves.** These are the four `before` fixtures 12a-i left. The two archive-only fixtures
+**What it proves.** These are the four `before` fixtures 12a-i left; the two archive-only fixtures
 are already proved in 12a-i's `verifyRules`.
 
-| Fixture                          | The change, made with                                                                                          | Writer on main?        | What only this replay reaches                                                                                          |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `yesterday-edited-after-logging` | `saveWorkout` (6a-ii) on Heavy A (pull-up removed, the bench press 3 sets at 30) and Morning (push-ups 2 sets) | yes (#491)             | R4: a removed prescription's rows are their own item; a logged set beyond a reduced count; the closed-day heading rule |
-| `closed-day-program-since-left`  | `saveWorkout` (6a-ii): Morning habits renamed Morning routine                                                  | yes (#491)             | R2: a closed day shows the frozen `sessions.workout_name`; R6: a program since left sorts after the current ones       |
-| `workout-left-the-week`          | `saveWeek` (6b): Heavy A off Saturday                                                                          | no: #522, open         | a logged workout that left the week, with no label (C18) and its ids kept                                              |
-| `today-stretching-first`         | 6d's reorder of an athlete's programs                                                                          | no: 6d, not yet opened | program order follows the athlete's, and a label never sorts                                                           |
+| Fixture                          | The change, made with                                                                                                | Writer on main?        |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `yesterday-edited-after-logging` | `saveWorkout` (6a-ii): Heavy A loses the pull-up and the bench goes to 3 sets at 30; Morning's push-ups go to 2 sets | yes (#491)             |
+| `closed-day-program-since-left`  | `saveWorkout` (6a-ii): Morning habits is renamed Morning routine                                                     | yes (#491)             |
+| `workout-left-the-week`          | `saveWeek` (6b): Heavy A comes off the 11-13 slot                                                                    | no: #522, open         |
+| `today-stretching-first`         | the athlete's programs reordered: 6d's writer, **or a direct `idx` update (Q6)**                                     | no: 6d, not yet opened |
 
-**The harness** is in `verify/day-plan.ts`, beside 12a-i's seeder.
+The deep-equals are the fixtures. Some of their rules are already proved in 12a-i: a logged set
+beyond a reduced count (`verify/day-plan.ts:987-1003`), and a left-the-week workout's null label
+and kept ids (`:1027-1042`, `:1409-1422`). The rules only these replays reach have proofs of their
+own (below).
 
-1. Seed `before` with 12a-i's `seedWorld`, unchanged except for one thing. The seeder records each
-   workout's and prescription's `client_id` in the id map, under `fixtureIds.workoutClient` and
-   `fixtureIds.prescriptionClient`. Those are the ids `workoutDraft` puts in a draft. The values
-   are still `newId()`: the fixture's own UUIDs are never written, because `client_id` is globally
-   unique and two seeds of one world would collide.
-2. Log `before`'s entries through `logRow`, as 12a-i does. `world`'s entries are `before`'s, stamps
+**The harness** sits in `verify/day-plan.ts`, beside 12a-i's seeder, and runs after `verifyFixtures`
+and before `verifyRules`.
+
+1. Seed `before` with 12a-i's `seedWorld`. One addition: each workout's and prescription's
+   `client_id` goes into the id map, under `fixtureIds.workoutClient` and
+   `fixtureIds.prescriptionClient`, which are the ids `workoutDraft` puts in a draft.
+   - The values stay `newId()`, because the fixtures' own UUIDs are the KEYS of `translate`'s map
+     and a value equal to its key would let an untranslated id pass.
+   - `client_id` is unique per block for a workout (`schema.ts:1167`) and per workout for a
+     prescription (`:1318`), so collision is not the reason.
+2. **Calibrate:** call `saveWorkout(translate(workoutDraft(before, prog, wid)))` on each workout,
+   unchanged. Each call must answer `ok`, and the resolved `before` day must deep-equal what it was
+   before the saves. This proves the seeder's rows and the writer's agree (the writer normalises
+   `targetReps` and sets `valueMax`), so a later difference is the edit's.
+3. Log `before`'s entries through `logRow`, as 12a-i does. `world`'s entries are `before`'s, stamps
    included (C17).
-3. Make the change with the real writer, under the seeded scope:
-   - `saveWorkout(translate(workoutDraft(world, prog, wid)))` for each workout whose draft differs
-     between `before` and `world`. A replay that touches no workout fails, so the replay cannot be
-     a no-op.
-   - `saveWeek(translate(weekDraftOf(world, prog)))`. `weekDraftOf` is a local helper, about eight
-     lines, that maps `program.week` to `WeekDraft['days']` (Q4).
-   - 6d's reorder, through its API as merged.
-   - Each writer must answer `ok`. A refusal fails the proof with the writer's reason.
-4. Resolve with `world.today` and deep-equal the translated fixture, exactly as 12a-i does. Where
-   the day is writable, also run C1's round trip.
+4. **Classify the change.** Diff `before` against `world` into three kinds: changed workouts
+   (their drafts differ), a changed week (`programView(world, prog).week` differs), and a reordered
+   assignment list.
+   - Any other difference (athletes, catalog, an assignment's dates, a workout added or removed)
+     throws "unreplayable change", naming it.
+   - Zero writer calls fails the proof.
+5. Replay each change with its writer, under the seeded scope:
+   - each changed workout: `saveWorkout(translate(workoutDraft(world, prog, wid)))`;
+   - each changed week: `saveWeek({ programPublicId, days: translate(programView(world, prog).week) })`
+     (Q4);
+   - a reorder: Q6.
 
-**Fixture selection** works by test, not by list, as in 12a-i. 12a-ii proves the sources with
-`before !== null` that are not in `ARCHIVE_ONLY_FIXTURES`. A fixture whose writer has not merged is
-listed in one constant, `AWAITING_WRITER`, which starts as `today-stretching-first` and
-`workout-left-the-week`. The PR stays a draft until that constant is empty, and `owed.test.ts` keeps
-those fixtures' `it.todo` lines until then.
+   Every call must answer `ok`; a refusal fails with the writer's reason.
 
-**Extra proofs** (from the plan's 12a-ii row):
+6. Resolve with `world.today` and deep-equal the translated fixture, as 12a-i does. Where the day
+   is writable, run C1's round trip:
+   - a fixture whose scheduled rows are all logged un-ticks a returned `entryPublicId` instead of
+     ticking;
+   - for `workout-left-the-week` that is a Heavy A entry, the ids only this fixture returns.
 
-- **A removed prescription whose movement is in the workout again stays its own item:** after the
-  pull-up is removed, a second `saveWorkout` adds the pull-up back as a new card, with a new
-  `prescriptionClientId`. The old rows are a removed item. The new card is a live item with no
-  logged rows.
-- **Progress does not count removed items' rows:** read on `yesterday-edited-after-logging`, which
-  closes the owed line `12a-ii: progress does not count removed items’ rows`.
-- **One movement twice in a workout:** 12a-i has no proof of this. It is proved here through
-  `saveWorkout`, with two cards of one movement, each with its own rows and its own PREVIOUS per set
-  (rule 5: they share PREVIOUS by set number, decided by first logged, which is a known limit).
-  ⚠️ _Unverified:_ that `saveWorkout` takes two cards of one movement. The probe is the proof's own
-  first save. If the writer refuses, the state is unreachable through the app, and the proof plants
-  it instead, saying so.
+**Selection** is derived, never typed out, on the `ARCHIVE_ONLY_FIXTURES` pattern:
 
-**Mutations** come from lane E's 251–259. One patch for each rule a replay is the first proof to
-reach, only where no 12a-i patch already reddens on it:
+- `fixture-groups.ts` exports `REPLAY_FIXTURES`: the `before !== null` sources not in
+  `ARCHIVE_ONLY_FIXTURES`. It also exports `REPLAY_FIXTURE_COUNT = 4`, which the proof asserts.
+- `owed.test.ts`'s loop reads the same list.
+- While the PR is a draft, a temporary `AWAITING_WRITER` names the fixtures whose writer has not
+  merged. It is typed `satisfies readonly (keyof typeof DAY_PLAN_FIXTURE_SOURCES)[]`, and the proof
+  asserts it is a subset of `REPLAY_FIXTURES`.
+- **Before the PR is marked ready, `AWAITING_WRITER` is deleted,** along with `owed.test.ts`'s
+  now-empty loop and import, and the `fixture-groups.ts` comment is updated. It never reaches
+  `main`.
 
-- R2's frozen name (the live name used instead);
-- R4's grouping key (by movement instead of `prescription_id`);
-- progress counting removed items' rows;
-- R6's tail (programs since left sorted by their `idx` as if current).
+**Proofs of the rules only a replay reaches**, each with a mutation from lane E's 253–259
+(251–252 went to #527):
 
-Each patch's `.expect` names a 12a-ii assertion.
+| Rule                                                                                                                        | Proof                                                                                                                                                                                                                                                         | Mutation (its `.expect` is that proof's first assertion)                                     |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| R2, closed half: a closed day shows the frozen `sessions.workout_name`                                                      | `closed-day-program-since-left`'s deep-equal                                                                                                                                                                                                                  | the name is `draft.liveName ?? frozen` (a bare `liveName` throws in 12a-i first)             |
+| R2, writable half: a writable day shows the live name                                                                       | on that seeded state after the rename, a1 resolved on 11-13 (w1 logged, writable) shows "Morning routine"                                                                                                                                                     | the name is the frozen one whatever `showing` is                                             |
+| The closed-day heading: where only logged rows show, an item's heading is its first-logged row's snapshot                   | on the edited state, 11-13 resolved with `today` = 11-15 (closed): the bench press's heading is `before`'s text (4 sets, 25 lb), not the live 3 at 30; each row keeps its own `logged.prescribedText`                                                         | the heading is the live `terms.text` on every day (`day-plan.ts:603`)                        |
+| R4: a removed prescription's rows are its OWN item, even with that movement live again; rows are claimed by prescription id | after the pull-up is removed, a hand-built draft adds the pull-up back as a new card. The old rows are a removed item, and the new card is live and unlogged                                                                                                  | a live item claims rows by `movementId` (`day-plan.ts:566`)                                  |
+| R4's key and order: one removed item per `prescription_id`, in first-logged order; name, text and unit from the lowest set  | that state again: log set 2 then set 1 on the new card, then remove it. There are two removed pull-up items, in first-logged order, and the second's text is set 1's                                                                                          | the removed-item key is the movement (`day-plan.ts:618`); its text from the first logged row |
+| One movement twice in a workout; the two cards share PREVIOUS per set (rule 5, a known limit)                               | a hand-built draft with two cards of one movement, saved through `saveWorkout`, which dedups item ids (`save-workout.ts:160-173`) and has no per-movement index. Each card has its own rows, and both show the same `previous` for set N, the earliest logged | the claim-by-movement patch above reddens it too                                             |
+
+A draft with a second card of one movement, or a card back again, cannot come from `workoutDraft`:
+both cards would get one `prescriptionClient(wid, iid)`. It is built by hand, with its new
+`prescriptionClientId` added after `translate` (which throws on an unknown UUID).
+
+Progress not counting removed items' rows is in `yesterday-edited-after-logging`'s deep-equal
+(`progress.done` would rise), which closes that owed line. R6's tail is in
+`closed-day-program-since-left`'s (p3 is listed first in `assign`). Neither gets a patch, per 12a-i's
+policy: a patch only where no fixture's deep-equal goes red.
 
 **Files:**
 
-- E `scripts/verify/day-plan.ts`: the replay, `weekDraftOf`, the extra proofs.
-- E `scripts/verify/fixture-groups.ts`: `AWAITING_WRITER`.
-- E `src/writers/day/owed.test.ts`: lines deleted as each is proved.
-- N mutation patches, 251 onwards, plus their README rows.
+- E `scripts/verify/day-plan.ts`: the harness and the proofs above.
+- E `scripts/verify/fixture-groups.ts`: `REPLAY_FIXTURES`, `REPLAY_FIXTURE_COUNT`, and the draft-only
+  `AWAITING_WRITER`.
+- E `src/writers/day/owed.test.ts`: reads `REPLAY_FIXTURES`; the progress line goes.
+- N mutation patches 253 onward, plus their README rows.
 - E `docs/features/day-writers.md`: the proof map.
-- E `docs/tech-debt.md`: the direct-insert seeder entry notes that 12a-ii now edits through the
-  writers. Seeding stays direct until 6c's `seedProgramFixtures`.
+- E `docs/tech-debt.md`: the direct-insert entry rewritten.
+  - The real reason the seeder stays on direct inserts is ids that run opposite to `idx`.
+    `saveWorkout` cannot insert a reversed draft, because `supersetsAreWellFormed` refuses a
+    reversed group.
+  - `seedProgramFixtures(db, scope)` takes no `world`, so the "fold it in at 6c" fix is struck.
+  - The calibration step is what keeps the two in agreement.
+- E this plan's Risks: the stale "label set aside" line goes (C18 made it `null`, deep-equalled in
+  full).
 - A changelog fragment.
 
 No file of lane P's, lane A's or the contract owner's is touched.
 
 **Questions:**
 
-- **Q4 (contract owner, not blocking):** should `weekDraft(world, programId)` sit beside
-  `workoutDraft` in the fixtures module? Recommendation: no, keep the local helper, since 12a-ii is
-  its one consumer.
-- **Q5 (contract owner, only if it happens):** does a replay's ids match the fixture's? If
-  `saveWorkout` mints a new row where the fixture keeps the old prescription id (D19: an item swap
-  mints, a sets or load edit does not), the proof says so, and the fixture or the writer is wrong.
-  That is raised, never patched around.
+- **Q4 (contract owner):** export `programView` from `@mat-plan/shared/program/fixtures`? It is
+  already imported in `fixtures/index.ts:11`, so it is one name and no new code. Its `.week` is a
+  `WeekDraft['days']` (`program-shapes.ts:211-215, 319`), which is what the week editor passes to
+  `saveWeek`. Recommended: yes. If not, a local copy whose docblock names `build.ts:452-460` as the
+  rule it copies.
+- **Q6 (the board):** apply `today-stretching-first`'s reorder by a direct `program_assignments.idx`
+  update instead of waiting for 6d? The plan row allows "a recorded decision to make an edit with
+  direct SQL".
+  - `logRow` does not read program order, so the database matches before → log → reorder.
+  - 12a-i applied the archive the same way.
+  - A replay through 6d would test 6d's writer, which is 6d's proof to make.
+  - Recommended: yes, so 12a-ii waits only on 6b.
 
-**Gates:** #491 (merged); #522 (6b) for `workout-left-the-week`; 6d for `today-stretching-first`.
-**Gates next:** 15.
+**Gates:** #491 (merged), #522 (6b), and 6d unless Q6 is yes. **Gates next:** 15.
 
 ## Risks
 
-- **A fixture the database cannot express:** R2's label; that one workout's `label` is set aside in the
-  comparison (12a-ii).
 - **N+1 reads:** one query per kind per day; PREVIOUS is one query.
 - **Ownership:** E1, E2 and E4, each with a planted-row proof and a mutation.
 
@@ -413,3 +445,28 @@ maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
 | 3S2 | security | The (f)/(g) proofs can pass without exercising E1                                      | **accepted** | Setups pinned; a non-vacuity check in the 4d pattern                                                 |
 | 3S3 | security | One mutation covers both WHERE clauses                                                 | **accepted** | Split in two (9 mutations)                                                                           |
 | 3S4 | security | The WHERE's target column is prose only                                                | **accepted** | It tests the scoped subquery's projected id, never the raw one                                       |
+
+### Engineering panel, round 4 (the 12a-ii addendum: correctness, scope, reuse; Opus 5.5)
+
+> Run on Opus 5.5 while Fable is capped. Panel cost: correctness 156k · 9m18s, scope 70k · 4m03s,
+> reuse 85k · 5m10s.
+
+| #   | Lens         | Critique (short)                                                                                                                        | Verdict              | Resolution                                                                                                                                            |
+| --- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4C1 | correctness  | The closed-day heading rule is claimed, but no planned state reaches it (11-13 is writable)                                             | **accepted**         | A proof on the edited state with `today` = 11-15, and a patch at `day-plan.ts:603`                                                                    |
+| 4C2 | correctness  | The R4 grouping-key patch cannot go red; the claim-by-prescription rule has no patch                                                    | **accepted**         | A claim-by-movement patch; the back-again proof logs and removes a second pull-up card, which reddens the key patch and proves the first-logged order |
+| 4C3 | correctness  | A bare-`liveName` R2 patch throws in 12a-i first; R2's writable half is unproven                                                        | **accepted**         | The patch is `liveName ?? frozen`; the run order is stated; a writable-day live-name proof and patch                                                  |
+| 4C4 | correctness  | C1's round trip fails on `workout-left-the-week` (every scheduled row is logged)                                                        | **accepted**         | Un-tick a returned Heavy A entry there                                                                                                                |
+| 4C5 | correctness  | "A replay that touches no workout fails" contradicts two fixtures; nothing checks the replay is complete                                | **accepted**         | The change is classified (workouts, week, order); anything else throws; zero writer calls fails                                                       |
+| 4C6 | correctness  | The selection has no count                                                                                                              | **accepted**         | `REPLAY_FIXTURE_COUNT`; `AWAITING_WRITER` asserted to be a subset                                                                                     |
+| 4C7 | correctness  | R4's lowest-set rule has no distinguishing state                                                                                        | **accepted**         | The back-again card logs set 2 before set 1                                                                                                           |
+| 4C8 | correctness  | NITs: overstated "only this replay"; a wrong `client_id` reason; Q5 moot; draft hand-building; the PREVIOUS wording; a stale Risks line | **accepted**         | All in rev 4                                                                                                                                          |
+| 4S1 | scope        | Waiting on 6d holds the branch open; split off the fixtures whose writers are unmerged                                                  | **accepted, partly** | The board said keep one draft until the writers land (2026-11-17); Q6 drops the 6d wait, so only 6b (#522, open) remains                              |
+| 4S2 | scope        | `today-stretching-first` does not need 6d                                                                                               | **accepted**         | Q6 to the board: a direct `idx` update                                                                                                                |
+| 4S3 | scope, reuse | `AWAITING_WRITER` would merge empty                                                                                                     | **accepted**         | Draft-only; deleted, with the empty loop, before ready                                                                                                |
+| 4S4 | scope        | Two of the four mutations repeat what the deep-equal guards                                                                             | **accepted**         | Progress and R6's tail get no patch; the remaining patches each name an assertion beyond the deep-equal                                               |
+| 4R1 | reuse        | `weekDraftOf` rewrites `programView(...).week`                                                                                          | **accepted**         | Q4: export `programView`; otherwise a copy that names its source                                                                                      |
+| 4R2 | reuse        | The replay selection is a second copy of `owed.test.ts`'s filter                                                                        | **accepted**         | `REPLAY_FIXTURES` in `fixture-groups.ts`, read by both                                                                                                |
+| 4R4 | reuse        | The seeder and `saveWorkout` write prescriptions two ways; the tech-debt fix cannot work                                                | **accepted**         | A calibration save before the edit; the tech-debt entry rewritten                                                                                     |
+| 4R5 | reuse        | The changed-only rule covers workouts, not the week                                                                                     | **accepted**         | One classifier for both                                                                                                                               |
+| —   | scope        | Settle the two-cards hedge by reading                                                                                                   | **accepted**         | `save-workout.ts:160-173` takes it; the plant fallback is dropped                                                                                     |
