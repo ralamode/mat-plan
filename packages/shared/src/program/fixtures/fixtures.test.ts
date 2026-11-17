@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { uuidSchema } from '../../id';
 import { TRACKING_TYPES } from '../../movements';
 import { QUANTITY_SLOT } from '../../quantity-slots';
-import { dayPlanSchema, type DayPlan } from '../day-shapes';
+import { dayPlanSchema, showsOnlyLogged, type DayPlan } from '../day-shapes';
 import { hasSetRows } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import { programListSchema, programViewSchema, workoutDraftSchema } from '../program-shapes';
@@ -808,6 +808,50 @@ describe('archived-athlete-nothing-logged: one other athlete to go to (C22)', ()
     const { world, before } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-nothing-logged'];
     expect(world.athletes.filter((a) => a.archived).map((a) => a.id)).toEqual(['a2', 'a3']);
     expect(before).toBe(DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world);
+  });
+});
+
+describe('showsOnlyLogged: one rule for a day that shows only what was logged (C23)', () => {
+  it('is a day that is neither writable nor a future day', () => {
+    expect(showsOnlyLogged({ writable: false, future: false })).toBe(true);
+    expect(showsOnlyLogged({ writable: true, future: false })).toBe(false);
+    expect(showsOnlyLogged({ writable: false, future: true })).toBe(false);
+  });
+
+  it('names exactly the fixtures of a closed day or an archived athlete', () => {
+    const names = Object.entries(DAY_PLAN_FIXTURES)
+      .filter(([, plan]) => showsOnlyLogged(plan))
+      .map(([name]) => name);
+    expect(names).toEqual([
+      'not-on-a-program-that-day',
+      'closed-day-logged-only',
+      'closed-day-program-since-left',
+      'archived-athlete-today',
+      'closed-day-nothing-logged',
+      'archived-athlete-nothing-logged',
+    ]);
+  });
+
+  it('holds in every fixture: there, every workout and item shown has a logged row, and no PREVIOUS', () => {
+    for (const [name, plan] of Object.entries(DAY_PLAN_FIXTURES)) {
+      if (!showsOnlyLogged(plan)) continue;
+      for (const w of plan.workouts) {
+        expect(w.items.length, `${name}: ${w.name}`).toBeGreaterThan(0);
+        for (const it of w.items) {
+          expect(it.rows.length, `${name}: ${it.name}`).toBeGreaterThan(0);
+          expect(it.rows.every((row) => row.logged !== null && row.previous === null)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('is what the builder asks: the same world lists an unlogged workout on a writable day only', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['closed-day-nothing-logged'];
+    // Tuesday the 10th is closed and unlogged: nothing. Today is writable: every scheduled workout.
+    expect(dayPlan(world, 'a1', '2026-11-10').workouts).toEqual([]);
+    expect(dayPlan(world, 'a1', FIXTURE_TODAY).workouts.length).toBeGreaterThan(0);
+    // A future day lists what is coming, though nothing is logged there either.
+    expect(dayPlan(world, 'a1', '2026-11-16').workouts.length).toBeGreaterThan(0);
   });
 });
 

@@ -19,7 +19,7 @@ import { ProgramLine } from '@/components/day/program-line';
 import { ProgramScreen } from '@/components/program-builder/program-screen';
 import { ProgramsListScreen } from '@/components/program-builder/programs-list-screen';
 import { WorkoutEditorScreen } from '@/components/program-builder/workout-editor-screen';
-import { NAME_WRAP_CLASS, SETTINGS_COPY } from '@/lib/constants';
+import { NAME_WRAP_CLASS, NOTICE_CLASS, SETTINGS_COPY } from '@/lib/constants';
 
 import {
   createFakeDayActions,
@@ -178,9 +178,7 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
           the fixture's world, in the page's own words, so the state reads as it will. On the real
           page "Household settings" is a link; the preview names it and links nowhere. */}
       {athlete.archived ? (
-        <p
-          className={`border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm ${NAME_WRAP_CLASS}`}
-        >
+        <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
           {SETTINGS_COPY.archivedNotice(athlete.name)} {SETTINGS_COPY.heading}.
         </p>
       ) : null}
