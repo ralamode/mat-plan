@@ -1,6 +1,6 @@
 'use client';
 
-import { ON_PROGRAM, type DayActions, type DayPlan } from '@mat-plan/shared';
+import { type DayActions, type DayPlan } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -10,7 +10,8 @@ import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DayContext, type DayContextValue } from './day-context';
-import { DAY_COPY, PROGRAM_COPY } from './day-copy';
+import { DAY_COPY } from './day-copy';
+import { nothingLoggedNotice, restNotice } from './day-notices';
 import { rowIsIn, workoutKeyOf } from './use-row';
 import { WorkoutCard } from './workout-card';
 
@@ -85,6 +86,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
 
   const many = plan.programs.length > 1;
   const rest = restNotice(plan);
+  const nothingLogged = nothingLoggedNotice(plan);
   const programName = (id: string | null) =>
     (many && plan.programs.find((p) => p.programPublicId === id)?.name) || null;
   const notSavedIn = (workoutKey: string) =>
@@ -109,6 +111,8 @@ function DayBody({ plan, actions }: DayScreenProps) {
             {rest.text}
           </p>
         ) : null}
+        {/* The notice box, as the all-rest line: it is then the only thing in the section. */}
+        {nothingLogged ? <p className={NOTICE_CLASS}>{nothingLogged}</p> : null}
         {plan.workouts.map((workout, index) => {
           const key = workoutKeyOf(workout, index);
           return (
@@ -127,33 +131,4 @@ function DayBody({ plan, actions }: DayScreenProps) {
       </section>
     </DayContext>
   );
-}
-
-/**
- * The rest-day line (FAM-1 step 13d), worded as v12 has it (maintainer, 2026-11-16): when every
- * program the athlete is on rests, "Rest day. Nothing is scheduled on Sundays."; when some rest on a
- * day with two or more, "Rest day on Family program."
- *
- * 🔴 **Only on today, yesterday and look-ahead days.** An older day lists only workouts with a logged
- * row (`dayPlanSchema`), so there a program with no workout means *skipped*, not rest, and calling it
- * a rest day would mislead a parent reading back (UX panel, 13d). A workout that left the week is not
- * a scheduled one, so it does not make its program "not resting". The all-rest line is v12's notice
- * box, since it is then the only thing in the section.
- */
-export function restNotice(plan: DayPlan): { text: string; allRest: boolean } | null {
-  if (plan.onProgram !== ON_PROGRAM.yes || !(plan.writable || plan.future)) return null;
-  const resting = plan.programs.filter(
-    (program) =>
-      !plan.workouts.some((w) => w.scheduled && w.programPublicId === program.programPublicId),
-  );
-  if (resting.length === 0) return null;
-  if (resting.length === plan.programs.length) {
-    // v12 says it only on an empty day: a logged workout that left the week is something to see.
-    return plan.workouts.length === 0
-      ? { text: PROGRAM_COPY.restAll(plan.day), allRest: true }
-      : null;
-  }
-  return plan.programs.length >= 2
-    ? { text: PROGRAM_COPY.restSome(resting.map((p) => p.name)), allRest: false }
-    : null;
 }

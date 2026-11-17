@@ -118,6 +118,14 @@ export function localWeekStartIso(day: string): string {
 }
 
 /**
+ * A day in a sentence, as the day page's date line names it: `today`, or `on Tue, Nov 10`
+ * (`formatDayShort`). Shared by every "… today / on <day>" line, so they cannot drift.
+ */
+export function onDayText(day: string, today: string): string {
+  return day === today ? 'today' : `on ${formatDayShort(day)}`;
+}
+
+/**
  * Human-readable long date from a `YYYY-MM-DD` calendar date.
  *
  * Anchored at UTC midnight and formatted in UTC BY DESIGN — and it deliberately takes NO
