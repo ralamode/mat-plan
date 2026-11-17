@@ -1,9 +1,22 @@
-import { localWeekday } from '@mat-plan/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { addDays, localWeekday } from '@mat-plan/shared';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../client';
+import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
-import { assignmentOnDay } from '../program-assignments';
+import { liveTemplateBlockIn, programBlockOfProfile } from '../../writers/ownership';
+import { assignmentCurrentAsOf, assignmentOnDay } from '../program-assignments';
+
+/**
+ * **A live week slot on the day's weekday**, any block, any workout: the half of `scheduledOn` that
+ * does not name a workout. The day resolver lists a block's slots through it (`weekSlotsOn`).
+ */
+export function weekSlotOn(day: string) {
+  return and(
+    eq(schema.blockDayWorkouts.weekday, localWeekday(day)),
+    isNull(schema.blockDayWorkouts.deletedAt),
+  );
+}
 
 /**
  * **Is this workout on its block's week on this day?** One rule for the row writer
@@ -25,8 +38,7 @@ export function scheduledOn(blockId: number, workoutId: number, day: string) {
   return and(
     eq(schema.blockDayWorkouts.blockId, blockId),
     eq(schema.blockDayWorkouts.workoutId, workoutId),
-    eq(schema.blockDayWorkouts.weekday, localWeekday(day)),
-    isNull(schema.blockDayWorkouts.deletedAt),
+    weekSlotOn(day),
   );
 }
 
@@ -72,7 +84,126 @@ export async function isOnProgramThatDay(
   const [row] = await exec
     .select({ id: a.id })
     .from(a)
-    .where(and(eq(a.profileId, profileId), eq(a.blockId, blockId), assignmentOnDay(day)))
+    .where(and(onProgramOn(profileId, day), eq(a.blockId, blockId)))
     .limit(1);
   return row !== undefined;
+}
+
+/**
+ * **This athlete's assignment rows that are on `day`** (`assignmentOnDay`, step 5's one spelling of
+ * the range), any program. One conjunct for the row writer's step 8 (`isOnProgramThatDay`, which adds
+ * the block) and the day resolver (`dayAssignments`: `onProgram`, `programs` and `canGoForward`), so
+ * the page and the ✓ agree on who is on what. When ASSIGN-1 moves to `assignmentDueOn`, it moves
+ * here, once.
+ *
+ * It judges the assignment row only; a reader adds the live parents and the scope (E1).
+ */
+export function onProgramOn(profileId: number, day: string) {
+  return and(eq(schema.programAssignments.profileId, profileId), assignmentOnDay(day));
+}
+
+/** One of the athlete's live assignment rows, on a live template block of the scope. */
+export type DayAssignment = {
+  id: number;
+  blockId: number;
+  programPublicId: string;
+  programName: string;
+  idx: number;
+  activeFrom: string;
+  activeTo: string | null;
+  /** On the viewed day (`onProgramOn`). */
+  onDay: boolean;
+  /** Current as of today: on it now or starting later (`assignmentCurrentAsOf`). */
+  current: boolean;
+  /** On the day after the viewed one: look-ahead (`canGoForward`). */
+  onNextDay: boolean;
+};
+
+/**
+ * **The day resolver's assignment read** (FAM-1 12a, decision E1's live anchor): every live
+ * assignment row of the athlete whose block is a live template block of the scope
+ * (`liveTemplateBlockIn`) AND of the athlete's own household (`programBlockOfProfile`), with three
+ * flags. One query, in `(idx, id)` order.
+ *
+ * So a hidden program, a program of another household (runbook pre-flight (h)) and a hidden
+ * assignment are on nothing: not on the day, not current, not ahead. Kept in this file, beside
+ * `isOnProgramThatDay`, so the step-5 tables are named in one lane E module
+ * (`program-tables-stay-dark.test.ts`).
+ *
+ * Takes the internal profile id the caller has already proved live in `scope`.
+ */
+export async function dayAssignments(
+  exec: Executor,
+  scope: HouseholdScope,
+  profileId: number,
+  dates: { day: string; today: string },
+): Promise<DayAssignment[]> {
+  const a = schema.programAssignments;
+  const b = schema.programBlocks;
+  const flag = (condition: ReturnType<typeof and>) => sql<boolean>`coalesce(${condition}, false)`;
+  return exec
+    .select({
+      id: a.id,
+      blockId: a.blockId,
+      programPublicId: b.publicId,
+      programName: b.name,
+      idx: a.idx,
+      activeFrom: a.activeFrom,
+      activeTo: a.activeTo,
+      onDay: flag(onProgramOn(profileId, dates.day)),
+      current: flag(assignmentCurrentAsOf(dates.today)),
+      onNextDay: flag(onProgramOn(profileId, addDays(dates.day, 1))),
+    })
+    .from(a)
+    .innerJoin(b, eq(b.id, a.blockId))
+    .where(
+      and(
+        eq(a.profileId, profileId),
+        isNull(a.deletedAt),
+        liveTemplateBlockIn(scope),
+        programBlockOfProfile(profileId),
+      ),
+    )
+    .orderBy(asc(a.idx), asc(a.id));
+}
+
+/** A live week slot of one of the day's blocks, with its live workout. */
+export type WeekSlot = {
+  blockId: number;
+  idx: number;
+  label: string | null;
+  workoutId: number;
+  workoutPublicId: string;
+  name: string;
+  description: string | null;
+};
+
+/**
+ * **The week slots of `blockIds` on the day's weekday** (`weekSlotOn`, the half of `scheduledOn` that
+ * does not name a workout), each with its LIVE workout, in `(block, idx)` order. The blocks are the
+ * caller's, already proved live and in scope by `dayAssignments`; the composite FK
+ * (`block_day_workouts_workout_block_fkey`) makes each slot's workout its block's own.
+ */
+export async function weekSlotsOn(
+  exec: Executor,
+  blockIds: readonly number[],
+  day: string,
+): Promise<WeekSlot[]> {
+  if (blockIds.length === 0) return [];
+  const s = schema.blockDayWorkouts;
+  const w = schema.workouts;
+  return exec
+    .select({
+      blockId: s.blockId,
+      idx: s.idx,
+      label: s.label,
+      workoutId: w.id,
+      workoutPublicId: w.publicId,
+      name: w.name,
+      description: w.description,
+    })
+    .from(s)
+    .innerJoin(w, and(eq(w.id, s.workoutId), isNull(w.deletedAt)))
+    .where(and(inArray(s.blockId, [...blockIds]), weekSlotOn(day)))
+    .orderBy(asc(s.blockId), asc(s.idx));
 }
