@@ -26,14 +26,15 @@ step below adds its files and its invariants here.
 
 ## The map
 
-| Step | Adds                                                                                                                |
-| ---- | ------------------------------------------------------------------------------------------------------------------- |
-| 8a   | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.    |
-| 8    | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                          |
-| 9    | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                   |
-| 10   | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                   |
-| 7a   | `apps/web/app/programs/actions.ts` (the real `ProgramActions`) with its registry file; `apps/web/lib/dal/program/`. |
-| 7b   | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                     |
+| Step  | Adds                                                                                                                        |
+| ----- | --------------------------------------------------------------------------------------------------------------------------- |
+| 8a    | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.            |
+| 8     | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                                  |
+| 9     | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                           |
+| 10    | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                           |
+| 7a-i  | `apps/web/app/programs/actions.ts`: create, rename and save a workout, with its registry file; `apps/web/lib/dal/program/`. |
+| 7a-ii | The same module: save the week, copy a workout, a new item; and the picker's options read.                                  |
+| 7b    | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                             |
 
 ### How a screen is put together (8a)
 
