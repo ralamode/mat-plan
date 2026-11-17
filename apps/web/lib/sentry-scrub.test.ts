@@ -11,6 +11,7 @@ import {
   beforeSendTransactionScrubbed,
   scrubSentryEvent,
   SENTRY_DATA_COLLECTION,
+  maskIds,
 } from './sentry-scrub';
 
 /**
@@ -462,5 +463,92 @@ describe('scrubSentryEvent — a rejected row never leaves the server (Postgres 
     } as Parameters<typeof beforeSendLogScrubbed>[0]);
     const crumb = beforeBreadcrumbScrubbed({ message: `x\nDETAIL: ${KEY}`, data: { detail: ROW } });
     expect(JSON.stringify({ log, crumb })).not.toContain('Saturday hill sprints');
+  });
+});
+
+describe('scrubSentryEvent — no public id leaves except the deliberate one (C11 review, 2026-11-16)', () => {
+  const ATHLETE = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f8091';
+  const PROGRAM = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f80ff';
+  const page = `https://www.mat-plan.dev/p/${ATHLETE}?d=2026-11-16`; // the query: a precaution, see scrubUrl
+
+  /**
+   * Shaped from `@sentry/nextjs@11.10.0`'s `captureRequestError`: Next's `onRequestError` hook puts
+   * the request path in `contexts.nextjs.request_path` (query string removed, path intact) and the
+   * URL under `request`. The review ran the real SDK through the scrubber; this pins what it found.
+   */
+  const requestErrorEvent = (): Event =>
+    ({
+      request: { url: page, method: 'GET', headers: {} },
+      contexts: {
+        nextjs: {
+          request_path: `/p/${ATHLETE}`,
+          router_kind: 'App Router',
+          router_path: '/p/[profileId]',
+          route_type: 'render',
+        },
+        request: { url: page },
+      },
+      transaction: 'GET /p/[profileId]',
+      exception: { values: [{ type: 'Error', value: `boom for /p/${ATHLETE}` }] },
+    }) as unknown as Event;
+
+  it('masks the athlete id in onRequestError’s contexts.nextjs.request_path (the missed key)', () => {
+    const event = scrubSentryEvent(requestErrorEvent());
+    expect(event.contexts?.nextjs).toMatchObject({
+      request_path: '/p/:id',
+      router_path: '/p/[profileId]',
+    });
+  });
+
+  it('masks it in the request URL, contexts.request and the exception message', () => {
+    const event = scrubSentryEvent(requestErrorEvent());
+    expect(event.request?.url).toBe('https://www.mat-plan.dev/p/:id');
+    expect(event.contexts?.request?.url).toBe('https://www.mat-plan.dev/p/:id');
+    expect(event.exception?.values?.[0]?.value).toBe('boom for /p/:id');
+  });
+
+  it('masks a row client_id an exception message carries (strength-session, checkin)', () => {
+    const event = scrubSentryEvent({
+      exception: { values: [{ type: 'Error', value: `client_id ${PROGRAM} held by another row` }] },
+    } as Event);
+    expect(event.exception?.values?.[0]?.value).toBe('client_id :id held by another row');
+  });
+
+  it('masks navigation breadcrumbs (from, to, url)', () => {
+    const crumb = beforeBreadcrumbScrubbed({
+      category: 'navigation',
+      data: { from: `/p/${ATHLETE}`, to: `/programs/${PROGRAM}`, url: page },
+    });
+    expect(crumb?.data).toEqual({
+      from: '/p/:id',
+      to: '/programs/:id',
+      url: 'https://www.mat-plan.dev/p/:id',
+    });
+  });
+
+  it('KEEPS the deliberate scope-miss id, and masks the same id anywhere else on that event', () => {
+    const event = scrubSentryEvent({
+      request: { url: `https://www.mat-plan.dev/programs/${PROGRAM}` },
+      contexts: { scope_miss: { kind: 'program', resource: PROGRAM, outcome: 'cross_household' } },
+    } as unknown as Event);
+    expect(event.contexts?.scope_miss).toMatchObject({ resource: PROGRAM });
+    expect(event.request?.url).toBe('https://www.mat-plan.dev/programs/:id');
+  });
+
+  it('masks the transaction name the HTTP server integration sets (GET /p/<id>)', () => {
+    const event = scrubSentryEvent({ transaction: `GET /p/${ATHLETE}` } as Event);
+    expect(event.transaction).toBe('GET /p/:id');
+  });
+
+  it('puts back only a well-formed UUID as the scope-miss resource', () => {
+    const event = scrubSentryEvent({
+      contexts: { scope_miss: { resource: `not-an-id /p/${ATHLETE}` } },
+    } as unknown as Event);
+    expect(event.contexts?.scope_miss).toMatchObject({ resource: 'not-an-id /p/:id' });
+  });
+
+  it('leaves strings with no UUID alone', () => {
+    expect(maskIds('/p/new')).toBe('/p/new');
+    expect(maskIds('/api/export/2026-11')).toBe('/api/export/2026-11');
   });
 });

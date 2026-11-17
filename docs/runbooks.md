@@ -1209,7 +1209,9 @@ it did pre-V1-14a — that absence path is what CI and local dev exercise.
    - **no `server_action_form_data.*`** entries under Additional Data;
    - **no request body** (Request → Data) and **no local variables** on any stack frame (Sentry 11
      collects both by default; `SENTRY_DATA_COLLECTION` turns them off);
-   - no bodyweight value anywhere in the payload.
+   - no bodyweight value anywhere in the payload;
+   - **no athlete UUID** in the request URL, the transaction name or `contexts.nextjs` (each shows
+     `:id`); only a scope-miss event carries one, under `contexts.scope_miss`.
      If any of those appear, `lib/sentry-scrub.ts` is not running — treat it as a **security incident**,
      revoke the DSN, and rotate `CLERK_SECRET_KEY` (§ "Rotate a secret"). ⚠️ Said "rotate
      `ACCESS_GATE_PASSWORD`" until `AUTH-1` 1d; the credential a leaked payload would expose is now a
