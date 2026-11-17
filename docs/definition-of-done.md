@@ -53,10 +53,11 @@ Every PR must satisfy:
 
 Runner: **Vitest** (`pnpm test`) for unit / integration / component; **Playwright** for E2E
 (added V0-11). Tests colocate as `*.test.ts(x)` next to the code they cover. Two CI jobs run them:
-the **`quality`** job runs the full **Vitest** suite (required check; no database — the DAL is
-mocked, and `db:verify` checks the schema against in-memory **PGlite**), and the **`e2e`** job runs
-the **Playwright** smoke against a real **CI Postgres service** (migrated + seeded). Vitest also runs
-on `pre-push`.
+the **`quality`** job runs the full **Vitest** suite (no database — the DAL is mocked, and `db:verify`
+checks the schema against in-memory **PGlite**), and the **`e2e`** job runs the **Playwright** smoke
+against a real **CI Postgres service** (migrated + seeded). **No check is required** in branch
+protection; green CI is the bar. `pre-push` runs only the tests the change reaches
+(`pnpm test:changed`); CI runs them all.
 
 **Speed budget (enforced by review).** Unit / integration / component tests are **fast — sub-second,
 usually milliseconds**. **E2E is the _only_ tier allowed to take multiple seconds**, so keep it

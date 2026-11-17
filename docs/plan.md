@@ -1723,7 +1723,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   - **2:** `db:mutations` in CI, sharded and scoped, with run-only pillar scopes;
   - **3:** screenshots in CI on request.
 
-  Planned 2026-11-17, five lenses; plan only.
+  Planned and approved 2026-11-17 (five lenses). ✅ **1a shipped:** a push runs typecheck plus only the
+  tests the change reaches (`pnpm test:changed`), and AGENTS.md has one rule for when to run locally.
 
 - **DX-18b — per-pillar test projects.** _(Deferred by DX-18, D9.)_ `pnpm test:pillar <name>`, and CI
   running only the affected pillars' vitest files. **Trigger:** CI's Test step passes 3 minutes (53s
