@@ -1,8 +1,8 @@
 diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
-index d60703f7..5fa834ac 100644
+index 9ec3f099..b122a125 100644
 --- a/packages/db/scripts/corrections/registry.ts
 +++ b/packages/db/scripts/corrections/registry.ts
-@@ -887,22 +887,6 @@ const createHousehold: Correction = {
+@@ -891,22 +891,6 @@ const createHousehold: Correction = {
        }
        const ids = parseAccountList(process.env[CREATE_HOUSEHOLD_ACCOUNTS_ENV]);
        const n = ids.length;
@@ -23,5 +23,5 @@ index d60703f7..5fa834ac 100644
 -      });
 -
        return await db.transaction(async (tx) => {
-         const bound = new Set((await liveMembershipsOf(tx, ids)).map((m) => m.clerkUserId));
-         if (bound.size > 0) {
+         const live = await liveMembershipsOf(tx, ids);
+         const bound = new Set(live.map((m) => m.clerkUserId));
