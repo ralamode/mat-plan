@@ -6,7 +6,12 @@ import { QUANTITY_SLOT } from '../../quantity-slots';
 import { dayPlanSchema, showsOnlyLogged, type DayPlan } from '../day-shapes';
 import { hasSetRows } from '../pieces';
 import { prescribedText } from '../prescribed-text';
-import { programListSchema, programViewSchema, workoutDraftSchema } from '../program-shapes';
+import {
+  programListSchema,
+  programViewSchema,
+  weekDraftSchema,
+  workoutDraftSchema,
+} from '../program-shapes';
 import { dayPlan, edit, programOf, workoutDraft, workoutOf } from './build';
 import {
   adultProgramWithCopy,
@@ -35,6 +40,7 @@ import {
   PROGRAM_LIST_FIXTURES,
   PROGRAM_VIEW_FIXTURES,
   programsList,
+  programView,
   sundayRestStretchOnly,
   todayStretchingFirst,
   todayTwoPrograms,
@@ -1339,5 +1345,31 @@ describe('new-program-empty and adult-program-with-copy', () => {
     ]);
     // A copy is its own workout: not the Family program's Conditioning.
     expect(copy?.workoutPublicId).not.toBe(fixtureIds.workout('w4'));
+  });
+});
+
+describe('programView, exported for a proof that saves a week (C27)', () => {
+  const seededWorld = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+
+  it('builds the program page the fixtures hold', () => {
+    expect(programView(seededWorld, 'p1')).toEqual(familyProgram);
+  });
+
+  it('gives a week saveWeek takes as it is, before and after an edit', () => {
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES['workout-left-the-week'];
+    if (!before) throw new Error('workout-left-the-week has no world before its edit');
+    for (const of of [before, world]) {
+      const view = programView(of, 'p1');
+      const draft = { programPublicId: view.programPublicId, days: view.week };
+      expect(weekDraftSchema.parse(draft)).toEqual(draft);
+    }
+    // The edit took Heavy A off Friday: the two weeks differ there and only there.
+    const was = programView(before, 'p1').week;
+    const is = programView(world, 'p1').week;
+    expect(is[5]).toEqual(
+      was[5].filter((slot) => slot.workoutPublicId !== fixtureIds.workout('w2')),
+    );
+    expect(is[5]).not.toEqual(was[5]);
+    expect({ ...is, 5: was[5] }).toEqual(was);
   });
 });
