@@ -484,8 +484,7 @@ Invariants (the spec's rules, as they bind code here):
     `matchMovementOptions`' own, for the query as typed. `shortFormHit` is the movement the query
     spells once its short forms are expanded: `db row` is Dumbbell row _(maintainer, 2026-11-17)_.
     Any of the three means the movement is already in the list: a picker on
-    `searchMovementOptions` withholds "Use as typed" (today's two pickers still call
-    `matchMovementOptions` and read the first two; CAT-3 chunk B1 moves them), and `existingItem`
+    `searchMovementOptions` withholds "Use as typed" (both pickers since CAT-3 chunk B1), and `existingItem`
     (`program/pieces.ts`) returns
     that item. Nothing else does: part of an alias and a near miss find a movement and still let
     a household make its own item of that name.
@@ -506,8 +505,8 @@ Invariants (the spec's rules, as they bind code here):
     found that way has the quality its expanded words would have had, and among such rows one
     whose name the words spell comes before one whose alias they spell, so `db row` and
     `dumbbell row` mean the same movement. The two old picker aliases that are short forms (`KB`,
-    `DB bench`, in `movement-picker-catalog.ts`) are retired by the chunk that moves the pickers
-    onto `searchMovementOptions` (B1), not before: today's pickers do not expand a short form.
+    `DB bench`, in `movement-picker-catalog.ts`) were retired by B1, which moved the pickers
+    onto `searchMovementOptions`.
 13. **Part of another name finds a movement, and never outranks an own name** (spec P17). From
     three letters, a query whose every word is in an alias finds the movement; the alias's best
     quality is "a word starts with it". `foundByAlias` gives the alias a row was found through

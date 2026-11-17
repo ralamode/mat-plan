@@ -53,6 +53,8 @@ const householdOption = (name: string, publicId: string): MovementOptionDTO => (
 });
 
 const ALL_CATALOG = MOVEMENT_SEED_ROWS.map((r) => catalogOption(r.name));
+/** A household item literally named `RDL`, beside the catalog's Romanian Deadlift (C30's tie). */
+const HOUSEHOLD_RDL_ID = '00000000-0000-7000-8000-00000000a0d1';
 /**
  * ⚠️ **Queried from the DOM, not through `screen`.** Radix's modal dialog puts `aria-hidden` on the
  * rest of the document while it is open, and Testing Library's role queries skip hidden nodes — so
@@ -733,6 +735,15 @@ describe('multi-select', () => {
     expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('false');
   });
 
+  it('a short form that spells a movement offers no "New item", and Enter ticks it (C30)', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('bb curl', 'Search items');
+    expect(screen.queryByRole('button', { name: 'New item: bb curl' })).toBeNull();
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect(box('Barbell Curls').getAttribute('aria-checked')).toBe('true');
+  });
+
   it('a similar name that is already ticked is not named: tapping it would untick it', () => {
     render(<MultiHarness data={data} />);
     open();
@@ -811,6 +822,47 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
     expect(row.textContent).toContain(COPY.tagAlsoCalled('Military press'));
     fireEvent.keyDown(search(), { key: 'Enter' });
     expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it('🔴 the list names, withholds and picks exactly what listedAs (existingItem) names', () => {
+    // One rule in two places: the list reads it off its search result, the item form and the
+    // server through existingItem. This holds them to one answer, a household "RDL" included (C30:
+    // an own name outranks another movement's alias).
+    const options = [householdOption('RDL', HOUSEHOLD_RDL_ID), ...ALL_CATALOG];
+    for (const query of ['rdl', 'RDL', 'bb curl', 'front squat', 'kb', 'db bench', 'bulgarain']) {
+      const onPick = vi.fn();
+      render(<Harness data={{ options }} onPick={onPick} />);
+      open();
+      type(query);
+      const expected = listedAs(options, query);
+      if (expected) {
+        expect(status(), query).toContain(COPY.statusAlreadyListed(expected.name));
+        expect(screen.queryByRole('button', { name: COPY.asTyped(query) }), query).toBeNull();
+        fireEvent.keyDown(search(), { key: 'Enter' });
+        expect(onPick.mock.calls[0]?.[0], query).toMatchObject({
+          kind: 'existing',
+          option: { publicId: expected.publicId },
+        });
+      } else {
+        expect(status(), query).not.toMatch(/Already in the list/);
+      }
+      cleanup();
+    }
+    // Non-vacuity: the household row wins `RDL`, and `db bench` names nothing.
+    expect(listedAs(options, 'RDL')?.publicId).toBe(HOUSEHOLD_RDL_ID);
+    expect(listedAs(options, 'db bench')).toBeUndefined();
+  });
+
+  it('Enter picks the one match a short form finds: "db bench" is Dumbbell Bench Press', () => {
+    const onPick = vi.fn();
+    render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
+    open();
+    type('db bench');
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith({
+      kind: 'existing',
+      option: expect.objectContaining({ name: 'Dumbbell Bench Press' }),
+    });
   });
 
   it("listedAs is the server's existingItem: name, alias, or what a short form spells", () => {

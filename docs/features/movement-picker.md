@@ -75,9 +75,11 @@ path and **creating** the deliberate one.
    guide's frontmatter note expects. Until then only fixtures build the DTO: the tests here, and
    the contract's `picker-options` ([program-contract.md](./program-contract.md)).
 
-4. **"Use as typed" is withheld on an exact or alias hit**, and that is the whole point. Typing `rdl`
-   must offer Romanian Deadlift, never mint a household movement called "rdl". The rule lives in
-   `matchMovementOptions`' `exact` / `aliasHit`, tested against the plan's vector table.
+4. **"Use as typed" is withheld when the text already names a movement**, and that is the whole
+   point. Typing `rdl` must offer Romanian Deadlift, never mint a household movement called "rdl".
+   Since C30 there are three signals, the server's `existingItem`'s: an exact name, an exact alias,
+   or what the text's short forms spell (`bb curl`). They come from `searchMovementOptions`
+   (`exact`, `aliasHit`, `shortFormHit`); invariant 13 says how the picker reads them.
 
 5. **Emptiness is tested on the RAW query, never on the fold.** `🙂` and `---` fold to `''`; a
    fold-based check drops them into browse mode and never renders the disabled footer that tells
@@ -106,11 +108,11 @@ path and **creating** the deliberate one.
    patched one symptom of two. ⚠️ **Not reproducible in jsdom**, where `useDeferredValue` settles
    synchronously — which is why it was found by reading the render and not by a red test.
 
-9. **The alias that hit comes OUT of the matcher.** `aliasHit` is the alias text (`'RDL'`), not a
-   boolean, so the "also called RDL" tag tests plain identity on authored strings. The component
-   used to re-run "fold both sides, compare keys" itself — a second copy of
-   `movement-search.ts`'s rule, in a React component, that would drift the first time the fold
-   changed.
+9. **The alias a row was found by comes OUT of the matcher.** The search's `foundByAlias` maps
+   each row found through another name (an exact alias, part of one, or a near miss of one) to that
+   alias as authored, and the "also called" tag reads it. The component used to re-run "fold both
+   sides, compare keys" itself — a second copy of `movement-search.ts`'s rule, in a React
+   component, that would drift the first time the fold changed.
 
 10. **Every counted string goes through `plural()`, and every `one` form carries its count.** `one`
     is a CLDR category, not the number one: in Russian it covers 21, 31 and 101, so `'1 match.'`
@@ -130,7 +132,7 @@ path and **creating** the deliberate one.
     - a tap toggles and the sheet stays open; Enter selects the one unambiguous match (never
       deselects, never creates) and clears the search;
     - "create" is the caller's: the button sits at the TOP of the body (with the keyboard up, the
-      footer is about 110 rows down), is withheld on an exact or alias hit as before (invariant 4),
+      footer is about 110 rows down), is withheld when the text already names a movement (invariants 4 and 13),
       and hands the typed text to `onCreate`. The component still never writes (invariant 2);
     - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts ("2 movements match some of your words") and `movementNameSchema`'s messages;
     - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
@@ -148,7 +150,8 @@ path and **creating** the deliberate one.
     after C30). What the list shows is [spec](../specs/cat-3-movement-library.md) P1 to P5 and P17;
     what lives between files here:
     - `searchPickerOptions` feeds the list. **`listedAs` IS `existingItem`** over the same
-      mapping, so the list, the item form and `newItem` agree on the three signals: an exact name,
+      mapping, and the list's own `listed` reads the same three signals from its search result, a
+      test holding the two to one answer, so the list, the item form and `newItem` agree: an exact name,
       an exact alias, or what the text's short forms spell (`bb curl` is Barbell Curls). Any of the
       three withholds "use as typed", gives the status its "Already in the list as …", and is what
       Enter picks.

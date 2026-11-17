@@ -69,7 +69,7 @@ type MovementPickerEntry = {
  *
  * The four aliases are the prototype's, and each is a thing typed on a phone between sets:
  * `RDL`, `BSS`, `OHP`, `hip thrust`. The prototype's other two, `DB bench` and `KB`, are equipment
- * short forms, retired when the picker began reading `QUERY_SHORT_FORMS` (CAT-3 spec P3, B1). ⚠️ So
+ * short forms, retired once `shortFormHit` withholds "use as typed" (C30; CAT-3 spec P3, in B1). ⚠️ So
  * `kb` and `db bench` alone still list KB Swings and Dumbbell Bench Press (Enter picks the one
  * match), but no longer withhold "use as typed": neither spells a whole movement once expanded.
  * A short form that does (`bb curl` for Barbell Curls) withholds it through `shortFormHit`.

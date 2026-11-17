@@ -65,9 +65,9 @@ const SUMMARY_ID = 'item-picker-picked';
  *   where the sheet lets the footer scroll; `sheet.tsx`).
  * - **What it tracks has no default** _(maintainer, 2026-11-16)_: Create is inactive until a type is
  *   chosen, because the type can never be changed and the item never deleted.
- * - **A name already in the list selects that item**, by the picker's own rule
- *   (`matchMovementOptions`: `movementNameKey`, aliases): typing "RDL" never makes a second Romanian
- *   Deadlift. The server answers `existed` for the same reason, and a retry that landed reads the
+ * - **A name already in the list selects that item**, by the server's own rule
+ *   (`listedAs`, which is `existingItem`: an exact name, an exact alias, or what the short forms
+ *   spell): typing "RDL" or "db row" never makes a second Romanian Deadlift or Dumbbell row. The server answers `existed` for the same reason, and a retry that landed reads the
  *   same.
  * - It writes only through `newItem`; the picker it mounts never writes (movement-picker invariant 2).
  *
@@ -167,7 +167,7 @@ export function ItemPicker({
 
   // ── The new-item form ───────────────────────────────────────────────────────────────────────────
   const cleaned = form ? cleanName(form.name) : '';
-  /** The item this name already is, by the picker's own rule (`listedAs`: name or alias). */
+  /** The item this name already is, by the picker's own rule (`listedAs`: name, alias or short form). */
   const existing = form && cleaned ? listedAs(options, cleaned) : undefined;
   const nameIssue = !form
     ? null

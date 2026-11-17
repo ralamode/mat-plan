@@ -7,6 +7,7 @@
   matches." once and counts each list; Enter never picks a similar name; the create button stays
   quiet while anything is listed, and its hint names the similar movement. A short form that spells a
   movement is that movement ("bb curl" is Barbell Curls, as the server already says since C30), and
-  the two aliases that were equipment short forms, `KB` and `DB bench`, are retired. The picker sends the query
+  the two aliases that were equipment short forms, `KB` and `DB bench`, are retired. A row found through another name says "also called …", and Enter does not pick a
+  sole match found only through part of another name. The picker sends the query
   nowhere itself (an import allowlist and a source scan), and searching in the item picker runs no
   action until a person taps Create. No schema change, no new dependency.

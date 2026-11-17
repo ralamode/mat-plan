@@ -35,8 +35,8 @@ import { cn } from '@/lib/utils';
  * ## What is settled elsewhere, so this file does not re-decide it
  *
  * The browse groups and aliases are `MOVEMENT_PICKER_ENTRIES` (Decision 3); the fold, the match and
- * the alias/exact rules are `matchMovementOptions` (Decision 4), which is pure and tested against
- * the plan's vector table; every string is `MOVEMENT_PICKER_COPY` (reuse S4). The eight gaps the
+ * the "already listed" signals are `searchMovementOptions`' and the server's `existingItem`'s
+ * (Decision 4, CAT-3 C30), which are pure and tested against their vector tables; every string is `MOVEMENT_PICKER_COPY` (reuse S4). The eight gaps the
  * pre-implementation UX panel found in Decision 8 are decided in the plan's
  * § "UX panel, round 2" and implemented here — each marked `panel 2 · N` at its site.
  */
@@ -263,7 +263,7 @@ export function MovementPicker({
   // removes the class. The cost is that the footer lags a frame behind the text on a slow device,
   // which is a thumb reaching for a button that is correct rather than one that is current.
   //
-  // ⚠️ Not folded. Folding happens inside `matchMovementOptions`, and nothing in this file tests a
+  // ⚠️ Not folded. Folding happens inside the search, and nothing in this file tests a
   // FOLDED value for emptiness — the point of panel 2 · 4, below.
   const deferredTrimmed = useDeferredValue(query).trim();
 
@@ -335,7 +335,9 @@ export function MovementPicker({
   /**
    * The movement the text already names, by the server's three signals (spec P1, C30): an exact
    * name or exact alias is the first row, else the row its short forms spell. The status names it,
-   * Enter picks it, and "use as typed" is withheld for it. `existingItem` reads the same three.
+   * Enter picks it, and "use as typed" is withheld for it. ⚠️ This is `existingItem`'s rule read off
+   * the result the list already has; a test holds it and `listedAs` (which IS `existingItem`) to
+   * one answer, so a change to the server's rule turns that test red rather than drifting.
    */
   const listed =
     result.exact || result.aliasHit !== null
@@ -635,7 +637,8 @@ export function MovementPicker({
 /**
  * Multi mode's create control, at the TOP of the body (FAM-1 step 9): with the keyboard up the
  * footer scrolls to the end of a long list, so a create button there is about 110 rows away. Quiet
- * with candidates, loud with none (UX2 B1); withheld on an exact or alias hit, where the status says
+ * with candidates, loud with none (UX2 B1); withheld when the text already names a movement (an exact name or alias, or what its
+ * short forms spell), where the status says
  * what is already listed; a plain "+ New item" when the query is empty. Never fired from Enter.
  */
 function CreateTop({
