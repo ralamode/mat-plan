@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..f2e80153 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -140,7 +140,7 @@ export type HideEntriesResult = { hiddenAt: string } | { notFound: true };
+ export async function hideEntries(exec: Executor, args: HideArgs): Promise<HideEntriesResult> {
+   // 🔴 No reason, and no way to pass one: only `clearDay` writes `'clear_day'` (B2-0), which is what
+   // this module exports rather than a convention callers must keep.
+-  return hideRows(exec, args, null);
++  return hideRows(exec, args, HIDE_REASON.clear_day);
+ }
+ 
+ type HideArgs = {

@@ -1,0 +1,23 @@
+diff --git a/packages/db/src/queries/day/prescription-live-in.ts b/packages/db/src/queries/day/prescription-live-in.ts
+index 7517e108..b1497a7f 100644
+--- a/packages/db/src/queries/day/prescription-live-in.ts
++++ b/packages/db/src/queries/day/prescription-live-in.ts
+@@ -5,7 +5,7 @@ import { uuidSchema } from '@mat-plan/shared';
+ import { schema } from '../../client';
+ import type { HouseholdScope } from '../../scope';
+ import type { Executor } from '../../writers/executor';
+-import { liveTemplateBlockIn } from '../../writers/ownership';
++import { liveTemplateBlockIn, programBlockInHousehold } from '../../writers/ownership';
+ 
+ /**
+  * Whether `prescriptionPublicId` names a live prescription of one of this household's live programs.
+@@ -47,7 +47,8 @@ export async function prescriptionLiveIn(
+       and(
+         eq(schema.prescriptions.publicId, prescriptionPublicId),
+         isNull(schema.prescriptions.deletedAt),
+-        liveTemplateBlockIn(scope),
++        programBlockInHousehold(scope),
++        isNull(schema.programBlocks.deletedAt),
+       ),
+     )
+     .limit(1);
