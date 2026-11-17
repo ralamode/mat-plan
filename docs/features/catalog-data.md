@@ -22,6 +22,16 @@ fills the directory and changes none of them.
 | `shipped.json`  | The lockfile: every shipped slug and its tracking type                                 |
 | `approved.json` | Batch number to slug to the SHA-256 (`entryHash`) of the entry the maintainer approved |
 
+### The batches on `main`
+
+Batch numbers follow the review sheet, so they need not be consecutive here: a batch merges once
+it is approved, one batch PR at a time.
+
+| Batch | Family                            | Entries |
+| ----- | --------------------------------- | ------- |
+| 1     | Mobility and stretching           | 50      |
+| 5     | Conditioning machines and running | 54      |
+
 ## How a batch arrives
 
 1. The entries are written in-house, in our own words, and reviewed by the maintainer row by row in
