@@ -117,6 +117,41 @@ describe('the editor’s draft', () => {
     ]);
   });
 
+  it('a loaded number in a unit its type can’t hold is never shown or converted (plan D27)', () => {
+    const typed = (trackingType: string) =>
+      everyType.items.find((item) => item.trackingType === trackingType)!;
+    const withQuantity = (trackingType: string, unit: string, value: number) =>
+      ({
+        ...everyType,
+        items: [
+          { ...typed(trackingType), quantities: [{ slot: QUANTITY_SLOT.primary, unit, value }] },
+        ],
+      }) as WorkoutDraft;
+    // A Duration stored in seconds: it keeps its own unit (it has no select), the number goes, and
+    // the card says what it was. Saved as it stands: "log in minutes, no target".
+    const duration = withQuantity('duration', 'sec', 30);
+    const [durationCard] = toCards(duration);
+    expect(durationCard).toMatchObject({
+      unit: 'min',
+      value: '',
+      dropped: { value: 30, unit: 'sec' },
+    });
+    expect(
+      saved(readDraft(duration, { name: 'D', description: '', cards: [durationCard!] })).items[0]!
+        .quantities,
+    ).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'min', value: null }]);
+    // A Count stored in `bool`: unset, so Save's unit refusal lands on the select.
+    const count = withQuantity('count', 'bool', 5);
+    const [countCard] = toCards(count);
+    expect(countCard).toMatchObject({ unit: null, value: '', dropped: { value: 5, unit: 'bool' } });
+    expect(errorsOf(readDraft(count, { name: 'C', description: '', cards: [countCard!] }))).toEqual(
+      [['unit', EDITOR_ERRORS.unit(quantityLabel('count')!)]],
+    );
+    // A unit the type holds loads as it was, with nothing dropped.
+    const [fine] = toCards(withQuantity('duration', 'min', 20));
+    expect(fine).toMatchObject({ unit: 'min', value: '20', dropped: null });
+  });
+
   it('a new workout needs a name, and saves with no items', () => {
     expect(errorsOf(readDraft(newWorkoutEmpty, { name: ' ', description: '', cards: [] }))).toEqual(
       [['name', EDITOR_ERRORS.name]],

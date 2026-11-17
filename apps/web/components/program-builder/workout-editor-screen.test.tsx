@@ -18,6 +18,7 @@ import { SAVING_LABEL } from '@/lib/constants';
 
 import {
   BUILDER_COPY,
+  droppedText,
   EDITOR_COPY,
   EDITOR_ERRORS,
   fieldsToFixText,
@@ -900,5 +901,29 @@ describe('a quantity needs its unit (C16)', () => {
         .getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`))
         .getAttribute('aria-invalid'),
     ).toBeNull();
+  });
+});
+
+describe('a loaded number the card cannot hold', () => {
+  it('is said on the card, describes the field, and goes on the first edit', () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const odd = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) =>
+        item === bench
+          ? { ...item, quantities: [{ ...item.quantities[0]!, unit: 'bool' as const, value: 5 }] }
+          : item,
+      ),
+    };
+    editor({}, odd);
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    const label = quantityLabel('weight_reps')!;
+    const note = droppedText(label, { value: 5, unit: 'bool' }, null);
+    const said = within(card).getByText(note);
+    const field = within(card).getByLabelText(new RegExp(`^${label}`)) as HTMLInputElement;
+    expect(field.value).toBe('');
+    expect(field.getAttribute('aria-describedby')).toContain(said.id);
+    fireEvent.change(field, { target: { value: '25' } });
+    expect(within(card).queryByText(note)).toBeNull();
   });
 });

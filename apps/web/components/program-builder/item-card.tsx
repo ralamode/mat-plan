@@ -19,6 +19,7 @@ import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import {
+  droppedText,
   EDITOR_COPY,
   linkLabel,
   linkText,
@@ -131,6 +132,16 @@ export function ItemCard({
   const headingId = cardHeadingId(id);
   const errorOf = (field: EditorField) => errors.find((error) => error.field === field) ?? null;
   const errorId = (field: EditorField) => `${fieldId(id, field)}-error`;
+  /** What a loaded number was, when the card could not hold its unit (`EditorCard.dropped`). */
+  const droppedId = `${fieldId(id, 'value')}-was`;
+  /** A field's description: its refusal, and for the number and unit what was dropped. */
+  const describedBy = (field: EditorField) =>
+    [
+      errorOf(field) ? errorId(field) : null,
+      card.dropped && (field === 'value' || field === 'unit') ? droppedId : null,
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined;
   const quantity = quantityLabel(item.trackingType);
   const groups = fields.slot && !fields.unit ? unitGroups(item.trackingType) : [];
 
@@ -153,7 +164,7 @@ export function ItemCard({
         value={text}
         onChange={(event) => onChange(field, event.target.value)}
         aria-invalid={errorOf(field) ? true : undefined}
-        aria-describedby={errorOf(field) ? errorId(field) : undefined}
+        aria-describedby={describedBy(field)}
         className={FIELD_CLASS}
       />
     </div>
@@ -208,7 +219,7 @@ export function ItemCard({
                     value={card.unit ?? ''}
                     onChange={(event) => onUnit(event.target.value as Unit)}
                     aria-invalid={errorOf('unit') ? true : undefined}
-                    aria-describedby={errorOf('unit') ? errorId('unit') : undefined}
+                    aria-describedby={describedBy('unit')}
                     className={FIELD_CLASS}
                   >
                     {card.unit ? null : (
@@ -230,6 +241,15 @@ export function ItemCard({
                 </div>
               ) : null}
             </div>
+            {card.dropped && quantity ? (
+              <p id={droppedId} className="text-muted-foreground text-sm">
+                {droppedText(
+                  quantity,
+                  card.dropped,
+                  TRACKING_TYPE_FIELDS[card.item.trackingType].unit,
+                )}
+              </p>
+            ) : null}
             {shownErrors.map(({ field, message }) => (
               <p key={field} id={errorId(field)} className="text-destructive text-sm">
                 {message}
