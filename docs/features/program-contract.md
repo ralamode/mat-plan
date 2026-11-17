@@ -163,10 +163,13 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
 2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
    `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
-   transcription to equal them. A fixture is changed by changing the prototype first. **Two
-   fixtures are not prototype states and say so**: `every-type-once`, and
-   `closed-day-program-since-left` (C17). Each is the prototype's data arranged to reach a rule no
-   prototype state reaches.
+   transcription to equal them. A fixture is changed by changing the prototype first. **Three
+   fixtures are not prototype states and say so**: `every-type-once`,
+   `closed-day-program-since-left` (C17) and `archived-athlete-today` (C18). Each is the
+   prototype's data arranged to reach a rule no prototype state reaches. **And one field of one
+   fixture differs from the prototype's own state, by the maintainer's decision** (2026-11-17):
+   the workout that left the week in `workout-left-the-week` has no label, where v12 shows the
+   label its slot had.
 3. **A fixture is tested from both sides.** The screen renders it; the data lane seeds the state it
    describes and asserts its query deep-equals it, through `packages/db/scripts/verify/normalize-fixture.ts`
    or, stricter, with ids compared exactly through a fixture-id to public-id map the proof's seeder
@@ -329,6 +332,18 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       now. The same fixture holds a workout renamed after logging.
       The day resolver, not the DAL, sets `writable`, `future` and `canGoForward`, from the `today`
       it is given; the DAL adds `athletes`.
+
+24. **`DayPlan.writable` is true exactly where the row writer would accept a ✓, and a workout
+    whose slot is gone has no label** (contract change C18; the maintainer, 2026-11-17).
+    - An archived athlete's day is never writable: today and yesterday read like a closed day,
+      with only what was logged and no PREVIOUS. `archived-athlete-today` holds it. So a page
+      never offers a ✓ the writer refuses with `closed_day`.
+    - `DayPlan.athletes` is the switcher's list: the household's athletes who are not archived,
+      as the picker lists them. An archived athlete is not in it on their own day either, so a
+      page takes the heading's name from the profile, never from this list (the preview harness
+      reads it from the fixture's world).
+    - A workout that left the week has `label: null`. The label is its slot's heading; the
+      database keeps the workout's name on the session and has nowhere to keep that label.
 
 ## Traps
 

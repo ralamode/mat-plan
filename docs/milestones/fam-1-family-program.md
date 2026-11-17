@@ -250,7 +250,7 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## The schedule: in a row, and in lanes
 
-The same 49 PRs drawn twice: one after another, and in the lanes of
+The same 50 PRs drawn twice: one after another, and in the lanes of
 [the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
 PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
 Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
@@ -266,11 +266,11 @@ gantt
   The contract, 5 PRs          :done, r0, 0, 5
   Lane A's 7 PRs               :r1, 5, 12
   Lane P's 6 PRs               :r2, 12, 18
-  Lane E's 5 PRs               :r3, 18, 23
-  Lane B's 10 PRs              :r4, 23, 33
-  Lane C's 9 PRs               :r5, 33, 42
-  Lane S's 7 PRs               :r6, 42, 49
-  All 49 PRs merged            :milestone, rm, 49, 49
+  Lane E's 6 PRs               :r3, 18, 24
+  Lane B's 10 PRs              :r4, 24, 34
+  Lane C's 9 PRs               :r5, 34, 43
+  Lane S's 7 PRs               :r6, 43, 50
+  All 50 PRs merged            :milestone, rm, 50, 50
 
   section Contract
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
@@ -291,8 +291,9 @@ gantt
   section E · day data
   11a                          :e1, 4, 5
   11b row writer               :crit, e2, 5, 7
-  12a the day's read           :crit, e3, 7, 8
+  12a-i the day's read         :crit, e3, 7, 8
   14, 11c                      :e4, 8, 9
+  12a-ii replayed fixtures     :e5, 9, 10
 
   section B · builder
   8a lists and program page    :b1, 1, 2
@@ -331,7 +332,7 @@ gantt
 
 **What it shows**
 
-- **In a row, 49 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
+- **In a row, 50 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
@@ -340,6 +341,9 @@ gantt
   merges. A delay on a red bar moves the end; a delay on a blue bar usually does not.
 - **Lane B has slack** (waves 7 to 9), and lanes B, C and S do their first six waves before any
   program data exists.
+- **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
+  critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a
+  change after logging; it waits for lane P's writers and gates 15, not the day page (12c).
 - **6a is three PRs since 2026-11-16** (6a-i, 6a-ii, 6a-iii). The row above counts them; the lanes
   picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's three takes a full PR-length, 7a-ii
