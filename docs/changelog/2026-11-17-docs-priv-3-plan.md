@@ -2,23 +2,34 @@
   corrections over one delete core and one committed list of per-household tables, which `db:verify`
   proves against the catalog** ([plan](../plans/priv-3-guarded-deletion.md)). Plan only, no code.
 
-  The work is four PRs:
-  1. `household-graph.ts`, with its 19 tables marked by grain. A proof fails when a table is
-     unclassified, a child is listed after its parent, or the athlete-grain set differs from what is
-     reachable from `profiles`. FAM-1 step 5's athlete list becomes a filter of this one, and `OPS-3`'s
-     restore reads it too.
-  2. A core typed `OwnerScope`. It locks the parent rows, re-runs the eight pre-flights inside the
-     transaction and fails closed.
-  3. `erase-household`. It requires the direct database URL, refuses the preview database and never
-     prints its target. It refuses a household that still carries a committed seed id: `SEC-6` re-keys
-     those first (`OPS-2` Q2). It turns runbook steps 2–5 into commands.
-  4. `erase-athlete`, which scripts step 5's "Erase one athlete", including its rule on who may ask.
+  The plan's PRs:
+  - **1:** the 19-table graph in `packages/db/src/erasure/`, with its own feature guide. A proof fails
+    on:
+    - an unclassified table;
+    - a child listed after its parent;
+    - a foreign key into the graph that does not abort and is not on an allowlist.
 
-  The plan was first drafted on 2026-11-13. The refresh:
-  - Brings in FAM-1's five program tables.
-  - Makes a second `OR` predicate (`program_assignments`) an `AND`.
-  - Notes that three of the pre-flights guard `ON DELETE SET NULL` edges, where no foreign-key abort
-    backs them up.
-  - Drops the draft's seed-id tombstones, which contradicted the notice.
+    FAM-1 step 5's athlete list becomes a filter of the graph.
 
-  The purge window `N` stays a deferred section, with 30 days proposed. No roadmap item moved.
+  - **2a:** a core typed `OwnerScope`. It locks every parent row, re-runs the eight pre-flights inside
+    the transaction and fails closed.
+  - **2b:** `erase-household`. It never prints its target id, including inside drizzle's error
+    messages. It refuses the live seed household until `SEC-6` re-keys it. It marks any sign-in that
+    is still live in another household.
+  - **3:** `erase-athlete`, which scripts step 5's runbook without restating its rule on who may ask.
+  - **3b** (a maintainer question): removing a program only that athlete was on.
+
+  A six-lens panel raised six blocking findings, all resolved:
+  - The refusal counted hidden profiles, which no re-key reaches, so the maintainer's own household
+    could never have been erased.
+  - A shared sign-in could have been deleted from another household.
+  - One proof was red on a clean tree, and four mutations named the wrong proof.
+  - The plan named none of FAM-1's queues for the files it shares.
+
+  The refresh also tightens a second `OR` predicate to `AND`. It records that three pre-flights guard
+  `ON DELETE SET NULL` edges, which no foreign-key abort backs up. It drops the first draft's seed-id
+  tombstones, which contradicted the notice.
+
+  `beta-1.md` row 8 is re-sized: 4–5 PRs, now also waiting on the `OPS-3` drill, and on `SEC-6` for
+  the seed household. The purge window `N` stays a deferred section, with 30 days proposed. No roadmap
+  item moved.
