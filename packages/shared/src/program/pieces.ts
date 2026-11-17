@@ -524,10 +524,27 @@ export const COPY_NAME_SUFFIX = ' (copy)';
  * Copy dialog prefills its Name field with: the workout's name and " (copy)", **cut so the whole
  * still fits `WORKOUT_NAME_MAX`** (a 30-character name keeps its first 23). One function, so the
  * dialog's prefill and the writer's default cannot differ (contract change C15).
+ *
+ * 🔴 **The cut is by whole characters, counted the way the name's schema counts** (contract change
+ * C33, found by step 6a-iii-b's review, the first writer to store one). `workoutNameSchema` limits
+ * a name's `length`, which counts an emoji as two; a plain `slice` at that length can keep the
+ * first half of one, and a database stores that half as a replacement mark. So the name is taken a
+ * character at a time while it fits. Then what the cut left hanging is dropped: a space (or the
+ * copy reads "Heavy  (copy)") and a joiner that no longer joins anything.
  */
 export function copyName(name: string): string {
-  return `${name.slice(0, WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length)}${COPY_NAME_SUFFIX}`;
+  const room = WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length;
+  let kept = '';
+  // A string iterates by code point, so a surrogate pair is taken whole or not at all.
+  for (const character of name) {
+    if (kept.length + character.length > room) break;
+    kept += character;
+  }
+  return `${kept.replace(DANGLING_AT_A_CUT, '')}${COPY_NAME_SUFFIX}`;
 }
+
+/** Trailing white space and zero-width joiners: what a cut can leave at the end of a name. */
+const DANGLING_AT_A_CUT = /[\s\u200d]+$/u;
 
 /**
  * The unit an item logs in, which is `DayItem.unit`: `null` for a type with no quantity (a Check,
