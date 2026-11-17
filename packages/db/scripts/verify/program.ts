@@ -1655,10 +1655,15 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
         owner: 'catalog',
         group: MOVEMENT_PICKER_ENTRIES.box_jump.group,
         aliases: MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? [],
+        slug: boxJump.slug,
       },
       "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases",
     );
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
+    assert.ok(
+      options.every((o) => (o.owner === 'catalog') === 'slug' in o),
+      'FAM-1 P11-i: a catalog option carries its slug, and a household option never does',
+    );
     assert.equal(
       options.find((o) => o.publicId === hop)?.trackingType,
       TRACKING_TYPE.distance,

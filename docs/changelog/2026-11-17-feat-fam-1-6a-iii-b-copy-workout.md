@@ -15,3 +15,7 @@ step 7a-ii wires it.
   their numbers, names itself wrongly, checks the name before the retry, takes a removed program's
   workout or a removed card, loses the order or a range, records the wrong program, or takes a
   day's first place.
+
+Also CAT-3's P11-i: each catalog item in the picker's list now carries its catalog key, so the server
+can attach its details and "How to". A household's own items never carry one, and the key is never
+sent to a page. Two more patches (397, 398) cover it.

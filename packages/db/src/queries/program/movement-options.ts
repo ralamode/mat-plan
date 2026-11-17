@@ -32,6 +32,13 @@ export type MovementOption = {
       readonly owner: 'catalog';
       readonly group: MovementPickerGroup;
       readonly aliases: readonly string[];
+      /**
+       * The catalog row's slug, reference data (CAT-3 P11-i): the DAL attaches the taxonomy and
+       * the "How to" by it from the catalog const. **It stops at the DAL**: no DTO or client
+       * component carries it. A household row has none here, because its slug is derived from
+       * free text.
+       */
+      readonly slug: string;
     }
   | { readonly owner: 'household' }
 );
@@ -124,6 +131,7 @@ export async function movementOptions(
         owner: 'catalog' as const,
         group: entry.group,
         aliases: entry.aliases ?? [],
+        slug: row.slug,
       };
     }),
     ...[...own].sort(byName).map((row) => ({ ...declared(row), owner: 'household' as const })),
