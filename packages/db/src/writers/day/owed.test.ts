@@ -1,8 +1,8 @@
-import { DAY_PLAN_FIXTURES } from '@mat-plan/shared/program/fixtures';
+import { DAY_PLAN_FIXTURE_SOURCES } from '@mat-plan/shared/program/fixtures';
 import { describe, it } from 'vitest';
 
 /**
- * The tests lane E (day data) still owes the program contract, tagged by step: 12a, 11c and 14
+ * The tests lane E (day data) still owes the program contract, tagged by step: 12a-ii, 11c and 14
  * (FAM-1 plan §4: "`it.todo` lists of the tests each consumer still owes").
  *
  * Each line comes from its step's Tests column in plan §5 or from §8's behaviour table. **The lane
@@ -17,18 +17,13 @@ import { describe, it } from 'vitest';
  */
 
 describe('DayPlan: owed by its consumers', () => {
-  for (const name of Object.keys(DAY_PLAN_FIXTURES)) {
-    it.todo(`12a: the resolver, on the seeded state, deep-equals ${name}`);
+  // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`); the ones with a
+  // `before` need the program edits replayed after logging, which is 12a-ii.
+  for (const [name, source] of Object.entries(DAY_PLAN_FIXTURE_SOURCES)) {
+    if (source.before === null) continue;
+    it.todo(`12a-ii: the resolver, on the seeded state, deep-equals ${name}`);
   }
-  it.todo(
-    '12a: workouts are in the athlete’s program order, then each week’s order; labels never sort',
-  );
-  it.todo('12a: PREVIOUS counts only rows logged in a program');
-  it.todo('12a: PREVIOUS, when an item was logged twice on that day, is the row logged first');
-  it.todo('12a: PREVIOUS is null on a day that is not writable');
-  it.todo('12a: a closed day omits the items and the workouts with no logged row');
-  it.todo('12a: progress counts prescribed rows plus extra logged ones, not removed items’ rows');
-  it.todo('12a: look-ahead goes forward only while the athlete is on a program the next day');
+  it.todo('12a-ii: progress does not count removed items’ rows');
 });
 
 describe('RowAmend: owed by its consumers', () => {
@@ -37,7 +32,6 @@ describe('RowAmend: owed by its consumers', () => {
 });
 
 describe('prescribedText: owed by its consumers', () => {
-  it.todo('12a: the day page’s prescribedText is the same renderer’s output');
   it.todo('14: the export writes template rows of each type through the renderer');
   it.todo('14: a comma in a workout name round-trips through the export');
 });

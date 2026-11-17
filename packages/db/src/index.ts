@@ -63,6 +63,9 @@ export * from './writers/ownership';
 export * from './writers/strength-session';
 // FAM-1 11b: the row writer, its un-tick and its re-tick, for step 12b's Server Actions.
 export * from './writers/day';
+// FAM-1 12a: the day resolver, for step 12b's DAL. By NAME, never `export *` from `queries/day`
+// (E7): its other modules take internal ids the caller must already have proved owned.
+export { resolveDayPlan, type ResolvedDayPlan } from './queries/day';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
 // tooling (e.g. the ephemeral screenshot fixture) can target the seeded profile by
 // its stable id instead of re-typing the UUID (constants convention, single source).

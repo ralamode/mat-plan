@@ -32,6 +32,7 @@ import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/
 import { hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
+import { verifyDayPlan } from './day-plan';
 import { asDb, asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import {
   entriesOnAnotherWorkoutsPrescriptions,
@@ -52,15 +53,16 @@ import {
  * - **step 11b (below)**: the row writer, its un-tick and its re-tick, proof by proof as
  *   `docs/plans/fam-1-11b-row-writer.md` → § Test plan numbers them, each with the mutation patch
  *   that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–181; 120 is unused, see there);
- * - step 12a: seeds the state each `DayPlan` fixture describes and deep-equals it, with
- *   hand-written timestamps;
+ * - **step 12a-i**: the day resolver and PREVIOUS, in `./day-plan.ts` (`verifyDayPlan`, called at
+ *   the end of `verifyDay`): it seeds the state each `DayPlan` fixture with no `before` describes,
+ *   with hand-written timestamps, and deep-equals it with ids mapped exactly; 12a-ii adds the four
+ *   with a `before`;
  * - step 11c: amend each type; a non-number is refused; an older day is refused;
  * - step 14: template rows of each type in the export.
  *
  * What a module can rely on when it runs, and the helpers to import, are in `./harness` →
- * `VerifyContext`. Step 12a's fixture comparisons go through `./normalize-fixture`, on both sides;
- * the worked example is in `./program.ts`'s header. A row result's `hiddenAt` is a timestamp: name it
- * in `timestampFields`.
+ * `VerifyContext`. Step 12a compares fixtures with ids mapped exactly, never through
+ * `./normalize-fixture` (its plan's C1; `./day-plan.ts`).
  *
  * ## How the 11b proofs are built
  *
@@ -76,6 +78,8 @@ import {
  */
 export async function verifyDay(_ctx: VerifyContext): Promise<void> {
   await verifyRowWriter();
+  // 12a-i's proofs run after 11b's, so an 11b patch still fails on its own assertion first.
+  await verifyDayPlan();
 }
 
 // ── FAM-1 11b — the row writer ──────────────────────────────────────────────────────────────────────
