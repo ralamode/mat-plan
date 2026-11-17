@@ -66,7 +66,12 @@ vi.mock('@/lib/dal/entries', () => ({
   clearPracticeEntry: vi.fn(async () => ({ cleared: true })),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
-    items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
+    items.map((i) => ({
+      clientId: i.clientId,
+      id: 'checkin-pub-id',
+      created: true,
+      outcome: 'created',
+    })),
   ),
 }));
 // AUTH-1 1c-3b, and from 1d the ONLY boundary mock. Passes by default; the unauth suite flips it
@@ -118,7 +123,6 @@ import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE } from '@/lib/constants';
 import { localDayIso } from '@/lib/date';
-import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
 
 /** The day the harness declares by default — the active-tz today under the pinned default tz,
@@ -134,7 +138,7 @@ function localDay(offsetDays = 0): string {
 // `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
 // the registry (`./actions.registry.ts`), which is the single source for both the action names and
 // their refusal copy.
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY } from '@/lib/constants';
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY, PRACTICE_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -1262,158 +1266,143 @@ describe('declared-day ±1 bound (shared across writers)', () => {
   });
 });
 
-// ── V1-7: life activities (wake = timing event, wrestling_practice = one-tap duration) ──────
+// ── V1-7: life activities — practice only, typed minutes since V1-24 3b-life-b ────────────
+// V1-24 3b-life-b: the life action logs PRACTICE only, in typed minutes.
 const lifeForm = (fields: Record<string, string>) =>
-  form({ profileId: PROFILE_ID, clientId: newId(), ...fields });
+  form({
+    profileId: PROFILE_ID,
+    clientId: newId(),
+    activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice,
+    day: localDay(),
+    minutes: '45',
+    ...fields,
+  });
+const loggedItem = () => vi.mocked(logCheckinEntries).mock.calls[0]![0].items[0]!;
 
 describe('logLifeActivitiesAction — boundary', () => {
-  it('rejects an activityKey not in the trusted life set (never trust the body)', async () => {
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: 'sc_lift' }), // a real activity, but not a life one
-    );
+  it.each([
+    ['Wake (not loggable: the tap time is not the wake time)', ACTIVITY_TYPE_KEYS.wake],
+    ['a real activity that is not a life one', ACTIVITY_TYPE_KEYS.sc_lift],
+  ])('refuses %s, never trusting the body', async (_what, activityKey) => {
+    const res = await logLifeActivitiesAction(initial, lifeForm({ activityKey }));
     expect(res.ok).toBe(false);
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
-  it('rejects a missing/absent activityKey', async () => {
-    const res = await logLifeActivitiesAction(
-      initial,
-      form({ profileId: PROFILE_ID, clientId: newId() }),
-    );
-    expect(res.ok).toBe(false);
+  it('refuses a missing activityKey', async () => {
+    const fd = lifeForm({});
+    fd.delete('activityKey');
+    expect((await logLifeActivitiesAction(initial, fd)).ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('a tab on the one-tap bundle (no minutes posted) is told to reload, with no write', async () => {
+    const fd = lifeForm({});
+    fd.delete('minutes');
+    expect(await logLifeActivitiesAction(initial, fd)).toEqual({
+      ok: false,
+      error: PRACTICE_COPY.reloadToLog,
+    });
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['blank', '  ', (): string => PRACTICE_COPY.blankLog],
+    ['an hours-shaped 2', '2', (): string => PRACTICE_COPY.hoursNotMinutes('2')],
+    ['a decimal 1.5', '1.5', (): string => PRACTICE_COPY.hoursNotMinutes('1.5')],
+    ['above the ceiling', String(PRACTICE_MINUTES_MAX + 1), (): string => PRACTICE_COPY.outOfRange],
+    ['text', 'abc', (): string => PRACTICE_COPY.outOfRange],
+  ])('refuses %s minutes on the field, with no write', async (_what, minutes, copy) => {
+    const res = await logLifeActivitiesAction(initial, lifeForm({ minutes }));
+    expect(res).toEqual({ ok: false, error: copy(), fieldErrors: { minutes: [copy()] } });
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
   it('rejects a missing/malformed profileId or clientId without touching the DAL', async () => {
-    expect(
-      (
-        await logLifeActivitiesAction(
-          initial,
-          form({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId: newId() }),
-        )
-      ).ok,
-    ).toBe(false);
-    expect(
-      (
-        await logLifeActivitiesAction(
-          initial,
-          lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId: 'nope' }),
-        )
-      ).ok,
-    ).toBe(false);
+    for (const over of [{ profileId: 'nope' }, { clientId: 'nope' }] as Record<string, string>[]) {
+      // Valid minutes, so the page itself is stale or crafted: a reload, not "fix the errors below".
+      expect(await logLifeActivitiesAction(initial, lifeForm(over))).toEqual({
+        ok: false,
+        error: PRACTICE_COPY.reloadToLog,
+      });
+    }
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
-  it('rejects a stale day on wrestling practice (day-grain, bounded ±1)', async () => {
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: '2020-01-01' }),
-    );
+  it('rejects a stale day (day-grain, bounded ±1)', async () => {
+    const res = await logLifeActivitiesAction(initial, lifeForm({ day: localDay(-5) }));
     expect(res.ok).toBe(false);
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
-  it('IGNORES the declared day for wake (a "now" event stamps its own day, no ±1 rejection)', async () => {
-    // Wake derives day/minutes/event_at from now, so even a wildly stale rendered `day` still logs
-    // (on today) — the cross-midnight-wrong-day bug the review caught can't happen.
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, day: '2020-01-01' }),
-    );
-    expect(res.ok).toBe(true);
-    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0].day).toBe(localDay());
-  });
-
   it('fails gracefully (no write) when the profile is unknown', async () => {
     vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice }),
-    );
+    const res = await logLifeActivitiesAction(initial, lifeForm({}));
     expect(res.ok).toBe(false);
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 });
 
-describe('logLifeActivitiesAction — happy path', () => {
-  it('logs wake as a timing event: metricKey null, eventAt a Date, value = local minutes (0–1439)', async () => {
+describe('logLifeActivitiesAction — the minutes and the outcomes (3b-life-b B5)', () => {
+  it('logs the typed minutes as practice_minutes, inclusive of both bounds', async () => {
+    for (const minutes of [PRACTICE_MINUTES_MIN, PRACTICE_MINUTES_MAX]) {
+      vi.mocked(logCheckinEntries).mockClear();
+      expect(
+        await logLifeActivitiesAction(initial, lifeForm({ minutes: String(minutes) })),
+      ).toEqual({ ok: true, error: null });
+      expect(loggedItem()).toMatchObject({
+        activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice,
+        metricKey: METRIC_KEYS.practice_minutes,
+        value: minutes,
+      });
+      expect(loggedItem().eventAt).toBeUndefined();
+    }
+  });
+
+  it('passes the posted client id, the declared day (±1) and the resolved profile, then revalidates', async () => {
+    // The idempotency key and the day reach the writer untouched: a minted id would break "one write
+    // per replay", a fixed day would file yesterday's practice under another (the Wake test covered
+    // these on main; they are practice's own now).
     const clientId = newId();
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId }),
-    );
-    expect(res.ok).toBe(true);
+    const day = localDay(-1);
+    await logLifeActivitiesAction(initial, lifeForm({ clientId, day }));
+    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0]).toMatchObject({
+      profilePublicId: PROFILE_ID,
+      day,
+      items: [{ clientId, value: 45 }],
+    });
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
-    const { items, day } = vi.mocked(logCheckinEntries).mock.calls[0]![0];
-    expect(day).toBe(localDay());
-    expect(items).toHaveLength(1);
-    const item = items[0]!;
-    expect(item.activityKey).toBe(ACTIVITY_TYPE_KEYS.wake);
-    expect(item.metricKey).toBeNull();
-    expect(item.clientId).toBe(clientId);
-    expect(item.eventAt).toBeInstanceOf(Date);
-    expect(item.value).toBeGreaterThanOrEqual(0);
-    expect(item.value).toBeLessThanOrEqual(1439);
-    expect(Number.isInteger(item.value)).toBe(true);
   });
 
-  it('logs wrestling practice one-tap: practice_minutes at the default, no eventAt', async () => {
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice }),
-    );
-    expect(res.ok).toBe(true);
-    const item = vi.mocked(logCheckinEntries).mock.calls[0]![0].items[0]!;
-    expect(item.activityKey).toBe(ACTIVITY_TYPE_KEYS.wrestling_practice);
-    expect(item.metricKey).toBe(METRIC_KEYS.practice_minutes);
-    expect(item.value).toBe(DEFAULT_PRACTICE_MINUTES);
-    expect(item.eventAt).toBeUndefined();
+  it('no result for the one item sent is "not saved", never ok', async () => {
+    vi.mocked(logCheckinEntries).mockResolvedValueOnce([]);
+    expect(await logLifeActivitiesAction(initial, lifeForm({}))).toEqual({
+      ok: false,
+      error: PRACTICE_COPY.notSaved,
+    });
   });
 
-  it('treats an idempotent replay (client_id conflict) as SUCCESS, not a destructive error', async () => {
-    // A one-tap double-tap reuses the same fixed client_id → ON CONFLICT dedupe → created:false. The
-    // end state is identical (the activity is logged), so it must return ok:true — never a red
-    // "already logged" alert for an operation that in fact succeeded (review finding).
+  it('a replay of the same write is ok', async () => {
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
-      { clientId: 'x', id: null, created: false, outcome: 'conflict' },
+      { clientId: 'x', id: 'p', created: false, outcome: 'replay' },
     ]);
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
-    );
-    expect(res.ok).toBe(true);
+    expect((await logLifeActivitiesAction(initial, lifeForm({}))).ok).toBe(true);
   });
 
-  /**
-   * 🔴 **V1-9b criterion 9: `own_hidden` is NEVER `ok`.** A `conflict` (another profile's row) is a
-   * replay and genuinely succeeded — the test above. `own_hidden` is this athlete's own DELETED row
-   * holding the id: nothing was written, and the old code discarded the writer's result entirely and
-   * returned `ok: true` for it.
-   */
-  it("refuses a life tap that landed on this athlete's own deleted row", async () => {
+  it.each([
+    ['day_taken', (): string => PRACTICE_COPY.dayTaken(45)],
+    ['own_hidden', (): string => PRACTICE_COPY.clearedEarlier],
+    ['conflict', (): string => PRACTICE_COPY.notSaved],
+  ] as const)('%s is a refusal with its own copy, never ok', async (outcome, copy) => {
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
-      { clientId: 'x', id: null, created: false, outcome: 'own_hidden' },
+      { clientId: 'x', id: null, created: false, outcome },
     ]);
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.error).toBe(HIDE_COPY.loggedThenDeleted);
-  });
-
-  // V1-24 3b-0 Z5: another phone's practice holds the day. While the ✓ writes a constant, that row
-  // already says what this tap meant, so it is `ok`; 3b-life turns this into a refusal.
-  it('a practice on a day another phone already logged is ok until 3b-life', async () => {
-    vi.mocked(logCheckinEntries).mockResolvedValueOnce([
-      { clientId: 'x', id: null, created: false, outcome: 'day_taken' },
-    ]);
-    const res = await logLifeActivitiesAction(
-      initial,
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice }),
-    );
-    expect(res).toEqual({ ok: true, error: null });
+    // ' 045 ' so the copy is built from the PARSED minutes, not the raw text.
+    expect(await logLifeActivitiesAction(initial, lifeForm({ minutes: ' 045 ' }))).toEqual({
+      ok: false,
+      error: copy(),
+      ...(outcome === 'day_taken' ? { dayTaken: true } : {}),
+    });
   });
 });
 

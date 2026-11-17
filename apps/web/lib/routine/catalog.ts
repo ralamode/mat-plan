@@ -47,9 +47,10 @@ export const ROUTINE_CATALOG: readonly string[] = [
  *    double-count adherence (CAT-1, whose trap (2) says "the default needs the criterion too") — and
  *    ONB-2's Daily Five prescribes push-ups and pull-ups, so keeping them here would hand every new
  *    household the same work loggable two ways on day one;
- *  - `life:wrestling_practice`'s one tap writes `DEFAULT_PRACTICE_MINUTES = 90` — the maintainer's
- *    club's session length — with no number on the button and no in-app undo. docs/plan.md's standing
- *    ruling names THIS row as the owner of that distinction.
+ *  - `life:wrestling_practice` was a one tap that wrote 90, the maintainer's club's session length,
+ *    with no number on the button. Since V1-24 3b-life it is typed minutes with Change and Clear, so
+ *    that reason is gone; whether a new household sees it by default is still this row's call
+ *    (docs/plan.md's standing ruling), and it stays out until that is decided.
  * Everything excluded stays fully authorable in the shipped editor, which Today links to.
  *
  * ⚠️ READ-TIME FALLBACK, NEVER WRITTEN. `routine_config = NULL` *is* the representation of "the neutral
@@ -79,7 +80,7 @@ export function resolveProfileRoutine(raw: unknown): RoutineConfig {
 
 /**
  * A render block: one existing form + the collapsed BARE catalog keys it covers. A CONTIGUOUS run of
- * `checkin:*` (or `life:*`) keys collapses into ONE block, so `CheckinForm`/`LifeForm` are called once per
+ * `checkin:*` (or `life:*`) keys collapses into ONE block, so `CheckinForm`/`PracticeForm` are called once per
  * run — preserving the batch submit + a single hydration island (`DEFAULT_ROUTINE`, all check-ins
  * contiguous, = today's single `CheckinForm`). A scattered routine yields multiple blocks (the honest
  * consequence). `strength` is a singleton block; unknown namespaces (`finisher:*`, already stripped by
@@ -140,7 +141,7 @@ export function checkinFieldsForKeys(keys: readonly string[]): CheckinField[] {
 }
 
 /** The life twin of `checkinFieldsForKeys` — bare keys → live `LIFE_ACTIVITIES` objects, in routine order
- *  (unknown keys dropped). Single-sources the resolution the `LifeForm` subset uses (no inline re-implement). */
+ *  (unknown keys dropped). Single-sources the resolution the Life section's subset uses (no inline re-implement). */
 export function lifeActivitiesForKeys(keys: readonly string[]): LifeActivity[] {
   return keys
     .map((k) => LIFE_ACTIVITY_BY_KEY.get(k))

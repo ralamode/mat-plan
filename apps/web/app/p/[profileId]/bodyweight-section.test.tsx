@@ -83,6 +83,15 @@ describe('BodyweightSection — its states', () => {
     expect(screen.queryByText(new RegExp(`^${LAST_TIME_PREFIX}`))).toBeNull();
   });
 
+  it('the ✓ fills while a weight waits to be sent, and goes back to outline when emptied (3b-life-b B3)', () => {
+    render(section());
+    fireEvent.change(field(), { target: { value: '72' } });
+    expect(logButton().getAttribute('data-variant')).toBe('default');
+    expect(logButton().hasAttribute('data-ready')).toBe(true);
+    fireEvent.change(field(), { target: { value: ' ' } });
+    expect(logButton().getAttribute('data-variant')).toBe('outline');
+  });
+
   it('"Last time" is its own muted line, never a placeholder, and describes the field', () => {
     render(section({ last: { value: 72.5, unit: 'lb', day: '2026-09-29' } }));
     const hint = screen.getByText(BODYWEIGHT_COPY.lastTime('72.5 lb', null));

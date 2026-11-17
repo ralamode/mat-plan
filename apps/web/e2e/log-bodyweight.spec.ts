@@ -23,10 +23,13 @@ import { pickerHeading } from './contexts';
 import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
 import {
   changePractice,
+  bodyweightSection,
+  clearAnyPractice,
   clearPractice,
   lifeSection,
   logBodyweight,
   logPractice,
+  practiceLogField,
   PRACTICE_SHOWN,
   practiceChange,
   selectProfile,
@@ -53,17 +56,62 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   await expect(
     page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
   ).toBeVisible();
+  // V1-24 3b-life-b B3: the bodyweight ✓ fills while a typed weight waits to be sent.
+  const weightField = bodyweightSection(page).getByLabel('Weight', { exact: true });
+  if ((await weightField.count()) > 0) {
+    const weightTick = bodyweightSection(page).getByRole('button', {
+      name: BODYWEIGHT_COPY.logLabel,
+      exact: true,
+    });
+    await expect(weightTick).not.toHaveAttribute('data-ready');
+    await weightField.fill('72.5');
+    await expect(weightTick).toHaveAttribute('data-ready', 'true');
+  }
   await logBodyweight(page, '72.5');
 
-  // V1-7 / V1-24 3b-page: the one-tap wrestling practice, a duration metric with the default minutes.
-  // The logged row shows those minutes on the page, where the removed "Logged entries" list did.
+  // V1-24 3b-life-b: practice is typed minutes. At 360px the unlogged row is ONE line, with the label
+  // on one line and a ≥44px ✓; a number that reads as hours is refused in the browser (no request);
+  // the ✓ fills once a value waits; then the logged row shows the minutes. A retry on the reused DB
+  // finds the practice logged: clear it first, so these checks always run.
+  await page.setViewportSize({ width: 360, height: 800 });
+  const minutesField = practiceLogField(page);
+  await clearAnyPractice(page);
+  const logTick = lifeSection(page).getByRole('button', {
+    name: PRACTICE_COPY.logLabel,
+    exact: true,
+  });
+  const [fieldBox, tickBox] = await Promise.all([
+    minutesField.boundingBox(),
+    logTick.boundingBox(),
+  ]);
+  // The label's VISIBLE words (its first text node; the box itself is stretched to 44px as a tap
+  // target) lay out on ONE line, and end before the field starts.
+  const words = await lifeSection(page)
+    .locator('label', { hasText: PRACTICE_COPY.label })
+    .evaluate((label) => {
+      const range = document.createRange();
+      range.selectNodeContents(label.firstChild!);
+      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+      return { lines: lines.size, right: range.getBoundingClientRect().right };
+    });
+  expect(words.lines).toBe(1);
+  expect(words.right).toBeLessThanOrEqual(fieldBox!.x);
+  expect(tickBox!.width).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+  expect(tickBox!.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await expect(logTick).not.toHaveAttribute('data-ready');
+  await minutesField.fill('5');
+  await expect(logTick).toHaveAttribute('data-ready', 'true');
+  await logTick.click();
+  await expect(lifeSection(page).getByRole('alert')).toHaveText(PRACTICE_COPY.hoursNotMinutes('5'));
+  await expect(minutesField).toBeFocused();
+  await expectNoAxeViolations(page, 'the practice row with an hours-shaped value refused');
   await logPractice(page);
 
   // V1-24 3b-life-a: Change it to the largest legal value (the longest minutes line; the label is the
   // row's widest line either way), check the row at 360px, refuse an out-of-range value, clear it (Save
-  // reads Clear), then the Wrestling practice button logs it again, so the day ends as it began. Athlete One's today is
+  // reads Clear), then the minutes are typed and logged again, so the day ends as it began. Athlete One's today is
   // this spec's alone (the e2e rule, `global.setup.ts`).
-  await page.setViewportSize({ width: 360, height: 800 });
   await changePractice(page, PRACTICE_SHOWN, String(PRACTICE_MINUTES_MAX));
   const life = lifeSection(page);
   const shownWidest = formatValueUnit(PRACTICE_MINUTES_MAX, PRACTICE_UNIT);

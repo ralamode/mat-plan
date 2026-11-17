@@ -3,6 +3,7 @@ import {
   MAX_HOUSEHOLD_ATHLETES,
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
+  type PracticeMinutesProblem,
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
   type Unit,
@@ -680,8 +681,8 @@ export const LOGGED_ROW_CLASS =
   'border-done bg-done-surface text-card-foreground has-[form]:bg-background';
 
 /**
- * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day: the
- * one-tap button writes minutes nobody typed, so the row is where a person first sees them.
+ * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day (typed since
+ * 3b-life-b; the practice row's own copy is `PRACTICE_COPY`).
  */
 export const LIFE_COPY = {
   heading: 'Life',
@@ -795,6 +796,9 @@ export const BODYWEIGHT_COPY = {
 } as const;
 
 /** The practice activity's label, from the one list that also names its button (one source). */
+/** The sr-only words after the practice label that make the field's name (`… minutes`). */
+const PRACTICE_FIELD_SUFFIX = ' minutes';
+
 const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
   (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
 )!.label;
@@ -809,8 +813,10 @@ export const PRACTICE_COPY = {
   changeSubject: PRACTICE_LABEL.toLowerCase(),
   /** `AMEND_ERROR_COPY`'s subject: `the practice wasn't changed`. */
   noun: 'practice',
-  /** The amend field's accessible name; the visible `min` beside it is `aria-hidden`. */
-  fieldLabel: `${PRACTICE_LABEL} minutes`,
+  /** The log row's sr-only suffix after its visible label, so its name is `fieldLabel`. */
+  fieldLabelSuffix: PRACTICE_FIELD_SUFFIX,
+  /** The field's accessible name on BOTH rows (log and Change); the visible `min` is `aria-hidden`. */
+  fieldLabel: `${PRACTICE_LABEL}${PRACTICE_FIELD_SUFFIX}`,
   ...singleValueCopy({
     subject: PRACTICE_LABEL,
     clearLabel: `Clear ${PRACTICE_LABEL.toLowerCase()}`,
@@ -819,9 +825,48 @@ export const PRACTICE_COPY = {
       'To clear this practice, leave the field empty. Two practices that day? Enter the total.',
     blankSave: 'Enter the minutes, then Save.',
   }),
-  /** A refused amend (`bad_value`): the one rule, its range from the shared consts. */
+  /** A refused amend or log (`bad_value`): the one rule, its range from the shared consts. */
   outOfRange: `Enter whole minutes, ${PRACTICE_MINUTES_MIN} to ${PRACTICE_MINUTES_MAX}.`,
+  // ── Logging (V1-24 3b-life-b B1, B2, B5) ────────────────────────────────────────────────────────
+  /** The ✓'s accessible name. */
+  logLabel: `Log ${PRACTICE_LABEL.toLowerCase()}`,
+  /** An empty ✓, refused in the browser before any request. */
+  blankLog: 'Enter the minutes, then ✓.',
+  /**
+   * A number that reads as hours: the floor's reason, said plainly _(maintainer, 2026-11-16)_. For a
+   * whole 1–5 the sum is done for them (`2 hours is 120`); otherwise a fixed example, in words, not
+   * the ½ glyph. (6 hours and up would be over the 300 cap anyway.)
+   */
+  hoursNotMinutes: (typed: string) => {
+    const t = typed.trim();
+    const hours = /^0*[1-5]$/.test(t) ? Number(t) : null;
+    return hours === null
+      ? 'Minutes, not hours: 1 and a half hours is 90.'
+      : `Minutes, not hours: ${hours} ${hours === 1 ? 'hour is' : 'hours is'} ${hours * 60}.`;
+  },
+  /** A tab still on the one-tap bundle posts no minutes; a reload brings the field. */
+  reloadToLog: 'Reload the page to log practice.',
+  /**
+   * A practice already holds the day (3b-0's index): say what happened to THIS number, and how to make
+   * it count. No claim about "another phone": a second tab on the same phone gets this too.
+   */
+  dayTaken: (minutes: number) =>
+    `A practice is already logged for this day, so your ${minutes} min wasn't saved. Tap Change to make it ${minutes}, or enter the total if it was a second practice.`,
+  /** The id is held by a different row (a crafted reuse): nothing saved; the form mints a new id. */
+  notSaved: "That wasn't saved. Tap ✓ to try again.",
+  /** This athlete's own CLEARED practice holds the id: nothing logged; the form mints a new id. */
+  clearedEarlier: 'That practice was cleared earlier, so nothing was logged. Tap ✓ to log it now.',
 } as const;
+
+/**
+ * Each typed-entry problem's message, for the form (before the request) and the action alike: one map,
+ * and a `Record`, so a new problem in `practiceMinutesProblem` is a compile error until it has copy.
+ */
+export const PRACTICE_PROBLEM_COPY: Record<PracticeMinutesProblem, (typed: string) => string> = {
+  blank: () => PRACTICE_COPY.blankLog,
+  hours: (typed) => PRACTICE_COPY.hoursNotMinutes(typed),
+  range: () => PRACTICE_COPY.outOfRange,
+};
 
 /**
  * The accessible name for an amend control — `Change weight — 84.5 lb` (V1-24 PR 1b).

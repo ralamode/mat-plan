@@ -69,27 +69,52 @@ describe('the editor’s draft', () => {
     expect(saveWorkoutSchema.safeParse(draft).success).toBe(true);
   });
 
-  it('an item loaded with no quantity is saved with none, not with a unit nobody chose', () => {
+  it('an item loaded with no quantity cannot be saved without a unit, which is the unit’s refusal (C16)', () => {
     const bare = {
       ...everyType,
       items: everyType.items.map((item) => ({ ...item, quantities: [] })),
     };
-    const draft = saved(readDraft(bare, { name: 'Bare', description: '', cards: toCards(bare) }));
-    expect(draft.items.map((item) => item.quantities)).toEqual(bare.items.map(() => []));
-    // A unit chosen with no number keeps the unit, as "log in this unit, no target".
-    const bareCount = toCards(bare).find((card) => card.item.trackingType === 'count')!;
-    expect(
-      saved(
-        readDraft(bare, { name: 'Bare', description: '', cards: [{ ...bareCount, unit: 'lb' }] }),
-      ).items[0]!.quantities,
-    ).toEqual([{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: null }]);
-    // A number typed with no unit chosen asks for the unit.
-    const count = toCards(bare).find((card) => card.item.trackingType === 'count')!;
+    const cards = toCards(bare);
+    const result = readDraft(bare, { name: 'Bare', description: '', cards });
+    // Every type whose unit the prescription names (no fixed one) is refused on its unit select;
+    // a type with a fixed unit, or no quantity, is not.
+    const needsOne = cards.filter((card) => {
+      const fields = TRACKING_TYPE_FIELDS[card.item.trackingType];
+      return fields.slot !== null && fields.unit === null;
+    });
+    expect(needsOne.length).toBeGreaterThan(0);
+    expect(errorsOf(result)).toEqual(
+      needsOne.map((card) => ['unit', EDITOR_ERRORS.unit(quantityLabel(card.item.trackingType)!)]),
+    );
+    // Given its unit, each saves as "log in this unit, no target"; a fixed unit saves as itself.
+    const chosen = cards.map((card) =>
+      needsOne.includes(card)
+        ? { ...card, unit: unitsForTrackingType(card.item.trackingType)[0]! }
+        : card,
+    );
+    const draft = saved(readDraft(bare, { name: 'Bare', description: '', cards: chosen }));
+    draft.items.forEach((item, k) => {
+      const fields = TRACKING_TYPE_FIELDS[item.trackingType];
+      expect(item.quantities).toEqual(
+        fields.slot ? [{ slot: fields.slot, unit: chosen[k]!.unit, value: null }] : [],
+      );
+    });
+    // A number typed with no unit chosen: one refusal, on the unit.
+    const count = cards.find((card) => card.item.trackingType === 'count')!;
     expect(
       errorsOf(
         readDraft(bare, { name: 'Bare', description: '', cards: [{ ...count, value: '5' }] }),
       ),
-    ).toEqual([['value', EDITOR_ERRORS.unit(quantityLabel('count')!)]]);
+    ).toEqual([['unit', EDITOR_ERRORS.unit(quantityLabel('count')!)]]);
+    // Not a number and no unit: the unit first, so Save focuses the select.
+    expect(
+      errorsOf(
+        readDraft(bare, { name: 'Bare', description: '', cards: [{ ...count, value: 'abc' }] }),
+      ),
+    ).toEqual([
+      ['unit', EDITOR_ERRORS.unit(quantityLabel('count')!)],
+      ['value', EDITOR_ERRORS.value(quantityLabel('count')!)],
+    ]);
   });
 
   it('a new workout needs a name, and saves with no items', () => {

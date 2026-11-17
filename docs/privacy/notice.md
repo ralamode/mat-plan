@@ -31,6 +31,11 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Bodyweight** — a number, a unit, a date, and whether it was morning or another time.
 - **Training** — the movements, how many sets, how many reps, the weight on the bar, whether the set
   was bodyweight or banded, and what day of the program it was.
+- **Wrestling practice** — how many minutes, and the day. Typed by whoever logs it (before 16
+  November 2026 a tap always recorded 90 minutes).
+- **Earlier check-ins and wake-up times** — whether a habit was done or a count, and the day, and
+  the clock time a wake-up was tapped. These are still stored from before November 2026; the day page
+  no longer records new ones.
 - **How a session felt** — a free-text box.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
