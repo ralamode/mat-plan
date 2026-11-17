@@ -24,19 +24,20 @@ preview route first, then wires the first real ✓.
 🚧 **Built up step by step.** Step 13 built the workout cards and the single rows (Check, Duration,
 Count) with their ✓; 13d the program line, Program order, the athlete switcher and the notices; 13b
 the set rows, Previous, Add set, supersets and the look-ahead cards; 13b-ii Change, a logged number
-edited in place. 12b wired the row writes; 12c mounts the screen. Each step adds its files and invariants here.
+edited in place. 12b wired the row writes; 12c mounted the screen on the athlete's page, with
+look-ahead and the narrowed window. Each step adds its files and invariants here.
 
 ## The map
 
-| Step   | Adds                                                                                                                                                     |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 13     | Workout cards and single rows, the optimistic ✓ and its failure state, in `day-screen.tsx` and its parts.                                                |
-| 13b    | Set rows, PREVIOUS, "+ Add set", linked supersets, the read-only look-ahead (`set-table.tsx`, `row-parts.tsx`).                                          |
-| 13b-ii | Change: a logged number edited in place, for set rows and single rows (the maintainer split 13b, 2026-11-16).                                            |
-| 13d    | `components/day/{program-line,program-order-dialog,athlete-switcher}.tsx`; the "not on a program" notices.                                               |
-| 12b    | `apps/web/app/p/[profileId]/row-actions.ts` (log, un-tick, re-tick) with its registry file; `lib/dal/day/day.ts`, `report-miss.ts`, `importers.test.ts`. |
-| 12c    | The screen joins `apps/web/app/p/[profileId]/page.tsx`. A seam, shared with lane S, in the plan's §6 order.                                              |
-| 12d    | Change. 15c: program order. 12f: the old forms' code goes.                                                                                               |
+| Step   | Adds                                                                                                                                                                                                                                                        |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 13     | Workout cards and single rows, the optimistic ✓ and its failure state, in `day-screen.tsx` and its parts.                                                                                                                                                   |
+| 13b    | Set rows, PREVIOUS, "+ Add set", linked supersets, the read-only look-ahead (`set-table.tsx`, `row-parts.tsx`).                                                                                                                                             |
+| 13b-ii | Change: a logged number edited in place, for set rows and single rows (the maintainer split 13b, 2026-11-16).                                                                                                                                               |
+| 13d    | `components/day/{program-line,program-order-dialog,athlete-switcher}.tsx`; the "not on a program" notices.                                                                                                                                                  |
+| 12b    | `apps/web/app/p/[profileId]/row-actions.ts` (log, un-tick, re-tick) with its registry file; `lib/dal/day/day.ts`, `report-miss.ts`, `importers.test.ts`.                                                                                                    |
+| 12c    | The screen joins `apps/web/app/p/[profileId]/page.tsx` (a seam shared with lane S, in the plan's §6 order), with the three placed parts, one state notice, look-ahead in `day-nav.tsx` and the today-and-yesterday window in `lib/entries/declared-day.ts`. |
+| 12d    | Change. 15c: program order. 12f: the old forms' code goes.                                                                                                                                                                                                  |
 
 ## Files
 
@@ -72,7 +73,7 @@ edited in place. 12b wired the row writes; 12c mounts the screen. Each step adds
 
 1. 🔴 **`DayScreen`, plus three parts the page places** (plan D34, decided by the
    maintainer for 13d, 2026-11-16). The day page mounts `DayScreen` with a `DayPlan` and a `DayActions`,
-   once, at step 12c, after Bodyweight and Life. v12 puts three things above those sections, so
+   once, since step 12c, after Bodyweight and Life. v12 puts three things above those sections, so
    they are their own components, given the **same `plan`** (and the same `actions` where they
    write): `AthleteSwitcher({ plan, hrefFor, className: 'lg:hidden' })` under the `<h1>` (the
    nav rail lists the athletes from `lg`), then
@@ -151,13 +152,38 @@ edited in place. 12b wired the row writes; 12c mounts the screen. Each step adds
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an
     argument, and the writer holds the row's `day` to the window itself (`rowDayOpen`: today and
     yesterday, never a later day, an archived athlete never). So a crafted older or future day
-    answers `closed_day` whatever the page rendered, and `resolveDeclaredDay`, which still accepts
-    tomorrow until 12c, is not on this path.
+    answers `closed_day` whatever the page rendered. Since 12c the older forms' `isWritableDay` and
+    `resolveDeclaredDay` are the same window (they call the shared `inWritableWindow`, D32), so
+    bodyweight, practice and a row agree. The page reads today too, from the same zone, to resolve
+    the day it renders and hand it to `getDayPlan`.
 18. **No refusal marks the field.** The screen checks every number by the writer's own rule
     (`fillRowValues`) before sending it, so a refused ✓ or Change is never the typed number's
     fault: `bad_value` from the server means the item changed under the page, and offers Reload.
     A `closed_day` also fetches the page's data again, since a retried ✓ refused at the window may
     have been saved the first time (UX panel, 12b).
+19. 🔴 **The day is pinned in the URL before a write, once midnight has passed** (12c;
+    `pinDayBeforeWrite` in `day-screen.tsx`). On the bare path a ✓'s own revalidated render
+    computes today again; after local midnight that is a new day, and the screen would remount on
+    it mid-workout. So every action the screen hands its rows, and its Reload, first sets `?d=` to
+    the viewed day when the URL has none and the device's day is not `plan.today`. Pinning after
+    the first write is too late (that write's response is the jump), and pinning always would open
+    a stale tab on yesterday the next morning. The date line says "Yesterday ·" there (v12's label).
+20. 🔴 **The page shows one state notice, never a stack** (12c; maintainer, 2026-11-17): the
+    archived notice ("… Nothing new can be logged. Restore them in Household settings."), else
+    "Coming up" on a future day, else the closed-day sentence, above the program line. The screen
+    adds none of its own except its `closed_day` callout, which says only what happened ("Not
+    saved. This day can't be logged any more."), so it is true for an archived athlete too.
+    "Not on a program yet." says "Bodyweight and practice log here." only on a writable day.
+21. **A future day is look-ahead, and only while on a program** (D32, plan §9). `dayNavBounds`
+    sets both arrows and the week strip from `DayPlan.canGoForward`; `resolveViewedDay` passes a
+    future `?d=` through and the page renders today instead unless the athlete is on a program
+    that day. A future day renders no Bodyweight or Life and no ✓.
+22. **A write in flight looks pending and warns before the page is left** (maintainer,
+    2026-11-17: "Warn + record"). A pending ✓ has a dashed border, `aria-busy` and "Saving…";
+    `beforeunload` asks while any row's write is in flight. ⚠️ **Recorded gap:** iOS ignores
+    `beforeunload`, and switching athlete is an in-app navigation no prompt covers, so a write
+    that fails after the screen has gone is not reported; the row reads un-ticked when the athlete
+    is opened again.
 
 ## Recorded differences from the prototype (v12)
 
@@ -211,6 +237,16 @@ or a practice; the day as the page's date line writes it (`formatDayShort`). The
 only when no one else is listed: `athletes` leaves an archived athlete out, so on their day one
 live athlete is the way back, no pill is the current one (as in the nav rail), and the pills show
 whole names, since the viewed athlete's own name is not listed to be told apart from.
+
+**Decided for 12c (maintainer, 2026-11-17, after the UX panel):** the page keeps D34's order, the
+workouts below Bodyweight and Life ("chosen by person who programmed the workout / day");
+collapsing already-completed items is owed as its own follow-up, prototyped and reviewed first. A
+future day shows v12's "Coming up. This is what <Name> has on Mondays. You can log it on the day."
+with no Bodyweight or Life. **Different from v12:** the one state notice sits above the program
+line (v12 puts its read-only notice after it), since it explains why everything below is inert;
+the switcher is under the `<h1>`, not beside it (13d's decision; beside, a long name is squeezed
+to a few letters a line at 360px); and Export sits at the foot beside rename, a parent's action,
+so the header above the day's work is shorter.
 
 A logged value and a prescription are spelled the same way (`30 s`, `40 yd`): both use the
 contract's `quantityText` (C1, #436).
