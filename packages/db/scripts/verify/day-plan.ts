@@ -80,9 +80,10 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  * an unlogged row ticks through `logRow` with the returned ids, a logged set answers `slot_taken`,
  * and a returned `entryPublicId` un-ticks through `untickRow`.
  *
- * 12a-i proves the fixtures whose `before` is `null`, chosen by that test, not by a list, and
- * `archived-athlete-today` in `verifyRules` (its only change is the archive). The other four of the
- * five with a `before` are 12a-ii's: they need the program edits replayed after logging.
+ * 12a-i proves the eleven fixtures whose `before` is `null`, chosen by that test, not by a list,
+ * and in `verifyRules` the two whose only change is an archive (`archived-athlete-today`,
+ * `archived-athlete-nothing-logged`). The other four of the six with a `before` are 12a-ii's: they
+ * need the program edits replayed after logging.
  */
 export async function verifyDayPlan(): Promise<void> {
   await verifyFixtures();
@@ -1182,23 +1183,28 @@ async function verifyRules(): Promise<void> {
     });
     console.log('✓ FAM-1 12a R1: an archived athlete’s future day is the normal preview');
 
-    // ── R1: an archived athlete's TODAY reads like a closed day (`archived-athlete-today`) ──────
-    await inSavepoint(tx, async (sp) => {
-      // Its source has a `before`, but the change is only the archive, so it is proved here.
-      const { athlete, day, world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
-      await sp
-        .update(schema.profiles)
-        .set({ archivedAt: new Date() })
-        .where(eq(schema.profiles.id, H.profiles.get(athlete)!.id));
-      const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[
-        'archived-athlete-today'
-      ] as DayPlan;
-      assert.deepStrictEqual(
-        await resolve(sp, H, athlete, day, world.today),
-        asJson(translate(fixture, H.ids, 'archived-athlete-today')),
-        'FAM-1 12a R1: an archived athlete’s today deep-equals archived-athlete-today',
-      );
-    });
+    // ── R1: an archived athlete's TODAY reads like a closed day ─────────────────────────────────
+    // Two fixtures whose `before` differs from `world` by the archive alone: the athletes the world
+    // marks archived are archived here, then the day deep-equals the fixture.
+    for (const name of ['archived-athlete-today', 'archived-athlete-nothing-logged'] as const) {
+      await inSavepoint(tx, async (sp) => {
+        const { athlete, day, world } = DAY_PLAN_FIXTURE_SOURCES[name];
+        const archived = world.athletes.filter((a) => a.archived).map((a) => a.id);
+        assert.ok(archived.length > 0, `FAM-1 12a R1: ${name} archives someone`);
+        for (const id of archived) {
+          await sp
+            .update(schema.profiles)
+            .set({ archivedAt: new Date() })
+            .where(eq(schema.profiles.id, H.profiles.get(id)!.id));
+        }
+        const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[name] as DayPlan;
+        assert.deepStrictEqual(
+          await resolve(sp, H, athlete, day, world.today),
+          asJson(translate(fixture, H.ids, name)),
+          `FAM-1 12a R1: an archived athlete’s today deep-equals ${name}`,
+        );
+      });
+    }
     console.log('✓ FAM-1 12a R1: an archived athlete’s today is read-only, logged rows only');
 
     // ── (i): an entry in ANOTHER profile's session never lends it a name ────────────────────────
@@ -1301,7 +1307,29 @@ async function verifyRules(): Promise<void> {
         'FAM-1 12a D14: a closed day carries the rest of a shown group only',
       );
     });
-    console.log('✓ FAM-1 12a D14: no rest for a group that is not shown');
+    await inSavepoint(tx, async (sp) => {
+      // Heavy A without Pull-up: group `a` has ONE live member, DB bench, and it carries the rest.
+      await sp
+        .update(schema.prescriptions)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.prescriptions.id, H.prescriptions.get('w2:pullup')!));
+      await sp
+        .update(schema.prescriptions)
+        .set({ restAfter: '90 s after each round' })
+        .where(eq(schema.prescriptions.id, H.prescriptions.get('w2:dbbench')!));
+      const plan = await resolve(sp, H, 'a2', YESTERDAY);
+      const heavyA = workoutOf(plan, H, 'w2');
+      assert.ok(
+        heavyA?.items.some((it) => it.superset?.group === 'a'),
+        'FAM-1 12a D14: a group of one is still shown (non-vacuity)',
+      );
+      assert.deepEqual(
+        Object.keys(heavyA!.restAfter),
+        ['b'],
+        'FAM-1 12a D14: a group of one carries no rest',
+      );
+    });
+    console.log('✓ FAM-1 12a D14: no rest for a group that is not shown, or of one');
 
     // ── C21: a hidden program's or workout's logged rows carry no live id ───────────────────────
     const leftByName = (plan: ResolvedDayPlan, name: string) =>

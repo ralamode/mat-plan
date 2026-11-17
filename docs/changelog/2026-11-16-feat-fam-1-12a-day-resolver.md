@@ -9,9 +9,10 @@
   practice or a check-in never enters the day. An archived athlete's day reads like a closed day.
   The row writer now takes its conjuncts and its prescription's unit, target and text from the same
   `queries/day/` modules the resolver reads (no behaviour change; eleven mutation patches
-  regenerated). `db:verify` seeds the ten fixtures with no `before`, deep-equals each with ids mapped
+  regenerated). `db:verify` seeds the eleven fixtures with no `before`, deep-equals each with ids mapped
   exactly, and round-trips the returned ids through the row writer; new proofs cover ownership
   (planted runbook (f), (g) and (h) rows), hidden rows, superset and program order, look-ahead and
   PREVIOUS, the hidden-program ids (C21) and an entry in another profile's session (runbook pre-flight
-  (i), added), with nineteen new mutations (230–248). Of the five fixtures with a `before`, 12a-i
-  proves `archived-athlete-today` (its only change is the archive); the other four are 12a-ii's.
+  (i), added), with twenty new mutations (230–249). Of the six fixtures with a `before`, 12a-i
+  proves the two whose only change is an archive (`archived-athlete-today`,
+  `archived-athlete-nothing-logged`); the other four are 12a-ii's.

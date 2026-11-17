@@ -17,11 +17,12 @@ import { describe, it } from 'vitest';
  */
 
 describe('DayPlan: owed by its consumers', () => {
-  // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`), and
-  // `archived-athlete-today`, whose only change is the archive. The other `before` fixtures need the
-  // program edits replayed after logging, which is 12a-ii.
+  // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`), and the two whose
+  // only change is an archive, which a proof applies directly. The other `before` fixtures change
+  // the program after logging, so they need its edits replayed: 12a-ii.
+  const ARCHIVE_ONLY = new Set(['archived-athlete-today', 'archived-athlete-nothing-logged']);
   for (const [name, source] of Object.entries(DAY_PLAN_FIXTURE_SOURCES)) {
-    if (source.before === null || name === 'archived-athlete-today') continue;
+    if (source.before === null || ARCHIVE_ONLY.has(name)) continue;
     it.todo(`12a-ii: the resolver, on the seeded state, deep-equals ${name}`);
   }
   it.todo('12a-ii: progress does not count removed items’ rows');
