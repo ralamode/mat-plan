@@ -1,0 +1,65 @@
+---
+feature: Erasure (the household graph)
+owns:
+  - packages/db/src/erasure/
+  - packages/db/scripts/verify/erasure.ts
+---
+
+# Erasure: the household graph
+
+**Read this before adding a table, a foreign key, or a delete that removes a household's rows.**
+The plan is [priv-3-guarded-deletion.md](../plans/priv-3-guarded-deletion.md) (`PRIV-3`); the
+procedure people run today is [runbooks.md](../runbooks.md) → "Delete a household and everyone in
+it" and "Erase one athlete".
+
+## What this is
+
+One committed list of the tables that hold a household's data, in the order a delete must walk them,
+each with the predicate that selects one household's rows. Both erasures, and `OPS-3`'s restore,
+read it. 🚧 **PR 1 ships the list and its proofs only**: the delete core (PR 2a) and the two guarded
+corrections (PR 2b, PR 3) are planned. The flow is [architecture.md](../architecture.md) → "The
+erasure graph".
+
+## The map
+
+| File                                    | What it holds                                                                                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/erasure/graph.ts`      | `HOUSEHOLD_GRAPH` (19 tables, child before parent, `householdRows(scope)`), `ATHLETE_GRAPH` (step 5's per-profile list), `REFERENCE_TABLES`, `NON_ABORTING_EDGES`, `isAthleteGrain`, `graphTableName`. Not in the barrel. |
+| `packages/db/scripts/verify/erasure.ts` | P1, P2, P7 and P8 (below), run last by `verify.ts`. Mutations `260`–`270` prove each can fail.                                                                                                                            |
+| `packages/db/src/writers/ownership.ts`  | The leaves the predicates are built from, including `householdRowIs` and `householdMemberInHousehold`. Owned by [write-path.md](./write-path.md): it is the one module allowed to unwrap a scope.                         |
+
+## Invariants that live between the files
+
+1. **The order follows the catalog, not the prose.** P2 requires every foreign key into a graph table
+   to come from a graph table at a lower index. A new table, or a new FK, goes into the graph in the
+   same PR, or `db:verify` goes red (P1 for the table, P2 for the edge).
+2. **A foreign key that does not abort is named.** A `CASCADE` or `SET NULL` key into the graph
+   must be in `NON_ABORTING_EDGES` with its guard: `cascade`, or the runbook pre-flight letter that
+   refuses the cross-household row first. P2 compares the list with `pg_constraint`.
+3. **The two-reference rows use `AND`.** `prescription_targets` and `program_assignments` are a
+   household's only when the athlete **and** the program are. A straddling row is matched by
+   neither household, so its parent's delete aborts `23503`: fail closed. P7 plants both straddles.
+   ⚠️ `OR` deletes another family's row instead.
+4. **Never a `deleted_at` conjunct.** A hidden row is still erased. P7 plants a hidden row in every
+   graph table that has a `deleted_at` column and requires B's predicate to match it; P8 plants a
+   hidden athlete with a hidden row and requires the household form to select it. ⚠️ P8's "same
+   rows" holds only on data with no straddling row: a per-profile scope takes an athlete's target or
+   assignment on another household's program, and the `AND` leaves it. "Erase one athlete"'s
+   pre-flight 2 refuses that row before any delete.
+5. **Athlete grain is derived, never stored.** `isAthleteGrain` is membership in `ATHLETE_GRAPH`,
+   and P2 requires the graph's athlete-grain tables to be that list in graph order. P8 requires the
+   two forms to select the same **rows** for household B. Step 5's proof (`verify/schema.ts`) holds
+   the same list against every table reachable from `profiles`, and the runbook's step-4 table and
+   count block against it.
+6. **A predicate is built from a leaf, never from `scope.householdId`.** The leaves live in
+   `ownership.ts`; `src/scope.test.ts` fails the build on any other module unwrapping a scope.
+
+## Traps
+
+- `movementIsAvailableTo` and `templateBlockIn` / `liveTemplateBlockIn` look like the right leaves
+  and are not: the first adds `household_id IS NULL` (the global catalog, which must survive), the
+  others miss legacy and hidden blocks.
+- drizzle's `and()` does not parenthesize its operands, so a two-part predicate carries its own
+  parentheses; P7's `both()` wraps each side for the same reason.
+- `OPS-3` restores in reverse graph order into a database that already holds `REFERENCE_TABLES` and
+  every global movement the household references.
