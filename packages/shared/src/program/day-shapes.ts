@@ -120,6 +120,12 @@ const dayWorkoutSchema = z.object({
    * merely left the week is still live: it keeps its description, its live items and its count.
    * So nothing of a hidden program's own text reappears. Hiding is reversible and the plan is a
    * read: un-hide the program and the ids are back.
+   *
+   * **Liveness decides this, never the assignment** (contract change C24). A live workout of a
+   * live program that was logged on a day no live assignment covers any more (the athlete's start
+   * was removed after a row was hidden, and the row then came back) is a workout that left the
+   * week: both ids non-null, its description, live items and count kept, logged rows only. Its
+   * program is not in `DayPlan.programs` for that day, and the screen names none.
    */
   programPublicId: uuidSchema.nullable(),
   workoutPublicId: uuidSchema.nullable(),

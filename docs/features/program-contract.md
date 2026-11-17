@@ -360,7 +360,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     that is no longer live has `scheduled: false` and no label, as one that left the week does,
     and further has no description, every item built as a removed item is, and `progress` 0 of 0,
     so a hidden program's own text never reappears. (A workout that merely left the week is still
-    live and keeps its description, its live items and its count.) No FAM-1 action hides a
+    live and keeps its description, its live items and its count.) **Liveness decides, never the
+    assignment** (C24): a live workout logged on a day no live assignment covers any more is
+    shown as one that left the week, ids kept, though its program is not in that day's
+    `programs`. No FAM-1 action hides a
     program, and no fixture holds this: the day resolver's own proof does.
 
 ## Traps
