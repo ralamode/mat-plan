@@ -23,12 +23,24 @@ export class CorrectionRefusal extends Error {
   }
 }
 
-/** A SQLSTATE, a Node error code or a constraint name: identifier characters, nothing a value fits in. */
-const IDENTIFIER = /^[A-Za-z0-9_]{1,63}$/;
+/**
+ * What each field may look like to be printed. ⚠️ **Not "identifier characters"**: the first version
+ * accepted `[A-Za-z0-9_]{1,63}`, which a Clerk id (`user_…`) matches exactly, so a driver that put
+ * the value in either field would have printed it.
+ *
+ * - `code`: a SQLSTATE (five digits or capitals, `23505`) or a Node system code (`ENOTFOUND`).
+ * - `constraint`: this schema's naming — a bare prefix or `<word>_<words>` in lower case — and never
+ *   anything starting `user_`, which the naming pattern alone would let through.
+ */
+const FIELD_SHAPE = {
+  code: (v: string) => /^[0-9A-Z]{5}$/.test(v) || /^E[A-Z0-9_]+$/.test(v),
+  constraint: (v: string) =>
+    /^(uq|idx|fk|pk|chk|[a-z0-9]+_[a-z0-9_]+)$/.test(v) && !/^user_/i.test(v) && v.length <= 63,
+} as const;
 
-function identifierOn(source: unknown, key: 'code' | 'constraint'): string {
+function fieldOn(source: unknown, key: keyof typeof FIELD_SHAPE): string {
   const value = (source as Record<string, unknown> | null | undefined)?.[key];
-  return typeof value === 'string' && IDENTIFIER.test(value) ? value : 'unknown';
+  return typeof value === 'string' && FIELD_SHAPE[key](value) ? value : 'unknown';
 }
 
 /**
@@ -37,7 +49,9 @@ function identifierOn(source: unknown, key: 'code' | 'constraint'): string {
  * - A `CorrectionRefusal` is returned unchanged: its message is already safe, and it is the operator's
  *   answer.
  * - Anything else becomes a NEW error, with no `cause`, whose message is
- *   `<name> failed and rolled back: <code> <constraint>`. Both are read from `err.cause` (drizzle
+ *   `<name> failed (nothing committed): <code> <constraint>`. "Nothing committed" rather than
+ *   "rolled back": a connection that never opened has nothing to roll back, and both are true of the
+ *   one transaction a correction runs in. Both are read from `err.cause` (drizzle
  *   wraps the driver's error and has no `code` of its own), or from `err` when nothing wraps it.
  *   Neither holds a bound parameter, and the constraint is what tells a lost race
  *   (`uq_household_members_clerk_user`) from anything else. ⚠️ **Nothing else is read**: not the
@@ -50,6 +64,6 @@ export function redactedFailure(name: string, err: unknown): Error {
   if (err instanceof CorrectionRefusal) return err;
   const source = (err as { cause?: unknown } | null | undefined)?.cause ?? err;
   return new Error(
-    `${name} failed and rolled back: ${identifierOn(source, 'code')} ${identifierOn(source, 'constraint')}`,
+    `${name} failed (nothing committed): ${fieldOn(source, 'code')} ${fieldOn(source, 'constraint')}`,
   );
 }

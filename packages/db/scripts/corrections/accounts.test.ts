@@ -118,7 +118,7 @@ describe('create-household: the catch is wired (D9)', () => {
     expect(thrown).toBeInstanceOf(Error);
     const err = thrown as Error;
     expect(err.message).toBe(
-      `${CREATE_HOUSEHOLD_NAME} failed and rolled back: 23505 uq_household_members_clerk_user`,
+      `${CREATE_HOUSEHOLD_NAME} failed (nothing committed): 23505 uq_household_members_clerk_user`,
     );
     expect(err.cause).toBeUndefined();
     for (const text of [err.message, String(err.cause ?? ''), err.stack ?? '']) {

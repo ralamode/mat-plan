@@ -35,7 +35,7 @@ describe('redactedFailure (PRIV-3 RC, D2)', () => {
 
     const out = redactedFailure('create-household-x', err);
     expect(out.message).toBe(
-      'create-household-x failed and rolled back: 23505 uq_household_members_clerk_user',
+      'create-household-x failed (nothing committed): 23505 uq_household_members_clerk_user',
     );
     expect(out.cause).toBeUndefined();
     expect(printed(out)).not.toContain(ID);
@@ -43,19 +43,46 @@ describe('redactedFailure (PRIV-3 RC, D2)', () => {
 
   it('reads code and constraint off the error itself when nothing wraps it', () => {
     const out = redactedFailure('c', uniqueViolation());
-    expect(out.message).toBe('c failed and rolled back: 23505 uq_household_members_clerk_user');
+    expect(out.message).toBe('c failed (nothing committed): 23505 uq_household_members_clerk_user');
     expect(printed(out)).not.toContain(ID);
   });
 
   it('prints "unknown" for a field that is missing or is not an identifier — never the value', () => {
     const cause = Object.assign(new Error(ID), { code: `x ${ID}`, constraint: undefined });
     const out = redactedFailure('c', new Error(ID, { cause }));
-    expect(out.message).toBe('c failed and rolled back: unknown unknown');
+    expect(out.message).toBe('c failed (nothing committed): unknown unknown');
     expect(printed(out)).not.toContain(ID);
   });
 
+  it.each([
+    [
+      'code',
+      { code: ID, constraint: 'uq_household_members_clerk_user' },
+      'unknown uq_household_members_clerk_user',
+    ],
+    ['constraint', { code: '23505', constraint: ID }, '23505 unknown'],
+    ['both', { code: ID, constraint: ID }, 'unknown unknown'],
+    [
+      'a lower-case account in constraint',
+      { code: '23505', constraint: 'user_rcfixture000a' },
+      '23505 unknown',
+    ],
+  ])('🔴 never prints an account id that arrives in %s', (_label, fields, tail) => {
+    const out = redactedFailure('c', Object.assign(new Error('x'), fields));
+    expect(out.message).toBe(`c failed (nothing committed): ${tail}`);
+    expect(printed(out)).not.toContain(ID);
+  });
+
+  it('keeps a Node system code', () => {
+    expect(redactedFailure('c', Object.assign(new Error('x'), { code: 'ENOTFOUND' })).message).toBe(
+      'c failed (nothing committed): ENOTFOUND unknown',
+    );
+  });
+
   it('survives a thrown non-Error', () => {
-    expect(redactedFailure('c', ID).message).toBe('c failed and rolled back: unknown unknown');
-    expect(redactedFailure('c', null).message).toBe('c failed and rolled back: unknown unknown');
+    expect(redactedFailure('c', ID).message).toBe('c failed (nothing committed): unknown unknown');
+    expect(redactedFailure('c', null).message).toBe(
+      'c failed (nothing committed): unknown unknown',
+    );
   });
 });
