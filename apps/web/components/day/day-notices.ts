@@ -48,3 +48,13 @@ export function restNotice(plan: DayPlan): { text: string; allRest: boolean } | 
     ? { text: PROGRAM_COPY.restSome(resting.map((p) => p.name)), allRest: false }
     : null;
 }
+
+/**
+ * The "No workouts logged" line (maintainer, 2026-11-17): on a day that shows only what was logged,
+ * for an athlete on a program, with no workouts. The rest line's twin, so never shown with it.
+ */
+export function nothingLoggedNotice(plan: DayPlan): string | null {
+  return plan.onProgram === ON_PROGRAM.yes && showsOnlyLogged(plan) && plan.workouts.length === 0
+    ? PROGRAM_COPY.nothingLogged(plan.day, plan.today)
+    : null;
+}

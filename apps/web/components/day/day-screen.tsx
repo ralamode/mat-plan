@@ -1,6 +1,6 @@
 'use client';
 
-import { ON_PROGRAM, type DayActions, type DayPlan } from '@mat-plan/shared';
+import { type DayActions, type DayPlan } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -10,8 +10,8 @@ import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DayContext, type DayContextValue } from './day-context';
-import { DAY_COPY, PROGRAM_COPY } from './day-copy';
-import { restNotice, showsOnlyLogged } from './day-notices';
+import { DAY_COPY } from './day-copy';
+import { nothingLoggedNotice, restNotice } from './day-notices';
 import { rowIsIn, workoutKeyOf } from './use-row';
 import { WorkoutCard } from './workout-card';
 
@@ -86,8 +86,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
 
   const many = plan.programs.length > 1;
   const rest = restNotice(plan);
-  const nothingLogged =
-    plan.onProgram === ON_PROGRAM.yes && showsOnlyLogged(plan) && plan.workouts.length === 0;
+  const nothingLogged = nothingLoggedNotice(plan);
   const programName = (id: string | null) =>
     (many && plan.programs.find((p) => p.programPublicId === id)?.name) || null;
   const notSavedIn = (workoutKey: string) =>
@@ -113,9 +112,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
           </p>
         ) : null}
         {/* The notice box, as the all-rest line: it is then the only thing in the section. */}
-        {nothingLogged ? (
-          <p className={NOTICE_CLASS}>{PROGRAM_COPY.nothingLogged(plan.day, plan.today)}</p>
-        ) : null}
+        {nothingLogged ? <p className={NOTICE_CLASS}>{nothingLogged}</p> : null}
         {plan.workouts.map((workout, index) => {
           const key = workoutKeyOf(workout, index);
           return (

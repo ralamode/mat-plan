@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
 import { DAY_COPY, PROGRAM_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
-import { restNotice } from './day-notices';
+import { nothingLoggedNotice, restNotice } from './day-notices';
 import {
   card,
   field,
@@ -536,6 +536,7 @@ describe('DayScreen: a day that shows only what was logged, with nothing logged'
     show(empty);
     // Pinned once: 2026-11-10 is a Tuesday, written as the page's date line writes it.
     expect(said(empty)?.textContent).toBe('No workouts logged on Tue, Nov 10.');
+    expect(nothingLoggedNotice(empty)).toBe(said(empty)?.textContent);
     // Not a rest day: on a day read back, an empty program means skipped.
     expect(restNotice(empty)).toBeNull();
     // A static line in the section, after its heading: not a live region, no heading of its own.
