@@ -104,7 +104,8 @@ async function singleValueWorld(
       },
     ])
     .returning({ id: schema.profiles.id });
-  return { hh, scope: householdScopeForScript(hh.id), athlete, sibling };
+  const scope = householdScopeForScript(hh.id);
+  return { hh, scope, athlete, sibling };
 }
 
 // ── V1-24 3b-bw — Clear a weigh-in, the pre-read, and "Last time" (plan W9, W10) ─────────────────────
