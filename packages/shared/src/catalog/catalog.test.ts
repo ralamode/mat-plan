@@ -355,3 +355,33 @@ describe('the library stays out of the browser (V6)', () => {
     expect(reachedFrom(resolve(SRC, 'catalog/approvals.ts')).packages).toContain('node:crypto');
   });
 });
+
+describe('the record files only grow (V4, the merge-base check)', () => {
+  type AppendOnly = (base: unknown, head: unknown) => string[];
+  // The check is a plain node script that CI runs before anything is installed; its comparison
+  // is tested here, where the rest of the contract's tests are.
+  const script = resolve(SRC, '../../../.github/scripts/check-catalog-append-only.mjs');
+  const load = async () =>
+    ((await import(/* @vite-ignore */ script)) as { appendOnlyIssues: AppendOnly })
+      .appendOnlyIssues;
+
+  it('lets a batch add slugs, batches and approvals', async () => {
+    const issues = await load();
+    expect(issues({}, { goblet_squat: 'weight_reps' })).toEqual([]);
+    expect(issues({ a: 'reps' }, { a: 'reps', b: 'reps' })).toEqual([]);
+    expect(issues({ '1': { a: 'h1' } }, { '1': { a: 'h1', b: 'h2' }, '2': { a: 'h3' } })).toEqual(
+      [],
+    );
+  });
+
+  it('🔴 refuses a retyped slug, a removed slug and a rewritten or removed approval', async () => {
+    const issues = await load();
+    expect(issues({ a: 'reps' }, { a: 'weight_reps' })).toHaveLength(1);
+    expect(issues({ a: 'reps', b: 'reps' }, { b: 'reps' })).toHaveLength(1);
+    expect(issues({ a: 'reps' }, { a_renamed: 'reps' })).toHaveLength(1);
+    expect(issues({ '1': { a: 'h1' } }, { '1': { a: 'h9' } })).toHaveLength(1);
+    expect(issues({ '1': { a: 'h1' } }, { '1': {} })).toHaveLength(1);
+    expect(issues({ '1': { a: 'h1' } }, { '2': { a: 'h1' } })).toHaveLength(1);
+    expect(issues({ '1': { a: 'h1' } }, [])).toHaveLength(1);
+  });
+});

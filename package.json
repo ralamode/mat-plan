@@ -28,6 +28,7 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm eval && pnpm db:verify && pnpm db:mutations && pnpm skills:check && pnpm actions:check && pnpm guards:test && pnpm audit:check",
     "prepare": "husky",
     "guides:check": "node .github/scripts/check-feature-guides.mjs",
+    "catalog:check": "node .github/scripts/check-catalog-append-only.mjs",
     "status:check": "node .github/scripts/check-status-touched.mjs",
     "skills:check": "node .github/scripts/check-skills.mjs",
     "actions:check": "node .github/scripts/check-action-pins.mjs",

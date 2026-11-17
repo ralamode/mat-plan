@@ -10,6 +10,21 @@ owns:
   # `program/` because the CSV reads them too, and owned here so a change to either is a contract
   # change: they are the bytes frozen on every logged row.
   - packages/shared/src/quantity-spelling.ts
+  # CAT-3's contract (the movement library): listed file by file, never the `catalog/` prefix,
+  # because `catalog/data/` is the data lane's and gets its own guide with the first batch.
+  - packages/shared/src/catalog/index.ts
+  - packages/shared/src/catalog/vocabulary.ts
+  - packages/shared/src/catalog/entry.ts
+  - packages/shared/src/catalog/fixture.ts
+  - packages/shared/src/catalog/approvals.ts
+  - packages/shared/src/catalog/catalog.test.ts
+  - packages/shared/src/catalog/owed.test.ts
+  - .github/scripts/check-catalog-append-only.mjs
+  # The search the picker and `existingItem` share. Moved here from movement-picker.md at CAT-3
+  # C0a: the contract's next chunk adds the library's search beside `matchMovementOptions`.
+  - packages/shared/src/movement-search.ts
+  # Source-reading helpers for the contract's own scans (lifted from `quantity-text.test.ts`).
+  - packages/shared/src/test-support/source-graph.ts
 ---
 
 # The program contract
@@ -394,6 +409,45 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 - **`packages/shared` has no typecheck project of its own** ([AGENTS.md](../../AGENTS.md) → "Local
   hooks vs CI merge-gates"). Its files are checked through what `apps/web` and `packages/db` import.
 - **The fixtures are deep-frozen.** Clone one before changing it (`structuredClone`); the fakes do.
+
+## The movement library's contract (CAT-3)
+
+The second contract this guide owns. [Its spec](../specs/cat-3-movement-library.md) is the source of
+truth; this section is the map. The library's lanes (schema, data, picker) meet at these files as
+FAM-1's lanes meet at the program shapes, and the same rule holds: **no lane edits a file listed
+here; a change goes through the contract owner.**
+
+| File                                            | What it holds                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT`, `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels) and `QUERY_SHORT_FORMS`. In the root barrel.                                                                                                          |
+| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id) and `requiresNoEquipment`. In the root barrel.                                                                                                                              |
+| `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries) and `CATALOG_FIXTURE_IDS`. The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                  |
+| `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                        |
+| `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide. |
+| `.github/scripts/check-catalog-append-only.mjs` | The step in CI's quality job that compares the two record files with the PR's base (`pnpm catalog:check` locally).                                                                                                                                         |
+| `packages/shared/src/catalog/catalog.test.ts`   | Criteria V1 to V6, D2 and D3, and what the fixture covers. `owed.test.ts` beside it lists the criteria no test holds yet.                                                                                                                                  |
+
+Invariants (the spec's rules, as they bind code here):
+
+1. **A vocabulary is one const array**, and `EQUIPMENT`, `MUSCLES` and `MODALITIES` become stored
+   data when the schema lane's tables ship: from then on a new, renamed or removed member is a
+   migration, never an edit to `vocabulary.ts` alone.
+2. **An entry has no id and no source.** `catalogMovementSchema` is strict. A catalog row's
+   `public_id` is minted when it is seeded; the library is authored and reviewed in-house.
+3. **A slug is set once.** It is `movementSlug` of the name or of an alias: a corrected name keeps
+   its slug and the old name becomes an alias. `shipped.json` pins every shipped slug to its
+   tracking type.
+4. **"No equipment" is computed** (`requiresNoEquipment`: the required set is empty) and stored
+   nowhere; a scan holds that no field or column is named for it.
+5. **Every entry, and every edit to one, needs an approval line.** `approved.json` holds the
+   SHA-256 of each entry the maintainer approved, by batch; an entry whose content has no matching
+   hash fails `catalog.test.ts`. Both record files only grow, which the merge-base check holds. A
+   batch PR is merged by the maintainer.
+6. **The library stays out of the browser.** The root barrel reaches the vocabularies and the
+   entry schema and never `catalog/data/` or `approvals.ts` (a scan). Import the data through its
+   subpath, on the server.
+7. **`CATALOG_FIXTURE` shares no slug and no name key with the legacy `MOVEMENT_SEED_ROWS`**, which
+   a fixtures database also holds until that list is retired.
 
 ## Changing it
 
