@@ -5,6 +5,8 @@ import {
   ACTIVITY_TYPE_KEYS,
   ENTRY_KIND,
   ENTRY_STATUS,
+  HIDE_REASON,
+  HIDE_REASONS,
   METRIC_KEYS,
   newId,
   PRACTICE_UNIT,
@@ -16,9 +18,13 @@ import {
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
-import { PRACTICE_DAY_UNIQUE_INDEX } from '../../src/schema';
+import {
+  ENTRY_HIDE_REASON_CHECK,
+  ENTRY_HIDE_REASON_HIDDEN_CHECK,
+  PRACTICE_DAY_UNIQUE_INDEX,
+} from '../../src/schema';
 import { writeCheckinEntries, type CheckinInsertValue } from '../../src/writers/checkin';
-import { hideEntries, restoreHidden } from '../../src/writers/hide';
+import { clearDay, hideEntries, restoreClear, restoreHidden } from '../../src/writers/hide';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
 import { insertBodyweightEntry } from '../../src/writers/bodyweight';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
@@ -30,7 +36,9 @@ import {
 } from '../../src/writers/single-value';
 import { findAmendablePractice, updatePracticeEntryById } from '../../src/writers/practice';
 import {
+  assertCheckCoversConst,
   asTx,
+  columnCatalogShape,
   expectRejectedBy,
   orFail,
   rolledBack,
@@ -57,6 +65,7 @@ export async function verifySingleValues(ctx: VerifyContext): Promise<void> {
   await verifyBodyweightClear(ctx);
   await verifyPracticeOnePerDay();
   await verifyPracticeAmend(ctx);
+  await verifyClearDay();
 }
 
 const HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b000';
@@ -987,4 +996,353 @@ async function verifyPracticeAmend({ B_SCOPE }: VerifyContext): Promise<void> {
       '✓ V1-24 3b-life-a: the practice amend changes only an owned, live practice in minutes (metric, unit, seenValue, profile and household pinned) and re-reads live only; the clear refuses the same and replays; a replayed clear after re-entry is stale; the pre-read returns only a day',
     );
   });
+}
+
+// ── V1-9b B2-0 — the clear's reason: Clear this day, Restore all, and every other hide (plan § B2-0) ──
+
+const CLEAR_HH_PUBLIC_ID = '019826b4-0000-7000-8000-0000000b2000';
+const CLEAR_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000b2001';
+const CLEAR_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-0000000b2002';
+const OTHER_HH_PUBLIC_ID = '019826b4-0000-7000-8000-0000000b2010';
+const OTHER_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000b2011';
+const OTHER_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-0000000b2012';
+
+/**
+ * ⚠️ **One transaction, one `now()`.** Every hide in this section runs inside `rolledBack`, so every
+ * `now()` is the same instant: two events made by writers here would share a token. Where a proof
+ * needs two events to differ, the EARLIER one's `deleted_at` is written by hand, older than `now()`
+ * (lessons → "A microsecond-precision proof cannot fail on PGlite").
+ */
+async function verifyClearDay(): Promise<void> {
+  // 1 · Shape and parity. Outside `rolledBack`: these read through the module-level `db`, which would
+  //     wait forever on PGlite's one connection inside a transaction.
+  assert.deepEqual(
+    await columnCatalogShape('entries', 'hide_reason'),
+    { data_type: 'text', is_nullable: 'YES', column_default: null },
+    'B2-0: entries.hide_reason is a nullable text with no default',
+  );
+  await assertCheckCoversConst(ENTRY_HIDE_REASON_CHECK, HIDE_REASONS);
+
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const {
+      scope: SCOPE,
+      athlete,
+      sibling,
+    } = await singleValueWorld(
+      tx,
+      {
+        hh: CLEAR_HH_PUBLIC_ID,
+        athlete: CLEAR_ATHLETE_PUBLIC_ID,
+        sibling: CLEAR_SIBLING_PUBLIC_ID,
+      },
+      'B2-0',
+    );
+    const other = await singleValueWorld(
+      tx,
+      {
+        hh: OTHER_HH_PUBLIC_ID,
+        athlete: OTHER_ATHLETE_PUBLIC_ID,
+        sibling: OTHER_SIBLING_PUBLIC_ID,
+      },
+      'B2-0 other',
+    );
+    const typeId = async (key: string) =>
+      (
+        await tx
+          .select({ id: schema.activityTypes.id })
+          .from(schema.activityTypes)
+          .where(eq(schema.activityTypes.key, key))
+      )[0]!.id;
+    const weighInType = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+    const practiceType = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
+    // A habit check-in has no one-per-day index, so a day can hold as many as proof 9 needs.
+    const habitType = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
+
+    let n = 0;
+    const entry = async (
+      profileId: number,
+      day: string,
+      values: Partial<typeof schema.entries.$inferInsert>,
+    ) => {
+      n += 1;
+      const publicId = `019826b4-0000-7000-8000-0000000b2${String(100 + n).padStart(3, '0')}`;
+      await tx.insert(schema.entries).values({
+        publicId,
+        clientId: newId(),
+        profileId,
+        activityDate: day,
+        status: ENTRY_STATUS.done,
+        unit: 'count',
+        valueNum: '1',
+        activityTypeId: habitType,
+        metricKey: null,
+        ...values,
+      });
+      return publicId;
+    };
+    const weighIn = (profileId: number, day: string, lb: number) =>
+      entry(profileId, day, {
+        kind: ENTRY_KIND.bodyweight,
+        unit: 'lb',
+        valueNum: String(lb),
+        activityTypeId: weighInType,
+        metricKey: SEED_METRIC_KEYS.bodyweight,
+      });
+    const practice = (profileId: number, day: string, minutes: number) =>
+      entry(profileId, day, {
+        unit: PRACTICE_UNIT,
+        valueNum: String(minutes),
+        activityTypeId: practiceType,
+        metricKey: METRIC_KEYS.practice_minutes,
+      });
+    /** A row's state, the token as microsecond TEXT (hide.ts's rule). */
+    const stateOf = async (publicId: string) =>
+      (
+        await tx
+          .select({
+            hiddenAt: sql<
+              string | null
+            >`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+            reason: schema.entries.hideReason,
+          })
+          .from(schema.entries)
+          .where(eq(schema.entries.publicId, publicId))
+      )[0]!;
+    /** Back-date a hidden row's token, so it differs from this transaction's `now()`. */
+    const backDate = (publicId: string, token: string) =>
+      tx
+        .update(schema.entries)
+        .set({ deletedAt: sql`${token}::timestamptz` })
+        .where(eq(schema.entries.publicId, publicId));
+    const asAthlete = { profilePublicId: CLEAR_ATHLETE_PUBLIC_ID, scope: SCOPE };
+    const asOther = { profilePublicId: OTHER_ATHLETE_PUBLIC_ID, scope: other.scope };
+    const clear = (day: string, as = asAthlete) =>
+      orFail(`B2-0: clearDay ${day}`, () => clearDay(exec, { ...as, day }));
+    const restore = (day: string, hiddenAt: string, as = asAthlete) =>
+      orFail(`B2-0: restoreClear ${day}`, () => restoreClear(exec, { ...as, day, hiddenAt }));
+    const tokenOf = (r: Awaited<ReturnType<typeof clearDay>>) => {
+      assert.ok('hiddenAt' in r, 'B2-0: the clear answered an event');
+      return r;
+    };
+    const OLDER = '2026-01-01T00:00:00.000001Z';
+    const OLDEST = '2025-12-31T00:00:00.000001Z';
+
+    // 2 · The CHECKs refuse: a reason that is not a HIDE_REASONS value; a reason on a live row; an
+    //     un-hide that leaves the reason (the maintainer's proof, 2026-11-17).
+    const checked = await weighIn(athlete.id, '2026-11-01', 80);
+    await expectRejectedBy(
+      ENTRY_HIDE_REASON_CHECK,
+      () =>
+        tx
+          .update(schema.entries)
+          .set({ deletedAt: sql`now()`, hideReason: 'oops' })
+          .where(eq(schema.entries.publicId, checked)),
+      tx,
+    );
+    await expectRejectedBy(
+      ENTRY_HIDE_REASON_HIDDEN_CHECK,
+      () =>
+        tx
+          .update(schema.entries)
+          .set({ hideReason: HIDE_REASON.clear_day })
+          .where(eq(schema.entries.publicId, checked)),
+      tx,
+    );
+    tokenOf(await clear('2026-11-01'));
+    await expectRejectedBy(
+      ENTRY_HIDE_REASON_HIDDEN_CHECK,
+      () =>
+        tx
+          .update(schema.entries)
+          .set({ deletedAt: null })
+          .where(eq(schema.entries.publicId, checked)),
+      tx,
+    );
+
+    // 3 · A clear is ONE event with the reason, over the day's LIVE entries only. A weigh-in hidden
+    //     earlier by a blank clear keeps its own token and no reason, and is not counted.
+    const D3 = '2026-11-02';
+    const earlier = await weighIn(athlete.id, D3, 79);
+    await clearBodyweight(exec, { ...asAthlete, entryId: earlier, unit: 'lb', seenValue: 79 });
+    await backDate(earlier, OLDER);
+    const w3 = await weighIn(athlete.id, D3, 81);
+    const p3 = await practice(athlete.id, D3, 90);
+    const sib3 = await practice(sibling.id, D3, 60);
+    const c3 = tokenOf(await clear(D3));
+    assert.equal(c3.count, 2, 'B2-0 proof 3: the clear counts the two live entries it hid');
+    for (const id of [w3, p3]) {
+      assert.deepEqual(
+        await stateOf(id),
+        { hiddenAt: c3.hiddenAt, reason: HIDE_REASON.clear_day },
+        'B2-0 proof 3: every live entry of the day is hidden under one token, with the reason',
+      );
+    }
+    assert.deepEqual(
+      await stateOf(earlier),
+      { hiddenAt: OLDER, reason: null },
+      'B2-0 proof 3: an entry hidden before the clear keeps its own token and no reason',
+    );
+    assert.deepEqual(
+      await stateOf(sib3),
+      { hiddenAt: null, reason: null },
+      "B2-0 proof 3: a sibling's entry on the same day is untouched",
+    );
+
+    // 4 · Every other hide carries NO reason: a blank clear of a weigh-in (proof 3's `earlier`) or a
+    //     practice, a hide through `hideEntries`, and a bodyweight swap's holder.
+    const D4 = '2026-11-03';
+    const p4 = await practice(athlete.id, D4, 45);
+    await clearPractice(exec, { ...asAthlete, entryId: p4, seenValue: 45 });
+    assert.equal((await stateOf(p4)).reason, null, 'B2-0 proof 4: a blank clear writes no reason');
+    const swapped = await weighIn(athlete.id, D4, 82);
+    const hidden4 = await hideEntries(exec, { ...asAthlete, day: D4, entryPublicIds: [swapped] });
+    assert.ok('hiddenAt' in hidden4);
+    assert.equal(
+      (await stateOf(swapped)).reason,
+      null,
+      'B2-0 proof 4: hideEntries writes no reason',
+    );
+    await backDate(swapped, OLDER);
+    const holder = await weighIn(athlete.id, D4, 83);
+    await restoreHidden(exec, {
+      ...asAthlete,
+      day: D4,
+      hiddenAt: OLDER,
+      entryPublicIds: [swapped],
+      keepInsteadOf: holder,
+    });
+    assert.equal(
+      (await stateOf(holder)).reason,
+      null,
+      "B2-0 proof 4: a swap's hidden holder carries no reason",
+    );
+
+    // 5 · Restore clears the reason with the token, for every item of the clear.
+    const r5 = await restore(D3, c3.hiddenAt);
+    assert.ok('items' in r5, 'B2-0 proof 5: restoreClear found the clear');
+    assert.deepEqual(
+      r5.items.map((i) => i.reason),
+      [RESTORE_REASON.ok, RESTORE_REASON.ok],
+      'B2-0 proof 5: every item of the clear is restored',
+    );
+    for (const id of [w3, p3]) {
+      assert.deepEqual(
+        await stateOf(id),
+        { hiddenAt: null, reason: null },
+        'B2-0 proof 5: a restored entry is live with no reason',
+      );
+    }
+    assert.equal(
+      (await stateOf(earlier)).hiddenAt,
+      OLDER,
+      "B2-0 proof 5: Restore all brings back the clear's entries, not an earlier hide's",
+    );
+
+    // 6 · A partial restore: the items whose place was retaken stay hidden WITHOUT the reason (the
+    //     weigh-in through the pre-check, the practice through the catch), so the banner does not
+    //     return; a second Restore all answers `notFound` (the replay contract). A row under the
+    //     token with no reason (written by hand: no writer makes one) is not the clear's.
+    const D6 = '2026-11-04';
+    const w6 = await weighIn(athlete.id, D6, 84);
+    const p6 = await practice(athlete.id, D6, 60);
+    const c6 = tokenOf(await clear(D6));
+    const stray = await entry(athlete.id, D6, {
+      deletedAt: sql`${c6.hiddenAt}::timestamptz` as unknown as Date,
+    });
+    await weighIn(athlete.id, D6, 85);
+    await practice(athlete.id, D6, 75);
+    const r6 = await restore(D6, c6.hiddenAt);
+    assert.ok('items' in r6, 'B2-0 proof 6: restoreClear found the clear');
+    assert.deepEqual(
+      Object.fromEntries(r6.items.map((i) => [i.entryPublicId, i.reason])),
+      { [w6]: RESTORE_REASON.slot_taken, [p6]: RESTORE_REASON.slot_taken },
+      "B2-0 proof 6: Restore all names exactly the clear's entries; both places were retaken",
+    );
+    for (const id of [w6, p6]) {
+      assert.deepEqual(
+        await stateOf(id),
+        { hiddenAt: c6.hiddenAt, reason: null },
+        'B2-0 proof 6: an item left hidden by a partial restore loses the reason',
+      );
+    }
+    assert.deepEqual(
+      await restore(D6, c6.hiddenAt),
+      { notFound: true },
+      'B2-0 proof 6: a second Restore all answers notFound (nothing of the clear is left)',
+    );
+    assert.equal(
+      (await stateOf(stray)).hiddenAt,
+      c6.hiddenAt,
+      'B2-0 proof 6: a row under the token without the reason is not restored with the clear',
+    );
+
+    // 7 · Replay: the same token and count, even with a NEWER hide of another kind on the day; a day
+    //     hidden only by blank clears, or with nothing logged, answers notFound.
+    const D7 = '2026-11-05';
+    const w7 = await weighIn(athlete.id, D7, 86);
+    tokenOf(await clear(D7));
+    await backDate(w7, OLDEST);
+    const later = await weighIn(athlete.id, D7, 87);
+    await clearBodyweight(exec, { ...asAthlete, entryId: later, unit: 'lb', seenValue: 87 });
+    assert.deepEqual(
+      await clear(D7),
+      { hiddenAt: OLDEST, count: 1 },
+      "B2-0 proof 7: a replayed clear answers the clear's token and count, not a newer blank clear's",
+    );
+    const D7b = '2026-11-06';
+    const blank = await weighIn(athlete.id, D7b, 88);
+    await clearBodyweight(exec, { ...asAthlete, entryId: blank, unit: 'lb', seenValue: 88 });
+    assert.deepEqual(
+      await clear(D7b),
+      { notFound: true },
+      'B2-0 proof 7: a day hidden only by blank clears has no clear to replay',
+    );
+    assert.deepEqual(
+      await clear('2026-11-07'),
+      { notFound: true },
+      'B2-0 proof 7: a day with nothing logged answers notFound',
+    );
+
+    // 8 · Scope, both directions, on days the owner has ALREADY cleared: the other household gets
+    //     notFound and no token, and the owner's rows keep the clear.
+    const D8 = '2026-11-08';
+    const mine = await weighIn(athlete.id, D8, 89);
+    const theirs = await weighIn(other.athlete.id, D8, 90);
+    const mineCleared = tokenOf(await clear(D8));
+    const theirsCleared = tokenOf(await clear(D8, asOther));
+    for (const [as, owner, token] of [
+      [{ ...asAthlete, scope: other.scope }, mine, mineCleared.hiddenAt],
+      [{ ...asOther, scope: SCOPE }, theirs, theirsCleared.hiddenAt],
+    ] as const) {
+      assert.deepEqual(
+        await clear(D8, as),
+        { notFound: true },
+        "B2-0 proof 8: another household's clear of a cleared day answers notFound, no token",
+      );
+      assert.deepEqual(
+        await restore(D8, token, as),
+        { notFound: true },
+        "B2-0 proof 8: another household's Restore all answers notFound",
+      );
+      assert.equal(
+        (await stateOf(owner)).reason,
+        HIDE_REASON.clear_day,
+        "B2-0 proof 8: the owner's cleared row is untouched",
+      );
+    }
+
+    // 9 · No cap: 51 entries (one over HIDE_ROW_MAX) clear and restore whole.
+    const D9 = '2026-11-09';
+    for (let i = 0; i < 51; i += 1) await entry(athlete.id, D9, {});
+    const c9 = tokenOf(await clear(D9));
+    assert.equal(c9.count, 51, 'B2-0 proof 9: a clear has no cap');
+    const r9 = await restore(D9, c9.hiddenAt);
+    assert.ok('items' in r9 && r9.items.every((i) => i.reason === RESTORE_REASON.ok));
+    assert.equal(r9.items.length, 51, 'B2-0 proof 9: Restore all has no cap');
+  });
+
+  console.log(
+    "✓ V1-9b B2-0: entries.hide_reason holds only clear_day and never on a live row; a clear hides the day's live entries as one event with the reason (no cap) and replays its own token; every other hide writes none; Restore all brings back exactly the clear, clears the reason, drops it from items left hidden, and answers notFound once done; both are household-scoped",
+  );
 }
