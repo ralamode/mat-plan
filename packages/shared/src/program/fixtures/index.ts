@@ -92,7 +92,8 @@ export const FIXTURE_ITEMS = deepFreeze(
  * exactly through a fixture-id to public-id map the proof's own seeder returns.
  *
  * `before` is the world before a change, for a fixture that describes "logged, then something
- * changed" (a program edited, or the athlete's programs reordered), and `null` otherwise. A proof
+ * changed" (a program edited, the athlete's programs reordered, or the athlete archived), and
+ * `null` otherwise. A proof
  * seeds `before`, logs its entries, then makes the change with the real writers and so reaches
  * `world`. `world`'s entries are `before`'s, stamps included.
  *
@@ -205,6 +206,14 @@ export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
     SINCE_LEFT_DAY,
     sinceLeftBefore,
   ),
+  'archived-athlete-today': from(
+    edit(seeded, (world) => {
+      for (const athlete of world.athletes) if (athlete.id === 'a1') athlete.archived = true;
+    }),
+    'a1',
+    FIXTURE_TODAY,
+    seeded,
+  ),
   'future-preview': from(seeded, 'a1', '2026-11-16'),
   'every-type-once': from(everyTypeWorld(), 'a1', FIXTURE_TODAY),
 } satisfies Record<string, DayPlanFixtureSource>);
@@ -263,7 +272,10 @@ export const yesterdayEditedAfterLogging: DayPlan = built('yesterday-edited-afte
 
 /**
  * Heavy A was taken off Fridays after yesterday (a Friday) was logged. It still shows on that day,
- * after the scheduled workouts, with its logged rows only and `scheduled: false`. Its second
+ * after the scheduled workouts, with its logged rows only, `scheduled: false`, and **no label**:
+ * the label was its slot's heading and the slot is gone _(maintainer, 2026-11-17: "No label")_.
+ * This is the one place a fixture differs from the prototype's own state, which shows the label
+ * the slot had. Its second
  * superset has no row logged, so neither its items nor its rest are here. The prototype renders
  * this state but has no "Jump to…" entry for it.
  */
@@ -284,6 +296,14 @@ export const closedDayLoggedOnly: DayPlan = built('closed-day-logged-only');
  *   name it has now ("Morning routine").
  */
 export const closedDayProgramSinceLeft: DayPlan = built('closed-day-program-since-left');
+
+/**
+ * Athlete One's today after they were archived: the same day as `today-two-programs`, read like a
+ * closed day. NOT a prototype state (C18). The row writer refuses an archived athlete, so their
+ * day is never writable _(maintainer, 2026-11-17: "Like a closed day")_: only what they logged
+ * shows, with no PREVIOUS, and the workouts they did not log are absent.
+ */
+export const archivedAthleteToday: DayPlan = built('archived-athlete-today');
 
 /** "Athlete One · look ahead to Monday": a future day. Items and prescriptions, no rows. */
 export const futurePreview: DayPlan = built('future-preview');
@@ -435,6 +455,7 @@ export const DAY_PLAN_FIXTURES = {
   'workout-left-the-week': workoutLeftTheWeek,
   'closed-day-logged-only': closedDayLoggedOnly,
   'closed-day-program-since-left': closedDayProgramSinceLeft,
+  'archived-athlete-today': archivedAthleteToday,
   'future-preview': futurePreview,
   'every-type-once': everyTypeOnce,
 } as const satisfies Record<keyof typeof DAY_PLAN_FIXTURE_SOURCES, DayPlan>;

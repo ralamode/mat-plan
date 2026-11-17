@@ -1,5 +1,5 @@
 {
-  "id": "db62e24d-17db-4bef-bfb9-d1d9e8e45f2c",
+  "id": "60cc6495-b37a-466f-bd46-9577b853dbbb",
   "prevId": "4e7e167d-d071-4ace-91f4-9579c280673a",
   "version": "7",
   "dialect": "postgresql",
@@ -723,12 +723,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "hide_reason": {
-          "name": "hide_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1116,14 +1110,6 @@
           "name": "entries_prescription_set_check",
           "value": "\"entries\".\"prescription_set\" is null or (\"entries\".\"prescription_set\" >= 1 and \"entries\".\"prescription_set\" <= 20)"
         },
-        "entries_hide_reason_check": {
-          "name": "entries_hide_reason_check",
-          "value": "\"entries\".\"hide_reason\" in ('clear_day')"
-        },
-        "entries_hide_reason_hidden_check": {
-          "name": "entries_hide_reason_hidden_check",
-          "value": "\"entries\".\"hide_reason\" is null or \"entries\".\"deleted_at\" is not null"
-        },
         "entries_prescription_needs_set_check": {
           "name": "entries_prescription_needs_set_check",
           "value": "\"entries\".\"prescription_id\" is null or \"entries\".\"prescription_set\" is not null"
@@ -1139,6 +1125,10 @@
         "entries_status_check": {
           "name": "entries_status_check",
           "value": "\"entries\".\"status\" in ('done', 'skipped', 'sub_failure')"
+        },
+        "entries_value_num_check": {
+          "name": "entries_value_num_check",
+          "value": "\"entries\".\"value_num\" is null or (\"entries\".\"value_num\" >= 0 and \"entries\".\"value_num\" <> 'NaN')"
         },
         "entries_shape_check": {
           "name": "entries_shape_check",
@@ -1373,6 +1363,10 @@
         "entry_set_quantities_value_num_check": {
           "name": "entry_set_quantities_value_num_check",
           "value": "\"entry_set_quantities\".\"value_num\" >= 0"
+        },
+        "entry_set_quantities_value_num_not_nan_check": {
+          "name": "entry_set_quantities_value_num_not_nan_check",
+          "value": "\"entry_set_quantities\".\"value_num\" <> 'NaN'"
         }
       },
       "isRLSEnabled": false
@@ -3538,6 +3532,10 @@
           "name": "program_blocks_kind_check",
           "value": "\"program_blocks\".\"kind\" in ('legacy', 'template')"
         },
+        "program_blocks_name_length_check": {
+          "name": "program_blocks_name_length_check",
+          "value": "char_length(btrim(\"program_blocks\".\"name\")) >= 1 and char_length(\"program_blocks\".\"name\") <= 60"
+        },
         "program_blocks_template_client_id_check": {
           "name": "program_blocks_template_client_id_check",
           "value": "\"program_blocks\".\"kind\" <> 'template' or \"program_blocks\".\"client_id\" is not null"
@@ -3765,6 +3763,10 @@
         "ramp_targets_target_value_check": {
           "name": "ramp_targets_target_value_check",
           "value": "\"ramp_targets\".\"target_value\" >= 0"
+        },
+        "ramp_targets_target_value_not_nan_check": {
+          "name": "ramp_targets_target_value_not_nan_check",
+          "value": "\"ramp_targets\".\"target_value\" <> 'NaN'"
         }
       },
       "isRLSEnabled": false
