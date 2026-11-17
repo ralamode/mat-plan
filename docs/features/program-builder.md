@@ -79,7 +79,7 @@ flowchart LR
 | `apps/web/components/program-builder/workout-editor-screen.tsx`         | `WorkoutEditorScreen({ draft, picker, actions, program? })`: the cards, one Save, and the save bar with its status line.                                                                                                                                                |
 | `apps/web/components/program-builder/item-card.tsx`                     | One item's card: fields by type, a unit select, instructions, Up, Down, Remove; the link to the next card; the group's rest.                                                                                                                                            |
 | `apps/web/components/program-builder/editor-draft.ts`                   | The editor's typed draft (`toCards`) and `readDraft`: every refusal the writer would make, per field, before Save calls.                                                                                                                                                |
-| `apps/web/components/program-builder/item-picker/item-picker.tsx`       | "Add items": the movement picker's multi mode, the selection's summary, "Add n items" and the new-item form.                                                                                                                                                            |
+| `apps/web/components/program-builder/item-picker/item-picker.tsx`       | "Add items": the movement picker's multi mode, the selection's summary, "Add n items" and the new-item form. Its test holds that searching runs no action until Create is tapped (CAT-3 P6's caller side).                                                              |
 | `apps/web/components/program-builder/supersets.ts`                      | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                                                                                                                                                       |
 | `apps/web/components/program-builder/*.test.ts(x)`                      | Each screen's and module's tests, beside it.                                                                                                                                                                                                                            |
 | `apps/web/components/program-builder/owed.test.ts`                      | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                    |
@@ -88,7 +88,6 @@ flowchart LR
 | `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                    |
 | `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported.                                                                                                                                                                        |
 | `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                    |
-| `apps/web/lib/dal/program/quiet-db-errors.ts`                           | `quietDbErrors`: a thrown error is rethrown as `ProgramWriteError`, keeping only the operation, the error's type, the SQLSTATE and the stack's frame lines.                                                                                                             |
 
 ## Invariants
 
@@ -109,7 +108,7 @@ flowchart LR
    targets; the layout at 360px.
 6. **The DAL resolves the household scope itself.** Every function under `lib/dal/program/` that
    reaches the database calls `getHouseholdScope()`, or takes the `HouseholdScope` its caller
-   resolved (`reportProgramMiss`); `quiet-db-errors.ts` touches no data. The tenancy scan (`lib/dal/scoped.test.ts`)
+   resolved (`reportProgramMiss`); the shared `lib/dal/quiet-db-errors.ts` (moved there at FAM-1 12b, for the day page's writes too) touches no data. The tenancy scan (`lib/dal/scoped.test.ts`)
    reaches sub-directories, so it holds this directory to that. [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
@@ -287,7 +286,9 @@ flowchart LR
 
 19. 🔴 **The actions and the program DAL** (step 7a-i; engineering panel, 2026-11-16):
     - Only `lib/dal/program/` imports lane P's writers and reads; everything else reaches them
-      through it (`apps/web/test/program-tables-stay-dark.test.ts`).
+      through it (`apps/web/test/program-tables-stay-dark.test.ts`). The one exception is
+      `workoutInHousehold`, which the day DAL (`lib/dal/day/`, 12b) may import as well, for its
+      scope-miss report.
     - A miss is reported only after a writer or read has said "not here", never on a success, and
       once per request: the program first, then the workout; an item's miss reports nothing. A
       failed check reports nothing and never changes the answer.

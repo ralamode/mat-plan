@@ -554,7 +554,8 @@ export function createFakeProgramActions(
         if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
         const { name, trackingType } = parsed.data;
         // An item is "the same movement" by the picker's rule (`existingItem`), which is looser than
-        // a name's fold: "push ups" is Push-ups, and a catalog item's alias ("RDL") is that item.
+        // a name's fold: "push ups" is Push-ups, and a catalog item's alias ("RDL") is that item,
+        // and so is an abbreviation that spells it ("db row").
         const existing = existingItem(
           // The catalog flag is the picker's tie-break (`movement-picker.tsx` maps it the same way).
           state.items.map((item) => ({ ...item, isCatalog: item.owner === 'catalog' })),

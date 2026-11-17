@@ -21,16 +21,18 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 });
 
 describe('DayPlan: owed by its consumers', () => {
-  it.todo('12b: the DAL sets writable, future and canGoForward');
   it.todo('12c: an older day and a future day are read-only (e2e)');
 });
 
 describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers', () => {
-  it.todo('12b: logRow, untickRow and retickRow pass the inherited action matrix');
-  it.todo('12b: row writes are held to the row rate limit, not the mutation limit');
-  it.todo('12b: a crafted un-tick or re-tick on an older or a future day answers closed_day');
-  it.todo('12b: an entry that is not this athlete’s on that day answers not_found');
   it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
+  it.todo(
+    '12c: a ✓ on today’s bare path pins the day (?d=), so the refresh after a ✓ past midnight stays on the day the rows were logged to',
+  );
+  it.todo(
+    '12c: a ✓ after an un-tick that answers with a NEW entry id shows that entry (the fake revives the same id)',
+  );
+  it.todo('12c: a ✓ queued before an athlete switch is logged when the parent comes back (e2e)');
 });
 
 describe('RowAmend: owed by its consumers', () => {

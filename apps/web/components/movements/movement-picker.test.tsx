@@ -7,14 +7,14 @@ import {
   type MovementPickerGroup,
 } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 
-import { MovementPicker, type TodaysProgramForPicker } from './movement-picker';
+import { listedAs, MovementPicker, type TodaysProgramForPicker } from './movement-picker';
 
 afterEach(cleanup);
 
@@ -53,6 +53,8 @@ const householdOption = (name: string, publicId: string): MovementOptionDTO => (
 });
 
 const ALL_CATALOG = MOVEMENT_SEED_ROWS.map((r) => catalogOption(r.name));
+/** A household item literally named `RDL`, beside the catalog's Romanian Deadlift (C30's tie). */
+const HOUSEHOLD_RDL_ID = '00000000-0000-7000-8000-00000000a0d1';
 /**
  * ⚠️ **Queried from the DOM, not through `screen`.** Radix's modal dialog puts `aria-hidden` on the
  * rest of the document while it is open, and Testing Library's role queries skip hidden nodes — so
@@ -309,9 +311,10 @@ describe('the status region (criterion 46)', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
     type('zzzzz');
-    expect(status()).toContain(COPY.statusNoMatches);
+    expect(status()).toBe(COPY.statusNoMatches);
     type('farmers walk');
-    expect(status()).toContain('some of your words');
+    // Farmer Carry and Walking Lunge, written out.
+    expect(status()).toBe(COPY.statusNone(0, 2));
   });
 
   it('carries the ONE reason "use as typed" is unavailable', () => {
@@ -465,7 +468,7 @@ describe('Enter in the search box (panel 2 · 3)', () => {
     const onPick = vi.fn();
     render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
     open();
-    type('zercher squat'); // no match at all — the only thing offered is creation
+    type('zercher squat'); // no match: some-words rows only, and creation
     pressEnter();
     expect(onPick).not.toHaveBeenCalled();
   });
@@ -716,5 +719,284 @@ describe('multi-select', () => {
     expect(screen.queryByRole('searchbox')).toBeNull();
     expect(screen.getByText('the form')).toBeTruthy();
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+  });
+
+  it('a similar name is named under the create button, which stays quiet (CAT-3 P5)', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('bulgarain', 'Search items');
+    const create = screen.getByRole('button', { name: 'New item: bulgarain' });
+    const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent).toBe(COPY.similarListed('Bulgarian Split Squat', 'below'));
+    expect(create.getAttribute('data-variant')).toBe('ghost');
+    expect(box('Bulgarian Split Squat')).toBeTruthy();
+    // Enter selects nothing: a similar name is a guess (P5).
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('a short form that spells a movement offers no "New item", and Enter ticks it (C30)', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('bb curl', 'Search items');
+    expect(screen.queryByRole('button', { name: 'New item: bb curl' })).toBeNull();
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect(box('Barbell Curls').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a similar name that is already ticked is not named: tapping it would untick it', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('bulgarian', 'Search items');
+    fireEvent.click(box('Bulgarian Split Squat'));
+    type('bulgarain', 'Search items');
+    expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('true');
+    const create = screen.getByRole('button', { name: 'New item: bulgarain' });
+    expect(create.getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('several some-words rows name no movement under the create button', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    // No near miss (no `z…` word), three some-words rows: none of them is "the one".
+    type('zercher squat', 'Search items');
+    const create = screen.getByRole('button', { name: 'New item: zercher squat' });
+    expect(create.getAttribute('aria-describedby')).toBeNull();
+    expect(create.getAttribute('data-variant')).toBe('ghost');
+  });
+});
+
+/**
+ * The picker's own modules, read as source, comments out (the shared scans' `code()` convention).
+ * ⚠️ cwd-relative paths, as in the scan above: under jsdom `import.meta.url` is not a `file:` URL.
+ */
+const PICKER_DIRS = ['components/movements', 'lib/movements'];
+const pickerSources = () =>
+  PICKER_DIRS.flatMap((dir) =>
+    // Recursive: a later chunk's subfolder (B2's filters) is scanned too.
+    readdirSync(dir, { recursive: true, encoding: 'utf8' })
+      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .map((f) => {
+        const path = `${dir}/${f}`;
+        const source = readFileSync(path, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+        return { path, source };
+      }),
+  );
+
+describe('search (CAT-3 B1: short forms and similar names)', () => {
+  it('🔴 a short form that spells a movement IS that movement: "bb curl" is Barbell Curls (P1, C30)', () => {
+    const onPick = vi.fn();
+    render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
+    open();
+    type('bb curl');
+    expect(headings()).toEqual([COPY.matches]);
+    // Withheld, as an exact name or alias is: the server's `existingItem` reads the same signal.
+    expect(screen.queryByRole('button', { name: COPY.asTyped('bb curl') })).toBeNull();
+    expect(status()).toBe(`${COPY.statusCount(1)} ${COPY.statusAlreadyListed('Barbell Curls')}`);
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith({
+      kind: 'existing',
+      option: expect.objectContaining({ name: 'Barbell Curls' }),
+    });
+  });
+
+  it('a short form alone that spells no movement lists the match and still offers "use as typed"', () => {
+    // `KB` was an alias until B1 retired it (P3): `kb` now finds KB Swings by its own name only.
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('kb');
+    expect(screen.getByRole('button', { name: /^KB Swings/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: COPY.asTyped('kb') })).toBeTruthy();
+  });
+
+  it('🔴 a row found through part of another name says "also called", and Enter does not pick it (P5, P17)', () => {
+    const onPick = vi.fn();
+    const ohp = { ...catalogOption('Overhead Shoulder Press'), aliases: ['Military press'] };
+    const options = ALL_CATALOG.map((o) => (o.publicId === ohp.publicId ? ohp : o));
+    render(<Harness data={{ options }} onPick={onPick} />);
+    open();
+    type('military');
+    const row = screen.getByRole('button', { name: /^Overhead Shoulder Press/ });
+    expect(row.textContent).toContain(COPY.tagAlsoCalled('Military press'));
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it('🔴 the list names, withholds and picks exactly what listedAs (existingItem) names', () => {
+    // One rule in two places: the list reads it off its search result, the item form and the
+    // server through existingItem. This holds them to one answer, a household "RDL" included (C30:
+    // an own name outranks another movement's alias).
+    // Two lists: the catalog alone (`rdl` is an ALIAS hit there), and with a household item named
+    // `RDL` (an exact NAME hit, which wins): each branch of the rule is exercised.
+    const withHousehold = [householdOption('RDL', HOUSEHOLD_RDL_ID), ...ALL_CATALOG];
+    const queries = ['rdl', 'RDL', 'bb curl', 'front squat', 'kb', 'db bench', 'bulgarain'];
+    for (const [options, query] of [ALL_CATALOG, withHousehold].flatMap((opts) =>
+      queries.map((q) => [opts, q] as const),
+    )) {
+      const onPick = vi.fn();
+      render(<Harness data={{ options }} onPick={onPick} />);
+      open();
+      type(query);
+      const expected = listedAs(options, query);
+      if (expected) {
+        expect(status(), query).toContain(COPY.statusAlreadyListed(expected.name));
+        expect(screen.queryByRole('button', { name: COPY.asTyped(query) }), query).toBeNull();
+        fireEvent.keyDown(search(), { key: 'Enter' });
+        expect(onPick.mock.calls[0]?.[0], query).toMatchObject({
+          kind: 'existing',
+          option: { publicId: expected.publicId },
+        });
+      } else {
+        expect(status(), query).not.toMatch(/Already in the list/);
+      }
+      cleanup();
+    }
+    // Non-vacuity: the household row wins `RDL`, and `db bench` names nothing.
+    expect(listedAs(withHousehold, 'RDL')?.publicId).toBe(HOUSEHOLD_RDL_ID);
+    expect(listedAs(ALL_CATALOG, 'rdl')?.name).toBe('Romanian Deadlift');
+    expect(listedAs(ALL_CATALOG, 'db bench')).toBeUndefined();
+  });
+
+  it('Enter picks the one match a short form finds: "db bench" is Dumbbell Bench Press', () => {
+    const onPick = vi.fn();
+    render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
+    open();
+    type('db bench');
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith({
+      kind: 'existing',
+      option: expect.objectContaining({ name: 'Dumbbell Bench Press' }),
+    });
+  });
+
+  it("listedAs is the server's existingItem: name, alias, or what a short form spells", () => {
+    expect(listedAs(ALL_CATALOG, 'romanian deadlift')?.name).toBe('Romanian Deadlift');
+    expect(listedAs(ALL_CATALOG, 'rdl')?.name).toBe('Romanian Deadlift');
+    expect(listedAs(ALL_CATALOG, 'bb curl')?.name).toBe('Barbell Curls');
+    expect(listedAs(ALL_CATALOG, 'kb')).toBeUndefined();
+    expect(listedAs(ALL_CATALOG, 'bulgarain')).toBeUndefined();
+  });
+
+  it('a misspelling lists the similar names, and the status counts them (P4, P5)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bulgarain');
+    expect(headings()).toEqual([COPY.near]);
+    expect(screen.getByRole('button', { name: /^Bulgarian Split Squat/ })).toBeTruthy();
+    expect(status()).toBe(COPY.statusNone(1, 0));
+  });
+
+  it('🔴 similar names come first, and a row in both lists is shown and counted once (P5)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    // `squat` alone matches three; with the misspelt word, none match. Bulgarian Split Squat is a
+    // similar name AND matches "squat": it shows under Similar names only.
+    type('bulgarain squat');
+    expect(headings()).toEqual([COPY.near, COPY.someWords]);
+    expect(screen.getAllByRole('button', { name: /^Bulgarian Split Squat/ })).toHaveLength(1);
+    const [near, some] = screen.getAllByRole('region');
+    expect(near!.textContent).toContain('Bulgarian Split Squat');
+    expect(some!.textContent).not.toContain('Bulgarian Split Squat');
+    // Written out, not counted from the rows: Back Squat and Front Squat.
+    expect(status()).toBe(COPY.statusNone(1, 2));
+  });
+
+  it('🔴 Enter never picks a similar name (P5)', () => {
+    const onPick = vi.fn();
+    render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
+    open();
+    type('bulgarain');
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('on a touch screen, Enter over listed rows puts the keyboard away; over nothing it does not', () => {
+    // jsdom has no `matchMedia`, so the picker takes the coarse-pointer path here.
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bulgarain');
+    act(() => search().focus());
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(document.activeElement).not.toBe(search());
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    type('zzzzz');
+    act(() => search().focus());
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(document.activeElement).toBe(search());
+  });
+
+  it('"use as typed" stays offered, and its hint names the similar movement first (P5)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bulgarain');
+    const create = screen.getByRole('button', { name: COPY.asTyped('bulgarain') });
+    const hint = () => document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint()?.textContent).toBe(COPY.asTypedHintNear('Bulgarian Split Squat', 'bulgarain'));
+    // Quiet while something is listed: the loud one is for a list with nothing in it (UX2 B1).
+    expect(create.getAttribute('data-variant')).toBe('ghost');
+    type('zzzzz');
+    expect(
+      screen.getByRole('button', { name: COPY.asTyped('zzzzz') }).getAttribute('data-variant'),
+    ).toBe('outline');
+  });
+
+  it('several some-words rows name no movement in the hint: plain warning only', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('zercher squat');
+    const create = screen.getByRole('button', { name: COPY.asTyped('zercher squat') });
+    const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent).toBe(COPY.asTypedHint('zercher squat'));
+  });
+
+  it('🔴 the picker sends the query nowhere itself (P6): imports, network, URL, storage, logs', () => {
+    // P6 says the query never leaves the device. The picker keeps it in its own state; what it hands
+    // its callers is `createLabel` (every render: the caller's own words, pure) and, on a tap, a
+    // deliberate create (`onCreate`, `onPick({ kind: 'typed' })`). The caller's side is
+    // `item-picker.test.tsx`'s. ⚠️ Holds while the app has no browser Sentry: a client init must
+    // keep Replay off or `maskAllInputs` on.
+    const sources = pickerSources();
+    expect(sources.map((s) => s.path)).toContain('components/movements/movement-picker.tsx');
+    // An allowlist, so an import that could send the text (a Server Action, a helper that does)
+    // fails here and forces the question, which a list of banned names never does.
+    const ALLOWED = new Set([
+      'react',
+      '@mat-plan/shared',
+      '@/components/ui/button',
+      '@/components/ui/sheet',
+      '@/lib/constants',
+      '@/lib/utils',
+      '@/lib/i18n/plural',
+      '@/lib/movements/movement-option',
+      '@/lib/movements/movement-picker-copy',
+    ]);
+    for (const { path, source } of sources) {
+      const specifiers = [
+        ...source.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(?\s*['"]([^'"]+)['"]/g),
+      ].map((m) => m[1] ?? m[2]);
+      expect(
+        specifiers.filter((spec) => !ALLOWED.has(spec!)),
+        path,
+      ).toEqual([]);
+      for (const leak of [
+        /'use server'/,
+        /\bfetch\(/,
+        /\bconsole\./,
+        /\buseRouter\b|\buseSearchParams\b|\busePathname\b/,
+        /\bwindow\.(?:location|history)\b|\bhistory\.(?:push|replace)State\b/,
+        /\b(?:local|session)Storage\b|\bindexedDB\b|\bdocument\.cookie\b/,
+        /\bnavigator\.sendBeacon\b|\bXMLHttpRequest\b|\bWebSocket\b/,
+        /\bSentry\b|@sentry\//,
+        /new RegExp\(/,
+      ])
+        expect(source, `${path}: ${String(leak)}`).not.toMatch(leak);
+    }
+    // The callback that fires on every keystroke is handed nothing.
+    const picker = sources.find((s) => s.path.endsWith('movement-picker.tsx'))!.source;
+    expect(picker).toMatch(/onQueryChange\?\.\(\)/);
+    expect(picker).not.toMatch(/onQueryChange\?\.\([^)]/);
   });
 });
