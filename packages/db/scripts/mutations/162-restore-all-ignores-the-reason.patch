@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..174869c7 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -620,7 +620,6 @@ export async function restoreClear(
+           and(
+             ownedOnDay(args),
+             hiddenUnder(args.hiddenAt),
+-            eq(schema.entries.hideReason, HIDE_REASON.clear_day),
+           ),
+         )
+     ).map((r) => r.publicId);

@@ -43,8 +43,9 @@ import {
 export { FIXTURE_SWITCH_DAY, FIXTURE_TODAY } from './world';
 export { FIXTURE_ITEM_KEYS, fixtureIds, type FixtureItemKey } from './ids';
 // For a data lane's proof that seeds a fixture's world (C17): the world's types and the helpers
-// that read it. `workoutDraft` gives a workout in the contract's own shape, ready for the writer.
-export { programOf, type Stamp, type World, workoutDraft, workoutOf } from './build';
+// that read it. `workoutDraft` gives a workout in the contract's own shape, ready for the writer;
+// `programView` gives a program's page, whose `week` is ready for `saveWeek` (C27).
+export { programOf, programView, type Stamp, type World, workoutDraft, workoutOf } from './build';
 export type {
   ProtoEntry,
   ProtoItem,
