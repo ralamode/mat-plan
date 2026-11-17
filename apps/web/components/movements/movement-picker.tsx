@@ -3,8 +3,9 @@
 import {
   MOVEMENT_NAME_MAX,
   MOVEMENT_PICKER_GROUPS,
-  matchMovementOptions,
+  existingItem,
   movementNameSchema,
+  searchMovementOptions,
 } from '@mat-plan/shared';
 import {
   useDeferredValue,
@@ -34,8 +35,8 @@ import { cn } from '@/lib/utils';
  * ## What is settled elsewhere, so this file does not re-decide it
  *
  * The browse groups and aliases are `MOVEMENT_PICKER_ENTRIES` (Decision 3); the fold, the match and
- * the alias/exact rules are `matchMovementOptions` (Decision 4), which is pure and tested against
- * the plan's vector table; every string is `MOVEMENT_PICKER_COPY` (reuse S4). The eight gaps the
+ * the "already listed" signals are `searchMovementOptions`' and the server's `existingItem`'s
+ * (Decision 4, CAT-3 C30), which are pure and tested against their vector tables; every string is `MOVEMENT_PICKER_COPY` (reuse S4). The eight gaps the
  * pre-implementation UX panel found in Decision 8 are decided in the plan's
  * § "UX panel, round 2" and implemented here — each marked `panel 2 · N` at its site.
  */
@@ -68,9 +69,16 @@ export type MultiPick = {
   readonly selected: readonly string[];
   /** `via` is `'enter'` for the search's Enter, where no row has focus to say what happened. */
   onToggle: (option: MovementOptionDTO, via?: 'tap' | 'enter') => void;
-  /** The typed text, trimmed (`''` from the plain "+ New item"). Never fired from Enter. */
+  /**
+   * The typed text, trimmed (`''` from the plain "+ New item"). Never fired from Enter. A person's
+   * deliberate create: from here the caller owns where the name goes (CAT-3 P6 is about the search).
+   */
   onCreate: (typed: string) => void;
-  /** The create button's words: `''` gives the plain one, a name gives "New item: “Bear Crawl”". */
+  /**
+   * The create button's words: `''` gives the plain one, a name gives "New item: “Bear Crawl”".
+   * ⚠️ **Called on every render with the live query, so it must be pure** (CAT-3 P6: the query
+   * never leaves the device). It is the one prop the search text reaches before a tap.
+   */
   createLabel: (typed: string) => string;
   /** Shown under the create button when nothing matches at all. */
   noMatchHint: string;
@@ -114,6 +122,7 @@ export type MovementPickerProps = {
   onReturned?: () => void;
 } & (
   | {
+      /** `typed` is a deliberate "use as typed" tap: the caller owns where the name goes (P6). */
       onPick: (
         picked: { kind: 'existing'; option: MovementOptionDTO } | { kind: 'typed'; name: string },
       ) => void;
@@ -123,30 +132,39 @@ export type MovementPickerProps = {
 );
 
 /**
- * The picker's match over its own options: ONE place that turns a `MovementOptionDTO` into what
- * `matchMovementOptions` reads (catalog-first, aliases from the catalog only). The item picker's
- * form asks the same question through `listedAs`, so "RDL" is withheld in the list and selects
- * Romanian Deadlift in the form by one rule, not two copies of it.
+ * ONE place that turns a `MovementOptionDTO` into what the matcher reads (catalog-first, aliases
+ * from the catalog only). Both the list's search and `listedAs` read through it.
  */
-export function matchPickerOptions(options: readonly MovementOptionDTO[], text: string) {
-  return matchMovementOptions(
-    options.map((option) => ({
-      name: option.name,
-      isCatalog: option.owner === 'catalog',
-      aliases: option.owner === 'catalog' ? option.aliases : [],
-      option,
-    })),
-    text,
-  );
+function matchable(options: readonly MovementOptionDTO[]) {
+  return options.map((option) => ({
+    name: option.name,
+    isCatalog: option.owner === 'catalog',
+    aliases: option.owner === 'catalog' ? option.aliases : [],
+    option,
+  }));
 }
 
-/** The option `text` already names (an exact name or an alias hit), or `undefined`. */
+/**
+ * What the list shows (CAT-3 B1): the library's search, with short forms, part of another name and
+ * near misses. Its `exact` and `aliasHit` are the plain match's for the text as typed, and
+ * `shortFormHit` is the third signal beside them (spec P1, C30): any of the three means the
+ * movement is already listed, as the server's `existingItem` says.
+ */
+export function searchPickerOptions(options: readonly MovementOptionDTO[], text: string) {
+  return searchMovementOptions(matchable(options), { query: text });
+}
+
+/**
+ * The option `text` already names (an exact name, an exact alias, or what its short forms spell),
+ * or `undefined`. **It IS the server's `existingItem`**, over the same mapping, so the item form
+ * and `newItem` can never name different items for one text, and "RDL" or "db row" selects the
+ * listed movement rather than making a second one.
+ */
 export function listedAs(
   options: readonly MovementOptionDTO[],
   text: string,
 ): MovementOptionDTO | undefined {
-  const result = matchPickerOptions(options, text);
-  return result.exact || result.aliasHit ? result.matches[0]?.option : undefined;
+  return existingItem(matchable(options), text)?.option;
 }
 
 /** A row, plus the single tag it earns. One tag per row, by precedence (panel 2 · 5). */
@@ -245,12 +263,12 @@ export function MovementPicker({
   // removes the class. The cost is that the footer lags a frame behind the text on a slow device,
   // which is a thumb reaching for a button that is correct rather than one that is current.
   //
-  // ⚠️ Not folded. Folding happens inside `matchMovementOptions`, and nothing in this file tests a
+  // ⚠️ Not folded. Folding happens inside the search, and nothing in this file tests a
   // FOLDED value for emptiness — the point of panel 2 · 4, below.
   const deferredTrimmed = useDeferredValue(query).trim();
 
   const result = useMemo(
-    () => matchPickerOptions(data.options, deferredTrimmed),
+    () => searchPickerOptions(data.options, deferredTrimmed),
     [data.options, deferredTrimmed],
   );
 
@@ -266,16 +284,14 @@ export function MovementPicker({
     underHouseholdHeading: boolean,
   ) => {
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
-    // `also called` fires ONLY on an alias hit, naming the alias that hit — otherwise it would
+    // `also called` fires ONLY for a row the search found through another name, naming that alias:
+    // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`). Otherwise it would
     // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
     //
-    // ⚠️ The alias comes from the MATCHER (`result.aliasHit` IS its text), and the test below is
-    // plain identity on authored strings. This used to re-run "fold both sides, compare keys" here,
-    // which is `movement-search.ts`'s rule and would have drifted from it the first time the fold
-    // changed.
-    if (result.aliasHit !== null && option.owner === 'catalog') {
-      if (option.aliases.includes(result.aliasHit)) return COPY.tagAlsoCalled(result.aliasHit);
-    }
+    // ⚠️ The alias comes from the MATCHER, never re-derived here: "fold both sides, compare keys"
+    // is `movement-search.ts`'s rule and a copy in a component drifts the first time it changes.
+    const alias = aliasFound.get(option.publicId);
+    if (alias !== undefined) return COPY.tagAlsoCalled(alias);
     if (option.publicId === currentId) return COPY.tagCurrent;
     if (inSearchResults && option.owner === 'catalog') return COPY.groupLabel(option.group);
     if (option.owner === 'household' && !underHouseholdHeading) return COPY.tagHousehold;
@@ -291,25 +307,55 @@ export function MovementPicker({
       tag: tagFor(option, opts.inSearchResults ?? false, opts.underHouseholdHeading ?? false),
     }));
 
+  /** The alias each row was found through, by option id (C30's `foundByAlias`). */
+  const aliasFound = new Map(
+    [...result.foundByAlias].map(([row, alias]) => [row.option.publicId, alias] as const),
+  );
+
   // ── The ordered candidate list, and what Enter may act on (panel 2 · 3) ─────────────────────────
   // 🔴 The match result carries the DTO it was given, so there is nothing to look up. An earlier
   // version re-keyed by `name` — which is not the identity, `publicId` is: two options sharing a
-  // display name collapsed to whichever was last in `data.options`, defeating the catalog-first tie
-  // rule and duplicating a React `key`. `MovementPickerData` promises no name uniqueness, so the
+  // display name collapsed to whichever was last in `data.options`, defeating the contract's tie
+  // rules and duplicating a React `key`. `MovementPickerData` promises no name uniqueness, so the
   // component must not depend on Decision 5's read happening to shadow it.
   const matches = result.matches.map((m) => m.option);
-  const someWords = result.someWords.map((m) => m.option);
-  // Enter picks `matches[0]` iff unambiguous. Two `exact` hits resolve to the first — catalog-first by
-  // Decision 4's tie rule, which is also the row the status names. `someWords` NEVER picks.
-  const enterTarget =
-    result.exact || result.aliasHit || matches.length === 1 ? matches[0] : undefined;
+  // Near misses and some-words are only filled when `matches` is empty (the contract's rule). A row
+  // in both is shown, and counted, once: under the similar names (CAT-3 P5).
+  const near = result.near.map((m) => m.option);
+  const nearIds = new Set(near.map((o) => o.publicId));
+  const someWords = result.someWords.map((m) => m.option).filter((o) => !nearIds.has(o.publicId));
+  /** Anything listed for the query: what makes the create button the quiet one (UX2 B1, P5). */
+  const hasCandidates = matches.length > 0 || near.length > 0 || someWords.length > 0;
+  /**
+   * The row the create hint names: the closest similar name, and only that. A some-words row is not
+   * similar, and naming the first of several (by name) would point a new movement at an arbitrary
+   * one (review of B1: `zercher squat` named Back Squat).
+   */
+  const similar = near[0];
+  /**
+   * The movement the text already names, by the server's three signals (spec P1, C30): an exact
+   * name or exact alias is the first row, else the row its short forms spell. The status names it,
+   * Enter picks it, and "use as typed" is withheld for it. ⚠️ This is `existingItem`'s rule read off
+   * the result the list already has; a test holds it and `listedAs` (which IS `existingItem`) to
+   * one answer, so a change to the server's rule turns that test red rather than drifting.
+   */
+  const listed =
+    result.exact || result.aliasHit !== null
+      ? matches[0]
+      : (result.shortFormHit?.option ?? undefined);
+  // Enter picks the listed movement, or the one match when it is unambiguous. Not a match found only
+  // through part of another name (P5, P17), and never a similar name or a some-words row (P5): a
+  // typo and Enter must not choose a guess.
+  const soleMatch =
+    matches.length === 1 && !aliasFound.has(matches[0]!.publicId) ? matches[0] : undefined;
+  const enterTarget = listed ?? soleMatch;
 
   // ── "Use as typed": offered for non-empty text that is not already in the list ─────────────────
   // 🔴 **Emptiness is tested on the RAW text, never on the fold** (panel 2 · 4). `🙂` and `---` fold
   // to `''`; a fold-based check would drop them into browse mode and never render the disabled
   // footer Decision 8 promises for them. Probed by replacing this with a fold-based test, which
   // reddens the aria-disabled cases.
-  const offersTyped = deferredTrimmed !== '' && !result.exact && !result.aliasHit;
+  const offersTyped = deferredTrimmed !== '' && !listed;
   // The reason comes from the SCHEMA, so the UI never hand-composes a rule the boundary owns. A name
   // breaking two rules shows the first, by `typedMovementNameIssues`' order.
   const typedNameIssue = useMemo(() => {
@@ -321,16 +367,12 @@ export function MovementPicker({
   // ── The status region: ONE shape, `{count}. {reason}`, one reason by precedence (panel 2 · 1-2) ──
   const status = (() => {
     if (deferredTrimmed === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
+    // With no matches: "No matches." once, then each list's own count, similar names first (P5).
     const count =
       matches.length > 0
         ? COPY.statusCount(matches.length)
-        : someWords.length > 0
-          ? COPY.statusSomeWords(someWords.length)
-          : COPY.statusNoMatches;
-    const reason =
-      (result.exact || result.aliasHit) && matches[0]
-        ? COPY.statusAlreadyListed(matches[0].name)
-        : typedNameIssue;
+        : COPY.statusNone(near.length, someWords.length);
+    const reason = listed ? COPY.statusAlreadyListed(listed.name) : typedNameIssue;
     return reason ? `${count} ${reason}` : count;
   })();
 
@@ -397,7 +439,14 @@ export function MovementPicker({
                 // Enter picks only when unambiguous, and NEVER fires "use as typed" (UX3 N8).
                 if (e.key !== 'Enter') return;
                 e.preventDefault();
-                if (!enterTarget) return;
+                if (!enterTarget) {
+                  // Nothing to pick. On a phone the Search key still puts the keyboard away, so
+                  // the rows it is covering show: several matches, similar names, some-words.
+                  if (!prefersKeyboardFocus && hasCandidates) {
+                    e.currentTarget.blur();
+                  }
+                  return;
+                }
                 if (!multiple) return pickExisting(enterTarget);
                 // Multi: Enter SELECTS (never deselects, never creates), then clears for the next.
                 if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget, 'enter');
@@ -458,8 +507,8 @@ export function MovementPicker({
                 <Button
                   type="button"
                   // Quiet with candidates above, loud with none (UX2 B1). `someWords` counts as
-                  // candidates (panel 2 · 8): UX3 6 exists to steer toward them.
-                  variant={matches.length > 0 || someWords.length > 0 ? 'ghost' : 'outline'}
+                  // candidates (panel 2 · 8): UX3 6 exists to steer toward them; so does `near` (P5).
+                  variant={hasCandidates ? 'ghost' : 'outline'}
                   size="lg"
                   aria-disabled={typedNameIssue !== null}
                   aria-describedby={TYPED_HINT_ID}
@@ -478,8 +527,13 @@ export function MovementPicker({
                 >
                   {COPY.asTyped(deferredTrimmed)}
                 </Button>
-                <p id={TYPED_HINT_ID} className="text-muted-foreground text-xs">
-                  {typedNameIssue ?? COPY.asTypedHint(deferredTrimmed)}
+                {/* `wrap-anywhere`: the hint quotes the typed name, up to MOVEMENT_NAME_MAX with no
+                    space, and must wrap at 360px as the button above it does. */}
+                <p id={TYPED_HINT_ID} className="text-muted-foreground text-sm wrap-anywhere">
+                  {typedNameIssue ??
+                    (similar
+                      ? COPY.asTypedHintNear(similar.name, deferredTrimmed)
+                      : COPY.asTypedHint(deferredTrimmed))}
                 </p>
               </>
             ) : null}
@@ -506,8 +560,14 @@ export function MovementPicker({
               typed={deferredTrimmed}
               offersTyped={offersTyped}
               issue={typedNameIssue}
-              loud={matches.length === 0 && someWords.length === 0}
-              noMatch={deferredTrimmed !== '' && matches.length === 0 && someWords.length === 0}
+              loud={!hasCandidates}
+              noMatch={deferredTrimmed !== '' && !hasCandidates}
+              // Never a ticked row: tapping it would untick what the person meant to keep.
+              similar={
+                offersTyped && similar && !selectedSet.has(similar.publicId)
+                  ? similar.name
+                  : undefined
+              }
             />
           ) : null}
           {deferredTrimmed === '' ? (
@@ -547,13 +607,22 @@ export function MovementPicker({
               heading={COPY.matches}
               rows={rowsFrom(matches, { inSearchResults: true })}
             />
-          ) : someWords.length > 0 ? (
-            <Section
-              mode={mode}
-              id={`${headingId}-some`}
-              heading={COPY.someWords}
-              rows={rowsFrom(someWords, { inSearchResults: true })}
-            />
+          ) : near.length > 0 || someWords.length > 0 ? (
+            // Similar names first, then some-words (P5); each section omits itself when empty.
+            <>
+              <Section
+                mode={mode}
+                id={`${headingId}-near`}
+                heading={COPY.near}
+                rows={rowsFrom(near, { inSearchResults: true })}
+              />
+              <Section
+                mode={mode}
+                id={`${headingId}-some`}
+                heading={COPY.someWords}
+                rows={rowsFrom(someWords, { inSearchResults: true })}
+              />
+            </>
           ) : (
             // No matches at all: the browse list stays reachable under the "No matches" status, so the
             // sheet is never a dead end.
@@ -568,7 +637,8 @@ export function MovementPicker({
 /**
  * Multi mode's create control, at the TOP of the body (FAM-1 step 9): with the keyboard up the
  * footer scrolls to the end of a long list, so a create button there is about 110 rows away. Quiet
- * with candidates, loud with none (UX2 B1); withheld on an exact or alias hit, where the status says
+ * with candidates, loud with none (UX2 B1); withheld when the text already names a movement (an exact name or alias, or what its
+ * short forms spell), where the status says
  * what is already listed; a plain "+ New item" when the query is empty. Never fired from Enter.
  */
 function CreateTop({
@@ -578,6 +648,7 @@ function CreateTop({
   issue,
   loud,
   noMatch,
+  similar,
 }: {
   multiple: MultiPick;
   typed: string;
@@ -585,8 +656,17 @@ function CreateTop({
   issue: string | null;
   loud: boolean;
   noMatch: boolean;
+  /**
+   * The closest similar name, while one is listed. The button sits above the list (the
+   * maintainer's placement, 2026-11-16) and carries the person's own spelling, so its hint names
+   * the movement they may mean, for sight and for a screen reader alike (UX panel, B1).
+   */
+  similar?: string;
 }) {
   if (typed !== '' && !offersTyped) return null;
+  const hint =
+    issue ??
+    (noMatch ? multiple.noMatchHint : similar ? COPY.similarListed(similar, 'below') : null);
   return (
     <div className="mb-4 flex flex-col gap-1">
       <Button
@@ -597,7 +677,7 @@ function CreateTop({
         variant={typed === '' || loud ? 'outline' : 'ghost'}
         size="lg"
         aria-disabled={issue !== null || undefined}
-        aria-describedby={issue || noMatch ? TYPED_HINT_ID : undefined}
+        aria-describedby={hint ? TYPED_HINT_ID : undefined}
         onClick={() => {
           if (issue) return;
           multiple.onCreate(typed);
@@ -606,9 +686,9 @@ function CreateTop({
       >
         {multiple.createLabel(typed)}
       </Button>
-      {issue || noMatch ? (
+      {hint ? (
         <p id={TYPED_HINT_ID} className="text-muted-foreground text-sm">
-          {issue ?? multiple.noMatchHint}
+          {hint}
         </p>
       ) : null}
     </div>

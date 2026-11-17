@@ -73,9 +73,9 @@ describe('MOVEMENT_PICKER_ENTRIES (PICK-1 Decision 3)', () => {
 });
 
 describe('the aliases', () => {
-  it("ships the prototype's six", () => {
+  it("ships the prototype's four (its two equipment short forms are retired: CAT-3 P3)", () => {
     expect(MOVEMENT_PICKER_ALIASES.map((a) => a.alias).sort()).toEqual(
-      ['BSS', 'DB bench', 'KB', 'OHP', 'RDL', 'hip thrust'].sort(),
+      ['BSS', 'OHP', 'RDL', 'hip thrust'].sort(),
     );
   });
 
