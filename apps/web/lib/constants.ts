@@ -803,6 +803,8 @@ export const BODYWEIGHT_COPY = {
   },
   /** A read-only day with nothing logged (v12, and Life's) — otherwise the section is a bare heading. */
   noneOnClosedDay: NOTHING_LOGGED,
+  /** `AMEND_ERROR_COPY`'s subject: `the weight wasn't changed` (as `PRACTICE_COPY.noun`). */
+  noun: 'weight',
   ...singleValueCopy({
     subject: 'Bodyweight',
     changeSubject: 'weight',

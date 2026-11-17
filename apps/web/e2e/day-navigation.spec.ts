@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { CLOSED_DAY_NOTICE } from '../lib/constants';
-
-import { BODYWEIGHT_COPY } from '@/lib/constants';
+import { BODYWEIGHT_COPY, CLOSED_DAY_NOTICE } from '../lib/constants';
 
 import { bodyweightSection, changePrefix, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 

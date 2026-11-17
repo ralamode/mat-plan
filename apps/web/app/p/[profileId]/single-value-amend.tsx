@@ -32,8 +32,10 @@ const NOT_SUBMITTED: AmendOutcome = { ok: true };
  * number being corrected would land in a narrow box in the gutter, and neither CI gate can see that.
  * So the form is `w-full` and drops beneath the value deterministically. Its first line is the field,
  * the unit and the icon-only ✓ / ✕ (`InlineEditActions`, maintainer 2026-11-16): ~139px fixed, so the
- * field (`flex-1 min-w-0`) keeps ~155px. That line is `flex` with NO `flex-wrap`: a ✕ dropped onto its
- * own line would pass every gate, so the a11y spec measures that the pair shares the field's row. The
+ * field keeps ~155px. What keeps the pair on that line is the field's `flex-1 min-w-0` (a zero
+ * basis that shrinks), not the absence of `flex-wrap`: a fixed field width over ~155px would push the
+ * ✕ onto its own line, which passes every gate, so the a11y spec measures that the pair shares the
+ * field's row. The
  * hint and any error sit beneath. This is the one full statement of that argument; the receipts, the
  * a11y spec and the screenshot script point here.
  *
@@ -46,7 +48,7 @@ const NOT_SUBMITTED: AmendOutcome = { ok: true };
  *
  * The ✓ looks the same whether it saves or clears (maintainer, 2026-11-16: no red Clear, no trash);
  * the line under the field always says a blank clears, and the ✓'s NAME follows the same predicate
- * as the clear (`clears`): `Clear bodyweight` while it would clear. `isBlankEntry` is the one
+ * as the clear (`clears`): `Clear weight` while it would clear. `isBlankEntry` is the one
  * predicate the name, the report and the server share. An archived athlete (`canClear` false) keeps
  * the save name and no hint, and a blank is refused: their page has no empty field to re-enter a
  * cleared value into.
@@ -217,7 +219,7 @@ export function SingleValueAmend({
       ))}
       <input type="hidden" name="seenValue" value={logged.value} readOnly />
 
-      {/* No flex-wrap: the ✓ and ✕ stay on the field's line (the docblock's width math). */}
+      {/* The field's `flex-1 min-w-0` keeps the ✓ and ✕ on this line (the docblock's width math). */}
       <div className="flex items-center gap-2">
         <label htmlFor={ids.value} className="sr-only">
           {fieldLabel}

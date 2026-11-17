@@ -13,7 +13,11 @@ export function TickButton({
   label,
   pending = false,
   ...props
-}: Omit<React.ComponentProps<typeof Button>, 'size' | 'children' | 'aria-label'> & {
+}: Omit<
+  React.ComponentProps<typeof Button>,
+  // Set here from `label` and `pending`: accepting them would compile and silently do nothing.
+  'size' | 'children' | 'aria-label' | 'disabled' | 'aria-busy' | 'asChild'
+> & {
   /** The accessible name: the glyph alone says nothing to a screen reader. */
   label: string;
   pending?: boolean;

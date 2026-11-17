@@ -29,7 +29,6 @@ import {
  * Covered elsewhere: every copy state, the archived refusal and the island's focus rules
  * (`bodyweight-section.test.tsx`, `single-value-live.test.tsx`); 360px and axe (`a11y.spec.ts`).
  */
-
 test('log with ✓, change, clear with a blank ✓, then re-enter, with focus at each step', async ({
   page,
 }, testInfo) => {

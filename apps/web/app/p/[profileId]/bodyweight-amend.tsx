@@ -41,7 +41,7 @@ export function BodyweightAmend({
         // A zod refusal on a field this editor does not show (a tampered `unit` or `seenValue`, or a
         // stale bundle) has no "errors below" to point at; say what is true instead.
         if (result.fieldErrors && !field) {
-          return { ok: false, error: AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.changeSubject) };
+          return { ok: false, error: AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun) };
         }
         return { ok: false, error: result.error ?? '', field };
       }}

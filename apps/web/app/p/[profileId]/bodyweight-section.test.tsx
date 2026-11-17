@@ -494,7 +494,9 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: SAVE }));
     });
-    expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.notFound('weight'));
+    expect(screen.getByRole('alert').textContent).toBe(
+      AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun),
+    );
   });
 });
 
