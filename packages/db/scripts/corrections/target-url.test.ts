@@ -1,7 +1,18 @@
-import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
+import {
+  E2E_SESSION_BYPASS_USER,
+  newId,
+  SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_PUBLIC_ID,
+} from '@mat-plan/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { correctionTargetUrl, fixtureBindIsAllowed } from './target-url';
+import {
+  correctionTargetIsLocal,
+  correctionTargetIsPreview,
+  correctionTargetUrl,
+  fixtureBindIsAllowed,
+  seedHouseholdClaimIsAllowed,
+} from './target-url';
 
 /**
  * `AUTH-1` 1c-4a — the guard that keeps the committed e2e fixture principal off any database but a
@@ -17,6 +28,7 @@ const ENV_KEYS = ['DATABASE_URL', 'DATABASE_URL_UNPOOLED'] as const;
 
 const LOCAL = 'postgres://u:p@localhost:5432/mat_plan';
 const PROD = 'postgres://u:p@ep-nameless-hall-123456.us-east-1.aws.neon.tech/mat_plan';
+const PREVIEW = 'postgres://u:p@ep-nameless-hall-654321.us-east-1.aws.neon.tech/mat_plan_preview';
 
 let saved: Record<string, string | undefined>;
 
@@ -88,5 +100,76 @@ describe('fixtureBindIsAllowed — the fixture principal, and only it, is pinned
     // from this side too.
     process.env.DATABASE_URL_UNPOOLED = `${LOCAL}?%68ost=evil.example.com`;
     expect(fixtureBindIsAllowed(E2E_SESSION_BYPASS_USER)).toBe(false);
+  });
+});
+
+describe("correctionTargetIsLocal / correctionTargetIsPreview — read from the runner's own target", () => {
+  it('a production unpooled string beside a local DATABASE_URL is neither local nor the preview', () => {
+    process.env.DATABASE_URL = LOCAL;
+    process.env.DATABASE_URL_UNPOOLED = PROD;
+    expect(correctionTargetIsLocal()).toBe(false);
+    expect(correctionTargetIsPreview()).toBe(false);
+  });
+
+  it('a local target is local and not the preview', () => {
+    process.env.DATABASE_URL = LOCAL;
+    expect(correctionTargetIsLocal()).toBe(true);
+    expect(correctionTargetIsPreview()).toBe(false);
+  });
+
+  it('the preview database is recognised by name, and is not local', () => {
+    process.env.DATABASE_URL_UNPOOLED = PREVIEW;
+    expect(correctionTargetIsPreview()).toBe(true);
+    expect(correctionTargetIsLocal()).toBe(false);
+  });
+
+  it('no target at all is neither — unknown is the riskier case for every caller', () => {
+    expect(correctionTargetIsLocal()).toBe(false);
+    expect(correctionTargetIsPreview()).toBe(false);
+  });
+});
+
+describe("seedHouseholdClaimIsAllowed — a seed household only where the seed's fixtures may live (PRIV-3 RC, D6)", () => {
+  it('🔴 refuses the seeded household on a production target, even with a local DATABASE_URL beside it', () => {
+    process.env.DATABASE_URL = LOCAL;
+    process.env.DATABASE_URL_UNPOOLED = PROD;
+    expect(seedHouseholdClaimIsAllowed(SEED_HOUSEHOLD_PUBLIC_ID)).toBe(false);
+  });
+
+  it('refuses the seeded household when no target is set', () => {
+    expect(seedHouseholdClaimIsAllowed(SEED_HOUSEHOLD_PUBLIC_ID)).toBe(false);
+  });
+
+  it('refuses any member of SEED_PUBLIC_IDS, not only the household id', () => {
+    process.env.DATABASE_URL_UNPOOLED = PROD;
+    expect(seedHouseholdClaimIsAllowed(SEED_PROFILE_PUBLIC_ID)).toBe(false);
+  });
+
+  it.each([
+    ['upper case', SEED_HOUSEHOLD_PUBLIC_ID.toUpperCase()],
+    ['braces', `{${SEED_HOUSEHOLD_PUBLIC_ID}}`],
+    ['no hyphens', SEED_HOUSEHOLD_PUBLIC_ID.replace(/-/g, '')],
+  ])(
+    'refuses the seeded household spelt with %s — Postgres reads it as the same uuid',
+    (_l, id) => {
+      process.env.DATABASE_URL_UNPOOLED = PROD;
+      expect(seedHouseholdClaimIsAllowed(id)).toBe(false);
+    },
+  );
+
+  it("allows the seeded household on a local target (the e2e harness, a developer's claim)", () => {
+    process.env.DATABASE_URL = LOCAL;
+    process.env.DATABASE_URL_UNPOOLED = LOCAL;
+    expect(seedHouseholdClaimIsAllowed(SEED_HOUSEHOLD_PUBLIC_ID)).toBe(true);
+  });
+
+  it('allows the seeded household on the preview database (the only way a preview gets a member)', () => {
+    process.env.DATABASE_URL_UNPOOLED = PREVIEW;
+    expect(seedHouseholdClaimIsAllowed(SEED_HOUSEHOLD_PUBLIC_ID)).toBe(true);
+  });
+
+  it('does not constrain an ordinary household id on production', () => {
+    process.env.DATABASE_URL_UNPOOLED = PROD;
+    expect(seedHouseholdClaimIsAllowed(newId())).toBe(true);
   });
 });

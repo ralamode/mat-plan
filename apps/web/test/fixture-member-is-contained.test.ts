@@ -14,12 +14,14 @@ const REPO = resolve(WEB_DIR, '../..');
  *
  * 1c-3a gave the harnesses a *principal*; this chunk gives that principal a `household_members` row,
  * because from `1c-4` the household scope is derived from it. The row is written by the committed
- * `household-claim-2026-10-25` correction, which is also the writer `packages/db/scripts/verify.ts`
+ * `household-claim-2026-10-25` correction, one of the two writers `packages/db/scripts/verify.ts`
  * names when it asserts _"the seed writes NO household_members row"_ — the seed must keep writing
- * none, because `migrate.yml` seeds **production**.
+ * none, because `migrate.yml` seeds **production**. The other writer, `create-household-…`
+ * (`PRIV-3` RC), binds REAL accounts and is run by hand only: item 4 below pins that no workflow
+ * runs it.
  *
  * The sibling guard for the principal (`bypass-is-contained.test.ts`) explains why a prose rule is
- * not enough here: it exists because `ci.yml` stated one and nothing checked it. Three things this
+ * not enough here: it exists because `ci.yml` stated one and nothing checked it. Four things this
  * file pins that nothing else can:
  *
  *  1. **No workflow but `ci.yml` runs the claim correction.** `migrate.yml` seeds production, and a
@@ -34,6 +36,9 @@ const REPO = resolve(WEB_DIR, '../..');
  *     is `pnpm dev`, against the **persistent** cluster. The correction refuses a second identical
  *     bind, so a `pnpm dev` that linked would die on its *second* start — after the change had
  *     shipped, in somebody's working day, with nothing in CI having seen it.
+ *  4. **No workflow runs `create-household-…` or names its input variable** (`PRIV-3` RC). Its input
+ *     is a list of real sign-in accounts, and an Actions log is public; the correction prints counts
+ *     only, but the variable itself would sit in the workflow file or in a secret wired to it.
  */
 describe('the fixture membership is contained (AUTH-1 1c-4a)', () => {
   /**
@@ -49,6 +54,29 @@ describe('the fixture membership is contained (AUTH-1 1c-4a)', () => {
     );
     const m = registry.match(/name: '(household-claim-[\d-]+)'/);
     expect(m, 'the claim correction must still be named in the registry').not.toBeNull();
+    return m![1];
+  })();
+  /** `create-household-…`, read from the registry the same way. */
+  const CREATE_HOUSEHOLD = (() => {
+    const registry = readFileSync(
+      join(REPO, 'packages/db/scripts/corrections/registry.ts'),
+      'utf8',
+    );
+    const m = registry.match(/'(create-household-[\d-]+)'/);
+    expect(m, 'the create-household correction must still be named in the registry').not.toBeNull();
+    return m![1];
+  })();
+  /** Its input variable, read from where it is defined (`accounts.ts`). */
+  const CREATE_HOUSEHOLD_ENV = (() => {
+    const accounts = readFileSync(
+      join(REPO, 'packages/db/scripts/corrections/accounts.ts'),
+      'utf8',
+    );
+    const m = accounts.match(/CREATE_HOUSEHOLD_ACCOUNTS_ENV = '([A-Z_]+)'/);
+    expect(
+      m,
+      'the create-household input variable must still be defined in accounts.ts',
+    ).not.toBeNull();
     return m![1];
   })();
   /** The two throwaway harnesses. Both delete their database on exit. */
@@ -71,6 +99,25 @@ describe('the fixture membership is contained (AUTH-1 1c-4a)', () => {
       workflows.map((f) => f.replace(`${REPO}/`, '')),
       'migrate.yml seeds PRODUCTION — the fixture membership must never be written from a workflow other than the smoke job',
     ).toEqual(['.github/workflows/ci.yml']);
+  });
+
+  it('🔴 no workflow runs create-household or names its input variable (PRIV-3 RC)', () => {
+    const all = globSync('.github/workflows/*.{yml,yaml}', { cwd: REPO });
+    // Non-vacuity, as above: a mis-rooted glob finds nothing and would pass.
+    expect(all.length).toBeGreaterThan(3);
+    const offenders = all.filter((f) => {
+      const text = readFileSync(join(REPO, f), 'utf8');
+      return text.includes(`db:correct ${CREATE_HOUSEHOLD}`) || text.includes(CREATE_HOUSEHOLD_ENV);
+    });
+    expect(
+      offenders,
+      'create-household binds REAL sign-in accounts and is run by hand only; an Actions log is public',
+    ).toEqual([]);
+    // A loose spelling (two spaces, a line continuation) must not slip past the exact match above.
+    const loose = all.filter((f) =>
+      /db:correct\s+create-household-/.test(readFileSync(join(REPO, f), 'utf8')),
+    );
+    expect(loose).toEqual([]);
   });
 
   it("CI's literals are the committed constants, and there is exactly one of each", () => {

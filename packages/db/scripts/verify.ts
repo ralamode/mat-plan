@@ -13,6 +13,7 @@ import {
   E2E_SESSION_BYPASS_USER,
   ENTRY_KIND,
   ENTRY_STATUS,
+  HOUSEHOLD_DEFAULT_NAME,
   HOUSEHOLD_ROLE,
   HOUSEHOLD_ROLES,
   MAX_HOUSEHOLD_ATHLETES,
@@ -36,6 +37,7 @@ import {
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
   SEED_PUBLIC_ID_PREFIX,
+  SEED_PUBLIC_IDS,
   SESSION_TYPES,
   UNITS,
   UNIT_CODES,
@@ -114,12 +116,16 @@ import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
 // the correction's own dry run rather than a lookalike of its SQL.
-import { CORRECTIONS, NULL_ROUTINE_TO_FULL_NAME } from './corrections/registry';
+import { CREATE_HOUSEHOLD_ACCOUNTS_ENV } from './corrections/accounts';
+import {
+  CORRECTIONS,
+  CREATE_HOUSEHOLD_NAME,
+  NULL_ROUTINE_TO_FULL_NAME,
+} from './corrections/registry';
 import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
-  SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   seed,
@@ -138,6 +144,7 @@ import {
   columnsOf,
   db,
   expectRejectedBy,
+  orFail,
   type VerifyContext,
 } from './verify/harness';
 import { verifyProgram } from './verify/program';
@@ -239,12 +246,16 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
 }
 // V1-3: the kid profiles, stable by public_id across re-seeds. PROF-1 b added a THIRD, owned by the
 // archive e2e specs — see `SEED_PROFILE_3_PUBLIC_ID`'s docblock for why archive cannot share one.
-assert.equal(profiles.length, 3, 'exactly three profiles after two seed runs');
-const seededProfileIds = profiles.map((p) => p.publicId).sort();
+//
+// 🔴 **PRIV-3 RC, D7: what the seed writes, stated once.** This used to be a hand-written list of the
+// three profile ids; it is now equality with `SEED_PUBLIC_IDS`, the set `household-claim-…` refuses
+// on production. Sorted arrays, not sets, so it holds in BOTH directions and a duplicate fails too:
+// an extra seeded athlete, or a member of the set the seed no longer writes, goes red here. Here and
+// not in `verify/erasure.ts`, because this is the last point where the database is the seed's alone.
 assert.deepEqual(
-  seededProfileIds,
-  [SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_3_PUBLIC_ID].sort(),
-  'every seed profile stable by public_id',
+  [...households, ...profiles].map((r) => r.publicId).sort(),
+  [...SEED_PUBLIC_IDS].sort(),
+  'PRIV-3 RC: the seeded household and profile public_ids equal SEED_PUBLIC_IDS, in both directions',
 );
 // The literal is deliberate and lives here exactly once (AGENTS.md -> constants: "a contract test that
 // pins the const's value"). This is the OSS-1 guard: it fails if anyone puts a real first name back into
@@ -7154,12 +7165,13 @@ console.log(
 
   // (1) The seed writes NO membership — behavioural, not a reading of seed.ts. `migrate.yml` runs
   // db:seed against prod on every push, so a seeded membership would bind a real family's household
-  // to whatever id the seed names. The claim correction is the only writer.
+  // to whatever id the seed names. The two account corrections (`household-claim-…` and, since
+  // PRIV-3 RC, `create-household-…`) are the only writers.
   const seededMembers = await db.select().from(schema.householdMembers);
   assert.equal(
     seededMembers.length,
     0,
-    'AUTH-1 1b: the seed writes NO household_members row — the claim correction is the only writer',
+    'AUTH-1 1b: the seed writes NO household_members row — the two account corrections are the only writers',
   );
 
   // (2) The happy path, through the scope capability rather than a raw household id.
@@ -7430,7 +7442,8 @@ console.log(
   const claim = CORRECTIONS.find((c) => c.name === 'household-claim-2026-10-25');
   assert.ok(claim, 'AUTH-1 1b: the claim correction is in the registry');
 
-  const CLERK_C = 'user_verify_claim';
+  // Letters and digits only after `user_`: the claim checks `CLERK_USER_ID_PATTERN` since PRIV-3 RC.
+  const CLERK_C = 'user_verifyclaim';
   const envBefore = { h: process.env.HOUSEHOLD_PUBLIC_ID, u: process.env.CLERK_USER_ID };
   try {
     // (6a) Both targets are required, and neither may be a committed constant.
@@ -7514,7 +7527,14 @@ console.log(
 
     // (6e) 🔴 The case `INSERT … WHERE NOT EXISTS` could not have told apart: the SAME Clerk id
     // pointed at a DIFFERENT household must REFUSE, not silently no-op.
-    process.env.HOUSEHOLD_PUBLIC_ID = households[0]!.publicId;
+    // ⚠️ A second NON-seed household, not the seed's (PRIV-3 RC, D6): the claim refuses a seed id
+    // outside a local or preview database, and CI runs this with no database URL at all, so a seed
+    // id here would prove D6's refusal in CI and this one locally.
+    const OTHER_HH_PUBLIC_ID = newId();
+    await asPg
+      .insert(schema.households)
+      .values({ publicId: OTHER_HH_PUBLIC_ID, name: 'verify 1b second household' });
+    process.env.HOUSEHOLD_PUBLIC_ID = OTHER_HH_PUBLIC_ID;
     await assert.rejects(
       () => claim.run(asCorrectionDb, true),
       /already bound to a DIFFERENT household/,
@@ -7526,6 +7546,171 @@ console.log(
     if (envBefore.u === undefined) delete process.env.CLERK_USER_ID;
     else process.env.CLERK_USER_ID = envBefore.u;
   }
+
+  // ── PRIV-3 RC — the seed-household refusal and `create-household-…`, exercised (D9) ──────────
+  //
+  // Each case pins the environment through `withEnv` and restores it in a `finally`, so a failing
+  // case cannot leak a target into the next. Both database URLs are REMOVED where a case needs a
+  // non-local target: `correctionTargetUrl()` then resolves `undefined`, which every guard treats as
+  // not local and not the preview — the (6f) idiom. A run expected to succeed goes through `orFail`;
+  // a run expected to refuse goes through `assert.rejects` with a message regex and a message, so
+  // either way a thrown error fails a NAMED assertion (the mutations README's rule).
+  const withEnv = async <T>(
+    vars: Readonly<Record<string, string | undefined>>,
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const before = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+    for (const [k, v] of Object.entries(vars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    try {
+      return await fn();
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  };
+  const NO_TARGET = { DATABASE_URL: undefined, DATABASE_URL_UNPOOLED: undefined } as const;
+
+  // (6g) 🔴 The claim refuses a SEED household id on a target that is neither local nor the preview
+  // (D6). `target-url.test.ts` drives the predicate; this proves it is WIRED into the correction.
+  // A dry run on purpose: without the refusal it returns a line instead of throwing.
+  await withEnv(
+    {
+      ...NO_TARGET,
+      HOUSEHOLD_PUBLIC_ID: SEED_HOUSEHOLD_PUBLIC_ID,
+      CLERK_USER_ID: 'user_verifyseedclaim',
+    },
+    () =>
+      assert.rejects(
+        () => claim.run(asCorrectionDb, false),
+        /whose public_id is one the seed writes/,
+        'PRIV-3 RC (6g): the claim correction refuses a seed household id on a non-local, non-preview target',
+      ),
+  );
+
+  const create = CORRECTIONS.find((c) => c.name === CREATE_HOUSEHOLD_NAME);
+  assert.ok(create, 'PRIV-3 RC: the create-household correction is in the registry');
+
+  // Visibly synthetic accounts, never read off a dashboard.
+  const RC_A = 'user_rcfixture000a';
+  const RC_B = 'user_rcfixture000b';
+  const RC_C = 'user_rcfixture000c';
+  /** Everything (6h)–(6j) printed or threw, for (6k). */
+  const rcOutput: string[] = [];
+  const captured = (re: RegExp) => (e: unknown) => {
+    const err = e as Error;
+    rcOutput.push(err.message, String(err.cause ?? ''), err.stack ?? '');
+    return re.test(err.message);
+  };
+  const householdCount = async () => (await asPg.select().from(schema.households)).length;
+  const memberCount = async () => (await asPg.select().from(schema.householdMembers)).length;
+
+  await withEnv({ ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_A} ${RC_B}` }, async () => {
+    // (6h) The dry run writes nothing and says how many it would create and bind; --apply then
+    // creates exactly one household and one OWNER membership per account, none with a seed id.
+    const householdsBefore = await householdCount();
+    const membersBefore = await memberCount();
+    const dry = await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
+      create.run(asCorrectionDb, false),
+    );
+    rcOutput.push(...dry);
+    assert.ok(
+      dry.length === 1 && dry[0]!.startsWith('would create 1 household with 2 account(s)'),
+      'PRIV-3 RC (6h): the dry run prints one line, the household and account counts',
+    );
+    assert.deepEqual(
+      [await householdCount(), await memberCount()],
+      [householdsBefore, membersBefore],
+      'PRIV-3 RC (6h): the create-household dry run writes nothing',
+    );
+
+    const applied = await orFail('PRIV-3 RC (6h): the create-household --apply completes', () =>
+      create.run(asCorrectionDb, true),
+    );
+    rcOutput.push(...applied);
+    const members = await asPg
+      .select({
+        publicId: schema.householdMembers.publicId,
+        householdId: schema.householdMembers.householdId,
+        role: schema.householdMembers.role,
+      })
+      .from(schema.householdMembers)
+      .where(
+        and(
+          inArray(schema.householdMembers.clerkUserId, [RC_A, RC_B]),
+          isNull(schema.householdMembers.deletedAt),
+        ),
+      );
+    const [created] = await asPg
+      .select({ publicId: schema.households.publicId, name: schema.households.name })
+      .from(schema.households)
+      .where(eq(schema.households.id, members[0]?.householdId ?? -1));
+    assert.ok(
+      (await householdCount()) === householdsBefore + 1 &&
+        members.length === 2 &&
+        new Set(members.map((m) => m.householdId)).size === 1 &&
+        members.every((m) => m.role === HOUSEHOLD_ROLE.owner) &&
+        created?.name === HOUSEHOLD_DEFAULT_NAME,
+      'PRIV-3 RC (6h): --apply creates exactly one household and binds both accounts to it as owner',
+    );
+    assert.ok(
+      ![created!.publicId, ...members.map((m) => m.publicId)].some((id) => SEED_PUBLIC_IDS.has(id)),
+      'PRIV-3 RC (6h): no public_id the correction mints is in SEED_PUBLIC_IDS',
+    );
+
+    // (6i) A second --apply with the same accounts is a refusal that writes nothing (D4).
+    await assert.rejects(
+      () => create.run(asCorrectionDb, true),
+      captured(/^2 of 2 accounts already have a live membership; nothing written/),
+      'PRIV-3 RC (6i): a second create-household --apply refuses with the live-membership count',
+    );
+    assert.deepEqual(
+      [await householdCount(), await memberCount()],
+      [householdsBefore + 1, membersBefore + 2],
+      'PRIV-3 RC (6i): the refused second run wrote nothing',
+    );
+  });
+
+  // (6j) A real-shaped account beside the committed fixture principal, on a non-local target: refused
+  // at position 2, before any write (D2). --apply on purpose, so "writes nothing" means something.
+  await withEnv(
+    { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_C} ${E2E_SESSION_BYPASS_USER}` },
+    async () => {
+      const householdsBefore = await householdCount();
+      await assert.rejects(
+        () => create.run(asCorrectionDb, true),
+        captured(/^account 2 of 2 is the committed e2e fixture principal/),
+        'PRIV-3 RC (6j): create-household refuses the fixture principal on a non-local target, at its position',
+      );
+      assert.equal(
+        await householdCount(),
+        householdsBefore,
+        'PRIV-3 RC (6j): the refused run created no household',
+      );
+    },
+  );
+
+  // (6k) 🔴 No line, message, cause or stack from (6h)–(6j) names an input account.
+  assert.ok(
+    rcOutput.length >= 8,
+    'PRIV-3 RC (6k): non-vacuity — the dry run, the apply and both refusals were captured',
+  );
+  assert.ok(
+    !rcOutput.some((text) =>
+      [RC_A, RC_B, RC_C, E2E_SESSION_BYPASS_USER].some((id) => text.includes(id)),
+    ),
+    'PRIV-3 RC (6k): nothing create-household printed or threw names an input account',
+  );
+
+  console.log(
+    '✓ PRIV-3 RC: the claim refuses a seed household off local and preview (6g); create-household ' +
+      'dry-runs, creates one household with two owners and no seed id (6h), refuses a second run ' +
+      '(6i) and the fixture principal (6j), and names no account on any path (6k)',
+  );
 
   console.log(
     '✓ AUTH-1 1b: household_members — CHECK bound to HOUSEHOLD_ROLES, four rejections, the freed ' +

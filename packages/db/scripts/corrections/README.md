@@ -71,16 +71,25 @@ before it is run, so a row lands here as `pending` and is dated in a follow-up c
 | `null-routine-to-full-2026-10-07`  | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed | ONB-0          | `pending`      |
 | `movements-ownership-2026-10-11`   | Census of the `movements` rows `TEN-2c` does not fix — aggregate counts only           | TEN-2c-1       | `pending`      |
 | `household-claim-2026-10-25`       | No Clerk account was bound to the household, so 1c's resolver had nothing to resolve   | AUTH-1 1b      | `pending`      |
+| `create-household-2026-11-17`      | The fresh start erases the seeded household, and the app cannot create one             | PRIV-3         | `pending`      |
 
 ⚠️ **`household-claim-2026-10-25` carries NEITHER target in this table, deliberately.** It takes a
 household `public_id` and a Clerk user id from the **environment**, and both are personal data in a
 public repo — the household id is an anti-IDOR handle, and the Clerk id is a stable third-party
 account id for a named adult (`data-inventory.md` §1a). Rule 6 says what a row records; this is the
 same reasoning rule 8 already applies to the deletion correction, one row earlier than `PRIV-3`.
-🔴 **`PRIV-3` converts this entry to `--household` / `--user` flags** when it lands that runner change
-(rule 8), so the repo does not keep two operator-input channels. Env was chosen here because this
-shipped inside a MIGRATION PR, and because a command line is broadly visible via `ps` while a
-process's environment is readable only by its owner.
+Env was chosen here because this shipped inside a MIGRATION PR, and because a command line is
+broadly visible via `ps` while a process's environment is readable only by its owner.
+✅ **Amended 2026-11-17 (`PRIV-3` RC).** This paragraph used to promise that `PRIV-3` would convert
+this entry to `--household` / `--user` flags. `PRIV-3` Q1 settled the environment as the channel for
+every operator-input correction _(maintainer, 2026-11-17)_, so there is nothing to convert: the repo
+keeps one channel, and this amendment is made here rather than in `PRIV-3` 2b.
+
+⚠️ **`create-household-2026-11-17` records neither target nor count, and nothing goes to the deletion
+ledger.** Its input is a list of sign-in accounts from the environment, the same personal data as the
+claim's, and how many accounts a household bound is a fact about a family. It takes no household id
+at all: it mints one. Its output is counts and positions only, on every path, errors included
+(`redact.ts`).
 
 <sub>⚠️ **The first two `Name`s changed under `OSS-1` (2026-10-08)** — they used to start with a child's
 first name, which this public repo should not carry (AGENTS.md → "No personal names"). Safe to rename:
