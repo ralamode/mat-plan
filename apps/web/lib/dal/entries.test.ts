@@ -185,7 +185,9 @@ describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
           },
         ],
       }),
-    ).rejects.toThrow('Profile not found');
+      // The writer's in-transaction `Profile not found`, rethrown by `quietDbErrors` (V1-9b B1-2)
+      // with only the operation and the error's type: the refusal still throws to error.tsx.
+    ).rejects.toThrow('logStrengthSession failed (Error)');
 
     const texts = rows.queries.map((q) => q.text.toLowerCase());
     const insertMovement = texts.findIndex((t) => t.startsWith('insert into "movements"'));
