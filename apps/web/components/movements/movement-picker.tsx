@@ -3,7 +3,7 @@
 import {
   MOVEMENT_NAME_MAX,
   MOVEMENT_PICKER_GROUPS,
-  matchMovementOptions,
+  existingItem,
   movementNameSchema,
   searchMovementOptions,
 } from '@mat-plan/shared';
@@ -145,31 +145,26 @@ function matchable(options: readonly MovementOptionDTO[]) {
 }
 
 /**
- * The picker's match over its own options. The item picker's form asks the same question through
- * `listedAs`, so "RDL" is withheld in the list and selects Romanian Deadlift in the form by one
- * rule, not two copies of it.
- */
-export function matchPickerOptions(options: readonly MovementOptionDTO[], text: string) {
-  return matchMovementOptions(matchable(options), text);
-}
-
-/**
- * What the list shows (CAT-3 B1): the library's search, with short forms and near misses. Its
- * `exact` and `aliasHit` are `matchPickerOptions`' own for the text as typed (spec P1), so the list
- * withholds "use as typed" exactly where `listedAs` and the server's `existingItem` say the name is
- * already listed.
+ * What the list shows (CAT-3 B1): the library's search, with short forms, part of another name and
+ * near misses. Its `exact` and `aliasHit` are the plain match's for the text as typed, and
+ * `shortFormHit` is the third signal beside them (spec P1, C30): any of the three means the
+ * movement is already listed, as the server's `existingItem` says.
  */
 export function searchPickerOptions(options: readonly MovementOptionDTO[], text: string) {
   return searchMovementOptions(matchable(options), { query: text });
 }
 
-/** The option `text` already names (an exact name or an alias hit), or `undefined`. */
+/**
+ * The option `text` already names (an exact name, an exact alias, or what its short forms spell),
+ * or `undefined`. **It IS the server's `existingItem`**, over the same mapping, so the item form
+ * and `newItem` can never name different items for one text, and "RDL" or "db row" selects the
+ * listed movement rather than making a second one.
+ */
 export function listedAs(
   options: readonly MovementOptionDTO[],
   text: string,
 ): MovementOptionDTO | undefined {
-  const result = matchPickerOptions(options, text);
-  return result.exact || result.aliasHit ? result.matches[0]?.option : undefined;
+  return existingItem(matchable(options), text)?.option;
 }
 
 /** A row, plus the single tag it earns. One tag per row, by precedence (panel 2 · 5). */
@@ -289,16 +284,14 @@ export function MovementPicker({
     underHouseholdHeading: boolean,
   ) => {
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
-    // `also called` fires ONLY on an alias hit, naming the alias that hit — otherwise it would
+    // `also called` fires ONLY for a row the search found through another name, naming that alias:
+    // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`). Otherwise it would
     // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
     //
-    // ⚠️ The alias comes from the MATCHER (`result.aliasHit` IS its text), and the test below is
-    // plain identity on authored strings. This used to re-run "fold both sides, compare keys" here,
-    // which is `movement-search.ts`'s rule and would have drifted from it the first time the fold
-    // changed.
-    if (result.aliasHit !== null && option.owner === 'catalog') {
-      if (option.aliases.includes(result.aliasHit)) return COPY.tagAlsoCalled(result.aliasHit);
-    }
+    // ⚠️ The alias comes from the MATCHER, never re-derived here: "fold both sides, compare keys"
+    // is `movement-search.ts`'s rule and a copy in a component drifts the first time it changes.
+    const alias = aliasFound.get(option.publicId);
+    if (alias !== undefined) return COPY.tagAlsoCalled(alias);
     if (option.publicId === currentId) return COPY.tagCurrent;
     if (inSearchResults && option.owner === 'catalog') return COPY.groupLabel(option.group);
     if (option.owner === 'household' && !underHouseholdHeading) return COPY.tagHousehold;
@@ -314,11 +307,16 @@ export function MovementPicker({
       tag: tagFor(option, opts.inSearchResults ?? false, opts.underHouseholdHeading ?? false),
     }));
 
+  /** The alias each row was found through, by option id (C30's `foundByAlias`). */
+  const aliasFound = new Map(
+    [...result.foundByAlias].map(([row, alias]) => [row.option.publicId, alias] as const),
+  );
+
   // ── The ordered candidate list, and what Enter may act on (panel 2 · 3) ─────────────────────────
   // 🔴 The match result carries the DTO it was given, so there is nothing to look up. An earlier
   // version re-keyed by `name` — which is not the identity, `publicId` is: two options sharing a
-  // display name collapsed to whichever was last in `data.options`, defeating the catalog-first tie
-  // rule and duplicating a React `key`. `MovementPickerData` promises no name uniqueness, so the
+  // display name collapsed to whichever was last in `data.options`, defeating the contract's tie
+  // rules and duplicating a React `key`. `MovementPickerData` promises no name uniqueness, so the
   // component must not depend on Decision 5's read happening to shadow it.
   const matches = result.matches.map((m) => m.option);
   // Near misses and some-words are only filled when `matches` is empty (the contract's rule). A row
@@ -334,18 +332,28 @@ export function MovementPicker({
    * one (review of B1: `zercher squat` named Back Squat).
    */
   const similar = near[0];
-  // Enter picks `matches[0]` iff unambiguous. Two `exact` hits resolve to the first — catalog-first by
-  // Decision 4's tie rule, which is also the row the status names. A similar name and a some-words
-  // row NEVER pick (P5): a typo and Enter must not choose a guess.
-  const enterTarget =
-    result.exact || result.aliasHit || matches.length === 1 ? matches[0] : undefined;
+  /**
+   * The movement the text already names, by the server's three signals (spec P1, C30): an exact
+   * name or exact alias is the first row, else the row its short forms spell. The status names it,
+   * Enter picks it, and "use as typed" is withheld for it. `existingItem` reads the same three.
+   */
+  const listed =
+    result.exact || result.aliasHit !== null
+      ? matches[0]
+      : (result.shortFormHit?.option ?? undefined);
+  // Enter picks the listed movement, or the one match when it is unambiguous. Not a match found only
+  // through part of another name (P5, P17), and never a similar name or a some-words row (P5): a
+  // typo and Enter must not choose a guess.
+  const soleMatch =
+    matches.length === 1 && !aliasFound.has(matches[0]!.publicId) ? matches[0] : undefined;
+  const enterTarget = listed ?? soleMatch;
 
   // ── "Use as typed": offered for non-empty text that is not already in the list ─────────────────
   // 🔴 **Emptiness is tested on the RAW text, never on the fold** (panel 2 · 4). `🙂` and `---` fold
   // to `''`; a fold-based check would drop them into browse mode and never render the disabled
   // footer Decision 8 promises for them. Probed by replacing this with a fold-based test, which
   // reddens the aria-disabled cases.
-  const offersTyped = deferredTrimmed !== '' && !result.exact && !result.aliasHit;
+  const offersTyped = deferredTrimmed !== '' && !listed;
   // The reason comes from the SCHEMA, so the UI never hand-composes a rule the boundary owns. A name
   // breaking two rules shows the first, by `typedMovementNameIssues`' order.
   const typedNameIssue = useMemo(() => {
@@ -362,10 +370,7 @@ export function MovementPicker({
       matches.length > 0
         ? COPY.statusCount(matches.length)
         : COPY.statusNone(near.length, someWords.length);
-    const reason =
-      (result.exact || result.aliasHit) && matches[0]
-        ? COPY.statusAlreadyListed(matches[0].name)
-        : typedNameIssue;
+    const reason = listed ? COPY.statusAlreadyListed(listed.name) : typedNameIssue;
     return reason ? `${count} ${reason}` : count;
   })();
 

@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 
-import { MovementPicker, type TodaysProgramForPicker } from './movement-picker';
+import { listedAs, MovementPicker, type TodaysProgramForPicker } from './movement-picker';
 
 afterEach(cleanup);
 
@@ -775,14 +775,50 @@ const pickerSources = () =>
   );
 
 describe('search (CAT-3 B1: short forms and similar names)', () => {
-  it('a short form finds the movement it stands for: "bb curl" is Barbell Curls (P3)', () => {
-    render(<Harness data={{ options: ALL_CATALOG }} />);
+  it('🔴 a short form that spells a movement IS that movement: "bb curl" is Barbell Curls (P1, C30)', () => {
+    const onPick = vi.fn();
+    render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
     open();
     type('bb curl');
     expect(headings()).toEqual([COPY.matches]);
-    expect(screen.getByRole('button', { name: /^Barbell Curls/ })).toBeTruthy();
-    // A short form never makes the name "already listed" (P1): it can still be added as typed.
-    expect(screen.getByRole('button', { name: COPY.asTyped('bb curl') })).toBeTruthy();
+    // Withheld, as an exact name or alias is: the server's `existingItem` reads the same signal.
+    expect(screen.queryByRole('button', { name: COPY.asTyped('bb curl') })).toBeNull();
+    expect(status()).toBe(`${COPY.statusCount(1)} ${COPY.statusAlreadyListed('Barbell Curls')}`);
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith({
+      kind: 'existing',
+      option: expect.objectContaining({ name: 'Barbell Curls' }),
+    });
+  });
+
+  it('a short form alone that spells no movement lists the match and still offers "use as typed"', () => {
+    // `KB` was an alias until B1 retired it (P3): `kb` now finds KB Swings by its own name only.
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('kb');
+    expect(screen.getByRole('button', { name: /^KB Swings/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: COPY.asTyped('kb') })).toBeTruthy();
+  });
+
+  it('🔴 a row found through part of another name says "also called", and Enter does not pick it (P5, P17)', () => {
+    const onPick = vi.fn();
+    const ohp = { ...catalogOption('Overhead Shoulder Press'), aliases: ['Military press'] };
+    const options = ALL_CATALOG.map((o) => (o.publicId === ohp.publicId ? ohp : o));
+    render(<Harness data={{ options }} onPick={onPick} />);
+    open();
+    type('military');
+    const row = screen.getByRole('button', { name: /^Overhead Shoulder Press/ });
+    expect(row.textContent).toContain(COPY.tagAlsoCalled('Military press'));
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it("listedAs is the server's existingItem: name, alias, or what a short form spells", () => {
+    expect(listedAs(ALL_CATALOG, 'romanian deadlift')?.name).toBe('Romanian Deadlift');
+    expect(listedAs(ALL_CATALOG, 'rdl')?.name).toBe('Romanian Deadlift');
+    expect(listedAs(ALL_CATALOG, 'bb curl')?.name).toBe('Barbell Curls');
+    expect(listedAs(ALL_CATALOG, 'kb')).toBeUndefined();
+    expect(listedAs(ALL_CATALOG, 'bulgarain')).toBeUndefined();
   });
 
   it('a misspelling lists the similar names, and the status counts them (P4, P5)', () => {

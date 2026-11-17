@@ -135,7 +135,7 @@ path and **creating** the deliberate one.
     - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts ("2 movements match some of your words") and `movementNameSchema`'s messages;
     - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
     - `onReturned` passes through to the sheet: the caller's moment for a page-level message after a close;
-    - `matchable` is the one place a `MovementOptionDTO` becomes what the matcher reads; `matchPickerOptions`, `searchPickerOptions` and `listedAs` all read through it, and the caller's "is this already an item" asks `listedAs`, never a copy;
+    - `matchable` is the one place a `MovementOptionDTO` becomes what the matcher reads; `searchPickerOptions` and `listedAs` both read through it, and the caller's "is this already an item" asks `listedAs`, never a copy;
     - `onToggle` says how a row was ticked (`'enter'` from the search), so the caller can say what a focusless Enter did;
     - `notice` takes the status region until the caller clears it (`onQueryChange` fires on every
       search change); `takeover` replaces the search, the list AND the footer (the caller's form; its exits are the header's ✕ and the caller's own Cancel), and opening it clears the search, so the list is whole when the form closes and the row the caller focuses stays put;
@@ -144,40 +144,43 @@ path and **creating** the deliberate one.
       accent fill is under AA. Rows carry `data-option-id`, and the create button has
       `PICKER_CREATE_ID`, so the caller can put focus back on them.
 
-13. **The list reads the library's search; "already listed" still reads the plain match** (CAT-3
-    B1). What the list shows is [spec](../specs/cat-3-movement-library.md) P3 to P5; what lives
-    between files here:
-    - `searchPickerOptions` feeds the list, while `matchPickerOptions` and `listedAs` stay on
-      `matchMovementOptions`. The search's `exact`/`aliasHit` equal theirs (P1), so "use as typed"
-      is withheld by the same rule as the item form and the server's `existingItem`.
+13. **The list reads the library's search, and "already listed" is the server's rule** (CAT-3 B1,
+    after C30). What the list shows is [spec](../specs/cat-3-movement-library.md) P1 to P5 and P17;
+    what lives between files here:
+    - `searchPickerOptions` feeds the list. **`listedAs` IS `existingItem`** over the same
+      mapping, so the list, the item form and `newItem` agree on the three signals: an exact name,
+      an exact alias, or what the text's short forms spell (`bb curl` is Barbell Curls). Any of the
+      three withholds "use as typed", gives the status its "Already in the list as …", and is what
+      Enter picks.
+    - **Enter otherwise picks only a sole match found by its own name**: never one found through
+      part of another name (P17), a similar name or a some-words row (P5). With nothing to pick it
+      puts a touch screen's keyboard away so the rows show.
+    - **"Also called" reads the search's `foundByAlias`**: an exact alias, part of one, or a near
+      miss of one. The component never re-derives which alias matched.
     - **The dedupe is the component's**, not the contract's: a row in `near` is dropped from
       `someWords` before anything (heading, count, hint, button) reads either.
-    - **Enter with nothing to pick** (several matches, similar names, some-words) puts a touch
-      screen's keyboard away so the rows show; it still picks nothing.
     - **The create hint names a near miss only** (`similar = near[0]`), never the first of several
       some-words rows, which would point a new movement at an arbitrary one, and never a row already
-      ticked in multi mode, where the tap it suggests would untick it. It is visible and tied
-      to the button by `aria-describedby`: in multi mode the button sits above the list
-      (invariant 12), so the hint is what reaches a keyboard first.
+      ticked in multi mode, where the tap it suggests would untick it. It is visible and tied to the
+      button by `aria-describedby`: in multi mode the button sits above the list (invariant 12), so
+      the hint is what reaches a keyboard first.
     - **The query stays in the picker** (P6). Its modules import only an allowlist, and a scan bans
       network, router, storage, logging and `new RegExp`. It reaches its callers through
       `createLabel` (every render, so it must be pure), `onQueryChange` (handed nothing) and, on a
-      tap, the deliberate create (`onCreate`, `onPick({ kind: 'typed' })`), which is the caller's
-      to send. `item-picker.test.tsx` holds that searching runs no action. ⚠️ It holds while the app
-      has no browser Sentry.
-    - **Cost:** `searchMovementOptions` over 500 options takes at most about 7.6 ms a call on a
-      desktop CPU (M1 Pro, Node 26, worst of eight queries: `kettelbell swingg`), on the deferred
-      value. Not measured on a phone; the spec's fallback (`near` after a pause) is not needed at
-      that figure.
+      tap, the deliberate create (`onCreate`, `onPick({ kind: 'typed' })`), which is the caller's to
+      send. `item-picker.test.tsx` holds that searching runs no action. ⚠️ It holds while the app has
+      no browser Sentry.
+    - **The `KB` and `DB bench` aliases are retired** (P3). ⚠️ So `kb` or `db bench` alone lists
+      its movement (Enter picks the one match) but no longer withholds "use as typed": neither
+      spells a whole movement once expanded.
+    - **Cost:** before C30, `searchMovementOptions` over 500 options took at most about 7.6 ms a
+      call on a desktop CPU (M1 Pro, Node 26), on the deferred value; not measured on a phone. C30's
+      measure at 500 entries is the contract's.
 
-    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. **After B1**, decided at the
-    prototype's sign-off (maintainer, 2026-11-17) and owned by the contract's chunk C30: a short
-    form's exact hit (`db row` beside Dumbbell row) withholds "use as typed" (`existingItem` expands
-    short forms, and the `KB` and `DB bench` aliases retire then); results say which alias matched,
-    so an alias-only near hit can read "also called"; the match order becomes best first. Until C30,
-    the picker's tests pin no order beyond an exact hit first. A near miss on a still-typing last
-    word (`bulgara`) comes as a proposal. "Did you mean" on a new item's name is `PICK-2`'s (spec §
-    Interactions).
+    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. The picker's tests pin no
+    result order beyond an exact hit first; the order is the contract's (C30). A near miss on a
+    still-typing last word (`bulgara`) comes as a proposal. "Did you mean" on a new item's name is
+    `PICK-2`'s (spec § Interactions).
 
 ## Traps
 
