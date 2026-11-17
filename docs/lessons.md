@@ -159,6 +159,8 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   seven spaced `>`s, so `format:check`, `guides:check` and CI all passed; a reviewer found it (FAM-1 4a-i,
   #437). → After any merge, read the WHOLE output and run `git diff --name-only --diff-filter=U`
   before committing; `git grep -nE '^(<{7}|={7}|>{7})( |$)|(> ){6}>'` must print nothing.
+  **Guarded since DX-17:** it happened again on #522, so the grep is now
+  `.github/scripts/check-conflict-markers.mjs`, in pre-commit and `format:check`.
 
 - **A skip label was added, the job was re-run, and the label was ignored.** → A re-run **replays the
   original event payload**, so `github.event.pull_request.labels` is frozen at the moment the run was

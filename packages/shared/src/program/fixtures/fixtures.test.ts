@@ -6,7 +6,12 @@ import { QUANTITY_SLOT } from '../../quantity-slots';
 import { dayPlanSchema, showsOnlyLogged, type DayPlan } from '../day-shapes';
 import { hasSetRows } from '../pieces';
 import { prescribedText } from '../prescribed-text';
-import { programListSchema, programViewSchema, workoutDraftSchema } from '../program-shapes';
+import {
+  programListSchema,
+  programViewSchema,
+  weekDraftSchema,
+  workoutDraftSchema,
+} from '../program-shapes';
 import { dayPlan, edit, programOf, workoutDraft, workoutOf } from './build';
 import {
   adultProgramWithCopy,
@@ -35,6 +40,7 @@ import {
   PROGRAM_LIST_FIXTURES,
   PROGRAM_VIEW_FIXTURES,
   programsList,
+  programView,
   sundayRestStretchOnly,
   todayStretchingFirst,
   todayTwoPrograms,
@@ -1339,5 +1345,56 @@ describe('new-program-empty and adult-program-with-copy', () => {
     ]);
     // A copy is its own workout: not the Family program's Conditioning.
     expect(copy?.workoutPublicId).not.toBe(fixtureIds.workout('w4'));
+  });
+});
+
+describe('programView, exported for a proof that saves a week (C27)', () => {
+  /** Every world a day fixture is built from, before and after its edit, with each program in it. */
+  const everyProgram = Object.entries(DAY_PLAN_FIXTURE_SOURCES).flatMap(([name, source]) =>
+    [source.world, source.before]
+      .filter((world) => world !== null && world !== undefined)
+      .flatMap((world) => world.programs.map((program) => ({ name, world, id: program.id }))),
+  );
+
+  it('gives a week saveWeek takes as it is, for every program of every fixture world', () => {
+    expect(everyProgram.length).toBeGreaterThan(Object.keys(DAY_PLAN_FIXTURE_SOURCES).length);
+    for (const { name, world, id } of everyProgram) {
+      const view = programView(world, id);
+      const draft = { programPublicId: view.programPublicId, days: view.week };
+      // Parsing changes nothing: every weekday is there, and a slot with no label holds `null`.
+      expect(weekDraftSchema.parse(draft), `${name} / ${id}`).toEqual(draft);
+      expect(Object.keys(view.week), `${name} / ${id}`).toHaveLength(7);
+    }
+  });
+
+  it('🔴 reads a blank label in the world as none', () => {
+    // The rule this export exists to share. The seeded family program labels every slot, so the
+    // premise is checked first: some world holds a slot whose label is blank.
+    const blank = everyProgram.filter(({ world, id }) =>
+      Object.values(world.programs.find((p) => p.id === id)?.week ?? {}).some((slots) =>
+        slots.some((slot) => slot.label === ''),
+      ),
+    );
+    expect(blank.length).toBeGreaterThan(0);
+    for (const { world, id } of blank) {
+      const labels = Object.values(programView(world, id).week).flatMap((slots) =>
+        slots.map((slot) => slot.label),
+      );
+      expect(labels).not.toContain('');
+      expect(labels).toContain(null);
+    }
+  });
+
+  it('follows an edit to the world: the week differs where the edit was, and nowhere else', () => {
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES['workout-left-the-week'];
+    if (!before) throw new Error('workout-left-the-week has no world before its edit');
+    const was = programView(before, 'p1').week;
+    const is = programView(world, 'p1').week;
+    // The edit took Heavy A off Friday.
+    expect(is[5]).toEqual(
+      was[5].filter((slot) => slot.workoutPublicId !== fixtureIds.workout('w2')),
+    );
+    expect(is[5]).not.toEqual(was[5]);
+    expect({ ...is, 5: was[5] }).toEqual(was);
   });
 });
