@@ -54,6 +54,7 @@ import {
   SESSION_WORKOUT_DAY_UNIQUE_INDEX,
   SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX,
 } from '../../src/schema';
+import { ATHLETE_GRAPH, ATHLETE_GRAPH_TABLES } from '../../src/erasure/graph';
 import { seed } from '../../src/seed';
 import { findOrCreateTypedMovement } from '../../src/writers/movement-catalog';
 import {
@@ -2191,7 +2192,7 @@ async function assignmentsWithoutWeekdays(tx: VerifyTx): Promise<number[]> {
  * included). The per-athlete erasure must name every one: a new table one hop down is as much the
  * athlete's as one with an FK to `profiles`.
  */
-async function tablesReachableFromProfiles(): Promise<string[]> {
+export async function tablesReachableFromProfiles(): Promise<string[]> {
   return rowsOf<{ t: string }>(
     await db.execute(sql`
       WITH RECURSIVE reach(t) AS (
@@ -2205,41 +2206,10 @@ async function tablesReachableFromProfiles(): Promise<string[]> {
   ).map((r) => r.t);
 }
 
-/**
- * 🔴 **"Erase one athlete" as ONE ordered list** (FAM-1 step 5; ADR 0007 A2 §8, §10): child before
- * parent, each table with its scope. `eraseAthlete` and `athleteCounts` are generated from it, and
- * `db:verify` reads the runbook's step-4 table and step-3 count block and requires both to be exactly
- * this list, in this order (`runbookEraseAthleteLists`). No `deleted_at` filter anywhere: a hidden row
- * is still a row the erasure removes.
- */
-const P_ENTRIES = (p: number) => sql`(SELECT id FROM entries WHERE profile_id = ${p})`;
-const P_SESSIONS = (p: number) => sql`(SELECT id FROM sessions WHERE profile_id = ${p})`;
-const P_ASSIGNMENTS = (p: number) =>
-  sql`(SELECT id FROM program_assignments WHERE profile_id = ${p})`;
-const ERASE_ATHLETE = [
-  {
-    table: 'entry_set_quantities',
-    scope: (p: number) =>
-      sql`entry_set_id IN (SELECT id FROM entry_sets WHERE entry_id IN ${P_ENTRIES(p)})`,
-  },
-  { table: 'entry_sets', scope: (p: number) => sql`entry_id IN ${P_ENTRIES(p)}` },
-  { table: 'entries', scope: (p: number) => sql`profile_id = ${p}` },
-  { table: 'supersets', scope: (p: number) => sql`session_id IN ${P_SESSIONS(p)}` },
-  { table: 'sessions', scope: (p: number) => sql`profile_id = ${p}` },
-  { table: 'day_readiness', scope: (p: number) => sql`profile_id = ${p}` },
-  { table: 'ramp_targets', scope: (p: number) => sql`profile_id = ${p}` },
-  { table: 'prescription_targets', scope: (p: number) => sql`profile_id = ${p}` },
-  {
-    table: 'program_assignment_weekdays',
-    scope: (p: number) => sql`assignment_id IN ${P_ASSIGNMENTS(p)}`,
-  },
-  { table: 'program_assignments', scope: (p: number) => sql`profile_id = ${p}` },
-  { table: 'profiles', scope: (p: number) => sql`id = ${p}` },
-] as const;
-const ERASE_ATHLETE_TABLES = ERASE_ATHLETE.map((r) => r.table);
-
+// "Erase one athlete" is `ATHLETE_GRAPH` (`src/erasure/graph.ts`), one ordered list; the two helpers
+// below are generated from it, and the runbook pins and step 5's proofs below all read it.
 async function eraseAthlete(tx: VerifyTx, p: number): Promise<void> {
-  for (const { table, scope } of ERASE_ATHLETE) {
+  for (const { table, scope } of ATHLETE_GRAPH) {
     await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE ${scope(p)}`);
   }
 }
@@ -2247,7 +2217,7 @@ async function eraseAthlete(tx: VerifyTx, p: number): Promise<void> {
 /** One athlete's row count in each table the erasure names (no `deleted_at` filter). */
 async function athleteCounts(tx: VerifyTx, p: number): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
-  for (const { table, scope } of ERASE_ATHLETE) {
+  for (const { table, scope } of ATHLETE_GRAPH) {
     const [row] = rowsOf<{ n: number }>(
       await tx.execute(
         sql`SELECT count(*)::int AS n FROM ${sql.identifier(table)} WHERE ${scope(p)}`,
@@ -2362,7 +2332,7 @@ async function householdOfBlock(tx: VerifyTx, blockId: number): Promise<number> 
 }
 
 /** An app-created kid in `householdId` (not a seeded one: the seed would re-create a seeded profile). */
-async function mkKid(tx: VerifyTx, householdId: number, name: string): Promise<number> {
+export async function mkKid(tx: VerifyTx, householdId: number, name: string): Promise<number> {
   const [row] = await tx
     .insert(schema.profiles)
     .values({ publicId: newId(), householdId, name, kind: PROFILE_KIND.kid })
@@ -2371,7 +2341,7 @@ async function mkKid(tx: VerifyTx, householdId: number, name: string): Promise<n
 }
 
 type AssignmentInsert = typeof schema.programAssignments.$inferInsert;
-async function mkAssignment(
+export async function mkAssignment(
   tx: VerifyTx,
   row: Pick<AssignmentInsert, 'blockId' | 'profileId'> & Partial<AssignmentInsert>,
   weekdays: readonly number[] = [],
@@ -2420,19 +2390,19 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   // Every table reachable from profiles by FK, at any depth, is one the erasure deletes.
   assert.deepEqual(
     await tablesReachableFromProfiles(),
-    [...ERASE_ATHLETE_TABLES].sort(),
+    [...ATHLETE_GRAPH_TABLES].sort(),
     'FAM-1 5: every table reachable from profiles is in the per-athlete erasure, and nothing else is',
   );
   // The runbook IS the code: its step-4 order and its step-3 count block are exactly this list.
   const runbook = runbookEraseAthleteLists();
   assert.deepEqual(
     runbook.order,
-    ERASE_ATHLETE_TABLES,
+    ATHLETE_GRAPH_TABLES,
     "FAM-1 5: the runbook's erasure order is eraseAthlete's, table for table",
   );
   assert.deepEqual(
     runbook.counted,
-    ERASE_ATHLETE_TABLES,
+    ATHLETE_GRAPH_TABLES,
     "FAM-1 5: the runbook's step-3 counts cover eraseAthlete's tables, in its order",
   );
   console.log(
@@ -2943,11 +2913,17 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const otherFamily = await mkTemplateBlock(exec, B_SCOPE, 'fam-1-5-other-family');
     const householdId = await householdOfBlock(tx, sharedBlock);
     const entryBase = await probeEntryBase(tx, sharedBlock, 'FAM-1 5');
-    const [{ prescriptionId }] = await tx
+    // A prescription of household A's own, so every one of the athletes' rows is household A's: the
+    // household graph erases a target with A only when its athlete AND its prescription are A's.
+    const [aPrescription] = await tx
       .select({ prescriptionId: schema.prescriptions.id })
       .from(schema.prescriptions)
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
+      .where(eq(schema.programBlocks.householdId, householdId))
       .orderBy(schema.prescriptions.id)
       .limit(1);
+    assert.ok(aPrescription, "FAM-1 5: household A holds a prescription for the athletes' targets");
+    const { prescriptionId } = aPrescription;
     const [{ metricKey }] = await tx
       .select({ metricKey: schema.metricDefinitions.key })
       .from(schema.metricDefinitions)
@@ -3041,7 +3017,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const P = await athlete('Erase probe', [sharedBlock, onlyP]);
     const S = await athlete('Sibling probe', [sharedBlock]);
     const before = await athleteCounts(tx, P.id);
-    for (const t of ERASE_ATHLETE_TABLES) {
+    for (const t of ATHLETE_GRAPH_TABLES) {
       assert.ok(
         before[t]! > 0,
         `FAM-1 5: the erased athlete holds a row in ${t} before the erasure`,
@@ -3095,7 +3071,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     await eraseAthlete(tx, P.id);
     assert.deepEqual(
       await athleteCounts(tx, P.id),
-      Object.fromEntries(ERASE_ATHLETE_TABLES.map((t) => [t, 0])),
+      Object.fromEntries(ATHLETE_GRAPH_TABLES.map((t) => [t, 0])),
       'FAM-1 5: after the erasure the athlete has no row in any table',
     );
     void afterStrayRemoved;
