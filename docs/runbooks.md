@@ -434,11 +434,14 @@ EVERY insert into `entries` and every hide and restore, so all logging; roll Ver
 clearing `hide_reason`, which the CHECK refuses (`23514`) on any row Clear this day hid. ⚠️ Once the migration is
 observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
 production from following new deployments automatically, so later merges would not go live (unverified
-here; check the Vercel dashboard after a rollback). 🔴 **The window is also a privacy condition:** a
+here; check the Vercel dashboard after a rollback). 🔴 **The window was a privacy condition until `V1-9b` B1-2:** a
 failed insert's `DrizzleQueryError` carries its `params` (a weigh-in, a note, how a session felt),
 which Sentry's scrubber strips but Next's `console.error` writes to Vercel's runtime logs, kept 24
-hours. If a write failed in the window, record it in the deletion ledger's incident notes
-(`docs/privacy/data-inventory.md` §7) rather than assume the logs are clean.
+hours. Every DAL write and the scope read now rethrow through `lib/dal/quiet-db-errors.ts`, so a
+failure in the window logs the operation, the error's type and the SQLSTATE, and at most ids and a
+day from a read. If a deploy predates B1-2, or a write failed outside the DAL, record it in the
+deletion ledger's incident notes (`docs/privacy/data-inventory.md` §7) rather than assume the logs
+are clean.
 
 ---
 

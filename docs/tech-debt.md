@@ -100,9 +100,10 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `apps/web/lib/dal/quiet-db-errors.ts` (shared since 12b, moved out of `lib/dal/program/`) with only
   the operation, the error's type, the SQLSTATE and the stack's frame lines, so the gate above is
   met. **Closed by `V1-9b` B1-2:** every write in `lib/dal/entries.ts` and `lib/dal/profiles.ts`
-  (fourteen, the movement find-or-create inside `logStrengthSession` included), pinned by
-  `lib/dal/writes-quiet-errors.test.ts`. What is left unwrapped is reads, whose parameters are
-  ids and a day.
+  (fourteen functions, fifteen calls: `logStrengthSession`'s movement find-or-create has its own,
+  `logStrengthSession.resolveMovements`), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
+  read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
+  (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 

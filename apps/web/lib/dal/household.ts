@@ -14,6 +14,7 @@ import { and, eq, isNull, not } from 'drizzle-orm';
 import { cache } from 'react';
 
 import { db } from './db';
+import { DbWriteError } from './quiet-db-errors';
 import { getCurrentUser } from './session';
 
 /**
@@ -113,7 +114,11 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
     // ⚠️ **The code is on `error.cause`, not on `error`** — drizzle wraps the driver's error. A test
     // that fabricates `{ code: '42P01' }` on the error itself passes while production rethrows, which
     // is a `42P01` on every route: the total outage this branch exists to prevent.
-    if (!isSchemaMissing(error)) throw error;
+    //
+    // 🔴 **Rethrown WITHOUT its params** (V1-9b B1-2): drizzle's message embeds `params:`, and the
+    // param here is the Clerk user id, which Next's `console.error` would put in Vercel's runtime log.
+    // `DbWriteError` keeps the operation, the error's type and the SQLSTATE, and nothing else.
+    if (!isSchemaMissing(error)) throw new DbWriteError('getHouseholdScope', error);
     // ⚠️ **FIXED MESSAGE AND TAG ONLY — never the error, never `extra`.** The caught error is a
     // `DrizzleQueryError` whose message embeds `params:`, and the param here IS the Clerk user id.
     // `scrubSentryEvent` has no allowlist for hand-built contexts; the DAL does not rely on it.

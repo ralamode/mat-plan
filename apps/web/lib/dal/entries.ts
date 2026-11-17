@@ -525,7 +525,8 @@ export async function logStrengthSession(
   // than a lookalike (write-path invariant 3) — which is the only way the cross-household refusal is
   // PROVED. This DAL is now a pass-through: it holds no resolution logic of its own.
   // A typed name's find-or-create is a write too (its own INSERT, before the session's transaction).
-  const movements = await quietDbErrors('logStrengthSession', () =>
+  // Its own operation name, so a log line tells a catalog failure from the session's.
+  const movements = await quietDbErrors('logStrengthSession.resolveMovements', () =>
     resolveSessionMovements(db, scope, args.movements),
   );
 
