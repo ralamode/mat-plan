@@ -37,7 +37,7 @@ g update-ref refs/remotes/origin/main HEAD
 
 # dry <ref-to-reset-to-or-empty> -> selection on stdout. Each case starts from a clean base.
 reset() { g reset -q --hard origin/main && g clean -qfd; }
-dry() { (cd "$repo" && GITHUB_ACTIONS= node "$script" --base origin/main --dry-run 2>&1); }
+dry() { (cd "$repo" && CI= GITHUB_ACTIONS= node "$script" --base origin/main --dry-run 2>&1); }
 has() { printf '%s' "$1" | grep -qxF "$2"; }
 
 reset
@@ -46,15 +46,37 @@ g commit -qam 'feat: lb'
 out="$(dry)"
 if has "$out" 'mode: changed' && has "$out" 'traced: packages/shared/src/units.ts' &&
   has "$out" 'scanner: apps/web/app/pages-need-a-session.test.ts'; then
-  ok 'a packages/shared file is handed to vitest --changed (which reaches its test), plus the scanners'
+  ok 'a committed packages/shared file is traced (vitest related reaches its test), plus the scanners'
 else bad 'packages/shared change' "$out"; fi
 
 reset
 put 'apps/web/app/p/[profileId]/new/page.tsx' 'export default function Page() {}'
-out="$(dry)" # untracked, as vitest's --changed also counts it
+g add -A && g commit -qm 'feat: a page'
+out="$(dry)"
 if has "$out" 'scanner: apps/web/app/pages-need-a-session.test.ts'; then
-  ok 'a new page.tsx (untracked) selects pages-need-a-session'
+  ok 'a new committed page.tsx selects pages-need-a-session'
 else bad 'new page.tsx' "$out"; fi
+
+# 🔴 The working tree is not the push (2026-11-17: an applied mutation patch made a db push run the
+# editor suites). An uncommitted edit is reported, never traced.
+reset
+put packages/shared/src/units.ts 'export const UNITS = ["kg", "st"];' # modified, NOT committed
+put docs/guide.md '# guide, revised'
+g commit -qam 'docs: guide' -- docs/guide.md
+out="$(dry)"
+if has "$out" 'untested-local: packages/shared/src/units.ts' && ! printf '%s' "$out" | grep -q '^traced:'; then
+  ok 'an uncommitted edit is reported as untested-local and never traced'
+else bad 'uncommitted edit' "$out"; fi
+
+# Outside CI a full run is CI's: the script never spawns the whole suite there.
+if grep -qF 'full suite due: CI runs it' "$script" && grep -qF 'inCI()' "$script"; then
+  ok 'outside CI a due full run is left to CI (related tests and scanners still run)'
+else bad 'the full-run skip outside CI is missing'; fi
+
+# The real run must not hand vitest --changed (which re-adds the working tree).
+if ! grep -qE "'--changed'" "$script" && grep -qF "'related'" "$script"; then
+  ok 'the real run uses vitest related on committed files, never --changed'
+else bad 'the run still uses --changed'; fi
 
 reset
 put docs/privacy/notice.md '# notice, revised'
@@ -71,7 +93,7 @@ out="$(dry)"
 if has "$out" 'mode: none' && has "$out" 'reason: no tests reached by this change'; then
   ok 'a docs-only change runs nothing'
 else bad 'docs-only' "$out"; fi
-out="$(cd "$repo" && GITHUB_ACTIONS= node "$script" --base origin/main 2>&1)"; code=$?
+out="$(cd "$repo" && CI= GITHUB_ACTIONS= node "$script" --base origin/main 2>&1)"; code=$?
 if [ "$code" -eq 0 ] && printf '%s' "$out" | grep -qF 'no tests reached by this change'; then
   ok 'and a real (non-dry) run of it says so and exits 0 without spawning vitest'
 else bad "docs-only real run: exit $code" "$out"; fi
@@ -82,7 +104,8 @@ for trigger in pnpm-lock.yaml pnpm-workspace.yaml apps/web/tsconfig.json package
   put "$trigger" "# changed $trigger"
   g add -A && g commit -qm "chore: $trigger"
   out="$(dry)"
-  if has "$out" 'mode: full' && has "$out" "reason: $trigger forces a full run"; then
+  if has "$out" 'mode: full' && has "$out" "reason: $trigger forces a full run" &&
+    has "$out" 'local: full suite due: CI runs it'; then
     ok "$trigger forces a full run"
   else bad "trigger $trigger" "$out"; fi
 done
@@ -96,7 +119,7 @@ else bad 'rename source' "$out"; fi
 
 reset
 g rm -q apps/web/test/bypass-is-contained.test.ts && g commit -qm 'test: drop'
-out="$(cd "$repo" && GITHUB_ACTIONS= node "$script" --base origin/main --dry-run 2>&1)"; code=$?
+out="$(cd "$repo" && CI= GITHUB_ACTIONS= node "$script" --base origin/main --dry-run 2>&1)"; code=$?
 if [ "$code" -eq 2 ] && printf '%s' "$out" | grep -qF 'apps/web/test/bypass-is-contained.test.ts' &&
   ! printf '%s' "$out" | grep -qF 'pages-need-a-session'; then
   ok 'a required scanner the grep no longer finds: exit 2, naming it'

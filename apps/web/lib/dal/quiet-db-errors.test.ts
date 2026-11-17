@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { ProgramWriteError, quietDbErrors } from './quiet-db-errors';
+import { DbWriteError, quietDbErrors } from './quiet-db-errors';
 
 // A note an adult might type about a child; it must not survive the rethrow.
 const NOTE = 'knee sore after practice, keep it light';
@@ -29,8 +29,8 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
     const thrown = await quietDbErrors('saveWorkout', async () => {
       throw failedSave();
     }).catch((error: unknown) => error);
-    expect(thrown).toBeInstanceOf(ProgramWriteError);
-    const err = thrown as ProgramWriteError;
+    expect(thrown).toBeInstanceOf(DbWriteError);
+    const err = thrown as DbWriteError;
     expect(err.code).toBe('23505');
     expect(err.message).toBe('saveWorkout failed (DrizzleQueryError, SQLSTATE 23505)');
     expect(err.cause).toBeUndefined();
@@ -55,7 +55,7 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
   it('an error with no SQLSTATE says only which operation failed', async () => {
     const thrown = await quietDbErrors('createProgram', async () => {
       throw new Error(`connection lost while writing ${NOTE}`);
-    }).catch((error: unknown) => error as ProgramWriteError);
+    }).catch((error: unknown) => error as DbWriteError);
     expect(thrown.message).toBe('createProgram failed (Error)');
     expect(inspect(thrown)).not.toContain(NOTE);
   });
@@ -65,7 +65,7 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
       throw new TypeError(`cannot read 'unit' of ${NOTE}`);
     }
     const thrown = await quietDbErrors('saveWorkout', async () => writerBug()).catch(
-      (error: unknown) => error as ProgramWriteError,
+      (error: unknown) => error as DbWriteError,
     );
     expect(thrown.message).toBe('saveWorkout failed (TypeError)');
     expect(thrown.stack).toMatch(/\n\s+at writerBug .*quiet-db-errors\.test\.ts:\d+:\d+/);
@@ -75,7 +75,7 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
   it('a Node errno is not a SQLSTATE', async () => {
     const thrown = await quietDbErrors('saveWorkout', async () => {
       throw Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
-    }).catch((error: unknown) => error as ProgramWriteError);
+    }).catch((error: unknown) => error as DbWriteError);
     expect(thrown.code).toBeNull();
     expect(thrown.message).toBe('saveWorkout failed (Error)');
   });
@@ -83,7 +83,7 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
   it('a multi-line message never reaches the stack, even a line that starts with "at"', async () => {
     const thrown = await quietDbErrors('saveWorkout', async () => {
       throw new Error(`Failed query: insert\n    at ${NOTE}\nparams: ${NOTE}`);
-    }).catch((error: unknown) => error as ProgramWriteError);
+    }).catch((error: unknown) => error as DbWriteError);
     expect(thrown.stack).not.toContain(NOTE);
     expect(thrown.stack).not.toContain('params');
   });
@@ -96,7 +96,7 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
         [value],
         new Error('x'),
       );
-    }).catch((error: unknown) => error as ProgramWriteError);
+    }).catch((error: unknown) => error as DbWriteError);
     expect(thrown.stack).not.toContain('the gym');
     // Frames are still kept: the throw's own position survives.
     expect(thrown.stack).toMatch(/\n\s+at .*:\d+:\d+/);

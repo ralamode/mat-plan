@@ -234,6 +234,13 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
   anything but the **hash-pinned** copy whose hooks no-op under CI, because the model job would load
   them. The action re-fetches that config from `main` mid-run, so the job also withholds the review if
   what the CLI loaded differs from what was guarded, including a config file that is new on `main`.
+- **The pinned hooks** (`PINNED_HOOKS`): `guard-main-checkout.mjs`, `guard-process-kill.mjs` (DX-18 1b)
+  and `session-context.mjs`. Each must exit under `CI`/`GITHUB_ACTIONS` before doing anything; the
+  kill guard also loads its lexer (from `guard-main-checkout.mjs`) only after that exit, by a dynamic
+  `import()`, so no imported code runs in the job. Both guards are `PreToolUse` **Bash** hooks, and the
+  model job has no shell, so they would not fire there even without the exit. The worst a broken
+  kill guard could do outside CI is deny or allow a local `kill`; it reads stdin and writes one JSON
+  decision, with no network, file write or subprocess.
 - **Accepted residual:** the pinned action installs the Claude CLI with `curl … | bash` inside the
   step that holds the token, verified only against a checksum from the same host. The action SHA does
   not pin that download. It is the vendor that issued the token, so it is accepted, not mitigated. The

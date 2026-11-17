@@ -12,7 +12,7 @@ import {
 
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
-import { quietDbErrors } from './quiet-db-errors';
+import { quietDbErrors } from '../quiet-db-errors';
 import { reportProgramMiss } from './report-miss';
 
 /**

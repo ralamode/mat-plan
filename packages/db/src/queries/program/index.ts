@@ -6,3 +6,4 @@
 export { programIn, workoutIn, workoutInHousehold } from './exists';
 export { readWorkoutDraft } from './workout';
 export { readWeek } from './week';
+export { movementOptions, type MovementOption } from './movement-options';

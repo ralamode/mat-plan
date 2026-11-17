@@ -1,4 +1,16 @@
-import { QUERY_SHORT_FORMS } from './catalog/vocabulary';
+import {
+  EQUIPMENT,
+  MUSCLES,
+  QUERY_SHORT_FORMS,
+  type Equipment,
+  type Muscle,
+} from './catalog/vocabulary';
+import {
+  movementFiltersOn,
+  passesMovementFilters,
+  type FilterableMovement,
+  type MovementFilters,
+} from './movement-filters';
 import { MOVEMENT_NAME_MAX } from './movements';
 import { foldName } from './text';
 
@@ -459,7 +471,46 @@ export type MovementSearchResult<T> = MovementMatchResult<T> & {
    * found by its own name is not in the map.
    */
   readonly foundByAlias: ReadonlyMap<T, string>;
+  /**
+   * The rows the typed name already names: an exact name, an exact alias, or the movement a short
+   * form spells (P1). 🔴 **They are the first rows of `matches` whatever the filters say** (P8):
+   * the picker refuses to make an item of that name, so it must show the item it means.
+   */
+  readonly hits: readonly T[];
+  /** The `hits` that are library movements outside the filters: marked "not in your filters". */
+  readonly hitsOutsideFilters: readonly T[];
+  /**
+   * With a filter on, the household's own items the query found (as matches, near misses or
+   * some-words rows, in that order), which a filter cannot judge: one section, "Your custom items
+   * (not filtered)", after the filtered matches (P9). They are then in none of the other three
+   * lists. A custom item that is a hit is not here: it stays first in `matches`. Empty with no
+   * filter on, when a custom item sits among `matches` like any row.
+   */
+  readonly custom: readonly T[];
+  /**
+   * How many library movements the query found that the filters removed (P10): "3 more are not in
+   * your filters". `hits` are not counted; they are shown.
+   */
+  readonly outsideFilters: number;
+  /**
+   * The row Enter picks, or `null` (P5): a hit; or the only match there is to pick, when it was
+   * found by its own name or through a short form. Under a filter "the only match" counts the
+   * filtered matches and the custom items that MATCHED (they are on the screen, set apart), so
+   * one filtered match beside one custom match is two to choose from.
+   *
+   * 🔴 **Never a row found by another name, a near miss or a some-words row**, and that holds for
+   * a custom item set apart under a filter as for any row: those are offers, and Enter on an
+   * offer would add a movement nobody chose. (The accepted prototype let Enter take a lone custom
+   * near miss under a filter; its own comment and P5 say otherwise, and P5 is the rule.)
+   */
+  readonly enterTarget: T | null;
 };
+
+/** The search before the filters: every field that does not depend on them. */
+type Found<T> = Omit<
+  MovementSearchResult<T>,
+  'hitsOutsideFilters' | 'custom' | 'outsideFilters' | 'enterTarget'
+>;
 
 /**
  * The movement library's search (CAT-3 spec, chunks C0b-1 and C30): {@link matchMovementOptions},
@@ -496,15 +547,68 @@ export type MovementSearchResult<T> = MovementMatchResult<T> & {
  * characters; the field's own limit and the name schema keep such a query from being typed or
  * saved.) It is pure and runs on the device: the query goes nowhere.
  *
- * `search` is an object because the filters join it in the next chunk (C0b-2).
+ * **Filters** (P7 to P10; `movement-filters.ts`). The query is always read over every option
+ * first: `exact`, `aliasHit`, `shortFormHit`, `foundByAlias` and `hits` do not depend on the
+ * filters, and `near` is computed only when nothing matched before filtering. Then, with a filter
+ * on: a library row that does not pass leaves `matches`, `near` and `someWords` and is counted in
+ * `outsideFilters`; a household's own row moves to `custom`; `hits` stay first in `matches`; and
+ * nothing is reordered. With no filter on the result is the unfiltered one.
+ *
+ * `someWords` never repeats a row of `near` (P5).
  */
-export function searchMovementOptions<T extends MatchableMovement>(
+export function searchMovementOptions<T extends MatchableMovement & FilterableMovement>(
   options: readonly T[],
-  search: { readonly query: string },
+  search: { readonly query: string; readonly filters?: MovementFilters },
 ): MovementSearchResult<T> {
-  const folded = foldMovementQuery(search.query.trim().slice(0, MOVEMENT_NAME_MAX));
+  const found = findMovementOptions(options, search.query);
+  const filters = search.filters;
+  const isHit = new Set<T>(found.hits);
+  const beyondHits = found.matches.filter((option) => !isHit.has(option));
+  if (filters === undefined || movementFiltersOn(filters) === 0) {
+    return {
+      ...found,
+      hitsOutsideFilters: [],
+      custom: [],
+      outsideFilters: 0,
+      enterTarget: enterTargetOf(found, beyondHits),
+    };
+  }
+  const fits = (option: T) => passesMovementFilters(option, filters);
+  const kept = (rows: readonly T[]) => rows.filter((option) => option.isCatalog && fits(option));
+  const everyRow = [...new Set([...beyondHits, ...found.near, ...found.someWords])];
+  const keptMatches = kept(beyondHits);
+  return {
+    ...found,
+    matches: [...found.hits, ...keptMatches],
+    near: kept(found.near),
+    someWords: kept(found.someWords),
+    hitsOutsideFilters: found.hits.filter((option) => option.isCatalog && !fits(option)),
+    custom: everyRow.filter((option) => !option.isCatalog),
+    outsideFilters: everyRow.filter((option) => option.isCatalog && !fits(option)).length,
+    // Only a custom item that MATCHED stands beside the filtered matches as something to pick.
+    enterTarget: enterTargetOf(found, [
+      ...keptMatches,
+      ...beyondHits.filter((option) => !option.isCatalog),
+    ]),
+  };
+}
+
+/** A hit; or the one pickable match, when it was not found through another name (P5, P17). */
+function enterTargetOf<T>(found: Found<T>, pickable: readonly T[]): T | null {
+  const hit = found.hits[0];
+  if (hit !== undefined) return hit;
+  const [only, ...others] = pickable;
+  if (only === undefined || others.length > 0) return null;
+  return found.foundByAlias.has(only) ? null : only;
+}
+
+function findMovementOptions<T extends MatchableMovement>(
+  options: readonly T[],
+  typedQuery: string,
+): Found<T> {
+  const folded = foldMovementQuery(typedQuery.trim().slice(0, MOVEMENT_NAME_MAX));
   if (folded === '') {
-    return { ...NO_MATCH, near: [], shortFormHit: null, foundByAlias: new Map() };
+    return { ...NO_MATCH, near: [], shortFormHit: null, foundByAlias: new Map(), hits: [] };
   }
   const prepared = prepare(options);
   const { rows: typedRows, result: typed } = plainMatch(prepared, folded);
@@ -512,7 +616,13 @@ export function searchMovementOptions<T extends MatchableMovement>(
   // 🔴 A query of more words than the cap gets the plain match and nothing added. Reading only its
   // first words would let a row "match" without a word that was typed.
   if (words.length > SEARCH_WORDS_MAX) {
-    return { ...typed, near: [], shortFormHit: null, foundByAlias: aliasesOf(typedRows) };
+    return {
+      ...typed,
+      near: [],
+      shortFormHit: null,
+      foundByAlias: aliasesOf(typedRows),
+      hits: hitsOf(typedRows, null),
+    };
   }
 
   const expanded = words.flatMap((word) => shortFormWords(word) ?? [word]);
@@ -539,21 +649,110 @@ export function searchMovementOptions<T extends MatchableMovement>(
       exact: typed.exact,
       shortFormHit,
       foundByAlias,
+      hits: hitsOf(all, shortFormHit),
     };
   }
   const near = nearMisses(prepared, expanded);
+  const isNear = new Set(near.map((miss) => miss.option));
+  const someWords = hasShortForm
+    ? inOrder(typed.someWords, someWordsOf(prepared, expanded))
+    : typed.someWords;
   for (const miss of near) if (miss.alias !== null) foundByAlias.set(miss.option, miss.alias);
   return {
     matches,
-    someWords: hasShortForm
-      ? inOrder(typed.someWords, someWordsOf(prepared, expanded))
-      : typed.someWords,
+    // A row offered as a close spelling is not offered again for one of its words (P5).
+    someWords: someWords.filter((option) => !isNear.has(option)),
     near: near.map((miss) => miss.option),
     aliasHit: typed.aliasHit,
     exact: typed.exact,
     shortFormHit,
     foundByAlias,
+    hits: [],
   };
+}
+
+/**
+ * The rows that ARE the typed name: found as typed at quality 0 (by name, then by alias), then
+ * the movement a short form spells. In `matches`' order, of which they are the first rows.
+ */
+function hitsOf<T>(ranked: readonly Row<T>[], shortFormHit: T | null): T[] {
+  const typed = ranked
+    .filter((row) => row.quality === 0 && (row.by === FOUND_BY.name || row.by === FOUND_BY.alias))
+    .map((row) => row.option);
+  return shortFormHit === null || typed.includes(shortFormHit) ? typed : [...typed, shortFormHit];
+}
+
+export type MovementFilterCounts = {
+  /** Rows on the screen under the filters as they are. */
+  readonly total: number;
+  /** If the equipment choice were "No equipment", with the muscles as they are. */
+  readonly equipmentNone: number;
+  /** For each item: if it alone were ticked under "chosen", with the muscles as they are. */
+  readonly equipment: ReadonlyMap<Equipment, number>;
+  /** For each muscle: if it alone were ticked, with the equipment choice as it is. */
+  readonly muscles: ReadonlyMap<Muscle, number>;
+};
+
+/**
+ * What each filter choice would leave on the screen (P7): the number beside it in the panel, and
+ * 🔴 **zero means the choice is shown greyed and cannot be ticked** _(maintainer, 2026-11-17)_, for
+ * an equipment item as for a muscle. A choice already ticked stays tickable so it can be unticked.
+ *
+ * **What is counted is what the list would show**, as the accepted prototype's panel counts it.
+ * With no query: the library movements that fit (the custom items are their own section and are
+ * not in the number). With a query: the hits and the custom items the query found, which are
+ * shown whatever the filters (P8, P9), plus the library rows that pass. So while an exact name
+ * is typed no choice greys: every one of them still leaves that row.
+ *
+ * Each number is for that choice ALONE of its kind, with the other kind's filters as they are.
+ * Items are joined by "any of" and so are muscles, so a choice that counts zero alone can add no
+ * row to whatever is already ticked: greying it hides nothing. Every vocabulary code has an
+ * entry, in the vocabulary's order; `equipmentFilterOrder` gives the order the panel lists them.
+ */
+export function movementFilterCounts<T extends MatchableMovement & FilterableMovement>(
+  options: readonly T[],
+  search: { readonly query: string; readonly filters: MovementFilters },
+): MovementFilterCounts {
+  const found = findMovementOptions(options, search.query);
+  const isHit = new Set<T>(found.hits);
+  const browsing = foldMovementQuery(search.query.trim().slice(0, MOVEMENT_NAME_MAX)) === '';
+  const rows = [
+    ...new Set(browsing ? options : [...found.matches, ...found.near, ...found.someWords]),
+  ].filter((option) => !isHit.has(option));
+  const library = rows.filter((option) => option.isCatalog);
+  // Shown whatever the filters: nothing when browsing, where the number is the library's alone.
+  const always = browsing ? 0 : found.hits.length + (rows.length - library.length);
+  const count = (filters: MovementFilters) =>
+    always +
+    (movementFiltersOn(filters) === 0
+      ? library.length
+      : library.filter((option) => passesMovementFilters(option, filters)).length);
+  const { filters } = search;
+  return {
+    total: count(filters),
+    equipmentNone: count({ ...filters, equipment: 'none' }),
+    equipment: new Map(
+      EQUIPMENT.map((item) => [
+        item,
+        count({ ...filters, equipment: 'chosen', chosenEquipment: [item] }),
+      ]),
+    ),
+    muscles: new Map(MUSCLES.map((muscle) => [muscle, count({ ...filters, muscles: [muscle] })])),
+  };
+}
+
+/**
+ * The equipment items in the order the panel lists them (P7): by how many movements each would
+ * leave, most first, ties in the vocabulary's order. The first `EQUIPMENT_FILTER_SHOWN_FIRST` are
+ * shown and the rest sit behind "Show all equipment"; an item that counts zero is listed greyed,
+ * after the others (the accepted prototype left it out; production greys it, by the same decision
+ * as for a muscle).
+ */
+export function equipmentFilterOrder(counts: MovementFilterCounts): readonly Equipment[] {
+  return [...counts.equipment]
+    .map(([item, count], index) => ({ item, count, index }))
+    .sort((a, b) => b.count - a.count || a.index - b.index)
+    .map(({ item }) => item);
 }
 
 /** The folded words a short form stands for, or `undefined` for any other word. */
