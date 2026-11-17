@@ -374,6 +374,11 @@ through `writers/single-value.ts`'s `clearBodyweight`: it opens the transaction,
 `stale`), and calls `hideEntries` for that row on its own day. The diagram below is the general shape;
 the clear is one item, with no restore offered for it.
 
+**Clear this day (V1-9b B2-0).** `clearDay` hides every live entry of the day as one event and
+stamps each `hide_reason = 'clear_day'`; `restoreClear` brings back exactly that event's rows. Both
+work out the rows on the server (no id list, no cap). Every un-hide sets `UNHIDE`, so the reason
+leaves with the tombstone, and a CHECK refuses a live row that kept one.
+
 ```mermaid
 sequenceDiagram
   participant P as Person
@@ -644,6 +649,7 @@ erDiagram
     text raw_load "verbatim → lossless CSV export"
     text prescribed_snapshot "what was ASKED, frozen at log time (0013) — export-only"
     date activity_date "calendar date in the ACTIVE IANA tz (V1-6c), not UTC"
+    text hide_reason "clear_day or NULL; never on a live row (V1-9b B2-0)"
   }
   activity_types {
     text key UK "natural key"
