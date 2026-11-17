@@ -337,6 +337,7 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(modules.sort()).toEqual([
       'app/p/[profileId]/actions.ts', // the per-athlete day actions
       'app/p/[profileId]/clear-day-actions.ts', // Clear this day and Restore all (V1-9b B1-2)
+      'app/p/[profileId]/row-actions.ts', // the day page's row writes (FAM-1 12b)
       'app/p/profile-actions.ts', // athlete management (PROF-1)
       'app/programs/actions.ts', // the program builder (FAM-1 7a-i)
     ]);
