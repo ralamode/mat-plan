@@ -1,5 +1,8 @@
 # DX-18 — heavy runs move to GitHub CI; the machine keeps one slot
 
+> **Status: approved** _(maintainer, 2026-11-17, through the FAM-1 board)_. Build order: 1a, then 1b after
+> lane A's #554, then 2, then 3; each PR asks the board for its push slot.
+
 > Backlog: [plan.md](../plan.md) → `DX-18` (this PR adds the row). Branch: `docs/dx-18-heavy-runs-to-ci`
 > (this plan), then one branch per PR below. Assigned to the Native Scaling lane by the maintainer
 > _(orchestrator's chat, 2026-11-17)_: "move everything heavy off of the local machine unless
@@ -376,16 +379,14 @@ github.repository`**: a same-repo PR, whose author already has write access. A f
 - Moving `check-feature-guides` and `check-status-touched` onto one changed-files helper (a follow-up).
 - Per-pillar vitest projects (`DX-18b`).
 
-## Open questions (the maintainer's)
+## Decided _(maintainer, 2026-11-17, through the FAM-1 board; each quotes the option chosen)_
 
-- **Q1:** every push to main runs every mutation shard (D6), with no cron. **Recommended,** because a red
-  result sits on the commit that caused it. The alternative is a nightly run that tells no one.
-- **Q2:** I is delivered as `test:changed`, the CI scopes and the filtered commands. Per-pillar vitest
-  projects wait until CI's Test step passes 3 minutes (53s today). **Recommended,** because splitting a
-  53-second step saves nothing yet.
-- **Q3:** CI-made screenshots arrive as PR comments, the first one marked as the baseline, instead of
-  sitting in the PR description. **Recommended,** because editing a PR body from a workflow needs a
-  broader token for no gain.
+- **Q1, "Every push to main (Recommended)":** each merge to main runs every mutation shard. No cron.
+- **Q2, "Plan now, build when slow (Recommended)":** `test:changed` ships in DX-18. Per-pillar CI test
+  projects are `DX-18b`, built once CI's Test step passes 3 minutes.
+- **Q3, "As PR comments (Recommended)":** CI screenshots arrive as PR comments, the first one marked as
+  the baseline. No write token sits beside a fork's files.
+- **The plan, "Approve (Recommended)".**
 
 ## Review-response log (adversarial panel)
 
