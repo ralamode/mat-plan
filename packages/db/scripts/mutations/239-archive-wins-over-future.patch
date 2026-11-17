@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 9d1a35a1..6923295c 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -88,7 +88,8 @@ export async function resolveDayPlan(
+   // R1, in ONE place: an archived athlete's day is like a closed day.
+   const writable = inWritableWindow(day, today) && profile.archivedAt === null;
+   const future = day > today;
+-  const scheduledShowing: Showing = future ? 'preview' : writable ? 'all' : 'logged';
++  const scheduledShowing: Showing =
++    profile.archivedAt !== null ? 'logged' : future ? 'preview' : writable ? 'all' : 'logged';
+ 
+   // ── The live branch: assignments, then the day's week slots ─────────────────────────────────────
+   const assignments = await dayAssignments(exec, scope, profile.id, { day, today });

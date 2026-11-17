@@ -134,7 +134,8 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
     `(superset_order, idx)`; `superset.order` is the place in the group; a rest only for a shown group
     of two or more, off its last member. Mutation 232.
 19. **E7 — exports**: `resolveDayPlan` and its type, by name only.
-20. **R1 in one place**: `writable = inWritableWindow(day, today) && !archived`. An archived athlete's
+20. **R1 in one place**: `future` first (the preview, no rows, archived or not; mutation 239); else
+    `writable = inWritableWindow(day, today) && !archived`; else logged rows only. An archived athlete's
     day shows only what was logged. A workout that left the week has `label: null` (R2).
 21. **PREVIOUS** (`previous.ts`): the same `profile_id` (mutation 230), movement and set; a live
     program row before the day; the latest day, then `created_at`, then id. `null` on a day that is
