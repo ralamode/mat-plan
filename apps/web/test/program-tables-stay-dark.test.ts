@@ -39,6 +39,10 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'packages/db/src/schema.ts',
     'packages/db/src/queries/program-assignments.ts',
     'packages/db/src/writers/program/',
+    // FAM-1 11b's "on the program that day" check (`isOnProgramThatDay`, a named-column read on
+    // `assignmentOnDay`). 11b merges only after 0027 is applied (its plan M7), and no request path
+    // calls the row writer until 12b, so this read cannot race the deploy window.
+    'packages/db/src/queries/day/scheduled.ts',
   ];
   const PATTERNS: Record<string, RegExp> = {
     insert: new RegExp(`\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`),

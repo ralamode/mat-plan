@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 4f96cfb1..aa72482e 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -645,9 +645,7 @@ export async function retickRow(
+     const [entry] = await tx
+       .select({ id: schema.entries.id })
+       .from(schema.entries)
+-      .where(
+-        and(eq(schema.entries.publicId, input.entryPublicId), programRowOf(profileId, input.day)),
+-      )
++      .where(eq(schema.entries.publicId, input.entryPublicId))
+       .limit(1);
+     if (!entry) refuse(ROW_REFUSAL.not_found);
+ 

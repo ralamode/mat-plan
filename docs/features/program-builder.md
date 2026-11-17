@@ -26,14 +26,15 @@ step below adds its files and its invariants here.
 
 ## The map
 
-| Step | Adds                                                                                                                |
-| ---- | ------------------------------------------------------------------------------------------------------------------- |
-| 8a   | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.    |
-| 8    | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                          |
-| 9    | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                   |
-| 10   | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                   |
-| 7a   | `apps/web/app/programs/actions.ts` (the real `ProgramActions`) with its registry file; `apps/web/lib/dal/program/`. |
-| 7b   | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                     |
+| Step  | Adds                                                                                                                        |
+| ----- | --------------------------------------------------------------------------------------------------------------------------- |
+| 8a    | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.            |
+| 8     | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                                  |
+| 9     | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                           |
+| 10    | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                           |
+| 7a-i  | `apps/web/app/programs/actions.ts`: create, rename and save a workout, with its registry file; `apps/web/lib/dal/program/`. |
+| 7a-ii | The same module: save the week, copy a workout, a new item; and the picker's options read.                                  |
+| 7b    | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                             |
 
 ### How a screen is put together (8a)
 
@@ -147,7 +148,9 @@ flowchart LR
     ✓ could ever be stored for it. The refusal is the unit select's ("Weight: choose a unit."), so
     focus goes where the fix is; typing a number does not clear it, choosing a unit does. The bar
     counts the fields to fix (a name alone says its own message). A type with a fixed unit (Duration, Time per set) loaded bare saves
-    that unit with no target, never no quantity. The machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
+    that unit with no target, never no quantity. A loaded quantity in its type's slot (`slotQuantity`; one outside it is not read) is kept only in
+    a unit the type can hold; otherwise the number is not shown and never converted, and the card
+    says what it was (`EditorCard.dropped`): a fixed-unit type keeps its own unit, any other starts unset. The machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
     `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
     editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
     sends.

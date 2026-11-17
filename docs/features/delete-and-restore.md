@@ -40,11 +40,11 @@ filter. None of them can be checked by looking at a single file.
 a finite claim — but the unqualified version ("the only writer") is **false**, and a privacy lens
 caught it. There are three:
 
-| Writer                                                | Reachable by                                                                                                                                                                                | Production       |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `writers/hide.ts`                                     | the app: a blank ✓ clears a weigh-in from V1-24 3b-bw, and a practice from 3b-life-a (`writers/single-value.ts`); the next caller is B2's Clear this day, and Beta 0 has no per-item Delete | from 3b-bw       |
-| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run                                                                                                                                                                 | **has been run** |
-| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB                                                                                                                                                                   | no               |
+| Writer                                                | Reachable by                                                                                                                                                                                                                                                                                        | Production       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `writers/hide.ts`                                     | the app: a blank ✓ clears a weigh-in from V1-24 3b-bw, and a practice from 3b-life-a (`writers/single-value.ts`); the next caller is B2's Clear this day, and Beta 0 has no per-item Delete. From FAM-1 11b, un-tick and re-tick of a program row (`writers/day/log-row.ts`, its program rows only) | from 3b-bw       |
+| `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run                                                                                                                                                                                                                                                                         | **has been run** |
+| `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB                                                                                                                                                                                                                                                                           | no               |
 
 🔴 **The consequence `B1-3` has to decide, so it is written down here rather than discovered:**
 `hiddenEntriesForDay` does **not** distinguish a row the person hid from a row the _correction_ hid.
@@ -111,8 +111,12 @@ commit the holder's hide.
 swap first; **practice (V1-24 3b-0) has neither**: its restore meets `uq_entries_profile_day_practice`
 and the catch answers `slot_taken` without `heldBy`, and `keepInsteadOf` never applies to it. That keeps
 the list provable on PGlite's one connection (mutation **86**); for bodyweight the catch is reached
-only by the two-connection race. FAM-1 11b appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. Any other
-`23505` still propagates. Re-entering a cleared single value makes a new row; reviving the hidden one
+only by the two-connection race. **A program row (FAM-1 11b) is the third entry,
+`ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`, and like practice it has no pre-check and no `heldBy`**: a
+re-tick onto a set ticked again meanwhile meets the row arbiter inside its savepoint and answers
+`slot_taken` (`verify/day.ts` 10, mutation **122**). The match is `isUniqueViolationOn`
+(`writers/unique-violation.ts`), the one matcher for a named unique index. Any other `23505` still
+propagates. Re-entering a cleared single value makes a new row; reviving the hidden one
 is for program rows only _(maintainer, 2026-11-16)_.
 
 ## Traps

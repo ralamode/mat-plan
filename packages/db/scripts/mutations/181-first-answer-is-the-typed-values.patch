@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 4f96cfb1..71aeacf6 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -545,7 +545,7 @@ export async function logRow(
+ 
+     // 12 — answered from the stored row, read the one way a replay reads it: `numeric(8,3)` rounds
+     //      (40.12345 is stored 40.123), so `values` itself would differ from the replay's answer.
+-    return { ok: true, entryPublicId: entry.publicId, values: await storedValues(tx, entry.id) };
++    return { ok: true, entryPublicId: entry.publicId, values };
+   });
+ }
+ 

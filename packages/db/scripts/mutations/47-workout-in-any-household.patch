@@ -1,11 +1,12 @@
 diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 146e6d6b..07b0e4e9 100644
 --- a/packages/db/src/writers/ownership.ts
 +++ b/packages/db/src/writers/ownership.ts
-@@ -550,7 +550,6 @@ export async function insertProfileOwnedBy(
+@@ -560,7 +560,6 @@ export function programBlockIsLegacy() {
   */
- export function liveTemplateBlockIn(scope: HouseholdScope) {
+ export function templateBlockIn(scope: HouseholdScope) {
    return and(
 -    programBlockInHousehold(scope),
      eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.template),
-     isNull(schema.programBlocks.deletedAt),
    );
+ }
