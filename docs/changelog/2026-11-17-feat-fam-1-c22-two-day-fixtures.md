@@ -5,4 +5,5 @@
   one other athlete, for the rule that the athlete switcher shows whenever there is someone to go
   to. The preview page shows its archived notice for any state whose athlete is archived. The plan
   records a ✕ in place of the Cancel button on a failed change (#512), and `PRIV-3`'s turns in
-  FAM-1's shared files, with its proofs as a fifth verify module. Preview route and docs only.
+  FAM-1's shared files, with its proofs as a fifth verify module. Shared fixtures, the preview route and docs only: the day resolver's proof takes on the two new
+  fixtures. No schema change.

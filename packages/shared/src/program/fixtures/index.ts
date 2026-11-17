@@ -130,19 +130,19 @@ function sinceLeftWorld(): World {
       {
         n: 951,
         ath: 'a1',
-        day: SINCE_LEFT_DAY,
+        day: CLOSED_TUESDAY,
         prog: 'p3',
         wid: 'w6',
         iid: 'plank',
         set: 1,
         v: { sec: 30 },
       },
-      { n: 952, ath: 'a1', day: SINCE_LEFT_DAY, prog: 'p1', wid: 'w1', iid: 'grip', set: 1, v: {} },
+      { n: 952, ath: 'a1', day: CLOSED_TUESDAY, prog: 'p1', wid: 'w1', iid: 'grip', set: 1, v: {} },
     ],
   });
 }
-/** A Tuesday four days back: closed, and before Stretching started. */
-const SINCE_LEFT_DAY = '2026-11-10';
+/** A Tuesday four days back: closed, and before Stretching started. Two fixtures stand on it. */
+const CLOSED_TUESDAY = '2026-11-10';
 const sinceLeftBefore = sinceLeftWorld();
 
 export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
@@ -203,7 +203,7 @@ export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
       workoutOf(programOf(world, 'p1'), 'w1').name = 'Morning routine';
     }),
     'a1',
-    SINCE_LEFT_DAY,
+    CLOSED_TUESDAY,
     sinceLeftBefore,
   ),
   'archived-athlete-today': from(
@@ -214,7 +214,7 @@ export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
     FIXTURE_TODAY,
     seeded,
   ),
-  'closed-day-nothing-logged': from(seeded, 'a1', SINCE_LEFT_DAY),
+  'closed-day-nothing-logged': from(seeded, 'a1', CLOSED_TUESDAY),
   'archived-athlete-nothing-logged': from(
     edit(seeded, (world) => {
       for (const athlete of world.athletes) if (athlete.id !== 'a1') athlete.archived = true;
