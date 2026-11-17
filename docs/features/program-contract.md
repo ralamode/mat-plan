@@ -338,6 +338,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - An archived athlete's day is never writable: today and yesterday read like a closed day,
       with only what was logged and no PREVIOUS. `archived-athlete-today` holds it. So a page
       never offers a ✓ the writer refuses with `closed_day`.
+    - **`DayPlan.archived` says the athlete is archived** (contract change C19; the maintainer,
+      2026-11-17), on every day of theirs, so the day screen can say why nothing can be logged:
+      "<Name> is archived. Nothing new can be logged." The day resolver sets it from the profile
+      row it reads `writable` from. Every fixture has it `false` but `archived-athlete-today`.
     - `DayPlan.athletes` is the switcher's list: the household's athletes who are not archived,
       as the picker lists them. An archived athlete is not in it on their own day either, so a
       page takes the heading's name from the profile, never from this list (the preview harness

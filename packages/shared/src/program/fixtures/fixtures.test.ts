@@ -712,6 +712,26 @@ describe('closed-day-program-since-left: the order of a day’s programs, and a 
 describe('archived-athlete-today: an archived athlete’s day is never writable (C18)', () => {
   const plan = archivedAthleteToday;
 
+  it('says the athlete is archived, and no other fixture does (C19)', () => {
+    expect(plan.archived).toBe(true);
+    const others = Object.entries(DAY_PLAN_FIXTURES).filter(
+      ([name]) => name !== 'archived-athlete-today',
+    );
+    expect(others.length).toBeGreaterThan(10);
+    for (const [name, other] of others) expect(other.archived, name).toBe(false);
+  });
+
+  it('is archived on every day of theirs, and nobody else in the household is', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
+    for (const day of ['2026-11-11', '2026-11-13', FIXTURE_TODAY, '2026-11-16']) {
+      expect(dayPlan(world, 'a1', day).archived, day).toBe(true);
+      expect(dayPlan(world, 'a2', day).archived, day).toBe(false);
+    }
+    // And `writable` is false on each of those days for the archived athlete, whatever the day.
+    expect(dayPlan(world, 'a1', '2026-11-13').writable).toBe(false);
+    expect(dayPlan(world, 'a2', '2026-11-13').writable).toBe(true);
+  });
+
   it('is today, and reads like a closed day', () => {
     expect(plan).toMatchObject({ day: FIXTURE_TODAY, today: FIXTURE_TODAY });
     expect(plan).toMatchObject({ writable: false, future: false, onProgram: 'yes' });
@@ -764,6 +784,8 @@ describe('archived-athlete-today: an archived athlete’s day is never writable 
     const mine = fixtureIds.athlete('a1');
     expect(dayPlan(world, 'a1', '2026-11-16')).toEqual({
       ...futurePreview,
+      // They are archived on every day of theirs, a future one too, and are not in the switcher.
+      archived: true,
       athletes: futurePreview.athletes.filter((a) => a.profilePublicId !== mine),
     });
   });

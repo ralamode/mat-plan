@@ -181,6 +181,14 @@ export const dayPlanSchema = z.object({
   writable: z.boolean(),
   future: z.boolean(),
   /**
+   * The athlete is archived (contract change C19; maintainer, 2026-11-17). The day screen says so
+   * on every day of theirs, in the maintainer's words: "<Name> is archived. Nothing new can be
+   * logged." It is why `writable` is false on their today and yesterday, and it is `true` on their
+   * older and future days too, where `writable` is false for anyone. **The day resolver sets it**,
+   * from the same profile row it reads `writable` from, so the two cannot disagree.
+   */
+  archived: z.boolean(),
+  /**
    * The household's athletes who are not archived, for the switcher: the list the picker shows.
    * An archived athlete is not in it, on their own day either. Added by the DAL, not the day
    * resolver.

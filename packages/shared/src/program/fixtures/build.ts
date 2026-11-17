@@ -373,6 +373,7 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     today: world.today,
     writable,
     future,
+    archived: world.athletes.find((a) => a.id === athlete)?.archived === true,
     // The switcher's list, as the picker lists a household: an archived athlete is not in it,
     // their own day included (`DayPlan.athletes`).
     athletes: world.athletes

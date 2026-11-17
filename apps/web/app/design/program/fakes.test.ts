@@ -17,6 +17,7 @@ import {
 } from '@mat-plan/shared';
 import {
   adultProgramWithCopy,
+  archivedAthleteToday,
   closedDayLoggedOnly,
   everyTypeOnce,
   familyProgram,
@@ -231,6 +232,9 @@ describe('the fake DayActions: ✓', () => {
   it.each([
     ['a closed day', closedDayLoggedOnly],
     ['a future day', futurePreview],
+    // C18, C19: archived, so not writable though the day is today. The fake refuses as the row
+    // writer does, and the plan it hands back still says the athlete is archived.
+    ['an archived athlete’s today', archivedAthleteToday],
   ])('%s is read-only: no ✓, no un-tick, no Change', async (_name, fixture) => {
     const { actions } = day(fixture);
     const closed = { ok: false, reason: ROW_REFUSAL.closed_day };
