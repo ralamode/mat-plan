@@ -92,8 +92,8 @@ function hiddenUnder(token: string): SQL {
 }
 
 /**
- * The NEWEST token among the hidden entries matching `where`, or `null`. The caller's `where` must
- * join `profiles` when it uses `ownedOnDay`; this adds the hidden filter.
+ * The NEWEST token among the hidden entries matching `where`, or `null`. It joins `profiles` itself,
+ * so `where` may use `ownedOnDay`, and it adds the hidden filter.
  *
  * 🔴 **The NEWEST, not "exactly one".** An earlier version demanded a single shared token and returned
  * `notFound` otherwise — which made a retry of a MIXED call fail after it had already succeeded: hide
@@ -173,8 +173,10 @@ async function hideRows(
         sql`${schema.entries.publicId} = any(${uuidArray(args.entryPublicIds)})`,
       ),
     )
-    // One lock order for every hide path (B2-0): a multi-id hide racing `clearDay` on overlapping rows
-    // would otherwise be a lock cycle and a `40P01`, as `restoreHidden` sorts for the same reason.
+    // One lock order for every HIDE path (B2-0): a multi-id hide racing `clearDay` on overlapping rows
+    // would otherwise be a lock cycle and a `40P01`. ⚠️ Restore sorts by PUBLIC id instead (a v7's
+    // random tail does not follow `id` within a millisecond); a cycle across the two needs one restore
+    // to lock two rows a clear holds, which no path does today.
     .orderBy(schema.entries.id)
     // 🔴 **`FOR UPDATE`, and it is not defensive — without it a double tap THROWS.** Two concurrent
     // hides of the same ids both see them live, so neither takes the replay branch; the first
@@ -365,24 +367,29 @@ async function dropReasonOfItemsLeftHidden(
     .filter((r) => r.reason === RESTORE_REASON.slot_taken)
     .map((r) => r.entryPublicId);
   if (leftHidden.length === 0) return;
+  // Ownership in the subselect (the internal-id rule); the token and the reason on the OUTER row, so
+  // an UPDATE that waited on a row lock re-checks them against the row's newest version (READ
+  // COMMITTED re-evaluates the target's own WHERE, not a subselect's snapshot).
   await exec
     .update(schema.entries)
     .set({ hideReason: null })
     .where(
-      inArray(
-        schema.entries.id,
-        exec
-          .select({ id: schema.entries.id })
-          .from(schema.entries)
-          .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-          .where(
-            and(
-              ownedOnDay(args),
-              sql`${schema.entries.publicId} = any(${uuidArray(leftHidden)})`,
-              hiddenUnder(args.hiddenAt),
-              eq(schema.entries.hideReason, HIDE_REASON.clear_day),
+      and(
+        inArray(
+          schema.entries.id,
+          exec
+            .select({ id: schema.entries.id })
+            .from(schema.entries)
+            .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+            .where(
+              and(
+                ownedOnDay(args),
+                sql`${schema.entries.publicId} = any(${uuidArray(leftHidden)})`,
+              ),
             ),
-          ),
+        ),
+        hiddenUnder(args.hiddenAt),
+        eq(schema.entries.hideReason, HIDE_REASON.clear_day),
       ),
     );
 }

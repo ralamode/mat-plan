@@ -13,11 +13,13 @@
 -- split across two PRs would buy nothing (0024's argument, on the same table). The two constraints
 -- are one ALTER TABLE, so the table is scanned once.
 --
--- LOCKS AND DURATION: ADD COLUMN takes ACCESS EXCLUSIVE on entries first, held to commit; the scan is
--- O(rows). lock_timeout 5s; statement_timeout 10s, not 0024's 60s: an app request queued behind the
--- lock waits at most 5s plus a hold capped at 10s, within 0028's 15s role statement_timeout, so no
--- queued request fails 57014. 5s and not #496's 2s: a 55P03 here leaves the file pending, which opens
--- the deploy window below, so failing is costlier than for 0029's checks.
+-- LOCKS AND DURATION: ADD COLUMN takes ACCESS EXCLUSIVE on entries first, held to commit; the hold is
+-- the one validating scan, O(rows) (the production count is in the PR, not here: a dated fact does not
+-- belong in a forward-only file). lock_timeout 5s; statement_timeout 8s per statement, so an app request
+-- queued behind the lock waits at most 5s plus the hold, inside 0028's 15s role statement_timeout as
+-- long as the hold is short, which the table's size, not this setting, is what guarantees. 5s and not
+-- #496's 2s: a 55P03 here leaves the file pending, which opens the deploy window below, so failing is
+-- costlier than for 0029's checks.
 --
 -- DEPLOY WINDOW (0024's): the OLD app works on either schema; the NEW app needs this applied first.
 -- Until it applies, Drizzle's insert names every column, so every insert into entries fails 42703 (all
@@ -26,7 +28,7 @@
 -- observed applied; watch the run. On failure: roll Vercel back, re-dispatch migrate.yml, re-promote
 -- (docs/runbooks.md).
 SET lock_timeout = '5s';--> statement-breakpoint
-SET statement_timeout = '10s';--> statement-breakpoint
+SET statement_timeout = '8s';--> statement-breakpoint
 ALTER TABLE "entries" ADD COLUMN "hide_reason" text;--> statement-breakpoint
 -- Every row holds NULL in the new column, which both CHECKs accept; one scan, under the column's lock.
 -- squawk-ignore constraint-missing-not-valid

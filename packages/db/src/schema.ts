@@ -18,7 +18,12 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { DEFAULT_TRACKING_TYPE, PROGRAM_BLOCK_KIND, type RoutineConfig } from '@mat-plan/shared';
+import {
+  DEFAULT_TRACKING_TYPE,
+  type HideReason,
+  PROGRAM_BLOCK_KIND,
+  type RoutineConfig,
+} from '@mat-plan/shared';
 
 /**
  * Schema — v0 thin slice (units + profiles + entries + entry_sets) plus the V1-1a
@@ -415,8 +420,9 @@ export const entries = pgTable(
     status: text('status').notNull().default('done'), // mirrors ENTRY_STATUSES
     notes: text('notes'),
     // V1-9b B2-0: why a hidden row was hidden; NULL on every live row and on every hide that is not a
-    // clear. Written by `clearDay` only, cleared by every un-hide (`UNHIDE`). Not personal data.
-    hideReason: text('hide_reason'), // mirrors HIDE_REASONS (nullable)
+    // clear. Written by `clearDay` only, cleared by every un-hide (`UNHIDE`). Its privacy reading is
+    // `data-inventory.md`'s `entries` row.
+    hideReason: text('hide_reason').$type<HideReason>(), // mirrors HIDE_REASONS (nullable)
     ...timestamps,
   },
   (t) => [

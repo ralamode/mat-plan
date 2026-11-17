@@ -429,7 +429,9 @@ insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll
 previous deployment (its code works on either schema), then re-run as below. 0025: no request-path
 statement (the only insert into `prescriptions` is the fixtures seed, and nothing reads or writes
 `prescription_quantities`), so the app keeps serving; re-run as below. 0030 (V1-9b B2-0): as 0024,
-EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run. ⚠️ Once the migration is
+EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run.
+⚠️ **Once B2 has shipped, never roll Vercel back past B2-0's deploy:** older code un-hides without
+clearing `hide_reason`, which the CHECK refuses (`23514`) on any row Clear this day hid. ⚠️ Once the migration is
 observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
 production from following new deployments automatically, so later merges would not go live (unverified
 here; check the Vercel dashboard after a rollback). 🔴 **The window is also a privacy condition:** a

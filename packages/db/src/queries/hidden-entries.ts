@@ -54,7 +54,7 @@ export async function hiddenEntriesForDay(
     .select({
       entryPublicId: schema.entries.publicId,
       hiddenAt: hiddenAtText,
-      hideReason: sql<HideReason | null>`${schema.entries.hideReason}`,
+      hideReason: schema.entries.hideReason,
       kind: schema.entries.kind,
       metricKey: schema.entries.metricKey,
       movementName: schema.entries.movementName,

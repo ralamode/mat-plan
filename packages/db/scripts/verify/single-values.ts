@@ -24,7 +24,14 @@ import {
   PRACTICE_DAY_UNIQUE_INDEX,
 } from '../../src/schema';
 import { writeCheckinEntries, type CheckinInsertValue } from '../../src/writers/checkin';
-import { clearDay, hideEntries, restoreClear, restoreHidden } from '../../src/writers/hide';
+import {
+  clearDay,
+  hiddenAtText,
+  hideEntries,
+  restoreClear,
+  restoreHidden,
+} from '../../src/writers/hide';
+import { hiddenEntriesForDay } from '../../src/queries/hidden-entries';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
 import { insertBodyweightEntry } from '../../src/writers/bodyweight';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
@@ -1104,9 +1111,7 @@ async function verifyClearDay(): Promise<void> {
       (
         await tx
           .select({
-            hiddenAt: sql<
-              string | null
-            >`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+            hiddenAt: sql<string | null>`${hiddenAtText}`,
             reason: schema.entries.hideReason,
           })
           .from(schema.entries)
@@ -1139,7 +1144,7 @@ async function verifyClearDay(): Promise<void> {
       () =>
         tx
           .update(schema.entries)
-          .set({ deletedAt: sql`now()`, hideReason: 'oops' })
+          .set({ deletedAt: sql`now()`, hideReason: sql`'oops'` }) // not a HideReason, on purpose
           .where(eq(schema.entries.publicId, checked)),
       tx,
     );
@@ -1152,7 +1157,12 @@ async function verifyClearDay(): Promise<void> {
           .where(eq(schema.entries.publicId, checked)),
       tx,
     );
-    tokenOf(await clear('2026-11-01'));
+    // The reason written by hand, so this proof is about the CHECK and a mutation of the clear's
+    // writer dies on proof 3, which is the one about it.
+    await tx
+      .update(schema.entries)
+      .set({ deletedAt: sql`now()`, hideReason: HIDE_REASON.clear_day })
+      .where(eq(schema.entries.publicId, checked));
     await expectRejectedBy(
       ENTRY_HIDE_REASON_HIDDEN_CHECK,
       () =>
@@ -1191,16 +1201,33 @@ async function verifyClearDay(): Promise<void> {
       { hiddenAt: null, reason: null },
       "B2-0 proof 3: a sibling's entry on the same day is untouched",
     );
+    const read = Object.fromEntries(
+      (await hiddenEntriesForDay(exec, { ...asAthlete, day: D3 })).map((r) => [
+        r.entryPublicId,
+        r.hideReason,
+      ]),
+    );
+    assert.deepEqual(
+      read,
+      { [w3]: HIDE_REASON.clear_day, [p3]: HIDE_REASON.clear_day, [earlier]: null },
+      "B2-0 proof 3: the hidden-entries read reports each row's reason (B1-2's banner reads it)",
+    );
 
     // 4 · Every other hide carries NO reason: a blank clear of a weigh-in (proof 3's `earlier`) or a
     //     practice, a hide through `hideEntries`, and a bodyweight swap's holder.
     const D4 = '2026-11-03';
     const p4 = await practice(athlete.id, D4, 45);
-    await clearPractice(exec, { ...asAthlete, entryId: p4, seenValue: 45 });
-    assert.equal((await stateOf(p4)).reason, null, 'B2-0 proof 4: a blank clear writes no reason');
+    assert.deepEqual(
+      await clearPractice(exec, { ...asAthlete, entryId: p4, seenValue: 45 }),
+      { cleared: true },
+      'B2-0 proof 4: the blank practice clear hid it',
+    );
+    const afterBlank = await stateOf(p4);
+    assert.ok(afterBlank.hiddenAt !== null, 'B2-0 proof 4: the blank practice clear hid it');
+    assert.equal(afterBlank.reason, null, 'B2-0 proof 4: a blank clear writes no reason');
     const swapped = await weighIn(athlete.id, D4, 82);
     const hidden4 = await hideEntries(exec, { ...asAthlete, day: D4, entryPublicIds: [swapped] });
-    assert.ok('hiddenAt' in hidden4);
+    assert.ok('hiddenAt' in hidden4, 'B2-0 proof 4: hideEntries hid the weigh-in');
     assert.equal(
       (await stateOf(swapped)).reason,
       null,
@@ -1208,15 +1235,23 @@ async function verifyClearDay(): Promise<void> {
     );
     await backDate(swapped, OLDER);
     const holder = await weighIn(athlete.id, D4, 83);
-    await restoreHidden(exec, {
-      ...asAthlete,
-      day: D4,
-      hiddenAt: OLDER,
-      entryPublicIds: [swapped],
-      keepInsteadOf: holder,
-    });
+    assert.deepEqual(
+      (
+        await restoreHidden(exec, {
+          ...asAthlete,
+          day: D4,
+          hiddenAt: OLDER,
+          entryPublicIds: [swapped],
+          keepInsteadOf: holder,
+        })
+      ).map((r) => r.reason),
+      [RESTORE_REASON.ok],
+      'B2-0 proof 4: the swap restored the weigh-in',
+    );
+    const swappedHolder = await stateOf(holder);
+    assert.ok(swappedHolder.hiddenAt !== null, 'B2-0 proof 4: the swap hid the holder');
     assert.equal(
-      (await stateOf(holder)).reason,
+      swappedHolder.reason,
       null,
       "B2-0 proof 4: a swap's hidden holder carries no reason",
     );
@@ -1368,9 +1403,7 @@ async function verifyClearDayProgramRows(): Promise<void> {
       (
         await tx
           .select({
-            hiddenAt: sql<
-              string | null
-            >`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+            hiddenAt: sql<string | null>`${hiddenAtText}`,
             reason: schema.entries.hideReason,
           })
           .from(schema.entries)
