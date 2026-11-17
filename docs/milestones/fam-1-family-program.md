@@ -311,7 +311,7 @@ gantt
   13b set rows, supersets      :done, c2, 2, 3
   13b-ii Change                :done, c2b, 3, 4
   13d look ahead, closed days  :done, c3, 3, 4
-  12b first real ✓             :crit, c4, 8, 9
+  12b first real ✓             :crit, done, c4, 8, 9
   12c on the day page          :crit, c5, 9, 10
   12d Change                   :crit, c6, 10, 11
   15c, 12f                     :c7, 11, 12
@@ -351,10 +351,10 @@ gantt
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's four takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii-b) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 34 of the 52). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 35 of the 52). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
   themselves. Since then: all of lane A's chain; lane E's 11a, 11b and 12a-i (#505); lane B's six screen steps
-  (8a to 10b) and 7a-i; lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
+  (8a to 10b) and 7a-i; lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
   6a-i, 6a-ii and 6b (#522) are merged and 6a-iii's two are not, so 6a's bar is part merged; so are 7a's bar
   (7a-i is merged, 7a-ii is not). A bar is marked here when its PRs are on `main`.
 
