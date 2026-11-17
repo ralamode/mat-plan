@@ -828,8 +828,13 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
     // One rule in two places: the list reads it off its search result, the item form and the
     // server through existingItem. This holds them to one answer, a household "RDL" included (C30:
     // an own name outranks another movement's alias).
-    const options = [householdOption('RDL', HOUSEHOLD_RDL_ID), ...ALL_CATALOG];
-    for (const query of ['rdl', 'RDL', 'bb curl', 'front squat', 'kb', 'db bench', 'bulgarain']) {
+    // Two lists: the catalog alone (`rdl` is an ALIAS hit there), and with a household item named
+    // `RDL` (an exact NAME hit, which wins): each branch of the rule is exercised.
+    const withHousehold = [householdOption('RDL', HOUSEHOLD_RDL_ID), ...ALL_CATALOG];
+    const queries = ['rdl', 'RDL', 'bb curl', 'front squat', 'kb', 'db bench', 'bulgarain'];
+    for (const [options, query] of [ALL_CATALOG, withHousehold].flatMap((opts) =>
+      queries.map((q) => [opts, q] as const),
+    )) {
       const onPick = vi.fn();
       render(<Harness data={{ options }} onPick={onPick} />);
       open();
@@ -849,8 +854,9 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       cleanup();
     }
     // Non-vacuity: the household row wins `RDL`, and `db bench` names nothing.
-    expect(listedAs(options, 'RDL')?.publicId).toBe(HOUSEHOLD_RDL_ID);
-    expect(listedAs(options, 'db bench')).toBeUndefined();
+    expect(listedAs(withHousehold, 'RDL')?.publicId).toBe(HOUSEHOLD_RDL_ID);
+    expect(listedAs(ALL_CATALOG, 'rdl')?.name).toBe('Romanian Deadlift');
+    expect(listedAs(ALL_CATALOG, 'db bench')).toBeUndefined();
   });
 
   it('Enter picks the one match a short form finds: "db bench" is Dumbbell Bench Press', () => {
