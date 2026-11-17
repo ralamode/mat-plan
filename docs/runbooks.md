@@ -1524,6 +1524,16 @@ child:
 --        WHERE (pr.household_id = (SELECT id FROM h) OR b.household_id = (SELECT id FROM h))
 --          AND pr.household_id <> b.household_id
 --       (`db:verify` → FAM-1 5 flags a planted one, hidden too.)
+-- (i) FAM-1 12a: an ENTRY in a SESSION of ANOTHER profile (any household). The session's frozen
+--       `workout_name` would reach that entry's athlete's day. No writer makes one: the row writer
+--       creates or re-selects the session by `workoutSessionSlot(profile, day, workout)`. The day
+--       resolver refuses it on the read side: its logged branch keeps a row only when
+--       `entries.session_id IS NULL OR sessions.profile_id = the athlete`, proved by
+--       `verify/day-plan.ts` → "FAM-1 12a (i)" and mutation 242. A row here is a defect: STOP, and
+--       with a correction repoint or hide the entry before this procedure.
+--       SELECT e.id FROM entries e JOIN sessions s ON s.id = e.session_id
+--        WHERE s.profile_id <> e.profile_id
+--       (`db:verify` proves this join finds a planted row, `verify/day-plan.ts` → FAM-1 12a (i).)
 ```
 
 🔴 **Why (d) exists, and why it STAYS although `TEN-2c` closed the writer that minted it.** `TEN-2a`
@@ -1578,9 +1588,10 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write them all out against the same CTEs and read the numbers. (a)–(c) and (e)–(h) must be zero. For
-(d), follow the repoint above rather than stopping; for (e)–(h), STOP and clear the other household's
-copies of H's text (or, for (h), the stray assignment) with a correction first, as each says.
+Write them all out against the same CTEs and read the numbers. (a)–(c) and (e)–(i) must be zero. For
+(d), follow the repoint above rather than stopping; for (e)–(i), STOP and clear the other household's
+copies of H's text (or, for (h), the stray assignment; for (i), the stray entry) with a correction
+first, as each says.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/day/previous.ts b/packages/db/src/queries/day/previous.ts
+index fcd1e0bd..2b2ff4f4 100644
+--- a/packages/db/src/queries/day/previous.ts
++++ b/packages/db/src/queries/day/previous.ts
+@@ -52,7 +52,6 @@ export async function previousRows(
+     .from(e)
+     .where(
+       and(
+-        eq(e.profileId, profileId),
+         lt(e.activityDate, day),
+         programRow(),
+         isNull(e.deletedAt),

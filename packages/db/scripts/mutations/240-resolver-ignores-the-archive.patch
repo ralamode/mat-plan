@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 9b02d883..528b86a4 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -94,7 +94,7 @@ export async function resolveDayPlan(
+ 
+   // R1: future first (the preview, archived or not); else writable only inside the window and not
+   // archived (`rowDayOpen`, the writer's own rule); else logged rows only.
+-  const writable = rowDayOpen(day, today, profile.archivedAt);
++  const writable = rowDayOpen(day, today, null);
+   const future = day > today;
+   // `showsOnlyLogged` (C23) is the one spelling of "this day shows only what was logged", shared with
+   // the fixture builder and the day screen; a future day is checked inside it, so it previews.

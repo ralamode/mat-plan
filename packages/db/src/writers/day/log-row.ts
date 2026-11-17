@@ -2,11 +2,7 @@ import {
   entryUnitFor,
   fillRowValues,
   hasSetRows,
-  inWritableWindow,
   newId,
-  prescribedTarget,
-  type QuantitySlot,
-  quantitySlotSchema,
   type RestoreReason,
   ROW_REFUSAL,
   type RowRefusal,
@@ -19,27 +15,35 @@ import {
   TRACKING_TYPE_FIELDS,
   type TrackingType,
   trackingTypeSchema,
-  type Unit,
-  unitSchema,
   unitsForTrackingType,
-  itemUnit,
 } from '@mat-plan/shared';
-import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../../client';
 import { schema } from '../../client';
+import {
+  liveQuantities,
+  type PrescribedQuantity,
+  prescriptionTerms,
+} from '../../queries/day/prescription-terms';
+import {
+  programRowOf,
+  programRowSlot,
+  workoutSessionSlot,
+  workoutSupersetSlot,
+} from '../../queries/day/program-rows';
+import { rowDayOpen } from '../../queries/day/day-window';
 import { isOnProgramThatDay, isScheduledOn } from '../../queries/day/scheduled';
 import { readRowValues } from '../../queries/day/stored-row-values';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { hideEntries, restoreHidden } from '../hide';
 import {
+  athleteTemplateBlockIn,
   isLiveProfile,
   movementIsAvailableTo,
-  programBlockOfProfile,
-  templateBlockIn,
+  workoutIsLive,
 } from '../ownership';
 import { insertEntrySetRows } from '../session-rows';
 
@@ -89,47 +93,8 @@ async function rowTransaction(
   }
 }
 
-// ── The named conjuncts ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * **A program row of this athlete on this day**: `entries.profile_id`, `activity_date` and
- * `prescription_set IS NOT NULL` ("logged in a program" is the SET, which a purge never clears; see
- * `schema.ts`). One conjunct for the replay pin, `untickRow` and `retickRow`, so a weigh-in or a
- * strength entry is never reached through the row actions.
- */
-export function programRowOf(profileId: number, day: string) {
-  return and(
-    eq(schema.entries.profileId, profileId),
-    eq(schema.entries.activityDate, day),
-    isNotNull(schema.entries.prescriptionSet),
-  );
-}
-
-/** The natural key of `SESSION_WORKOUT_DAY_UNIQUE_INDEX`. Callers add `deleted_at IS NULL`. */
-export function workoutSessionSlot(profileId: number, day: string, workoutId: number) {
-  return and(
-    eq(schema.sessions.profileId, profileId),
-    eq(schema.sessions.activityDate, day),
-    eq(schema.sessions.workoutId, workoutId),
-  );
-}
-
-/** The natural key of `SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX`. Callers add `deleted_at IS NULL`. */
-export function workoutSupersetSlot(sessionId: number, group: string) {
-  return and(
-    eq(schema.supersets.sessionId, sessionId),
-    eq(schema.supersets.prescriptionGroup, group),
-  );
-}
-
-/** The natural key of `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. Callers add `deleted_at IS NULL`. */
-export function programRowSlot(sessionId: number, prescriptionId: number, set: number) {
-  return and(
-    eq(schema.entries.sessionId, sessionId),
-    eq(schema.entries.prescriptionId, prescriptionId),
-    eq(schema.entries.prescriptionSet, set),
-  );
-}
+// The named conjuncts (`programRowOf`, `workoutSessionSlot`, `workoutSupersetSlot`,
+// `programRowSlot`) live in `queries/day/program-rows.ts` since 12a: a read does not import a writer.
 
 // ── The shared steps ────────────────────────────────────────────────────────────────────────────────
 
@@ -149,8 +114,8 @@ async function openRowDay(
     .where(isLiveProfile(args.profilePublicId, args.scope))
     .limit(1);
   if (!profile) refuse(ROW_REFUSAL.not_found);
-  if (profile.archivedAt !== null) refuse(ROW_REFUSAL.closed_day);
-  if (!inWritableWindow(args.day, args.today)) refuse(ROW_REFUSAL.closed_day);
+  // Archived, or outside the window: the one rule the day resolver's `writable` reads too.
+  if (!rowDayOpen(args.day, args.today, profile.archivedAt)) refuse(ROW_REFUSAL.closed_day);
   return profile.id;
 }
 
@@ -238,7 +203,8 @@ export type RowWorkout = { id: number; blockId: number; name: string; live: bool
 
 /**
  * Step 4: **the workout a write names, if this athlete may log it** — a workout on a template block
- * of the scope (`templateBlockIn`) AND of the profile's own household (`programBlockOfProfile`).
+ * of the scope AND of the profile's own household (`athleteTemplateBlockIn`: `templateBlockIn` ∧
+ * `programBlockOfProfile`).
  * `null` for foreign, missing, and hidden-and-foreign alike: the scope is in the WHERE and liveness
  * is read off the row, so another household's hidden workout is never told apart from a missing one.
  *
@@ -256,17 +222,12 @@ export async function rowWorkout(
       id: schema.workouts.id,
       blockId: schema.workouts.blockId,
       name: schema.workouts.name,
-      workoutDeletedAt: schema.workouts.deletedAt,
-      blockDeletedAt: schema.programBlocks.deletedAt,
+      live: workoutIsLive(),
     })
     .from(schema.workouts)
     .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
     .where(
-      and(
-        eq(schema.workouts.publicId, workoutPublicId),
-        templateBlockIn(scope),
-        programBlockOfProfile(profileId),
-      ),
+      and(eq(schema.workouts.publicId, workoutPublicId), athleteTemplateBlockIn(scope, profileId)),
     )
     .limit(1);
   if (!workout) return null;
@@ -274,17 +235,9 @@ export async function rowWorkout(
     id: workout.id,
     blockId: workout.blockId,
     name: workout.name,
-    live: workout.workoutDeletedAt === null && workout.blockDeletedAt === null,
+    live: workout.live === true,
   };
 }
-
-/** A prescription's live quantity, its numbers converted from `numeric` strings. */
-type PrescribedQuantityRow = {
-  slot: QuantitySlot;
-  unit: Unit;
-  value: number | null;
-  valueMax: number | null;
-};
 
 /**
  * Step 10's first half: **does the prescription's quantity fit its tracking type?** Every live
@@ -294,15 +247,13 @@ type PrescribedQuantityRow = {
  * prescription (a Duration in `lb`) answers `bad_value` rather than storing a wrong row or reaching
  * `entryUnitFor`'s throw.
  */
-function fitsItsType(trackingType: TrackingType, quantities: readonly PrescribedQuantityRow[]) {
+function fitsItsType(trackingType: TrackingType, quantities: readonly PrescribedQuantity[]) {
   const fields = TRACKING_TYPE_FIELDS[trackingType];
   const units = unitsForTrackingType(trackingType);
   const fits = quantities.every((q) => q.slot === fields.slot && units.includes(q.unit));
   const unitKnown = fields.slot === null || fields.unit !== null || quantities.length > 0;
   return fits && unitKnown;
 }
-
-const toNumber = (v: string | null) => (v === null ? null : Number(v));
 
 /**
  * The one live row an insert-then-reselect must find, or a throw: a broken natural key (two live
@@ -385,24 +336,8 @@ export async function logRow(
     const prescription = rows[0];
     if (!prescription) refuse(ROW_REFUSAL.not_found);
     if (prescription.deletedAt !== null) refuse(ROW_REFUSAL.program_changed);
-    const quantities: PrescribedQuantityRow[] = rows.flatMap((r) =>
-      r.slot === null || r.unit === null
-        ? []
-        : [
-            {
-              slot: quantitySlotSchema.parse(r.slot),
-              unit: unitSchema.parse(r.unit),
-              value: toNumber(r.valueMin),
-              valueMax: toNumber(r.valueMax),
-            },
-          ],
-    );
-    // 🔴 Two live quantities in one slot: `PRESCRIPTION_QUANTITY_SLOT_UNIQUE_INDEX` makes that
-    // impossible, so seeing one means this read stopped filtering hidden rows. Fail rather than copy
-    // whichever came first.
-    if (new Set(quantities.map((q) => q.slot)).size !== quantities.length) {
-      throw new Error(`prescription ${prescription.id} has two live quantities in one slot`);
-    }
+    // Its live quantities as numbers; two in one slot throw (`liveQuantities`, E5).
+    const quantities = liveQuantities(prescription.id, rows);
 
     // 6 — the movement, re-checked inside the transaction against the household, as
     //     `writeStrengthSession` does.
@@ -431,9 +366,14 @@ export async function logRow(
     // 10 — the values: the prescription fits its type, then the one fill rule.
     if (!fitsItsType(trackingType, quantities)) refuse(ROW_REFUSAL.bad_value);
     const fields = TRACKING_TYPE_FIELDS[trackingType];
-    // The unit the item logs in: `itemUnit`, the one rule 12a's `DayItem.unit` also reads.
-    const unit = itemUnit(trackingType, quantities);
-    const target = prescribedTarget(prescription.targetReps, quantities);
+    // The unit, target and text: `prescriptionTerms` (E5), the one function the day resolver's
+    // heading also reads, so the snapshot below and the page cannot diverge.
+    const { unit, target, text } = prescriptionTerms({
+      trackingType,
+      sets: prescription.sets,
+      targetReps: prescription.targetReps,
+      quantities,
+    });
     const values = fillRowValues({ trackingType, unit }, write.values, target);
     if (!values) refuse(ROW_REFUSAL.bad_value);
 
@@ -511,12 +451,7 @@ export async function logRow(
         prescriptionSet: write.set,
         // What the row was logged against, frozen (D7). `''` is a real value (a Check) and stays
         // `''`. The quantities are the target's, so a range renders as the day page shows it.
-        prescribedSnapshot: prescribedText({
-          trackingType,
-          sets: prescription.sets,
-          targetReps: prescription.targetReps,
-          quantities: target.quantities,
-        }),
+        prescribedSnapshot: text,
       })
       .onConflictDoNothing()
       .returning({ id: schema.entries.id, publicId: schema.entries.publicId });

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/scheduled.ts b/packages/db/src/queries/day/scheduled.ts
+index 2f6e368a..af93925f 100644
+--- a/packages/db/src/queries/day/scheduled.ts
++++ b/packages/db/src/queries/day/scheduled.ts
+@@ -159,7 +159,7 @@ export async function dayAssignments(
+       and(
+         eq(a.profileId, profileId),
+         isNull(a.deletedAt),
+-        liveAthleteTemplateBlockIn(scope, profileId),
++        isNull(schema.programBlocks.deletedAt),
+       ),
+     )
+     .orderBy(asc(a.idx), asc(a.id));

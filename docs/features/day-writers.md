@@ -4,6 +4,7 @@ owns:
   - packages/db/src/writers/day/
   - packages/db/src/queries/day/
   - packages/db/scripts/verify/day.ts
+  - packages/db/scripts/verify/day-plan.ts
 ---
 
 # Day writers and reads
@@ -17,32 +18,40 @@ An athlete ticks a row of a workout and it is logged: one writer for every track
 that changes a logged row's numbers, and the resolver that turns an athlete and a day into the
 `DayPlan` the day page shows. The lane starts when the plan's migration 4a-ii is applied.
 
-🚧 **Steps 11a and 11b are in** (the row writer, with its un-tick and re-tick); 12a, 11c and 14 add
-their files, diagrams and invariants here. The row writer's sequence diagram is
-[architecture.md §2i](../architecture.md); its plan is
-[fam-1-11b-row-writer.md](../plans/fam-1-11b-row-writer.md).
+🚧 **Steps 11a, 11b and 12a-i are in** (the row writer, with its un-tick and re-tick; the day
+resolver and PREVIOUS); 12a-ii, 11c and 14 add their files, diagrams and invariants here. The row
+writer's sequence diagram is [architecture.md §2i](../architecture.md), the day resolver's read path
+[§2d](../architecture.md) and [below](#the-read-path); the plans are
+[fam-1-11b-row-writer.md](../plans/fam-1-11b-row-writer.md) and
+[fam-1-12a-day-resolver.md](../plans/fam-1-12a-day-resolver.md).
 
 ## The map
 
-| Step | Adds                                                                                                                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 11a  | `writers/session-rows.ts`, extracted from the strength writer. A seam: it owes [write-path.md](./write-path.md) and [strength-logging.md](./strength-logging.md). |
-| 11b  | `writers/day/log-row.ts`, `queries/day/{scheduled,stored-row-values}.ts`. Seams: `hide.ts` (lane S), `ownership.ts`, `session-rows.ts`, `unique-violation.ts`.    |
-| 12a  | `queries/day/{day-plan,previous}.ts`: the day resolver and PREVIOUS.                                                                                              |
-| 11c  | `writers/day/amend-row.ts`: Change.                                                                                                                               |
-| 14   | The export. Seams: `apps/web/lib/dal/export.ts`, `queries/export-month.ts`, `packages/shared/src/csv/`.                                                           |
+| Step | Adds                                                                                                                                                                  |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 11a  | `writers/session-rows.ts`, extracted from the strength writer. A seam: it owes [write-path.md](./write-path.md) and [strength-logging.md](./strength-logging.md).     |
+| 11b  | `writers/day/log-row.ts`, `queries/day/{scheduled,stored-row-values}.ts`. Seams: `hide.ts` (lane S), `ownership.ts`, `session-rows.ts`, `unique-violation.ts`.        |
+| 12a  | `queries/day/{day-plan,previous,prescription-terms,program-rows}.ts`, `scripts/verify/day-plan.ts`: the day resolver and PREVIOUS (12a-i); the edit replays (12a-ii). |
+| 11c  | `writers/day/amend-row.ts`: Change.                                                                                                                                   |
+| 14   | The export. Seams: `apps/web/lib/dal/export.ts`, `queries/export-month.ts`, `packages/shared/src/csv/`.                                                               |
 
 ## Files
 
-| File                                               | What it is for                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/day/index.ts`             | The directory's exports: `logRow`, `untickRow`, `retickRow`, re-exported from the package index for step 12b's actions.                                                                                                                                                                                                                                                                                                                        |
-| `packages/db/src/writers/day/log-row.ts`           | **The row writer** (11b): the three writers, `classifyRowHolder`, `rowWorkout`, `RowRefused`, and the conjuncts `programRowOf`, `workoutSessionSlot`, `workoutSupersetSlot`, `programRowSlot`.                                                                                                                                                                                                                                                 |
-| `packages/db/src/queries/day/scheduled.ts`         | `scheduledOn(blockId, workoutId, day)`: a live week slot on the day's weekday (`localWeekday`), as a conjunct; `isScheduledOn(exec, …)` asks it as a boolean (the ✓ and the un-tick). One rule for the writer, 12a's `scheduled` and 11c. `isOnProgramThatDay(exec, profileId, blockId, day)`: step 8, "the athlete is on this program on this day", on step 5's `assignmentOnDay` (on the program, not due on the weekday; see its docblock). |
-| `packages/db/src/queries/day/stored-row-values.ts` | `readRowValues`: a logged row's live set and its live quantities, as `RowValues`. Throws on two live sets (D3). A second copy of the DAL's read (`docs/tech-debt.md`).                                                                                                                                                                                                                                                                         |
-| `packages/db/src/writers/day/owed.test.ts`         | The lane's `it.todo` list: the tests steps 11b, 12a, 11c and 14 still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                          |
-| `packages/db/src/queries/day/index.ts`             | The directory's exports. Not re-exported from the package index yet; 12a decides.                                                                                                                                                                                                                                                                                                                                                              |
-| `packages/db/scripts/verify/day.ts`                | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                                                                                                                                  |
+| File                                                | What it is for                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/db/src/writers/day/index.ts`              | The directory's exports: `logRow`, `untickRow`, `retickRow`, re-exported from the package index for step 12b's actions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `packages/db/src/writers/day/log-row.ts`            | **The row writer** (11b): the three writers, `classifyRowHolder`, `rowWorkout`, `RowRefused`. It imports its conjuncts from `queries/day/program-rows.ts` and its prescription's terms from `queries/day/prescription-terms.ts` (12a moved both out, so a read never imports the row writer, `writers/day/`). It refuses `closed_day` on `rowDayOpen` and finds the workout on `athleteTemplateBlockIn` and `workoutIsLive` (`writers/ownership.ts`), the resolver's own rules.                                                                                                                                                                                                                                                                              |
+| `packages/db/src/queries/day/program-rows.ts`       | The day's row conjuncts: `programRow` (`prescription_set IS NOT NULL`), `programRowOf(profileId, day)`, and the natural keys `workoutSessionSlot`, `workoutSupersetSlot`, `programRowSlot`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `packages/db/src/queries/day/prescription-terms.ts` | E5: `liveQuantities` (numeric conversion, two-in-one-slot throw) and `prescriptionTerms` (`target`, `itemUnit`, the one renderer's text). The row writer's snapshot and the resolver's heading both call it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `packages/db/src/queries/day/day-window.ts`         | `rowDayOpen(day, today, archivedAt)`: inside the writable window and not archived. The writer's `closed_day` and the resolver's `writable` (R1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `packages/db/src/queries/day/day-plan.ts`           | **The day resolver** (12a): `resolveDayPlan(exec, { scope, profilePublicId, day, today })` → `Omit<DayPlan, 'athletes'>`, or `null` for a profile not live in scope. Also `currentPrograms` (R7), for 6c.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `packages/db/src/queries/day/previous.ts`           | PREVIOUS: `previousRows(exec, profileId, day, keys)`, one query for the day, keyed on movement and set (R5).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `packages/db/src/queries/day/scheduled.ts`          | `scheduledOn(blockId, workoutId, day)`: a live week slot on the day's weekday (`localWeekday`), as a conjunct; `isScheduledOn(exec, …)` asks it as a boolean (the ✓ and the un-tick). The writer, 11c and the resolver's week read (`weekSlotsOn`) share its half that names no workout, `weekSlotOn(day)`. `isOnProgramThatDay(exec, profileId, blockId, day)`: step 8, "the athlete is on this program on this day", on `onProgramOn(profileId, day)` (step 5's `assignmentOnDay`; on the program, not due on the weekday; see its docblock), the conjunct the resolver reads too. 12a adds `weekSlotOn`, `dayAssignments` (E1's live anchor) and `weekSlotsOn`; the step-5 tables are named in this one lane E file (`program-tables-stay-dark.test.ts`). |
+| `packages/db/src/queries/day/stored-row-values.ts`  | `readRowValues`: a logged row's live set and its live quantities, as `RowValues`. Throws on two live sets (D3). A second copy of the DAL's read (`docs/tech-debt.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `packages/db/src/writers/day/owed.test.ts`          | The lane's `it.todo` list: the tests steps 12a-ii, 11c and 14 still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `packages/db/src/queries/day/index.ts`              | The directory's exports. **The package index re-exports only `resolveDayPlan` and `ResolvedDayPlan`, by name (E7)**, never `export *`: the other functions take internal ids the caller must already have proved owned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `packages/db/scripts/verify/day.ts`                 | The lane's `db:verify` proofs. Its header lists what each step owes. It calls `verifyDayPlan` last.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `packages/db/scripts/verify/day-plan.ts`            | 12a's proofs: the fixture seeder (direct inserts in reverse order, entries through `logRow` in descending `n`, rising hand-written `created_at`), the exact-id comparison and round trip, and the rules no fixture reaches (ownership (f)/(g)/(h), E2, PREVIOUS, hidden rows, E6, R7, look-ahead, E4).                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Invariants
 
@@ -52,9 +61,11 @@ their files, diagrams and invariants here. The row writer's sequence diagram is
    (`session-rows.ts` also owes [strength-logging.md](./strength-logging.md)), one PR in
    review at a time with lane S. The lane never edits `schema.ts`; a missing column is a **column
    request** to lane A.
-2. 🔴 **The resolver deep-equals every `DayPlan` fixture.** Step 12a seeds the state each fixture
-   describes, with hand-written timestamps, and compares through
-   `scripts/verify/normalize-fixture.ts`. The shapes and fixtures are
+2. 🔴 **The resolver deep-equals every `DayPlan` fixture**, with ids mapped exactly: the seeder
+   returns fixture id → the `public_id` each insert returned, the fixture is translated through it
+   (an unknown UUID throws), and `assert.deepStrictEqual` compares after a JSON round trip. **Never
+   through `normalize-fixture.ts`**, which relabels every UUID and would let a returned `client_id`
+   pass. 12a-i proves the eleven fixtures with no `before`, and the two whose only change is an archive (`archived-athlete-today`, `archived-athlete-nothing-logged`); 12a-ii the other four of the six with a `before`. The shapes and fixtures are
    [the contract's](./program-contract.md); a shape that is wrong or short is a contract change,
    not an edit here.
 3. 🔴 **The prescribed text a row is frozen against comes from one renderer**,
@@ -63,7 +74,7 @@ their files, diagrams and invariants here. The row writer's sequence diagram is
 4. **Every refusal is a typed `RowResult`, never a throw**, and the reasons are the contract's
    `ROW_REFUSALS`. The preview route's fake answers the same reasons by the same rules
    (`apps/web/app/design/program/fakes.ts`), so a difference between the two is a bug in one.
-5. **Every proof goes in `verify/day.ts`**, never in `verify.ts` or another lane's module. **Another lane** that needs a real program row builds lane E's fixture through the exported `programRowFixture(tx)` (`verify/day.ts`), rather than a copy; its own proofs stay in its own module (lane S's B2-0 is the first).
+5. **Every proof goes in `verify/day.ts` or `verify/day-plan.ts`**, never in `verify.ts` or another lane's module. **Another lane** that needs a real program row builds lane E's fixture through the exported `programRowFixture(tx)` (`verify/day.ts`), rather than a copy; its own proofs stay in its own module (lane S's B2-0 is the first).
 6. **Start on open, merge on applied** (plan §6).
 7. **[write-path.md](./write-path.md)'s invariants still apply to these files**, though the guide
    gate no longer sends a PR there: ownership proven by `public_id` inside the transaction (2), the
@@ -100,6 +111,72 @@ their files, diagrams and invariants here. The row writer's sequence diagram is
     Guessing one needs the 74 random bits of a UUIDv7, so that is accepted, and said here rather than
     claimed away.
 
+13. 🔴 **E1 — two anchors.** The resolver's live branch starts from the athlete's assignments, on
+    `liveAthleteTemplateBlockIn(scope, profileId)` (`dayAssignments`; mutation 246 drops it, which
+    the planted (h) proof catches). Its logged branch starts from `programRowOf(profileId, day)`, and
+    LEFT JOINs a SCOPED workout and a SCOPED prescription, each joined to its OWN block under
+    `athleteTemplateBlockIn(scope, profileId)` (`writers/ownership.ts`: `templateBlockIn` ∧
+    `programBlockOfProfile`, one spelling for the writer and the resolver). **The drop is a WHERE on the raw FK testing the subquery's projected
+    id**: `(sessions.workout_id IS NULL OR scoped_workout.id IS NOT NULL) AND (entries.prescription_id
+IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f), (g)) drops the
+    row; a purged (NULL) one keeps it with null ids. Never move the scope into an ON clause, which can
+    only null the joined columns. Mutations 234, 235. ⚠️ After a purge, foreign and purged look
+    alike; pre-flight (f)/(g) is then the only control. A purged workout's rows show with null ids
+    and the session's frozen name (mutation 245). **And the session must be the athlete's own**
+    (`entries.session_id IS NULL OR sessions.profile_id = the athlete`, runbook (i), mutation 242),
+    so another profile's session never lends its frozen name.
+14. **E2 — the movement is read under `movementIsAvailableTo(scope)`** (one read, for live items and
+    logged rows), so an item is absent exactly where the writer answers `not_found`. Mutation 236.
+15. **E3 — a hidden entry is never a logged row**, and a session counts only through its live
+    entries. A live entry with no live set throws, with internal ids only. Mutation 231.
+16. 🔴 **E4 — program rows only**: the day read adds `entries.movement_id IS NOT NULL` beside
+    `programRowOf` (not inside it: 11b relies on its behaviour). A weigh-in, a practice or a check-in
+    never enters a `DayPlan`, even one carrying a `prescription_set` and a live session. Bodyweight
+    is privileged. Mutation 238.
+17. **E5 — one function for a prescription's terms**, `prescriptionTerms`: the page's live heading
+    and the row's frozen snapshot cannot diverge.
+18. **E6 — superset placement**: a group sits at its first member's `idx`; members by
+    `(superset_order, idx)`; `superset.order` is the place in the group; a rest only for a shown group
+    of two or more, off its last member. Mutations 232, 244, 249.
+19. **E7 — exports**: `resolveDayPlan` and its type, by name only.
+    **C21 — ids only for what is live**: a logged workout under a hidden program or a hidden workout
+    shows like one that left the week, but built from its entries alone (no description, every item a
+    removed item, progress 0 of 0; mutation 248), with `programPublicId` only while its block is live
+    and `workoutPublicId` only while the workout and its block are (mutation 247).
+    **C24 — the ids come from the live block, not the day's assignments**: a live workout of a live
+    program, logged on a day no live assignment covers any more, shows as left the week with both
+    ids, its description, live items and count, and its program is not in `programs` (mutation 250).
+    So only a SCHEDULED workout's program is always one of `programs`; `verify/day-plan.ts`'s
+    `resolve()` asserts that on every read.
+20. **R1 in one place**: `future` first (the preview, no rows, archived or not; mutation 239); else
+    `writable = rowDayOpen(day, today, archivedAt)` (`queries/day/day-window.ts`, the writer's rule
+    too; mutation 240 drops the archive at the resolver's call); else logged rows only, and a workout
+    with none is absent (mutation 241). An archived athlete's day shows only what was logged
+    (`archived-athlete-today`). A workout that left the week has `label: null` (R2).
+21. **PREVIOUS** (`previous.ts`): the same `profile_id` (mutation 230), movement and set; a live
+    program row before the day; the latest day, then `created_at`, then id. `null` on a day that is
+    not writable and on a removed item. A hidden row is skipped (mutation 243). Its program-row
+    conjunct has no mutation of its own: the `prescription_set = N` key implies it.
+22. **Look-ahead** reads `onProgramOn(day + 1)` (mutation 237); `onProgram` reads `onProgramOn(day)`
+    (mutation 233), the conjunct `isOnProgramThatDay` uses, so the page and the ✓ agree.
+    `programBlockOfProfile` in the logged join has no mutation through the resolver (the profile's
+    household always equals the scope's there); it is proven in 11b's 4d (mutation 111).
+
+### The read path
+
+```mermaid
+flowchart LR
+  IN["scope · profile · day · today"] --> PRO["isLiveProfile → else null"]
+  PRO --> ASG["dayAssignments (E1 live)"] --> SLOT["weekSlotsOn"] --> RX["live prescriptions → prescriptionTerms (E5)"]
+  PRO --> LOG["programRowOf ∧ movement (E4) ∧ live (E3) ⟕ scoped workout / prescription (E1)"] --> VAL["readRowValues"]
+  LOG -->|"live workouts that left the week"| RX
+  RX --> MOV["movementIsAvailableTo (E2)"]
+  LOG --> MOV
+  MOV --> PREV["previousRows (writable only)"]
+  PREV --> OUT["Omit&lt;DayPlan, 'athletes'&gt;"]
+  VAL --> OUT
+```
+
 ## Fake parity
 
 The preview's fake (`apps/web/app/design/program/fakes.ts`) and the writer answer the same input the
@@ -115,10 +192,12 @@ same way, except:
 - The writer answers the values **as stored**: `numeric(8,3)` rounds a quantity to three decimals,
   so 40.12345 answers 40.123, where the fake answers what was typed.
 - The writer's "on the program that day" check (step 8) reads `program_assignments` through
-  `assignmentOnDay`; the fake reads it from the fixture. 12a must use the same predicate.
+  `onProgramOn` (`assignmentOnDay`); the fake reads it from the fixture. The resolver's `onProgram`
+  reads the same conjunct.
 - ⚠️ **The item's unit is one rule**, `itemUnit` (`@mat-plan/shared`, C13): the type's fixed unit
-  first, else the slot's prescribed unit. 12a's `DayItem.unit` must call it for a live prescription
-  (a removed one takes the unit its entry was stored in), or a row's placeholder and its ✓ disagree.
+  first, else the slot's prescribed unit. `DayItem.unit` calls it through `prescriptionTerms` for a
+  live prescription (a removed one takes the unit its entry was stored in), so a row's placeholder
+  and its ✓ agree.
 
 ## Changing it
 
