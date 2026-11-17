@@ -709,8 +709,11 @@ export const LOGGED_SR_LABEL = 'Logged';
  * The copy a single value's Change editor and its island share (V1-24 3b-life A2): one template per
  * subject, so bodyweight and practice cannot drift into two spellings of "changed to" or "cleared".
  *
- * - `clearLabel`: the ✓'s accessible name while the editor's field is empty and a ✓ clears (plan W5;
- *   the icon-only pair, 2026-11-16). The ✓ looks the same either way; the hint says a blank clears.
+ * - `changeSubject`: `changeLabel`'s subject (`Change weight — 84.5 lb`); the ✓ and ✕ names below
+ *   are built from it, so one row never names its value with two different nouns.
+ * - `saveLabel` / `clearLabel` / `cancelLabel`: the inline ✓'s name (`Save weight`, or `Clear
+ *   weight` while an empty ✓ would clear: plan W5; the icon-only pair, 2026-11-16) and the ✕'s. The
+ *   ✓ looks the same either way; the hint says a blank clears.
  * - `clearHint`: always under the open editor, so a blank ✓ is never a surprise. "Clear", not
  *   "remove": the row is hidden, not erased, until `PRIV-3` (delete-and-restore.md's trap).
  * - `blankSave`: an archived athlete's empty ✓, refused (there is no field to re-enter into). It names
@@ -720,12 +723,15 @@ export const LOGGED_SR_LABEL = 'Logged';
  */
 function singleValueCopy(o: {
   subject: string;
-  clearLabel: string;
+  changeSubject: string;
   clearHint: string;
   blankSave: string;
 }) {
   return {
-    clearLabel: o.clearLabel,
+    changeSubject: o.changeSubject,
+    saveLabel: inlineSaveLabel(o.changeSubject),
+    clearLabel: `Clear ${o.changeSubject}`,
+    cancelLabel: inlineCancelLabel(o.changeSubject),
     clearHint: o.clearHint,
     blankSave: o.blankSave,
     announcedLogged: LIFE_COPY.announced(o.subject),
@@ -735,6 +741,17 @@ function singleValueCopy(o: {
 }
 
 export type SingleValueCopy = ReturnType<typeof singleValueCopy>;
+
+/** An inline ✓'s name (`Save weight`): icon-only, so the name says what it saves. */
+function inlineSaveLabel(subject: string): string {
+  return `Save ${subject}`;
+}
+
+/** An inline ✕'s name (`Cancel changing weight`), for every inline Change (`AMEND_COPY.cancelLabel`),
+ *  so two open editors are not two identical "Cancel"s in a screen reader's list. */
+function inlineCancelLabel(subject: string): string {
+  return `Cancel changing ${subject}`;
+}
 
 /**
  * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
@@ -786,11 +803,9 @@ export const BODYWEIGHT_COPY = {
   },
   /** A read-only day with nothing logged (v12, and Life's) — otherwise the section is a bare heading. */
   noneOnClosedDay: NOTHING_LOGGED,
-  /** `changeLabel`'s subject (`Change weight — 84.5 lb`), and the inline ✓ / ✕ names'. */
-  changeSubject: 'weight',
   ...singleValueCopy({
     subject: 'Bodyweight',
-    clearLabel: 'Clear bodyweight',
+    changeSubject: 'weight',
     clearHint: 'To clear this weigh-in, leave the field empty.',
     blankSave: 'Enter your bodyweight, then ✓.',
   }),
@@ -810,8 +825,6 @@ const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
  */
 export const PRACTICE_COPY = {
   label: PRACTICE_LABEL,
-  /** `changeLabel`'s subject: `Change wrestling practice — 90 min`. */
-  changeSubject: PRACTICE_LABEL.toLowerCase(),
   /** `AMEND_ERROR_COPY`'s subject: `the practice wasn't changed`. */
   noun: 'practice',
   /** The log row's sr-only suffix after its visible label, so its name is `fieldLabel`. */
@@ -820,7 +833,7 @@ export const PRACTICE_COPY = {
   fieldLabel: `${PRACTICE_LABEL}${PRACTICE_FIELD_SUFFIX}`,
   ...singleValueCopy({
     subject: PRACTICE_LABEL,
-    clearLabel: `Clear ${PRACTICE_LABEL.toLowerCase()}`,
+    changeSubject: PRACTICE_LABEL.toLowerCase(),
     // "That day", not "today": Change renders on yesterday too, the evening-after path this is for.
     clearHint:
       'To clear this practice, leave the field empty. Two practices that day? Enter the total.',
@@ -889,11 +902,8 @@ export const AMEND_COPY = {
   change: 'Change',
   save: 'Save',
   cancel: 'Cancel',
-  /** The inline ✓'s name (`Save weight`): icon-only, so the name says what it saves. */
-  saveLabel: (subject: string) => `Save ${subject}`,
-  /** The inline ✕'s name (`Cancel changing weight`), shared by every inline Change, so two open
-   *  editors are not two identical "Cancel"s in a screen reader's list. */
-  cancelLabel: (subject: string) => `Cancel changing ${subject}`,
+  /** The inline ✕'s name for a row with no `SingleValueCopy` (lane C's set rows). */
+  cancelLabel: inlineCancelLabel,
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */
   valueLabel: (unit: string) => `Weight (${unit})`,

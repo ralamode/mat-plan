@@ -18,7 +18,7 @@ import {
 } from './steps';
 
 /**
- * **V1-24 3b-bw — the bodyweight row, end to end: ✓, Change, a blank Save that clears, re-entry.**
+ * **V1-24 3b-bw — the bodyweight row, end to end: ✓, Change, a blank ✓ that clears, re-entry.**
  *
  * 🔴 **On an athlete this test CREATES, never a seeded one.** A clear hides a weigh-in, and nothing in
  * the app restores it; Athlete Two's history is what `export-csv.spec.ts` reads. A new athlete also
@@ -29,11 +29,8 @@ import {
  * Covered elsewhere: every copy state, the archived refusal and the island's focus rules
  * (`bodyweight-section.test.tsx`, `single-value-live.test.tsx`); 360px and axe (`a11y.spec.ts`).
  */
-/** The inline ✓ / ✕ names, from the templates the editor uses. */
-const SAVE = AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject);
-const CANCEL = AMEND_COPY.cancelLabel(BODYWEIGHT_COPY.changeSubject);
 
-test('log with ✓, change, clear with a blank Save, then re-enter, with focus at each step', async ({
+test('log with ✓, change, clear with a blank ✓, then re-enter, with focus at each step', async ({
   page,
 }, testInfo) => {
   test.setTimeout(90_000);
@@ -75,14 +72,14 @@ test('log with ✓, change, clear with a blank Save, then re-enter, with focus a
   await expect(editor).toBeFocused();
   await editor.press('9'); // replaces the selection
   await expect(editor).toHaveValue('9');
-  await section.getByRole('button', { name: CANCEL }).click();
+  await section.getByRole('button', { name: BODYWEIGHT_COPY.cancelLabel, exact: true }).click();
   await expect(changeWeight(page, FIRST)).toBeFocused();
   // Escape cancels too, from the field and from the ✓ (a keyboard user's Cancel).
   await changeWeight(page, FIRST).click();
   await editor.press('Escape');
   await expect(changeWeight(page, FIRST)).toBeFocused();
   await changeWeight(page, FIRST).click();
-  await section.getByRole('button', { name: SAVE }).focus();
+  await section.getByRole('button', { name: BODYWEIGHT_COPY.saveLabel, exact: true }).focus();
   await page.keyboard.press('Escape');
   await expect(changeWeight(page, FIRST)).toBeFocused();
 
@@ -90,7 +87,7 @@ test('log with ✓, change, clear with a blank Save, then re-enter, with focus a
   const CORRECTED = '71.8';
   await changeWeight(page, FIRST).click();
   await editor.fill(CORRECTED);
-  await section.getByRole('button', { name: SAVE }).click();
+  await section.getByRole('button', { name: BODYWEIGHT_COPY.saveLabel, exact: true }).click();
   await expect(loggedWeight(page, CORRECTED)).toBeVisible({ timeout: 15_000 });
   await expect(status).toHaveText(BODYWEIGHT_COPY.announcedChanged(shownWeight(CORRECTED)));
   await expect(changeWeight(page, CORRECTED)).toBeFocused();
@@ -99,7 +96,7 @@ test('log with ✓, change, clear with a blank Save, then re-enter, with focus a
   await changeWeight(page, CORRECTED).click();
   await expect(section.getByText(BODYWEIGHT_COPY.clearHint, { exact: true })).toBeVisible();
   await editor.fill('');
-  await section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).click();
+  await section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel, exact: true }).click();
   await expect(status).toHaveText(BODYWEIGHT_COPY.announcedCleared(shownWeight(CORRECTED)), {
     timeout: 15_000,
   });
@@ -130,6 +127,6 @@ async function clearFrom(page: Page, value: string): Promise<void> {
   await section
     .getByLabel(AMEND_COPY.valueLabel(DEFAULT_BODYWEIGHT_UNIT), { exact: true })
     .fill('');
-  await section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).click();
+  await section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel, exact: true }).click();
   await expect(section.getByLabel('Weight', { exact: true })).toBeVisible({ timeout: 15_000 });
 }

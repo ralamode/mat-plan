@@ -8,7 +8,6 @@ import { expect, test } from '@playwright/test';
 
 import {
   ALL_ATHLETES_LINK,
-  AMEND_COPY,
   APP_HOME_PATH,
   BODYWEIGHT_COPY,
   DEFAULT_TIME_ZONE,
@@ -44,8 +43,6 @@ import {
 // This is deliberately the ONLY e2e for the flow: the write's correctness
 // (idempotency, zod, ownership) is covered by fast Vitest integration tests.
 // E2E is the slow tier — keep it to critical wiring smokes only.
-const PRACTICE_SAVE = AMEND_COPY.saveLabel(PRACTICE_COPY.changeSubject);
-
 test('picks a profile then logs a bodyweight in its scoped Today', async ({ page }) => {
   await page.goto(APP_HOME_PATH);
 
@@ -111,8 +108,8 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   await logPractice(page);
 
   // V1-24 3b-life-a: Change it to the largest legal value (the longest minutes line; the label is the
-  // row's widest line either way), check the row at 360px, refuse an out-of-range value, clear it (Save
-  // reads Clear), then the minutes are typed and logged again, so the day ends as it began. Athlete One's today is
+  // row's widest line either way), check the row at 360px, refuse an out-of-range value, clear it (the ✓
+  // named Clear), then the minutes are typed and logged again, so the day ends as it began. Athlete One's today is
   // this spec's alone (the e2e rule, `global.setup.ts`).
   await changePractice(page, PRACTICE_SHOWN, String(PRACTICE_MINUTES_MAX));
   const life = lifeSection(page);
@@ -140,10 +137,20 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   await change.click();
   const editorField = life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
   await editorField.fill(String(PRACTICE_MINUTES_MIN - 1));
-  await life.getByRole('button', { name: PRACTICE_SAVE, exact: true }).click();
+  await life.getByRole('button', { name: PRACTICE_COPY.saveLabel, exact: true }).click();
   await expect(life.getByRole('alert')).toHaveText(PRACTICE_COPY.outOfRange);
   await expect(editorField).toBeFocused();
   await expectNoAxeViolations(page, 'the practice editor with a refused value');
+  // The ✓ and ✕ share the field's line at 360px beside `min` (wider than `lb`), each 44px wide.
+  const editorBox = (await editorField.boundingBox())!;
+  for (const name of [PRACTICE_COPY.saveLabel, PRACTICE_COPY.cancelLabel]) {
+    const box = (await life.getByRole('button', { name, exact: true }).boundingBox())!;
+    expect(box.width, `${name} is at least 44px wide`).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+    expect(
+      Math.abs(editorBox.y + editorBox.height / 2 - (box.y + box.height / 2)),
+      `${name} sits on the field's line at 360px`,
+    ).toBeLessThanOrEqual(2);
+  }
 
   // The armed Clear, on the editor's plain surface.
   await editorField.fill('');
@@ -153,9 +160,7 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   // Scan it settled, not mid-transition (`transition-all`), as the bodyweight scan does.
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   await expectNoAxeViolations(page, 'the practice editor with Clear armed');
-  await life
-    .getByRole('button', { name: AMEND_COPY.cancelLabel(PRACTICE_COPY.changeSubject), exact: true })
-    .click();
+  await life.getByRole('button', { name: PRACTICE_COPY.cancelLabel, exact: true }).click();
 
   await clearPractice(page, shownWidest);
   await logPractice(page);

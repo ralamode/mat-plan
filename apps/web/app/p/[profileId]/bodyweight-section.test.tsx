@@ -121,7 +121,9 @@ describe('BodyweightSection — its states', () => {
     // THE half that stops the second submit: no create form.
     expect(screen.queryByLabelText('Weight')).toBeNull();
     expect(screen.queryByRole('button', { name: BODYWEIGHT_COPY.logLabel })).toBeNull();
-    expect(screen.getByRole('button', { name: changeLabel('weight', shown(w)) })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) }),
+    ).toBeTruthy();
   });
 
   it('several weights → all of them, never silently the newest', () => {
@@ -191,7 +193,7 @@ describe('BodyweightSection — the ✓ (plan W3, W6)', () => {
     const w = weight(84.5);
     rerender(section({ logged: [w] }));
     expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: changeLabel('weight', shown(w)) }),
+      screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) }),
     );
   });
 
@@ -208,7 +210,11 @@ describe('BodyweightSection — the ✓ (plan W3, W6)', () => {
     rerender(section({ logged: [weight(85)] }));
     expect(screen.getByRole('alert').textContent).toBe(BODYWEIGHT_COPY.dayTaken);
     // Opening Change dismisses it: it was about a log, not the value now being changed.
-    fireEvent.click(screen.getByRole('button', { name: changeLabel('weight', shown(weight(85))) }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(weight(85))),
+      }),
+    );
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -239,10 +245,10 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
   const amendInput = () =>
     screen.queryByLabelText(AMEND_COPY.valueLabel(W.unit)) as HTMLInputElement | null;
   const changeButton = (w: LoggedBodyweight = W) =>
-    screen.getByRole('button', { name: changeLabel('weight', shown(w)) });
+    screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) });
   const open = (w: LoggedBodyweight = W) => fireEvent.click(changeButton(w));
-  const SAVE = AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject);
-  const CANCEL = AMEND_COPY.cancelLabel(BODYWEIGHT_COPY.changeSubject);
+  const SAVE = BODYWEIGHT_COPY.saveLabel;
+  const CANCEL = BODYWEIGHT_COPY.cancelLabel;
 
   it('opens with the saved value SELECTED, so the first digit replaces it', () => {
     render(section({ logged: [W] }));
@@ -389,7 +395,7 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(document.activeElement).toBe(changeButton());
   });
 
-  it('while a save is in flight, Escape does nothing and the ✕ is hidden', async () => {
+  it('while a save is in flight, Escape and the ✕ do nothing, and the ✕ is hidden', async () => {
     let resolve!: (r: { ok: true }) => void;
     vi.mocked(editBodyweightAction).mockImplementationOnce(
       () => new Promise((r) => (resolve = r as typeof resolve)),
@@ -401,9 +407,13 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
       fireEvent.click(screen.getByRole('button', { name: SAVE }));
     });
     expect(screen.getByRole('button', { name: SAVE }).getAttribute('aria-busy')).toBe('true');
-    // `invisible` (jsdom loads no CSS, so the class is the assertion; the e2e sees it hidden).
-    expect(screen.getByRole('button', { name: CANCEL }).className).toMatch(/\binvisible\b/);
+    // jsdom loads no CSS, so the class is the only check that it is hidden (no e2e holds a save in
+    // flight); the click below proves the guard does not rest on CSS.
+    const x = screen.getByRole('button', { name: CANCEL });
+    expect(x.className).toMatch(/\binvisible\b/);
     fireEvent.keyDown(amendInput()!, { key: 'Escape' });
+    expect(amendInput()).not.toBeNull();
+    fireEvent.click(x); // the ✕ is still painted for a moment in a real browser
     expect(amendInput()).not.toBeNull();
     await act(async () => resolve({ ok: true }));
   });

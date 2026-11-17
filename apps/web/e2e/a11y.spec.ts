@@ -11,7 +11,6 @@ import {
 
 import {
   ADD_ATHLETE_PATH,
-  AMEND_COPY,
   APP_HOME_PATH,
   BODYWEIGHT_COPY,
   MAIN_CONTENT_ID,
@@ -33,6 +32,7 @@ import {
   SEED_PROFILE_2_ROUTE,
   SEED_PROFILE_ROUTE,
   loggedWeight,
+  changePrefix,
 } from './steps';
 import {
   DESKTOP_VIEWPORT,
@@ -378,25 +378,24 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   // No test had ever opened an edit form before this. Measured here with `widest` already on screen,
   // because that is the worst case: the longest value the bound allows, plus the editor's controls.
   //
-  // ⚠️ These gates are the FLOOR, not what makes the editor safe — an inline editor passes all three
-  // (flex wraps; the tap-target check measures height only). See `bodyweight-amend.tsx`.
-  await section.getByRole('button', { name: /^Change weight/ }).click();
+  // ⚠️ These gates are the FLOOR, not what makes the editor safe — a ✕ wrapped onto its own line
+  // passes all three (the tap-target check measures height only), hence the same-line measurement
+  // below. The width argument: `single-value-amend.tsx`.
+  await section.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) }).click();
   await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
   await expectNoAxeViolations(page, 'weigh-in (editing)');
   // Emptied, the ✓ is named Clear (same look; the hint says a blank clears; the row drops its tint
   // while editing).
   const editorField = section.getByLabel(/^Weight \(/);
   await editorField.fill('');
-  const clear = section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel });
+  const clear = section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel, exact: true });
   await expect(clear).toBeVisible();
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   await expectNoAxeViolations(page, 'weigh-in (editing, the ✓ named Clear)');
   // …and with a field error under it: the error text is the pair the done tint must never carry
   // (`app/done-tokens.test.ts`), which is why the row drops its tint while the editor is open.
   await editorField.fill('845');
-  await section
-    .getByRole('button', { name: AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject) })
-    .click();
+  await section.getByRole('button', { name: BODYWEIGHT_COPY.saveLabel, exact: true }).click();
   await expect(section.getByRole('alert')).toHaveText(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
   await expectNoAxeViolations(page, 'weigh-in (editing, a refused value)');
   await editorField.fill(widest);
@@ -406,11 +405,8 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   // The icon-only ✓ and ✕ share the FIELD's line at 360px, each a full 44px wide (maintainer,
   // 2026-11-16). None of the gates above sees a ✕ wrapped onto its own line (`single-value-amend.tsx`).
   const editorBox = (await editorField.boundingBox())!;
-  for (const name of [
-    AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject),
-    AMEND_COPY.cancelLabel(BODYWEIGHT_COPY.changeSubject),
-  ]) {
-    const box = (await section.getByRole('button', { name }).boundingBox())!;
+  for (const name of [BODYWEIGHT_COPY.saveLabel, BODYWEIGHT_COPY.cancelLabel]) {
+    const box = (await section.getByRole('button', { name, exact: true }).boundingBox())!;
     expect(box.width, `${name} is at least 44px wide`).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
     expect(
       Math.abs(editorBox.y + editorBox.height / 2 - (box.y + box.height / 2)),

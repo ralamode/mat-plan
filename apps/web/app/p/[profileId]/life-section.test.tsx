@@ -9,7 +9,6 @@ vi.mock('./actions', () => ({
 }));
 
 import {
-  AMEND_COPY,
   AMEND_ERROR_COPY,
   changeLabel,
   LIFE_COPY,
@@ -61,9 +60,9 @@ const submit = async (name: string) => {
   });
 };
 
-/** The inline ✓ / ✕ names, from the same templates the editor uses. */
-const PRACTICE_SAVE = AMEND_COPY.saveLabel(PRACTICE_COPY.changeSubject);
-const PRACTICE_CANCEL = AMEND_COPY.cancelLabel(PRACTICE_COPY.changeSubject);
+/** The inline ✓ / ✕ names the editor uses. */
+const PRACTICE_SAVE = PRACTICE_COPY.saveLabel;
+const PRACTICE_CANCEL = PRACTICE_COPY.cancelLabel;
 
 describe('LifeSection — its states', () => {
   it('writable and nothing logged: the practice button, and no Wake', () => {

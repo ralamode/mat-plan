@@ -6,17 +6,14 @@ import { InlineEditActions } from './inline-edit-actions';
 
 afterEach(cleanup);
 
-const SAVE = 'Save weight';
-const CANCEL = 'Cancel changing weight';
+// Neutral fixtures: the primitive takes any names; the app's copy is tested where it is used.
+const SAVE = 'Confirm thing';
+const CANCEL = 'Cancel thing';
 
 describe('InlineEditActions', () => {
   it('renders ✓ then ✕, each 44px icon-lg with its name, the ✕ a neutral outline', () => {
     render(
-      <InlineEditActions
-        confirm={{ label: SAVE, type: 'submit' }}
-        cancelLabel={CANCEL}
-        onCancel={() => {}}
-      />,
+      <InlineEditActions confirm={{ label: SAVE }} cancelLabel={CANCEL} onCancel={() => {}} />,
     );
     const buttons = screen.getAllByRole('button');
     expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([SAVE, CANCEL]);
@@ -35,45 +32,30 @@ describe('InlineEditActions', () => {
     ]);
   });
 
-  it('passes the cancel handlers through, and onClick still cancels', () => {
+  it('passes the pointer handlers through, and onClick still cancels', () => {
     const onCancel = vi.fn();
     const onPointerDown = vi.fn();
     const onPointerCancel = vi.fn();
-    const onFocus = vi.fn();
     render(
       <InlineEditActions
         cancelLabel={CANCEL}
         onCancel={onCancel}
-        cancelHandlers={{ onPointerDown, onPointerCancel, onFocus }}
+        cancelHandlers={{ onPointerDown, onPointerCancel }}
       />,
     );
     const x = screen.getByRole('button', { name: CANCEL });
     fireEvent.pointerDown(x);
     fireEvent.pointerCancel(x);
-    fireEvent.focus(x);
     fireEvent.click(x);
-    expect(
-      [onPointerDown, onPointerCancel, onFocus, onCancel].map((f) => f.mock.calls.length),
-    ).toEqual([1, 1, 1, 1]);
-  });
-
-  it('a button confirm calls onConfirm', () => {
-    const onConfirm = vi.fn();
-    render(
-      <InlineEditActions
-        confirm={{ label: SAVE, type: 'button', onConfirm }}
-        cancelLabel={CANCEL}
-        onCancel={() => {}}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: SAVE }));
-    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect([onPointerDown, onPointerCancel, onCancel].map((f) => f.mock.calls.length)).toEqual([
+      1, 1, 1,
+    ]);
   });
 
   it('pending: the ✓ keeps its name, busy and disabled; the ✕ is hidden, not disabled', () => {
     render(
       <InlineEditActions
-        confirm={{ label: SAVE, type: 'submit' }}
+        confirm={{ label: SAVE }}
         cancelLabel={CANCEL}
         onCancel={() => {}}
         pending
@@ -83,14 +65,17 @@ describe('InlineEditActions', () => {
     expect(tick.getAttribute('aria-busy')).toBe('true');
     expect((tick as HTMLButtonElement).disabled).toBe(true);
     const x = screen.getByRole('button', { name: CANCEL, hidden: true });
+    // Hidden at once: no ~150ms `transition-all` window in which it is still painted and clickable.
     expect(x.className).toMatch(/\binvisible\b/);
+    expect(x.className).toMatch(/\bpointer-events-none\b/);
+    expect(x.className).toMatch(/\btransition-none\b/);
     expect((x as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('describes both buttons and applies the focus class to both', () => {
     render(
       <InlineEditActions
-        confirm={{ label: SAVE, type: 'submit' }}
+        confirm={{ label: SAVE }}
         cancelLabel={CANCEL}
         onCancel={() => {}}
         describedBy="line-1"

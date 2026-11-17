@@ -61,7 +61,6 @@ export function SingleValueAmend({
   logged,
   canClear,
   copy,
-  changeSubject,
   fieldLabel,
   inputMode,
   parse,
@@ -72,8 +71,6 @@ export function SingleValueAmend({
   /** False for an archived athlete: Change stays, a clear does not (plan W5). */
   canClear: boolean;
   copy: SingleValueCopy;
-  /** `changeLabel`'s subject: `weight`, `wrestling practice`. */
-  changeSubject: string;
   /** The field's accessible name; the visible unit beside it is `aria-hidden`. */
   fieldLabel: string;
   inputMode: 'decimal' | 'numeric';
@@ -122,7 +119,7 @@ export function SingleValueAmend({
   // The outcome as of the last open: an error from a PREVIOUS open (submit 845, Cancel, reopen)
   // must not reappear under a correct value, and `useActionState` never resets on its own.
   const [stateAtOpen, setStateAtOpen] = useState(state);
-  /** The archived athlete's blank Save, refused before any request. Cleared by typing. */
+  /** The archived athlete's blank ✓, refused before any request. Cleared by typing. */
   const [blankRefused, setBlankRefused] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const takeChange = live.focusRef('change');
@@ -153,8 +150,11 @@ export function SingleValueAmend({
   const blank = isBlankEntry(value);
   const clears = blank && canClear;
   const valueErr = blankRefused ? copy.blankSave : fresh && !state.ok ? state.field : undefined;
-  const saveLabel = clears ? copy.clearLabel : AMEND_COPY.saveLabel(changeSubject);
+  const saveLabel = clears ? copy.clearLabel : copy.saveLabel;
   const cancel = () => {
+    // Never mid-save: the write would still land behind a closed editor, and a refusal under the
+    // field would have nowhere to show. One guard for the ✕ and Escape.
+    if (pending) return;
     setEditing(false);
     live.dismiss();
     // The editor is about to unmount; hand focus back to the Change that opened it.
@@ -185,7 +185,7 @@ export function SingleValueAmend({
           live.dismissOnOpen();
           setEditing(true);
         }}
-        aria-label={changeLabel(changeSubject, shown)}
+        aria-label={changeLabel(copy.changeSubject, shown)}
       >
         {AMEND_COPY.change}
       </Button>
@@ -206,7 +206,7 @@ export function SingleValueAmend({
         if (e.key !== 'Escape') return;
         e.preventDefault();
         e.stopPropagation();
-        if (!pending) cancel();
+        cancel();
       }}
       className="flex w-full flex-col gap-2"
     >
@@ -245,8 +245,8 @@ export function SingleValueAmend({
           {logged.unit}
         </span>
         <InlineEditActions
-          confirm={{ label: saveLabel, type: 'submit' }}
-          cancelLabel={AMEND_COPY.cancelLabel(changeSubject)}
+          confirm={{ label: saveLabel }}
+          cancelLabel={copy.cancelLabel}
           onCancel={cancel}
           pending={pending}
         />
