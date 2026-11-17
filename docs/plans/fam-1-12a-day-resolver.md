@@ -241,12 +241,12 @@ here, with its own patch) or a contract question for the roadmap thread.
 **What it proves.** These are the four `before` fixtures 12a-i left; the two archive-only fixtures
 are already proved in 12a-i's `verifyRules`.
 
-| Fixture                          | The change, made with                                                                                                | Writer on main?        |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| `yesterday-edited-after-logging` | `saveWorkout` (6a-ii): Heavy A loses the pull-up and the bench goes to 3 sets at 30; Morning's push-ups go to 2 sets | yes (#491)             |
-| `closed-day-program-since-left`  | `saveWorkout` (6a-ii): Morning habits is renamed Morning routine                                                     | yes (#491)             |
-| `workout-left-the-week`          | `saveWeek` (6b): Heavy A comes off the 11-13 slot                                                                    | no: #522, open         |
-| `today-stretching-first`         | the athlete's programs reordered: 6d's writer, **or a direct `idx` update (Q6)**                                     | no: 6d, not yet opened |
+| Fixture                          | The change, made with                                                                                                | Writer on main? |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `yesterday-edited-after-logging` | `saveWorkout` (6a-ii): Heavy A loses the pull-up and the bench goes to 3 sets at 30; Morning's push-ups go to 2 sets | yes (#491)      |
+| `closed-day-program-since-left`  | `saveWorkout` (6a-ii): Morning habits is renamed Morning routine                                                     | yes (#491)      |
+| `workout-left-the-week`          | `saveWeek` (6b): Heavy A comes off the 11-13 slot                                                                    | no: #522, open  |
+| `today-stretching-first`         | the athlete's programs reordered, by a direct `idx` update (Q6, decided)                                             | not needed (Q6) |
 
 The deep-equals are the fixtures. Some of their rules are already proved in 12a-i: a logged set
 beyond a reduced count (`verify/day-plan.ts:987-1003`), and a left-the-week workout's null label
@@ -279,7 +279,7 @@ and before `verifyRules`.
    - each changed workout: `saveWorkout(translate(workoutDraft(world, prog, wid)))`;
    - each changed week: `saveWeek({ programPublicId, days: translate(programView(world, prog).week) })`
      (Q4);
-   - a reorder: Q6.
+   - a reorder: the direct `idx` update (Q6), then the density check.
 
    Every call must answer `ok`; a refusal fails with the writer's reason.
 
@@ -327,7 +327,7 @@ policy: a patch only where no fixture's deep-equal goes red.
 - E `scripts/verify/day-plan.ts`: the harness and the proofs above.
 - E `scripts/verify/fixture-groups.ts`: `REPLAY_FIXTURES`, `REPLAY_FIXTURE_COUNT`, and the draft-only
   `AWAITING_WRITER`.
-- E `src/writers/day/owed.test.ts`: reads `REPLAY_FIXTURES`; the progress line goes.
+- E `src/writers/day/owed.test.ts`: reads `REPLAY_FIXTURES`; the progress line goes; Q6's 6d line is added.
 - N mutation patches 253 onward, plus their README rows.
 - E `docs/features/day-writers.md`: the proof map.
 - E `docs/tech-debt.md`: the direct-insert entry rewritten.
@@ -349,15 +349,18 @@ No file of lane P's, lane A's or the contract owner's is touched.
   `WeekDraft['days']` (`program-shapes.ts:211-215, 319`), which is what the week editor passes to
   `saveWeek`. Recommended: yes. If not, a local copy whose docblock names `build.ts:452-460` as the
   rule it copies.
-- **Q6 (the board):** apply `today-stretching-first`'s reorder by a direct `program_assignments.idx`
-  update instead of waiting for 6d? The plan row allows "a recorded decision to make an edit with
-  direct SQL".
-  - `logRow` does not read program order, so the database matches before → log → reorder.
-  - 12a-i applied the archive the same way.
-  - A replay through 6d would test 6d's writer, which is 6d's proof to make.
-  - Recommended: yes, so 12a-ii waits only on 6b.
+- **Q6, decided: yes** _(board, 2026-11-17)_. `today-stretching-first` applies its reorder as a
+  direct `program_assignments.idx` update. The plan row allows "a recorded decision to make an edit
+  with direct SQL"; `logRow` does not read program order; 12a-i applied the archive the same way.
+  The board's two conditions:
+  1. The update leaves a state 6d's writer could produce. The proof asserts, after it, that each
+     athlete's open assignments have dense `idx` values from 0, all in one transaction, and that no
+     unique index was violated. A bad hand edit fails loudly instead of seeding an order 6d could
+     never write.
+  2. A recorded exit: `owed.test.ts` gains
+     `it.todo('12a-ii: when 6d lands, replay today-stretching-first through its writer and assert the same rows')`.
 
-**Gates:** #491 (merged), #522 (6b), and 6d unless Q6 is yes. **Gates next:** 15.
+**Gates:** #491 (merged) and #522 (6b). **Gates next:** 15.
 
 ## Risks
 
@@ -461,8 +464,8 @@ maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
 | 4C6 | correctness  | The selection has no count                                                                                                              | **accepted**         | `REPLAY_FIXTURE_COUNT`; `AWAITING_WRITER` asserted to be a subset                                                                                     |
 | 4C7 | correctness  | R4's lowest-set rule has no distinguishing state                                                                                        | **accepted**         | The back-again card logs set 2 before set 1                                                                                                           |
 | 4C8 | correctness  | NITs: overstated "only this replay"; a wrong `client_id` reason; Q5 moot; draft hand-building; the PREVIOUS wording; a stale Risks line | **accepted**         | All in rev 4                                                                                                                                          |
-| 4S1 | scope        | Waiting on 6d holds the branch open; split off the fixtures whose writers are unmerged                                                  | **accepted, partly** | The board said keep one draft until the writers land (2026-11-17); Q6 drops the 6d wait, so only 6b (#522, open) remains                              |
-| 4S2 | scope        | `today-stretching-first` does not need 6d                                                                                               | **accepted**         | Q6 to the board: a direct `idx` update                                                                                                                |
+| 4S1 | scope        | Waiting on 6d holds the branch open; split off the fixtures whose writers are unmerged                                                  | **accepted, partly** | The board said keep one draft until the writers land (2026-11-17); Q6 (yes) drops the 6d wait, so only 6b (#522, open) remains                        |
+| 4S2 | scope        | `today-stretching-first` does not need 6d                                                                                               | **accepted**         | Q6, decided yes (board, 2026-11-17): a direct `idx` update, with a density check and a 6d exit                                                        |
 | 4S3 | scope, reuse | `AWAITING_WRITER` would merge empty                                                                                                     | **accepted**         | Draft-only; deleted, with the empty loop, before ready                                                                                                |
 | 4S4 | scope        | Two of the four mutations repeat what the deep-equal guards                                                                             | **accepted**         | Progress and R6's tail get no patch; the remaining patches each name an assertion beyond the deep-equal                                               |
 | 4R1 | reuse        | `weekDraftOf` rewrites `programView(...).week`                                                                                          | **accepted**         | Q4: export `programView`; otherwise a copy that names its source                                                                                      |
