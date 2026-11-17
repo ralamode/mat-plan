@@ -140,7 +140,8 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
     of two or more, off its last member. Mutations 232, 244.
 19. **E7 — exports**: `resolveDayPlan` and its type, by name only.
     **C21 — ids only for what is live**: a logged workout under a hidden program or a hidden workout
-    shows like one that left the week, built from its entries alone (progress 0 of 0), with
+    shows like one that left the week, but built from its entries alone (no description, every item a
+    removed item, progress 0 of 0; mutation 248), with
     `programPublicId` only for a program in `programs` and `workoutPublicId` only for a live workout of
     such a program. Mutation 247; `verify/day-plan.ts`'s `resolve()` asserts the invariant on every
     read.

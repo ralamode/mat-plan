@@ -13,5 +13,5 @@
   exactly, and round-trips the returned ids through the row writer; new proofs cover ownership
   (planted runbook (f), (g) and (h) rows), hidden rows, superset and program order, look-ahead and
   PREVIOUS, the hidden-program ids (C21) and an entry in another profile's session (runbook pre-flight
-  (i), added), with eighteen new mutations (230–247). Of the five fixtures with a `before`, 12a-i
+  (i), added), with nineteen new mutations (230–248). Of the five fixtures with a `before`, 12a-i
   proves `archived-athlete-today` (its only change is the archive); the other four are 12a-ii's.
