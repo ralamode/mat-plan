@@ -67,7 +67,8 @@ export const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at t
  * 🔴 **The one un-hide (V1-9b B2-0).** Every writer that makes a hidden entry live sets this, so the
  * hide reason goes in the same statement as `deleted_at`: a live row with a reason is refused by
  * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`). `no-bare-unhide.test.ts` fails on any other
- * `deletedAt: null` in this package. FAM-1 11c's D35 revive (`day/log-row.ts`) spreads it too.
+ * un-hide in this package or the app's DAL. FAM-1 11c's D35 revive (`day/log-row.ts`, not built yet)
+ * must spread it: whichever of 11c and B2-0 lands second makes that edit.
  */
 export const UNHIDE = { deletedAt: null, hideReason: null } as const;
 

@@ -21,8 +21,10 @@ import { describe, expect, it } from 'vitest';
 const SRC = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DAL = resolve(SRC, '../../../apps/web/lib/dal');
 
+// `deletedAt:` followed by a null anywhere before the next field (a bare null, sql`null`, a ternary),
+// an upsert's `excluded.deleted_at`, or a SQL `deleted_at = null` in any quoting.
 const UNHIDE_LITERAL =
-  /deletedAt:\s*(sql`\s*)?null\b|deleted_?at"?\}?\s*=\s*null\b|deletedAt\}\s*=\s*null\b/i;
+  /deletedAt:[^,}\n]*\bnull\b|excluded\.deleted_at|deleted_?at"?\}?\s*=\s*null\b|deletedAt\}\s*=\s*null\b/i;
 /** A file that names the entries table is one whose un-hide must clear the reason. */
 const WRITES_ENTRIES = /schema\.entries\b|\bentries\b/;
 const UNHIDE_DEFINITION = /export const UNHIDE = \{ deletedAt: null, hideReason: null \} as const;/;
@@ -31,19 +33,23 @@ const UNHIDE_DEFINITION = /export const UNHIDE = \{ deletedAt: null, hideReason:
 const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line);
 
 describe('every un-hide clears the hide reason (V1-9b B2-0)', () => {
-  it('the only deletedAt: null in packages/db/src is UNHIDE', () => {
+  it('the only un-hide in packages/db/src and apps/web/lib/dal is UNHIDE', () => {
     const hits: string[] = [];
     for (const root of [SRC, DAL]) {
+      let read = 0;
       for (const file of globSync('**/*.ts', { cwd: root })) {
         if (file.endsWith('.test.ts')) continue;
         const text = readFileSync(join(root, file), 'utf8');
         if (!WRITES_ENTRIES.test(text)) continue;
+        read += 1;
         text.split('\n').forEach((line, i) => {
           if (isComment(line) || !UNHIDE_LITERAL.test(line)) return;
           if (UNHIDE_DEFINITION.test(line)) return;
           hits.push(`${relative(SRC, join(root, file))}:${i + 1}: ${line.trim()}`);
         });
       }
+      // A root that moved reads nothing and would pass vacuously; each must read real files.
+      expect(read, `${root} has files that write entries`).toBeGreaterThan(0);
     }
     expect(hits, 'set UNHIDE (writers/hide.ts) instead, so the hide reason is cleared too').toEqual(
       [],
@@ -57,10 +63,18 @@ describe('every un-hide clears the hide reason (V1-9b B2-0)', () => {
       'sql`update entries set deleted_at = null`',
       'sql`update "entries" set "deleted_at" = NULL`',
       'sql`set ${schema.entries.deletedAt} = null`',
+      '.set({ deletedAt: revive ? null : sql`now()` })',
+      '.onConflictDoUpdate({ target, set: { deletedAt: sql`excluded.deleted_at` } })',
     ]) {
       expect(UNHIDE_LITERAL.test(spelling), spelling).toBe(true);
     }
-    expect(UNHIDE_LITERAL.test('.set({ deletedAt: sql`now()` })')).toBe(false);
+    for (const notAnUnhide of [
+      '.set({ deletedAt: sql`now()` })',
+      'deletedAt: schema.entries.deletedAt,',
+      '.where(isNull(schema.entries.deletedAt))',
+    ]) {
+      expect(UNHIDE_LITERAL.test(notAnUnhide), notAnUnhide).toBe(false);
+    }
   });
 
   it('UNHIDE is defined exactly once, and clears the reason', () => {

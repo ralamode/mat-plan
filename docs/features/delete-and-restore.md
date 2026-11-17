@@ -57,8 +57,8 @@ call, and it is `B1-3`'s.
 structural.** `'clear_day'` is written by `clearDay` alone: `hideEntries` takes no reason (a private
 `hideRows` core does), so a blank clear, an un-tick, a swap's holder and a correction all leave it
 NULL. **Every un-hide clears it in the same statement** as `deleted_at`, by setting `UNHIDE`; a CHECK
-refuses a live row with a reason (`23514`), and a source test refuses any other `deletedAt: null` in
-`packages/db/src`. A partial Restore all drops the reason of the items it left hidden (their place was
+refuses a live row with a reason (`23514`), and a source test refuses any other un-hide spelling in
+`packages/db/src` and `apps/web/lib/dal`. A partial Restore all drops the reason of the items it left hidden (their place was
 retaken), so the banner does not come back offering a restore that can only refuse. This answers
 invariant 1's open consequence for the banner: a correction-hidden row has no reason, so it never
 counts as a clear. ⚠️ **`restoreClear` replays as `notFound`**: it finds the clear's rows by state its
