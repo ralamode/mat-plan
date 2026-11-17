@@ -1059,6 +1059,17 @@ async function verifyWorkoutInHousehold({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
     const hiddenProgram = await mustCreate(tx, A_SCOPE, 'Hidden program');
     const inHiddenProgram = await workoutOf(A_SCOPE, hiddenProgram, 'Orphan');
     await hide(tx, hiddenProgram);
+    // A workout planted under the seeded LEGACY block with a raw insert (the writers refuse to put
+    // one there): the read is template blocks only, not merely the household's live blocks.
+    const legacy = await seededBlock(tx, A_SCOPE);
+    const [legacyBlock] = await tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.publicId, legacy.publicId));
+    const onLegacy = newId();
+    await tx
+      .insert(schema.workouts)
+      .values({ publicId: onLegacy, clientId: newId(), blockId: legacyBlock!.id, name: 'Planted' });
 
     const cases: Array<[string, HouseholdScope, string, boolean]> = [
       ['its own workout', A_SCOPE, mine, true],
@@ -1068,6 +1079,7 @@ async function verifyWorkoutInHousehold({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
       ["A's workout, asked by B", B_SCOPE, mine, false],
       ['a hidden workout', A_SCOPE, hiddenWorkout, false],
       ['a workout of a hidden program', A_SCOPE, inHiddenProgram, false],
+      ['a workout on the legacy block', A_SCOPE, onLegacy, false],
       ['an unknown id', A_SCOPE, newId(), false],
       ['a malformed id', A_SCOPE, 'not-a-uuid', false],
     ];

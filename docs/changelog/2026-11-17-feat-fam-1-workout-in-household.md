@@ -6,7 +6,8 @@ have a workout's id but not its program's: the copy action's report of which id 
 the day page's (12b). Every miss, from another household, a hidden workout or program, an unknown or
 a malformed id, is the same `false`.
 
-- `db:verify` proves each case; two new `db:mutations` patches (300, 301) show the proof fails when
-  the read stops leaving out hidden workouts or stops checking the household.
+- `db:verify` proves each case; three new `db:mutations` patches (300–302) show the proof fails when
+  the read stops leaving out hidden workouts, stops checking the household, or takes a block that is
+  not a program.
 - `program-tables-stay-dark.test.ts` lets the day DAL (`lib/dal/day/`) import this read, and no other
-  of lane P's, alongside the program DAL.
+  of lane P's, alongside the program DAL; neither DAL may re-export a lane P name.
