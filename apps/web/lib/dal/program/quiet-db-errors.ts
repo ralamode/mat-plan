@@ -26,19 +26,24 @@ export class ProgramWriteError extends Error {
     super(`${operation} failed (${kind}${code ? `, SQLSTATE ${code}` : ''})`);
     this.name = 'ProgramWriteError';
     this.code = code;
-    const frames = error instanceof Error ? framesOf(error.stack) : [];
+    const frames = error instanceof Error ? framesOf(error) : [];
     if (frames.length) this.stack = [`${this.name}: ${this.message}`, ...frames].join('\n');
   }
 }
 
 /**
- * Only a stack's frame lines, `at <function> (<file>:<line>:<col>)`: the header repeats the message,
- * which is where the data is, and drizzle's message runs over several lines. A line must end in a
- * position to count, so a value that happens to start with "at" is still dropped.
+ * Only a stack's frame lines, `at <function> (<file>:<line>:<col>)`. The stack opens with the
+ * message, which is where the data is and which drizzle runs over several lines, so those lines are
+ * skipped BY COUNT first: a value shaped like a frame cannot pass by looking like one. What is left
+ * must still end in a position to count.
  */
 const FRAME = /^\s+at \S.*:\d+:\d+\)?$/;
-function framesOf(stack: string | undefined): string[] {
-  return (stack ?? '').split('\n').filter((line) => FRAME.test(line));
+function framesOf(error: Error): string[] {
+  const header = error.message.split('\n').length;
+  return (error.stack ?? '')
+    .split('\n')
+    .slice(header)
+    .filter((line) => FRAME.test(line));
 }
 
 /**

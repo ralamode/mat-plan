@@ -87,4 +87,18 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
     expect(thrown.stack).not.toContain(NOTE);
     expect(thrown.stack).not.toContain('params');
   });
+
+  it('a message line shaped like a frame is still dropped: the message is skipped by count', async () => {
+    const value = 'warm up first\n    at the gym before 5:30:15';
+    const thrown = await quietDbErrors('saveWorkout', async () => {
+      throw new DrizzleQueryError(
+        'insert into "prescriptions" ("notes") values ($1)',
+        [value],
+        new Error('x'),
+      );
+    }).catch((error: unknown) => error as ProgramWriteError);
+    expect(thrown.stack).not.toContain('the gym');
+    // Frames are still kept: the throw's own position survives.
+    expect(thrown.stack).toMatch(/\n\s+at .*:\d+:\d+/);
+  });
 });
