@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 61e60d91..538a426b 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -104,7 +104,7 @@ export async function saveWeek(
+     const relabelled: Array<{ id: number; label: string | null }> = [];
+     const added: typeof wanted = [];
+     for (const slot of wanted) {
+-      const row = liveByKey.get(slotKey(slot.weekday, slot.workoutId));
++      const row = undefined as (typeof live)[number] | undefined;
+       if (!row) {
+         added.push(slot);
+         continue;

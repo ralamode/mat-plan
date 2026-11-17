@@ -23,6 +23,13 @@ import { keyBySelf } from '../enums';
  * A sled's tow strap comes with `sled`; the two ropes are two things to own, so there is no plain
  * `rope`.
  *
+ * **`any_weight` is a load of the athlete's own choosing, simply held or set in place**: a plate
+ * on the back for a weighted plank, whatever is to hand for a weighted sit-up _(maintainer,
+ * 2026-11-17: "Just weight, they can choose how to add the weight")_. **Where the way the load is
+ * carried is part of the movement, the entry names that tool:** a belt for a load hung from the
+ * hips (a weighted pull-up or dip), a vest for one worn on the body (a weighted push-up). Where
+ * neither reading is plainly right, the batch's review asks the maintainer.
+ *
  * ⚠️ **A required set cannot say "this or that".** A goblet squat names one of dumbbell and
  * kettlebell, and a filter for the other does not show it (spec rule 8, a known limit).
  */
@@ -39,6 +46,7 @@ export const EQUIPMENT = [
   'ankle_weights',
   'wrist_weights',
   'weight_belt',
+  'any_weight',
   'bench',
   'rack',
   'pull_up_bar',
@@ -99,6 +107,7 @@ export const EQUIPMENT_LABELS = {
   ankle_weights: 'Ankle weights',
   wrist_weights: 'Wrist weights',
   weight_belt: 'Weight belt',
+  any_weight: 'Any weight',
   bench: 'Bench',
   rack: 'Rack',
   pull_up_bar: 'Pull-up bar',
@@ -173,7 +182,8 @@ export const MUSCLE = keyBySelf(MUSCLES);
 
 /**
  * What each muscle is called on screen: plain words, since a child may be the one choosing
- * (spec, chunk P0). The anatomical name stays the code.
+ * (spec, chunk P0). The anatomical name stays the code. "Obliques" is the maintainer's choice over
+ * "Side abs" (2026-11-17, from the first batch review).
  */
 export const MUSCLE_LABELS = {
   neck: 'Neck',
@@ -187,7 +197,7 @@ export const MUSCLE_LABELS = {
   triceps: 'Triceps',
   forearms: 'Forearms and grip',
   abdominals: 'Abs',
-  obliques: 'Side abs',
+  obliques: 'Obliques',
   hip_flexors: 'Hip flexors',
   glutes: 'Glutes',
   adductors: 'Inner thigh',

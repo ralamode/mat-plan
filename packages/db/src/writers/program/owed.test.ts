@@ -15,11 +15,6 @@ import { describe, it } from 'vitest';
  * These are a to-do list, not skipped tests: nothing here was ever a passing test.
  */
 
-describe('WeekDraft: owed by its consumers', () => {
-  it.todo('6b: a workout runs at most once on a weekday (once_per_day)');
-  it.todo('6b: a removed slot frees its place');
-});
-
 describe('ProgramList and ProgramView: owed by their consumers', () => {
   it.todo('6c: the program-list query deep-equals programs-list');
   it.todo('6c: the program-view query deep-equals family-program');
