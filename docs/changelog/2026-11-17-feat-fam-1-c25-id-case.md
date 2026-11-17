@@ -5,7 +5,7 @@
   "each card has its own id" check. Every id in the program and day shapes is now handed back in
   lower case when it is parsed, so the shapes' own checks, the preview's fakes and the writers all
   compare one spelling. The workout writer's own lower-casing and its second check, which now did
-  nothing, are removed, and the two tests that guarded them guard the shapes instead. The
+  nothing, are removed, and the two mutation checks that guarded them guard the shapes instead. The
   preview's week save now tells "one workout twice on a day" from any other bad week with a shared
   rule that reads the two spellings as one workout. Nothing changes for an id the app made itself,
   which is always lower case.

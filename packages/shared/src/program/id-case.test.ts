@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
+import { WEEKDAYS } from '../day';
 import { uuidSchema } from '../id';
 import {
   dayPlanSchema,
@@ -268,6 +269,20 @@ describe('weekRepeatsAWorkout: why a refused week was refused (C25)', () => {
     expect(weekRepeatsAWorkout(withSunday(slot(upper(A_WORKOUT)), slot(light), slot(heavy)))).toBe(
       true,
     );
+  });
+
+  it('finds a repeat on any day of the week, not only the first', () => {
+    for (const day of WEEKDAYS) {
+      // Every other day is as the program page holds it; only this one names a workout twice.
+      const days = { ...week, [day]: [slot(heavy), slot(upper(A_WORKOUT), 'Evening')] };
+      expect(weekRepeatsAWorkout({ programPublicId, days }), `day ${day}`).toBe(true);
+      expect(weekDraftSchema.safeParse({ programPublicId, days }).success, `day ${day}`).toBe(
+        false,
+      );
+      // And with that day set right again, the week is no repeat.
+      const once = { ...week, [day]: [slot(heavy)] };
+      expect(weekRepeatsAWorkout({ programPublicId, days: once }), `day ${day}`).toBe(false);
+    }
   });
 
   it('agrees with the schema: a week it calls a repeat never parses', () => {
