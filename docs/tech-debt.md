@@ -23,11 +23,13 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   request can change a program row's numbers outside D20's writable window (today and yesterday).
   The day page's own Change (`amendRow`, 11c-i) keeps the window; this older path does not.
 - **Reach:** within the household only, and on the athlete's own history: `ownedEntryIds` rides
-  `isLiveProfile(profilePublicId, scope)`, so another household's set is never reached. Any member of
-  the household may correct any of its athletes by design (ADR 0008 Decision 4); what is missing is
+  `isLiveProfile(profilePublicId, scope)`, so another household's set is never reached. A household member
+  corrects with the same authority as logging and hiding (ADR 0008 Decision 4; revisited after
+  AUTH-1); what is missing is
   the window, not the ownership.
-- **The fix:** the fix-a-set path refuses a program row (`entries.prescription_id IS NOT NULL`)
-  whose day is outside `rowDayOpen`. A `db:verify` boundary proof and a mutation.
+- **The fix:** the fix-a-set path refuses a program row (`programRow()`, i.e. `entries.prescription_set IS NOT NULL`, which a
+  purge leaves set) whose day is outside `rowDayOpen`. A `db:verify` boundary proof, a purged row
+  (`prescription_id` NULL) among its cases, and a mutation.
 - **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
 - **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
 

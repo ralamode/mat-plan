@@ -25,8 +25,8 @@ and the page to 12c and 12d.
   `programBlockOfProfile`, which compares against the athlete's **current** household. So under
   `ID-1`'s "take your history", a moved athlete could no longer Change or revive rows logged against
   the old household's programs. `ID-1` inherits that trade-off; it is recorded here, not decided.
-  The cross-athlete authority (anyone in the household corrects a row) is by design: ADR 0008
-  Decision 4.
+  A household member corrects a row with the same authority as logging and hiding (ADR 0008
+  Decision 4; revisited after `AUTH-1`).
 - Checked against the private roadmap; nothing to add here.
 
 ## Acceptance
@@ -110,7 +110,7 @@ Done when:
 | 11b proof                                                  | Today        | Under 11c                                                        | Its mutation                                                                                                                                                                                           |
 | ---------------------------------------------------------- | ------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 10, "a re-tick after a new ✓ took the set is `slot_taken`" | `slot_taken` | `ok`, the revived entry (R7)                                     | **122 keeps a proof:** a planted leg on the same set, a live L and a hidden H (a state 11b could leave). Re-tick H → `slot_taken` through `RESTORE_SLOT_INDEXES`. 122's `.expect` is re-pointed to it. |
-| 3b, "replaying c1 after c2"                                | `own_hidden` | `slot_taken` (c2 revived c1's entry and replaced its `clientId`) | **125 moves to proof 3** (the Clear-day replay), which still reddens under it. The header note at `day.ts:72-74` ("3b runs before 3") is fixed, and so are both README rows.                           |
+| 3b, "replaying c1 after c2"                                | `own_hidden` | `slot_taken` (c2 revived c1's entry and replaced its `clientId`) | **125 moves to proof 3** (the Clear-day replay), which still reddens under it. The header note at `day.ts:74-77` ("3b runs before 3") is fixed, and so are both README rows.                           |
 
 ## File by file
 
@@ -199,7 +199,7 @@ README and `src/index.ts` after #527. The board is asked to add 11c to the FAM-1
 
 **Order:** 11c's proofs run after `verifyRowWriter`'s 11b proofs, so the regenerated 11b patches whose
 code moves to `row-steps.ts` (112, 114, 124, 127) still redden their own 11b assertion first, as
-12a-i's proofs are arranged (`verify/day.ts:83-87`).
+12a-i's proofs are arranged (`verify/day.ts:79-82`).
 
 **Unproven on PGlite, and why.** PGlite has one connection (`harness.ts:22-26`), so nothing
 concurrent runs. These are left without a `db:verify` proof:
