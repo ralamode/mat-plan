@@ -40,8 +40,8 @@ export type EditorCard = {
   notes: string;
   /**
    * A loaded quantity whose unit its type cannot hold (a Duration stored in seconds, a Count in
-   * `bool`): shown on the card as what it was, never put in the field and never converted (the
-   * machine never authors a load, plan D27). Cleared on the first edit of the number or the unit.
+   * `bool`): shown on the card as what it was, never put in the field and never converted (plan D27;
+   * the machine never authors a load, AGENTS.md). Cleared on the first edit of the number or the unit.
    */
   dropped: { value: number; unit: Unit } | null;
 };

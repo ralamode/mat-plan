@@ -147,6 +147,18 @@ describe('the editor’s draft', () => {
     expect(errorsOf(readDraft(count, { name: 'C', description: '', cards: [countCard!] }))).toEqual(
       [['unit', EDITOR_ERRORS.unit(quantityLabel('count')!)]],
     );
+    // A unit it can't hold with no number: nothing a person typed is lost, so no note.
+    expect(
+      toCards({
+        ...everyType,
+        items: [
+          {
+            ...typed('count'),
+            quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'bool', value: null }],
+          },
+        ],
+      } as WorkoutDraft)[0],
+    ).toMatchObject({ unit: null, value: '', dropped: null });
     // A unit the type holds loads as it was, with nothing dropped.
     const [fine] = toCards(withQuantity('duration', 'min', 20));
     expect(fine).toMatchObject({ unit: 'min', value: '20', dropped: null });

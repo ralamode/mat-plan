@@ -6,6 +6,7 @@ import {
   unitsForTrackingType,
   WORKOUT_NAME_MAX,
   type ProgramActions,
+  TRACKING_TYPE_FIELDS,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty, programsList } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -924,7 +925,14 @@ describe('a loaded number the card cannot hold', () => {
     const said = within(card).getByText(note);
     const field = within(card).getByLabelText(new RegExp(`^${label}`)) as HTMLInputElement;
     expect(field.value).toBe('');
-    expect(field.getAttribute('aria-describedby')).toContain(said.id);
+    expect(said.id).toBeTruthy();
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(said.id);
+    expect(
+      document
+        .getElementById(unitFieldId(bench.prescriptionClientId))!
+        .getAttribute('aria-describedby')
+        ?.split(' '),
+    ).toContain(said.id);
     fireEvent.change(field, { target: { value: '25' } });
     expect(within(card).queryByText(note)).toBeNull();
   });
@@ -949,5 +957,24 @@ describe('a loaded number the card cannot hold', () => {
       target: { value: 'kg' },
     });
     expect(screen.queryByText(note)).toBeNull();
+  });
+
+  it('on a fixed-unit card (no unit select), the note names its own unit and describes the number', () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const fields = TRACKING_TYPE_FIELDS.duration;
+    const plank = {
+      ...bench,
+      trackingType: 'duration' as const,
+      sets: fields.sets ? bench.sets : null,
+      targetReps: null,
+      quantities: [{ slot: fields.slot!, unit: 'sec' as const, value: 30 }],
+    };
+    editor({}, { ...heavyADraft, items: [plank] });
+    const note = 'This was saved as 30 seconds, which this item can’t hold. Enter it in minutes.';
+    const said = screen.getByText(note);
+    expect(said.id).toBeTruthy();
+    const field = screen.getByLabelText(new RegExp(`^${quantityLabel('duration')}`));
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(said.id);
+    expect(document.getElementById(unitFieldId(plank.prescriptionClientId))).toBeNull();
   });
 });

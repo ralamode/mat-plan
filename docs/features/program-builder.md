@@ -148,9 +148,9 @@ flowchart LR
     ✓ could ever be stored for it. The refusal is the unit select's ("Weight: choose a unit."), so
     focus goes where the fix is; typing a number does not clear it, choosing a unit does. The bar
     counts the fields to fix (a name alone says its own message). A type with a fixed unit (Duration, Time per set) loaded bare saves
-    that unit with no target, never no quantity. A loaded quantity is read from its type's slot (`slotQuantity`) and kept only in a unit the type
-    can hold; otherwise the number is not shown and never converted, and the card says what it
-    was (`EditorCard.dropped`): a fixed-unit type keeps its own unit, any other starts unset. The machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
+    that unit with no target, never no quantity. A loaded quantity in its type's slot (`slotQuantity`; one outside it is not read) is kept only in
+    a unit the type can hold; otherwise the number is not shown and never converted, and the card
+    says what it was (`EditorCard.dropped`): a fixed-unit type keeps its own unit, any other starts unset. The machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
     `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
     editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
     sends.
