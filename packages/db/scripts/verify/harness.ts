@@ -275,3 +275,17 @@ export interface VerifyContext {
   /** Household B ("Verify Programming HH"), as its OWNER: the other side of a cross-household refusal. */
   readonly B_SCOPE: HouseholdScope;
 }
+
+/**
+ * Run a writer, and turn a throw into a failed assertion that names the proof: a mutation that makes
+ * the writer throw then fails on `what`, which is what its `.expect` file matches (mutations README).
+ * Lifted from `single-values.ts` (V1-9b B2-0); `day.ts`'s `settle` and `program.ts`'s `threw` are the
+ * same idea in their lanes' files.
+ */
+export async function orFail<T>(what: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    assert.fail(`${what} (threw: ${String((e as Error).message).slice(0, 120)})`);
+  }
+}
