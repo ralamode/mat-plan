@@ -1,6 +1,6 @@
 # PRIV-3 RC — a guarded correction that creates a household
 
-> Backlog: [plan.md](../plan.md) → `PRIV-3`; the work is chunk **RC** of the
+> **Status: approved** _(maintainer, 2026-11-17, through the FAM-1 board)_. Backlog: [plan.md](../plan.md) → `PRIV-3`; the work is chunk **RC** of the
 > [CAT-3 spec](../specs/cat-3-movement-library.md) → "Chunks, in order". Branch:
 > `docs/priv-3-rc-create-household` (this plan), then `db/priv-3-rc-create-household` (the code).
 
