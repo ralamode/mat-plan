@@ -438,6 +438,10 @@ export function prescribedTarget(
  * from `target` (plan D13: an empty ✓ on a prescribed row logs the prescription). An amend passes
  * `target: null`, so nothing is filled and a field left out is refused.
  *
+ * 🔴 **For an amend, `item.unit` is the unit the row was LOGGED in** (`loggedRowUnit`), not the
+ * unit the item logs in now (contract change C28). The two differ once a prescription's unit is
+ * edited after a row was logged, and a Change fixes a number: it never restates one in a new unit.
+ *
  * Refused, never dropped or repaired:
  * - a number the type has no field for (reps on a Duration, a distance on a weight);
  * - **a slot named twice** in what was typed (which of the two to keep is not ours to choose);
@@ -475,6 +479,26 @@ export function fillRowValues(
     values.quantities.push(quantity);
   }
   return values;
+}
+
+/**
+ * The unit a logged row's numbers are in: its stored quantity's in the type's slot, and `null` for
+ * a type with no quantity. **What an amend is checked against** (contract change C28, from step
+ * 11c's plan): `fillRowValues({ trackingType, unit: loggedRowUnit(trackingType, logged) }, …)`.
+ *
+ * A row logged in lb is changed in lb even when its prescription now reads kg. Checked against
+ * the item's current unit instead, a Change would take a kg number into a row still labelled lb:
+ * a load stored in the wrong unit.
+ *
+ * **`null` whenever the row does not hold what its type now logs**: no quantity in the type's
+ * slot, or one in a unit the type cannot be in (`unitsForTrackingType`: a Duration is minutes, so a
+ * row holding pounds has no unit here). An amend that sends a quantity is then refused. No FAM-1
+ * screen changes an item's type (plan D25), so this is a row nothing can make today; the rule is
+ * here so the fake never writes a row the writer could not.
+ */
+export function loggedRowUnit(trackingType: TrackingType, logged: RowValues): Unit | null {
+  const unit = slotQuantity({ trackingType }, logged.quantities)?.unit;
+  return unit !== undefined && unitsForTrackingType(trackingType).includes(unit) ? unit : null;
 }
 
 /** What a copy's default name ends with, inside the workout's own program. */
