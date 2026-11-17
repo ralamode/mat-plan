@@ -11,7 +11,7 @@ import {
   beforeSendTransactionScrubbed,
   scrubSentryEvent,
   SENTRY_DATA_COLLECTION,
-  maskUrlPath,
+  maskIds,
 } from './sentry-scrub';
 
 /**
@@ -466,28 +466,55 @@ describe('scrubSentryEvent — a rejected row never leaves the server (Postgres 
   });
 });
 
-describe('scrubSentryEvent — a page address never names an athlete (C11 review, 2026-11-16)', () => {
+describe('scrubSentryEvent — no public id leaves except the deliberate one (C11 review, 2026-11-16)', () => {
   const ATHLETE = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f8091';
   const PROGRAM = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f80ff';
-  const page = `https://www.mat-plan.dev/p/${ATHLETE}/2026-11-16`;
+  const page = `https://www.mat-plan.dev/p/${ATHLETE}?d=2026-11-16`;
 
-  it('masks ids and the day in the request URL, keeping the route shape', () => {
-    const event = scrubSentryEvent({ request: { url: page } } as Event);
-    expect(event.request?.url).toBe('https://www.mat-plan.dev/p/:id/:date');
+  /**
+   * Shaped from `@sentry/nextjs@11.10.0`'s `captureRequestError`: Next's `onRequestError` hook puts
+   * the request path in `contexts.nextjs.request_path` (query string removed, path intact) and the
+   * URL under `request`. The review ran the real SDK through the scrubber; this pins what it found.
+   */
+  const requestErrorEvent = (): Event =>
+    ({
+      request: { url: page, method: 'GET', headers: {} },
+      contexts: {
+        nextjs: {
+          request_path: `/p/${ATHLETE}`,
+          router_kind: 'App Router',
+          router_path: '/p/[profileId]',
+          route_type: 'render',
+        },
+        request: { url: page },
+      },
+      transaction: 'GET /p/[profileId]',
+      exception: { values: [{ type: 'Error', value: `boom for /p/${ATHLETE}` }] },
+    }) as unknown as Event;
+
+  it('masks the athlete id in onRequestError’s contexts.nextjs.request_path (the missed key)', () => {
+    const event = scrubSentryEvent(requestErrorEvent());
+    expect(event.contexts?.nextjs).toMatchObject({
+      request_path: '/p/:id',
+      router_path: '/p/[profileId]',
+    });
   });
 
-  it('masks the duplicate under contexts.request, the transaction name and span descriptions', () => {
+  it('masks it in the request URL, contexts.request and the exception message', () => {
+    const event = scrubSentryEvent(requestErrorEvent());
+    expect(event.request?.url).toBe('https://www.mat-plan.dev/p/:id');
+    expect(event.contexts?.request?.url).toBe('https://www.mat-plan.dev/p/:id');
+    expect(event.exception?.values?.[0]?.value).toBe('boom for /p/:id');
+  });
+
+  it('masks a row client_id an exception message carries (strength-session, checkin)', () => {
     const event = scrubSentryEvent({
-      transaction: `GET /p/${ATHLETE}`,
-      contexts: { request: { url: page } },
-      spans: [{ description: `GET /programs/${PROGRAM}` }],
-    } as unknown as Event);
-    expect(event.contexts?.request?.url).toBe('https://www.mat-plan.dev/p/:id/:date');
-    expect(event.transaction).toBe('GET /p/:id');
-    expect(event.spans?.[0]?.description).toBe('GET /programs/:id');
+      exception: { values: [{ type: 'Error', value: `client_id ${PROGRAM} held by another row` }] },
+    } as Event);
+    expect(event.exception?.values?.[0]?.value).toBe('client_id :id held by another row');
   });
 
-  it('masks navigation and fetch breadcrumbs (from, to, url)', () => {
+  it('masks navigation breadcrumbs (from, to, url)', () => {
     const crumb = beforeBreadcrumbScrubbed({
       category: 'navigation',
       data: { from: `/p/${ATHLETE}`, to: `/programs/${PROGRAM}`, url: page },
@@ -495,21 +522,21 @@ describe('scrubSentryEvent — a page address never names an athlete (C11 review
     expect(crumb?.data).toEqual({
       from: '/p/:id',
       to: '/programs/:id',
-      url: 'https://www.mat-plan.dev/p/:id/:date',
+      url: 'https://www.mat-plan.dev/p/:id',
     });
   });
 
-  it('KEEPS the deliberate scope-miss id: it is not a URL field (household.ts → reportScopeMiss)', () => {
+  it('KEEPS the deliberate scope-miss id, and masks the same id anywhere else on that event', () => {
     const event = scrubSentryEvent({
-      request: { url: page },
+      request: { url: `https://www.mat-plan.dev/programs/${PROGRAM}` },
       contexts: { scope_miss: { kind: 'program', resource: PROGRAM, outcome: 'cross_household' } },
     } as unknown as Event);
-    expect(event.request?.url).toBe('https://www.mat-plan.dev/p/:id/:date');
     expect(event.contexts?.scope_miss).toMatchObject({ resource: PROGRAM });
+    expect(event.request?.url).toBe('https://www.mat-plan.dev/programs/:id');
   });
 
-  it('leaves a non-date segment and a plain number alone', () => {
-    expect(maskUrlPath('/p/new?x=1')).toBe('/p/new?x=1');
-    expect(maskUrlPath('/api/export/2026-11')).toBe('/api/export/2026-11');
+  it('leaves strings with no UUID alone', () => {
+    expect(maskIds('/p/new')).toBe('/p/new');
+    expect(maskIds('/api/export/2026-11')).toBe('/api/export/2026-11');
   });
 });

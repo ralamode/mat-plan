@@ -128,7 +128,7 @@ const VALUE_KEYS = new Set(['params', 'detail']);
 function stripQueryParams<T>(value: T): T {
   return (
     typeof value === 'string'
-      ? value
+      ? maskIds(value)
           .replace(QUERY_PARAMS_TAIL, '')
           .replace(DB_DETAIL_TAIL, '')
           .replace(DB_DETAIL_PHRASE, '')
@@ -137,27 +137,29 @@ function stripQueryParams<T>(value: T): T {
 }
 
 /**
- * 🔴 **A page's ADDRESS names an athlete.** App routes carry public ids and days in the PATH
- * (`/p/<athlete id>/<yyyy-mm-dd>`, a program's or workout's id), and the SDK records the request URL
- * on every event from that page, so before this every error report from an athlete's page carried
- * their id and the day being viewed (found in C11's review, 2026-11-16; it predates C11). The
- * DELIBERATE security event (`reportScopeMiss`) puts its id in `contexts.scope_miss`, which is not a
- * URL field, so masking URL fields here keeps that event intact and removes only the incidental copies.
- *
- * Masked: every UUID (all public ids are UUIDv7) → `:id`, and a whole `yyyy-mm-dd` path segment →
- * `:date`. The route's shape survives (`/p/:id/:date`), which is what a reader of an error needs.
+ * 🔴 **No public id leaves in a string, except the one sent on purpose.** App routes carry an
+ * athlete's public id in the PATH (`/p/<id>`), and the SDK copies the path into the request URL,
+ * `contexts.request` and Next's `contexts.nextjs.request_path` (set by `captureRequestError` with
+ * only the query string removed); exception messages can carry a row's `client_id` too. Before this,
+ * every error report from an athlete's page carried their id (found in C11's review, 2026-11-16; it
+ * predates C11). Masking by KEY missed `request_path` on the first try, so this masks every UUID in
+ * every string the scrub walks, and `scrubSentryEvent` exempts the one deliberate id
+ * (`contexts.scope_miss.resource`, from `reportScopeMiss`) by putting it back afterwards.
  */
 const UUID_ANYWHERE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const DATE_SEGMENT = /\/\d{4}-\d{2}-\d{2}(?=[/?#\s]|$)/g;
-/** The keys under which the SDK and OpenTelemetry carry a URL or a route path. */
-const URL_KEYS = new Set(['url', 'from', 'to', 'http.url', 'http.target', 'url.full', 'url.path']);
 
-export function maskUrlPath<T>(value: T): T {
-  return (
-    typeof value === 'string'
-      ? value.replace(UUID_ANYWHERE, ':id').replace(DATE_SEGMENT, '/:date')
-      : value
-  ) as T;
+export function maskIds<T>(value: T): T {
+  return (typeof value === 'string' ? value.replace(UUID_ANYWHERE, ':id') : value) as T;
+}
+
+/**
+ * A URL with its id masked and its QUERY cut. `urlQueryParams: false` drops `request.query_string`,
+ * but the SDK still writes the full URL, query included, into `request.url`, `contexts.request.url`
+ * and a navigation breadcrumb, and the day page's `?d=<yyyy-mm-dd>` is in that query.
+ */
+const URL_FIELDS = new Set(['url', 'from', 'to']);
+function scrubUrl<T>(value: T): T {
+  return (typeof value === 'string' ? maskIds(value).replace(/[?#][\s\S]*$/, '') : value) as T;
 }
 
 /**
@@ -182,8 +184,7 @@ function scrubTree(node: unknown, seen = new Set<unknown>(), depth = 0): void {
     const value = record[key];
     if (typeof value === 'string') {
       // Write only when something changed: never touch a caller-owned object needlessly.
-      const cut = stripQueryParams(value);
-      const stripped = URL_KEYS.has(key) ? maskUrlPath(cut) : cut;
+      const stripped = stripQueryParams(value);
       if (stripped !== value) record[key] = stripped;
     } else scrubTree(value, seen, depth + 1);
   }
@@ -194,6 +195,9 @@ function scrubTree(node: unknown, seen = new Set<unknown>(), depth = 0): void {
  * Exported separately from the config so it is unit-testable without booting the SDK.
  */
 export function scrubSentryEvent<T extends Event>(event: T): T {
+  // The one id sent on purpose (`reportScopeMiss`); every other id is masked below.
+  const scopeMiss = event.contexts?.scope_miss as { resource?: unknown } | undefined;
+  const deliberateId = scopeMiss?.resource;
   if (event.request) {
     // `cookies` is the SDK's parsed form; the raw `cookie` header is a SEPARATE copy — both go.
     delete event.request.cookies;
@@ -206,12 +210,12 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
     delete event.request.query_string;
     // The request body: for a Server Action, its form fields (a weight, a movement name).
     delete event.request.data;
-    // The page's address: its path names an athlete and a day (see `maskUrlPath`).
-    event.request.url = maskUrlPath(event.request.url);
+    // The page's address: its path names an athlete (see `maskIds`).
+    event.request.url = scrubUrl(event.request.url);
   }
   // A transaction's name is the request path on some paths (`GET /p/<id>/…`).
-  event.transaction = maskUrlPath(event.transaction);
-  for (const span of event.spans ?? []) span.description = maskUrlPath(span.description);
+  event.transaction = maskIds(event.transaction);
+  for (const span of event.spans ?? []) span.description = maskIds(span.description);
 
   if (event.extra) {
     for (const key of Object.keys(event.extra)) {
@@ -265,8 +269,7 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   const requestContext = event.contexts?.request;
   if (requestContext) {
     delete requestContext.cookies;
-    if (typeof requestContext.url === 'string')
-      requestContext.url = maskUrlPath(requestContext.url);
+    if (typeof requestContext.url === 'string') requestContext.url = scrubUrl(requestContext.url);
     const headers = requestContext.headers;
     if (headers && typeof headers === 'object') {
       for (const name of Object.keys(headers as Record<string, unknown>)) {
@@ -277,6 +280,8 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
     }
   }
 
+  if (scopeMiss && typeof deliberateId === 'string') scopeMiss.resource = deliberateId;
+
   return event;
 }
 
@@ -286,7 +291,12 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
  * kept, stripped); everything else is walked.
  */
 function scrubBreadcrumb(crumb: Breadcrumb): Breadcrumb {
-  crumb.message = maskUrlPath(stripQueryParams(crumb.message));
+  crumb.message = stripQueryParams(crumb.message);
+  if (crumb.data) {
+    for (const key of URL_FIELDS) {
+      if (typeof crumb.data[key] === 'string') crumb.data[key] = scrubUrl(crumb.data[key]);
+    }
+  }
   if (crumb.category === 'console' && crumb.data) delete crumb.data.arguments;
   scrubTree(crumb.data);
   return crumb;
