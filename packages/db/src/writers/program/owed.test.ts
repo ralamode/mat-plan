@@ -28,5 +28,7 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 });
 
 describe('MovementOption: owed by its consumer', () => {
-  it.todo('7a-ii: MovementOption (packages/db) is assignable to MovementOptionDTO (apps/web)');
+  it.todo(
+    "7a-ii: the DAL's option (movementOptions, plus the taxonomy lib/dal/program attaches by slug) is assignable to MovementOptionDTO",
+  );
 });
