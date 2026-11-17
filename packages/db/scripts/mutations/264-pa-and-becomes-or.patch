@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -121,7 +121,7 @@
+ const prescriptionsOf = (s: HouseholdScope) =>
+   sql`(SELECT ${schema.prescriptions.id} FROM ${schema.prescriptions} WHERE ${prescriptionRows(s)})`;
+ const assignmentRows = (s: HouseholdScope) =>
+-  sql`(${schema.programAssignments.profileId} IN ${profilesOf(s)} AND ${schema.programAssignments.blockId} IN ${blocksOf(s)})`;
++  sql`(${schema.programAssignments.profileId} IN ${profilesOf(s)} OR ${schema.programAssignments.blockId} IN ${blocksOf(s)})`;
+ 
+ /**
+  * 🔴 **The 19 tables, child before parent.** Order is step 4 of the runbook's "Delete a household",

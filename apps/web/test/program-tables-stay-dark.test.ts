@@ -1,5 +1,5 @@
 import { globSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { code, WEB_DIR } from './source-scan';
@@ -43,6 +43,11 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     // `assignmentOnDay`). 11b merges only after 0027 is applied (its plan M7), and no request path
     // calls the row writer until 12b, so this read cannot race the deploy window.
     'packages/db/src/queries/day/scheduled.ts',
+    // PRIV-3's household graph names every program table as a value (`{ table: schema.workouts }`),
+    // which is no query and runs on no request path: nothing re-exports `src/erasure/` from the barrel
+    // and no `apps/web` file imports it (pinned below), so it cannot race migrate.yml. The FILE, not
+    // the directory: a later module there (the delete core) justifies its own entry.
+    'packages/db/src/erasure/graph.ts',
   ];
   const PATTERNS: Record<string, RegExp> = {
     insert: new RegExp(`\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`),
@@ -67,6 +72,8 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'packages/db/src/seed.ts',
     'packages/db/src/writers/ownership.ts',
     'packages/db/src/writers/program/',
+    // PRIV-3's household graph: see NEW_TABLES_ALLOWED.
+    'packages/db/src/erasure/graph.ts',
   ];
   const HELPERS =
     /\b(insertProgramBlockOwnedBy|insertWorkoutOwnedBy|programBlockByClientId|liveTemplateBlockIn)\b/;
@@ -143,6 +150,12 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     ).toBe(true);
   });
 
+  it('no request path reaches the erasure graph (what its allowlist entry rests on)', () => {
+    const web = files.filter((f) => f.startsWith('apps/web/'));
+    expect(web.filter((f) => /\berasure\//.test(code(join(REPO, f))))).toEqual([]);
+    expect(code(join(REPO, 'packages/db/src/index.ts'))).not.toMatch(/\berasure\b/);
+  });
+
   it('apps/web calls none of the ownership helpers yet', () => {
     const web = files.filter((f) => f.startsWith('apps/web/'));
     expect(web.filter((f) => HELPERS.test(code(join(REPO, f))))).toEqual([]);
@@ -152,7 +165,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // the lane's two barrels. Their names are also `ProgramActions` members, which the screens and the
   // preview's fake implement, so the scan matches an import or re-export of one FROM THE PACKAGE, not
   // the bare name. The names are read from the barrels, so a later step's export is covered without
-  // an edit here. Step 7a changes this case.
+  // an edit here.
   const LANE_P_BARRELS = [
     'packages/db/src/writers/program/index.ts',
     'packages/db/src/queries/program/index.ts',
@@ -175,11 +188,17 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     new RegExp(
       `(?:import|export)\\s*(?:type\\s*)?\\{[^}]*\\b(?:${names.join('|')})\\b[^}]*\\}\\s*from\\s*['"]@mat-plan\\/db['"]`,
     );
-  // The forms that would reach a writer without naming it in braces.
+  // The forms that would reach a writer without naming it in braces: nowhere in apps/web, the DAL
+  // included, so containment below can be checked by name.
   const WHOLE_PACKAGE =
     /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)|export\s*\*\s*(?:as\s+\w+\s*)?from\s*['"]@mat-plan\/db['"]/;
 
-  it("apps/web imports none of lane P's program writers or reads yet (step 7a wires them)", () => {
+  // FAM-1 7a-i: lane P's writers and reads are wired, and only the program DAL may import them: an
+  // action, a page or a component reaches them through `lib/dal/program/`, which resolves the
+  // caller's household first (AGENTS.md → DAL). Its tests mock them, so they may name them too.
+  const PROGRAM_DAL = 'apps/web/lib/dal/program/';
+
+  it("only the program DAL imports lane P's program writers and reads (step 7a-i wires them there)", () => {
     for (const barrel of LANE_P_BARRELS) {
       // A barrel that re-exports a whole module publishes names this scan cannot read.
       expect(code(join(REPO, barrel)), `${barrel} names what it publishes`).not.toMatch(
@@ -191,8 +210,11 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     );
     const named = fromDb(laneP);
     const web = files.filter((f) => f.startsWith('apps/web/'));
-    expect(web.filter((f) => named.test(code(join(REPO, f))))).toEqual([]);
+    const importing = web.filter((f) => named.test(code(join(REPO, f))));
+    expect(importing.filter((f) => !f.startsWith(PROGRAM_DAL))).toEqual([]);
     expect(web.filter((f) => WHOLE_PACKAGE.test(code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: the DAL does import them, so the scan sees an import where there is one.
+    expect(importing.some((f) => f.startsWith(PROGRAM_DAL))).toBe(true);
     // Non-vacuity: each form is caught, and a ProgramActions member is not.
     expect(named.test("import { db, saveWorkout } from '@mat-plan/db';")).toBe(true);
     expect(named.test("export { readWorkoutDraft } from '@mat-plan/db';")).toBe(true);
@@ -205,5 +227,65 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     // only; a barrel's local `export function` or `export { x }` would publish a name it cannot see,
     // so the barrels keep to that one form.
     expect(published("export { readA as readB, readC } from './x';")).toEqual(['readB', 'readC']);
+  });
+
+  /**
+   * FAM-1 7a-i wires the actions, and **no page imports them until 7b**: Next registers a Server
+   * Action only when the module graph reaches it, so until then no request can write a program. The
+   * privacy notice and the data inventory still say so, truthfully. The PR that imports this module
+   * from a page (7b) lifts this pin and owes, in the same PR (privacy lens, 2026-11-16):
+   */
+  const OWED_AT_7B = [
+    'notice.md "Programs you build yourself … (coming; the app cannot save one yet)" made true now',
+    'notice.md "Three text boxes have no filter": recount with a prescription\'s notes',
+    'notice.md "Technical bits": a client id per item card (inventory §2, prescriptions.client_id)',
+    'notice.md export omissions: built programs are not in the export (inventory §6)',
+    'notice.md: a swapped item is hidden, not erased (inventory §8, D19)',
+    'data-inventory.md: every "until step 7b" sentence (§1 to §3, §8), rewritten as reachable',
+  ];
+  /** The module itself, as a path from the repo root without its extension. */
+  const ACTIONS = 'apps/web/app/programs/actions';
+  /**
+   * Every module specifier a source names: `from '…'` (an import or a re-export), a bare
+   * side-effect `import '…'`, and a dynamic `import('…')` or `require('…')`. Any of them puts the
+   * module in the graph, which is what registers its actions.
+   */
+  const SPECIFIER = /(?:\bfrom\s*|\bimport\s+|\bimport\(\s*|\brequire\(\s*)['"]([^'"]+)['"]/g;
+  /** Does a source at `file` import the actions module, by the `@/` alias or by a relative path? */
+  const namesActions = (file: string, source: string) =>
+    [...source.matchAll(SPECIFIER)].some(([, spec]) => {
+      if (spec === '@/app/programs/actions') return true;
+      if (!spec!.startsWith('.')) return false;
+      return relative(REPO, resolve(dirname(join(REPO, file)), spec!)) === ACTIONS;
+    });
+  const importsActions = (file: string) => namesActions(file, code(join(REPO, file)));
+  /** The module and its registry are the module, not a page reaching it; tests are skipped below. */
+  const THE_MODULE = new Set([`${ACTIONS}.ts`, `${ACTIONS}.registry.ts`]);
+
+  it('no page or component imports the program actions until 7b (see OWED_AT_7B)', () => {
+    const web = files.filter(
+      (f) => f.startsWith('apps/web/') && !/\.test\.tsx?$/.test(f) && !THE_MODULE.has(f),
+    );
+    expect(
+      web.filter(importsActions),
+      `lifting this pin owes, in the same PR:\n- ${OWED_AT_7B.join('\n- ')}`,
+    ).toEqual([]);
+  });
+
+  it('the pin sees every form of import, by alias and by relative path (non-vacuity)', () => {
+    // The test file itself imports it relatively: the resolver must see that.
+    expect(importsActions('apps/web/app/programs/actions.test.ts')).toBe(true);
+    const page = 'apps/web/app/programs/page.tsx';
+    for (const form of [
+      "import { saveWorkoutAction } from '@/app/programs/actions';",
+      "export { saveWorkoutAction } from './actions';",
+      "import './actions';",
+      "const { saveWorkoutAction } = await import('@/app/programs/actions');",
+      "const m = require('./actions');",
+    ])
+      expect(namesActions(page, form), form).toBe(true);
+    expect(namesActions(page, "import { x } from './actions-copy';")).toBe(false);
+    // A sibling of the module is not the module: it is scanned like any page.
+    expect(THE_MODULE.has(`${ACTIONS}.form.tsx`)).toBe(false);
   });
 });

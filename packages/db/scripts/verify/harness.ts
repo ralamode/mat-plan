@@ -232,8 +232,8 @@ export async function assertCheckCoversConst(
  *
  * ## What a proof module can rely on
  *
- * `verify.ts` calls the four modules once each, in the order schema → program → day →
- * single-values, as the LAST thing it does. So when a module runs:
+ * `verify.ts` calls the five modules once each, in the order schema → program → day →
+ * single-values → erasure, as the LAST thing it does. So when a module runs:
  *
  * - every migration is applied and `seed()` has run (several times);
  * - 🔴 the database is NOT pristine: every row `verify.ts` wrote is still there, in household A

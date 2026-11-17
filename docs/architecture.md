@@ -909,3 +909,30 @@ sequenceDiagram
 every merge and would re-create it — `OPS-2`), and **`OPS-3`'s per-household restore has been
 rehearsed** (without it a mistaken deletion is not practically recoverable, because the branch above
 restores _everyone_).
+
+### 8a. The erasure graph — one list, read by every deletion (PRIV-3)
+
+`PRIV-3` turns the step-4 table above into code: `HOUSEHOLD_GRAPH` in
+`packages/db/src/erasure/graph.ts`, proved against the catalog by `db:verify` (P1, P2, P7, P8 in
+`packages/db/scripts/verify/erasure.ts`). The guide is [erasure.md](./features/erasure.md). Only the
+graph exists today; the core, the two corrections and the ledger replay are planned (PRIV-3 PR 2a, 2b
+and 3). The athlete grain is the graph's 11 tables reachable from `profiles`, which is `ATHLETE_GRAPH`.
+
+```mermaid
+flowchart TD
+  G["HOUSEHOLD_GRAPH<br/>19 tables, child before parent<br/>11 of them athlete grain"]
+  P["db:verify P1 P2 P7 P8<br/>the catalog and a household in every table"]
+  C["delete core (planned, PRIV-3 2a)<br/>lock the parent rows<br/>re-run pre-flights a to h<br/>delete in graph order"]
+  EH["erase-household (planned, PRIV-3 2b)<br/>household grain: all 19"]
+  EA["erase-athlete (planned, PRIV-3 3)<br/>athlete grain: the 11"]
+  L["deletion ledger<br/>grain and public id"]
+  R["OPS-3 restore<br/>walks the graph in reverse,<br/>then replays the ledger through the core"]
+  P -. proves .-> G
+  G --> C
+  C --> EH
+  C --> EA
+  EH --> L
+  EA --> L
+  L --> R
+  G --> R
+```
