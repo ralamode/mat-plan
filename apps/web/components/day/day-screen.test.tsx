@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
-import { ROW_REFUSAL, type DayPlan, type RowResult } from '@mat-plan/shared';
+import { ON_PROGRAM, ROW_REFUSAL, type DayPlan, type RowResult } from '@mat-plan/shared';
 import {
+  archivedAthleteToday,
   closedDayLoggedOnly,
   DAY_PLAN_FIXTURES,
+  futurePreview,
+  notOnAProgramThatDay,
+  sundayRestStretchOnly,
   everyTypeOnce,
   todayTwoPrograms,
   workoutLeftTheWeek,
@@ -517,5 +521,40 @@ describe('a day that cannot be written', () => {
     show(workoutLeftTheWeek);
     expect(within(workout('Heavy A')).queryAllByRole('button')).toHaveLength(0);
     expect(within(workout('Morning habits')).queryAllByRole('button').length).toBeGreaterThan(0);
+  });
+});
+
+describe('DayScreen: a day that shows only what was logged, with nothing logged', () => {
+  const said = (plan: DayPlan) => screen.queryByText(DAY_COPY.nothingLogged(plan.day, plan.today));
+
+  it('an older day says no workouts were logged, the day written as the date line writes it', () => {
+    const empty: DayPlan = { ...closedDayLoggedOnly, workouts: [] };
+    expect(empty.day).not.toBe(empty.today);
+    show(empty);
+    expect(said(empty)?.textContent).toMatch(/^No workouts logged on \w{3}, \w{3} \d{1,2}\.$/);
+    // Not a rest day: on a day read back, an empty program means skipped.
+    expect(screen.queryByText(/Rest day/)).toBeNull();
+  });
+
+  it('an archived athlete’s today says it of today', () => {
+    expect(archivedAthleteToday.writable).toBe(false);
+    const empty: DayPlan = { ...archivedAthleteToday, workouts: [] };
+    show(empty);
+    expect(said(empty)?.textContent).toBe('No workouts logged today.');
+  });
+
+  it('never beside a logged workout, on a writable or look-ahead day, or off a program', () => {
+    const cases: DayPlan[] = [
+      closedDayLoggedOnly,
+      { ...sundayRestStretchOnly, workouts: [] }, // writable: a rest day, which says so
+      { ...futurePreview, workouts: [] },
+      { ...closedDayLoggedOnly, workouts: [], onProgram: ON_PROGRAM['not-this-day'] },
+      notOnAProgramThatDay,
+    ];
+    for (const plan of cases) {
+      show(plan);
+      expect(screen.queryByText(/^No workouts logged/)).toBeNull();
+      cleanup();
+    }
   });
 });

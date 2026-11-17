@@ -32,7 +32,7 @@ export function switcherLabels(athletes: DayPlan['athletes']): string[] {
  * as v12 and the nav rail do, so `hrefFor` gives the athlete's page with no day.
  *
  * No `'use client'`: it holds no state, so the page renders it on the server and the preview can
- * pass a function for `hrefFor`. Hidden for a household of one.
+ * pass a function for `hrefFor`. Hidden when no one else is listed (a household of one).
  */
 export function AthleteSwitcher({
   plan,
@@ -44,7 +44,9 @@ export function AthleteSwitcher({
   /** The placer's: the day page passes `lg:hidden`, since from `lg` its nav rail lists the athletes. */
   className?: string;
 }) {
-  if (plan.athletes.length < 2) return null;
+  // Hidden only with nowhere to go. Not a count: `athletes` leaves an archived athlete out, so on
+  // their day the list holds only the others, and one live athlete is the way back.
+  if (!plan.athletes.some((a) => a.profilePublicId !== plan.profilePublicId)) return null;
   const labels = switcherLabels(plan.athletes);
   return (
     <nav aria-label={PROGRAM_COPY.switcher} className={className}>

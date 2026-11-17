@@ -85,6 +85,8 @@ function DayBody({ plan, actions }: DayScreenProps) {
 
   const many = plan.programs.length > 1;
   const rest = restNotice(plan);
+  const nothingLogged =
+    plan.onProgram === ON_PROGRAM.yes && showsOnlyLogged(plan) && plan.workouts.length === 0;
   const programName = (id: string | null) =>
     (many && plan.programs.find((p) => p.programPublicId === id)?.name) || null;
   const notSavedIn = (workoutKey: string) =>
@@ -109,6 +111,10 @@ function DayBody({ plan, actions }: DayScreenProps) {
             {rest.text}
           </p>
         ) : null}
+        {/* The notice box, as the all-rest line: it is then the only thing in the section. */}
+        {nothingLogged ? (
+          <p className={NOTICE_CLASS}>{DAY_COPY.nothingLogged(plan.day, plan.today)}</p>
+        ) : null}
         {plan.workouts.map((workout, index) => {
           const key = workoutKeyOf(workout, index);
           return (
@@ -130,18 +136,29 @@ function DayBody({ plan, actions }: DayScreenProps) {
 }
 
 /**
+ * Whether the day shows only what was logged: neither writable (today and yesterday, for an athlete
+ * who is not archived) nor a look-ahead day. An older day and an archived athlete's today are both.
+ * The rest line and the "No workouts logged" line read this one test, so a day is never both.
+ */
+export function showsOnlyLogged(plan: DayPlan): boolean {
+  return !plan.writable && !plan.future;
+}
+
+/**
  * The rest-day line (FAM-1 step 13d), worded as v12 has it (maintainer, 2026-11-16): when every
  * program the athlete is on rests, "Rest day. Nothing is scheduled on Sundays."; when some rest on a
  * day with two or more, "Rest day on Family program."
  *
- * 🔴 **Only on today, yesterday and look-ahead days.** An older day lists only workouts with a logged
- * row (`dayPlanSchema`), so there a program with no workout means *skipped*, not rest, and calling it
- * a rest day would mislead a parent reading back (UX panel, 13d). A workout that left the week is not
+ * 🔴 **Never on a day that shows only what was logged** (`showsOnlyLogged`: an older day, and an
+ * archived athlete's today or yesterday). Such a day lists only workouts with a logged row
+ * (`dayPlanSchema`), so there a program with no workout means *skipped*, not rest, and calling it
+ * a rest day would mislead a parent reading back (UX panel, 13d); it says "No workouts logged"
+ * instead. A workout that left the week is not
  * a scheduled one, so it does not make its program "not resting". The all-rest line is v12's notice
  * box, since it is then the only thing in the section.
  */
 export function restNotice(plan: DayPlan): { text: string; allRest: boolean } | null {
-  if (plan.onProgram !== ON_PROGRAM.yes || !(plan.writable || plan.future)) return null;
+  if (plan.onProgram !== ON_PROGRAM.yes || showsOnlyLogged(plan)) return null;
   const resting = plan.programs.filter(
     (program) =>
       !plan.workouts.some((w) => w.scheduled && w.programPublicId === program.programPublicId),

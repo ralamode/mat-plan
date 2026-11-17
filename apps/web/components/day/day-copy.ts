@@ -2,6 +2,7 @@ import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-p
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
 import { CLOSED_DAY_NOTICE, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
+import { formatDayShort } from '@/lib/date';
 import { formatList, plural } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
@@ -16,6 +17,14 @@ import type { RowWriteKind, TypedProblem } from './row-values';
  */
 export const DAY_COPY = {
   heading: 'Workouts',
+  /**
+   * A day that shows only what was logged, with nothing logged (maintainer, 2026-11-17). It says
+   * "workouts" because Bodyweight and Life sit above it with their own "Nothing logged." and may
+   * hold a weigh-in or a practice. The day is written as the page's date line writes it
+   * (`formatDayShort`): a weekday alone is ambiguous months back.
+   */
+  nothingLogged: (day: string, today: string) =>
+    day === today ? 'No workouts logged today.' : `No workouts logged on ${formatDayShort(day)}.`,
   done: 'Done',
   doneMark: 'Done ✓',
   lastTime: 'Last time',
