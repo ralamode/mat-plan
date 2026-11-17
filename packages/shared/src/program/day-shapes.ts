@@ -33,6 +33,8 @@ import { programRefSchema } from './program-shapes';
 /**
  * Whether the athlete is on a program on the viewed day: `yes`; `not-this-day` (they are on one now,
  * but were not on this day: "Not on a program on this day"); `never` ("Not on a program yet").
+ * It reads `DayPlan.programs` and `currentPrograms`, which hold live programs only, so a hidden
+ * program does not count: an athlete whose only program that day is hidden is not on one.
  */
 export const ON_PROGRAM_STATES = ['yes', 'not-this-day', 'never'] as const;
 export type OnProgram = (typeof ON_PROGRAM_STATES)[number];
@@ -136,7 +138,10 @@ const dayWorkoutSchema = z.object({
   name: workoutNameSchema,
   /** The live workout's description; `null` when it has none, or when the workout is no longer live. */
   description: nullableNoteSchema,
-  /** `false`: logged on this day, but no longer on the week. It shows its logged rows only. */
+  /**
+   * `false`: logged on this day, but no longer on the week, or no longer live (a hidden workout is
+   * never scheduled, even while its slot is still on the week). It shows its logged rows only.
+   */
   scheduled: z.boolean(),
   /**
    * "6 of 10": `done` is the logged rows, `total` the prescribed rows plus any logged beyond them,
