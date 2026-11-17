@@ -261,7 +261,7 @@ transaction with `set local lock_timeout` and `statement_timeout` (the `registry
    exports from `packages/db/src/household-graph.ts` (the household graph filtered to the per-athlete
    tables, at athlete grain) and which lands before PR 2, so the correction counts over the list the
    athlete erasure deletes and `db:verify` proves complete. PR 2 imports it and moves nothing
-   _(reconciled with PRIV-3's refresh, 2026-11-17)_. **No `deleted_at` filter.** It **refuses** if any count is non-zero. The
+   _(reconciled with PRIV-3's refresh, 2026-11-17)_. The count **skips the target's own `profiles` row**, which `ATHLETE_GRAPH` lists and the lock already holds: it counts only the rows that hang off it (PRIV-3 #513). **No `deleted_at` filter.** It **refuses** if any count is non-zero. The
    row lock conflicts with the key-share lock a child insert takes, so the counts hold until commit;
 4. under `--apply`, sets `deleted_at = now(), updated_at = now()`.
 
