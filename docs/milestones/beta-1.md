@@ -563,7 +563,9 @@ improves before anyone is invited, and the invited family gets per-athlete days 
    3's verdict.
 5. **Widen to 3–5:** household members by invitation, step-up, self-serve deletion, client-side
    Sentry, the audit log, the support runbooks.
-6. `V1-16`, `PROGS-2` (`CAT-3` moved into Beta 0 on 2026-11-17).
+6. `V1-16`, `PROGS-2` (`CAT-3` moved into Beta 0 on 2026-11-17). `CAT-4` (a catalog admin) and
+   `CAT-5` (variations) joined on 2026-11-17: wanted before the pilot, not scoped, and not yet
+   placed in this order.
 
 Each group is planned, prototyped and signed off when Beta 1 is planned, after Beta 0's sign-off.
 
