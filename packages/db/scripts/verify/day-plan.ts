@@ -50,6 +50,7 @@ import {
 import { insertEntrySetRows } from '../../src/writers/session-rows';
 import { activityTypeIdOf, expectOk, inSavepoint } from './day';
 import { asDb, asTx, rolledBack, type VerifyTx } from './harness';
+import { ARCHIVE_ONLY_FIXTURES, FIXED_WORLD_FIXTURE_COUNT } from './fixture-groups';
 import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './schema';
 
 /**
@@ -356,7 +357,11 @@ async function verifyFixtures(): Promise<void> {
     names.includes('closed-day-logged-only'),
     'FAM-1 12a: closed-day-logged-only is in 12a-i',
   );
-  assert.ok(names.length >= 10, `FAM-1 12a: 12a-i proves ${names.length} fixtures`);
+  assert.equal(
+    names.length,
+    FIXED_WORLD_FIXTURE_COUNT,
+    `FAM-1 12a: 12a-i proves exactly ${FIXED_WORLD_FIXTURE_COUNT} fixed-world fixtures`,
+  );
 
   // Fixtures built from the same world share one seed (each one's writes are in a savepoint).
   const worldKey = (name: FixtureName) => {
@@ -1189,7 +1194,7 @@ async function verifyRules(): Promise<void> {
     // ── R1: an archived athlete's TODAY reads like a closed day ─────────────────────────────────
     // Two fixtures whose `before` differs from `world` by the archive alone: the athletes the world
     // marks archived are archived here, then the day deep-equals the fixture.
-    for (const name of ['archived-athlete-today', 'archived-athlete-nothing-logged'] as const) {
+    for (const name of ARCHIVE_ONLY_FIXTURES) {
       await inSavepoint(tx, async (sp) => {
         const { athlete, day, world } = DAY_PLAN_FIXTURE_SOURCES[name];
         const archived = world.athletes.filter((a) => a.archived).map((a) => a.id);

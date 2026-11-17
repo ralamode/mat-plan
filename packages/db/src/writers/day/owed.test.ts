@@ -1,6 +1,8 @@
 import { DAY_PLAN_FIXTURE_SOURCES } from '@mat-plan/shared/program/fixtures';
 import { describe, it } from 'vitest';
 
+import { ARCHIVE_ONLY_FIXTURES } from '../../../scripts/verify/fixture-groups';
+
 /**
  * The tests lane E (day data) still owes the program contract, tagged by step: 12a-ii, 11c and 14
  * (FAM-1 plan §4: "`it.todo` lists of the tests each consumer still owes").
@@ -20,7 +22,7 @@ describe('DayPlan: owed by its consumers', () => {
   // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`), and the two whose
   // only change is an archive, which a proof applies directly. The other `before` fixtures change
   // the program after logging, so they need its edits replayed: 12a-ii.
-  const ARCHIVE_ONLY = new Set(['archived-athlete-today', 'archived-athlete-nothing-logged']);
+  const ARCHIVE_ONLY = new Set<string>(ARCHIVE_ONLY_FIXTURES);
   for (const [name, source] of Object.entries(DAY_PLAN_FIXTURE_SOURCES)) {
     if (source.before === null || ARCHIVE_ONLY.has(name)) continue;
     it.todo(`12a-ii: the resolver, on the seeded state, deep-equals ${name}`);
