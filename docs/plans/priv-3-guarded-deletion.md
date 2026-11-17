@@ -459,9 +459,10 @@ athlete erasure by hand: 4b cannot follow a script that has already committed.
 ## File-by-file changes
 
 Mutation numbers come from the block the FAM-1 board assigned to this track, **260–289** (2026-11-17),
-taken in PR order. `verifyErasure` is a fifth module called **last** in `verify.ts:9864-9867` (**waiting on
-the roadmap thread's ruling**, since the comment there says lanes add no call; PR 1 does not start
-until it is recorded here with its date); last means step 5's assertions see an
+taken in PR order. `verifyErasure` is a fifth module called **last** in `verify.ts:9864-9867` (**ruled 2026-11-17** by the roadmap thread, the harness owner since FAM-1 0c: one import and one
+call, last, the block comment naming it; it deletes only its own fixture households or works inside
+`rolledBack`; step 5's existing proofs are not moved out of `verify/schema.ts`; every edit to that file,
+an `export` included, is lane A's to agree and the board's to order); last means step 5's assertions see an
 athlete-grain defect first, so this plan's own mutations target household-grain tables and household
 arms, and each `.expect` is confirmed by running `pnpm db:mutations` before it is committed.
 
@@ -690,10 +691,13 @@ kept from the first draft.
 5. **Q5. Re-key first, then an ordinary hard delete** _(`OPS-2` Q2, 2026-11-16)_ (D6).
 6. **Q6. Script the program removal as PR 3b** (D7).
 
-**Still open, not the maintainer's:** the fifth `verify` module call is a harness change, which the
-FAM-1 board has sent to the roadmap thread (contract owner of 0c). PR 1 does not start until it rules.
-Guest slots: PRs 1, 2a and 3 enter lane A's files and `write-path.md` after lane A's `VALIDATE` PR
-merges, and PRs 1, 2b and 3 take the privacy-docs queue in turn, ordered by the board.
+**Board and harness, 2026-11-17.** The fifth module is ruled (above). Lane A has no open PR on its
+two files, so PR 1 is cut now; whichever of it and lane A's `VALIDATE` PR merges second merges `main`.
+Lane E's #505 goes first on `runbooks.md`. **Still open, lane A's:** the `verify/schema.ts` edits PR 1
+asks for (D2: `ERASE_ATHLETE` derived in place, the fixture pin, three exports). If lane A declines the
+derivation while its own PRs are open, the interim is two lists tied by a deep-equal in `verifyErasure`,
+with its own mutation and a tech-debt entry to collapse them. **Open until PR 3, with lane A:** whether
+step 5's sibling proof calls the core (2R5); it stays in `verify/schema.ts` either way.
 
 ## Review-response log (adversarial panel)
 
