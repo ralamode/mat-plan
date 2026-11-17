@@ -23,9 +23,11 @@ describe('resolveViewedDay', () => {
     }
   });
 
-  // THE stale-tab case: a page open across midnight must not render a day that has not happened.
-  it('clamps the future to today', () => {
-    expect(resolveViewedDay('2026-10-05', TODAY, FLOOR)).toBe(TODAY);
+  // Look-ahead (FAM-1 12c): a future day passes through, and the PAGE renders it only while the
+  // athlete is on a program that day (otherwise today). Nothing here makes it writable.
+  it('passes a future day through for the page to check', () => {
+    expect(resolveViewedDay('2026-10-05', TODAY, FLOOR)).toBe('2026-10-05');
+    expect(isWritableDay('2026-10-05', TODAY)).toBe(false);
   });
 
   it('floors at the profile’s first day, so `‹` cannot walk into 2019', () => {
@@ -74,6 +76,7 @@ describe('dayPageFlags', () => {
     for (const day of [TODAY, YESTERDAY]) {
       expect(dayPageFlags(day, TODAY, false)).toEqual({
         closedDay: false,
+        future: false,
         writable: true,
         amendable: true,
         showClosedNotice: false,
@@ -84,6 +87,7 @@ describe('dayPageFlags', () => {
   it('a day before yesterday is read-only: no log, no Change, and the notice', () => {
     expect(dayPageFlags(OLDER, TODAY, false)).toEqual({
       closedDay: true,
+      future: false,
       writable: false,
       amendable: false,
       showClosedNotice: true,
@@ -93,6 +97,7 @@ describe('dayPageFlags', () => {
   it('archived on today: no log, but Change stays, and no read-only notice', () => {
     expect(dayPageFlags(TODAY, TODAY, true)).toEqual({
       closedDay: false,
+      future: false,
       writable: false,
       amendable: true,
       showClosedNotice: false,
@@ -102,9 +107,24 @@ describe('dayPageFlags', () => {
   it('archived on an older day: nothing, and still no read-only notice (it would be false)', () => {
     expect(dayPageFlags(OLDER, TODAY, true)).toEqual({
       closedDay: true,
+      future: false,
       writable: false,
       amendable: false,
       showClosedNotice: false,
     });
+  });
+
+  // FAM-1 12c (D32 and the maintainer's 2026-11-17 look-ahead decision): a future day is read-only
+  // for everyone, and never shows the closed-day sentence, which reads as a missed day.
+  it('a future day: no log, no Change, no closed notice, archived or not', () => {
+    for (const archived of [false, true]) {
+      expect(dayPageFlags('2026-10-01', TODAY, archived)).toEqual({
+        closedDay: true,
+        future: true,
+        writable: false,
+        amendable: false,
+        showClosedNotice: false,
+      });
+    }
   });
 });

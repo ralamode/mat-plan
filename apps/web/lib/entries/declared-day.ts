@@ -57,20 +57,25 @@ export function isWritableDay(day: string, today: string): boolean {
  * What the day page may offer on `day` (V1-24 3b-page). Pure, so the read-only rule is tested here
  * rather than only in the async page, which Vitest cannot render.
  *
- * - `closedDay`: before yesterday. Read-only for everyone.
+ * - `closedDay`: not today or yesterday. Read-only for everyone.
+ * - `future`: a day after today, which the page shows only as look-ahead (FAM-1 12c): its own
+ *   notice, no Bodyweight or Life, never the closed-day sentence.
  * - `writable`: a log form may render — not closed, and the athlete is not archived.
  * - `amendable`: a logged value offers Change. Follows the DAY only: an archived athlete's weight on
  *   today or yesterday stays correctable, as before.
- * - `showClosedNotice`: the read-only sentence. Not for an archived athlete, where its "today and
- *   yesterday can be logged" is false and the archived notice gives the real reason.
+ * - `showClosedNotice`: the read-only sentence, on a PAST closed day. Not for an archived athlete,
+ *   where its "today and yesterday can be logged" is false and the archived notice gives the real
+ *   reason, and not for a future day, which has not happened yet (maintainer, 2026-11-17).
  */
 export function dayPageFlags(day: string, today: string, archived: boolean) {
   const closedDay = !isWritableDay(day, today);
+  const future = isoDayDiff(day, today) > 0;
   return {
     closedDay,
+    future,
     writable: !closedDay && !archived,
     amendable: !closedDay,
-    showClosedNotice: closedDay && !archived,
+    showClosedNotice: closedDay && !future && !archived,
   };
 }
 
@@ -85,9 +90,11 @@ export function dayPageFlags(day: string, today: string, archived: boolean) {
  * page; there is no resource to "not find", since every date is a legal day and most simply have
  * nothing logged.
  *
- * **The future is clamped**, so a tab left open across midnight cannot render a day that has not
- * happened. **The past is floored at the profile's first day**, so a kid tapping `‹` cannot walk back
- * into 2019 and conclude the app is broken.
+ * **A future day passes through** (FAM-1 12c, look-ahead), and the PAGE decides whether to show it:
+ * only while the athlete is on a program that day (plan §9, "goes forward only while the athlete is
+ * on a program the next day"); otherwise it renders today, as this function once did for every
+ * future day. **The past is floored at the profile's first day**, so a kid tapping `‹` cannot walk
+ * back into 2019 and conclude the app is broken.
  */
 export function resolveViewedDay(
   requested: string | undefined,
@@ -106,7 +113,7 @@ export function resolveViewedDay(
     isoDayDiff(profileFirstDay, earliestWritable) < 0 ? profileFirstDay : earliestWritable;
   const parsed = isoDaySchema.safeParse(requested);
   if (!parsed.success) return today;
-  if (isoDayDiff(parsed.data, today) > 0) return today; // never the future
+  if (isoDayDiff(parsed.data, today) > 0) return parsed.data; // look-ahead: the page checks it
   if (isoDayDiff(parsed.data, floor) < 0) return floor; // never before the profile existed
   return parsed.data;
 }
