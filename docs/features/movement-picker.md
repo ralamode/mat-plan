@@ -143,6 +143,28 @@ path and **creating** the deliberate one.
       accent fill is under AA. Rows carry `data-option-id`, and the create button has
       `PICKER_CREATE_ID`, so the caller can put focus back on them.
 
+13. **The list reads the library's search; "already listed" still reads the plain match** (CAT-3
+    B1, [spec](../specs/cat-3-movement-library.md) § Search). `searchPickerOptions` feeds the list:
+    short forms (`bb curl` → Barbell Curls) and, when nothing matches, **Similar names** (near
+    misses) above "Matches some of your words". `matchPickerOptions` and `listedAs` stay on
+    `matchMovementOptions`, and the search's `exact`/`aliasHit` equal theirs (P1), so "use as
+    typed" is withheld by the same rule as the item form and the server's `existingItem`. Then:
+    - a row in both lists is shown and counted once, under Similar names (P5);
+    - the status says "No matches." once, then each list's count, similar names first;
+    - Enter never picks a similar name or a some-words row; on a phone it only puts the keyboard
+      away so the list shows;
+    - the create button stays quiet while either list holds a row, and its hint names the closest
+      one (`similarListed`), visible and tied to the button by `aria-describedby`: in multi mode the
+      button sits above the list (invariant 12), so that hint is what reaches a keyboard first;
+    - the query never leaves the device (P6): a source scan bans network, router, storage, logging
+      and `new RegExp` in the component, and `onQueryChange` is handed nothing.
+
+    ⚠️ **"Similar names" is interim.** The prototype (P0) owns the heading's final wording. Not
+    "Close spellings" (the ✕ and the last button say "Close"), not "Did you mean" (it tells a
+    correct new name it is a typo). ⚠️ **A short form can still be added as typed** next to the
+    movement it found (`db row` beside Dumbbell row): P1 pins that a short form never makes a name
+    "already listed", and changing that is the contract's, with the server's `existingItem`.
+
 ## Traps
 
 - ⚠️ **A copy key must not begin `use`.** `useAsTyped` reads as a React hook to

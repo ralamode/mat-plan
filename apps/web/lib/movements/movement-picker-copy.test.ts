@@ -18,8 +18,13 @@ describe('MOVEMENT_PICKER_COPY — the counted sentences', () => {
   });
 
   it('statusSomeWords uses "movement", and conjugates both ways', () => {
-    expect(COPY.statusSomeWords(1)).toBe('No matches. 1 movement matches some of your words.');
-    expect(COPY.statusSomeWords(3)).toBe('No matches. 3 movements match some of your words.');
+    expect(COPY.statusSomeWords(1)).toBe('1 movement matches some of your words.');
+    expect(COPY.statusSomeWords(3)).toBe('3 movements match some of your words.');
+  });
+
+  it('statusNear counts similar names, both ways (CAT-3 P5)', () => {
+    expect(COPY.statusNear(1)).toBe('1 similar name.');
+    expect(COPY.statusNear(2)).toBe('2 similar names.');
   });
 
   it('saveCreates names every movement, conjugates both ways, and joins the list properly', () => {

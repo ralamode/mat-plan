@@ -33,6 +33,13 @@ export const MOVEMENT_PICKER_COPY = {
   household: 'Your household',
   matches: 'Matches',
   someWords: 'Matches some of your words',
+  /**
+   * Near misses (CAT-3 spec P4, P5), shown above `someWords`. ⚠️ **Interim wording: the prototype
+   * (P0) owns the final heading.** Not "Close spellings": the sheet's ✕ and its last button already
+   * say "Close", and a screen reader may voice the heading as the verb. Not "Did you mean": that
+   * tells someone who typed a new movement correctly that they misspelt it (UX panel, B1).
+   */
+  near: 'Similar names',
   groupLabel: (group: MovementPickerGroup) => MOVEMENT_PICKER_GROUP_LABELS[group],
 
   // ── Row tags, one per row by precedence (UX2 S2, UX3 4, UX1 8) ──────────────────────────────────
@@ -73,10 +80,15 @@ export const MOVEMENT_PICKER_COPY = {
    * here instead of needing this sentence rewritten.
    */
   statusSomeWords: (n: number) =>
-    `No matches. ${plural(n, {
+    `${plural(n, {
       one: `${n} movement matches`,
       other: `${n} movements match`,
     })} some of your words.`,
+  /**
+   * The near misses' count, after `statusNoMatches` and before `statusSomeWords` (CAT-3 P5: each
+   * counted apart). The same noun as the heading, so a screen-reader user can match the two.
+   */
+  statusNear: (n: number) => plural(n, { one: `${n} similar name.`, other: `${n} similar names.` }),
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
 
@@ -100,6 +112,13 @@ export const MOVEMENT_PICKER_COPY = {
    */
   asTypedHint: (name: string) =>
     `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`,
+
+  /**
+   * Leads the create hint while a similar name is listed (UX panel, B1): the button carries the
+   * person's own spelling, so the hint next to it names the movement they may mean. `where` is
+   * where the list sits from the button: above the footer in single mode, below the top in multi.
+   */
+  similarListed: (name: string, where: 'above' | 'below') => `${quote(name)} is listed ${where}.`,
 
   // ── The card, and the Save line (PR 4 renders these; the strings live here) ─────────────────────
   /** The Movement field's button when no movement is chosen yet. */

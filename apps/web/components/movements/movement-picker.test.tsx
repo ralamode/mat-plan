@@ -717,4 +717,102 @@ describe('multi-select', () => {
     expect(screen.getByText('the form')).toBeTruthy();
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
+
+  it('a similar name is named under the create button, which stays quiet (CAT-3 P5)', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('bulgarain', 'Search items');
+    const create = screen.getByRole('button', { name: 'New item: bulgarain' });
+    const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent).toBe(COPY.similarListed('Bulgarian Split Squat', 'below'));
+    expect(box('Bulgarian Split Squat')).toBeTruthy();
+    // Enter selects nothing: a similar name is a guess (P5).
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+describe('search (CAT-3 B1: short forms and similar names)', () => {
+  it('a short form finds the movement it stands for: "bb curl" is Barbell Curls (P3)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bb curl');
+    expect(headings()).toEqual([COPY.matches]);
+    expect(screen.getByRole('button', { name: /^Barbell Curls/ })).toBeTruthy();
+    // A short form never makes the name "already listed" (P1): it can still be added as typed.
+    expect(screen.getByRole('button', { name: COPY.asTyped('bb curl') })).toBeTruthy();
+  });
+
+  it('a misspelling lists the similar names, and the status counts them (P4, P5)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bulgarain');
+    expect(headings()).toEqual([COPY.near]);
+    expect(screen.getByRole('button', { name: /^Bulgarian Split Squat/ })).toBeTruthy();
+    expect(status()).toBe(`${COPY.statusNoMatches} ${COPY.statusNear(1)}`);
+  });
+
+  it('🔴 similar names come first, and a row in both lists is shown and counted once (P5)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    // `squat` alone matches three; with the misspelt word, none match. Bulgarian Split Squat is a
+    // similar name AND matches "squat": it shows under Similar names only.
+    type('bulgarain squat');
+    expect(headings()).toEqual([COPY.near, COPY.someWords]);
+    expect(screen.getAllByRole('button', { name: /^Bulgarian Split Squat/ })).toHaveLength(1);
+    const [near, some] = screen.getAllByRole('region');
+    expect(near!.textContent).toContain('Bulgarian Split Squat');
+    expect(some!.textContent).not.toContain('Bulgarian Split Squat');
+    // Written out, not counted from the rows: Back Squat and Front Squat.
+    expect(status()).toBe(
+      `${COPY.statusNoMatches} ${COPY.statusNear(1)} ${COPY.statusSomeWords(2)}`,
+    );
+  });
+
+  it('🔴 Enter never picks a similar name (P5)', () => {
+    const onPick = vi.fn();
+    render(<Harness data={{ options: ALL_CATALOG }} onPick={onPick} />);
+    open();
+    type('bulgarain');
+    fireEvent.keyDown(search(), { key: 'Enter' });
+    expect(onPick).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('"use as typed" stays offered, and its hint names the similar movement first (P5)', () => {
+    render(<Harness data={{ options: ALL_CATALOG }} />);
+    open();
+    type('bulgarain');
+    const create = screen.getByRole('button', { name: COPY.asTyped('bulgarain') });
+    const hint = document.getElementById(create.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent).toBe(
+      `${COPY.similarListed('Bulgarian Split Squat', 'above')} ${COPY.asTypedHint('bulgarain')}`,
+    );
+    // Quiet while something is listed: the loud one is for a list with nothing in it (UX2 B1).
+    // `outline` is the variant that draws the border; the quiet (`ghost`) one has none.
+    expect(create.className).not.toMatch(/\bborder-border\b/);
+    type('zzzzz');
+    expect(screen.getByRole('button', { name: COPY.asTyped('zzzzz') }).className).toMatch(
+      /\bborder-border\b/,
+    );
+  });
+
+  it('🔴 the query never leaves the device (P6): no URL, action, storage or log carries it', () => {
+    // A source scan: the picker keeps the text in its own state and hands nobody the text.
+    const source = readFileSync('components/movements/movement-picker.tsx', 'utf8');
+    for (const leak of [
+      /\bfetch\(/,
+      /\bconsole\./,
+      /\buseRouter\b|\buseSearchParams\b|\busePathname\b/,
+      /\bwindow\.(?:location|history)\b|\bhistory\.(?:push|replace)State\b/,
+      /\b(?:local|session)Storage\b|\bindexedDB\b|\bdocument\.cookie\b/,
+      /\bnavigator\.sendBeacon\b|\bXMLHttpRequest\b|\bWebSocket\b/,
+      /\bSentry\b|@sentry\//,
+      /new RegExp\(/,
+    ])
+      expect(source, String(leak)).not.toMatch(leak);
+    // The one callback that fires on every keystroke is handed nothing.
+    expect(source).toMatch(/onQueryChange\?\.\(\)/);
+    expect(source).not.toMatch(/onQueryChange\?\.\([^)]/);
+  });
 });
