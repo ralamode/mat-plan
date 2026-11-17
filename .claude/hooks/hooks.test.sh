@@ -291,6 +291,100 @@ guard "runs through a symlinked path" "$repo" "git checkout -b y" deny "$tmp/gua
 mkdir -p "$tmp/dir with space" && cp "$here/guard-main-checkout.mjs" "$tmp/dir with space/guard.mjs"
 guard "runs from a path containing a space" "$repo" "git checkout -b y" deny "$tmp/dir with space/guard.mjs"
 
+echo "── kill guard: a pattern or broad kill is denied, in any directory"
+kg="$here/guard-process-kill.mjs"
+kill_guard() { guard "kill guard: $1" "$wt" "$2" "$3" "$kg"; }
+kill_guard "pkill -f" "pkill -f mutations.mjs" deny
+kill_guard "killall" "killall node" deny
+kill_guard "/usr/bin/pkill (a path)" "/usr/bin/pkill -9 vitest" deny
+kill_guard "quoted name (p''kill)" "p''kill -f x" deny
+kill_guard "fuser -k" "fuser -k 3000/tcp" deny
+kill_guard "fuser -km (combined flags)" "fuser -km /mnt" deny
+kill_guard "kill \$(pgrep …)" 'kill $(pgrep -f mutations)' deny
+kill_guard "kill of backticks" 'kill -9 `pgrep node`' deny
+kill_guard "… | xargs kill" "pgrep -f vitest | xargs kill -9" deny
+kill_guard "kill 0 (the whole process group)" "kill 0" deny
+kill_guard "kill 1" "kill -9 1" deny
+kill_guard "kill -1 (every process)" "kill -1" deny
+kill_guard "kill -9 -1" "kill -9 -1" deny
+kill_guard "a negative pid (a process group)" "kill -TERM -4242" deny
+kill_guard "kill -- …" "kill -- 4242" deny
+kill_guard "kill -s TERM -- -1" "kill -s TERM -- -1" deny
+kill_guard "pkill after && in a later segment" "cd /tmp && pkill node" deny
+kill_guard "inside \$(…)" 'echo "$(pkill node)"' deny
+guard "kill guard: an unrelated repo is covered too" "$other" "pkill node" deny "$kg"
+guard "kill guard: the main checkout is covered too" "$repo" "killall node" deny "$kg"
+
+echo "── kill guard: each wrapper is walked"
+for w in "sudo" "sudo -u root" "doas" "env" "env FOO=1" "command" "exec" "nice -n 5" "nohup" \
+  "stdbuf -o0" "timeout 5" "timeout -s KILL 5" "caffeinate -i" "time" "npx" "pnpm exec" "builtin"; do
+  kill_guard "$w pkill" "$w pkill -f x" deny
+done
+kill_guard "eval" "eval 'pkill -f x'" deny
+kill_guard "sh -c" "sh -c 'pkill -f x'" deny
+kill_guard "bash -lc" "bash -lc \"killall node\"" deny
+kill_guard "bash -c with a broad kill" "bash -c 'kill -9 -1'" deny
+kill_guard "xargs pkill" "echo x | xargs pkill -f" deny
+kill_guard "xargs sudo kill" "pgrep x | xargs -n1 sudo kill" deny
+kill_guard "script -c" "script -q -c 'pkill x' /dev/null" deny
+kill_guard "watch" "watch -n 1 pkill x" deny
+kill_guard "find -exec" "find . -name '*.pid' -exec pkill -F {} ';'" deny
+kill_guard "env -S" "env -S 'pkill -f x'" deny
+kill_guard "a heredoc fed to bash" "$(printf 'bash <<EOF\npkill -f x\nEOF')" deny
+kill_guard "if/then" "if true; then pkill x; fi" deny
+
+echo "── kill guard: your own pid, a captured pid, a job, a mention"
+kill_guard "kill <literal pid>" "kill 4242" allow
+kill_guard "kill -9 <literal pid>" "kill -9 4242" allow
+kill_guard "kill -s TERM <pid>, kill -TERM <pid>" "kill -s TERM 4242 && kill -TERM 4243" allow
+kill_guard "kill \$!" 'pnpm dev & sleep 5; kill $!' allow
+kill_guard "kill \"\$name\"" 'kill "$server_pid"' allow
+kill_guard "kill -0 \"\${pid}\" (a liveness probe)" 'kill -0 "${pid}"' allow
+kill_guard "kill %job" "kill %1" allow
+kill_guard "kill -l (list the signals)" "kill -l" allow
+kill_guard "sudo kill <pid>" "sudo kill 4242" allow
+kill_guard "a commit message mentions pkill" 'git commit -m "docs: never pkill -f a gate"' allow
+kill_guard "a heredoc to cat mentions pkill" "$(printf 'cat >notes.md <<EOF\npkill -f x killed it\nEOF')" allow
+kill_guard "echo / grep mention pkill" "echo pkill && grep -n 'killall' docs/lessons.md" allow
+kill_guard "command -v pkill (a lookup)" "command -v pkill" allow
+kill_guard "a comment mentions pkill" "ls # pkill -f x" allow
+kill_guard "pgrep alone (read-only)" "pgrep -fl vitest" allow
+kill_guard "escape hatch, leading" "MAT_PLAN_ALLOW_PATTERN_KILL=1 pkill -f x" allow
+kill_guard "escape hatch in a comment" "pkill -f x # MAT_PLAN_ALLOW_PATTERN_KILL=1" deny
+kill_guard "escape hatch elsewhere in the string" "echo MAT_PLAN_ALLOW_PATTERN_KILL=1; pkill -f x" deny
+kill_guard "escape hatch covers only its own segment" "MAT_PLAN_ALLOW_PATTERN_KILL=1 kill 4242 && pkill x" deny
+kill_guard "escape hatch carries into bash -c" "MAT_PLAN_ALLOW_PATTERN_KILL=1 bash -c 'pkill x'" allow
+
+echo "── kill guard: CI, loading, and the sibling"
+# Under CI the hook exits without reading stdin, so the writer may hit EPIPE: expected, and silenced.
+out="$(hook_input "$wt" "pkill -f x" 2>/dev/null | CI=true node "$kg")"
+[ -z "$out" ] && ok "kill guard: CI=true: no output at all" || bad "kill guard: CI=true: produced output" "$out"
+out="$(hook_input "$wt" "pkill -f x" 2>/dev/null | env -u CI GITHUB_ACTIONS=true node "$kg")"
+[ -z "$out" ] && ok "kill guard: GITHUB_ACTIONS=true: no output at all" || bad "kill guard: GITHUB_ACTIONS=true: produced output" "$out"
+# The lexer import must not run the sibling's main (its isEntryPoint()): in the main checkout, a
+# `git checkout -b` the sibling would deny gets no output from the kill guard.
+guard "kill guard: importing the lexer does not run the sibling's main" "$repo" "git checkout -b y; kill 4242" allow "$kg"
+out="$(printf 'not json' | env -u CI -u GITHUB_ACTIONS node "$kg")"
+code=$?
+[ "$code" -eq 0 ] && [ -z "$out" ] && ok "kill guard: malformed input fails open" || bad "kill guard: malformed input: exit $code" "$out"
+ln -s "$kg" "$tmp/kill-link.mjs"
+guard "kill guard: runs through a symlinked path (the lexer still resolves)" "$wt" "pkill x" deny "$tmp/kill-link.mjs"
+# Both PreToolUse Bash hooks are registered, and each loads and decides when run as settings.json runs it.
+settings="$here/../settings.json"
+cmds="$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$settings")"
+for f in guard-main-checkout.mjs guard-process-kill.mjs; do
+  grep -qF ".claude/hooks/$f" <<<"$cmds" && ok "settings.json registers $f as a PreToolUse Bash hook" || bad "settings.json does not register $f" "$cmds"
+done
+root="$(cd "$here/../.." && pwd)"
+denied=0
+while IFS= read -r c; do
+  # The hook path from THIS tree; CLAUDE_PROJECT_DIR is the throwaway repo, so its main checkout is guarded.
+  c="${c//\$CLAUDE_PROJECT_DIR/$root}"
+  out="$(hook_input "$repo" "git checkout -b y; pkill -f x" | env -u CI -u GITHUB_ACTIONS CLAUDE_PROJECT_DIR="$repo" bash -c "$c")" || bad "a registered hook exited non-zero: $c"
+  grep -q '"permissionDecision":"deny"' <<<"$out" && denied=$((denied + 1))
+done <<<"$cmds"
+[ "$denied" -eq 2 ] && ok "both registered hooks load and decide (each denies its own half)" || bad "registered hooks: $denied of 2 denied"
+
 echo "── session briefing"
 # A fake `gh`: one same-repo PR (with a control character in its title), one fork PR whose title is
 # an injection attempt, and merged heads for feat/x (same repo) and feat/fork (a fork's branch).
