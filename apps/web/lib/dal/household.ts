@@ -597,9 +597,9 @@ type ScopeMissEvent = Required<{
  * ## Who consumes it
  *
  * `docs/runbooks.md` → "A cross-household scope miss" carries the alert rule. The ADR justifies the
- * event as what makes rate-limiting id probing possible; `lib/rate-limit.ts` deliberately does not
- * limit the mutating actions yet, so **the limiter is AUTH-1's** (it re-keys from IP to user id) and
- * the alert is the consumer today.
+ * event as what makes rate-limiting id probing possible. Every mutating action is rate-limited per
+ * signed-in user (`enterMutation` in `app/p/mutation-entry.ts` calls `checkMutationLimit`), but **no
+ * limiter reads this event**: the alert is its only consumer today.
  */
 export async function reportScopeMiss(args: ScopeMissArgs): Promise<void> {
   try {
