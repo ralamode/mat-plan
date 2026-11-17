@@ -760,7 +760,9 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
     prescription's), still as that one declaration. For the three program kinds it asks "live, in a
     household that is not the caller's" through `programBlockInHousehold`, negated, because a
     program read serves less than "live, in my household" and the caller's own row can miss. A DAL
-    function that resolves one of those ids calls it on a miss; none writes a probe of its own. `getActivityTypeByKey` and
+    function that resolves one of those ids calls it on a miss; none writes a probe of its own. No
+    limiter reads the event: the mutating actions are limited per signed-in user by `enterMutation`
+    (invariant 1), and the runbook's alert is the event's only consumer. `getActivityTypeByKey` and
     `getMetricDefinition` in `catalog.ts` are global reference reads.
     ✅ **`findOrCreateMovementId` was a fourth and is not any more** — `TEN-2b` scoped it, and
     `scoped.test.ts`'s dead-entry assertion is what forced its allowlist entry out rather than letting

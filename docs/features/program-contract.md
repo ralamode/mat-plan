@@ -129,6 +129,31 @@ refuses what the real action will. Every `WorkoutDraft` fixture and every workou
 prototype's world already keeps the rule (`save-workout.test.ts` holds that). The rule reads the
 `trackingType` the draft carries; the writer still checks the item's real type.
 
+### The unit rule on save
+
+`saveWorkoutSchema` also refuses an item that could be saved and never logged (contract change
+C16). `workoutDraftSchema` does not: a card whose type was just chosen has no unit yet.
+
+- A type with a quantity (`TRACKING_TYPE_FIELDS[type].slot`) must have a unit, as `itemUnit` finds
+  it: the type's fixed unit, or the unit of the prescribed quantity in the type's slot.
+- So a **Count**, a **Weight × reps** and a **Distance** item each carry a quantity in their slot.
+  Its `value` may be `null` ("log in this unit, no target"); the unit may not be missing.
+- A **Duration** and a **Time per set** have a fixed unit and pass with no quantity. A **Check** and
+  **Reps** measure nothing and pass with none.
+
+- **The quantity in the type's slot is in a unit the type logs in** (`unitsForTrackingType`, what
+  the editor's unit select offers; plan D27). A Count in `bool` could store no ✓, and a Duration
+  prescribed in seconds would refuse an empty ✓, because a Duration logs in minutes.
+- **A target is a number an empty ✓ can store.** Where the quantity has a `value`, the rule asks
+  `fillRowValues` itself whether an empty ✓ on that target is stored. Today that refuses a value
+  over its unit's ceiling (`quantityCeiling`: 1,001 of a count, 1,441 minutes). A blank target is
+  not judged: the row asks for the number.
+
+The issue is on the item's quantities (`['items', index, 'quantities']`), beside any `sets` issue on
+the same card. The rule reads the `trackingType` the draft carries, as the sets rule does; the
+writer still checks the item's real type. It looks at the type's own slot only: a quantity in
+another slot, or a second one in the same slot, is the writer's to refuse.
+
 ## Invariants
 
 1. 🔴 **A shape change goes through the contract owner, and the lanes reading it wait** (plan §4).
@@ -269,6 +294,18 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
     athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
     to list them as available.
+
+22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
+    The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
+    logs in. The save refuses an item for which it answers `null` while the type has a quantity,
+    one whose quantity is in a unit its type does not log in (`unitsForTrackingType`), and one
+    whose target `fillRowValues` would not store (over its unit's ceiling), so the row writer never
+    meets a prescription whose empty ✓ it must refuse for its unit or its number.
+    `save-workout.test.ts` holds that against `fillRowValues` for every type and unit, at a small
+    value, a fraction, the unit's ceiling and one past it. Reps are outside the rule: reps text
+    that is not a whole number is legal, and the row then asks for them. The workout
+    editor asks for the unit before Save (lane B, #493), and the preview's fake parses with this
+    schema; the program writer (6a-ii) refuses the same draft with `invalid`.
 
 ## Traps
 
