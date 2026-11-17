@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 61e60d91..cda345d5 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -47,7 +47,7 @@ export async function saveWeek(
+   if (!parsed.success) {
+     // A repeat answers `once_per_day` whatever else is wrong: the preview fake's rule, shared.
+     return refuse(
+-      weekRepeatsAWorkout(input) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
++      weekRepeatsAWorkout(input) && parsed.error.issues.length === 1 ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+     );
+   }
+   // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.

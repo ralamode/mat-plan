@@ -712,7 +712,18 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   check named a file the PR never meant to touch.
   → **One gate run per worktree at a time.** To check: `for p in packages/db/scripts/mutations/*.patch;
 do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prints any patch
-  that is live. Before calling another lane's proof flaky, run it on a clean checkout of `main`.
+  that is live. Before calling another lane's proof flaky, run it on a clean checkout of `main`. **Stopping a run midway leaves its current patch applied too**
+  (FAM-1 6b, #522: stopping a background `pnpm verify` left `261` in `erasure/graph.ts`, and its
+  `sh -c` chain kept running). After stopping one, end the chain's processes, then run the check
+  above and `git apply -R` what it prints.
+
+- 🔴 **A merge commit carried conflict markers, and Prettier hid them.** FAM-1 6b (#522): a merge's
+  output was cut short (`| tail -3`), only one of two conflicts was read, and `git add -A` committed
+  `data-inventory.md` with `<<<<<<<` in it. Prettier then rewrote the `>>>>>>>` lines as blockquotes
+  (`> > > > > > >`), so `format:check` stayed green, and the second-pass review found it.
+  → After a merge, list the conflicts with `git diff --name-only --diff-filter=U`, never from the
+  merge's own output, and before committing run
+  `git grep -nE '^(<<<<<<<|=======$|>>>>>>>)|^> > > > >' -- . ':!*.patch'`.
 
 - 🔴 **THE RECURRING ONE, named because it keeps coming back in different clothes: a proof whose
   EXPECTATION is derived from the thing it is proving.** Seven instances across `#364`–`PICK-1` PR 3,

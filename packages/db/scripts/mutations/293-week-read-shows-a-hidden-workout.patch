@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/queries/program/week.ts b/packages/db/src/queries/program/week.ts
+index a58b9987..981a1835 100644
+--- a/packages/db/src/queries/program/week.ts
++++ b/packages/db/src/queries/program/week.ts
+@@ -39,10 +39,7 @@ export async function readWeek(
+     .from(schema.blockDayWorkouts)
+     .innerJoin(
+       schema.workouts,
+-      and(
+-        eq(schema.workouts.id, schema.blockDayWorkouts.workoutId),
+-        isNull(schema.workouts.deletedAt),
+-      ),
++      eq(schema.workouts.id, schema.blockDayWorkouts.workoutId),
+     )
+     .where(
+       and(eq(schema.blockDayWorkouts.blockId, blockId), isNull(schema.blockDayWorkouts.deletedAt)),
