@@ -69,8 +69,8 @@ path and **creating** the deliberate one.
    (AGENTS.md; strength-logging invariant 1).
 
    **`trackingType`** (FAM-1 step 0b) is one of the seven `TRACKING_TYPES`: how the item is logged,
-   set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The program
-   builder's item picker (step 9) shows it under each name. ⚠️ **No read fills it yet.** The column
+   set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The
+   movement picker shows it on each row's second line (invariant 14). ⚠️ **No read fills it yet.** The column
    arrives in step 3 and the picker's read in step 6a, homed in `packages/db/src/queries/program/`
    ([program-writers.md](./program-writers.md)), not in the `queries/movement-options.ts` this
    guide's frontmatter note expects. Until then only fixtures build the DTO: the tests here, and
@@ -194,24 +194,37 @@ path and **creating** the deliberate one.
       called "No equipment". The row's tag joins that line with " · ", so a row stays short enough
       that two fit with a phone's keyboard up. A household item carries no tag: its second line
       already says what it is.
-    - **A library option REQUIRES its taxonomy** (`MovementOptionDTO`'s catalog arm). ⚠️ A read
-      that has not got the equipment set must not build a library option: `equipment: []` MEANS
-      "No equipment" and passes that filter.
+    - **A library option IS the contract's `CatalogOption`** (the DTO's catalog arm), taxonomy
+      required, plus the legacy `group` where an old built-in has one. A library entry has no group:
+      it is found by search, carries no group tag, and is left out of the legacy browse groups
+      (invariant 11) until B3's tree. ⚠️ A read that has not got the equipment set must not build a
+      library option: `equipment: []` MEANS "No equipment" and passes that filter.
     - **The supervision label** ("Learn with a coach present") is its own line between the name
       and the second line, at full contrast in every row state, and never replaced by a tag.
     - **The row's accessible name reads its parts apart** ("Pull-Up, Learn with a coach present,
       Reps · Pull-up bar"), with hidden separators: stacked spans carry no space between them.
-    - **"How to" is the caller's loader** (`howTo(option)`): the steps are read by slug on the
-      server, and the picker imports no server action (invariant 2). With no loader, no row shows
-      the button. It shows only on a library row whose entry `hasInstructions`. One row is open
-      at a time; typing closes it; a late answer for a row no longer open is dropped. The box shows
-      the name, **the supervision label first, read from the option** (so a loader that leaves it
-      out cannot drop it, K17), then the steps; "No steps for this movement yet." for `null`; and,
-      on failure, "Try again", with the failure said once in the sheet's one status region.
-      "Hide" puts focus back on "How to" before its box goes. `aria-controls` is set only while
-      open. ⚠️ **Until lane P's option read carries the slug (P11-i), no production caller passes
-      a loader**: the server action (public id, then the caller's own option read, then
-      `catalogHowToOf`) is wired then.
+    - **"How to" is the caller's loader, by public id** (`howTo(publicId)`, on `MovementPicker`,
+      `ItemPicker` and `WorkoutEditorScreen`): the steps are read by slug on the server, and the
+      picker imports no server action (invariant 2). A failure is a rejection. With no loader, no
+      row shows the button; with one, it shows only on a library row whose entry
+      `hasInstructions`, and a row without steps keeps the column empty so rows end at one edge.
+    - **One box per row ON SCREEN**, keyed `${section}:${publicId}`: a movement listed twice
+      (Recent and its group) opens one box, under the row tapped. Each load has a number, and an
+      answer applies only while that load is still the open one, read from state, so a reopen, a
+      search change (typing, Enter, the takeover) or opening another row drops a late answer.
+    - **The box** is a region named by its `h4` ("How to do X"), busy while loading: **the
+      supervision label first, read from the option** (so a loader that leaves it out cannot drop
+      it, K17), then the steps; "No steps for this movement yet." for `null` or blank steps; on
+      failure, "Try again". "Try again" and "Hide" put focus on "How to" before the box changes.
+      `aria-controls` is set only while open.
+    - **The failure is said in the sheet's one status region**, derived from the box: it stands
+      through a retry (so the region does not fall back to re-reading the search count), goes with
+      the box, and wins over the caller's `notice` until a tick silences it.
+    - ⚠️ **No production caller passes a loader yet.** It is wired when lane P's option read
+      carries the slug (P11): the page's loader takes the public id, finds the row in the caller's
+      own option read, and calls `catalogHowToOf`. That is a READ, so the page owes a choice the
+      repo's rule makes visible (Route Handlers for reads): a Route Handler, or an action recorded
+      as the exception, with an adapter turning a refusal into a rejection.
 
 ## Traps
 

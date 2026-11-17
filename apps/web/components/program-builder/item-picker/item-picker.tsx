@@ -15,6 +15,7 @@ import { flushSync } from 'react-dom';
 import {
   listedAs,
   MovementPicker,
+  type MovementPickerProps,
   OPTION_ID_ATTR,
   PICKER_CREATE_ID,
 } from '@/components/movements/movement-picker';
@@ -87,12 +88,15 @@ export function ItemPicker({
   newItem,
   onCreated,
   onAdd,
+  howTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusTo: RefObject<HTMLElement | null>;
   /** Every item the household can add, including those made here. */
   options: readonly MovementOptionDTO[];
+  /** "How to" for a library row (CAT-3 P16), passed to the movement picker; none, no button. */
+  howTo?: MovementPickerProps['howTo'];
   /** Selected ids, in pick order. */
   selected: readonly string[];
   onToggle: (option: MovementOptionDTO) => void;
@@ -404,6 +408,7 @@ export function ItemPicker({
 
   return (
     <MovementPicker
+      howTo={howTo}
       open={open}
       onOpenChange={(next) => {
         // A create in flight no longer belongs to the screen (the form itself goes on `open`).

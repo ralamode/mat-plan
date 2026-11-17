@@ -7,6 +7,9 @@ import {
   type ProgramActions,
   type WorkoutDraft,
   NEW_ITEM_NAME_MESSAGES,
+  EQUIPMENT_CODE,
+  MODALITY,
+  MUSCLE,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -563,10 +566,10 @@ describe('the item picker (FAM-1 9)', () => {
         unitDefault: null,
         isBodyweight: false,
         trackingType: TRACKING_TYPE.weight_reps,
-        modality: 'strength',
+        modality: MODALITY.strength,
         pattern: 'hinge',
-        equipment: ['barbell'],
-        primaryMuscle: 'hamstrings',
+        equipment: [EQUIPMENT_CODE.barbell],
+        primaryMuscle: MUSCLE.hamstrings,
         secondaryMuscles: [],
         supervision: null,
         hasInstructions: false,

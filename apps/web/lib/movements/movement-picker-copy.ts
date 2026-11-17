@@ -1,5 +1,6 @@
 import { MOVEMENT_PICKER_GROUP_LABELS, type MovementPickerGroup } from '@mat-plan/shared';
 
+import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural, quote } from '@/lib/i18n/plural';
 
 /** See `asTypedHint` below for why every word of it is load-bearing. */
@@ -7,6 +8,8 @@ const asTypedHintText = (name: string) =>
   `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
 
 const statusNoMatches = 'No matches.';
+/** Between the parts of a row's second line, and before its tag. */
+const ROW_META_JOIN = ' · ';
 /**
  * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
  * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
@@ -14,10 +17,12 @@ const statusNoMatches = 'No matches.';
  * forms are named categories rather than a comparison, and a locale with more of them adds keys
  * here instead of needing this sentence rewritten.
  */
+/** A FRAGMENT of `statusNone`'s sentence, not a sentence: it has no terminal period. */
 const statusSomeWords = (n: number) => `${n} with some of your words`;
 /**
- * The near misses' count, as the accepted prototype words it ("1 close spelling"). The heading
- * over them is "Did you mean" (spec P5, amended at the prototype's sign-off).
+ * The near misses' count, as the accepted prototype words it ("1 close spelling"): a FRAGMENT of
+ * `statusNone`'s sentence. The heading over them is "Did you mean" (spec P5, amended at the
+ * prototype's sign-off).
  */
 const statusNear = (n: number) =>
   plural(n, { one: `${n} close spelling`, other: `${n} close spellings` });
@@ -75,6 +80,11 @@ export const MOVEMENT_PICKER_COPY = {
   // ── The row's second line (CAT-3 P13, P14) ──────────────────────────────────────────────────────
   /** A library movement whose equipment set is empty: just you and the floor. */
   noEquipment: 'No equipment',
+  /** The equipment a library row needs, as a locale's list ("Barbell, Bench"), never a `.join`. */
+  equipmentList: (labels: readonly string[]) => formatList(labels, APP_LOCALE, 'unit'),
+  /** The row's second line (P14): how it is logged, then what it needs. The tag joins with the same mark. */
+  rowMeta: (tracking: string, needs: string) => `${tracking}${ROW_META_JOIN}${needs}`,
+  rowMetaJoin: ROW_META_JOIN,
   /**
    * A household's own item, in place of its equipment. 🔴 **Never "No equipment"**: it has no
    * equipment field at all, and saying it needs none is a claim nobody made (P14).
@@ -103,8 +113,8 @@ export const MOVEMENT_PICKER_COPY = {
   /**
    * ⚠️ **The terminal period is part of the shape, not punctuation taste.** Panel 2 · 2 decided
    * `{count}. {reason}`; without it a screen reader reads "1 match Already in the list as Pull-Up"
-   * as one breathless clause, and the three count strings disagreed with each other —
-   * `statusNoMatches` and `statusSomeWords` already ended in one.
+   * as one breathless clause. Every count SENTENCE ends in one (`statusCount`, `statusNoMatches`,
+   * `statusNone`); `statusNear` and `statusSomeWords` are fragments that `statusNone` joins.
    */
   /**
    * ⚠️ **The `one` form interpolates `${n}` rather than writing `1`.** `one` is not "the number one"
@@ -118,8 +128,9 @@ export const MOVEMENT_PICKER_COPY = {
   statusSomeWords,
   statusNear,
   /**
-   * The status with no matches (CAT-3 P5): "No matches." once, then each list's own count, similar
-   * names first, each only when it holds a row.
+   * The status with no matches (CAT-3 P5): "No matches." once, then each list's own count, close
+   * spellings first, each only when it holds a row: "No matches. 1 close spelling, 2 with some of
+   * your words." (the accepted prototype's sentence).
    */
   statusNone: (near: number, someWords: number) => {
     const parts = [

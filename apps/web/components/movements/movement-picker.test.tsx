@@ -7,7 +7,10 @@ import {
   type MovementPickerGroup,
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
+  EQUIPMENT_CODE,
+  MODALITY,
   type CatalogHowTo,
+  type CatalogOptionTaxonomy,
 } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -16,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
+import { SHEET_COPY } from '@/components/ui/sheet';
 
 import { listedAs, MovementPicker, type TodaysProgramForPicker } from './movement-picker';
 
@@ -32,21 +36,22 @@ afterEach(cleanup);
 /**
  * The library fields a catalog option must carry (CAT-3 C0b-2), as a test default: a barbell lift
  * with no supervision and no instructions. ⚠️ Not `equipment: []`, which MEANS "No equipment". A
- * test that needs another shape passes `taxonomy`.
+ * test that needs another shape passes `taxonomy`, typed as the contract's, so a misspelt or
+ * missing field does not compile.
  */
-const TEST_TAXONOMY = {
-  modality: 'strength',
+const TEST_TAXONOMY: CatalogOptionTaxonomy = {
+  modality: MODALITY.strength,
   pattern: null,
-  equipment: ['barbell'],
+  equipment: [EQUIPMENT_CODE.barbell],
   primaryMuscle: null,
   secondaryMuscles: [],
   supervision: null,
   hasInstructions: false,
-} as const satisfies Partial<MovementOptionDTO>;
+};
 
 const catalogOption = (
   name: string,
-  taxonomy: Partial<typeof TEST_TAXONOMY> | Record<string, unknown> = {},
+  taxonomy: Partial<CatalogOptionTaxonomy> = {},
 ): MovementOptionDTO => {
   const row = MOVEMENT_SEED_ROWS.find((r) => r.name === name);
   if (!row) throw new Error(`fixture: no seeded movement named ${name}`);
@@ -63,7 +68,7 @@ const catalogOption = (
     trackingType: TRACKING_TYPE.weight_reps,
     ...TEST_TAXONOMY,
     ...taxonomy,
-  } as MovementOptionDTO;
+  };
 };
 
 const householdOption = (name: string, publicId: string): MovementOptionDTO => ({
@@ -999,6 +1004,7 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       '@/lib/constants',
       '@/lib/utils',
       '@/lib/i18n/plural',
+      '@/lib/i18n/locale',
       '@/lib/movements/movement-option',
       '@/lib/movements/movement-picker-copy',
     ]);
@@ -1052,14 +1058,19 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     supervision: 'coach',
   };
 
+  type Loader = (publicId: string) => Promise<CatalogHowTo | null>;
   function RowHarness({
     howTo,
     multi = false,
     options = [SQUAT, PUSH_UPS, ROPE, MINE],
+    recentIds,
+    notice,
   }: {
-    howTo?: (option: MovementOptionDTO) => Promise<CatalogHowTo | null>;
+    howTo?: Loader;
     multi?: boolean;
     options?: readonly MovementOptionDTO[];
+    recentIds?: readonly string[];
+    notice?: string;
   }) {
     const [isOpen, setOpen] = useState(false);
     const [selected, setSelected] = useState<string[]>([]);
@@ -1068,7 +1079,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
       open: isOpen,
       onOpenChange: setOpen,
       title: COPY.title,
-      data: { options },
+      data: { options, recentIds },
       returnFocusTo: ref,
       howTo,
     };
@@ -1089,6 +1100,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
               searchLabel: 'Search items',
               searchPlaceholder: 'Search items',
               footerAction: <button type="button">Add</button>,
+              notice,
             }}
           />
         ) : (
@@ -1176,10 +1188,12 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
       expect(el.querySelectorAll('ol > li')).toHaveLength(2);
       return el;
     });
-    expect(howTo).toHaveBeenCalledWith(ROPE);
+    expect(howTo).toHaveBeenCalledWith(ROPE.publicId);
     expect(button.getAttribute('aria-expanded')).toBe('true');
+    // The heading, then the supervision label as the first line of the box (K17), then the steps.
+    expect(box.querySelector('h4')?.textContent).toBe(COPY.howToFor('Pull-Up'));
     const paragraphs = [...box.querySelectorAll('p')].map((p) => p.textContent);
-    expect(paragraphs).toEqual([COPY.howToFor('Pull-Up'), SUPERVISION_LABELS.coach]);
+    expect(paragraphs).toEqual([SUPERVISION_LABELS.coach]);
     // "Hide" puts focus back on "How to" before its own box goes.
     fireEvent.click(within(box).getByRole('button', { name: COPY.howToHide }));
     expect(document.activeElement).toBe(button);
@@ -1197,7 +1211,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
 
   it('no steps yet, and a failed load with a retry that works, said once in the status', async () => {
     const howTo = vi
-      .fn<(option: MovementOptionDTO) => Promise<CatalogHowTo | null>>()
+      .fn<Loader>()
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(STEPS);
     render(<RowHarness howTo={howTo} />);
@@ -1219,7 +1233,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     let resolveFirst: (steps: CatalogHowTo) => void = () => {};
     const other = catalogOption('Front Squat', { hasInstructions: true });
     const howTo = vi
-      .fn<(option: MovementOptionDTO) => Promise<CatalogHowTo | null>>()
+      .fn<Loader>()
       .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
       .mockResolvedValueOnce({
         name: 'Front Squat',
@@ -1236,5 +1250,124 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     expect(screen.queryByText('Hang from the bar.')).toBeNull();
     type('front');
     expect(howToButton('Front Squat')!.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('🔴 a reopen drops an answer still in flight', async () => {
+    let resolve: (steps: CatalogHowTo) => void = () => {};
+    render(<RowHarness howTo={vi.fn<Loader>(() => new Promise((r) => (resolve = r)))} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    fireEvent.click(screen.getAllByRole('button', { name: SHEET_COPY.close }).at(-1)!);
+    open();
+    await act(async () => resolve(STEPS));
+    expect(howToButton('Pull-Up')!.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('a second tap on "How to" closes it, and Enter clearing the search closes it too', async () => {
+    render(<RowHarness multi howTo={vi.fn<Loader>(async () => STEPS)} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(document.querySelectorAll('ol > li').length).toBe(2));
+    fireEvent.click(howToButton('Pull-Up')!);
+    expect(howToButton('Pull-Up')!.getAttribute('aria-expanded')).toBe('false');
+    type('pull', 'Search items');
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(document.querySelectorAll('ol > li').length).toBe(2));
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect(document.querySelector('ol')).toBeNull();
+  });
+
+  it('🔴 a movement listed twice (Recent and its group) opens ONE box, under the row tapped', async () => {
+    render(<RowHarness howTo={vi.fn<Loader>(async () => STEPS)} recentIds={[ROPE.publicId]} />);
+    open();
+    const copies = screen.getAllByRole('button', { name: COPY.howToFor('Pull-Up') });
+    expect(copies).toHaveLength(2);
+    fireEvent.click(copies[1]!);
+    await waitFor(() => expect(document.querySelectorAll('ol > li').length).toBe(2));
+    expect(document.querySelectorAll('[role="region"][aria-labelledby]')).toHaveLength(1);
+    expect(copies[0]!.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: COPY.howToHide }));
+    expect(document.activeElement).toBe(copies[1]);
+  });
+
+  it('🔴 "Try again" keeps focus on "How to", and the failure stays said through the retry', async () => {
+    const howTo = vi
+      .fn<Loader>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(() => new Promise(() => {}));
+    render(<RowHarness howTo={howTo} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    const retry = await screen.findByRole('button', { name: COPY.howToRetry });
+    fireEvent.click(retry);
+    expect(document.activeElement).toBe(howToButton('Pull-Up'));
+    // Not back to the search count while the retry loads (criterion 46: read once).
+    expect(status()).toBe(COPY.statusHowToFailed('Pull-Up'));
+  });
+
+  it('the failure is said over a standing notice, goes with Hide, and a tick silences it', async () => {
+    render(
+      <RowHarness
+        multi
+        notice="Bear crawl made and ticked."
+        howTo={vi.fn<Loader>().mockRejectedValue(new Error('offline'))}
+      />,
+    );
+    open();
+    expect(status()).toBe('Bear crawl made and ticked.');
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(status()).toBe(COPY.statusHowToFailed('Pull-Up')));
+    fireEvent.click(row('Back Squat'));
+    expect(status()).toBe('Bear crawl made and ticked.');
+    fireEvent.click(howToButton('Pull-Up')!);
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(status()).toBe(COPY.statusHowToFailed('Pull-Up')));
+    fireEvent.click(screen.getByRole('button', { name: COPY.howToHide }));
+    expect(status()).toBe('Bear crawl made and ticked.');
+  });
+
+  it('steps that are all blank read "No steps for this movement yet.", never an empty list', async () => {
+    render(
+      <RowHarness howTo={vi.fn<Loader>(async () => ({ ...STEPS, instructions: '\n  \n' }))} />,
+    );
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(screen.getByText(COPY.howToNone)).toBeTruthy());
+    expect(document.querySelector('ol')).toBeNull();
+  });
+
+  it('the open box is a region named by its heading, busy while it loads', () => {
+    render(<RowHarness howTo={vi.fn<Loader>(() => new Promise(() => {}))} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    const region = screen.getByRole('region', { name: COPY.howToFor('Pull-Up') });
+    expect(region.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('with a loader, a row without steps keeps the "How to" column, so rows end at one edge', () => {
+    render(<RowHarness howTo={vi.fn<Loader>(async () => STEPS)} />);
+    open();
+    const spacer = row('Back Squat').parentElement!.lastElementChild!;
+    expect(spacer.tagName).toBe('SPAN');
+    expect(spacer.getAttribute('aria-hidden')).toBe('true');
+    cleanup();
+    render(<RowHarness />);
+    open();
+    expect(row('Back Squat').parentElement!.children).toHaveLength(1);
+  });
+
+  it('a library option with no legacy group is found by search and left out of browse (C0b-2)', () => {
+    const { group: _dropped, ...rest } = catalogOption('Pallof Press') as Extract<
+      MovementOptionDTO,
+      { owner: 'catalog' }
+    >;
+    void _dropped;
+    const ungrouped: MovementOptionDTO = { ...rest, publicId: 'lib-1', name: 'Leg Swing' };
+    render(<Harness data={{ options: [...ALL_CATALOG, ungrouped] }} />);
+    open();
+    expect(screen.queryByRole('button', { name: /^Leg Swing/ })).toBeNull();
+    type('leg swing');
+    const found = screen.getByRole('button', { name: /^Leg Swing/ });
+    expect(found.querySelector('[data-row-tag]')).toBeNull();
   });
 });
