@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..700d7a28 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -560,7 +560,7 @@ export async function clearDay(
+       .select({ publicId: schema.entries.publicId })
+       .from(schema.entries)
+       .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+-      .where(and(ownedOnDay(args), isNull(schema.entries.deletedAt)))
++      .where(ownedOnDay(args))
+       .orderBy(schema.entries.id)
+       .for('update', { of: schema.entries });
+ 

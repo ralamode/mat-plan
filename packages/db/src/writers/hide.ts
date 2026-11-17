@@ -1,5 +1,11 @@
-import { RESTORE_REASON, SEED_METRIC_KEYS, type RestoreReason } from '@mat-plan/shared';
-import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import {
+  HIDE_REASON,
+  RESTORE_REASON,
+  SEED_METRIC_KEYS,
+  type HideReason,
+  type RestoreReason,
+} from '@mat-plan/shared';
+import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
@@ -53,9 +59,68 @@ const uuidArray = (ids: readonly string[]) => sql`${sql.param(ids)}::uuid[]`;
  * `deleted_at`, rendered as the fixed-format UTC text a token is.
  *
  * ⚠️ Used for both the SELECT that produces a token and the UPDATE that returns one, so the two can
- * never disagree about the format.
+ * never disagree about the format; `queries/hidden-entries.ts` imports it for the same reason.
  */
-const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+export const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
+/**
+ * 🔴 **The one un-hide (V1-9b B2-0).** Every writer that makes a hidden entry live sets this, so the
+ * hide reason goes in the same statement as `deleted_at`: a live row with a reason is refused by
+ * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`). `no-bare-unhide.test.ts` fails on any other
+ * un-hide in this package or the app's DAL. FAM-1 11c's D35 revive (`day/log-row.ts`, not built yet)
+ * must spread it: whichever of 11c and B2-0 lands second makes that edit.
+ */
+export const UNHIDE = { deletedAt: null, hideReason: null } as const;
+
+/** The owned athlete's entries on one day: the join to `profiles` is the caller's. */
+function ownedOnDay(args: { profilePublicId: string; scope: HouseholdScope; day: string }): SQL {
+  return and(
+    isLiveProfile(args.profilePublicId, args.scope),
+    eq(schema.entries.activityDate, args.day),
+  )!;
+}
+
+/**
+ * The entries hidden under one event. ⚠️ A **bound** text parameter cast in SQL, never a `Date`: a JS
+ * date holds milliseconds and a token microseconds (the module docblock). The one token comparison;
+ * mutation `41-token-through-date.patch` mutates it.
+ */
+function hiddenUnder(token: string): SQL {
+  return and(
+    isNotNull(schema.entries.deletedAt),
+    sql`${schema.entries.deletedAt} = ${token}::timestamptz`,
+  )!;
+}
+
+/**
+ * The NEWEST token among the hidden entries matching `where`, or `null`. It joins `profiles` itself,
+ * so `where` may use `ownedOnDay`, and it adds the hidden filter.
+ *
+ * 🔴 **The NEWEST, not "exactly one".** An earlier version demanded a single shared token and returned
+ * `notFound` otherwise — which made a retry of a MIXED call fail after it had already succeeded: hide
+ * [X, Y] where X was already hidden under T0 mints T1 for Y, and the retry then sees {T0, T1} and
+ * refuses rows that exist, are owned, and are hidden. A correctness lens traced it.
+ *
+ * ⚠️ **"Newest" is the latest transaction START, not provably "the event this call created."**
+ * `now()` is the transaction clock, so a caller whose transaction began earlier but committed later
+ * mints the OLDER token, and its retry then answers with the other caller's newer one. That is still
+ * a success carrying a valid token, and the ids under the older event answer `changed` on a restore —
+ * Decision 3's table — so the behaviour is right either way. The precise claim is: a retry never
+ * refuses rows that exist, are owned and are hidden.
+ *
+ * Lexicographic order is chronological here because the format is fixed-width in every field
+ * (`YYYY-MM-DD"T"HH24:MI:SS.US"Z"`, no `FM`), which the six-digit assertion in `db:verify` pins.
+ */
+async function newestToken(exec: Executor, where: SQL): Promise<string | null> {
+  const tokens = (
+    await exec
+      .select({ hiddenAt: hiddenAtText })
+      .from(schema.entries)
+      .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+      .where(and(where, isNotNull(schema.entries.deletedAt)))
+  ).map((r) => r.hiddenAt);
+  return tokens.length === 0 ? null : tokens.sort()[tokens.length - 1];
+}
 
 export type HideEntriesResult = { hiddenAt: string } | { notFound: true };
 
@@ -73,14 +138,24 @@ export type HideEntriesResult = { hiddenAt: string } | { notFound: true };
  * the update's row count as the answer is the obvious mistake here and would turn every replay into
  * `notFound`.
  */
-export async function hideEntries(
+export async function hideEntries(exec: Executor, args: HideArgs): Promise<HideEntriesResult> {
+  // 🔴 No reason, and no way to pass one: only `clearDay` writes `'clear_day'` (B2-0), which is what
+  // this module exports rather than a convention callers must keep.
+  return hideRows(exec, args, null);
+}
+
+type HideArgs = {
+  profilePublicId: string;
+  scope: HouseholdScope;
+  day: string;
+  entryPublicIds: readonly string[];
+};
+
+/** `hideEntries`' body, with the reason the clear writes (and nothing else may). */
+async function hideRows(
   exec: Executor,
-  args: {
-    profilePublicId: string;
-    scope: HouseholdScope;
-    day: string;
-    entryPublicIds: readonly string[];
-  },
+  args: HideArgs,
+  reason: HideReason | null,
 ): Promise<HideEntriesResult> {
   // Ownership is `isLiveProfile` itself — an inner join to `profiles` plus its conjunct — never a
   // copy of them (the seam: a PUBLIC id from the request, resolved inside the scope). Matching on the day too is what makes a
@@ -95,11 +170,15 @@ export async function hideEntries(
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
     .where(
       and(
-        isLiveProfile(args.profilePublicId, args.scope),
-        eq(schema.entries.activityDate, args.day),
+        ownedOnDay(args),
         sql`${schema.entries.publicId} = any(${uuidArray(args.entryPublicIds)})`,
       ),
     )
+    // One lock order for every HIDE path (B2-0): a multi-id hide racing `clearDay` on overlapping rows
+    // would otherwise be a lock cycle and a `40P01`. ⚠️ Restore sorts by PUBLIC id instead (a v7's
+    // random tail does not follow `id` within a millisecond); a cycle across the two needs one restore
+    // to lock two rows a clear holds, which no path does today.
+    .orderBy(schema.entries.id)
     // 🔴 **`FOR UPDATE`, and it is not defensive — without it a double tap THROWS.** Two concurrent
     // hides of the same ids both see them live, so neither takes the replay branch; the first
     // commits, and the second's `UPDATE … AND deleted_at IS NULL` matches **zero** rows under READ
@@ -115,33 +194,10 @@ export async function hideEntries(
   // on the request's public ids — see the UPDATE for why that matters.
   const ownedIds = owned.map((r) => r.id);
 
-  // The token the owned rows already share, or `null` if they do not share one. Used by the
-  // all-hidden branch and by the zero-row UPDATE below, which are the same situation reached two
-  // ways: everything was already hidden when we looked, or it became so while we waited for the lock.
-  const newestExistingToken = async (): Promise<string | null> => {
-    const tokens = (
-      await exec
-        .select({ hiddenAt: hiddenAtText })
-        .from(schema.entries)
-        .where(and(inArray(schema.entries.id, ownedIds), isNotNull(schema.entries.deletedAt)))
-    ).map((r) => r.hiddenAt);
-    // 🔴 **The NEWEST, not "exactly one".** An earlier version demanded a single shared token and
-    // returned `notFound` otherwise — which made a retry of a MIXED call fail after it had already
-    // succeeded: hide [X, Y] where X was already hidden under T0 mints T1 for Y, and the retry then
-    // sees {T0, T1} and refuses rows that exist, are owned, and are hidden. A correctness lens
-    // traced it.
-    //
-    // ⚠️ **"Newest" is the latest transaction START, not provably "the event this call created."**
-    // `now()` is the transaction clock, so a caller whose transaction began earlier but committed
-    // later mints the OLDER token, and its retry then answers with the other caller's newer one.
-    // That is still a success carrying a valid token, and the ids under the older event answer
-    // `changed` on a restore — Decision 3's table — so the behaviour is right either way. The
-    // precise claim is: a retry never refuses rows that exist, are owned and are hidden.
-    //
-    // Lexicographic order is chronological here because the format is fixed-width in every field
-    // (`YYYY-MM-DD"T"HH24:MI:SS.US"Z"`, no `FM`), which the six-digit assertion in `db:verify` pins.
-    return tokens.length === 0 ? null : tokens.sort()[tokens.length - 1];
-  };
+  // The newest token the owned rows hold, or `null`. Used by the all-hidden branch and by the
+  // zero-row UPDATE below, which are the same situation reached two ways: everything was already
+  // hidden when we looked, or it became so while we waited for the lock.
+  const newestExistingToken = () => newestToken(exec, inArray(schema.entries.id, ownedIds));
 
   const alreadyHidden = owned.filter((r) => r.deletedAt !== null);
   if (alreadyHidden.length === owned.length) {
@@ -164,7 +220,7 @@ export async function hideEntries(
   // in-statement check left.
   const updated = await exec
     .update(schema.entries)
-    .set({ deletedAt: sql`now()` })
+    .set({ deletedAt: sql`now()`, hideReason: reason })
     .where(and(inArray(schema.entries.id, ownedIds), isNull(schema.entries.deletedAt)))
     .returning({ hiddenAt: hiddenAtText });
 
@@ -227,6 +283,19 @@ export async function restoreHidden(
     keepInsteadOf?: string;
   },
 ): Promise<RestoreItemResult[]> {
+  // One unit: the items' savepoints and the reason cleanup below commit together, even when the
+  // caller passes a bare handle (a nested call makes this a savepoint).
+  return exec.transaction(async (tx) => {
+    const results = await restoreItems(tx, args);
+    await dropReasonOfItemsLeftHidden(tx, args, results);
+    return results;
+  });
+}
+
+async function restoreItems(
+  exec: Executor,
+  args: Parameters<typeof restoreHidden>[1],
+): Promise<RestoreItemResult[]> {
   const results: RestoreItemResult[] = [];
 
   // ⚠️ **Sorted, so two concurrent restores of the same items cannot deadlock.** Items are locked one
@@ -277,6 +346,53 @@ export async function restoreHidden(
   }
 
   return results;
+}
+
+/**
+ * 🔴 **A partial Restore all must not leave the banner behind (V1-9b B2-0).** An item answered
+ * `slot_taken` stays hidden (its place was retaken), so if it kept `'clear_day'` the "Day cleared ·
+ * Restore all" banner would come back on every reload offering a restore that can only refuse. So its
+ * reason is dropped; it stays hidden, as any cleared single value does.
+ *
+ * Runs AFTER the item loop, outside the items' savepoints: inside one, `ItemRefused`'s rollback would
+ * undo it. Keyed through an owned subselect (the module's internal-id rule: no UPDATE here keys on
+ * the request's public ids), and only on rows still hidden under THIS token, so a row another
+ * connection re-hid in between keeps its own reason.
+ */
+async function dropReasonOfItemsLeftHidden(
+  exec: Executor,
+  args: Parameters<typeof restoreHidden>[1],
+  results: readonly RestoreItemResult[],
+): Promise<void> {
+  const leftHidden = results
+    .filter((r) => r.reason === RESTORE_REASON.slot_taken)
+    .map((r) => r.entryPublicId);
+  if (leftHidden.length === 0) return;
+  // Ownership in the subselect (the internal-id rule); the token and the reason on the OUTER row, so
+  // an UPDATE that waited on a row lock re-checks them against the row's newest version (READ
+  // COMMITTED re-evaluates the target's own WHERE, not a subselect's snapshot).
+  await exec
+    .update(schema.entries)
+    .set({ hideReason: null })
+    .where(
+      and(
+        inArray(
+          schema.entries.id,
+          exec
+            .select({ id: schema.entries.id })
+            .from(schema.entries)
+            .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+            .where(
+              and(
+                ownedOnDay(args),
+                sql`${schema.entries.publicId} = any(${uuidArray(leftHidden)})`,
+              ),
+            ),
+        ),
+        hiddenUnder(args.hiddenAt),
+        eq(schema.entries.hideReason, HIDE_REASON.clear_day),
+      ),
+    );
 }
 
 /**
@@ -352,13 +468,7 @@ async function restoreOne(
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-    .where(
-      and(
-        isLiveProfile(args.profilePublicId, args.scope),
-        eq(schema.entries.activityDate, args.day),
-        eq(schema.entries.publicId, entryPublicId),
-      ),
-    )
+    .where(and(ownedOnDay(args), eq(schema.entries.publicId, entryPublicId)))
     .for('update', { of: schema.entries })
     .limit(1);
 
@@ -418,18 +528,111 @@ async function restoreOne(
   //     has been locked since step 1 and was read after the lock, so a concurrent re-hide between
   //     there and here is impossible. It is kept because it is cheap and because it is the line
   //     `41-token-through-date.patch` mutates — the proof that the comparison is TEXT lives on it.
+  //     `UNHIDE`: the reason goes with `deleted_at`, so a re-tick after a clear (11b's `retickRow`
+  //     restores through here) never trips the live-row CHECK (B2-0).
   const restored = await exec
     .update(schema.entries)
-    .set({ deletedAt: null })
-    .where(
-      and(
-        eq(schema.entries.id, item.id),
-        isNotNull(schema.entries.deletedAt),
-        sql`${schema.entries.deletedAt} = ${args.hiddenAt}::timestamptz`,
-      ),
-    )
+    .set(UNHIDE)
+    .where(and(eq(schema.entries.id, item.id), hiddenUnder(args.hiddenAt)))
     .returning({ id: schema.entries.id });
 
   if (restored.length !== 1) return answer(RESTORE_REASON.changed);
   return answer(RESTORE_REASON.ok);
+}
+
+// ── Clear this day (V1-9b B2-0) ─────────────────────────────────────────────────────────────────
+
+/** `count` is the entries under the token carrying `'clear_day'`, the same on a first call and a replay. */
+export type ClearDayResult = { hiddenAt: string; count: number } | { notFound: true };
+
+/**
+ * Hide every live entry of one athlete on one day as ONE event, with the reason `'clear_day'`
+ * (plan § B2-0, the Amendment of 2026-11-15). The id list is the SERVER's, read under the lock, so it
+ * has no cap (`HIDE_ROW_MAX` bounds a client-sent list, and there is none here).
+ *
+ * - **Live entries:** locked `ORDER BY id` (one order with `hideRows`), then hidden by the core.
+ * - **None live:** a replay after success answers the day's newest `'clear_day'` token; a day whose
+ *   entries were hidden by other means (a blank amend, an un-tick) or that holds nothing answers
+ *   `notFound`, never another kind of event's token.
+ *
+ * The writer opens its own transaction, as `clearSingleValue` does: the lock and the hide are one
+ * unit. ⚠️ Not here: the writable window and the archived athlete. B2's action refuses those, as the
+ * single-value amends do (plan § B2-0).
+ */
+export async function clearDay(
+  exec: Executor,
+  args: { profilePublicId: string; scope: HouseholdScope; day: string },
+): Promise<ClearDayResult> {
+  return exec.transaction(async (tx) => {
+    const live = await tx
+      .select({ publicId: schema.entries.publicId })
+      .from(schema.entries)
+      .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+      .where(and(ownedOnDay(args), isNull(schema.entries.deletedAt)))
+      .orderBy(schema.entries.id)
+      .for('update', { of: schema.entries });
+
+    const clearEvent = and(ownedOnDay(args), eq(schema.entries.hideReason, HIDE_REASON.clear_day))!;
+    let hiddenAt: string;
+    if (live.length > 0) {
+      const hidden = await hideRows(
+        tx,
+        { ...args, entryPublicIds: live.map((r) => r.publicId) },
+        HIDE_REASON.clear_day,
+      );
+      // Locked and proven owned above, so a refusal is a contract break, not an outcome.
+      if ('notFound' in hidden) {
+        throw new Error('clearDay: hideRows refused rows this transaction had locked');
+      }
+      hiddenAt = hidden.hiddenAt;
+    } else {
+      const replayed = await newestToken(tx, clearEvent);
+      if (replayed === null) return { notFound: true };
+      hiddenAt = replayed;
+    }
+
+    const [{ count }] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.entries)
+      .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+      .where(and(clearEvent, hiddenUnder(hiddenAt)));
+    return { hiddenAt, count };
+  });
+}
+
+export type RestoreClearResult = { items: RestoreItemResult[] } | { notFound: true };
+
+/**
+ * Restore ALL of one clear: the entries hidden under `hiddenAt` that still carry `'clear_day'`, found
+ * by the SERVER (maintainer, 2026-11-17), so a cleared day of any size can be restored and nothing
+ * the page sends can be stale. Each item goes through `restoreHidden`, so its answers, `slot_taken`
+ * and the reason cleanup are that code's.
+ *
+ * ⚠️ **Its replay differs from `restoreHidden`'s, by construction:** the ids come from state a
+ * successful restore erases (the token and the reason), so a Restore all retried after a lost
+ * response answers `notFound`. B1-2's action reads that as "already restored", never as a refusal. A
+ * concurrent double tap is unaffected: both read the ids before either commits, and the item locks
+ * settle the rest.
+ */
+export async function restoreClear(
+  exec: Executor,
+  args: { profilePublicId: string; scope: HouseholdScope; day: string; hiddenAt: string },
+): Promise<RestoreClearResult> {
+  return exec.transaction(async (tx) => {
+    const ids = (
+      await tx
+        .select({ publicId: schema.entries.publicId })
+        .from(schema.entries)
+        .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+        .where(
+          and(
+            ownedOnDay(args),
+            hiddenUnder(args.hiddenAt),
+            eq(schema.entries.hideReason, HIDE_REASON.clear_day),
+          ),
+        )
+    ).map((r) => r.publicId);
+    if (ids.length === 0) return { notFound: true };
+    return { items: await restoreHidden(tx, { ...args, entryPublicIds: ids }) };
+  });
 }
