@@ -3,8 +3,9 @@ import { describe, it } from 'vitest';
 /**
  * CAT-3: the tests the contract's consumers still owe
  * ([spec](../../../../docs/specs/cat-3-movement-library.md) → Acceptance). Each line is a
- * criterion no test holds yet. The chunk that writes the proof deletes its line; a lane's own
- * proofs live in the lane's directory, and this list only says they are owed
+ * criterion no test holds yet. The chunk that writes the proof tells the contract owner, who
+ * deletes its line: this file is the contract's, and a lane never edits a contract file. A lane's
+ * own proofs live in the lane's directory, and this list only says they are owed
  * ([program-contract](../../../../docs/features/program-contract.md) invariant 9's pattern).
  *
  * Not listed, because no test can hold them: D1 beyond the schema's strictness (nothing names a
