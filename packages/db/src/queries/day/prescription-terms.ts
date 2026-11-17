@@ -22,10 +22,13 @@ import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
  * (`liveQuantities`). No I/O; the caller reads the rows.
  */
 
-/** A prescription's live quantity, as `prescription_quantities` stores it (`numeric` as a string). */
+/**
+ * A prescription's live quantity as a LEFT JOIN onto `prescription_quantities` returns it (`numeric`
+ * as a string): all NULL where the prescription has none.
+ */
 export type PrescriptionQuantityRow = {
-  slot: string;
-  unit: string;
+  slot: string | null;
+  unit: string | null;
   valueMin: string | null;
   valueMax: string | null;
 };
@@ -49,7 +52,8 @@ export type PrescriptionTerms = {
 const toNumber = (v: string | null) => (v === null ? null : Number(v));
 
 /**
- * A prescription's LIVE quantity rows with their numbers converted.
+ * A prescription's LIVE quantity rows with their numbers converted. A row with no slot or unit (the
+ * LEFT JOIN's empty side) is skipped.
  *
  * 🔴 Two live quantities in one slot throw: `PRESCRIPTION_QUANTITY_SLOT_UNIQUE_INDEX` makes that
  * impossible, so seeing one means a read stopped filtering hidden rows. Failing beats copying
@@ -59,12 +63,18 @@ export function liveQuantities(
   prescriptionId: number,
   rows: readonly PrescriptionQuantityRow[],
 ): PrescribedQuantity[] {
-  const quantities: PrescribedQuantity[] = rows.map((q) => ({
-    slot: quantitySlotSchema.parse(q.slot),
-    unit: unitSchema.parse(q.unit),
-    value: toNumber(q.valueMin),
-    valueMax: toNumber(q.valueMax),
-  }));
+  const quantities: PrescribedQuantity[] = rows.flatMap((q) =>
+    q.slot === null || q.unit === null
+      ? []
+      : [
+          {
+            slot: quantitySlotSchema.parse(q.slot),
+            unit: unitSchema.parse(q.unit),
+            value: toNumber(q.valueMin),
+            valueMax: toNumber(q.valueMax),
+          },
+        ],
+  );
   if (new Set(quantities.map((q) => q.slot)).size !== quantities.length) {
     throw new Error(`prescription ${prescriptionId} has two live quantities in one slot`);
   }

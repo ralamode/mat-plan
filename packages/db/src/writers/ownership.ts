@@ -586,11 +586,40 @@ export function liveTemplateBlockIn(scope: HouseholdScope) {
  * block to the profile directly, so a session can never name another family's workout whatever a
  * scope later widens to. It reads no scope, so it adds nothing to `scope.test.ts`'s one-module rule.
  *
- * Consumers: the row writer's workout lookup (`writers/day/log-row.ts` → `rowWorkout`) and, at 11c,
- * the amend. `verify/day.ts` 4d proves it apart from the scope conjunct; mutation 111 drops it.
+ * Consumers: through {@link athleteTemplateBlockIn} and {@link liveAthleteTemplateBlockIn} only —
+ * the row writer's workout lookup (`rowWorkout`), the day resolver's scoped workout and prescription
+ * and its assignment read (`queries/day/`), and, at 11c, the amend. `verify/day.ts` 4d proves it apart
+ * from the scope conjunct; mutation 111 drops it.
  */
 export function programBlockOfProfile(profileId: number) {
   return sql`${schema.programBlocks.householdId} = (select ${schema.profiles.householdId} from ${schema.profiles} where ${schema.profiles.id} = ${profileId})`;
+}
+
+/**
+ * 🔴 **A template block this athlete may reach**: {@link templateBlockIn} (the scope's, `kind =
+ * template`) ∧ {@link programBlockOfProfile} (the athlete's own household). Live or hidden: for a
+ * reader that must tell a hidden block from a foreign one (`rowWorkout`; the day resolver's logged
+ * branch, FAM-1 12a E1). One spelling, so no reader gates by one conjunct and forgets the other.
+ */
+export function athleteTemplateBlockIn(scope: HouseholdScope, profileId: number) {
+  return and(templateBlockIn(scope), programBlockOfProfile(profileId));
+}
+
+/**
+ * {@link athleteTemplateBlockIn} ∧ live: what an athlete can be ON (the day resolver's assignment
+ * read, FAM-1 12a E1's live anchor).
+ */
+export function liveAthleteTemplateBlockIn(scope: HouseholdScope, profileId: number) {
+  return and(athleteTemplateBlockIn(scope, profileId), isNull(schema.programBlocks.deletedAt));
+}
+
+/**
+ * **A workout is live**: it and its block are not hidden. For a read joining `workouts` to its
+ * `program_blocks` unaliased; one expression for the row writer (`rowWorkout`, `program_changed`)
+ * and the day resolver's scoped workout.
+ */
+export function workoutIsLive() {
+  return sql<boolean>`(${schema.workouts.deletedAt} is null and ${schema.programBlocks.deletedAt} is null)`;
 }
 
 /**

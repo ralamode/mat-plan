@@ -17,10 +17,11 @@ import { describe, it } from 'vitest';
  */
 
 describe('DayPlan: owed by its consumers', () => {
-  // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`); the ones with a
-  // `before` need the program edits replayed after logging, which is 12a-ii.
+  // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`), and
+  // `archived-athlete-today`, whose only change is the archive. The other `before` fixtures need the
+  // program edits replayed after logging, which is 12a-ii.
   for (const [name, source] of Object.entries(DAY_PLAN_FIXTURE_SOURCES)) {
-    if (source.before === null) continue;
+    if (source.before === null || name === 'archived-athlete-today') continue;
     it.todo(`12a-ii: the resolver, on the seeded state, deep-equals ${name}`);
   }
   it.todo('12a-ii: progress does not count removed items’ rows');

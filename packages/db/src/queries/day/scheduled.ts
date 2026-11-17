@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
-import { liveTemplateBlockIn, programBlockOfProfile } from '../../writers/ownership';
+import { liveAthleteTemplateBlockIn } from '../../writers/ownership';
 import { assignmentCurrentAsOf, assignmentOnDay } from '../program-assignments';
 
 /**
@@ -121,9 +121,8 @@ export type DayAssignment = {
 
 /**
  * **The day resolver's assignment read** (FAM-1 12a, decision E1's live anchor): every live
- * assignment row of the athlete whose block is a live template block of the scope
- * (`liveTemplateBlockIn`) AND of the athlete's own household (`programBlockOfProfile`), with three
- * flags. One query, in `(idx, id)` order.
+ * assignment row of the athlete whose block is a live template block of the scope AND of the
+ * athlete's own household (`liveAthleteTemplateBlockIn`), with three flags. One query, in `(idx, id)` order.
  *
  * So a hidden program, a program of another household (runbook pre-flight (h)) and a hidden
  * assignment are on nothing: not on the day, not current, not ahead. Kept in this file, beside
@@ -160,8 +159,7 @@ export async function dayAssignments(
       and(
         eq(a.profileId, profileId),
         isNull(a.deletedAt),
-        liveTemplateBlockIn(scope),
-        programBlockOfProfile(profileId),
+        liveAthleteTemplateBlockIn(scope, profileId),
       ),
     )
     .orderBy(asc(a.idx), asc(a.id));

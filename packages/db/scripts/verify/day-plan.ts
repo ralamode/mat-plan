@@ -4,14 +4,18 @@ import {
   ACTIVITY_TYPE_KEYS,
   addDays,
   type DayPlan,
+  dayPlanSchema,
   type DayWorkout,
   ENTRY_KIND,
   ENTRY_STATUS,
+  ENTRY_UNIT_WITHOUT_QUANTITY,
+  localWeekday,
   newId,
+  ON_PROGRAM,
   PROFILE_KIND,
   PROGRAM_BLOCK_KIND,
+  QUANTITY_SLOT,
   ROW_REFUSAL,
-  type RowResult,
   type RowValues,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
@@ -25,8 +29,10 @@ import {
   FIXTURE_TODAY,
   fixtureIds,
   type FixtureItemKey,
+  programOf,
   type World,
   workoutDraft,
+  workoutOf as protoWorkoutOf,
 } from '@mat-plan/shared/program/fixtures';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
@@ -36,8 +42,15 @@ import type { HouseholdScope } from '../../src/scope';
 import { logRow, untickRow } from '../../src/writers/day/log-row';
 import { hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import {
+  insertProgramBlockOwnedBy,
+  insertWorkoutOwnedBy,
+  programBlockByClientId,
+} from '../../src/writers/ownership';
 import { insertEntrySetRows } from '../../src/writers/session-rows';
+import { activityTypeIdOf, expectOk, inSavepoint } from './day';
 import { asDb, asTx, rolledBack, type VerifyTx } from './harness';
+import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './schema';
 
 /**
  * `db:verify` proofs for **the day resolver** (FAM-1 step 12a-i; plan
@@ -77,21 +90,6 @@ export async function verifyDayPlan(): Promise<void> {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────────────────────────
 
-/** Thrown by {@link inSavepoint} to undo its body. Private. */
-class Undo extends Error {}
-
-/** Run `fn` in a savepoint that is always rolled back, so proofs on one seeded state stay apart. */
-async function inSavepoint(tx: VerifyTx, fn: (sp: VerifyTx) => Promise<void>): Promise<void> {
-  try {
-    await tx.transaction(async (sp) => {
-      await fn(sp);
-      throw new Undo();
-    });
-  } catch (e) {
-    if (!(e instanceof Undo)) throw e;
-  }
-}
-
 /** A hand-written `created_at` for entry `n`: one second apart, rising with `n`. */
 const loggedAt = (n: number) => new Date(Date.UTC(2026, 10, 1, 12) + n * 1000);
 
@@ -111,19 +109,7 @@ function translate<T>(value: T, ids: ReadonlyMap<string, string>, name: string):
 /** A JSON round trip: what a page would receive. */
 const asJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-async function workoutItemTypeId(tx: VerifyTx): Promise<number> {
-  const [row] = await tx
-    .select({ id: schema.activityTypes.id })
-    .from(schema.activityTypes)
-    .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.workout_item));
-  assert.ok(row, 'FAM-1 12a: the workout_item activity type is seeded');
-  return row.id;
-}
-
-function expectOk(r: RowResult, title: string): Extract<RowResult, { ok: true }> {
-  assert.ok(r.ok, `${title} — got ${JSON.stringify(r)}`);
-  return r as Extract<RowResult, { ok: true }>;
-}
+const workoutItemTypeId = (tx: VerifyTx) => activityTypeIdOf(tx, ACTIVITY_TYPE_KEYS.workout_item);
 
 // ── The seeder ────────────────────────────────────────────────────────────────────────────────────
 
@@ -173,32 +159,25 @@ async function seedWorld(tx: VerifyTx, world: World, label: string, activityType
   const workouts = new Map<string, number>();
   const prescriptions = new Map<string, number>();
   for (const program of [...world.programs].reverse()) {
-    const [block] = await tx
-      .insert(schema.programBlocks)
-      .values({
-        publicId: newId(),
-        householdId: household.id,
-        slug: `verify-12a-${label}-${program.id}`,
-        name: program.name,
-        kind: PROGRAM_BLOCK_KIND.template,
-        clientId: newId(),
-      })
-      .returning({ id: schema.programBlocks.id, publicId: schema.programBlocks.publicId });
+    const blockClientId = newId();
+    await insertProgramBlockOwnedBy(asTx(tx), SEEDED_SCOPE, {
+      clientId: blockClientId,
+      slug: `verify-12a-${label}-${program.id}`,
+      name: program.name,
+      notes: null,
+    });
+    const block = (await programBlockByClientId(asTx(tx), SEEDED_SCOPE, blockClientId))!;
     blocks.set(program.id, block.id);
     ids.set(fixtureIds.program(program.id), block.publicId);
 
     for (const workout of [...program.workouts].reverse()) {
       const draft = workoutDraft(world, program.id, workout.wid);
-      const [w] = await tx
-        .insert(schema.workouts)
-        .values({
-          publicId: newId(),
-          clientId: newId(),
-          blockId: block.id,
-          name: draft.name,
-          description: draft.description,
-        })
-        .returning({ id: schema.workouts.id, publicId: schema.workouts.publicId });
+      const w = (await insertWorkoutOwnedBy(asTx(tx), SEEDED_SCOPE, {
+        blockId: block.id,
+        clientId: newId(),
+        name: draft.name,
+        description: draft.description,
+      }))!;
       workouts.set(workout.wid, w.id);
       ids.set(fixtureIds.workout(workout.wid), w.publicId);
 
@@ -290,6 +269,13 @@ async function seedWorld(tx: VerifyTx, world: World, label: string, activityType
       .set({ createdAt: loggedAt(n) })
       .where(eq(schema.entries.publicId, publicId));
   }
+  // Lane A's pre-flight (f) and (g) detectors read nothing on a seeded world: the planted rows below
+  // are the only foreign pointers any proof sees.
+  assert.deepEqual(
+    { f: await sessionsOnForeignWorkouts(tx), g: await entriesOnForeignPrescriptions(tx) },
+    { f: [], g: [] },
+    `FAM-1 12a ${label}: the seeded world has no foreign session or entry`,
+  );
 
   return {
     scope: SEEDED_SCOPE,
@@ -340,7 +326,16 @@ async function resolve(
     today,
   });
   assert.ok(plan, `FAM-1 12a: ${athlete} resolves on ${day}`);
-  return asJson(plan);
+  // The contract's own schema, so a field the fixtures never reach is still the right shape.
+  const parsed = asJson(dayPlanSchema.omit({ athletes: true }).parse(plan));
+  // C21: a non-null `programPublicId` names one of the day's programs.
+  const programs = new Set(parsed.programs.map((p) => p.programPublicId));
+  assert.deepEqual(
+    parsed.workouts.filter((w) => w.programPublicId !== null && !programs.has(w.programPublicId)),
+    [],
+    'FAM-1 12a C21: every workout’s programPublicId names one of the day’s programs',
+  );
+  return parsed;
 }
 
 // ── The fixtures ──────────────────────────────────────────────────────────────────────────────────
@@ -524,7 +519,7 @@ async function plantRow(
 
 async function plantSession(
   tx: VerifyTx,
-  s: { profileId: number; day: string; workoutId: number; workoutName: string },
+  s: { profileId: number; day: string; workoutId: number | null; workoutName: string },
 ): Promise<number> {
   const [row] = await tx
     .insert(schema.sessions)
@@ -546,18 +541,15 @@ async function verifyRules(): Promise<void> {
     const activityTypeId = await workoutItemTypeId(tx);
     // H: the prototype's household (the seeded world). F: another household, on the every-type
     // program (its athlete `a1` is F's own, logged today in w900, nothing on any other day).
-    const H = await seedWorld(
-      tx,
-      DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world as World,
-      'h',
-      activityTypeId,
-    );
-    const F = await seedWorld(
-      tx,
-      DAY_PLAN_FIXTURE_SOURCES['every-type-once'].world as World,
-      'f',
-      activityTypeId,
-    );
+    const H_WORLD = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world as World;
+    const F_WORLD = DAY_PLAN_FIXTURE_SOURCES['every-type-once'].world as World;
+    const H = await seedWorld(tx, H_WORLD, 'h', activityTypeId);
+    const F = await seedWorld(tx, F_WORLD, 'f', activityTypeId);
+    // H's real names, as a planted row would carry them (the runbook's defect).
+    const FAMILY_PROGRAM = programOf(H_WORLD, 'p1').name;
+    const HEAVY_A = protoWorkoutOf(programOf(H_WORLD, 'p1'), 'w2').name;
+    const MORNING_HABITS = protoWorkoutOf(programOf(H_WORLD, 'p1'), 'w1').name;
+    const ONE_OF_EACH = protoWorkoutOf(programOf(F_WORLD, 'p900'), 'w900').name;
     const H_SCOPE = H.scope;
     const F_SCOPE = F.scope;
     const hStrings = [...H.ids.values()];
@@ -643,20 +635,21 @@ async function verifyRules(): Promise<void> {
         workoutId,
         workoutName,
       });
-      return plantRow(sp, {
+      const entry = await plantRow(sp, {
         profileId: fAthlete.id,
         day: YESTERDAY,
         sessionId,
         movementId: fMove,
-        movementName: 'Grip: rice bucket',
+        movementName: F_WORLD.catalog.grip.name,
         set: 1,
         snapshot: '',
-        unit: 'bool',
+        unit: ENTRY_UNIT_WITHOUT_QUANTITY.check,
         activityTypeId,
       });
+      return { ...entry, sessionId };
     };
     await inSavepoint(tx, async (sp) => {
-      const own = await plantF(sp, F.workouts.get('w900')!, 'One of each');
+      const own = await plantF(sp, F.workouts.get('w900')!, ONE_OF_EACH);
       const plan = await resolve(sp, F, 'a1', YESTERDAY);
       assert.ok(
         stringsOf(plan).includes(own.publicId),
@@ -664,15 +657,19 @@ async function verifyRules(): Promise<void> {
       );
     });
     await inSavepoint(tx, async (sp) => {
-      const planted = await plantF(sp, H.workouts.get('w2')!, 'Heavy A');
+      const planted = await plantF(sp, H.workouts.get('w2')!, HEAVY_A);
+      assert.ok(
+        (await sessionsOnForeignWorkouts(sp)).includes(planted.sessionId),
+        'FAM-1 12a (f): lane A’s pre-flight (f) detector sees the planted session',
+      );
       const plan = await resolve(sp, F, 'a1', YESTERDAY);
       const strings = stringsOf(plan);
       assert.ok(
-        !strings.includes(planted.publicId) && plan.workouts.every((w) => w.name !== 'Heavy A'),
+        !strings.includes(planted.publicId) && plan.workouts.every((w) => w.name !== HEAVY_A),
         'FAM-1 12a (f): a session naming another household’s workout is not shown',
       );
       assert.deepEqual(
-        strings.filter((s) => hStrings.includes(s) || s === 'Heavy A'),
+        strings.filter((s) => hStrings.includes(s) || s === HEAVY_A),
         [],
         'FAM-1 12a (f): no id or name of H reaches F’s day',
       );
@@ -685,7 +682,7 @@ async function verifyRules(): Promise<void> {
         profileId: fAthlete.id,
         day: YESTERDAY,
         workoutId: F.workouts.get('w900')!,
-        workoutName: 'One of each',
+        workoutName: ONE_OF_EACH,
       });
       const [superset] = await sp
         .insert(schema.supersets)
@@ -696,14 +693,14 @@ async function verifyRules(): Promise<void> {
         day: YESTERDAY,
         sessionId,
         movementId: F.movements.get('dbbench')!,
-        movementName: 'DB bench press',
+        movementName: F_WORLD.catalog.dbbench.name,
         prescriptionId,
         set: 1,
         snapshot,
         unit: 'lb',
         activityTypeId,
         supersetId: superset.id,
-        values: { reps: 6, quantities: [{ slot: 'primary', unit: 'lb', value: 20 }] },
+        values: { reps: 6, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 20 }] },
       });
     };
     const H_PUSH_PRESS_TEXT = '4 × 6 @ 20 lb';
@@ -717,6 +714,10 @@ async function verifyRules(): Promise<void> {
     });
     await inSavepoint(tx, async (sp) => {
       const planted = await plantG(sp, H.prescriptions.get('w3:pushpress')!, H_PUSH_PRESS_TEXT);
+      assert.ok(
+        (await entriesOnForeignPrescriptions(sp)).includes(planted.id),
+        'FAM-1 12a (g): lane A’s pre-flight (g) detector sees the planted entry',
+      );
       const plan = await resolve(sp, F, 'a1', YESTERDAY);
       const strings = stringsOf(plan);
       const w900 = workoutOf(plan, F, 'w900');
@@ -745,7 +746,7 @@ async function verifyRules(): Promise<void> {
       const plan = await resolve(sp, F, 'h-own', FIXTURE_TODAY);
       assert.equal(
         plan.onProgram,
-        'yes',
+        ON_PROGRAM.yes,
         'FAM-1 12a (h): the same assignment on F’s own program IS on it (non-vacuity)',
       );
     });
@@ -761,11 +762,11 @@ async function verifyRules(): Promise<void> {
       const plan = await resolve(sp, F, 'h-planted', FIXTURE_TODAY);
       assert.deepEqual(
         [plan.onProgram, plan.currentPrograms, plan.programs, plan.workouts, plan.canGoForward],
-        ['never', [], [], [], false],
+        [ON_PROGRAM.never, [], [], [], false],
         'FAM-1 12a (h): an assignment to another household’s program puts the athlete on nothing',
       );
       assert.deepEqual(
-        stringsOf(plan).filter((s) => hStrings.includes(s) || s === 'Family program'),
+        stringsOf(plan).filter((s) => hStrings.includes(s) || s === FAMILY_PROGRAM),
         [],
         'FAM-1 12a (h): no id or name of H reaches F’s day',
       );
@@ -823,10 +824,10 @@ async function verifyRules(): Promise<void> {
         day: YESTERDAY,
         sessionId: null,
         movementId: H.movements.get('pushups')!,
-        movementName: 'Push-ups',
+        movementName: H_WORLD.catalog.pushups.name,
         set: 1,
         snapshot: '3 × 15',
-        unit: 'count',
+        unit: ENTRY_UNIT_WITHOUT_QUANTITY.reps,
         activityTypeId,
         values: { reps: 98, quantities: [] },
       });
@@ -876,7 +877,7 @@ async function verifyRules(): Promise<void> {
       const plan = await resolve(sp, H, 'a1', FIXTURE_TODAY);
       assert.deepEqual(
         itemOf(workoutOf(plan, H, 'w1'), H, 'splits')?.rows[0]?.previous,
-        { quantities: [{ slot: 'primary', unit: 'min', value: 4 }] },
+        { quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'min', value: 4 }] },
         'FAM-1 12a PREVIOUS: two rows logged at the same instant are decided by the lower id',
       );
     });
@@ -899,14 +900,14 @@ async function verifyRules(): Promise<void> {
           activityDate: YESTERDAY,
           kind: ENTRY_KIND.strength,
           unit: 'lb',
-          movementName: 'Push press',
+          movementName: H_WORLD.catalog.pushpress.name,
           movementId: H.movements.get('pushpress')!,
           activityTypeId,
         })
         .returning({ id: schema.entries.id });
       await insertEntrySetRows(asTx(sp), {
         entryId: strength.id,
-        sets: [{ reps: 1, quantities: [{ slot: 'primary', unit: 'lb', value: 99 }] }],
+        sets: [{ reps: 1, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 99 }] }],
       });
       await sp.insert(schema.entries).values({
         publicId: newId(),
@@ -925,7 +926,7 @@ async function verifyRules(): Promise<void> {
           ?.rows[0]?.previous;
       assert.deepEqual(
         await pushPress(),
-        { reps: 6, quantities: [{ slot: 'primary', unit: 'lb', value: 20 }] },
+        { reps: 6, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 20 }] },
         'FAM-1 12a PREVIOUS: a strength entry and a weigh-in are not program rows',
       );
       // Hide Nov 11's set 1: nothing else answers for set 1.
@@ -1010,7 +1011,7 @@ async function verifyRules(): Promise<void> {
           and(
             eq(schema.blockDayWorkouts.blockId, H.blocks.get('p1')!),
             eq(schema.blockDayWorkouts.workoutId, H.workouts.get('w2')!),
-            eq(schema.blockDayWorkouts.weekday, 5),
+            eq(schema.blockDayWorkouts.weekday, localWeekday(YESTERDAY)),
           ),
         );
       const heavyA = async () => workoutOf(await resolve(sp, H, 'a1', YESTERDAY), H, 'w2');
@@ -1135,7 +1136,7 @@ async function verifyRules(): Promise<void> {
       const live = await resolve(sp, H, 'hidden-block', FIXTURE_TODAY);
       assert.deepEqual(
         [live.onProgram, live.currentPrograms.length, live.canGoForward],
-        ['yes', 1, true],
+        [ON_PROGRAM.yes, 1, true],
         'FAM-1 12a hidden block: a live block is a program (non-vacuity)',
       );
       await sp
@@ -1145,7 +1146,7 @@ async function verifyRules(): Promise<void> {
       const hidden = await resolve(sp, H, 'hidden-block', FIXTURE_TODAY);
       assert.deepEqual(
         [hidden.onProgram, hidden.currentPrograms, hidden.programs, hidden.canGoForward],
-        ['never', [], [], false],
+        [ON_PROGRAM.never, [], [], false],
         'FAM-1 12a hidden block: a hidden block is no program, now or ahead',
       );
     });
@@ -1168,6 +1169,176 @@ async function verifyRules(): Promise<void> {
       );
     });
     console.log('✓ FAM-1 12a R1: an archived athlete’s future day is the normal preview');
+
+    // ── R1: an archived athlete's TODAY reads like a closed day (`archived-athlete-today`) ──────
+    await inSavepoint(tx, async (sp) => {
+      // Its source has a `before`, but the change is only the archive, so it is proved here.
+      const { athlete, day, world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
+      await sp
+        .update(schema.profiles)
+        .set({ archivedAt: new Date() })
+        .where(eq(schema.profiles.id, H.profiles.get(athlete)!.id));
+      const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[
+        'archived-athlete-today'
+      ] as DayPlan;
+      assert.deepStrictEqual(
+        await resolve(sp, H, athlete, day, world.today),
+        asJson(translate(fixture, H.ids, 'archived-athlete-today')),
+        'FAM-1 12a R1: an archived athlete’s today deep-equals archived-athlete-today',
+      );
+    });
+    console.log('✓ FAM-1 12a R1: an archived athlete’s today is read-only, logged rows only');
+
+    // ── (i): an entry in ANOTHER profile's session never lends it a name ────────────────────────
+    // H's Athlete One has a session yesterday with no workout (as a purge leaves it) and H's real
+    // workout name; F's athlete's entry points at it. Only the session's profile conjunct drops it.
+    const plantI = async (sp: VerifyTx, sessionProfileId: number, workoutName: string) => {
+      const sessionId = await plantSession(sp, {
+        profileId: sessionProfileId,
+        day: YESTERDAY,
+        workoutId: null,
+        workoutName,
+      });
+      return plantRow(sp, {
+        profileId: fAthlete.id,
+        day: YESTERDAY,
+        sessionId,
+        movementId: fMove,
+        movementName: F_WORLD.catalog.grip.name,
+        set: 1,
+        snapshot: '',
+        unit: ENTRY_UNIT_WITHOUT_QUANTITY.check,
+        activityTypeId,
+      });
+    };
+    /** Runbook pre-flight (i): entries whose session is another profile's. */
+    const entriesInAnotherProfilesSession = async (sp: VerifyTx) =>
+      (
+        await sp
+          .select({ id: schema.entries.id })
+          .from(schema.entries)
+          .innerJoin(schema.sessions, eq(schema.sessions.id, schema.entries.sessionId))
+          .where(ne(schema.sessions.profileId, schema.entries.profileId))
+      ).map((r) => r.id);
+    const PURGED_NAME = 'Old workout';
+    await inSavepoint(tx, async (sp) => {
+      // Non-vacuity, and the purged path: the same row in F's OWN session shows, with null ids and
+      // the session's frozen name.
+      const own = await plantI(sp, fAthlete.id, PURGED_NAME);
+      const plan = await resolve(sp, F, 'a1', YESTERDAY);
+      const purged = plan.workouts.find((w) => w.name === PURGED_NAME);
+      assert.deepEqual(
+        purged && {
+          ids: [purged.programPublicId, purged.workoutPublicId, purged.label],
+          scheduled: purged.scheduled,
+          rows: purged.items.flatMap((it) => it.rows.map((r) => r.logged?.entryPublicId)),
+        },
+        { ids: [null, null, null], scheduled: false, rows: [own.publicId] },
+        'FAM-1 12a purged: a row whose workout pointer is NULL shows, with null ids and its frozen name',
+      );
+    });
+    await inSavepoint(tx, async (sp) => {
+      const planted = await plantI(sp, H.profiles.get('a1')!.id, HEAVY_A);
+      assert.ok(
+        (await entriesInAnotherProfilesSession(sp)).includes(planted.id),
+        'FAM-1 12a (i): the runbook’s pre-flight (i) query sees the planted entry',
+      );
+      const plan = await resolve(sp, F, 'a1', YESTERDAY);
+      const strings = stringsOf(plan);
+      assert.ok(
+        !strings.includes(planted.publicId) && !strings.includes(HEAVY_A),
+        'FAM-1 12a (i): an entry in another profile’s session is not shown, nor that session’s name',
+      );
+      assert.deepEqual(
+        strings.filter((s) => hStrings.includes(s)),
+        [],
+        'FAM-1 12a (i): no id of H reaches F’s day',
+      );
+    });
+    console.log(
+      '✓ FAM-1 12a (i): an entry in another profile’s session is dropped; a purged one shows',
+    );
+
+    // ── A soft-deleted profile resolves to null ─────────────────────────────────────────────────
+    await inSavepoint(tx, async (sp) => {
+      const athlete = await newAthlete(H, sp, 'deleted');
+      await sp
+        .update(schema.profiles)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.profiles.id, athlete.id));
+      assert.equal(
+        await resolveDayPlan(asTx(sp), {
+          scope: H_SCOPE,
+          profilePublicId: athlete.publicId,
+          day: FIXTURE_TODAY,
+          today: FIXTURE_TODAY,
+        }),
+        null,
+        'FAM-1 12a ownership: a soft-deleted profile resolves to null',
+      );
+    });
+    console.log('✓ FAM-1 12a ownership: a soft-deleted profile is null');
+
+    // ── restAfter: only for a group with an item showing (D14) ──────────────────────────────────
+    await inSavepoint(tx, async (sp) => {
+      // Yesterday seen from the day after today: closed. Heavy A's group `a` was logged, `b` not.
+      const plan = await resolve(sp, H, 'a1', YESTERDAY, addDays(FIXTURE_TODAY, 1));
+      assert.deepEqual(
+        Object.keys(workoutOf(plan, H, 'w2')?.restAfter ?? {}),
+        ['a'],
+        'FAM-1 12a D14: a closed day carries the rest of a shown group only',
+      );
+    });
+    console.log('✓ FAM-1 12a D14: no rest for a group that is not shown');
+
+    // ── C21: a hidden program's or workout's logged rows carry no live id ───────────────────────
+    const leftByName = (plan: ResolvedDayPlan, name: string) =>
+      plan.workouts.find((w) => !w.scheduled && w.name === name);
+    const fromEntriesAlone = (w: DayWorkout | undefined) =>
+      w !== undefined &&
+      w.label === null &&
+      w.progress.done === 0 &&
+      w.progress.total === 0 &&
+      w.items.length > 0 &&
+      w.items.every(
+        (it) => it.prescriptionPublicId === null && it.superset === null && it.notes === null,
+      );
+    await inSavepoint(tx, async (sp) => {
+      await sp
+        .update(schema.programBlocks)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.programBlocks.id, H.blocks.get('p1')!));
+      const plan = await resolve(sp, H, 'a1', YESTERDAY);
+      const heavyA = leftByName(plan, HEAVY_A);
+      const morning = leftByName(plan, MORNING_HABITS);
+      assert.ok(
+        fromEntriesAlone(heavyA) && fromEntriesAlone(morning),
+        'FAM-1 12a C21: a hidden program’s logged workouts show from their entries alone',
+      );
+      assert.deepEqual(
+        [heavyA!.programPublicId, heavyA!.workoutPublicId, morning!.programPublicId],
+        [null, null, null],
+        'FAM-1 12a C21: a hidden program’s workout has neither a program nor a workout id',
+      );
+    });
+    await inSavepoint(tx, async (sp) => {
+      await sp
+        .update(schema.workouts)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.workouts.id, H.workouts.get('w2')!));
+      const plan = await resolve(sp, H, 'a1', YESTERDAY);
+      const heavyA = leftByName(plan, HEAVY_A);
+      assert.ok(
+        fromEntriesAlone(heavyA),
+        'FAM-1 12a C21: a hidden workout’s logged rows show from their entries alone',
+      );
+      assert.deepEqual(
+        [heavyA!.programPublicId, heavyA!.workoutPublicId],
+        [H.ids.get(fixtureIds.program('p1')), null],
+        'FAM-1 12a C21: a hidden workout of a live program keeps the program id, not its own',
+      );
+    });
+    console.log('✓ FAM-1 12a C21: a hidden program or workout carries no live id');
 
     // ── Look-ahead (canGoForward) ───────────────────────────────────────────────────────────────
     await inSavepoint(tx, async (sp) => {

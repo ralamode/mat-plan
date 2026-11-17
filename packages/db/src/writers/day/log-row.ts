@@ -2,7 +2,6 @@ import {
   entryUnitFor,
   fillRowValues,
   hasSetRows,
-  inWritableWindow,
   newId,
   type RestoreReason,
   ROW_REFUSAL,
@@ -34,16 +33,17 @@ import {
   workoutSessionSlot,
   workoutSupersetSlot,
 } from '../../queries/day/program-rows';
+import { rowDayOpen } from '../../queries/day/day-window';
 import { isOnProgramThatDay, isScheduledOn } from '../../queries/day/scheduled';
 import { readRowValues } from '../../queries/day/stored-row-values';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { hideEntries, restoreHidden } from '../hide';
 import {
+  athleteTemplateBlockIn,
   isLiveProfile,
   movementIsAvailableTo,
-  programBlockOfProfile,
-  templateBlockIn,
+  workoutIsLive,
 } from '../ownership';
 import { insertEntrySetRows } from '../session-rows';
 
@@ -114,8 +114,8 @@ async function openRowDay(
     .where(isLiveProfile(args.profilePublicId, args.scope))
     .limit(1);
   if (!profile) refuse(ROW_REFUSAL.not_found);
-  if (profile.archivedAt !== null) refuse(ROW_REFUSAL.closed_day);
-  if (!inWritableWindow(args.day, args.today)) refuse(ROW_REFUSAL.closed_day);
+  // Archived, or outside the window: the one rule the day resolver's `writable` reads too.
+  if (!rowDayOpen(args.day, args.today, profile.archivedAt)) refuse(ROW_REFUSAL.closed_day);
   return profile.id;
 }
 
@@ -203,7 +203,8 @@ export type RowWorkout = { id: number; blockId: number; name: string; live: bool
 
 /**
  * Step 4: **the workout a write names, if this athlete may log it** — a workout on a template block
- * of the scope (`templateBlockIn`) AND of the profile's own household (`programBlockOfProfile`).
+ * of the scope AND of the profile's own household (`athleteTemplateBlockIn`: `templateBlockIn` ∧
+ * `programBlockOfProfile`).
  * `null` for foreign, missing, and hidden-and-foreign alike: the scope is in the WHERE and liveness
  * is read off the row, so another household's hidden workout is never told apart from a missing one.
  *
@@ -221,17 +222,12 @@ export async function rowWorkout(
       id: schema.workouts.id,
       blockId: schema.workouts.blockId,
       name: schema.workouts.name,
-      workoutDeletedAt: schema.workouts.deletedAt,
-      blockDeletedAt: schema.programBlocks.deletedAt,
+      live: workoutIsLive(),
     })
     .from(schema.workouts)
     .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
     .where(
-      and(
-        eq(schema.workouts.publicId, workoutPublicId),
-        templateBlockIn(scope),
-        programBlockOfProfile(profileId),
-      ),
+      and(eq(schema.workouts.publicId, workoutPublicId), athleteTemplateBlockIn(scope, profileId)),
     )
     .limit(1);
   if (!workout) return null;
@@ -239,7 +235,7 @@ export async function rowWorkout(
     id: workout.id,
     blockId: workout.blockId,
     name: workout.name,
-    live: workout.workoutDeletedAt === null && workout.blockDeletedAt === null,
+    live: workout.live === true,
   };
 }
 
@@ -341,14 +337,7 @@ export async function logRow(
     if (!prescription) refuse(ROW_REFUSAL.not_found);
     if (prescription.deletedAt !== null) refuse(ROW_REFUSAL.program_changed);
     // Its live quantities as numbers; two in one slot throw (`liveQuantities`, E5).
-    const quantities = liveQuantities(
-      prescription.id,
-      rows.flatMap((r) =>
-        r.slot === null || r.unit === null
-          ? []
-          : [{ slot: r.slot, unit: r.unit, valueMin: r.valueMin, valueMax: r.valueMax }],
-      ),
-    );
+    const quantities = liveQuantities(prescription.id, rows);
 
     // 6 — the movement, re-checked inside the transaction against the household, as
     //     `writeStrengthSession` does.

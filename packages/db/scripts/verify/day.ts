@@ -91,9 +91,11 @@ const MONDAY = 1;
 const SUNDAY = 0;
 const TUESDAY = 2;
 
+// ── Shared by lane E's proof modules (`./day-plan.ts` imports these) ───────────────────────────────
+
 /** A writer's answer, or what it threw, so a patch that makes it throw fails on a named assertion. */
-type Settled = RowResult | { threw: string };
-async function settle(run: Promise<RowResult>): Promise<Settled> {
+export type Settled = RowResult | { threw: string };
+export async function settle(run: Promise<RowResult>): Promise<Settled> {
   try {
     return await run;
   } catch (error) {
@@ -101,13 +103,44 @@ async function settle(run: Promise<RowResult>): Promise<Settled> {
   }
 }
 
-function expectOk(r: Settled, title: string): Extract<RowResult, { ok: true }> {
+export function expectOk(r: Settled, title: string): Extract<RowResult, { ok: true }> {
   assert.ok('ok' in r && r.ok, `${title} — got ${JSON.stringify(r)}`);
   return r as Extract<RowResult, { ok: true }>;
 }
 
 function expectRefused(r: Settled, reason: RowRefusal, title: string): void {
   assert.deepEqual(r, { ok: false, reason }, `${title} — got ${JSON.stringify(r)}`);
+}
+
+/** A seeded activity type's id, by its key (`workout_item` for a program row, `weigh_in`). */
+export async function activityTypeIdOf(tx: VerifyTx, key: string): Promise<number> {
+  const [row] = await tx
+    .select({ id: schema.activityTypes.id })
+    .from(schema.activityTypes)
+    .where(eq(schema.activityTypes.key, key));
+  assert.ok(row, `FAM-1 lane E: the ${key} activity type is seeded`);
+  return row.id;
+}
+
+/** Thrown by {@link inSavepoint} to undo its body. Private. */
+class Undo extends Error {}
+
+/**
+ * Run `fn` in a savepoint that is always rolled back, inside a `rolledBack` transaction, so several
+ * proofs share one seeded state and stay apart.
+ */
+export async function inSavepoint(
+  tx: VerifyTx,
+  fn: (sp: VerifyTx) => Promise<void>,
+): Promise<void> {
+  try {
+    await tx.transaction(async (sp) => {
+      await fn(sp);
+      throw new Undo();
+    });
+  } catch (e) {
+    if (!(e instanceof Undo)) throw e;
+  }
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
@@ -359,11 +392,7 @@ async function fixture(tx: VerifyTx) {
   await assign(elsewhere.id, otherBlock, LONG_AGO, null); // on a program, but not this one
   await assign(startsToday.id, block, DAY, null); // put on today: not on it yesterday
 
-  const [activity] = await tx
-    .select({ id: schema.activityTypes.id })
-    .from(schema.activityTypes)
-    .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.workout_item));
-  assert.ok(activity, 'FAM-1 11b: the workout_item activity type is seeded');
+  const activity = { id: await activityTypeIdOf(tx, ACTIVITY_TYPE_KEYS.workout_item) };
 
   /**
    * A ✓ with sensible defaults (the athlete, W1, set 1, nothing typed) in the scope given, which is
@@ -438,10 +467,7 @@ async function fixture(tx: VerifyTx) {
         .where(eq(schema.entries.publicId, publicId))
     )[0];
   const weighIn = async (hidden: boolean) => {
-    const [type] = await tx
-      .select({ id: schema.activityTypes.id })
-      .from(schema.activityTypes)
-      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.weighIn));
+    const type = { id: await activityTypeIdOf(tx, SEED_ACTIVITY_TYPE_KEYS.weighIn) };
     const publicId = newId();
     await tx.insert(schema.entries).values({
       publicId,

@@ -14,6 +14,7 @@ export * from './previous';
 export {
   currentPrograms,
   resolveDayPlan,
+  type CurrentProgramRow,
   type ProgramOnDay,
   type ResolvedDayPlan,
 } from './day-plan';

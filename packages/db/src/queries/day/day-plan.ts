@@ -3,7 +3,7 @@ import {
   type DayPlan,
   type DayRow,
   type DayWorkout,
-  inWritableWindow,
+  hasSetRows,
   ON_PROGRAM,
   type RowValues,
   TRACKING_TYPE_FIELDS,
@@ -17,12 +17,17 @@ import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
 import {
+  athleteTemplateBlockIn,
   isLiveProfile,
   movementIsAvailableTo,
-  programBlockOfProfile,
-  templateBlockIn,
+  workoutIsLive,
 } from '../../writers/ownership';
-import { liveQuantities, prescriptionTerms } from './prescription-terms';
+import { rowDayOpen } from './day-window';
+import {
+  liveQuantities,
+  type PrescriptionQuantityRow,
+  prescriptionTerms,
+} from './prescription-terms';
 import { previousKey, type PreviousKey, previousRows } from './previous';
 import { programRowOf } from './program-rows';
 import { type DayAssignment, dayAssignments, weekSlotsOn } from './scheduled';
@@ -67,7 +72,8 @@ type LivePrescription = {
   restAfter: string | null;
   supersetLabel: string | null;
   supersetOrder: number | null;
-  quantities: { slot: string; unit: string; valueMin: string | null; valueMax: string | null }[];
+  /** The LEFT JOIN's rows, as `liveQuantities` takes them. */
+  quantities: PrescriptionQuantityRow[];
 };
 
 type Movement = { publicId: string; name: string; trackingType: TrackingType };
@@ -85,8 +91,9 @@ export async function resolveDayPlan(
     .limit(1);
   if (!profile) return null;
 
-  // R1, in ONE place: an archived athlete's day is like a closed day.
-  const writable = inWritableWindow(day, today) && profile.archivedAt === null;
+  // R1: future first (the preview, archived or not); else writable only inside the window and not
+  // archived (`rowDayOpen`, the writer's own rule); else logged rows only.
+  const writable = rowDayOpen(day, today, profile.archivedAt);
   const future = day > today;
   const scheduledShowing: Showing = future ? 'preview' : writable ? 'all' : 'logged';
 
@@ -158,9 +165,14 @@ export async function resolveDayPlan(
       .filter(([key]) => !slots.some((s) => `w:${s.workoutId}` === key))
       .map(([, rows]) => {
         const [first] = rows;
+        // C21: an id only for what is live. A program's id only while it is one of the day's
+        // programs (live, so in `programs`); a workout's only while it and its program are live.
+        const programPublicId =
+          first.workoutBlockId !== null ? (programOfBlock.get(first.workoutBlockId) ?? null) : null;
         return {
-          programPublicId: first.programPublicId,
-          workoutPublicId: first.workoutPublicId,
+          programPublicId,
+          workoutPublicId:
+            programPublicId !== null && first.workoutLive ? first.workoutPublicId : null,
           // R2: a workout that left the week has no label.
           label: null,
           liveName: null,
@@ -225,13 +237,25 @@ export type ProgramOnDay = { blockId: number; programPublicId: string; name: str
  * by its open or upcoming row's `idx`, else by its closed row's (`schema.ts` → `programAssignments`).
  * Exported within `queries/day/` for step 6c's program order, its second consumer.
  */
+export type CurrentProgramRow = Pick<
+  DayAssignment,
+  | 'id'
+  | 'blockId'
+  | 'programPublicId'
+  | 'programName'
+  | 'idx'
+  | 'activeFrom'
+  | 'activeTo'
+  | 'current'
+>;
+
 export function currentPrograms(
-  assignments: readonly DayAssignment[],
+  assignments: readonly CurrentProgramRow[],
   today: string,
 ): ProgramOnDay[] {
-  const placing = new Map<number, DayAssignment>();
+  const placing = new Map<number, CurrentProgramRow>();
   // 0: an open row, or one starting after today; 1: a row closing today or later.
-  const rank = (a: DayAssignment) => (a.activeTo === null || a.activeFrom > today ? 0 : 1);
+  const rank = (a: CurrentProgramRow) => (a.activeTo === null || a.activeFrom > today ? 0 : 1);
   for (const a of assignments) {
     if (!a.current) continue;
     const held = placing.get(a.blockId);
@@ -293,18 +317,18 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
       id: w.id,
       publicId: w.publicId,
       description: w.description,
-      live: sql<boolean>`(${w.deletedAt} is null and ${b.deletedAt} is null)`.as('workout_live'),
-      programPublicId: sql<string>`${b.publicId}`.as('program_public_id'),
+      blockId: w.blockId,
+      live: sql<boolean>`${workoutIsLive()}`.as('workout_live'),
     })
     .from(w)
     .innerJoin(b, eq(b.id, w.blockId))
-    .where(and(templateBlockIn(scope), programBlockOfProfile(profileId)))
+    .where(athleteTemplateBlockIn(scope, profileId))
     .as('scoped_workout');
   const scopedPrescription = exec
     .select({ id: p.id, publicId: p.publicId })
     .from(p)
     .innerJoin(b, eq(b.id, p.blockId))
-    .where(and(templateBlockIn(scope), programBlockOfProfile(profileId)))
+    .where(athleteTemplateBlockIn(scope, profileId))
     .as('scoped_prescription');
 
   return exec
@@ -323,7 +347,7 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
       workoutPublicId: scopedWorkout.publicId,
       workoutDescription: scopedWorkout.description,
       workoutLive: scopedWorkout.live,
-      programPublicId: scopedWorkout.programPublicId,
+      workoutBlockId: scopedWorkout.blockId,
       prescriptionId: scopedPrescription.id,
       prescriptionPublicId: scopedPrescription.publicId,
     })
@@ -336,6 +360,9 @@ async function loggedRows(exec: Executor, scope: HouseholdScope, profileId: numb
         programRowOf(profileId, day),
         isNotNull(e.movementId),
         isNull(e.deletedAt),
+        // The entry's session is this athlete's own (runbook pre-flight (i)): a session of another
+        // profile never lends its frozen name.
+        or(isNull(e.sessionId), eq(s.profileId, profileId)),
         or(isNull(s.workoutId), isNotNull(scopedWorkout.id)),
         or(isNull(e.prescriptionId), isNotNull(scopedPrescription.id)),
       ),
@@ -384,14 +411,12 @@ async function livePrescriptions(
       held = { ...r, workoutId: r.workoutId!, quantities: [] };
       byId.set(r.id, held);
     }
-    if (r.slot !== null && r.unit !== null) {
-      held.quantities.push({
-        slot: r.slot,
-        unit: r.unit,
-        valueMin: r.valueMin,
-        valueMax: r.valueMax,
-      });
-    }
+    held.quantities.push({
+      slot: r.slot,
+      unit: r.unit,
+      valueMin: r.valueMin,
+      valueMax: r.valueMax,
+    });
   }
   return [...byId.values()];
 }
@@ -473,7 +498,7 @@ function setsOf(
   trackingType: TrackingType,
   rows: readonly LoggedRow[],
 ): number[] {
-  if (!TRACKING_TYPE_FIELDS[trackingType].sets) return [1];
+  if (!hasSetRows(trackingType)) return [1];
   const prescribed = prescription.sets ?? 1;
   const extra = rows
     .filter((r) => r.prescriptionId === prescription.id && r.set! > prescribed)
@@ -535,7 +560,7 @@ function dayWorkout(
       targetReps: prescription.targetReps,
       quantities: liveQuantities(prescription.id, prescription.quantities),
     });
-    const hasSets = TRACKING_TYPE_FIELDS[movement.trackingType].sets;
+    const hasSets = hasSetRows(movement.trackingType);
     const all = setsOf(prescription, movement.trackingType, draft.rows).map((set) => {
       // R7: a one-row type has exactly one row, whatever its entries' set numbers.
       const entry = hasSets ? mine.find((r) => r.set === set) : firstOf(mine, true);
