@@ -41,6 +41,20 @@ usually ends the investigation.
 
 ## 3. Reproduce locally with the matching command
 
+Debugging a CI failure is on the run-locally side of the one list ([AGENTS.md](../../../AGENTS.md) →
+"Local hooks vs CI merge-gates"), but reproduce **the failing step, filtered to the failing test**,
+not the whole gate:
+
+```bash
+pnpm --filter web exec vitest run <path> -t "<name>"            # one file, or one test by name
+pnpm --filter web exec vitest run ../../packages/shared/src     # one package
+pnpm test:changed                                               # what this branch reaches
+pnpm e2e:local e2e/<spec>.ts -g "<name>"                        # one Playwright spec or test
+```
+
+A timeout that passes when re-run alone is load, not a defect: see
+[lessons.md](../../../docs/lessons.md) → "load timeouts that look like failures".
+
 | CI step (`ci.yml`)               | Local reproduction                                                                                |
 | -------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Forward-only migration guard     | `git diff --name-status origin/main -- packages/db/migrations` (only `A` allowed)                 |
