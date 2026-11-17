@@ -241,8 +241,8 @@ export type ScopeOutcome = (typeof SCOPE_OUTCOME)[keyof typeof SCOPE_OUTCOME];
  * profile-addressed request, `profiles.ts`'s null-scope branch emitted one **uncapped**
  * `profile scope miss: no_scope` per request, so the stream this bound exists to stop survived under
  * a different value. `cross_household` and `unknown_resource` stay **uncapped on purpose**: those
- * two ARE the signal ADR 0006 obligation 3 exists to raise, and `runbooks.md`'s *"more than 3 events
- * in 1 hour"* rule is written against them.
+ * two ARE the signal ADR 0006 obligation 3 exists to raise, and the runbook's alert is written
+ * against them (`docs/runbooks.md` → "A cross-household scope miss").
  *
  * The ids stay in **process memory only**: never logged, never emitted (the tag is still the whole
  * payload), and gone on the next deploy. Deliberately the plaintext id rather than a digest — the

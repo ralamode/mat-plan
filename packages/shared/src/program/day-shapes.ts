@@ -173,6 +173,9 @@ export const dayPlanSchema = z.object({
    * (plan D32). **An archived athlete's day is never writable**: the row writer refuses them, so
    * their today reads like a closed day, with only what was logged _(maintainer, 2026-11-17)_. So
    * `writable` is true exactly where the row writer would accept a ✓ for this athlete and day.
+   * A future day is the same for an archived athlete as for anyone: read-only, showing what is
+   * coming. **The plan does not say the athlete is archived**: the page knows it from the profile
+   * and says it once, in its own notice.
    *
    * **The day resolver sets `writable`, `future` and `canGoForward`** from the `today` it is
    * given, so one proof against the fixtures covers all three (contract change C17). The DAL adds

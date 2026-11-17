@@ -19,7 +19,7 @@ import { ProgramLine } from '@/components/day/program-line';
 import { ProgramScreen } from '@/components/program-builder/program-screen';
 import { ProgramsListScreen } from '@/components/program-builder/programs-list-screen';
 import { WorkoutEditorScreen } from '@/components/program-builder/workout-editor-screen';
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { NAME_WRAP_CLASS, SETTINGS_COPY } from '@/lib/constants';
 
 import {
   createFakeDayActions,
@@ -172,6 +172,18 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
       <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>{athlete.name}</h1>
       {/* No `lg:hidden` here, unlike the page: the preview has no nav rail to list the athletes. */}
       <AthleteSwitcher plan={plan} hrefFor={dayPreviewHrefFor(selection)} />
+      {/* The page's archived notice (PROF-1 b), which the real page shows from the profile: it is
+          why an archived athlete's day needs no line of its own from the day screen, and no
+          `archived` field on the plan (maintainer, 2026-11-17: "One merged notice"). Shown here from
+          the fixture's world, in the page's own words, so the state reads as it will. On the real
+          page "Household settings" is a link; the preview names it and links nowhere. */}
+      {athlete.archived ? (
+        <p
+          className={`border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm ${NAME_WRAP_CLASS}`}
+        >
+          {SETTINGS_COPY.archivedNotice(athlete.name)} {SETTINGS_COPY.heading}.
+        </p>
+      ) : null}
       <ProgramLine plan={plan} actions={fake.actions} />
       {/* No `programsHref`: the Programs page does not exist until step 7b. */}
       <NotOnAProgram plan={plan} />
