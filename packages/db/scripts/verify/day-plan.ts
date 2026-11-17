@@ -49,7 +49,7 @@ import {
   programBlockByClientId,
 } from '../../src/writers/ownership';
 import { insertEntrySetRows } from '../../src/writers/session-rows';
-import { activityTypeIdOf, expectOk, inSavepoint } from './day';
+import { activityTypeIdOf, entriesInAnotherProfilesSession, expectOk, inSavepoint } from './day';
 import { asDb, asTx, rolledBack, type VerifyTx } from './harness';
 import { ARCHIVE_ONLY_FIXTURES, FIXED_WORLD_FIXTURE_COUNT } from './fixture-groups';
 import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './schema';
@@ -1238,15 +1238,6 @@ async function verifyRules(): Promise<void> {
         activityTypeId,
       });
     };
-    /** Runbook pre-flight (i): entries whose session is another profile's. */
-    const entriesInAnotherProfilesSession = async (sp: VerifyTx) =>
-      (
-        await sp
-          .select({ id: schema.entries.id })
-          .from(schema.entries)
-          .innerJoin(schema.sessions, eq(schema.sessions.id, schema.entries.sessionId))
-          .where(ne(schema.sessions.profileId, schema.entries.profileId))
-      ).map((r) => r.id);
     const PURGED_NAME = 'Old workout';
     await inSavepoint(tx, async (sp) => {
       // Non-vacuity, and the purged path: the same row in F's OWN session shows, with null ids and

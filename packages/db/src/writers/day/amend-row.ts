@@ -16,14 +16,7 @@ import { isScheduledOn } from '../../queries/day/scheduled';
 import type { HouseholdScope } from '../../scope';
 import { updateEntrySetRows } from '../session-rows';
 import { rowWorkout } from './log-row';
-import {
-  fitsItsType,
-  openProfile,
-  refuse,
-  rowItem,
-  rowTransaction,
-  storedValues,
-} from './row-steps';
+import { openProfile, refuse, rowItem, rowTransaction, storedValues } from './row-steps';
 
 /**
  * FAM-1 step 11c-i — **Change**: correct a logged program row's numbers in place, on today or
@@ -93,7 +86,7 @@ export async function amendRow(
     // 5 · 6 — the prescription, pinned to that workout, and its movement (`rowItem`, as a ✓).
     //     A purged one is `program_changed`, as the fake's removed item.
     if (entry.prescriptionId === null) refuse(ROW_REFUSAL.program_changed);
-    const { quantities, trackingType } = await rowItem(tx, scope, {
+    const { trackingType } = await rowItem(tx, scope, {
       prescription: { id: entry.prescriptionId },
       workoutId: workout.id,
     });
@@ -101,7 +94,6 @@ export async function amendRow(
     // 7 — the values, against the row as it was LOGGED (A5; contract C28): each typed quantity in the
     //     unit the row was logged in, and nothing filled in (no target), so a blank is `bad_value`
     //     and keeps the number that is there.
-    if (!fitsItsType(trackingType, quantities)) refuse(ROW_REFUSAL.bad_value);
     const logged = await storedValues(tx, entry.id);
     const values = fillRowValues(
       { trackingType, unit: loggedRowUnit(trackingType, logged) },

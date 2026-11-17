@@ -34,6 +34,7 @@ import { hideEntries, restoreHidden } from '../hide';
 import { athleteTemplateBlockIn, workoutIsLive } from '../ownership';
 import { insertEntrySetRows } from '../session-rows';
 import {
+  type ById,
   fitsItsType,
   openProfile,
   refuse,
@@ -173,7 +174,7 @@ export async function rowWorkout(
   exec: Executor,
   profileId: number,
   scope: HouseholdScope,
-  workout: string | { id: number },
+  workout: ById,
 ): Promise<RowWorkout | null> {
   const [row] = await exec
     .select({
@@ -186,8 +187,8 @@ export async function rowWorkout(
     .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
     .where(
       and(
-        typeof workout === 'string'
-          ? eq(schema.workouts.publicId, workout)
+        'publicId' in workout
+          ? eq(schema.workouts.publicId, workout.publicId)
           : eq(schema.workouts.id, workout.id),
         athleteTemplateBlockIn(scope, profileId),
       ),
@@ -241,7 +242,7 @@ export async function logRow(
     if (earlier.held) return answerHolder(tx, earlier);
 
     // 4 — the workout.
-    const workout = await rowWorkout(tx, profileId, scope, write.workoutPublicId);
+    const workout = await rowWorkout(tx, profileId, scope, { publicId: write.workoutPublicId });
     if (!workout) refuse(ROW_REFUSAL.not_found);
     if (!workout.live) refuse(ROW_REFUSAL.program_changed);
 
@@ -433,8 +434,9 @@ export async function untickRow(
       if (!scheduled) refuse(ROW_REFUSAL.not_scheduled);
     }
 
-    // 5 — the hide.
-    const values = await storedValues(tx, entry.id);
+    // 5 — the hide, then the numbers it hid. Read AFTER `hideEntries` takes the entry's lock, so an
+    //     un-tick racing a Change (11c-i) answers the numbers it actually hid, which are what a
+    //     re-tick brings back.
     const hidden = await hideEntries(tx, {
       profilePublicId: input.profilePublicId,
       scope,
@@ -442,6 +444,7 @@ export async function untickRow(
       entryPublicIds: [input.entryPublicId],
     });
     if ('notFound' in hidden) refuse(ROW_REFUSAL.not_found);
+    const values = await storedValues(tx, entry.id);
     return { ok: true, entryPublicId: input.entryPublicId, values, hiddenAt: hidden.hiddenAt };
   });
 }

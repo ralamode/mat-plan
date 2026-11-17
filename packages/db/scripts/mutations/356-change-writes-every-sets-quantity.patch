@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/session-rows.ts b/packages/db/src/writers/session-rows.ts
-index d4dba662..f7db8e57 100644
+index 3c2f980a..f9763958 100644
 --- a/packages/db/src/writers/session-rows.ts
 +++ b/packages/db/src/writers/session-rows.ts
-@@ -135,7 +135,7 @@ export async function updateEntrySetRows(
+@@ -139,7 +139,7 @@ export async function updateEntrySetRows(
        .set({ valueNum: String(q.value), updatedAt: now })
        .where(
          and(
 -          eq(schema.entrySetQuantities.entrySetId, setId),
 +          sql`${schema.entrySetQuantities.entrySetId} in (select id from entry_sets where entry_id = ${args.entryId})`,
            eq(schema.entrySetQuantities.slot, q.slot),
+           eq(schema.entrySetQuantities.unit, q.unit),
            isNull(schema.entrySetQuantities.deletedAt),
-         ),

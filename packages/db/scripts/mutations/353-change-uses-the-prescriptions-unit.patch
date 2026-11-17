@@ -1,9 +1,18 @@
 diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
-index 0c724670..b754683f 100644
+index 85dac75b..7e94314c 100644
 --- a/packages/db/src/writers/day/amend-row.ts
 +++ b/packages/db/src/writers/day/amend-row.ts
-@@ -104,7 +104,7 @@ export async function amendRow(
-     if (!fitsItsType(trackingType, quantities)) refuse(ROW_REFUSAL.bad_value);
+@@ -86,7 +86,7 @@ export async function amendRow(
+     // 5 · 6 — the prescription, pinned to that workout, and its movement (`rowItem`, as a ✓).
+     //     A purged one is `program_changed`, as the fake's removed item.
+     if (entry.prescriptionId === null) refuse(ROW_REFUSAL.program_changed);
+-    const { trackingType } = await rowItem(tx, scope, {
++    const { trackingType, quantities } = await rowItem(tx, scope, {
+       prescription: { id: entry.prescriptionId },
+       workoutId: workout.id,
+     });
+@@ -96,7 +96,7 @@ export async function amendRow(
+     //     and keeps the number that is there.
      const logged = await storedValues(tx, entry.id);
      const values = fillRowValues(
 -      { trackingType, unit: loggedRowUnit(trackingType, logged) },

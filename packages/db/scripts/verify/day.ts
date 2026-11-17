@@ -483,10 +483,38 @@ async function fixture(tx: VerifyTx) {
           supersetOrder: schema.entries.supersetOrder,
           snapshot: schema.entries.prescribedSnapshot,
           deletedAt: schema.entries.deletedAt,
+          prescriptionId: schema.entries.prescriptionId,
         })
         .from(schema.entries)
         .where(eq(schema.entries.publicId, publicId))
     )[0];
+  /**
+   * A HIDDEN set row under an entry, carrying a LIVE 99 lb quantity in the primary slot: a read or a
+   * write that keeps the hidden set sees two live sets (proof 10, mutation 172), or writes its
+   * quantity (Change 8, mutation 356).
+   */
+  const plantHiddenSet = async (entryPublicId: string) => {
+    const [hiddenSet] = await tx
+      .insert(schema.entrySets)
+      .values({
+        publicId: newId(),
+        clientId: newId(),
+        entryId: (await entryRow(entryPublicId)).id,
+        idx: 1,
+        reps: 99,
+        deletedAt: new Date(),
+      })
+      .returning({ id: schema.entrySets.id });
+    await tx.insert(schema.entrySetQuantities).values({
+      clientId: newId(),
+      entrySetId: hiddenSet.id,
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION_BY_CODE.lb,
+      unit: 'lb',
+      valueNum: '99',
+    });
+    return hiddenSet;
+  };
   const weighIn = async (hidden: boolean) => {
     const type = { id: await activityTypeIdOf(tx, SEED_ACTIVITY_TYPE_KEYS.weighIn) };
     const publicId = newId();
@@ -547,20 +575,23 @@ async function fixture(tx: VerifyTx) {
     countEntries,
     countSessions,
     entryRow,
+    plantHiddenSet,
     weighIn,
   };
 }
 
 /**
- * Runbook pre-flight (i): an entry in a session of ANOTHER profile. 12a's resolver drops such a row
- * (mutation 242), and 11c-i's Change refuses it; no writer may make one (11c, Acceptance).
+ * Runbook pre-flight (i): the ids of entries in a session of ANOTHER profile. 12a's resolver drops
+ * such a row (mutation 242), and 11c-i's Change refuses it; no writer may make one. One query for
+ * the end-of-proof sweep here and `./day-plan.ts`'s (i) proof.
  */
-async function entriesInAnotherProfilesSession(tx: VerifyTx) {
-  return tx
+export async function entriesInAnotherProfilesSession(tx: VerifyTx): Promise<number[]> {
+  const rows = await tx
     .select({ id: schema.entries.id })
     .from(schema.entries)
     .innerJoin(schema.sessions, eq(schema.sessions.id, schema.entries.sessionId))
     .where(ne(schema.sessions.profileId, schema.entries.profileId));
+  return rows.map((r) => r.id);
 }
 
 /** One proof: a fresh fixture, the body, then the detector sweep, all rolled back. */
@@ -982,16 +1013,16 @@ async function verifyRowWriter(): Promise<void> {
   // 4e is red under mutation 47 too, but shadowed: 4a-i's assertion in `verify/schema.ts` fails first.
   await proof('4d/4e: the workout lookup’s two household conjuncts', async (f) => {
     assert.ok(
-      await rowWorkout(f.exec, f.athlete.id, f.H_SCOPE, f.w1.publicId),
+      await rowWorkout(f.exec, f.athlete.id, f.H_SCOPE, { publicId: f.w1.publicId }),
       'FAM-1 11b 4d: the athlete’s own workout is found (non-vacuity)',
     );
     assert.equal(
-      await rowWorkout(f.exec, f.foreigner.id, f.H_SCOPE, f.w1.publicId),
+      await rowWorkout(f.exec, f.foreigner.id, f.H_SCOPE, { publicId: f.w1.publicId }),
       null,
       'FAM-1 11b 4d: F’s profile under H’s scope never reaches H’s workout',
     );
     assert.equal(
-      await rowWorkout(f.exec, f.foreigner.id, f.H_SCOPE, f.fw.publicId),
+      await rowWorkout(f.exec, f.foreigner.id, f.H_SCOPE, { publicId: f.fw.publicId }),
       null,
       'FAM-1 11b 4e: F’s profile under H’s scope never reaches F’s workout',
     );
@@ -1366,25 +1397,7 @@ async function verifyRowWriter(): Promise<void> {
     // A HIDDEN set row under the entry, carrying a LIVE 99 lb quantity. A read that keeps the hidden
     // set sees two live sets and throws (that is what reddens 172); the 99 lb would surface only if
     // that throw were removed as well.
-    const [hiddenSet] = await tx
-      .insert(schema.entrySets)
-      .values({
-        publicId: newId(),
-        clientId: newId(),
-        entryId: (await f.entryRow(first.entryPublicId)).id,
-        idx: 1,
-        reps: 99,
-        deletedAt: new Date(),
-      })
-      .returning({ id: schema.entrySets.id });
-    await tx.insert(schema.entrySetQuantities).values({
-      clientId: newId(),
-      entrySetId: hiddenSet.id,
-      slot: QUANTITY_SLOT.primary,
-      dimension: UNIT_DIMENSION_BY_CODE.lb,
-      unit: 'lb',
-      valueNum: '99',
-    });
+    const hiddenSet = await f.plantHiddenSet(first.entryPublicId);
     const hidden = expectOk(await f.untick(first.entryPublicId), 'FAM-1 11b 10: un-tick is ok');
     assert.ok(hidden.hiddenAt, 'FAM-1 11b 10: un-tick answers a token');
     // ⚠️ This cannot tell two tokens apart: every hide in one transaction shares one `now()`, and
@@ -1569,7 +1582,6 @@ async function verifyAmend(): Promise<void> {
     'Change 1: every tracking type, in place',
     async (f, tx) => {
       const cases: { name: string; prescriptionPublicId: string; changed: RowValues }[] = [
-        { name: 'check', prescriptionPublicId: f.p.check.publicId, changed: { quantities: [] } },
         {
           name: 'count',
           prescriptionPublicId: f.p.count.publicId,
@@ -1600,17 +1612,31 @@ async function verifyAmend(): Promise<void> {
           prescriptionPublicId: f.p.distance.publicId,
           changed: { quantities: [q('yd', 50, QUANTITY_SLOT.distance)] },
         },
+        // Last: a Check has no numbers, so a set UPDATE with nothing to set would throw before the
+        // `updated_at` assertions could name what is missing.
+        { name: 'check', prescriptionPublicId: f.p.check.publicId, changed: { quantities: [] } },
       ];
       for (const c of cases) {
         const logged = expectOk(
           await f.tick({ prescriptionPublicId: c.prescriptionPublicId }),
           `FAM-1 11c-i Change 1: a ${c.name} row is logged`,
         );
-        // Wind its `updated_at` back, so the amend's `now()` is told apart in one transaction.
+        // Wind every `updated_at` of the row back, so the amend's `now()` is told apart in one
+        // transaction: the entry, its live set and the set's quantities.
+        const entryId = (await f.entryRow(logged.entryPublicId)).id;
         await tx
           .update(schema.entries)
           .set({ updatedAt: PAST })
-          .where(eq(schema.entries.publicId, logged.entryPublicId));
+          .where(eq(schema.entries.id, entryId));
+        const [set] = await tx
+          .update(schema.entrySets)
+          .set({ updatedAt: PAST })
+          .where(eq(schema.entrySets.entryId, entryId))
+          .returning({ id: schema.entrySets.id });
+        await tx
+          .update(schema.entrySetQuantities)
+          .set({ updatedAt: PAST })
+          .where(eq(schema.entrySetQuantities.entrySetId, set!.id));
         const before = await rowState(tx, logged.entryPublicId);
         const r = expectOk(
           await f.amend(logged.entryPublicId, c.changed),
@@ -1630,6 +1656,22 @@ async function verifyAmend(): Promise<void> {
         assert.ok(
           after.updatedAt.getTime() > PAST.getTime(),
           `FAM-1 11c-i Change 1: a ${c.name} row's updated_at advances`,
+        );
+        const [setStamp] = await tx
+          .select({ at: schema.entrySets.updatedAt })
+          .from(schema.entrySets)
+          .where(eq(schema.entrySets.id, set!.id));
+        assert.ok(
+          setStamp!.at.getTime() > PAST.getTime(),
+          `FAM-1 11c-i Change 1: a ${c.name} row's set updated_at advances`,
+        );
+        const quantityStamps = await tx
+          .select({ at: schema.entrySetQuantities.updatedAt })
+          .from(schema.entrySetQuantities)
+          .where(eq(schema.entrySetQuantities.entrySetId, set!.id));
+        assert.ok(
+          quantityStamps.every((x) => x.at.getTime() > PAST.getTime()),
+          `FAM-1 11c-i Change 1: a ${c.name} row's quantities' updated_at advance`,
         );
       }
     },
@@ -1770,11 +1812,38 @@ async function verifyAmend(): Promise<void> {
         'FAM-1 11c-i Change 5: another household’s row',
       );
       const changed = { reps: 12, quantities: [] };
+      const theirsBefore = await rowState(tx, theirs.entryPublicId);
       expectRefused(
         await f.amend(theirs.entryPublicId, changed),
         ROW_REFUSAL.not_found,
         'FAM-1 11c-i Change 5: the sibling’s row under the athlete’s id is not_found',
       );
+      assert.deepEqual(
+        (await rowState(tx, theirs.entryPublicId)).values,
+        theirsBefore.values,
+        'FAM-1 11c-i Change 5: and the sibling’s row is not written',
+      );
+      // Not a program row: the athlete's own entry, in their own workout session, with no
+      // prescription and no set (a CHECK pairs them), the shape of an old strength entry. Only
+      // `programRow()` refuses it with `not_found`; without it the purged-prescription check would
+      // answer `program_changed`.
+      const strength = expectOk(
+        await f.tick({ prescriptionPublicId: f.p.reps.publicId, set: 2 }),
+        'FAM-1 11c-i Change 5: a row to make into a non-program row',
+      );
+      const own = (await f.entryRow(strength.entryPublicId)).prescriptionId!;
+      const unset = (prescriptionId: number | null, prescriptionSet: number | null) =>
+        tx
+          .update(schema.entries)
+          .set({ prescriptionId, prescriptionSet })
+          .where(eq(schema.entries.publicId, strength.entryPublicId));
+      await unset(null, null);
+      expectRefused(
+        await f.amend(strength.entryPublicId, changed),
+        ROW_REFUSAL.not_found,
+        'FAM-1 11c-i Change 5: an entry that is not a program row is not_found',
+      );
+      await unset(own, 2); // the plant goes before the sweep
       expectRefused(
         await f.amend(foreign.entryPublicId, { quantities: [] }),
         ROW_REFUSAL.not_found,
@@ -1833,16 +1902,52 @@ async function verifyAmend(): Promise<void> {
         'FAM-1 11c-i Change 6: back in its own session it is ok (non-vacuity)',
       );
 
-      // (f′): the athlete's own session pointed at ANOTHER household's workout.
-      const setWorkout = (workoutId: number) =>
-        tx.update(schema.sessions).set({ workoutId }).where(eq(schema.sessions.id, ownSession));
-      await setWorkout(f.fw.id);
+      // (f′): the athlete's own row pointed at ANOTHER household's workout AND a prescription of it on
+      // a GLOBAL movement, so the pin to the workout and the movement's household both pass: only
+      // the workout's own scope (`rowWorkout`'s `athleteTemplateBlockIn`) refuses it.
+      // A seeded global movement (household NULL), so it is available to every household.
+      const [globalMove] = await tx
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(
+          and(
+            isNull(schema.movements.householdId),
+            eq(schema.movements.trackingType, TRACKING_TYPE.reps),
+          ),
+        )
+        .limit(1);
+      assert.ok(globalMove, 'FAM-1 11c-i Change 6: a global Reps movement is seeded');
+      const [theirRx] = await tx
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId: f.fw.blockId,
+          workoutId: f.fw.id,
+          clientId: newId(),
+          movementId: globalMove.id,
+          idx: 9,
+          sets: 3,
+          targetReps: '10',
+        })
+        .returning({ id: schema.prescriptions.id });
+      const ownRx = (await f.entryRow(mine.entryPublicId)).prescriptionId!;
+      const point = async (workoutId: number, prescriptionId: number) => {
+        await tx
+          .update(schema.sessions)
+          .set({ workoutId })
+          .where(eq(schema.sessions.id, ownSession));
+        await tx
+          .update(schema.entries)
+          .set({ prescriptionId })
+          .where(eq(schema.entries.publicId, mine.entryPublicId));
+      };
+      await point(f.fw.id, theirRx.id);
       expectRefused(
         await f.amend(mine.entryPublicId, { reps: 9, quantities: [] }),
         ROW_REFUSAL.not_found,
         'FAM-1 11c-i Change 6: a row on another household’s workout is not_found',
       );
-      await setWorkout(f.w1.id); // the (f) plant goes before the sweep
+      await point(f.w1.id, ownRx); // the (f) and (g) plants go before the sweep
     },
     '11c-i',
   );
@@ -1973,25 +2078,7 @@ async function verifyAmend(): Promise<void> {
         'FAM-1 11c-i Change 8: the row',
       );
       // A HIDDEN set under the entry, carrying a LIVE 99 lb quantity in the same slot (as proof 10).
-      const [hiddenSet] = await tx
-        .insert(schema.entrySets)
-        .values({
-          publicId: newId(),
-          clientId: newId(),
-          entryId: (await f.entryRow(logged.entryPublicId)).id,
-          idx: 1,
-          reps: 99,
-          deletedAt: new Date(),
-        })
-        .returning({ id: schema.entrySets.id });
-      await tx.insert(schema.entrySetQuantities).values({
-        clientId: newId(),
-        entrySetId: hiddenSet.id,
-        slot: primary,
-        dimension: UNIT_DIMENSION_BY_CODE.lb,
-        unit: 'lb',
-        valueNum: '99',
-      });
+      const hiddenSet = await f.plantHiddenSet(logged.entryPublicId);
       const changed = { reps: 6, quantities: [q('lb', 30)] };
       const first = await f.amend(logged.entryPublicId, changed);
       const second = await f.amend(logged.entryPublicId, changed);
@@ -2003,6 +2090,16 @@ async function verifyAmend(): Promise<void> {
         ],
         'FAM-1 11c-i Change 8: the same amend twice answers the same, and writes only the live set',
       );
+      const liveSets = await tx
+        .select({ id: schema.entrySets.id })
+        .from(schema.entrySets)
+        .where(
+          and(
+            eq(schema.entrySets.entryId, (await f.entryRow(logged.entryPublicId)).id),
+            isNull(schema.entrySets.deletedAt),
+          ),
+        );
+      assert.equal(liveSets.length, 1, 'FAM-1 11c-i Change 8: still one live set, nothing added');
       const [hiddenQuantity] = await tx
         .select({ value: schema.entrySetQuantities.valueNum })
         .from(schema.entrySetQuantities)

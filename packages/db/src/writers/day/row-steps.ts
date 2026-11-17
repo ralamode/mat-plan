@@ -94,6 +94,9 @@ export function fitsItsType(trackingType: TrackingType, quantities: readonly Pre
   return fits && unitKnown;
 }
 
+/** A row found by its `public_id` (from a request) or by internal id (read off an owned row). */
+export type ById = { publicId: string } | { id: number };
+
 /** What `rowItem` found: the prescription, its live quantities and its movement's type. */
 export type RowItem = {
   prescription: {
@@ -121,7 +124,7 @@ export type RowItem = {
 export async function rowItem(
   exec: Executor,
   scope: HouseholdScope,
-  args: { prescription: { publicId: string } | { id: number }; workoutId: number },
+  args: { prescription: ById; workoutId: number },
 ): Promise<RowItem> {
   // 5 — the prescription, IN this workout (a mismatched pair is `not_found`), with its live
   //     quantities in the same statement.
@@ -169,11 +172,10 @@ export async function rowItem(
     .where(and(eq(schema.movements.id, prescription.movementId), movementIsAvailableTo(scope)))
     .limit(1);
   if (!movement) refuse(ROW_REFUSAL.not_found);
-  // A prescription's movement is NOT NULL on a program row; `movementId` was read above.
   return {
     prescription: {
       id: prescription.id,
-      movementId: prescription.movementId!,
+      movementId: prescription.movementId,
       sets: prescription.sets,
       targetReps: prescription.targetReps,
       supersetLabel: prescription.supersetLabel,

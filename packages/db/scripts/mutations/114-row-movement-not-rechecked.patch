@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/day/row-steps.ts b/packages/db/src/writers/day/row-steps.ts
-index 862fa27b..411bd94c 100644
+index 01223f99..e87e58cb 100644
 --- a/packages/db/src/writers/day/row-steps.ts
 +++ b/packages/db/src/writers/day/row-steps.ts
-@@ -166,7 +166,7 @@ export async function rowItem(
+@@ -169,7 +169,7 @@ export async function rowItem(
    const [movement] = await exec
      .select({ name: schema.movements.name, trackingType: schema.movements.trackingType })
      .from(schema.movements)
@@ -10,4 +10,4 @@ index 862fa27b..411bd94c 100644
 +    .where(eq(schema.movements.id, prescription.movementId))
      .limit(1);
    if (!movement) refuse(ROW_REFUSAL.not_found);
-   // A prescription's movement is NOT NULL on a program row; `movementId` was read above.
+   return {
