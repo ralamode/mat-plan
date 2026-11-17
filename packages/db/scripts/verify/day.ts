@@ -1622,11 +1622,12 @@ async function verifyAmend(): Promise<void> {
           `FAM-1 11c-i Change 1: a ${c.name} row is logged`,
         );
         // Wind every `updated_at` of the row back, so the amend's `now()` is told apart in one
-        // transaction: the entry, its live set and the set's quantities.
+        // transaction: the entry, its live set and the set's quantities. `created_at` too, so a
+        // re-stamp to `now()` would show.
         const entryId = (await f.entryRow(logged.entryPublicId)).id;
         await tx
           .update(schema.entries)
-          .set({ updatedAt: PAST })
+          .set({ updatedAt: PAST, createdAt: PAST })
           .where(eq(schema.entries.id, entryId));
         const [set] = await tx
           .update(schema.entrySets)
@@ -1725,6 +1726,7 @@ async function verifyAmend(): Promise<void> {
         await f.tick({ prescriptionPublicId: f.p.weightReps.publicId }),
         'FAM-1 11c-i Change 3: a row logged in lb',
       );
+      const loggedText = (await rowState(tx, logged.entryPublicId)).snapshot;
       // The program is edited since: the prescription is now in kg.
       await tx
         .update(schema.prescriptionQuantities)
@@ -1743,6 +1745,13 @@ async function verifyAmend(): Promise<void> {
         r.values,
         { reps: 6, quantities: [q('lb', 30)] },
         'FAM-1 11c-i Change 3: and it is stored in lb',
+      );
+      // A7: the text is the one the row was logged against, not the kg program's (re-frozen, it
+      // would read the new unit).
+      assert.equal(
+        (await rowState(tx, logged.entryPublicId)).snapshot,
+        loggedText,
+        'FAM-1 11c-i Change 3: and it keeps the text it was logged against',
       );
     },
     '11c-i',
@@ -1852,7 +1861,12 @@ async function verifyAmend(): Promise<void> {
       // Another household's PROFILE under H's scope, naming its own row, and an unknown profile.
       // `openProfile` refuses both; `rowWorkout`'s scope would too, so this is a second guard with no
       // patch of its own (no patch can redden it through Change).
-      const foreignBefore = await rowState(tx, foreign.entryPublicId);
+      // A Check has no numbers to compare, so the row's `updated_at` is wound back and read: any
+      // write stamps it (`updateEntrySetRows`).
+      await tx
+        .update(schema.entries)
+        .set({ updatedAt: PAST })
+        .where(eq(schema.entries.publicId, foreign.entryPublicId));
       for (const [title, profilePublicId] of [
         ['another household’s profile', f.foreigner.publicId],
         ['an unknown profile', newId()],
@@ -1863,9 +1877,9 @@ async function verifyAmend(): Promise<void> {
           `FAM-1 11c-i Change 5: ${title} is not_found`,
         );
       }
-      assert.deepEqual(
-        (await rowState(tx, foreign.entryPublicId)).values,
-        foreignBefore.values,
+      assert.equal(
+        (await rowState(tx, foreign.entryPublicId)).updatedAt.getTime(),
+        PAST.getTime(),
         'FAM-1 11c-i Change 5: and another household’s row is not written',
       );
       const weighIn = await f.weighIn(false);
