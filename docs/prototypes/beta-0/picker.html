@@ -1,0 +1,4541 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picker prototype</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+    />
+    <style>
+      :root {
+        --bg: oklch(1 0 0);
+        --fg: oklch(0.145 0 0);
+        --card: oklch(1 0 0);
+        --primary: oklch(0.205 0 0);
+        --primary-fg: oklch(0.985 0 0);
+        --muted: oklch(0.965 0.003 250);
+        --muted-fg: oklch(0.52 0.01 250);
+        --border: oklch(0.915 0.004 250);
+        --border-strong: oklch(0.62 0.01 250);
+        --ring: oklch(0.6 0.12 250);
+        --stage: oklch(0.955 0.005 250);
+        --note: oklch(0.97 0.035 85);
+        --note-fg: oklch(0.4 0.07 70);
+        --radius: 10px;
+        --font: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --bg: oklch(0.17 0.005 250);
+          --fg: oklch(0.97 0 0);
+          --card: oklch(0.21 0.006 250);
+          --primary: oklch(0.93 0 0);
+          --primary-fg: oklch(0.2 0 0);
+          --muted: oklch(0.26 0.006 250);
+          --muted-fg: oklch(0.72 0.01 250);
+          --border: oklch(1 0 0 / 12%);
+          --border-strong: oklch(0.6 0.01 250);
+          --ring: oklch(0.7 0.12 250);
+          --stage: oklch(0.12 0.004 250);
+          --note: oklch(0.28 0.035 85);
+          --note-fg: oklch(0.88 0.06 85);
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: oklch(0.17 0.005 250);
+        --fg: oklch(0.97 0 0);
+        --card: oklch(0.21 0.006 250);
+        --primary: oklch(0.93 0 0);
+        --primary-fg: oklch(0.2 0 0);
+        --muted: oklch(0.26 0.006 250);
+        --muted-fg: oklch(0.72 0.01 250);
+        --border: oklch(1 0 0 / 12%);
+        --border-strong: oklch(0.6 0.01 250);
+        --ring: oklch(0.7 0.12 250);
+        --stage: oklch(0.12 0.004 250);
+        --note: oklch(0.28 0.035 85);
+        --note-fg: oklch(0.88 0.06 85);
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--stage);
+        color: var(--fg);
+        font-family: var(--font);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+      .page {
+        max-width: 1020px;
+        margin: 0 auto;
+        padding-block: 20px 40px;
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+      }
+      @media (min-width: 880px) {
+        .page {
+          grid-template-columns: 380px minmax(0, 1fr);
+          align-items: start;
+        }
+        .sticky {
+          position: sticky;
+          top: 16px;
+        }
+      }
+      h1 {
+        font-size: 1.3rem;
+        margin: 0 0 4px;
+        font-weight: 600;
+        text-wrap: balance;
+        line-height: 1.25;
+      }
+      h2 {
+        font-size: 1.0625rem;
+        margin: 0;
+        font-weight: 600;
+      }
+      h3 {
+        font-size: 0.875rem;
+        margin: 16px 0 6px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 8px;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .hint {
+        color: var(--muted-fg);
+        font-size: 0.875rem;
+      }
+      .side {
+        min-width: 0;
+      }
+      .side label {
+        display: grid;
+        gap: 4px;
+        margin: 10px 0;
+        font-weight: 500;
+        font-size: 0.9rem;
+      }
+      .side .vars {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 0 14px;
+      }
+      select,
+      input[type='text'],
+      input[type='search'] {
+        font: inherit;
+        color: inherit;
+        background: var(--card);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        padding: 9px 12px;
+        min-height: 44px;
+        width: 100%;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      select {
+        background-image:
+          linear-gradient(45deg, transparent 50%, currentColor 50%),
+          linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position:
+          calc(100% - 18px) 55%,
+          calc(100% - 13px) 55%;
+        background-size: 5px 5px;
+        background-repeat: no-repeat;
+        padding-right: 32px;
+      }
+      :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+      }
+      .decide {
+        background: var(--note);
+        color: var(--note-fg);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        margin-top: 14px;
+      }
+      .decide ol {
+        margin: 8px 0 0;
+        padding-left: 22px;
+      }
+      .decide li {
+        margin: 7px 0;
+      }
+      .decide .new {
+        font-weight: 600;
+      }
+      /* the phone */
+      .phone {
+        width: 360px;
+        max-width: 100%;
+        height: 720px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        margin: 0 auto;
+        position: relative;
+      }
+      .phone.short {
+        height: 420px;
+      }
+      .phone.short .picked {
+        display: none;
+      }
+      .ov-h {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px 8px;
+      }
+      .ov-s {
+        padding: 0 18px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .ov-b {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 18px 16px;
+      }
+      .ov-f {
+        padding: 10px 18px 12px;
+        border-top: 1px solid var(--border);
+        background: var(--bg);
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      .txt {
+        background: none;
+        border: 0;
+        padding: 10px 8px;
+        min-height: 44px;
+        min-width: 44px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border-radius: 8px;
+      }
+      .btn {
+        background: var(--primary);
+        color: var(--primary-fg);
+        border: 0;
+        border-radius: 8px;
+        min-height: 44px;
+        padding: 9px 14px;
+        font-weight: 500;
+        flex: 1;
+      }
+      .btn[disabled] {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .btn[aria-disabled='true'] {
+        background: var(--muted);
+        color: var(--fg);
+        cursor: default;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid var(--border-strong);
+      }
+      .btn.small {
+        flex: none;
+      }
+      .btn.create {
+        width: 100%;
+        margin: 4px 0 2px;
+      }
+      .btn.loud {
+        border-color: var(--fg);
+        border-width: 2px;
+        font-weight: 600;
+      }
+      .acts {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+      .bar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .bar input {
+        flex: 1 1 11rem;
+      }
+      .bar .fbtn {
+        flex: none;
+        white-space: nowrap;
+      }
+      .status {
+        font-size: 0.875rem;
+        color: var(--muted-fg);
+        min-height: 1.4em;
+      }
+      .picked {
+        font-size: 0.875rem;
+        color: var(--muted-fg);
+        margin: 0 0 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .line {
+        background: var(--muted);
+        border-radius: 8px;
+        padding: 6px 6px 6px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.875rem;
+        margin: 8px 0;
+      }
+      .line.big {
+        display: block;
+        padding: 12px;
+        font-size: 1rem;
+      }
+      .line.big .txt {
+        display: block;
+        padding-left: 0;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .row {
+        display: flex;
+        align-items: stretch;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        margin: 8px 0;
+        background: var(--card);
+      }
+      .row.on {
+        border-color: var(--primary);
+        box-shadow: inset 0 0 0 1px var(--primary);
+      }
+      .pick {
+        flex: 1;
+        min-width: 0;
+        text-align: left;
+        background: none;
+        border: 0;
+        padding: 10px 6px 10px 12px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        min-height: 56px;
+        border-radius: var(--radius);
+      }
+      .pick .t {
+        min-width: 0;
+        flex: 1;
+      }
+      .pick b {
+        font-weight: 500;
+        overflow-wrap: anywhere;
+        display: block;
+      }
+      .meta {
+        display: block;
+        color: var(--muted-fg);
+        font-size: 0.875rem;
+        overflow-wrap: anywhere;
+      }
+      .sup {
+        display: block;
+        font-size: 0.875rem;
+        color: var(--fg);
+        font-weight: 500;
+      }
+      p.sup {
+        margin: 4px 0;
+      }
+      .box {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        border: 1.5px solid var(--muted-fg);
+        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        font-size: 0.9rem;
+        line-height: 1;
+      }
+      .box.round {
+        border-radius: 50%;
+        font-size: 0.7rem;
+      }
+      .row.on .box {
+        background: var(--primary);
+        color: var(--primary-fg);
+        border-color: var(--primary);
+      }
+      .how {
+        flex: none;
+        background: none;
+        border: 0;
+        border-left: 1px solid var(--border-strong);
+        width: 68px;
+        min-height: 44px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        border-radius: 0 var(--radius) var(--radius) 0;
+      }
+      .how.none {
+        border-left-color: transparent;
+      }
+      .howto {
+        margin: -2px 0 10px;
+        padding: 12px 14px 4px;
+        background: var(--muted);
+        border-radius: 8px;
+        font-size: 0.9375rem;
+      }
+      .howto ol {
+        margin: 6px 0 0;
+        padding-left: 22px;
+        list-style: decimal;
+      }
+      .howto li {
+        margin: 4px 0;
+      }
+      details.grp {
+        border-bottom: 1px solid var(--border);
+      }
+      details.grp summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 2px;
+        min-height: 46px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      details.grp summary::-webkit-details-marker {
+        display: none;
+      }
+      details.grp .gl {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 500;
+      }
+      details.grp .n {
+        color: var(--muted-fg);
+        font-weight: 400;
+      }
+      .chev {
+        display: inline-block;
+        width: 12px;
+        transition: transform 0.15s;
+        color: var(--muted-fg);
+      }
+      details[open] > summary .chev {
+        transform: rotate(90deg);
+      }
+      details.l2,
+      details.l3 {
+        margin-left: 18px;
+      }
+      details.l2:last-child,
+      details.l3:last-child {
+        border-bottom: 0;
+      }
+      details.l1 > summary .gl {
+        font-weight: 600;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .chev {
+          transition: none;
+        }
+      }
+      .panel {
+        position: absolute;
+        inset: 0;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        z-index: 2;
+      }
+      fieldset {
+        border: 0;
+        margin: 0 0 6px;
+        padding: 0;
+        min-width: 0;
+      }
+      legend {
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 12px 0 4px;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        padding: 3px 0;
+      }
+      .check input {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        accent-color: var(--primary);
+        margin: 0;
+      }
+      .check .n {
+        margin-left: auto;
+        color: var(--muted-fg);
+        font-size: 0.875rem;
+      }
+      .check.off {
+        color: var(--muted-fg);
+      }
+      .two {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+        gap: 0 14px;
+      }
+      .sub {
+        margin-left: 32px;
+        grid-template-columns: 1fr;
+      }
+      .card {
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        margin: 6px 0 10px;
+        display: grid;
+        gap: 8px;
+      }
+      .card label {
+        display: grid;
+        gap: 4px;
+        font-size: 0.9rem;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body style="margin: 0">
+    <div class="page">
+      <div>
+        <div class="sticky"><div class="phone" id="phone"></div></div>
+      </div>
+      <div class="side">
+        <h1>Movement picker: filters, near matches and “How to”</h1>
+        <p class="hint">
+          Prototype for the movement library, version 5: the version signed off on 17 Nov 2026. It
+          works: type, filter, tick, press Enter. The data is the batches drafted so far (277
+          movements) and three made-up custom items.
+        </p>
+        <label
+          >Jump to a state
+          <select id="state">
+            <option value="Browse: nothing typed">Browse: nothing typed</option>
+            <option value="Browse: Strength opened, then a family">
+              Browse: Strength opened, then a family
+            </option>
+            <option value="Filters: the panel, equipment chosen">
+              Filters: the panel, equipment chosen
+            </option>
+            <option value="Browse: filters on (No equipment, Abs)">
+              Browse: filters on (No equipment, Abs)
+            </option>
+            <option value="Search: matches (“pull-up”)">Search: matches (“pull-up”)</option>
+            <option value="Search: a short form (“db”)">Search: a short form (“db”)</option>
+            <option value="Search: an abbreviation that spells a movement (“db bench press”)">
+              Search: an abbreviation that spells a movement (“db bench press”)
+            </option>
+            <option value="Search: letters in the middle of a word (“chin”)">
+              Search: letters in the middle of a word (“chin”)
+            </option>
+            <option value="Search: part of another name (“military”)">
+              Search: part of another name (“military”)
+            </option>
+            <option value="Search: best match first (“press”)">
+              Search: best match first (“press”)
+            </option>
+            <option value="Search: a typo (“farmrs carry”)">Search: a typo (“farmrs carry”)</option>
+            <option value="Search: a four-letter typo (“pusg”)">
+              Search: a four-letter typo (“pusg”)
+            </option>
+            <option value="Search: your custom item, filter on (“chin”)">
+              Search: your custom item, filter on (“chin”)
+            </option>
+            <option value="Search: exact match not in the filters (“plank”)">
+              Search: exact match not in the filters (“plank”)
+            </option>
+            <option value="Search: every match hidden by the filters (“stretch”)">
+              Search: every match hidden by the filters (“stretch”)
+            </option>
+            <option value="Search: nothing found (“zercher”)">
+              Search: nothing found (“zercher”)
+            </option>
+            <option value="New item: the form (“zercher squat”)">
+              New item: the form (“zercher squat”)
+            </option>
+            <option value="Row: supervision label (“rope climb”)">
+              Row: supervision label (“rope climb”)
+            </option>
+            <option value="Row: How to, open (“bridge”)">Row: How to, open (“bridge”)</option>
+            <option value="Row: another name, long (“pull-up iso”)">
+              Row: another name, long (“pull-up iso”)
+            </option>
+            <option value="Row: the longest (“close-grip bench”)">
+              Row: the longest (“close-grip bench”)
+            </option>
+            <option value="Ticked: three items, one off screen">
+              Ticked: three items, one off screen
+            </option>
+          </select>
+        </label>
+        <div class="vars">
+          <label
+            >Mode
+            <select id="mode">
+              <option value="multi">Program builder: tick several</option>
+              <option value="single">Logging: choose one</option>
+            </select>
+          </label>
+          <label
+            >Screen
+            <select id="view">
+              <option value="tall">Phone, 360 wide</option>
+              <option value="short">Keyboard up (short screen)</option>
+            </select>
+          </label>
+        </div>
+        <h2 style="margin-top: 16px">Four choices, decided: the first option of each</h2>
+        <p class="hint">Left here so you can still flip one and compare.</p>
+        <div class="vars">
+          <label
+            >1 · Ticking equipment means
+            <select id="v-eq">
+              <option value="anyOf">Uses at least one of them (decided)</option>
+              <option value="allOwned">Needs nothing beyond them</option>
+            </select>
+          </label>
+          <label
+            >2 · Your custom items while filtering
+            <select id="v-own">
+              <option value="show">Kept reachable, marked not filtered (decided)</option>
+              <option value="hide">Hidden behind a “Show” line</option>
+            </select>
+          </label>
+          <label
+            >3 · Browsing with nothing typed
+            <select id="v-browse">
+              <option value="two">Kind, then family (decided)</option>
+              <option value="flat">One level: kind · muscle</option>
+            </select>
+          </label>
+          <label
+            >4 · Order of results
+            <select id="v-order">
+              <option value="new">Best match first (decided)</option>
+              <option value="legacy">As today</option>
+            </select>
+          </label>
+        </div>
+        <div class="decide">
+          <h2>Decided by you (17 Nov)</h2>
+          <ol>
+            <li>Your own movements are called “Your custom items”.</li>
+            <li>Both sections, your custom items and all movements, fold like a tree.</li>
+            <li>A filter choice that would find nothing is shown greyed and can’t be ticked.</li>
+            <li>
+              A four-letter word may be one letter off when its first two letters match (“pusg”
+              finds Push-up). Shorter words must be exact.
+            </li>
+            <li>
+              Ticking equipment lists movements that use at least one of them; every row shows what
+              it needs.
+            </li>
+            <li>
+              Your custom items stay reachable while you filter, without pushing the filtered
+              results down: folded to one line when you browse, and listed after the filtered
+              matches when you search. A name you typed exactly still comes first.
+            </li>
+            <li>All movements are grouped by kind of training, then family.</li>
+            <li>
+              Results are ordered best match first: an exact name; then names that start with what
+              you typed; then a word that starts with it; a match in the middle of a word last. A
+              movement’s own name before its other name, and a shorter name before a longer one.
+            </li>
+            <li>
+              Typing three letters or more of another name finds the movement (“military” finds
+              Overhead press), ranked by the same rule.
+            </li>
+            <li>A “How to” button on each row opens the instructions in the picker.</li>
+            <li>
+              An abbreviation that spells a movement is that movement: “db row” says “Already in the
+              list as Dumbbell row” and offers no new item.
+            </li>
+          </ol>
+          <h2 style="margin-top: 14px">The rest: one yes covers these</h2>
+          <ol>
+            <li>
+              Filters are one button and a panel. Equipment is one choice of three, so nothing you
+              ticked is ever cleared for you. Equipment is listed by how many movements use it, ten
+              first.
+            </li>
+            <li>
+              “No equipment” means just you and the floor: a wall, a towel or a partner counts as
+              equipment.
+            </li>
+            <li>
+              Muscles use plain words and filter by the main muscle: “Inner thigh”, “Outer hip”,
+              “Upper traps”, “Forearms and grip”.
+            </li>
+            <li>
+              Each row shows how it is logged and what it needs (“Reps · Pull-up bar”), not which
+              group it is in.
+            </li>
+            <li>
+              An exact match is always listed first, even when it is not in your filters, and says
+              so.
+            </li>
+            <li>
+              When filters hide every match, the screen says how many and offers to clear the
+              filters. It never shows movements your filters exclude.
+            </li>
+            <li>
+              A typo gets “Did you mean”, apart from “Has some of your words”. Enter ticks an exact
+              match, or the only match when it matched by its own name; never a “Did you mean” row
+              or an “also called” row.
+            </li>
+            <li>
+              The supervision label reads “Learn with a coach present”: under the name on the row,
+              and again at the top of the instructions.
+            </li>
+            <li>Wording: “not in your filters”, “Did you mean”, “Tick items to add”.</li>
+            <li>
+              Filters stay on while you keep adding to the same workout and reset when you leave it.
+              “Recent” is hidden while you filter. A group opens itself when 20 or fewer movements
+              are left.
+            </li>
+            <li>When logging (choose one), a tap chooses the movement and closes the picker.</li>
+          </ol>
+        </div>
+        <p class="hint" style="margin-top: 12px">
+          Not for sign-off here: the entries themselves (they are in the sheet), and the exact shade
+          of each colour.
+        </p>
+      </div>
+    </div>
+    <script>
+      const LIB = [
+        {
+          name: 'Leg swing',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Stand tall and hold onto something steady with one hand.\nSwing the outside leg forward and back like a pendulum, keeping the knee soft.\nLet the range grow a little with each swing without arching your lower back.\nSwitch legs.',
+        },
+        {
+          name: 'Lateral leg swing',
+          aliases: ['Side-to-side leg swing'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'adductors',
+          instructions:
+            'Face something steady and rest both hands on it.\nSwing one leg across the front of your body and then out to the side.\nKeep your hips square and your standing knee soft.\nSwitch legs.',
+        },
+        {
+          name: 'Hip circle',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Stand on one leg, holding something steady if you need to.\nLift the other knee to hip height.\nDraw a slow, wide circle with the knee: forward, out to the side and back.\nReverse the direction, then switch legs.',
+        },
+        {
+          name: 'Thoracic rotation',
+          aliases: ['Open book'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'upper_back',
+          instructions:
+            'Lie on your side with your knees bent in front of you and your arms reaching forward together.\nKeep your knees together and on the floor.\nLift the top arm and open it across to the other side, following your hand with your eyes.\nReturn slowly and switch sides.',
+        },
+        {
+          name: 'Arm circle',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+          instructions:
+            'Stand with your arms straight out to the sides.\nDraw small circles with your hands, then let them grow larger.\nKeep your shoulders down away from your ears.\nReverse the direction.',
+        },
+        {
+          name: 'Band shoulder pass-through',
+          aliases: ['Band dislocate'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['band'],
+          primaryMuscle: 'shoulders',
+          instructions:
+            'Hold a light band in front of your hips with a wide grip.\nWith straight arms, lift the band over your head and down behind you.\nBring it back over the top to the front.\nWiden your grip if your elbows bend or your back arches.',
+        },
+        {
+          name: '90/90 hip stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'glutes',
+          instructions:
+            'Sit with your front leg bent in front of you and your back leg bent out to the side, both knees at about a right angle.\nSit tall, then lean your chest forward over the front shin.\nKeep both sit bones near the floor.\nSwitch sides.',
+        },
+        {
+          name: '90/90 hip switch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'glutes',
+          instructions:
+            'Sit with both knees bent at about a right angle, one leg in front and one out to the side.\nKeeping your feet on the floor, rotate both knees over to the other side.\nSit tall as you switch, using your hands behind you only if you need them.\nKeep switching side to side slowly.',
+        },
+        {
+          name: 'Couch stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['wall'],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Kneel with your back to a wall and slide one knee back so the shin runs up the wall.\nStep the other foot forward into a lunge.\nSqueeze the glute on the kneeling side and lift your chest.\nSwitch sides.',
+        },
+        {
+          name: 'Hip flexor stretch',
+          aliases: ['Kneeling hip flexor stretch'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Kneel on one knee with the other foot flat in front of you.\nTuck your hips under by squeezing the glute of the kneeling leg.\nShift forward a little until you feel the front of the hip open.\nKeep your chest tall, then switch sides.',
+        },
+        {
+          name: 'Hamstring stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hamstrings',
+          instructions:
+            'Lie on your back and lift one leg, holding behind the thigh or calf.\nKeep the other leg long on the floor.\nStraighten the lifted knee until you feel the back of the thigh.\nSwitch legs.',
+        },
+        {
+          name: 'Calf stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['wall'],
+          primaryMuscle: 'calves',
+          instructions:
+            'Face a wall with your hands on it.\nStep one foot back and press its heel into the floor with the knee straight.\nLean toward the wall until you feel the calf.\nBend the back knee slightly to reach lower in the calf, then switch legs.',
+        },
+        {
+          name: 'Quad stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'quadriceps',
+          instructions:
+            'Stand on one leg, holding something steady if you need to.\nBend the other knee and hold that foot behind you.\nKeep your knees together and press the hip forward.\nSwitch legs.',
+        },
+        {
+          name: 'Pigeon stretch',
+          aliases: ['Pigeon pose'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'glutes',
+          instructions:
+            'From your hands and knees, bring one knee forward behind the same wrist.\nLet that shin angle across the floor and slide the other leg straight back.\nSquare your hips and lower your chest toward the floor.\nSwitch sides.',
+        },
+        {
+          name: 'Figure-four stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'glutes',
+          instructions:
+            'Lie on your back with both knees bent.\nCross one ankle over the opposite knee.\nPull the bottom thigh toward your chest until you feel the hip of the crossed leg.\nSwitch sides.',
+        },
+        {
+          name: 'Butterfly stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'adductors',
+          instructions:
+            'Sit tall and put the soles of your feet together.\nHold your feet and let your knees fall out to the sides.\nHinge forward from the hips with a long back.\nUse your elbows to ease the knees lower if you want more.',
+        },
+        {
+          name: 'Frog stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'adductors',
+          instructions:
+            'Start on your hands and knees on a soft surface.\nSlide your knees wide apart, keeping your ankles in line with your knees.\nLower onto your forearms and ease your hips back.\nKeep your back flat.',
+        },
+        {
+          name: 'Front split',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hamstrings',
+          instructions:
+            'Kneel and slide one leg straight forward and the other straight back.\nKeep your hips facing forward and support yourself on your hands or on blocks.\nLower only as far as you can control.\nSwitch sides.',
+        },
+        {
+          name: 'Straddle split',
+          aliases: ['Middle split'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'adductors',
+          instructions:
+            'Stand or sit with your legs wide apart and your toes pointing up or forward.\nKeep your knees straight.\nLower your hips or walk your hands forward, keeping your back long.\nGo only as wide as you can control.',
+        },
+        {
+          name: 'Pancake stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'adductors',
+          instructions:
+            'Sit with your legs wide and straight, toes pointing up.\nSit tall, then hinge forward from the hips.\nWalk your hands out in front of you with a long back.\nKeep your knees and toes facing the ceiling.',
+        },
+        {
+          name: 'Seated forward fold',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hamstrings',
+          instructions:
+            'Sit with your legs straight out in front of you.\nSit tall, then hinge forward from the hips.\nReach toward your feet, letting your back round only at the end.\nKeep your knees straight but not locked.',
+        },
+        {
+          name: 'Standing toe touch',
+          aliases: ['Toe touch'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hamstrings',
+          instructions:
+            'Stand with your feet together and your knees straight but soft.\nHinge at the hips and let your upper body hang toward your feet.\nLet your head and arms relax.\nRoll up slowly to stand.',
+        },
+        {
+          name: "Child's pose",
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'lower_back',
+          instructions:
+            'Kneel with your big toes together and your knees apart.\nSit your hips back toward your heels.\nReach your arms forward and rest your forehead on the floor.\nBreathe slowly into your back.',
+        },
+        {
+          name: 'Cat-cow',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'lower_back',
+          instructions:
+            'Start on your hands and knees.\nRound your back up toward the ceiling and tuck your chin.\nThen let your belly drop, lift your chest and look forward.\nMove slowly between the two with your breath.',
+        },
+        {
+          name: 'Cobra stretch',
+          aliases: ['Cobra pose'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+          instructions:
+            'Lie on your front with your hands under your shoulders.\nPress the floor away and lift your chest, keeping your hips down.\nStraighten your arms only as far as your lower back is comfortable.\nKeep your shoulders away from your ears.',
+        },
+        {
+          name: 'Sphinx stretch',
+          aliases: ['Sphinx', 'Sphinx pose'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'lower_back',
+          instructions:
+            'Lie on your front and prop yourself up on your forearms, elbows under your shoulders.\nKeep your hips and legs on the floor.\nPress the forearms down and lift your chest.\nRelax your lower back and breathe.',
+        },
+        {
+          name: 'Back bridge',
+          aliases: ['Wheel pose'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'lower_back',
+          supervision: 'coach',
+          instructions:
+            'Lie on your back with your feet flat and your hands by your ears, fingers pointing toward your shoulders.\nPress through your hands and feet to lift your hips and chest off the floor.\nStraighten your arms as far as you can and push your chest toward the wall behind you.\nLower yourself slowly, head last.',
+        },
+        {
+          name: 'Wall slide',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['wall'],
+          primaryMuscle: 'shoulders',
+          instructions:
+            'Stand with your back, head and arms against a wall, elbows bent like goalposts.\nSlide your arms up the wall as far as you can while keeping contact.\nSlide them back down, pulling your shoulder blades down.\nKeep your lower back close to the wall.',
+        },
+        {
+          name: 'Doorway chest stretch',
+          aliases: ['Doorway stretch'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['wall'],
+          primaryMuscle: 'chest',
+          instructions:
+            'Stand in a doorway or beside a wall corner.\nPlace your forearm on the frame with your elbow at shoulder height.\nStep through gently until you feel the front of the chest and shoulder.\nSwitch sides.',
+        },
+        {
+          name: 'Cross-body shoulder stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+          instructions:
+            'Bring one straight arm across the front of your chest.\nHold it above the elbow with the other hand.\nEase it closer to your chest, keeping the shoulder down.\nSwitch sides.',
+        },
+        {
+          name: 'Sleeper stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+          instructions:
+            'Lie on your side with the bottom arm out in front of you and the elbow bent upward.\nWith your top hand, ease the bottom forearm down toward the floor.\nStop when you feel the back of the shoulder.\nSwitch sides.',
+        },
+        {
+          name: 'Triceps stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'triceps',
+          instructions:
+            'Reach one arm overhead and bend the elbow so your hand falls behind your head.\nWith the other hand, ease the elbow back and down.\nKeep your ribs down and your head up.\nSwitch sides.',
+        },
+        {
+          name: 'Kneeling lat stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['bench'],
+          primaryMuscle: 'lats',
+          instructions:
+            'Kneel facing a bench and rest your elbows on it.\nSit your hips back toward your heels.\nLet your chest sink toward the floor.\nKeep your back flat and breathe.',
+        },
+        {
+          name: 'Wrist stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'forearms',
+          instructions:
+            'Kneel and place your hands on the floor with your fingers pointing back toward your knees.\nKeep your palms flat and lean back gently.\nThen turn your hands over, backs of the hands on the floor, and lean back again.',
+        },
+        {
+          name: 'Neck stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'neck',
+          instructions:
+            'Sit or stand tall.\nTip one ear toward the same shoulder.\nLet the other shoulder relax down.\nSwitch sides.',
+        },
+        {
+          name: 'Neck circle',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'neck',
+          instructions:
+            'Sit or stand tall with your shoulders relaxed.\nLower your chin to your chest.\nRoll your head slowly to one side and back to the centre, then to the other side.\nKeep the movement small and slow.',
+        },
+        {
+          name: 'Chin tuck',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'neck',
+          instructions:
+            'Sit or stand tall and look straight ahead.\nDraw your chin straight back, as if making a double chin.\nKeep your eyes level.\nRelax and repeat.',
+        },
+        {
+          name: 'Kneeling ankle stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'calves',
+          instructions:
+            'Kneel on one knee with the other foot flat in front of you.\nDrive the front knee forward over the toes, keeping the heel down.\nKeep the knee in line with the foot.\nSwitch legs.',
+        },
+        {
+          name: 'Deep squat hold',
+          aliases: ['Deep squat'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'adductors',
+          instructions:
+            'Stand with your feet a little wider than your hips.\nSit all the way down between your heels with your chest up.\nKeep your heels on the floor and your knees over your toes.\nHold onto something in front of you if you need help balancing.',
+        },
+        {
+          name: "World's greatest stretch",
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Step into a long lunge and put both hands on the floor inside the front foot.\nDrop the front elbow toward the floor, then rotate that arm up to the ceiling.\nBring the hand back down, straighten the front leg to feel the hamstring, then step back.\nSwitch sides.',
+        },
+        {
+          name: 'Inchworm',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'hamstrings',
+          instructions:
+            'Stand tall and hinge forward to put your hands on the floor.\nWalk your hands out until you reach a plank.\nWalk your feet in toward your hands, keeping your knees as straight as you can.\nStand up and repeat.',
+        },
+        {
+          name: 'Spiderman lunge',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Start in a plank.\nStep one foot up outside the same hand.\nSink your hips toward the floor.\nStep back to the plank and switch sides.',
+        },
+        {
+          name: 'Scorpion stretch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+          instructions:
+            'Lie on your front with your arms out to the sides.\nLift one foot and reach it across behind you toward the opposite hand.\nKeep both shoulders on the floor as long as you can.\nReturn and switch sides.',
+        },
+        {
+          name: 'Hip airplane',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'glutes',
+          instructions:
+            'Stand on one leg and hinge forward until your body is level with the floor.\nRotate your hips open toward the ceiling, then close them back toward the floor.\nKeep the standing knee soft and the movement slow.\nHold onto something if you need to, then switch legs.',
+        },
+        {
+          name: 'Foam rolling',
+          aliases: ['Foam roll'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['foam_roller'],
+          primaryMuscle: null,
+          instructions:
+            'Place a foam roller under the muscle you want to roll.\nUse your hands and other leg to control how much weight is on it.\nRoll slowly along the muscle.\nPause on any tight spot and breathe.',
+        },
+        {
+          name: 'Thoracic extension on a foam roller',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['foam_roller'],
+          primaryMuscle: 'upper_back',
+          instructions:
+            'Lie on your back with a foam roller under your upper back, across your spine.\nSupport your head with your hands and keep your hips on the floor.\nLet your upper back arch gently over the roller, then curl back up.\nMove the roller a little higher or lower and repeat.',
+        },
+        {
+          name: 'Band joint distraction',
+          aliases: ['Banded distraction'],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['band', 'anchor'],
+          primaryMuscle: null,
+          instructions:
+            'Loop a band around a fixed anchor and around the joint you are working on, such as the hip or the ankle.\nStep away until the band pulls the joint gently.\nMove slowly through the stretch while the band holds tension.\nSwitch sides.',
+        },
+        {
+          name: 'German hang',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['rings'],
+          primaryMuscle: 'shoulders',
+          instructions:
+            'Hold a pair of rings and tuck your legs through your arms so you rotate backward.\nLower your feet toward the floor behind you until your arms point behind your body.\nKeep your toes on the floor to control how much stretch you take.\nCome out the way you went in.',
+        },
+        {
+          name: 'Single-leg balance',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: null,
+          instructions:
+            'Stand on one leg with the other foot just off the floor.\nKeep your standing knee soft and your hips level.\nFix your eyes on a point in front of you.\nSwitch legs.',
+        },
+        {
+          name: 'One-leg ball catch',
+          aliases: [],
+          modality: 'mobility',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['ball'],
+          primaryMuscle: null,
+          instructions:
+            'Stand on one leg.\nCatch a ball tossed to you, or thrown off a wall, and toss it back.\nKeep your standing knee soft and your hips level.\nSwitch legs.',
+        },
+        {
+          name: 'Plank',
+          aliases: ['Front plank'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'High plank',
+          aliases: ['Straight-arm plank'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Knee plank',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Reverse plank',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'glutes',
+        },
+        {
+          name: 'Weighted plank',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: ['any_weight'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Side plank',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Side plank hip dip',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Side plank leg raise',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Copenhagen plank',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: ['bench'],
+          primaryMuscle: 'adductors',
+        },
+        {
+          name: 'Short-lever Copenhagen plank',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: ['bench'],
+          primaryMuscle: 'adductors',
+        },
+        {
+          name: 'Plank shoulder tap',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Plank knee-to-elbow',
+          aliases: ['Spiderman plank'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Plank pull-through',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['any_weight'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Plank jack',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Plank up-down',
+          aliases: ['Plank walk-up'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Hollow hold',
+          aliases: ['Hollow body hold'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Hollow rock',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Dead bug',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Bird dog',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'lower_back',
+        },
+        {
+          name: 'Pallof press',
+          aliases: ['Cable Pallof press', 'Anti-rotation press'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Band Pallof press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['band', 'anchor'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Pallof hold',
+          aliases: ['Anti-rotation hold'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'time_sets',
+          equipment: ['band', 'anchor'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Hanging leg raise',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Weighted hanging leg raise',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['pull_up_bar', 'ankle_weights'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Hanging knee raise',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Toes-to-bar',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Lying leg raise',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'V-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Sit-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Weighted sit-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['any_weight'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Decline sit-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['bench'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Crunch',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Weighted crunch',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['any_weight'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Bicycle crunch',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Russian twist',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Weighted Russian twist',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['any_weight'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Ab-wheel rollout',
+          aliases: ['Ab rollout'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['ab_wheel'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Cable crunch',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Cable woodchop',
+          aliases: ['Woodchopper'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Landmine rotation',
+          aliases: ['Landmine rainbow'],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'landmine'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Dumbbell side bend',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Stir the pot',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: ['exercise_ball'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Mountain climber',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'core',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: "Farmer's carry",
+          aliases: ["Farmer's walk"],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'forearms',
+        },
+        {
+          name: "Farmer's hold",
+          aliases: [],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'time_sets',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'forearms',
+        },
+        {
+          name: 'Trap-bar carry',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['trap_bar', 'plates'],
+          primaryMuscle: 'forearms',
+        },
+        {
+          name: 'Suitcase carry',
+          aliases: ["Single-arm farmer's carry"],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Suitcase hold',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'time_sets',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Uneven carry',
+          aliases: ['Offset carry'],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'obliques',
+        },
+        {
+          name: 'Front-rack carry',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'abdominals',
+        },
+        {
+          name: 'Overhead carry',
+          aliases: ["Waiter's walk"],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Sandbag bear-hug carry',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['sandbag'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Partner carry',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'carry',
+          trackingType: 'distance',
+          equipment: ['partner'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Sled push',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: ['sled', 'plates'],
+          primaryMuscle: 'quadriceps',
+        },
+        {
+          name: 'Sled march',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: ['sled', 'plates'],
+          primaryMuscle: 'glutes',
+        },
+        {
+          name: 'Sled drag',
+          aliases: ['Backward sled drag'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: ['sled', 'plates'],
+          primaryMuscle: 'quadriceps',
+        },
+        {
+          name: 'Rope sled pull',
+          aliases: ['Hand-over-hand sled pull'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'distance',
+          equipment: ['sled', 'plates'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Sled row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'distance',
+          equipment: ['sled', 'plates'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Weighted pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['pull_up_bar', 'weight_belt', 'plates'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Chin-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Weighted chin-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['pull_up_bar', 'weight_belt', 'plates'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Neutral-grip pull-up',
+          aliases: ['Parallel-grip pull-up'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Wide-grip pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Chest-to-bar pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Kipping pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Towel pull-up',
+          aliases: ['Two-towel pull-up', 'Wide two-towel pull-up'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar', 'towel'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'L-sit pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Archer pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Commando pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Negative pull-up',
+          aliases: ['Eccentric pull-up'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Negative chin-up',
+          aliases: ['Eccentric chin-up'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Jumping pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Tempo pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Band-assisted pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar', 'band'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Band-assisted chin-up',
+          aliases: ['Banded chin-up'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar', 'band'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Machine-assisted pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Ring pull-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['rings'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Pull-up hold',
+          aliases: ['Pull-up isometric hold', 'Flexed-arm hang'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'time_sets',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Scapular pull-up',
+          aliases: ['Scap pull-up'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Dead hang',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'time_sets',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'forearms',
+        },
+        {
+          name: 'Single-arm dead hang',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'time_sets',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'forearms',
+        },
+        {
+          name: 'Rope climb',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['climbing_rope'],
+          primaryMuscle: 'lats',
+          supervision: 'coach',
+        },
+        {
+          name: 'Legless rope climb',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['climbing_rope'],
+          primaryMuscle: 'lats',
+          supervision: 'coach',
+        },
+        {
+          name: 'Lat pulldown',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Close-grip lat pulldown',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Reverse-grip lat pulldown',
+          aliases: ['Underhand lat pulldown'],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Single-arm lat pulldown',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Straight-arm pulldown',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Band lat pulldown',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_pull',
+          trackingType: 'reps',
+          equipment: ['band', 'anchor'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Overhead press',
+          aliases: ['OHP', 'Strict press', 'Military press'],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'rack'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Seated overhead press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench', 'rack'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Push press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'rack'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Seated dumbbell shoulder press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell', 'bench'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Standing dumbbell shoulder press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Single-arm overhead press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Arnold press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Kettlebell overhead press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Bottoms-up kettlebell press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Landmine press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'landmine'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Half-kneeling landmine press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'landmine'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Z press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Machine shoulder press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['machine'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Band overhead press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['band'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Pike push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Elevated pike push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['box'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Handstand push-up',
+          aliases: ['HSPU'],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['wall'],
+          primaryMuscle: 'shoulders',
+          supervision: 'coach',
+        },
+        {
+          name: 'Dip',
+          aliases: ['Parallel-bar dip'],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['dip_bars'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Weighted dip',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['dip_bars', 'weight_belt', 'plates'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Band-assisted dip',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['dip_bars', 'band'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Negative dip',
+          aliases: ['Eccentric dip'],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['dip_bars'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Bench dip',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['bench'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Weighted bench dip',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'weight_reps',
+          equipment: ['bench', 'plates'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Ring dip',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'reps',
+          equipment: ['rings'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Dip support hold',
+          aliases: ['Top dip hold'],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'time_sets',
+          equipment: ['dip_bars'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Ring support hold',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'vertical_push',
+          trackingType: 'time_sets',
+          equipment: ['rings'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Push-up',
+          aliases: ['Press-up'],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Weighted push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['weight_vest'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Feet-elevated push-up',
+          aliases: ['Decline push-up'],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: ['box'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Weighted feet-elevated push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['box', 'weight_vest'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Incline push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: ['bench'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Knee push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Wide push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Diamond push-up',
+          aliases: ['Close-grip push-up'],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Archer push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Spiderman push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'T push-up',
+          aliases: ['Push-up with rotation'],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'One-arm push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Clapping push-up',
+          aliases: ['Plyo push-up'],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Hand-release push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Tempo push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Pause push-up',
+          aliases: ['Paused push-up'],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Hindu push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Dive bomber push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Ring push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: ['rings'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Deficit push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: ['parallettes'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Band push-up',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'reps',
+          equipment: ['band'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench', 'rack'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Close-grip bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench', 'rack'],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Incline bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench', 'rack'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Decline bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench', 'rack'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Pause bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench', 'rack'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Floor press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'rack'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Dumbbell bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell', 'bench'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Incline dumbbell bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell', 'bench'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Single-arm dumbbell bench press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell', 'bench'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Dumbbell floor press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Machine chest press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['machine'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Cable chest press',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_push',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Barbell row',
+          aliases: ['Bent-over row'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Pendlay row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Reverse-grip barbell row',
+          aliases: ['Underhand barbell row'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Single-arm dumbbell row',
+          aliases: ['One-arm dumbbell row'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell', 'bench'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Chest-supported dumbbell row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell', 'bench'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Seal row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'bench'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Landmine row',
+          aliases: ['T-bar row'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'plates', 'landmine'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Kettlebell row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Gorilla row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['kettlebell'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Renegade row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['dumbbell'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Seated cable row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Single-arm cable row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Machine row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['machine'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Inverted row',
+          aliases: ['Bodyweight row'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['barbell', 'rack'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Weighted inverted row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['barbell', 'rack', 'weight_vest'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Feet-elevated inverted row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['barbell', 'rack', 'box'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Ring row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['rings'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Single-arm ring row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['rings'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Suspension trainer row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['suspension_trainer'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Towel row',
+          aliases: ['Door towel row'],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['towel', 'anchor'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Band row',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['band', 'anchor'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Face pull',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'weight_reps',
+          equipment: ['cable_machine'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Band face pull',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['band', 'anchor'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Band pull-apart',
+          aliases: [],
+          modality: 'strength',
+          pattern: 'horizontal_pull',
+          trackingType: 'reps',
+          equipment: ['band'],
+          primaryMuscle: 'upper_back',
+        },
+        {
+          name: 'Rowing machine',
+          aliases: ['Rower', 'Indoor rowing'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['rowing_machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Rowing machine intervals',
+          aliases: ['Rower intervals'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['rowing_machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Rowing machine for distance',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: ['rowing_machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Ski ergometer',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['ski_ergometer'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Ski ergometer intervals',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['ski_ergometer'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Air bike',
+          aliases: ['Fan bike'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['air_bike'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Air bike intervals',
+          aliases: ['Fan bike intervals'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['air_bike'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Stationary bike',
+          aliases: ['Exercise bike'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['stationary_bike'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Stationary bike intervals',
+          aliases: ['Exercise bike intervals'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['stationary_bike'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Climbing machine',
+          aliases: ['Vertical climber', 'Ladder climber'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['climbing_machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Climbing machine intervals',
+          aliases: ['Vertical climber intervals'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['climbing_machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Stair machine',
+          aliases: ['Step machine', 'Stair climber'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Elliptical',
+          aliases: ['Elliptical trainer', 'Cross-trainer'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['machine'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Treadmill run',
+          aliases: ['Treadmill jog'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['treadmill'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Treadmill intervals',
+          aliases: ['Treadmill sprints'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['treadmill'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Treadmill walk',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['treadmill'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Run',
+          aliases: ['Jog', 'Easy run', 'Long run'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Interval run',
+          aliases: ['Run intervals'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Run for distance',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Walk',
+          aliases: ['Ruck'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Sprint',
+          aliases: ['Flat sprint', 'Dash'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Hill sprint',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['hill_or_stairs'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Stair sprint',
+          aliases: ['Stair run'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['hill_or_stairs'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Stair climb',
+          aliases: ['Stair walk'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['hill_or_stairs'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Backpedal',
+          aliases: ['Backward run'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Shuttle run',
+          aliases: ['Line drill'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['cones'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Pro agility shuttle',
+          aliases: ['Short shuttle'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['cones'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Cone weave',
+          aliases: ['Cone slalom'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['cones'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Agility ladder drill',
+          aliases: ['Ladder footwork'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['agility_ladder'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Lateral shuffle',
+          aliases: ['Side shuffle'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abductors',
+        },
+        {
+          name: 'Carioca',
+          aliases: ['Grapevine'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'High knees',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hip_flexors',
+        },
+        {
+          name: 'Butt kick',
+          aliases: ['Heel kick'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'hamstrings',
+        },
+        {
+          name: 'Jumping jack',
+          aliases: ['Star jump'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'calves',
+        },
+        {
+          name: 'Burpee',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'chest',
+        },
+        {
+          name: 'Jump rope',
+          aliases: ['Skipping rope'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['jump_rope'],
+          primaryMuscle: 'calves',
+        },
+        {
+          name: 'Double-under',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['jump_rope'],
+          primaryMuscle: 'calves',
+        },
+        {
+          name: 'Battle rope waves',
+          aliases: ['Rope waves'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['battle_rope'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Battle rope slam',
+          aliases: ['Rope slam'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['battle_rope'],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Bear crawl',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Bear crawl for distance',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Crab walk',
+          aliases: ['Crab crawl'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'triceps',
+        },
+        {
+          name: 'Duck walk',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: [],
+          primaryMuscle: 'quadriceps',
+        },
+        {
+          name: 'Swim',
+          aliases: ['Swimming', 'Lap swim'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: ['pool'],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Bag flip',
+          aliases: ['Tire flip'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: ['heavy_bag'],
+          primaryMuscle: 'glutes',
+        },
+        {
+          name: 'Bag flip for reps',
+          aliases: ['Tire flip for reps'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['heavy_bag'],
+          primaryMuscle: 'glutes',
+        },
+        {
+          name: 'Incline treadmill walk',
+          aliases: ['Incline walk'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: ['treadmill'],
+          primaryMuscle: 'glutes',
+        },
+        {
+          name: 'Tempo run',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Fartlek run',
+          aliases: ['Fartlek'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'duration',
+          equipment: [],
+          primaryMuscle: null,
+        },
+        {
+          name: 'Band-resisted sprint',
+          aliases: ['Resisted sprint'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'distance',
+          equipment: ['band', 'partner'],
+          primaryMuscle: 'glutes',
+        },
+        {
+          name: 'Squat thrust',
+          aliases: ['Half burpee'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: [],
+          primaryMuscle: 'quadriceps',
+        },
+        {
+          name: 'Burpee pull-up',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'reps',
+          equipment: ['pull_up_bar'],
+          primaryMuscle: 'lats',
+        },
+        {
+          name: 'Lateral bear crawl',
+          aliases: [],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'shoulders',
+        },
+        {
+          name: 'Bear crawl hold',
+          aliases: ['Bear plank'],
+          modality: 'conditioning',
+          pattern: null,
+          trackingType: 'time_sets',
+          equipment: [],
+          primaryMuscle: 'abdominals',
+        },
+      ];
+      const LABELS = {
+        equipment: {
+          barbell: 'Barbell',
+          ez_bar: 'EZ bar',
+          trap_bar: 'Trap bar',
+          plates: 'Plates',
+          dumbbell: 'Dumbbell',
+          kettlebell: 'Kettlebell',
+          medicine_ball: 'Medicine ball',
+          sandbag: 'Sandbag',
+          weight_vest: 'Weight vest',
+          ankle_weights: 'Ankle weights',
+          wrist_weights: 'Wrist weights',
+          weight_belt: 'Weight belt',
+          any_weight: 'Any weight',
+          bench: 'Bench',
+          rack: 'Rack',
+          pull_up_bar: 'Pull-up bar',
+          dip_bars: 'Dip bars',
+          rings: 'Rings',
+          parallettes: 'Parallettes',
+          suspension_trainer: 'Suspension trainer',
+          band: 'Band',
+          cable_machine: 'Cable machine',
+          machine: 'Machine',
+          landmine: 'Landmine',
+          box: 'Box',
+          step: 'Step',
+          wall: 'Wall',
+          sled: 'Sled',
+          battle_rope: 'Battle rope',
+          climbing_rope: 'Climbing rope',
+          heavy_bag: 'Heavy bag',
+          mat: 'Mat',
+          foam_roller: 'Foam roller',
+          exercise_ball: 'Exercise ball',
+          ab_wheel: 'Ab wheel',
+          jump_rope: 'Jump rope',
+          air_bike: 'Air bike',
+          rowing_machine: 'Rowing machine',
+          ski_ergometer: 'Ski ergometer',
+          treadmill: 'Treadmill',
+          stationary_bike: 'Stationary bike',
+          climbing_machine: 'Climbing machine',
+          back_extension_bench: 'Back-extension bench',
+          glute_ham_developer: 'Glute-ham developer',
+          towel: 'Towel',
+          anchor: 'Anchor point',
+          hill_or_stairs: 'Hill or stairs',
+          ball: 'Ball',
+          cones: 'Cones',
+          hurdles: 'Hurdles',
+          agility_ladder: 'Agility ladder',
+          pool: 'Pool',
+          partner: 'Partner',
+        },
+        muscle: {
+          neck: 'Neck',
+          traps: 'Upper traps',
+          shoulders: 'Shoulders',
+          chest: 'Chest',
+          upper_back: 'Upper back',
+          lats: 'Lats',
+          lower_back: 'Lower back',
+          biceps: 'Biceps',
+          triceps: 'Triceps',
+          forearms: 'Forearms and grip',
+          abdominals: 'Abs',
+          obliques: 'Obliques',
+          hip_flexors: 'Hip flexors',
+          glutes: 'Glutes',
+          adductors: 'Inner thigh',
+          abductors: 'Outer hip',
+          quadriceps: 'Quads',
+          hamstrings: 'Hamstrings',
+          calves: 'Calves',
+          shins: 'Shins',
+        },
+        modality: {
+          strength: 'Strength',
+          conditioning: 'Conditioning',
+          mobility: 'Mobility',
+          skill: 'Skill and drills',
+        },
+        supervision: { coach: 'Learn with a coach present' },
+        tracking: {
+          weight_reps: 'Weight × reps',
+          reps: 'Reps',
+          time_sets: 'Time per set',
+          duration: 'Duration',
+          distance: 'Distance',
+          count: 'Count',
+          check: 'Check',
+        },
+      };
+    </script>
+    <script>
+      'use strict';
+      // ---- the search: packages/shared/src/movement-search.ts, ported, plus the proposals marked below
+      const SHORT = {
+        db: 'dumbbell',
+        kb: 'kettlebell',
+        bb: 'barbell',
+        ez: 'ez bar',
+        trx: 'suspension trainer',
+      };
+      const shortOf = (w) => (Object.hasOwn(SHORT, w) ? SHORT[w].split(' ') : null);
+      function fold(v) {
+        return v
+          .normalize('NFKD')
+          .replace(/[\p{M}\p{Cf}]/gu, '')
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, ' ')
+          .split(' ')
+          .filter((w) => w !== '' && w !== 's')
+          .map((w) => (w.endsWith('s') && !w.endsWith('ss') && w.length > 2 ? w.slice(0, -1) : w))
+          .join(' ')
+          .trim();
+      }
+      const keyOf = (v) => fold(v).replaceAll(' ', '');
+      function edits(a, b, max) {
+        if (Math.abs(a.length - b.length) > max) return max + 1;
+        let two = [],
+          prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+        for (let i = 1; i <= a.length; i++) {
+          const row = [i];
+          for (let j = 1; j <= b.length; j++) {
+            let d = Math.min(
+              prev[j] + 1,
+              row[j - 1] + 1,
+              prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+            );
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+              d = Math.min(d, two[j - 2] + 1);
+            row.push(d);
+          }
+          two = prev;
+          prev = row;
+        }
+        return Math.min(prev[b.length], max + 1);
+      }
+      const allowed = (w) => (w.length >= 9 ? 2 : w.length >= 4 ? 1 : 0);
+      // A four-letter word may be one edit off only when its first two letters agree ("pusg" for push).
+      const sameStart = (w, c) => c[0] === w[0] && (w.length !== 4 || c[1] === w[1]);
+      const tie = (a, b) =>
+        Number(!!a.o.own) - Number(!!b.o.own) || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
+
+      /** One pass of the plain match. `tier`: 0 exact or alias, 1 starts with it, 2 at the start of a word, 5 only mid-word. */
+      function plain(prep, folded, key) {
+        const words = folded.split(' ');
+        return prep
+          .filter((p) => words.every((w) => p.f.includes(w)) || p.c.includes(key) || p.hit)
+          .map((p) => {
+            const ws = p.f.split(' ');
+            const atWordStart =
+              words.every((w) => ws.some((x) => x.startsWith(w))) ||
+              ws.some((_, i) => ws.slice(i).join('').startsWith(key));
+            const tier =
+              p.hit || p.c === key
+                ? 0
+                : p.f.startsWith(folded) || p.c.startsWith(key)
+                  ? 1
+                  : atWordStart
+                    ? 2
+                    : 5;
+            return {
+              o: p.o,
+              f: p.f,
+              t: tier,
+              g: 'typed',
+              len: p.f.length,
+              alias: p.hit ? p.hit.a : null,
+            };
+          });
+      }
+      /** How well a folded spelling answers the words: 1 starts with them, 2 each at the start of a word, 5 only mid-word, null not at all. */
+      function tierOf(spelling, words, folded) {
+        if (!words.every((w) => spelling.includes(w))) return null;
+        if (spelling.startsWith(folded)) return 1;
+        const ws = spelling.split(' ');
+        return words.every((w) => ws.some((x) => x.startsWith(w))) ? 2 : 5;
+      }
+      /** matches, someWords, near, exact, aliasHit. A row is { o, t, g, alias? }: `g` is how it was found. */
+      function search(options, query, order) {
+        const folded = fold(query.trim().slice(0, 100)),
+          key = folded.replaceAll(' ', '');
+        const out = {
+          matches: [],
+          someWords: [],
+          near: [],
+          exact: false,
+          aliasHit: null,
+          shortHit: null,
+        };
+        if (folded === '') return out;
+        const words = folded.split(' ');
+        const prep = options.map((o) => {
+          const f = fold(o.name),
+            al = (o.aliases || []).map((a) => ({ a, f: fold(a) }));
+          return {
+            o,
+            f,
+            c: f.replaceAll(' ', ''),
+            al,
+            hit: al.find((x) => x.f.replaceAll(' ', '') === key),
+          };
+        });
+        out.exact = prep.some((p) => p.c === key);
+        out.aliasHit = (prep.find((p) => p.hit) || {}).hit?.a ?? null;
+        const many = words.length > 12;
+        const expanded = many ? words : words.flatMap((w) => shortOf(w) ?? [w]);
+        const typed = plain(prep, folded, key);
+        const k2 = expanded.join('');
+        const viaShort =
+          !many && expanded.join(' ') !== folded
+            ? plain(
+                prep.map((p) => ({ ...p, hit: p.al.find((x) => x.f.replaceAll(' ', '') === k2) })),
+                expanded.join(' '),
+                k2,
+              ).map((r) => ({ ...r, g: 'short' }))
+            : [];
+        // PROPOSED: part of another name finds the movement. Three letters or more, after the name matches.
+        const viaAlias =
+          !many && key.length >= 3
+            ? prep
+                .map((p) => {
+                  const best = p.al
+                    .map((x) => ({ x, t: tierOf(x.f, words, folded) }))
+                    .filter((r) => r.t !== null)
+                    .sort((a, b) => a.t - b.t || a.x.f.length - b.x.f.length)[0];
+                  // Another name never outranks a movement's own name of the same quality: its best is "a word starts with it".
+                  return best
+                    ? {
+                        o: p.o,
+                        f: p.f,
+                        t: Math.max(best.t, 2),
+                        g: 'alias',
+                        len: best.x.f.length,
+                        alias: best.x.a,
+                      }
+                    : null;
+                })
+                .filter(Boolean)
+            : [];
+        // One row a movement: its best way of being found (a start-of-word hit on another name beats a mid-word hit on its own).
+        const G = { typed: 0, alias: 1, short: 2 };
+        const fresh = (r) => r.t * 10 + G[r.g];
+        const best = new Map();
+        for (const r of [...typed, ...viaShort, ...viaAlias]) {
+          const b = best.get(r.o);
+          if (!b || (order !== 'legacy' ? fresh(r) < fresh(b) : false))
+            best.set(r.o, b && order === 'legacy' ? b : r);
+        }
+        const all = [...best.values()];
+        // PROPOSED and decided 2026-11-17: an abbreviation that spells a movement is that movement ("db row" is Dumbbell row).
+        if (viaShort.length)
+          out.shortHit =
+            (prep.find((p) => p.c === k2 || p.al.some((x) => x.f.replaceAll(' ', '') === k2)) || {})
+              .o || null;
+        // PROPOSED order: by tier, so a mid-word match ("maCHINe" for "chin") comes last. Legacy: typed rows, then the rest.
+        // Legacy (production today): typed rows by exact, starts-with, rest; then short-form rows the same way.
+        const legacy = (r) =>
+          r.g === 'typed' ? Math.min(r.t, 2) : r.g === 'short' ? 10 + Math.min(r.t, 2) : 20;
+        const rank = order === 'legacy' ? legacy : fresh;
+        out.matches = all.sort(
+          (a, b) => rank(a) - rank(b) || (order === 'legacy' ? 0 : a.len - b.len) || tie(a, b),
+        );
+        if (out.matches.length) return out;
+        const some = (ws) =>
+          prep
+            .filter((p) => ws.some((w) => w.length >= 3 && p.f.includes(w)))
+            .map((p) => ({ o: p.o, f: p.f }))
+            .sort(tie);
+        const seen2 = new Set();
+        for (const r of [...some(words), ...some(expanded)])
+          if (!seen2.has(r.o)) {
+            seen2.add(r.o);
+            out.someWords.push(r);
+          }
+        if (!many && expanded.some((w) => allowed(w) > 0)) {
+          const compact = expanded.join('');
+          const found = [];
+          for (const p of prep) {
+            const spell = [p.f, ...p.al.map((x) => x.f)],
+              cand = spell.flatMap((s) => s.split(' '));
+            let total = 0;
+            for (const w of expanded) {
+              if (p.f.includes(w)) continue;
+              const max = allowed(w);
+              if (!max) {
+                total = Infinity;
+                break;
+              }
+              let best = max + 1;
+              for (const c of cand) if (sameStart(w, c)) best = Math.min(best, edits(w, c, max));
+              if (best > max) {
+                total = Infinity;
+                break;
+              }
+              total += best;
+            }
+            const cm = allowed(compact);
+            if (cm)
+              for (const s of spell) {
+                const c = s.replaceAll(' ', '');
+                if (sameStart(compact, c)) {
+                  const d = edits(compact, c, cm);
+                  if (d <= cm) total = Math.min(total, d);
+                }
+              }
+            if (Number.isFinite(total)) found.push({ o: p.o, f: p.f, e: total });
+          }
+          out.near = found.sort((a, b) => a.e - b.e || tie(a, b));
+        }
+        return out;
+      }
+
+      // ---- data ----------------------------------------------------------------------------------
+      const OWN = [
+        { name: 'Bear crawl relay', trackingType: 'time_sets' },
+        { name: 'Backyard hill sprint', trackingType: 'count' },
+        { name: 'Grandpa’s chin-up ladder', trackingType: 'reps' },
+      ].map((o) => ({
+        aliases: [],
+        equipment: null,
+        primaryMuscle: null,
+        modality: null,
+        own: true,
+        ...o,
+      }));
+      const ALL = [...OWN, ...LIB];
+      const IN_WORKOUT = ['Plank'];
+      const RECENT = ['Pull-up', 'Plank', 'Couch stretch']
+        .map((n) => LIB.find((e) => e.name === n))
+        .filter(Boolean);
+      const FAMILY = {
+        vertical_pull: 'Pull-ups and pulldowns',
+        horizontal_pull: 'Rows',
+        horizontal_push: 'Push-ups and presses',
+        vertical_push: 'Overhead presses and dips',
+        squat: 'Squats',
+        hinge: 'Hinges and deadlifts',
+        lunge: 'Lunges',
+        jump: 'Jumps',
+        core: 'Core',
+        carry: 'Carries and sleds',
+        isolation: 'Arms, calves and single muscles',
+      };
+      const AREA = {
+        neck: 'Neck and shoulders',
+        traps: 'Neck and shoulders',
+        shoulders: 'Neck and shoulders',
+        chest: 'Chest and arms',
+        biceps: 'Chest and arms',
+        triceps: 'Chest and arms',
+        forearms: 'Chest and arms',
+        upper_back: 'Back',
+        lats: 'Back',
+        lower_back: 'Back',
+        abdominals: 'Core',
+        obliques: 'Core',
+      };
+      const KINDS = ['strength', 'mobility', 'conditioning', 'skill'];
+      const family = (o) =>
+        o.modality === 'strength'
+          ? FAMILY[o.pattern] || 'Other'
+          : o.primaryMuscle
+            ? AREA[o.primaryMuscle] || 'Hips and legs'
+            : 'Whole body';
+      const flatHeading = (o) =>
+        LABELS.modality[o.modality] +
+        (o.primaryMuscle ? ' · ' + LABELS.muscle[o.primaryMuscle] : '');
+      const needs = (o) =>
+        o.own
+          ? 'Custom item'
+          : o.equipment.length
+            ? o.equipment.map((e) => LABELS.equipment[e]).join(', ')
+            : 'No equipment';
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"]/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
+        );
+      const plural = (n, one, other) => (n === 1 ? one : other).replace('#', n);
+      const movements = (n) => plural(n, '# movement', '# movements');
+
+      // ---- state ---------------------------------------------------------------------------------
+      const S = {
+        q: '',
+        eqMode: 'any',
+        eq: new Set(),
+        mu: new Set(),
+        allEq: false,
+        panel: false,
+        showOwn: false,
+        sel: [],
+        how: null,
+        open: new Set(),
+        form: null,
+        mode: 'multi',
+        said: '',
+        psaid: '',
+      };
+      const V = { eqRule: 'anyOf', own: 'show', browse: 'two', order: 'new' };
+      const filtersOn = () =>
+        (S.eqMode === 'none' ? 1 : S.eqMode === 'pick' ? S.eq.size : 0) + S.mu.size;
+      function passes(o) {
+        if (o.own) return false; // an item of yours has no equipment or muscle to filter by
+        if (S.eqMode === 'none' && o.equipment.length) return false;
+        if (S.eqMode === 'pick' && S.eq.size) {
+          if (V.eqRule === 'anyOf' && !o.equipment.some((e) => S.eq.has(e))) return false;
+          if (V.eqRule === 'allOwned' && !o.equipment.every((e) => S.eq.has(e))) return false;
+        }
+        if (S.mu.size && !S.mu.has(o.primaryMuscle)) return false;
+        return true;
+      }
+
+      // ---- rows ----------------------------------------------------------------------------------
+      function row(r, notes = []) {
+        const o = r.o,
+          on = S.sel.includes(o.name),
+          id = 'h' + ALL.indexOf(o),
+          open = S.how === o.name;
+        const tags = [
+          ...(r.alias ? ['also called ' + r.alias] : []),
+          ...(S.mode === 'multi' && IN_WORKOUT.includes(o.name) ? ['already in this workout'] : []),
+          ...notes,
+        ];
+        const sup = o.supervision
+          ? '<span class="sup">' + esc(LABELS.supervision[o.supervision]) + '</span>'
+          : '';
+        const mark =
+          S.mode === 'multi'
+            ? '<span class="box" aria-hidden="true">' + (on ? '✓' : '') + '</span>'
+            : '';
+        const how = o.instructions
+          ? '<button class="how" data-how="' +
+            esc(o.name) +
+            '" aria-expanded="' +
+            open +
+            '" aria-label="How to do ' +
+            esc(o.name) +
+            '">How to</button>'
+          : '<span class="how none"></span>';
+        const box = open
+          ? '<div class="howto" id="' +
+            id +
+            '"><b>How to do ' +
+            esc(o.name) +
+            '</b>' +
+            (o.supervision
+              ? '<p class="sup">' + esc(LABELS.supervision[o.supervision]) + '</p>'
+              : '') +
+            '<ol>' +
+            o.instructions
+              .split('\n')
+              .map((l) => '<li>' + esc(l) + '</li>')
+              .join('') +
+            '</ol><button class="txt" data-how="' +
+            esc(o.name) +
+            '">Hide</button></div>'
+          : '';
+        return (
+          '<li><div class="row' +
+          (on ? ' on' : '') +
+          '"><button class="pick"' +
+          (S.mode === 'multi' ? ' role="checkbox" aria-checked="' + on + '"' : '') +
+          ' data-pick="' +
+          esc(o.name) +
+          '">' +
+          mark +
+          '<span class="t"><b>' +
+          esc(o.name) +
+          '</b>' +
+          sup +
+          '<span class="meta">' +
+          esc(LABELS.tracking[o.trackingType]) +
+          ' · ' +
+          esc(needs(o)) +
+          '</span>' +
+          (tags.length ? '<span class="meta tag">' + esc(tags.join(' · ')) + '</span>' : '') +
+          '</span></button>' +
+          how +
+          '</div>' +
+          box +
+          '</li>'
+        );
+      }
+      const list = (rows, notes) =>
+        '<ul>' +
+        rows.map((r) => row(r, typeof notes === 'function' ? notes(r) : notes)).join('') +
+        '</ul>';
+      const section = (title, rows, notes) =>
+        rows.length ? '<h3>' + esc(title) + '</h3>' + list(rows, notes) : '';
+      function group(key, label, n, inner, level, auto) {
+        const open = auto || S.open.has(key);
+        return (
+          '<details class="grp l' +
+          level +
+          '"' +
+          (open ? ' open' : '') +
+          ' data-grp="' +
+          esc(key) +
+          '"><summary><span class="chev" aria-hidden="true">›</span><h3 class="gl">' +
+          esc(label) +
+          '</h3><span class="n">' +
+          n +
+          '<span class="sr"> movements</span></span></summary>' +
+          (open ? inner() : '') +
+          '</details>'
+        );
+      }
+
+      // ---- the list ------------------------------------------------------------------------------
+      function browse(on) {
+        const lib = LIB.filter((o) => !on || passes(o)),
+          own = OWN.map((o) => ({ o }));
+        const auto = on && lib.length <= 20;
+        let html = '',
+          top = '',
+          hidden = 0;
+        if (!on)
+          html +=
+            group('own', 'Your custom items', own.length, () => list(own), 1, false) +
+            section(
+              'Recent',
+              RECENT.map((o) => ({ o })),
+            );
+        else if (V.own === 'show')
+          html += group(
+            'own-filtered',
+            'Your custom items (not filtered)',
+            own.length,
+            () => list(own),
+            1,
+            false,
+          );
+        else if (S.showOwn)
+          html += '<h3 id="own-h" tabindex="-1">Your custom items</h3>' + list(own);
+        else {
+          hidden = own.length;
+          top =
+            '<div class="line"><span>' +
+            plural(
+              hidden,
+              '# of your custom items is hidden while you filter.',
+              '# of your custom items are hidden while you filter.',
+            ) +
+            '</span><button class="txt" data-act="show-own">Show</button></div>';
+        }
+        let tree = '';
+        if (!lib.length)
+          tree +=
+            '<p>No movements fit your filters.</p><button class="btn ghost" data-act="clear">Clear filters</button>';
+        const by = (items, f) => {
+          const m = new Map();
+          items.forEach((o) => m.set(f(o), [...(m.get(f(o)) || []), o]));
+          return m;
+        };
+        if (V.browse === 'flat') {
+          const g = by(lib, flatHeading);
+          [...g.keys()].sort().forEach((h) => {
+            tree += group(h, h, g.get(h).length, () => list(g.get(h).map((o) => ({ o }))), 2, auto);
+          });
+        } else {
+          KINDS.forEach((k) => {
+            const items = lib.filter((o) => o.modality === k);
+            if (!items.length) return;
+            tree += group(
+              k,
+              LABELS.modality[k],
+              items.length,
+              () => {
+                const g = by(items, family);
+                return [...g.keys()]
+                  .sort((a, b) => g.get(b).length - g.get(a).length)
+                  .map((f) =>
+                    group(
+                      k + '/' + f,
+                      f,
+                      g.get(f).length,
+                      () => list(g.get(f).map((o) => ({ o }))),
+                      3,
+                      auto,
+                    ),
+                  )
+                  .join('');
+              },
+              2,
+              auto,
+            );
+          });
+        }
+        html += group(
+          'all',
+          on ? 'Movements that fit your filters' : 'All movements',
+          lib.length,
+          () => tree,
+          1,
+          auto,
+        );
+        const status = on
+          ? movements(lib.length) +
+            ' ' +
+            (lib.length === 1 ? 'fits' : 'fit') +
+            ' your filters.' +
+            (hidden
+              ? ' ' +
+                plural(
+                  hidden,
+                  '# of your custom items is hidden.',
+                  '# of your custom items are hidden.',
+                )
+              : '')
+          : '';
+        return { html, top, status, count: lib.length, first: null, lone: null };
+      }
+
+      function results(on) {
+        const typed = S.q.trim();
+        const res = search(ALL, typed, V.order);
+        const k = keyOf(typed);
+        const isFirst = (r) =>
+          keyOf(r.o.name) === k || (r.alias && keyOf(r.alias) === k) || r.o === res.shortHit;
+        const first = res.matches.filter(isFirst);
+        const uniq = (rows) => rows.filter((r, i) => rows.findIndex((x) => x.o === r.o) === i);
+        const rest = (rows) => rows.filter((r) => !first.some((x) => x.o === r.o));
+        const near = rest(res.near),
+          some = rest(res.someWords).filter((r) => !near.some((x) => x.o === r.o));
+        const lib = (rows) => rows.filter((r) => !r.o.own),
+          fit = (rows) => lib(rows).filter((r) => !on || passes(r.o));
+        const ownHits = uniq(rest([...res.matches, ...near, ...some]).filter((r) => r.o.own));
+        const m = on ? fit(rest(res.matches)) : rest(res.matches),
+          n = on ? fit(near) : near,
+          w = on ? fit(some) : some;
+        const hiddenLib = on
+          ? lib(rest([...res.matches, ...near, ...some])).length - (m.length + n.length + w.length)
+          : 0;
+        const ownShown = on && ownHits.length && (V.own === 'show' || S.showOwn);
+        const ownHidden = on && ownHits.length && !ownShown ? ownHits.length : 0;
+        let html = '',
+          top = '';
+        if (ownHidden)
+          top =
+            '<div class="line"><span>' +
+            plural(
+              ownHidden,
+              '# of your custom items matches and is hidden while you filter.',
+              '# of your custom items match and are hidden while you filter.',
+            ) +
+            '</span><button class="txt" data-act="show-own">Show</button></div>';
+        html += first.length
+          ? list(first, (r) =>
+              on && !r.o.own && !passes(r.o)
+                ? ['not in your filters']
+                : on && r.o.own
+                  ? ['custom, not filtered']
+                  : r.o.own
+                    ? ['custom']
+                    : [],
+            )
+          : '';
+        html += section(first.length ? 'More matches' : 'Matches', m, (r) =>
+          r.o.own ? ['custom'] : [],
+        );
+        // Custom matches come AFTER the filtered ones, so they never push the filtered results down.
+        if (ownShown)
+          html +=
+            '<h3 id="own-h" tabindex="-1">Your custom items (not filtered)</h3>' + list(ownHits);
+        html += section('Did you mean', n, (r) => (r.o.own ? ['custom'] : []));
+        html += section('Has some of your words', w, (r) => (r.o.own ? ['custom'] : []));
+        const shown =
+          first.length + (ownShown ? ownHits.length : 0) + m.length + n.length + w.length;
+        if (on && hiddenLib > 0) {
+          html +=
+            '<div class="line' +
+            (shown ? '' : ' big') +
+            '"><span>' +
+            (shown
+              ? plural(
+                  hiddenLib,
+                  '# more is not in your filters.',
+                  '# more are not in your filters.',
+                )
+              : movements(hiddenLib) +
+                ' for “' +
+                esc(typed) +
+                '” ' +
+                (hiddenLib === 1 ? 'is' : 'are') +
+                ' not in your filters.') +
+            '</span><button class="txt" data-act="clear">Clear filters</button></div>';
+        }
+        const anything = res.matches.length + res.near.length + res.someWords.length;
+        if (!anything)
+          html +=
+            '<p class="hint">No movement matches. Make it a new item with the button above, or look through the list.</p>' +
+            browse(on).html;
+        const count = first.length + (ownShown ? ownHits.length : 0) + m.length;
+        let status;
+        if (first.length)
+          status =
+            plural(count, '# match.', '# matches.') +
+            ' Already in the list as ' +
+            first[0].o.name +
+            (on && !first[0].o.own && !passes(first[0].o)
+              ? ', which is not in your filters.'
+              : '.');
+        else if (count) status = plural(count, '# match.', '# matches.');
+        else if (n.length || w.length)
+          status =
+            'No matches. ' +
+            [
+              n.length ? plural(n.length, '# close spelling', '# close spellings') : '',
+              w.length ? w.length + ' with some of your words' : '',
+            ]
+              .filter(Boolean)
+              .join(', ') +
+            '.';
+        else if (hiddenLib) status = 'Nothing in your filters. ' + hiddenLib + ' outside them.';
+        else status = 'No matches.';
+        if (ownHidden)
+          status +=
+            ' ' +
+            plural(
+              ownHidden,
+              '# of your custom items is hidden.',
+              '# of your custom items are hidden.',
+            );
+        const label =
+          S.mode === 'multi'
+            ? 'New item: “' + esc(typed) + '”'
+            : 'Add “' + esc(typed) + '” as a new movement';
+        const create =
+          res.exact || res.aliasHit || res.shortHit
+            ? ''
+            : '<button class="btn ghost' +
+              (anything ? '' : ' loud') +
+              ' create" data-act="new">' +
+              label +
+              '</button>';
+        // Enter's target: an exact or alias hit, or the only match when it matched by its own name. Never an "also called" row.
+        const only = !first.length && count === 1 ? [...(ownShown ? ownHits : []), ...m][0] : null;
+        const lone = only && only.g !== 'alias' ? only : null;
+        return { html, top, status, count: shown, create, first: first[0] || null, lone };
+      }
+      const body = () =>
+        S.q.trim()
+          ? results(filtersOn() > 0)
+          : {
+              create:
+                '<button class="btn ghost create" data-act="new">' +
+                (S.mode === 'multi' ? '+ New item' : '+ New movement') +
+                '</button>',
+              ...browse(filtersOn() > 0),
+            };
+
+      function form() {
+        return (
+          '<div class="card"><b>New item</b><label><span>Name</span><input type="text" id="ni-name" maxlength="40" value="' +
+          esc(S.form.name) +
+          '"></label>' +
+          '<label><span>What it tracks</span><select id="ni-type"><option value="">Choose…</option>' +
+          Object.keys(LABELS.tracking)
+            .map((t) => '<option value="' + t + '">' + LABELS.tracking[t] + '</option>')
+            .join('') +
+          '</select></label>' +
+          '<p class="hint">It can’t be deleted or renamed, and what it tracks can’t be changed.</p><div class="acts"><button class="txt" data-act="ni-cancel">Cancel</button><button class="btn small" data-act="ni-save">Create</button></div></div>'
+        );
+      }
+
+      function panel(count) {
+        const withOnly = (fn) => {
+          const keep = { eqMode: S.eqMode, eq: S.eq, mu: S.mu, open: new Set(S.open) };
+          fn();
+          const c = body().count;
+          Object.assign(S, keep);
+          return c;
+        };
+        const nEq = (e) =>
+          withOnly(() => {
+            S.eqMode = 'pick';
+            S.eq = new Set([e]);
+          });
+        const nMu = (m) =>
+          withOnly(() => {
+            S.mu = new Set([m]);
+          });
+        const eqs = Object.keys(LABELS.equipment)
+          .map((e) => ({ e, n: nEq(e) }))
+          .filter((x) => x.n > 0)
+          .sort((a, b) => b.n - a.n);
+        const shownEq = S.allEq ? eqs : eqs.filter((x, i) => i < 10 || S.eq.has(x.e));
+        const radio = (v, label, hint) =>
+          '<label class="check"><input type="radio" name="eqm" data-f="eqm" value="' +
+          v +
+          '"' +
+          (S.eqMode === v ? ' checked' : '') +
+          '><span>' +
+          label +
+          (hint ? '<span class="meta">' + hint + '</span>' : '') +
+          '</span></label>';
+        const what = S.q.trim()
+          ? plural(count, 'Show # result', 'Show # results')
+          : 'Show ' + movements(count);
+        return (
+          '<div class="panel" role="dialog" aria-modal="true" aria-labelledby="f-t"><div class="ov-h"><h2 id="f-t" tabindex="-1">Filters</h2><button class="txt" data-act="panel-close">Close</button></div>' +
+          '<div class="ov-b"><fieldset><legend>Equipment</legend>' +
+          radio('any', 'Any equipment') +
+          radio(
+            'none',
+            'No equipment',
+            'Just you and the floor. A wall, a towel or a partner counts as equipment.',
+          ) +
+          radio(
+            'pick',
+            V.eqRule === 'anyOf' ? 'Uses at least one of…' : 'Only what I have…',
+            V.eqRule === 'anyOf'
+              ? 'A movement may need more than the one you tick. Each row lists what it needs.'
+              : 'Shows movements that need nothing beyond what you tick.',
+          ) +
+          (S.eqMode === 'pick'
+            ? '<div class="two sub">' +
+              shownEq
+                .map(
+                  (x) =>
+                    '<label class="check"><input type="checkbox" data-f="eq" value="' +
+                    x.e +
+                    '"' +
+                    (S.eq.has(x.e) ? ' checked' : '') +
+                    '><span>' +
+                    esc(LABELS.equipment[x.e]) +
+                    '</span><span class="n">' +
+                    x.n +
+                    '</span></label>',
+                )
+                .join('') +
+              '</div>' +
+              (eqs.length > 10
+                ? '<button class="txt" data-act="all-eq">' +
+                  (S.allEq ? 'Show fewer' : 'Show all equipment (' + eqs.length + ')') +
+                  '</button>'
+                : '')
+            : '') +
+          '</fieldset><fieldset><legend>Main muscle</legend><div class="two">' +
+          Object.keys(LABELS.muscle)
+            .map((m) => {
+              const n = nMu(m);
+              return (
+                '<label class="check' +
+                (n ? '' : ' off') +
+                '"><input type="checkbox" data-f="mu" value="' +
+                m +
+                '"' +
+                (S.mu.has(m) ? ' checked' : '') +
+                (n || S.mu.has(m) ? '' : ' disabled') +
+                '><span>' +
+                esc(LABELS.muscle[m]) +
+                '</span><span class="n">' +
+                n +
+                '</span></label>'
+              );
+            })
+            .join('') +
+          '</div></fieldset></div><div class="ov-f"><div class="status" role="status">' +
+          esc(S.psaid) +
+          '</div><div class="acts"><button class="btn ghost small" data-act="clear"' +
+          (filtersOn() ? '' : ' disabled') +
+          '>Clear filters</button><button class="btn" data-act="panel-close"' +
+          (count ? '' : ' disabled') +
+          '>' +
+          (count ? what : 'Nothing fits') +
+          '</button></div></div></div>'
+        );
+      }
+
+      function render(focus) {
+        const b = body(),
+          n = S.sel.length,
+          f = filtersOn();
+        const phone = document.getElementById('phone');
+        const keep = (sel) => phone.querySelector(sel)?.scrollTop || 0;
+        const y = keep(':scope > .ov-b'),
+          py = keep('.panel .ov-b');
+        const picked = n
+          ? '<p class="picked">' + n + ' picked: ' + esc(S.sel.join(', ')) + '</p>'
+          : '';
+        phone.innerHTML =
+          '<div class="ov-h"><h2 id="pk-t">' +
+          (S.mode === 'multi' ? 'Add items' : 'Choose a movement') +
+          '</h2></div>' +
+          '<div class="ov-s"><div class="bar"><input type="search" id="q" maxlength="100" enterkeyhint="search" value="' +
+          esc(S.q) +
+          '" placeholder="' +
+          (S.mode === 'multi' ? 'Search items' : 'Search or type a new movement') +
+          '" aria-label="' +
+          (S.mode === 'multi' ? 'Search items' : 'Search movements') +
+          '" autocomplete="off">' +
+          '<button class="btn ghost fbtn" data-act="panel-open" aria-haspopup="dialog"><span aria-hidden="true">Filters' +
+          (f ? ' · ' + f : '') +
+          '</span><span class="sr">Filters, ' +
+          (f ? f + ' on' : 'none on') +
+          '</span></button></div></div>' +
+          '<div class="ov-b">' +
+          (b.top || '') +
+          '<div class="status" role="status" aria-live="polite">' +
+          esc(S.said || b.status) +
+          '</div>' +
+          (S.mode === 'single' && n
+            ? '<div class="line"><span><b>' +
+              esc(S.sel[0]) +
+              '</b> chosen. In the app the picker closes here.</span></div>'
+            : '') +
+          (S.form ? form() : b.create || '') +
+          b.html +
+          '</div>' +
+          '<div class="ov-f">' +
+          (S.mode === 'multi'
+            ? picked +
+              '<div class="acts"><button class="btn" data-act="noop"' +
+              (n ? '' : ' aria-disabled="true"') +
+              '>' +
+              (n ? plural(n, 'Add # item', 'Add # items') : 'Tick items to add') +
+              '</button><button class="btn ghost small" data-act="noop">Close</button></div>'
+            : '<div class="acts"><button class="btn ghost" data-act="noop">Close</button></div>') +
+          '</div>' +
+          (S.panel ? panel(b.count) : '');
+        phone.querySelector(':scope > .ov-b').scrollTop = y;
+        if (S.panel) phone.querySelector('.panel .ov-b').scrollTop = py;
+        const at =
+          focus && (focus === 'q' ? document.getElementById('q') : phone.querySelector(focus));
+        if (at) {
+          at.focus({ preventScroll: focus !== '#own-h' });
+          if (focus === 'q') at.setSelectionRange(at.value.length, at.value.length);
+        }
+        S.said = '';
+        LAST = b;
+      }
+      let LAST = null;
+
+      // ---- events --------------------------------------------------------------------------------
+      const phone = document.getElementById('phone');
+      const sel = (name) => '[data-pick="' + CSS.escape(name) + '"]';
+      function pick(name) {
+        if (S.mode === 'single') {
+          S.sel = [name];
+          S.said = name + ' chosen.';
+        } else if (S.sel.includes(name)) S.sel = S.sel.filter((x) => x !== name);
+        else S.sel.push(name);
+        render(sel(name));
+      }
+      phone.addEventListener('input', (e) => {
+        if (e.target.id === 'q') {
+          S.q = e.target.value;
+          S.how = null;
+          S.form = null;
+          render('q');
+        }
+      });
+      phone.addEventListener('keydown', (e) => {
+        if (e.target.id !== 'q' || e.key !== 'Enter') return;
+        const r = LAST && (LAST.first || LAST.lone); // an exact or alias hit, or the only match by name; never a near miss
+        if (!r) return;
+        const name = r.o.name;
+        if (S.mode === 'single') S.sel = [name];
+        else if (!S.sel.includes(name)) S.sel.push(name);
+        S.q = '';
+        S.said = name + (S.mode === 'single' ? ' chosen.' : ' ticked.');
+        render('q');
+      });
+      phone.addEventListener('change', (e) => {
+        const t = e.target,
+          f = t.dataset.f;
+        if (!f) return;
+        let what = '';
+        if (f === 'eqm') {
+          S.eqMode = t.value;
+          what = { any: 'Any equipment', none: 'No equipment', pick: 'Choose equipment' }[t.value];
+        }
+        if (f === 'eq') {
+          t.checked ? S.eq.add(t.value) : S.eq.delete(t.value);
+          what = LABELS.equipment[t.value] + (t.checked ? ' on' : ' off');
+        }
+        if (f === 'mu') {
+          t.checked ? S.mu.add(t.value) : S.mu.delete(t.value);
+          what = LABELS.muscle[t.value] + (t.checked ? ' on' : ' off');
+        }
+        S.showOwn = false;
+        const c = body().count;
+        S.psaid =
+          what + '. ' + (S.q.trim() ? plural(c, '# result.', '# results.') : movements(c) + '.');
+        render('.panel [data-f="' + f + '"][value="' + t.value + '"]');
+      });
+      phone.addEventListener(
+        'toggle',
+        (e) => {
+          const g = e.target.dataset && e.target.dataset.grp;
+          if (!g || e.target.open === S.open.has(g)) return;
+          e.target.open ? S.open.add(g) : S.open.delete(g);
+          render('[data-grp="' + CSS.escape(g) + '"] > summary');
+        },
+        true,
+      );
+      phone.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.pick) return pick(b.dataset.pick);
+        if (b.dataset.how) {
+          const n = b.dataset.how;
+          S.how = S.how === n ? null : n;
+          return render('.how[data-how="' + CSS.escape(n) + '"]');
+        }
+        const a = b.dataset.act;
+        if (a === 'panel-open') {
+          S.panel = true;
+          S.psaid = '';
+          render('#f-t');
+        }
+        if (a === 'panel-close') {
+          S.panel = false;
+          const c = body();
+          S.said = filtersOn() ? c.status : '';
+          render('.fbtn');
+        }
+        if (a === 'all-eq') {
+          S.allEq = !S.allEq;
+          render('[data-act="all-eq"]');
+        }
+        if (a === 'clear') {
+          S.eqMode = 'any';
+          S.eq.clear();
+          S.mu.clear();
+          S.showOwn = false;
+          const c = body();
+          S.psaid =
+            'Filters cleared. ' +
+            (S.q.trim() ? plural(c.count, '# result.', '# results.') : movements(c.count) + '.');
+          S.said = (c.status ? c.status + ' ' : '') + 'Filters cleared.';
+          render(S.panel ? '#f-t' : '.fbtn');
+        }
+        if (a === 'show-own') {
+          S.showOwn = true;
+          render('#own-h');
+        }
+        if (a === 'new') {
+          S.form = { name: S.q.trim() };
+          render('#ni-name');
+        }
+        if (a === 'ni-cancel') {
+          S.form = null;
+          render('.create');
+        }
+        if (a === 'ni-save') {
+          const name = document.getElementById('ni-name').value.trim(),
+            type = document.getElementById('ni-type').value;
+          if (!name) return;
+          const same = ALL.find(
+            (x) =>
+              keyOf(x.name) === keyOf(name) ||
+              (x.aliases || []).some((al) => keyOf(al) === keyOf(name)),
+          );
+          if (same) {
+            S.form = null;
+            S.q = '';
+            if (!S.sel.includes(same.name)) S.sel.push(same.name);
+            S.said = 'Already in the list as ' + same.name + '. Ticked.';
+            return render('q');
+          }
+          if (!type) {
+            S.said = 'Choose what it tracks.';
+            return render('#ni-type');
+          }
+          const o = {
+            name,
+            trackingType: type,
+            aliases: [],
+            equipment: null,
+            primaryMuscle: null,
+            modality: null,
+            own: true,
+          };
+          OWN.push(o);
+          ALL.unshift(o);
+          S.form = null;
+          S.q = '';
+          S.sel.push(name);
+          S.said = name + ' made and ticked.';
+          render('q');
+        }
+      });
+
+      const STATES = {
+        'Browse: nothing typed': {},
+        'Browse: Strength opened, then a family': {
+          open: ['strength', 'strength/Pull-ups and pulldowns'],
+        },
+        'Filters: the panel, equipment chosen': {
+          panel: true,
+          eqMode: 'pick',
+          eq: ['pull_up_bar'],
+          mu: ['lats'],
+        },
+        'Browse: filters on (No equipment, Abs)': { eqMode: 'none', mu: ['abdominals'] },
+        'Search: matches (“pull-up”)': { q: 'pull-up' },
+        'Search: a short form (“db”)': { q: 'db' },
+        'Search: an abbreviation that spells a movement (“db bench press”)': {
+          q: 'db bench press',
+        },
+        'Search: letters in the middle of a word (“chin”)': { q: 'chin' },
+        'Search: part of another name (“military”)': { q: 'military' },
+        'Search: best match first (“press”)': { q: 'press' },
+        'Search: a typo (“farmrs carry”)': { q: 'farmrs carry' },
+        'Search: a four-letter typo (“pusg”)': { q: 'pusg' },
+        'Search: your custom item, filter on (“chin”)': { q: 'chin', mu: ['lats'] },
+        'Search: exact match not in the filters (“plank”)': {
+          q: 'plank',
+          eqMode: 'pick',
+          eq: ['plates'],
+        },
+        'Search: every match hidden by the filters (“stretch”)': {
+          q: 'stretch',
+          eqMode: 'pick',
+          eq: ['barbell'],
+        },
+        'Search: nothing found (“zercher”)': { q: 'zercher' },
+        'New item: the form (“zercher squat”)': { q: 'zercher squat', form: true },
+        'Row: supervision label (“rope climb”)': { q: 'rope climb' },
+        'Row: How to, open (“bridge”)': { q: 'bridge', how: 'Back bridge' },
+        'Row: another name, long (“pull-up iso”)': { q: 'pull-up iso' },
+        'Row: the longest (“close-grip bench”)': { q: 'close-grip bench' },
+        'Ticked: three items, one off screen': {
+          q: 'push-up',
+          sel: ['Push-up', 'Diamond push-up', 'Pull-up'],
+        },
+      };
+      function go(name) {
+        const st = STATES[name] || {};
+        Object.assign(S, {
+          q: st.q || '',
+          panel: !!st.panel,
+          showOwn: !!st.showOwn,
+          how: st.how || null,
+          form: st.form ? { name: st.q || '' } : null,
+          eqMode: st.eqMode || 'any',
+          allEq: false,
+          said: '',
+          psaid: '',
+        });
+        S.eq = new Set(st.eq || []);
+        S.mu = new Set(st.mu || []);
+        S.open = new Set(['own', 'all', ...(st.open || [])]);
+        S.sel = [...(st.sel || [])];
+        render();
+      }
+      const bind = (id, fn) =>
+        document.getElementById(id).addEventListener('change', (e) => {
+          fn(e.target.value);
+          render();
+        });
+      document.getElementById('state').addEventListener('change', (e) => go(e.target.value));
+      bind('mode', (v) => {
+        S.mode = v;
+        S.sel = [];
+      });
+      bind('view', (v) => phone.classList.toggle('short', v === 'short'));
+      bind('v-eq', (v) => {
+        V.eqRule = v;
+      });
+      bind('v-own', (v) => {
+        V.own = v;
+        S.showOwn = false;
+      });
+      bind('v-browse', (v) => {
+        V.browse = v;
+        S.open = new Set(['own', 'all']);
+      });
+      bind('v-order', (v) => {
+        V.order = v;
+      });
+      go(Object.keys(STATES)[0]);
+    </script>
+  </body>
+</html>

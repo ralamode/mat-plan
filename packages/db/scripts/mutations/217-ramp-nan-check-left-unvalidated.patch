@@ -1,0 +1,10 @@
+diff --git a/packages/db/migrations/0031_tdebt_validate_name_and_nan_checks.sql b/packages/db/migrations/0031_tdebt_validate_name_and_nan_checks.sql
+--- a/packages/db/migrations/0031_tdebt_validate_name_and_nan_checks.sql
++++ b/packages/db/migrations/0031_tdebt_validate_name_and_nan_checks.sql
+@@ -30,6 +30,5 @@
+ SET lock_timeout = '5s';--> statement-breakpoint
+ SET statement_timeout = '60s';--> statement-breakpoint
+ ALTER TABLE "program_blocks" VALIDATE CONSTRAINT "program_blocks_name_length_check";--> statement-breakpoint
+-ALTER TABLE "ramp_targets" VALIDATE CONSTRAINT "ramp_targets_target_value_not_nan_check";--> statement-breakpoint
+ ALTER TABLE "entries" VALIDATE CONSTRAINT "entries_value_num_check";--> statement-breakpoint
+ ALTER TABLE "entry_set_quantities" VALIDATE CONSTRAINT "entry_set_quantities_value_num_not_nan_check";
