@@ -22,7 +22,8 @@ import { isUniqueViolationOn } from '../unique-violation';
  *   miss the replay lookup, the first inserts) must not be told its own program's name is taken;
  *   it falls through and the re-read returns that program (`createProfile`'s `excludeClientId`,
  *   for the same reason). A plain `!==` is safe: every template block has a `client_id`
- *   (`program_blocks_template_client_id_check`). Not yet staged: the proxy technique in
+ *   (`program_blocks_template_client_id_check`), once `createProgram` lower-cases its client id
+ *   (Postgres returns uuids in lower case), which is unproven for the same reason. Not yet staged: the proxy technique in
  *   `verify/program.ts` would do it, hooked on the name read (a twin under this `clientId`).
  * - **Template blocks only** ({@link liveTemplateBlockIn}): the seeded (legacy) block is not on the
  *   Programs list, so its name is not taken. Its slug still is: {@link freeProgramSlug}.

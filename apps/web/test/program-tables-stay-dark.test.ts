@@ -157,11 +157,11 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'packages/db/src/writers/program/index.ts',
     'packages/db/src/queries/program/index.ts',
   ];
-  const laneP = LANE_P_BARRELS.flatMap((b) =>
-    [...code(join(REPO, b)).matchAll(/export\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
+  /** The names an `export { … } from` barrel publishes: `a as b` publishes `b`. */
+  const published = (src: string) =>
+    [...src.matchAll(/export\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
       m[1]!
         .split(',')
-        // `a as b` publishes `b`.
         .map((n) =>
           n
             .trim()
@@ -169,8 +169,8 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
             .at(-1)!,
         )
         .filter(Boolean),
-    ),
-  );
+    );
+  const laneP = LANE_P_BARRELS.flatMap((b) => published(code(join(REPO, b))));
   const fromDb = (names: readonly string[]) =>
     new RegExp(
       `(?:import|export)\\s*(?:type\\s*)?\\{[^}]*\\b(?:${names.join('|')})\\b[^}]*\\}\\s*from\\s*['"]@mat-plan\\/db['"]`,
@@ -210,18 +210,10 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
     expect(WHOLE_PACKAGE.test("export * from '@mat-plan/db';")).toBe(true);
     expect(WHOLE_PACKAGE.test("export * as db from '@mat-plan/db';")).toBe(true);
-    // The alias rule publishes the right-hand name. ⚠️ The parser reads `export { … } from` only: a
-    // barrel's local `export function` or `export { x }` would publish a name it cannot see, so the
-    // barrels keep to the one form.
-    const aliased = [
-      ..."export { readA as readB } from './x';".matchAll(/export\s*\{([^}]*)\}\s*from/g),
-    ];
-    expect(
-      aliased[0]![1]!
-        .trim()
-        .split(/\s+as\s+/)
-        .at(-1),
-    ).toBe('readB');
+    // The scan's own parser: an alias publishes its right-hand name. ⚠️ It reads `export { … } from`
+    // only; a barrel's local `export function` or `export { x }` would publish a name it cannot see,
+    // so the barrels keep to that one form.
+    expect(published("export { readA as readB, readC } from './x';")).toEqual(['readB', 'readC']);
   });
 
   /**

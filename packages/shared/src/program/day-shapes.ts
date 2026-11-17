@@ -120,13 +120,23 @@ const dayWorkoutSchema = z.object({
    * merely left the week is still live: it keeps its description, its live items and its count.
    * So nothing of a hidden program's own text reappears. Hiding is reversible and the plan is a
    * read: un-hide the program and the ids are back.
+   *
+   * **Liveness decides this, never the assignment** (contract change C24). A live workout of a
+   * live program that was logged on a day no live assignment covers any more (the athlete's start
+   * was removed after a row was hidden, and the row then came back) is shown as one that left the
+   * week: both ids non-null, its description, live items and count kept, logged rows only. Its
+   * program is not in `DayPlan.programs` for that day, and the screen names none. `onProgram`
+   * still says what the assignments say: if that was the athlete's only program that day, they
+   * are not on a program, and the logged workout shows beneath that line.
    */
   programPublicId: uuidSchema.nullable(),
   workoutPublicId: uuidSchema.nullable(),
   /**
    * The heading of the workout's slot on the week, or `null` when the slot has none. **`null` for
    * a workout that left the week**: the label was the slot's, and the slot is gone _(maintainer,
-   * 2026-11-17)_. A scheduled workout on a closed day shows its slot's label as it is now.
+   * 2026-11-17)_. `null` too for any workout that is not scheduled: one no longer live, and one
+   * on a program the athlete is not on that day (its slot is not theirs). A scheduled workout on
+   * a closed day shows its slot's label as it is now.
    */
   label: slotLabelSchema,
   /**
@@ -140,7 +150,8 @@ const dayWorkoutSchema = z.object({
   description: nullableNoteSchema,
   /**
    * `false`: logged on this day, but no longer on the week, or no longer live (a hidden workout is
-   * never scheduled, even while its slot is still on the week). It shows its logged rows only.
+   * never scheduled, even while its slot is still on the week), or on a program the athlete is
+   * not on that day. It shows its logged rows only.
    */
   scheduled: z.boolean(),
   /**
@@ -234,6 +245,19 @@ export const dayPlanSchema = z.object({
   workouts: z.array(dayWorkoutSchema),
 });
 export type DayPlan = z.infer<typeof dayPlanSchema>;
+
+/**
+ * **A day that shows only what was logged**: not writable, and not a future day. That is a day
+ * before yesterday, and an archived athlete's today or yesterday (contract change C23).
+ *
+ * On such a day a workout nobody logged is absent from `workouts`, an item with no logged row is
+ * absent from its workout, and PREVIOUS is `null`. A future day is not one: it shows what is
+ * coming, with no rows. One function, so the fixture builder, the day resolver and the day screen
+ * (its "No workouts logged on <day>." line) ask the same question the same way.
+ */
+export function showsOnlyLogged(day: Pick<DayPlan, 'writable' | 'future'>): boolean {
+  return !day.writable && !day.future;
+}
 
 /**
  * The parts of a day, by name: one of `DayPlan.workouts`, one of its `items`, one of an item's

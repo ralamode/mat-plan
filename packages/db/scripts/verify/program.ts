@@ -713,6 +713,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       beforeUpper.prescriptions.map((r) => [r.id, r.deletedAt]),
       'FAM-1 6a-ii: an upper-case save hides and adds no row',
     );
+    const beforeReplay = await snapshot(tx);
     // A new workout's replay is found by its client id: in upper case it is still the replay.
     assert.deepEqual(
       await saveWorkout(exec, A_SCOPE, {
@@ -720,10 +721,20 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
         workoutClientId: draft.workoutClientId.toUpperCase(),
         workoutPublicId: null,
         name: live.name,
-        items: [],
+        items: live.items, // its current state: a replay changes nothing
       }).catch((e: unknown) => ({ threw: String(e) })),
       { ok: true, workoutPublicId },
       "FAM-1 6a-ii: a new workout's replay with an upper-case client id is the replay",
+    );
+    // ...and changes nothing. (updated_at is not compared: now() is one value in this transaction.)
+    const kept = (x: Awaited<ReturnType<typeof snapshot>>) => ({
+      prescriptions: x.prescriptions.map((r) => [r.id, r.idx, r.deletedAt]),
+      quantities: x.quantities.map((r) => [r.id, r.deletedAt]),
+    });
+    assert.deepEqual(
+      kept(await snapshot(tx)),
+      kept(beforeReplay),
+      "FAM-1 6a-ii: a new workout's upper-case replay hides, moves and adds nothing",
     );
     const other = await saveWorkout(exec, A_SCOPE, {
       ...draft,

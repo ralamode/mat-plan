@@ -9,7 +9,7 @@ import {
 } from '../../day';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
-import type { DayItem, DayPlan, DayWorkout } from '../day-shapes';
+import { showsOnlyLogged, type DayItem, type DayPlan, type DayWorkout } from '../day-shapes';
 import { prescribedTarget, TRACKING_TYPE_FIELDS, type RowValues } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import type { ProgramList, ProgramView, WorkoutDraft, WorkoutDraftItem } from '../program-shapes';
@@ -389,8 +389,8 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
       .map((s) =>
         dayWorkout(world, athlete, day, s.program, s.slot, s.scheduled, showing(s.scheduled)),
       )
-      // The contract's rule: on a closed day a workout nobody logged is not listed.
-      .filter((workout) => writable || future || workout.items.length > 0),
+      // The contract's rule: where only what was logged shows, a workout nobody logged is not listed.
+      .filter((workout) => !showsOnlyLogged({ writable, future }) || workout.items.length > 0),
   };
 }
 

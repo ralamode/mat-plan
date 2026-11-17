@@ -7,6 +7,7 @@ import {
   localMinutesSinceMidnight,
   localWeekStartIso,
   minutesToClock,
+  onDayText,
 } from './date';
 
 // V1-6c. Offsets: PDT=UTC-7, PST=UTC-8, EDT=UTC-4, MST(Arizona)=UTC-7 year-round,
@@ -154,5 +155,13 @@ describe('formatDayLong', () => {
     // The header weekday is formatDayLong(day), and day = localDayIso(tz) → they can't split.
     const day = localDayIso(LA, new Date('2026-07-21T00:30:00Z')); // Mon 2026-07-20 PDT
     expect(formatDayLong(day)).toBe('Monday, July 20, 2026');
+  });
+});
+
+describe('onDayText', () => {
+  it('names today as "today" and any other day as the date line does', () => {
+    expect(onDayText('2026-11-14', '2026-11-14')).toBe('today');
+    // 2026-11-10 is a Tuesday; the runtime's zone never enters (UTC-anchored).
+    expect(onDayText('2026-11-10', '2026-11-14')).toBe('on Tue, Nov 10');
   });
 });

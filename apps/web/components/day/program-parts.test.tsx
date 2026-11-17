@@ -7,6 +7,7 @@ import {
   type ProgramResult,
 } from '@mat-plan/shared';
 import {
+  archivedAthleteNothingLogged,
   closedDayLoggedOnly,
   futurePreview,
   noProgram,
@@ -24,7 +25,7 @@ import { athletePath } from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
-import { restNotice } from './day-screen';
+import { restNotice } from './day-notices';
 import { NotOnAProgram } from './not-on-a-program';
 import { ProgramLine } from './program-line';
 
@@ -76,10 +77,30 @@ describe('AthleteSwitcher', () => {
     expect(screen.getByRole('navigation').classList.contains('lg:hidden')).toBe(true);
   });
 
-  it('is not shown for a household of one', () => {
-    const alone = { ...todayTwoPrograms, athletes: todayTwoPrograms.athletes.slice(0, 1) };
-    render(<AthleteSwitcher plan={alone} hrefFor={hrefFor} />);
-    expect(screen.queryByRole('navigation')).toBeNull();
+  it('is not shown when no one else is listed (a household of one, or none listed)', () => {
+    const me = todayTwoPrograms.athletes.find(
+      (a) => a.profilePublicId === todayTwoPrograms.profilePublicId,
+    )!;
+    for (const athletes of [[me], []]) {
+      render(<AthleteSwitcher plan={{ ...todayTwoPrograms, athletes }} hrefFor={hrefFor} />);
+      expect(screen.queryByRole('navigation')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('on an archived athlete’s day (not listed), one live athlete is the way back', () => {
+    const plan = archivedAthleteNothingLogged;
+    expect(plan.athletes).toHaveLength(1);
+    const other = plan.athletes[0]!;
+    expect(other.profilePublicId).not.toBe(plan.profilePublicId);
+    render(<AthleteSwitcher plan={plan} hrefFor={hrefFor} />);
+    const links = within(screen.getByRole('navigation')).getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]!.getAttribute('href')).toBe(hrefFor(other.profilePublicId));
+    // The viewed athlete is not in the list, so no link is the current one.
+    expect(links[0]!.getAttribute('aria-current')).toBeNull();
+    // Its whole name: the archived athlete's own name is not listed to be told apart from.
+    expect(links[0]!.textContent).toBe(other.name);
   });
 });
 
