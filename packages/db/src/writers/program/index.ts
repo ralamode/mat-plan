@@ -6,3 +6,4 @@
 export { createProgram } from './create-program';
 export { renameProgram } from './rename-program';
 export { saveWorkout } from './save-workout';
+export { saveWeek } from './save-week';

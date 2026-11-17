@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..491fdad3 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -578,7 +578,7 @@ export async function clearDay(
+       }
+       hiddenAt = hidden.hiddenAt;
+     } else {
+-      const replayed = await newestToken(tx, clearEvent);
++      const replayed = await newestToken(tx, ownedOnDay(args));
+       if (replayed === null) return { notFound: true };
+       hiddenAt = replayed;
+     }

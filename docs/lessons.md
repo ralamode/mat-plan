@@ -159,6 +159,8 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   seven spaced `>`s, so `format:check`, `guides:check` and CI all passed; a reviewer found it (FAM-1 4a-i,
   #437). → After any merge, read the WHOLE output and run `git diff --name-only --diff-filter=U`
   before committing; `git grep -nE '^(<{7}|={7}|>{7})( |$)|(> ){6}>'` must print nothing.
+  **Guarded since DX-17:** it happened again on #522, so the grep is now
+  `.github/scripts/check-conflict-markers.mjs`, in pre-commit and `format:check`.
 
 - **A skip label was added, the job was re-run, and the label was ignored.** → A re-run **replays the
   original event payload**, so `github.event.pull_request.labels` is frozen at the moment the run was
@@ -710,7 +712,18 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   check named a file the PR never meant to touch.
   → **One gate run per worktree at a time.** To check: `for p in packages/db/scripts/mutations/*.patch;
 do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prints any patch
-  that is live. Before calling another lane's proof flaky, run it on a clean checkout of `main`.
+  that is live. Before calling another lane's proof flaky, run it on a clean checkout of `main`. **Stopping a run midway leaves its current patch applied too**
+  (FAM-1 6b, #522: stopping a background `pnpm verify` left `261` in `erasure/graph.ts`, and its
+  `sh -c` chain kept running). After stopping one, end the chain's processes, then run the check
+  above and `git apply -R` what it prints.
+
+- 🔴 **A merge commit carried conflict markers, and Prettier hid them.** FAM-1 6b (#522): a merge's
+  output was cut short (`| tail -3`), only one of two conflicts was read, and `git add -A` committed
+  `data-inventory.md` with `<<<<<<<` in it. Prettier then rewrote the `>>>>>>>` lines as blockquotes
+  (`> > > > > > >`), so `format:check` stayed green, and the second-pass review found it.
+  → After a merge, list the conflicts with `git diff --name-only --diff-filter=U`, never from the
+  merge's own output, and before committing run
+  `git grep -nE '^(<<<<<<<|=======$|>>>>>>>)|^> > > > >' -- . ':!*.patch'`.
 
 - 🔴 **THE RECURRING ONE, named because it keeps coming back in different clothes: a proof whose
   EXPECTATION is derived from the thing it is proving.** Seven instances across `#364`–`PICK-1` PR 3,
@@ -900,6 +913,28 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
   `docs/plans/*`) is NOT rewritten.
 
 ## Git / commits
+
+- 🔴 **A test that ran `git init` in a temp directory re-initialised THIS repository and
+  committed to the real branch, because it ran inside the pre-push hook.** → Git exports `GIT_DIR`
+  (and its kin) to a hook, and a child `git` obeys those over the directory it is started in. The
+  pre-push hook runs the test suite, so a scratch repository's `git init`, `git add -A` and
+  `git commit` all acted on the real one: `init` wrote `core.bare = true` into the shared
+  `.git/config`, which made the main checkout refuse every work-tree command for every lane that
+  uses it ("this operation must be run in a work tree"), and the commit put a tree holding only the
+  scratch files on top of the branch. The push was refused by the same failing test, so nothing left
+  the machine (CAT-3 C0a, #531, 2026-11-17). The same test passed when run by hand, where no
+  `GIT_*` is set, which is why it was pushed.
+  - **The rule:** a test or script that starts `git` gives the child an environment with every
+    `GIT_*` variable removed. One that writes (`init`, `add`, `commit`) also sets `GIT_DIR` and
+    `GIT_WORK_TREE` to its own scratch paths, an empty `GIT_CONFIG_GLOBAL` and
+    `GIT_CONFIG_NOSYSTEM=1`, and asserts afterwards that this repository's `core.bare`, `HEAD` and
+    index are unchanged (`packages/shared/src/catalog/approvals.test.ts` is the pattern).
+  - **Check before pushing:** run the test once with `GIT_DIR` set to a throwaway clone's git
+    directory, never this repository's.
+  - **The repair, if it happens:** `git config --file <main checkout>/.git/config core.bare false`,
+    then in the affected worktree `git reflog` to find the last real commit and `git reset <it>`
+    (mixed: the working files were never touched; anything you had staged is unstaged, not lost,
+    and is staged again by hand).
 
 - **Squashing a branch with `git reset --soft origin/main` reverts whatever landed on `main` since
   the branch was cut.** → `--soft` moves HEAD and keeps the tree, so the tree still holds the

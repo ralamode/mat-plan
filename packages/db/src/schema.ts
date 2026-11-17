@@ -18,7 +18,12 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { DEFAULT_TRACKING_TYPE, PROGRAM_BLOCK_KIND, type RoutineConfig } from '@mat-plan/shared';
+import {
+  DEFAULT_TRACKING_TYPE,
+  type HideReason,
+  PROGRAM_BLOCK_KIND,
+  type RoutineConfig,
+} from '@mat-plan/shared';
 
 /**
  * Schema — v0 thin slice (units + profiles + entries + entry_sets) plus the V1-1a
@@ -288,6 +293,19 @@ export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
 export const PRACTICE_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_practice';
 
 /**
+ * V1-9b B2-0: `entries.hide_reason` holds only a `HIDE_REASONS` value (`db:verify` pins the literal to
+ * the const). Named so the proofs reference it rather than re-typing it.
+ */
+export const ENTRY_HIDE_REASON_CHECK = 'entries_hide_reason_check';
+
+/**
+ * V1-9b B2-0: a LIVE entry never carries a hide reason. 🔴 So every un-hide clears `hide_reason` in
+ * the same statement as `deleted_at` (`UNHIDE` in `writers/hide.ts`); one that forgets fails `23514`
+ * here, loudly, rather than leaving a live row the "Day cleared" banner would count.
+ */
+export const ENTRY_HIDE_REASON_HIDDEN_CHECK = 'entries_hide_reason_hidden_check';
+
+/**
  * FAM-1 4a-ii's three arbiters (ADR 0007 A2 §6, A3), named once so code that must name one matches it
  * by const, as it matches `BODYWEIGHT_DAY_UNIQUE_INDEX`. Renaming one means a new migration too.
  * ⚠️ Step 11b's row writer infers the session and superset arbiters with a bare `ON CONFLICT`, so today
@@ -401,6 +419,10 @@ export const entries = pgTable(
     scheme: text('scheme'), // e.g. set/rep scheme label
     status: text('status').notNull().default('done'), // mirrors ENTRY_STATUSES
     notes: text('notes'),
+    // V1-9b B2-0: why a hidden row was hidden; NULL on every live row and on every hide that is not a
+    // clear. Written by `clearDay` only, cleared by every un-hide (`UNHIDE`). Its privacy reading is
+    // `data-inventory.md`'s `entries` row.
+    hideReason: text('hide_reason').$type<HideReason>(), // mirrors HIDE_REASONS (nullable)
     ...timestamps,
   },
   (t) => [
@@ -435,6 +457,12 @@ export const entries = pgTable(
     check(
       'entries_prescription_set_check',
       sql`${t.prescriptionSet} is null or (${t.prescriptionSet} >= 1 and ${t.prescriptionSet} <= 20)`,
+    ),
+    // V1-9b B2-0. Literals, as every text CHECK here (a const renders as `$1`); NULL passes `IN`.
+    check(ENTRY_HIDE_REASON_CHECK, sql`${t.hideReason} in ('clear_day')`), // mirrors HIDE_REASONS
+    check(
+      ENTRY_HIDE_REASON_HIDDEN_CHECK,
+      sql`${t.hideReason} is null or ${t.deletedAt} is not null`,
     ),
     // One-way on purpose (A3): a purge's SET NULL clears only prescription_id.
     check(

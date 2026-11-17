@@ -5,3 +5,4 @@
  */
 export { programIn, workoutIn } from './exists';
 export { readWorkoutDraft } from './workout';
+export { readWeek } from './week';

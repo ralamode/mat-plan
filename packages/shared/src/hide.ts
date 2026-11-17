@@ -94,6 +94,19 @@ export const restoreReasonSchema = z.enum(RESTORE_REASONS);
 export type RestoreReason = z.infer<typeof restoreReasonSchema>;
 
 /**
+ * Why a hidden entry was hidden (V1-9b B2-0), stored as `entries.hide_reason`. **One value, written by
+ * one writer:** `'clear_day'`, by `clearDay` alone, so "Day cleared · Restore all" is derived from the
+ * day's clear events and survives a reload. Every other hide (a blank amend, an un-tick, a swap, an
+ * operator correction) leaves it NULL, and every un-hide clears it in the same statement (a CHECK
+ * refuses a live row with a reason). The DB's CHECK mirrors this list as a literal; `db:verify` pins
+ * the two together.
+ */
+export const HIDE_REASONS = ['clear_day'] as const;
+export const HIDE_REASON = keyBySelf(HIDE_REASONS);
+export const hideReasonSchema = z.enum(HIDE_REASONS);
+export type HideReason = z.infer<typeof hideReasonSchema>;
+
+/**
  * Restore the items of one hide event.
  *
  * `keepInsteadOf` is the swap: the caller names the entry currently holding the bodyweight slot, and
