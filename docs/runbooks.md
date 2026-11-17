@@ -377,6 +377,13 @@ starts, so no gate can watch pooled traffic pick it up ([plan](./plans/scale-3-s
 
 **Safety:** steps 1–3 are read-only or transaction-scoped. Step 4 writes one catalog row.
 
+**Last run on production** (the maintainer, 2026-11-17, after migration `0028` applied at
+2026-11-16T22:59:40Z):
+
+- [x] Step 1: `current_user` is `neondb_owner` and `rolconfig` is `{statement_timeout=15s}`. The
+      pooled string uses the same role as the migrator, so the default reaches the app.
+- [x] Step 2: `0` backends started before 22:59:40Z, so every live backend is bounded.
+
 ## A pending migration wedges prod and the seed with it
 
 **When:** a `migrate.yml` run failed and left a migration **pending**. Promoted to its own heading at
