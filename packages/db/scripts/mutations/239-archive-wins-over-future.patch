@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 9b02d883..3056275c 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -98,7 +98,7 @@ export async function resolveDayPlan(
+   const future = day > today;
+   // `showsOnlyLogged` (C23) is the one spelling of "this day shows only what was logged", shared with
+   // the fixture builder and the day screen; a future day is checked inside it, so it previews.
+-  const scheduledShowing: Showing = showsOnlyLogged({ writable, future })
++  const scheduledShowing: Showing = profile.archivedAt !== null || showsOnlyLogged({ writable, future })
+     ? 'logged'
+     : future
+       ? 'preview'

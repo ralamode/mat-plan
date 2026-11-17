@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 9d1a35a1..e3d25b27 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -461,7 +461,6 @@ function liveItemsOf(draft: WorkoutDraft, movements: ReadonlyMap<number, Movemen
+   return live.sort(
+     ({ prescription: x }, { prescription: y }) =>
+       place(x) - place(y) ||
+-      (x.supersetOrder ?? 0) - (y.supersetOrder ?? 0) ||
+       x.idx - y.idx ||
+       x.id - y.id,
+   );

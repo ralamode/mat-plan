@@ -171,6 +171,19 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
   [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
 
+### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i)
+
+- **What & why it's debt:** `packages/db/scripts/verify/day-plan.ts`'s seeder writes the week
+  (`block_day_workouts`), prescriptions with their quantities, and assignments with their seven
+  weekday rows by direct `INSERT`, because lane P's writers for them do not exist yet. Programs and
+  workouts go through `insertProgramBlockOwnedBy` and `insertWorkoutOwnedBy`; entries through the
+  real row writer.
+- **Impact:** a rule a lane P writer enforces (a rest note only on a group's last item, a slot key, a
+  put-on's weekday rows) can differ from what the seeder writes, and the deep-equal would not notice.
+- **The fix:** fold the direct inserts into lane P's `seedProgramFixtures` at step 6c, so the proof
+  seeds through the writers the app uses. 12a-ii's edit replays need those writers anyway.
+- **Severity:** low. Test-only, one file, with a named step that removes it.
+
 ### Two reads of a logged row's live sets and quantities (added 2026-11-16, FAM-1 step 11b)
 
 - **What & why it's debt:** `packages/db/src/queries/day/stored-row-values.ts` (`readRowValues`, the
@@ -182,7 +195,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   reading by the old rule. The writer's copy is guarded by mutation 172; the DAL's is not.
 - **The fix:** the DAL calls `readRowValues` (or a sibling that also returns the set ids and
   statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
-  one from the start.
+  one (`queries/day/day-plan.ts`).
 - **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
 
 ### The a11y checks have two copies (added 2026-11-15, FAM-1 step 0b)
