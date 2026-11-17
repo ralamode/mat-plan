@@ -720,7 +720,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
         workoutClientId: draft.workoutClientId.toUpperCase(),
         workoutPublicId: null,
         name: live.name,
-        items: [],
+        items: live.items, // its current state: a replay changes nothing
       }).catch((e: unknown) => ({ threw: String(e) })),
       { ok: true, workoutPublicId },
       "FAM-1 6a-ii: a new workout's replay with an upper-case client id is the replay",
