@@ -179,8 +179,8 @@ target is neither local nor the preview. That mirrors the rule `seed.ts` already
 (`namesPreviewDatabase`). It runs first, beside the fixture check and before the membership read. Its
 message names no id. (6e) is pointed at a second, non-seed household, so its "bound elsewhere"
 assertion no longer depends on the environment. The result: no account can be bound to the seeded
-household in production again, before or after the fresh start. Existing rows are unaffected. Q2
-asks the roadmap thread to confirm this reading.
+household in production again, before or after the fresh start. Existing rows are unaffected. The
+roadmap thread confirmed this reading (Q2).
 
 **D7. `SEED_PUBLIC_IDS`, built from the existing constants, held equal to what the seed writes.**
 `seed-ids.ts` gains
@@ -338,10 +338,12 @@ preconditions already require it; this repeats it where the operator reads.
   corrects; the owner decides who belongs to it" (`ID-1`, item 5's note). The app never branches on
   role today, and `member` has no defined meaning until `COACH-1`. The alternative, the first account
   `owner` and the rest `member`, would give `member` a meaning nobody has designed.
-- **Q2 (the roadmap thread's, a reading of the spec):** is D6, which refuses a seed household id
-  except on a local or preview target, the meaning of "refusal of any id in it"? A literal reading
-  breaks the e2e harness, CI's smoke, the developer's claim, the preview's claim and a `db:verify`
-  case.
+- **Q2, answered _(roadmap thread, 2026-11-17)_:** yes, D6 is what the spec means. The refusal
+  exists so that production can never again bind an account to a seed-namespace household once the
+  fresh start has removed it (R4 reports on exactly that). A local or preview database may still
+  claim the seeded household, under the rule `seed.ts` uses for fixtures. The spec's RC row is to be
+  re-worded "gains the refusal, in production, of any id in it" in the roadmap thread's next spec
+  correction.
 
 ## ID-1's six keep-open items
 
