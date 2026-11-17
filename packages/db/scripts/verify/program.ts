@@ -11,6 +11,7 @@ import {
   QUANTITY_SLOT,
   SLOT_LABEL_MAX,
   TRACKING_TYPE,
+  emptyWeek,
   WEEKDAYS,
   weekDaysSchema,
 } from '@mat-plan/shared';
@@ -30,7 +31,6 @@ import { createProgram } from '../../src/writers/program/create-program';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
 import { programIn, readWeek, readWorkoutDraft, workoutIn } from '../../src/queries/program';
-import { emptyWeek } from '../../src/queries/program/week';
 import { saveWeek } from '../../src/writers/program/save-week';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';

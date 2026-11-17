@@ -1,16 +1,11 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
-import { WEEKDAYS, weekdaySchema, type WeekDraft } from '@mat-plan/shared';
+import { emptyWeek, weekdaySchema, type WeekDraft } from '@mat-plan/shared';
 
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
 import { liveProgramBlockId } from './exists';
-
-/** A week of seven rest days: every weekday present, each `[]`. */
-export function emptyWeek(): WeekDraft['days'] {
-  return Object.fromEntries(WEEKDAYS.map((d) => [d, []])) as unknown as WeekDraft['days'];
-}
 
 /**
  * A program's week as the week editor and the program page hold it (`WeekDraft['days']`, FAM-1 step
