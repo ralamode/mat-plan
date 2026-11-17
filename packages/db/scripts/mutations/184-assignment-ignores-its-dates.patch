@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/scheduled.ts b/packages/db/src/queries/day/scheduled.ts
+index 14a5bb58..11ae4715 100644
+--- a/packages/db/src/queries/day/scheduled.ts
++++ b/packages/db/src/queries/day/scheduled.ts
+@@ -72,7 +72,7 @@ export async function isOnProgramThatDay(
+   const [row] = await exec
+     .select({ id: a.id })
+     .from(a)
+-    .where(and(eq(a.profileId, profileId), eq(a.blockId, blockId), assignmentOnDay(day)))
++    .where(and(eq(a.profileId, profileId), eq(a.blockId, blockId), isNull(a.deletedAt)))
+     .limit(1);
+   return row !== undefined;
+ }

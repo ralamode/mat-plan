@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 4f96cfb1..15641c86 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -617,7 +617,7 @@ export async function untickRow(
+ const RETICK_REFUSAL: Record<RestoreReason, RowRefusal | null> = {
+   ok: null,
+   slot_taken: ROW_REFUSAL.slot_taken,
+-  changed: ROW_REFUSAL.not_found,
++  changed: null,
+   not_found: ROW_REFUSAL.not_found,
+ };
+ 

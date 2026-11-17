@@ -280,7 +280,7 @@ export function unitChangedText(item: string, value: number, from: Unit, to: Uni
 export function fieldsToFixText(count: number): string {
   return count === 1
     ? 'One field needs fixing before saving.'
-    : 'Some fields need fixing before saving.';
+    : `${count} fields need fixing before saving.`;
 }
 
 /** What a refused Save says in the save bar. `name_taken` is said under the name as well. */
@@ -653,4 +653,16 @@ export function copiedText(
   return sameProgram
     ? `${workout} added${on}.`
     : `${workout} copied to ${target}${on}. Editing one won’t change the other.`;
+}
+
+/**
+ * A loaded number the card cannot hold (FAM-1 editor): what it was, and what to do. Information
+ * only; the field stays empty for a person to type (plan D27).
+ */
+export function droppedText(was: { value: number; unit: Unit }, fixedUnit: Unit | null): string {
+  const unit = (u: Unit) => (UNIT_LABELS[u] ?? u).toLowerCase();
+  const saved = `This was saved as ${was.value} ${unit(was.unit)}`;
+  return fixedUnit
+    ? `${saved}, which this item can’t hold. Enter it in ${unit(fixedUnit)}.`
+    : `${saved}. Choose a unit and enter it again.`;
 }

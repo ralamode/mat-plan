@@ -5,14 +5,14 @@ import type { LoggedLifeActivity } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
 
-import { LifeForm } from './life-form';
+import { PracticeForm } from './life-form';
 import { LoggedValueRow } from './logged-value-row';
 import { PracticeAmend } from './practice-amend';
 import { SingleValueLive } from './single-value-live';
 
 /**
  * The life activities the day page shows: the routine's, minus Wake (V1-24 3b-page). The tap time is
- * not the wake time, so Wake leaves the page; the action still accepts it until 3b-life-b.
+ * not the wake time, so Wake leaves the page, and since 3b-life-b the action refuses it too.
  */
 function shownLifeActivities(activityKeys: readonly string[]) {
   return lifeActivitiesForKeys(activityKeys).filter((a) => a.key !== ACTIVITY_TYPE_KEYS.wake);
@@ -25,7 +25,7 @@ function shownLifeActivities(activityKeys: readonly string[]) {
  * - **Logged:** one row per entry in the done style (`LoggedValueRow`), on every day: the label, its
  *   value on a second line (one line does not fit 360px, plan A1), and **Change** for a practice on
  *   a day that can still be changed (V1-24 3b-life A1). One live practice per day (3b-0's index).
- * - **Not logged, writable:** the one-tap button (`LifeForm`).
+ * - **Not logged, writable:** the typed-minutes practice row (`PracticeForm`, 3b-life-b).
  * - **Not logged, read-only:** `Nothing logged.`, never a bare heading.
  *
  * Renders nothing when the routine has no activity to show.
@@ -88,8 +88,10 @@ export function LifeSection({
             </LoggedValueRow>
           );
         })}
-        {writable && open.length > 0 ? (
-          <LifeForm profileId={profileId} day={day} activities={open} />
+        {/* Practice is the one loggable life activity (3b-life-b B6); keyed on the day, so a day
+            change mounts a fresh form with a fresh client id. */}
+        {writable && open.some((a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice) ? (
+          <PracticeForm key={`form-${day}`} profileId={profileId} day={day} />
         ) : null}
         {!writable && rows.length === 0 ? (
           <p className="text-muted-foreground text-base">{LIFE_COPY.noneOnClosedDay}</p>

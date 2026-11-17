@@ -3,10 +3,15 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
-import { BODYWEIGHT_DAY_UNIQUE_INDEX, PRACTICE_DAY_UNIQUE_INDEX } from '../schema';
+import {
+  BODYWEIGHT_DAY_UNIQUE_INDEX,
+  ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX,
+  PRACTICE_DAY_UNIQUE_INDEX,
+} from '../schema';
 import { bodyweightSlot } from './bodyweight';
 import type { Executor } from './executor';
 import { isLiveProfile } from './ownership';
+import { isUniqueViolationOn } from './unique-violation';
 
 /**
  * V1-9b — **the only RUNTIME writer of `entries.deleted_at`** (ADR 0008 decision 3.3).
@@ -280,7 +285,7 @@ export async function restoreHidden(
  *
  * 🔴 **A list of index names, by decision** _(maintainer, 2026-11-16)_: the live-only uniques on
  * `entries` whose collision has a meaningful answer for a person. V1-24 3b-0 added practice; FAM-1
- * 11b appends `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`. (#447's other two arbiters are on `sessions` and
+ * 11b added `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`, a program row. (#447's other two arbiters are on `sessions` and
  * `supersets`, which a restore never writes.) ⚠️ Not every live-only unique on `entries` is here:
  * `uq_entries_superset_order` is not, because a row's position in a superset is not a place a person
  * chose, and a collision there is a bug that should propagate.
@@ -292,6 +297,10 @@ export async function restoreHidden(
 const RESTORE_SLOT_INDEXES: readonly string[] = [
   BODYWEIGHT_DAY_UNIQUE_INDEX,
   PRACTICE_DAY_UNIQUE_INDEX,
+  // FAM-1 11b: a program row whose set was ticked again while it was hidden. Like practice, it has no
+  // pre-check and no `heldBy` (a program row has no swap): the restore's UPDATE hits the partial row
+  // arbiter inside the item's savepoint, and this catch answers `slot_taken` (`verify/day.ts` 10).
+  ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX,
 ];
 
 /**
@@ -302,9 +311,7 @@ const RESTORE_SLOT_INDEXES: readonly string[] = [
  * every unique violation into `slot_taken` would tell a person the wrong story about a bug.
  */
 function isRestoreSlotConflict(error: unknown): boolean {
-  const cause = (error as { cause?: unknown })?.cause ?? error;
-  const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
-  return code === '23505' && constraint !== undefined && RESTORE_SLOT_INDEXES.includes(constraint);
+  return isUniqueViolationOn(error, RESTORE_SLOT_INDEXES);
 }
 
 /**

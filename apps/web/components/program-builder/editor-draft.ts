@@ -13,6 +13,7 @@ import {
   type Unit,
   type WorkoutDraft,
   type WorkoutDraftItem,
+  slotQuantity,
 } from '@mat-plan/shared';
 
 import { cleanName, EDITOR_ERRORS, quantityLabel } from './builder-text';
@@ -37,18 +38,40 @@ export type EditorCard = {
    */
   unit: Unit | null;
   notes: string;
+  /**
+   * A loaded quantity whose unit its type cannot hold (a Duration stored in seconds, a Count in
+   * `bool`): shown on the card as what it was, never put in the field and never converted (plan D27;
+   * the machine never authors a load, AGENTS.md). Cleared on the first edit of the number or the unit.
+   */
+  dropped: { value: number; unit: Unit } | null;
 };
 
 /** A field of a card, or of the workout, that can be refused. */
-export type EditorField = 'name' | 'description' | 'sets' | 'reps' | 'value' | 'notes' | 'rest';
+export type EditorField =
+  'name' | 'description' | 'sets' | 'reps' | 'value' | 'unit' | 'notes' | 'rest';
 
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
 
-function startingUnit(item: WorkoutDraftItem): Unit | null {
-  const { slot, unit } = TRACKING_TYPE_FIELDS[item.trackingType];
-  if (!slot) return null;
-  return unit ?? item.quantities[0]?.unit ?? null;
+/**
+ * A loaded item's quantity: its type's slot (`slotQuantity`), kept only in a unit the type can hold
+ * (`unitsForTrackingType`). A fixed-unit type always starts in its own unit, since it has no unit
+ * select to fix; any other starts unset when the stored unit is not one it offers, so Save's unit
+ * refusal lands on the select. Either way a number in a unit the card cannot hold is not shown in
+ * the field: it is `dropped`, and the card says what it was.
+ */
+function loadedQuantity(item: WorkoutDraftItem): Pick<EditorCard, 'value' | 'unit' | 'dropped'> {
+  const fields = TRACKING_TYPE_FIELDS[item.trackingType];
+  if (!fields.slot) return { value: '', unit: null, dropped: null };
+  const stored = slotQuantity(item, item.quantities);
+  const holds = !!stored && unitsForTrackingType(item.trackingType).includes(stored.unit);
+  return {
+    value: holds && stored.value != null ? String(stored.value) : '',
+    unit: fields.unit ?? (holds ? stored.unit : null),
+    // Only a number is lost: a unit with no number held nothing a person typed.
+    dropped:
+      stored && !holds && stored.value != null ? { value: stored.value, unit: stored.unit } : null,
+  };
 }
 
 export function toCards(draft: WorkoutDraft): EditorCard[] {
@@ -56,8 +79,7 @@ export function toCards(draft: WorkoutDraft): EditorCard[] {
     item,
     sets: item.sets === null ? '' : String(item.sets),
     reps: item.targetReps ?? '',
-    value: item.quantities[0]?.value == null ? '' : String(item.quantities[0].value),
-    unit: startingUnit(item),
+    ...loadedQuantity(item),
     notes: item.notes ?? '',
   }));
 }
@@ -101,24 +123,22 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
   const label = quantityLabel(card.item.trackingType) ?? '';
   if (fields.slot) {
     const typed = card.value.trim();
-    // Loaded with no quantity and left alone: saved with none, not with a unit nobody chose.
-    const untouched =
-      !typed && card.item.quantities.length === 0 && card.unit === startingUnit(card.item);
-    if (!untouched) {
-      let value: number | null = null;
-      if (typed) {
-        const ceiling = card.unit ? quantityCeiling(card.unit) : undefined;
-        if (!isPlainDecimal(typed)) refuse('value', EDITOR_ERRORS.value(label));
-        else if (!card.unit) refuse('value', EDITOR_ERRORS.unit(label));
-        // A unit with no declared ceiling refuses: no bound is not "no cap" (`quantityCeiling`).
-        else if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));
-        else if (Number(typed) > ceiling) {
-          refuse('value', EDITOR_ERRORS.ceiling(label, ceiling, card.unit));
-        } else value = Number(typed);
-      }
-      // A blank value under a chosen unit: "log in this unit, no target" (plan D2).
-      if (card.unit) quantities.push({ slot: fields.slot, unit: card.unit, value });
+    // A quantity needs its unit, number or not: without one no ✓ can ever be stored (C16;
+    // `itemUnit`'s note). The refusal is the unit select's, so focus goes where the fix is.
+    if (!card.unit) refuse('unit', EDITOR_ERRORS.unit(label));
+    let value: number | null = null;
+    if (typed && !isPlainDecimal(typed)) refuse('value', EDITOR_ERRORS.value(label));
+    else if (typed && card.unit) {
+      // With no unit the refusal above is the unit's, said once. A unit with no declared ceiling
+      // refuses: no bound is not "no cap" (`quantityCeiling`).
+      const ceiling = quantityCeiling(card.unit);
+      if (ceiling === undefined) refuse('value', EDITOR_ERRORS.value(label));
+      else if (Number(typed) > ceiling) {
+        refuse('value', EDITOR_ERRORS.ceiling(label, ceiling, card.unit));
+      } else value = Number(typed);
     }
+    // A blank value under its unit: "log in this unit, no target" (plan D2).
+    if (card.unit) quantities.push({ slot: fields.slot, unit: card.unit, value });
   }
 
   const notes = cleanNote(card.notes);
@@ -132,7 +152,8 @@ function readCard(card: EditorCard): { item: WorkoutDraftItem; errors: EditorErr
 }
 
 /**
- * What Save sends, or every refusal in screen order. The writer refuses the same things
+ * What Save sends, or every refusal in screen order, except that a card's unit refusal comes
+ * before its number's, so Save focuses the select (the number's keypad would cover it). The writer refuses the same things
  * (`invalid`), so a refusal here is what keeps `invalid` from being the normal path. The result is
  * parsed by `saveWorkoutSchema` last: a draft the contract would refuse is never sent, and comes
  * back with no field to blame (`errors: []`).
@@ -167,7 +188,7 @@ export const fieldId = (card: string | null, field: EditorField) =>
 export const cardHeadingId = (card: string) => `card-${card}-heading`;
 
 /** The id of a card's unit select. */
-export const unitFieldId = (card: string) => `${fieldId(card, 'value')}-unit`;
+export const unitFieldId = (card: string) => fieldId(card, 'unit');
 
 /**
  * A new card for an item picked in the item picker (FAM-1 step 9): a fresh `prescriptionClientId`
@@ -202,5 +223,6 @@ export function newCard(
     value: '',
     unit: fields.slot ? (fields.unit ?? declared) : null,
     notes: '',
+    dropped: null,
   };
 }

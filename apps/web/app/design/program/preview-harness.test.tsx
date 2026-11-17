@@ -232,6 +232,19 @@ describe('the preview harness', () => {
     },
   );
 
+  it('heads an archived athlete’s day with their name, though the switcher’s list leaves them out', () => {
+    // The page has the name from the profile. `plan.athletes` is the switcher's list, and an
+    // archived athlete is not in it (C18), so the harness reads the name from the fixture's world.
+    const plan = DAY_PLAN_FIXTURES['archived-athlete-today'];
+    expect(plan.athletes.some((a) => a.profilePublicId === plan.profilePublicId)).toBe(false);
+    render(<PreviewHarness screen="day" fixture="archived-athlete-today" failNext={false} />);
+    const own = DAY_PLAN_FIXTURES['today-two-programs'].athletes.find(
+      (a) => a.profilePublicId === plan.profilePublicId,
+    );
+    expect(own?.name).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(own?.name);
+  });
+
   it('the day preview supplies the page’s <h1>, which on the real page is not the screen’s', () => {
     render(<PreviewHarness screen="day" fixture="no-program" failNext={false} />);
     const plan = DAY_PLAN_FIXTURES['no-program'];

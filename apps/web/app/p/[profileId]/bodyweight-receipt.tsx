@@ -19,7 +19,7 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  *
  * 1a's "a receipt, not a checkmark" held while a logged weight could not be corrected: a tick on an
  * uncorrectable value asserted a finality the app could not back. Since 1b it has Change, and since
- * 3b-bw a blank Save clears it, so the filled `done` tick says only "logged", which is true. This
+ * 3b-bw a blank ✓ clears it, so the filled `done` tick says only "logged", which is true. This
  * supersedes 1a's rule (`docs/plans/v1-24-3b-logs-in-place.md`, W4).
  *
  * ## Its states

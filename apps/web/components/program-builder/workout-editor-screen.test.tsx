@@ -6,6 +6,7 @@ import {
   unitsForTrackingType,
   WORKOUT_NAME_MAX,
   type ProgramActions,
+  TRACKING_TYPE_FIELDS,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty, programsList } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -18,16 +19,19 @@ import { SAVING_LABEL } from '@/lib/constants';
 
 import {
   BUILDER_COPY,
+  droppedText,
   EDITOR_COPY,
   EDITOR_ERRORS,
   fieldsToFixText,
   linkLabel,
   moveLabel,
+  quantityLabel,
   removeLabel,
   saveRefusal,
   undoneText,
   usedByText,
 } from './builder-text';
+import { unitFieldId } from './editor-draft';
 import { programPath } from './routes';
 import { tapClock } from './test-taps';
 import { WorkoutEditorScreen } from './workout-editor-screen';
@@ -835,5 +839,142 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       await frames();
       expect(screen.getByRole('status').textContent).toBe('');
     });
+  });
+});
+
+describe('a quantity needs its unit (C16)', () => {
+  it('Save refuses on the unit select; a typed number does not clear it, choosing a unit does', async () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const bare = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) => (item === bench ? { ...item, quantities: [] } : item)),
+    };
+    const all = editor({}, bare);
+    save();
+    const select = document.getElementById(
+      unitFieldId(bench.prescriptionClientId),
+    ) as HTMLSelectElement;
+    await waitFor(() => expect(document.activeElement).toBe(select));
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(select.getAttribute('aria-describedby')!)!.textContent).toBe(
+      EDITOR_ERRORS.unit(quantityLabel('weight_reps')!),
+    );
+    await waitFor(() => expect(alerts()).toEqual([fieldsToFixText(1)]));
+    // A number is not the fix: the refusal stays on the unit.
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    fireEvent.change(within(card).getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`)), {
+      target: { value: '25' },
+    });
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.change(select, { target: { value: 'lb' } });
+    expect(select.getAttribute('aria-invalid')).toBeNull();
+    save();
+    await waitFor(() => expect(all.saveWorkout).toHaveBeenCalled());
+    // What is sent: the typed number, under the unit chosen.
+    const sent = vi
+      .mocked(all.saveWorkout)
+      .mock.calls[0]![0].items.find(
+        (item) => item.prescriptionClientId === bench.prescriptionClientId,
+      )!;
+    expect(sent.quantities).toMatchObject([{ unit: 'lb', value: 25 }]);
+  });
+
+  it('the bar counts the fields to fix', async () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const bare = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) => (item === bench ? { ...item, quantities: [] } : item)),
+    };
+    editor({}, bare);
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    fireEvent.change(within(card).getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`)), {
+      target: { value: 'abc' },
+    });
+    save();
+    // The contract-pinned sentence, once.
+    await waitFor(() => expect(alerts()).toEqual(['2 fields need fixing before saving.']));
+    // Choosing a unit clears both of the card's refusals in one write.
+    const select = document.getElementById(unitFieldId(bench.prescriptionClientId))!;
+    fireEvent.change(select, { target: { value: 'lb' } });
+    expect(select.getAttribute('aria-invalid')).toBeNull();
+    expect(
+      within(card)
+        .getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`))
+        .getAttribute('aria-invalid'),
+    ).toBeNull();
+  });
+});
+
+describe('a loaded number the card cannot hold', () => {
+  it('is said on the card, describes the field, and goes on the first edit', () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const odd = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) =>
+        item === bench
+          ? { ...item, quantities: [{ ...item.quantities[0]!, unit: 'bool' as const, value: 5 }] }
+          : item,
+      ),
+    };
+    editor({}, odd);
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    const label = quantityLabel('weight_reps')!;
+    // The words, pinned once: what it was, and what to do.
+    const note = 'This was saved as 5 done / not done. Choose a unit and enter it again.';
+    expect(droppedText({ value: 5, unit: 'bool' }, null)).toBe(note);
+    const said = within(card).getByText(note);
+    const field = within(card).getByLabelText(new RegExp(`^${label}`)) as HTMLInputElement;
+    expect(field.value).toBe('');
+    expect(said.id).toBeTruthy();
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(said.id);
+    expect(
+      document
+        .getElementById(unitFieldId(bench.prescriptionClientId))!
+        .getAttribute('aria-describedby')
+        ?.split(' '),
+    ).toContain(said.id);
+    fireEvent.change(field, { target: { value: '25' } });
+    expect(within(card).queryByText(note)).toBeNull();
+  });
+
+  it('goes when a unit is chosen too; a fixed-unit item’s note says its own unit', () => {
+    expect(droppedText({ value: 30, unit: 'sec' }, 'min')).toBe(
+      'This was saved as 30 seconds, which this item can’t hold. Enter it in minutes.',
+    );
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const odd = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) =>
+        item === bench
+          ? { ...item, quantities: [{ ...item.quantities[0]!, unit: 'bool' as const, value: 5 }] }
+          : item,
+      ),
+    };
+    editor({}, odd);
+    const note = droppedText({ value: 5, unit: 'bool' }, null);
+    expect(screen.getByText(note)).toBeTruthy();
+    fireEvent.change(document.getElementById(unitFieldId(bench.prescriptionClientId))!, {
+      target: { value: 'kg' },
+    });
+    expect(screen.queryByText(note)).toBeNull();
+  });
+
+  it('on a fixed-unit card (no unit select), the note names its own unit and describes the number', () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const fields = TRACKING_TYPE_FIELDS.duration;
+    const plank = {
+      ...bench,
+      trackingType: 'duration' as const,
+      sets: fields.sets ? bench.sets : null,
+      targetReps: null,
+      quantities: [{ slot: fields.slot!, unit: 'sec' as const, value: 30 }],
+    };
+    editor({}, { ...heavyADraft, items: [plank] });
+    const note = 'This was saved as 30 seconds, which this item can’t hold. Enter it in minutes.';
+    const said = screen.getByText(note);
+    expect(said.id).toBeTruthy();
+    const field = screen.getByLabelText(new RegExp(`^${quantityLabel('duration')}`));
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(said.id);
+    expect(document.getElementById(unitFieldId(plank.prescriptionClientId))).toBeNull();
   });
 });

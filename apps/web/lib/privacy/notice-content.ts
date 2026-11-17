@@ -214,6 +214,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
+                  "text": "Wrestling practice"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — how many minutes, and the day. Typed by whoever logs it (before 16\nNovember 2026 a tap always recorded 90 minutes)."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Earlier check-ins and wake-up times"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — whether a habit was done or a count, and the day, and\nthe clock time a wake-up was tapped. These are still stored from before November 2026; the day page\nno longer records new ones."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
                   "text": "How a session felt"
                 }
               ]
@@ -1221,6 +1261,15 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "k": "text",
         "text": ", not\n\"cannot\" — an unexpected fragment in an error message is always possible."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "text",
+        "text": "One thing is sent on purpose: when a signed-in request asks for an athlete, a program, a workout or\na workout item that the app will not show it, the app sends Sentry a security event with that item's\nid and whether it belongs to another household. The id is a random-looking code that also shows when\nthe item was created. The event carries no name and nothing that was logged. This is how an attempt\nto reach another family's data gets noticed."
       }
     ]
   },
