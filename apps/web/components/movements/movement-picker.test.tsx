@@ -1277,6 +1277,16 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     expect(document.querySelector('ol')).toBeNull();
   });
 
+  it('🔴 Enter clearing the search ends a failed How-to: its message does not stay said', async () => {
+    render(<RowHarness multi howTo={vi.fn<Loader>().mockRejectedValue(new Error('offline'))} />);
+    open();
+    type('pull', 'Search items');
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(status()).toBe(COPY.statusHowToFailed('Pull-Up')));
+    fireEvent.keyDown(search('Search items'), { key: 'Enter' });
+    expect(status()).not.toBe(COPY.statusHowToFailed('Pull-Up'));
+  });
+
   it('🔴 a movement listed twice (Recent and its group) opens ONE box, under the row tapped', async () => {
     render(<RowHarness howTo={vi.fn<Loader>(async () => STEPS)} recentIds={[ROPE.publicId]} />);
     open();
