@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MOVEMENT_PICKER_ALIASES } from '../movement-picker-catalog';
-import { matchMovementOptions } from '../movement-search';
+import { matchMovementOptions, searchMovementOptions } from '../movement-search';
 
 import { existingItem } from './pieces';
 import { NEW_ITEM_NAME_MESSAGES, newItemSchema } from './program-shapes';
@@ -61,18 +61,81 @@ describe('existingItem: the item a typed name already names', () => {
     expect(NEW_ITEM_NAME_MESSAGES.noKey).toBe('Give the item a longer name.');
   });
 
-  it('when two items qualify, the catalog one is the answer', () => {
-    // A household item named after the alias, made before the rule; the alias still means the
-    // catalog's item, whichever order the rows arrive in.
+  it('when two items qualify, the answer is the picker’s first row', () => {
+    // A household item named after the alias, made before the rule: `RDL` is its own name, and an
+    // own name comes before another name (C30; until then the catalog's item won this case).
     const stray = { id: 'stray', name: 'RDL', isCatalog: false };
-    expect(existingItem([stray, ...OPTIONS], 'rdl')?.id).toBe('rdl');
-    expect(existingItem([...OPTIONS, stray], 'rdl')?.id).toBe('rdl');
+    for (const options of [
+      [stray, ...OPTIONS],
+      [...OPTIONS, stray],
+    ]) {
+      expect(existingItem(options, 'rdl')?.id).toBe('stray');
+      expect(existingItem(options, 'rdl')).toBe(
+        searchMovementOptions(options, { query: 'rdl' }).matches[0],
+      );
+      // The catalog's item is still itself by its own name.
+      expect(existingItem(options, 'romanian deadlift')?.id).toBe('rdl');
+    }
+    // Two items with one name key: the catalog's, whichever order the rows arrive in.
+    const twin = { id: 'twin', name: 'Push ups', isCatalog: false };
+    expect(existingItem([twin, ...OPTIONS], 'pushups')?.isCatalog).toBe(true);
+    expect(existingItem([...OPTIONS, twin], 'pushups')?.isCatalog).toBe(true);
   });
 
-  it('is exactly the two cases in which the picker withholds "add as new"', () => {
-    for (const typed of ['RDL', 'push ups', 'RDL pause', 'Dead', 'Lunge', 'bear crawl', '']) {
-      const { exact, aliasHit } = matchMovementOptions(OPTIONS, typed);
-      expect(existingItem(OPTIONS, typed) !== undefined, typed).toBe(exact || aliasHit !== null);
+  it('is exactly the three cases in which the picker withholds "add as new"', () => {
+    const options = [...OPTIONS, { id: 'dbrow', name: 'Dumbbell row', isCatalog: true }];
+    const typedNames = ['RDL', 'push ups', 'RDL pause', 'Dead', 'Lunge', 'bear crawl', ''];
+    for (const typed of [...typedNames, 'db row', 'DB Rows', 'db', 'kb row', 'dumbbell']) {
+      const { exact, aliasHit, shortFormHit } = searchMovementOptions(options, { query: typed });
+      expect(existingItem(options, typed) !== undefined, typed).toBe(
+        exact || aliasHit !== null || shortFormHit !== null,
+      );
+      // The first two are the plain match's own, as they were before short forms existed.
+      const plain = matchMovementOptions(options, typed);
+      expect([exact, aliasHit], typed).toEqual([plain.exact, plain.aliasHit]);
+    }
+  });
+
+  it('🔴 an abbreviation that spells an item is that item (C30)', () => {
+    const options = [...OPTIONS, { id: 'dbrow', name: 'Dumbbell row', isCatalog: true }];
+    for (const typed of ['db row', 'DB row', 'db rows', ' Db  Row ']) {
+      expect(existingItem(options, typed)?.id, typed).toBe('dbrow');
+    }
+    // Only when the whole name is spelt: part of it, or another abbreviation, names no item.
+    for (const typed of ['db', 'db ro', 'kb row', 'db row pause', 'dbrow']) {
+      expect(existingItem(options, typed), typed).toBeUndefined();
+    }
+    // A household item literally named "db row" is itself, by its own name, before anything else.
+    const own = { id: 'own', name: 'DB row', isCatalog: false };
+    expect(existingItem([...options, own], 'db row')?.id).toBe('own');
+  });
+
+  it('a part of a name, or of another name, finds a movement in the picker and names no item here', () => {
+    const press = {
+      id: 'ohp',
+      name: 'Overhead press',
+      isCatalog: true,
+      aliases: ['Military press'],
+    };
+    const options = [...OPTIONS, press];
+    for (const typed of ['roman', 'military', 'milit', 'overhead', 'rdl x']) {
+      expect(searchMovementOptions(options, { query: typed }).matches.length, typed).toBe(
+        typed === 'rdl x' ? 0 : 1,
+      );
+      expect(existingItem(options, typed), typed).toBeUndefined();
+    }
+    expect(existingItem(options, 'military press')?.id).toBe('ohp');
+  });
+
+  it('two spellings of one name: the catalog item, whichever spelling is typed', () => {
+    const own = { id: 'own', name: 'Pushups', isCatalog: false };
+    for (const options of [
+      [own, ...OPTIONS],
+      [...OPTIONS, own],
+    ]) {
+      for (const typed of ['Push-ups', 'Pushups', 'push ups']) {
+        expect(existingItem(options, typed)?.id, typed).toBe('pushups');
+      }
     }
   });
 
