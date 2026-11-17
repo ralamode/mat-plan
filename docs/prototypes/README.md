@@ -16,10 +16,11 @@ variants the spec's open decisions ask about.
 **Lifecycle.** A prototype is frozen once its spec is signed off; the implementation PRs copy decisions
 from the spec, not markup from here. Delete the folder when its milestone closes.
 
-| Prototype                        | Spec                                                                                |
-| -------------------------------- | ----------------------------------------------------------------------------------- |
-| [`crud-1/`](./crud-1/index.html) | [CRUD-1 and PROG-1](../specs/crud-1-fix-it-yourself.md)                             |
-| [`beta-0/`](./beta-0/index.html) | [FAM-1](../milestones/fam-1-family-program.md), and every Beta 0 plan with a screen |
+| Prototype                                    | Spec                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [`crud-1/`](./crud-1/index.html)             | [CRUD-1 and PROG-1](../specs/crud-1-fix-it-yourself.md)                                                  |
+| [`beta-0/`](./beta-0/index.html)             | [FAM-1](../milestones/fam-1-family-program.md), and every Beta 0 plan with a screen                      |
+| [`beta-0/picker.html`](./beta-0/picker.html) | [CAT-3](../specs/cat-3-movement-library.md): the movement picker with filters, near matches and "How to" |
 
 ## The accepted prototype for each release
 
@@ -29,10 +30,11 @@ _(maintainer, 2026-11-15)_. A mismatch is fixed, or recorded as the maintainer's
 the prototype never shows goes on a list for its next round. It stays here until the release
 closes, not only until its spec is signed.
 
-| Release | Accepted prototype               | Version         | Notes                                                                                                                                                                                                                                                                                    |
-| ------- | -------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Beta 0  | [`beta-0/`](./beta-0/index.html) | v12, 2026-11-15 | v10 signed after FAM-1 d3 and its UX panel ([round notes](./beta-0/d3-round-1.md)); v11 made days before yesterday read-only and anchored the clear dialog at the top (#412); v12 brings it in line with the FAM-1 plan ([what changed](./beta-0/d3-round-1.md)), signed by merging #413 |
-| Beta 1  | not yet                          | —               | named here when Beta 1's prototype is signed off                                                                                                                                                                                                                                         |
+| Release | Accepted prototype                           | Version         | Notes                                                                                                                                                                                                                                                                                                                                                        |
+| ------- | -------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Beta 0  | [`beta-0/`](./beta-0/index.html)             | v12, 2026-11-15 | v10 signed after FAM-1 d3 and its UX panel ([round notes](./beta-0/d3-round-1.md)); v11 made days before yesterday read-only and anchored the clear dialog at the top (#412); v12 brings it in line with the FAM-1 plan ([what changed](./beta-0/d3-round-1.md)), signed by merging #413                                                                     |
+| Beta 0  | [`beta-0/picker.html`](./beta-0/picker.html) | v5, 2026-11-17  | The movement library's picker (CAT-3 spec, K19), signed off after three UX lenses and a confirming pass. Its sample data is the library's entries as drafted that day; only the first reviewed batch carries its instructions here, so fewer rows show "How to" than the maintainer saw. The four switches on the page are decided: the first option of each |
+| Beta 1  | not yet                                      | —               | named here when Beta 1's prototype is signed off                                                                                                                                                                                                                                                                                                             |
 
 **Why it exists:** ADR 0007 Amendment 2 went through six review lenses in three rounds, checked
 against the code and the rules. None of them checked it against what the maintainer had approved.
