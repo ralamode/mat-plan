@@ -188,7 +188,8 @@ program, with no workouts, says "No workouts logged on Tue, Nov 10." ("No workou
 on today), in the notice box (`PROGRAM_COPY.nothingLogged`, beside the rest lines). "Workouts", because Bodyweight and Life above it may hold a weigh-in
 or a practice; the day as the page's date line writes it (`formatDayShort`). The switcher hides
 only when no one else is listed: `athletes` leaves an archived athlete out, so on their day one
-live athlete is the way back, and no pill is the current one (as in the nav rail).
+live athlete is the way back, no pill is the current one (as in the nav rail), and the pills show
+whole names, since the viewed athlete's own name is not listed to be told apart from.
 
 A logged value and a prescription are spelled the same way (`30 s`, `40 yd`): both use the
 contract's `quantityText` (C1, #436).
