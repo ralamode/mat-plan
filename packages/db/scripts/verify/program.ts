@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 
 import {
+  MAX_REPS_PER_SET,
   movementSlug,
   newId,
   PROGRAM_BLOCK_KIND,
   PROGRAM_NAME_MAX,
   PROGRAM_REFUSAL,
   PROGRAM_SEED,
+  QUANTITY_SLOT,
+  TRACKING_TYPE,
 } from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
 import type { WorkoutDraft } from '@mat-plan/shared';
@@ -23,7 +26,7 @@ import {
 import { createProgram } from '../../src/writers/program/create-program';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
-import { readWorkoutDraft } from '../../src/queries/program/workout';
+import { programIn, readWorkoutDraft, workoutIn } from '../../src/queries/program';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
 import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
@@ -480,6 +483,36 @@ async function quantityRows(tx: VerifyTx, workoutPublicId: string) {
   return { all: rows.length, live: rows.filter((r) => r.deletedAt === null).length };
 }
 
+/** Every program row the proofs can write, with its place, hide and update stamp: "nothing changed". */
+async function snapshot(tx: VerifyTx) {
+  const prescriptions = await tx
+    .select({
+      id: schema.prescriptions.id,
+      idx: schema.prescriptions.idx,
+      deletedAt: schema.prescriptions.deletedAt,
+      updatedAt: schema.prescriptions.updatedAt,
+    })
+    .from(schema.prescriptions)
+    .orderBy(schema.prescriptions.id);
+  const quantities = await tx
+    .select({
+      id: schema.prescriptionQuantities.id,
+      deletedAt: schema.prescriptionQuantities.deletedAt,
+      updatedAt: schema.prescriptionQuantities.updatedAt,
+    })
+    .from(schema.prescriptionQuantities)
+    .orderBy(schema.prescriptionQuantities.id);
+  const workouts = await tx
+    .select({
+      id: schema.workouts.id,
+      name: schema.workouts.name,
+      updatedAt: schema.workouts.updatedAt,
+    })
+    .from(schema.workouts)
+    .orderBy(schema.workouts.id);
+  return { prescriptions, quantities, workouts };
+}
+
 async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
@@ -522,7 +555,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     // ── a reorder keeps every row (and so the entries logged against it); only places change ──
     const original = await rowsOf(tx, workoutPublicId);
     const items = draft.items;
-    // B-group first, then A, then the lone item: every place changes, and pairs swap.
+    // B-group first, then A, then the lone item: every place but the last changes, and pairs swap.
     const reordered = {
       ...draft,
       workoutPublicId,
@@ -599,13 +632,60 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       0,
       "FAM-1 6a-ii: a removed card's quantities are hidden too",
     );
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items.map(
+        (i) => i.prescriptionClientId,
+      ),
+      swapped.items.map((i) => i.prescriptionClientId),
+      'FAM-1 6a-ii: the read leaves out a hidden card',
+    );
+
+    // ── editing a kept card persists every field; a kept card's removed target is hidden ──
+    const timed = { ...swapFrom, prescriptionClientId: newId(), superset: null, restAfter: null };
+    const edited = {
+      ...swapped,
+      items: [
+        ...swapped.items.slice(0, 2),
+        {
+          ...swapped.items[2]!,
+          sets: 5,
+          targetReps: '6',
+          notes: 'New note',
+          quantities: [{ ...swapped.items[2]!.quantities[0]!, value: 35 }],
+        },
+        ...swapped.items.slice(3),
+        timed,
+      ],
+    };
+    assert.ok((await saveWorkout(exec, A_SCOPE, edited)).ok, 'FAM-1 6a-ii: an edit saves');
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items,
+      edited.items,
+      "FAM-1 6a-ii: an edited card's sets, reps, notes and target persist",
+    );
+    const beforeClear = await quantityRows(tx, workoutPublicId);
+    const cleared = {
+      ...edited,
+      items: [...edited.items.slice(0, -1), { ...timed, quantities: [] }],
+    };
+    assert.ok(
+      (await saveWorkout(exec, A_SCOPE, cleared)).ok,
+      'FAM-1 6a-ii: a cleared target saves',
+    );
+    assert.deepEqual(
+      await quantityRows(tx, workoutPublicId),
+      { all: beforeClear.all, live: beforeClear.live - 1 },
+      "FAM-1 6a-ii: a kept card's removed target is hidden, not deleted",
+    );
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items.at(-1)
+        ?.quantities,
+      [],
+      'FAM-1 6a-ii: the read leaves out a hidden quantity',
+    );
 
     // ── refusals are typed results, never thrown, and write nothing ──
-    const settled = {
-      rows: (await rowsOf(tx, workoutPublicId)).size,
-      q: await quantityRows(tx, workoutPublicId),
-    };
-    const live = swapped;
+    const live = cleared;
     const other = await saveWorkout(exec, A_SCOPE, {
       ...draft,
       workoutClientId: newId(),
@@ -614,6 +694,31 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     });
     assert.ok(other.ok, 'FAM-1 6a-ii: a second workout saves');
     const bProgram = await mustCreate(tx, B_SCOPE, 'Theirs');
+    const bWorkout = await saveWorkout(exec, B_SCOPE, {
+      ...draft,
+      programPublicId: bProgram,
+      workoutClientId: newId(),
+      name: 'Their workout',
+      items: [],
+    });
+    assert.ok(bWorkout.ok, "FAM-1 6a-ii: household B's own workout saves");
+    const aOther = await mustCreate(tx, A_SCOPE, 'Other A program');
+    const aOtherWorkout = await saveWorkout(exec, A_SCOPE, {
+      ...draft,
+      programPublicId: aOther,
+      workoutClientId: newId(),
+      name: 'Other workout',
+      items: [],
+    });
+    assert.ok(aOtherWorkout.ok, "FAM-1 6a-ii: a workout of A's other program saves");
+    const plank = newId();
+    await insertMovementOwnedBy(exec, A_SCOPE, {
+      publicId: plank,
+      slug: 'fam-1-6a-ii-plank',
+      name: 'Plank hold',
+      isBodyweight: false,
+      trackingType: TRACKING_TYPE.duration,
+    });
     const bItem = newId();
     await insertMovementOwnedBy(exec, B_SCOPE, {
       publicId: bItem,
@@ -630,6 +735,16 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     });
     const weighted = solo(live.items[2]!); // dbbench: Weight × reps, a known card
     const reps = solo(live.items[4]!); // the swapped-in Reps item, a known card
+    const timedCard = solo(live.items[5]!); // Time per set, a known card
+    const duration = {
+      ...reps,
+      prescriptionClientId: newId(),
+      itemPublicId: plank,
+      itemName: 'Plank hold',
+      trackingType: TRACKING_TYPE.duration,
+      sets: null,
+      targetReps: null,
+    };
     const only = (...its: unknown[]) => ({ ...live, items: its });
     const cases: Array<[string, unknown, string]> = [
       ['an empty name', { ...live, name: '' }, PROGRAM_REFUSAL.invalid],
@@ -639,15 +754,19 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
         only({ ...reps, targetReps: '8-12' }),
         PROGRAM_REFUSAL.invalid,
       ],
-      ['reps over 1000', only({ ...reps, targetReps: '1001' }), PROGRAM_REFUSAL.invalid],
+      [
+        'reps over the cap',
+        only({ ...reps, targetReps: String(MAX_REPS_PER_SET + 1) }),
+        PROGRAM_REFUSAL.invalid,
+      ],
       [
         'a quantity on a type with none',
-        only({ ...reps, quantities: [{ slot: 'primary', unit: 'lb', value: 5 }] }),
+        only({ ...reps, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 5 }] }),
         PROGRAM_REFUSAL.invalid,
       ],
       [
         'a quantity in the wrong unit',
-        only({ ...weighted, quantities: [{ slot: 'primary', unit: 'sec', value: 5 }] }),
+        only({ ...weighted, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 5 }] }),
         PROGRAM_REFUSAL.invalid,
       ],
       [
@@ -655,7 +774,46 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
         only({ ...reps, superset: { group: 'z', order: 1 } }),
         PROGRAM_REFUSAL.invalid,
       ],
-      ['a split superset', only(live.items[0]!, reps, live.items[1]!), PROGRAM_REFUSAL.invalid],
+      [
+        'a split superset (two runs under one key)',
+        only(
+          live.items[0]!,
+          live.items[1]!,
+          reps,
+          { ...live.items[2]!, superset: { group: live.items[0]!.superset!.group, order: 1 } },
+          { ...live.items[3]!, superset: { group: live.items[0]!.superset!.group, order: 2 } },
+        ),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a misnumbered superset',
+        only(
+          { ...live.items[0]!, superset: { ...live.items[0]!.superset!, order: 2 } },
+          { ...live.items[1]!, superset: { ...live.items[1]!.superset!, order: 1 } },
+        ),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a Duration prescribed in seconds',
+        only({
+          ...duration,
+          quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 30 }],
+        }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a Time per set prescribed in minutes',
+        only({
+          ...timedCard,
+          quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'min', value: 1 }],
+        }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        "a target over its unit's ceiling",
+        only({ ...weighted, quantities: [{ ...weighted.quantities[0]!, value: 99_999 }] }),
+        PROGRAM_REFUSAL.invalid,
+      ],
       [
         'a rest on a non-last item',
         only({ ...live.items[0]!, restAfter: 'Rest' }, live.items[1]!),
@@ -663,7 +821,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       ],
       [
         "a type that is not the item's own",
-        only({ ...weighted, trackingType: 'reps', quantities: [] }),
+        only({ ...weighted, trackingType: TRACKING_TYPE.reps, quantities: [] }),
         PROGRAM_REFUSAL.invalid,
       ],
       [
@@ -685,6 +843,16 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       ],
       ['an unknown workout', { ...live, workoutPublicId: newId() }, PROGRAM_REFUSAL.not_found],
       [
+        "another household's workout, in A's program",
+        { ...live, workoutPublicId: bWorkout.ok ? bWorkout.workoutPublicId : '' },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        "a workout of A's other program",
+        { ...live, workoutPublicId: aOtherWorkout.ok ? aOtherWorkout.workoutPublicId : '' },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
         'an unknown item',
         only({ ...reps, prescriptionClientId: newId(), itemPublicId: newId() }),
         PROGRAM_REFUSAL.not_found,
@@ -701,6 +869,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       ],
       ["another workout's name, folded", { ...live, name: 'light  A' }, PROGRAM_REFUSAL.name_taken],
     ];
+    const settled = await snapshot(tx);
     for (const [what, input, reason] of cases) {
       assert.deepEqual(
         await saveWorkout(exec, A_SCOPE, input).catch((e: unknown) => ({ threw: String(e) })),
@@ -709,12 +878,9 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       );
     }
     assert.deepEqual(
-      {
-        rows: (await rowsOf(tx, workoutPublicId)).size,
-        q: await quantityRows(tx, workoutPublicId),
-      },
+      await snapshot(tx),
       settled,
-      'FAM-1 6a-ii: a refused save writes nothing',
+      'FAM-1 6a-ii: a refused save writes nothing (every row, place and updated_at as it was)',
     );
 
     // ── another household: B cannot save into A's workout, nor read it ──
@@ -738,8 +904,48 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       [...(await rowsOf(tx, workoutPublicId)).values()].every((r) => r.deletedAt !== null),
       'FAM-1 6a-ii: removed cards are hidden, never deleted',
     );
-    const [{ live: liveQuantities }] = [await quantityRows(tx, workoutPublicId)];
-    assert.equal(liveQuantities, 0, 'FAM-1 6a-ii: and so are their quantities');
+    assert.equal(
+      (await quantityRows(tx, workoutPublicId)).live,
+      0,
+      'FAM-1 6a-ii: and so are their quantities',
+    );
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items,
+      [],
+      'FAM-1 6a-ii: an emptied workout reads back with no items',
+    );
+
+    // ── programIn / workoutIn: scoped existence, the same `false` for every miss ──
+    assert.equal(
+      await programIn(exec, A_SCOPE, programPublicId),
+      true,
+      'FAM-1 6a-ii: programIn finds its own program',
+    );
+    assert.equal(
+      await programIn(exec, B_SCOPE, programPublicId),
+      false,
+      "FAM-1 6a-ii: programIn: B does not find A's program",
+    );
+    assert.equal(
+      await programIn(exec, A_SCOPE, 'not-a-uuid'),
+      false,
+      'FAM-1 6a-ii: programIn: a malformed id is false',
+    );
+    assert.equal(
+      await workoutIn(exec, A_SCOPE, programPublicId, workoutPublicId),
+      true,
+      'FAM-1 6a-ii: workoutIn finds its own workout',
+    );
+    assert.equal(
+      await workoutIn(exec, B_SCOPE, programPublicId, workoutPublicId),
+      false,
+      "FAM-1 6a-ii: workoutIn: B does not find A's workout",
+    );
+    assert.equal(
+      await workoutIn(exec, A_SCOPE, aOther, workoutPublicId),
+      false,
+      'FAM-1 6a-ii: workoutIn: a workout under another program of the household is false',
+    );
   });
   console.log(
     '✓ FAM-1 6a-ii: saveWorkout (fixture read, replay, reorder, swap, refusals, households)',

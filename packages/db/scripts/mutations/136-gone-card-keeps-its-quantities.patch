@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
-index 82312055..2f47a1fd 100644
+index d5874bce..0e0a6379 100644
 --- a/packages/db/src/writers/program/save-workout.ts
 +++ b/packages/db/src/writers/program/save-workout.ts
-@@ -201,7 +201,7 @@ export async function saveWorkout(
+@@ -219,7 +219,7 @@ export async function saveWorkout(
      if (gone.length > 0) {
        await tx
          .update(schema.prescriptionQuantities)

@@ -21,13 +21,18 @@ export const SHIFT_BAND = 1_000_000;
  * frees their places (the index is partial on live rows).
  *
  * Call it inside a transaction: between the passes the rows sit in the band, and a reader outside
- * the transaction must never see that. `where` selects exactly the live rows being placed.
+ * the transaction must never see that. `where` selects exactly the live rows being placed, and is
+ * required. ⚠️ A table placed through the band must not CHECK an upper bound on `idx`.
  */
 export async function shiftIntoBand<T extends PgTable & { idx: PgColumn }>(
   exec: Executor,
   table: T,
   where: SQL | undefined,
 ): Promise<void> {
+  // `and(...)` answers `undefined` when every conjunct is; an unscoped update would move every
+  // household's rows into the band, and only the caller's would come back.
+  if (where === undefined)
+    throw new Error('shiftIntoBand needs a where: it never shifts a whole table');
   await exec
     .update(table)
     .set({ idx: sql`${table.idx} + ${SHIFT_BAND}` } as PgUpdateSetSource<T>)

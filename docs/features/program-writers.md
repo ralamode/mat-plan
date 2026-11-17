@@ -41,6 +41,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/save-workout.ts`   | `saveWorkout`: the editor's full draft. Matches rows by `prescriptionClientId` (D19), hides gone cards, places through the band.                                                                                                          |
 | `packages/db/src/writers/program/shift-band.ts`     | `shiftIntoBand`: move a set of placed rows out of the way (`idx + SHIFT_BAND`) so their final places can be written.                                                                                                                      |
 | `packages/db/src/writers/program/index.ts`          | The writers behind `ProgramActions`, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                  |
+| `packages/db/src/queries/program/exists.ts`         | `programIn`, `workoutIn`: scoped existence, for the DAL's scope-miss report after a `not_found` and for 7b's pages.                                                                                                                       |
 | `packages/db/src/queries/program/workout.ts`        | `readWorkoutDraft`: a saved workout as the editor loads it. Deep-equals the contract's `heavy-a-draft`.                                                                                                                                   |
 | `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                           |
 | `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                 |
@@ -93,16 +94,13 @@ rules it starts under. Each step below adds its files, its diagram and its invar
     a gone card is hidden with its quantities, never deleted; a swapped item arrives under a new id
     (the editor mints it), so its old row is hidden and a new one written. A known id under another
     item, or a hidden card's id, is `invalid`. Quantities are matched by place `(prescription, slot)`,
-    so a replayed save writes no row, hidden ones included (mutation
+    so a replayed save adds no row, hidden ones included (mutation
     `quantities-replaced-every-save`).
 11. 🔴 **Places go through the band** (`shift-band.ts`; mutation `save-skips-the-band`):
     `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
-    unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use
-    the same helper.
+    unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use the same helper. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
 12. **Every refusal comes before the first write**, and the whole save is one transaction (a
-    savepoint inside the caller's). Its locks are the block `FOR SHARE`, then the program's workouts
-    `FOR UPDATE` (`insertWorkoutOwnedBy`'s order), which also serialises two saves' name checks
-    within a program. Items must be available to the household (mutation
+    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities. The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
     `save-takes-any-households-item`) and of the type the draft says; a type's fields are
     `TRACKING_TYPE_FIELDS`' (Reps a whole number 1 to 1000; at most one quantity, in the type's slot
     and units); supersets are neighbours, numbered 1..n, at least two, with the rest on the last.
@@ -112,9 +110,9 @@ flowchart TD
   P[parse saveWorkoutSchema] -->|fails| I1[invalid]
   P --> S{supersets and item fields well formed?}
   S -->|no| I1
-  S --> B[block FOR SHARE, live template of the household]
+  S --> B[block FOR NO KEY UPDATE, live template of the household]
   B -->|none| N[not_found]
-  B --> W[the program's workouts FOR UPDATE: self by public id, or by client id for a new one]
+  B --> W[the program's workouts FOR NO KEY UPDATE: self by public id, or by client id for a new one]
   W -->|unknown or hidden| N
   W --> T{another live workout with the folded name?}
   T -->|yes| NT[name_taken]
@@ -126,6 +124,10 @@ flowchart TD
   R --> X[write: workout, hide gone cards and their quantities, shift into band, place and update or insert each card, quantities by slot]
   X --> OK["ok, workoutPublicId"]
 ```
+
+13. **The reads take ids from URLs and answer a malformed one as a miss** (`null` or `false`), never
+    a `22P02`. `not_found` from a writer is one answer for a program, workout or item that missed;
+    the DAL that wants to say which calls `programIn` / `workoutIn`.
 
 ## Changing it
 

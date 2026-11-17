@@ -5,6 +5,7 @@ import {
   quantitySlotSchema,
   trackingTypeSchema,
   unitSchema,
+  uuidSchema,
   type WorkoutDraft,
 } from '@mat-plan/shared';
 
@@ -25,12 +26,19 @@ import { liveTemplateBlockIn } from '../../writers/ownership';
  * - A quantity's `value` is `value_min` as a number, or `null` ("log in this unit, no target").
  *   `value_max` is not part of the contract yet; nothing writes it.
  * - Quantities are in `QUANTITY_SLOT_CODES` order, so a two-slot item reads the same on every load.
+ * - Hidden cards and hidden quantities are left out (a hidden card's id is refused by a save).
+ * - ⚠️ Three statements, not one snapshot: a save committing between them can load a card without
+ *   its quantity. Accepted while one person edits a program; a version column is the fix if two
+ *   devices ever edit one workout at once.
  */
 export async function readWorkoutDraft(
   exec: Executor,
   scope: HouseholdScope,
   ids: { programPublicId: string; workoutPublicId: string },
 ): Promise<WorkoutDraft | null> {
+  // An id from a URL that is not a uuid is `null`, never a 22P02 thrown by Postgres.
+  if (!uuidSchema.safeParse(ids.programPublicId).success) return null;
+  if (!uuidSchema.safeParse(ids.workoutPublicId).success) return null;
   const [workout] = await exec
     .select({
       id: schema.workouts.id,

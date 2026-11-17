@@ -148,17 +148,44 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(web.filter((f) => HELPERS.test(code(join(REPO, f))))).toEqual([]);
   });
 
-  // FAM-1 6a-ii (the board's seam turn): `@mat-plan/db` now exports lane P's program writers. The
-  // names are also `ProgramActions` members, which the screens and the preview's fake implement, so
-  // the scan matches an IMPORT of one from the package, not the bare name. 7a changes this line.
-  const LANE_P_WRITERS =
-    /import\s*(?:type\s*)?\{[^}]*\b(createProgram|renameProgram|saveWorkout|readWorkoutDraft)\b[^}]*\}\s*from\s*['"]@mat-plan\/db['"]/;
+  // FAM-1 6a-ii (the board's seam turn): `@mat-plan/db` exports lane P's writers and reads through
+  // the lane's two barrels. Their names are also `ProgramActions` members, which the screens and the
+  // preview's fake implement, so the scan matches an import or re-export of one FROM THE PACKAGE, not
+  // the bare name. The names are read from the barrels, so a later step's export is covered without
+  // an edit here. Step 7a changes this case.
+  const LANE_P_BARRELS = [
+    'packages/db/src/writers/program/index.ts',
+    'packages/db/src/queries/program/index.ts',
+  ];
+  const laneP = LANE_P_BARRELS.flatMap((b) =>
+    [...code(join(REPO, b)).matchAll(/export\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
+      m[1]!
+        .split(',')
+        .map((n) => n.trim())
+        .filter(Boolean),
+    ),
+  );
+  const fromDb = (names: readonly string[]) =>
+    new RegExp(
+      `(?:import|export)\\s*(?:type\\s*)?\\{[^}]*\\b(?:${names.join('|')})\\b[^}]*\\}\\s*from\\s*['"]@mat-plan\\/db['"]`,
+    );
+  // The forms that would reach a writer without naming it in braces.
+  const WHOLE_PACKAGE =
+    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)/;
 
-  it("apps/web imports none of lane P's program writers yet (step 7a wires them)", () => {
+  it("apps/web imports none of lane P's program writers or reads yet (step 7a wires them)", () => {
+    expect(laneP, 'the barrels name what they publish').toEqual(
+      expect.arrayContaining(['createProgram', 'renameProgram', 'saveWorkout', 'readWorkoutDraft']),
+    );
+    const named = fromDb(laneP);
     const web = files.filter((f) => f.startsWith('apps/web/'));
-    expect(web.filter((f) => LANE_P_WRITERS.test(code(join(REPO, f))))).toEqual([]);
-    // Non-vacuity: the pattern catches the import it names, and not a ProgramActions member.
-    expect(LANE_P_WRITERS.test("import { db, saveWorkout } from '@mat-plan/db';")).toBe(true);
-    expect(LANE_P_WRITERS.test('async saveWorkout(draft) {')).toBe(false);
+    expect(web.filter((f) => named.test(code(join(REPO, f))))).toEqual([]);
+    expect(web.filter((f) => WHOLE_PACKAGE.test(code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: each form is caught, and a ProgramActions member is not.
+    expect(named.test("import { db, saveWorkout } from '@mat-plan/db';")).toBe(true);
+    expect(named.test("export { readWorkoutDraft } from '@mat-plan/db';")).toBe(true);
+    expect(named.test('async saveWorkout(draft) {')).toBe(false);
+    expect(WHOLE_PACKAGE.test("import * as db from '@mat-plan/db';")).toBe(true);
+    expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
   });
 });

@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
-index 82312055..9b57d8a1 100644
+index d5874bce..b0b36163 100644
 --- a/packages/db/src/writers/program/save-workout.ts
 +++ b/packages/db/src/writers/program/save-workout.ts
-@@ -280,7 +280,7 @@ async function saveQuantities(
-     );
+@@ -315,7 +315,7 @@ async function saveQuantities(
+ ): Promise<void> {
    const wanted = new Map(item.quantities.map((q) => [q.slot as string, q]));
    for (const row of live) {
 -    const q = wanted.get(row.slot);
 +    const q = wanted.get('replaced-every-time');
-     if (!q) {
-       await tx
-         .update(schema.prescriptionQuantities)
+     wanted.delete(row.slot);
+     await tx
+       .update(schema.prescriptionQuantities)

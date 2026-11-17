@@ -7,6 +7,7 @@ import { PROGRAM_BLOCK_SLUG_UNIQUE_INDEX } from '../../schema';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { liveTemplateBlockIn, programBlockInHousehold } from '../ownership';
+import { isUniqueViolationOn } from '../unique-violation';
 
 /**
  * The rules `createProgram` and `renameProgram` share (FAM-1 plan D5, D9), written once.
@@ -127,10 +128,7 @@ export async function lostSlugRace(
     });
     return false;
   } catch (e) {
-    // `hide.ts`'s `isBodyweightSlotConflict` shape: drizzle wraps the driver error in `cause`.
-    const cause = (e as { cause?: unknown })?.cause ?? e;
-    const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
-    if (code === '23505' && constraint === PROGRAM_BLOCK_SLUG_UNIQUE_INDEX) return true;
+    if (isUniqueViolationOn(e, PROGRAM_BLOCK_SLUG_UNIQUE_INDEX)) return true;
     throw e;
   }
 }
