@@ -291,7 +291,7 @@ gantt
   section E · day data
   11a                          :done, e1, 4, 5
   11b row writer               :crit, done, e2, 5, 7
-  12a-i the day's read         :crit, e3, 7, 8
+  12a-i the day's read         :crit, done, e3, 7, 8
   14, 11c                      :e4, 8, 9
   12a-ii replayed fixtures     :e5, 9, 10
 
@@ -320,7 +320,7 @@ gantt
   3b-page (merged)             :done, s1, 1, 2
   3b-bw                        :done, s2, 2, 3
   3b-0                         :done, s3, 6, 7
-  3b-life (merged), B2-0       :active, s4, 7, 8
+  3b-life, B2-0 (merged)       :done, s4, 7, 8
   B1-2                         :s5, 8, 9
   B2                           :s6, 10, 11
 
@@ -349,12 +349,12 @@ gantt
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's three takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 31 of the 50). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 33 of the 50). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
-  themselves. Since then: all of lane A's chain; lane E's 11a and 11b; lane B's six screen steps
-  (8a to 10b) and 7a-i; lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0 and 3b-life.
+  themselves. Since then: all of lane A's chain; lane E's 11a, 11b and 12a-i (#505); lane B's six screen steps
+  (8a to 10b) and 7a-i; lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
   6a-i and 6a-ii are merged and 6a-iii is not, so 6a's bar is part merged; so are 7a's bar
-  (7a-i is merged, 7a-ii is not) and the bar that holds 3b-life and B2-0. A bar is marked here when its PRs are on `main`.
+  (7a-i is merged, 7a-ii is not). A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
