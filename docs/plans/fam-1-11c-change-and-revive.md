@@ -14,13 +14,13 @@ Two writer changes for the day page, both on program rows:
 2. **A slot holds at most one entry** (D35): a ✓ on a set whose entry the athlete un-ticked, or that
    Clear day hid, brings that entry back with the new numbers. It does not add a second entry.
 
-This PR holds the writers and their `db:verify` proofs. The Server Action for Change belongs to 12b,
+This PR holds the writers and their `db:verify` proofs. The Server Action for Change belongs to 12d,
 and the page to 12c and 12d.
 
 **Roadmap alignment (2026-11-17):** advances `FAM-1` lane E.
 
 - **Gated by** 11b (#470) and lane S's B2-0 (#514; `0030` applied), both merged.
-- **Gates** 12b's Change action and 12d.
+- **Gates** 12d (Change's action and page).
 - **`ID-1`:** nothing new is keyed on `(household, profile)`, and the amend is a new consumer of
   `programBlockOfProfile`, which compares against the athlete's **current** household. So under
   `ID-1`'s "take your history", a moved athlete could no longer Change or revive rows logged against
@@ -71,7 +71,7 @@ Done when:
 | S1  | **One module for the steps `logRow` and `amendRow` share:** `writers/day/row-steps.ts`. It holds `RowRefused`, `refuse`, `rowTransaction` (the `retry` answer), `storedValues`, `fitsItsType`, and `rowItem(tx, scope, { workoutId, prescriptionId })`. That last returns `{ prescription, quantities, movement, trackingType, terms }`: 11b's steps 5, 6 and the `prescriptionTerms` half of 10, lifted out of `log-row.ts` unchanged. `openRowDay` is split into `openProfile` (`isLiveProfile`) and the window check, because Change learns its day from the entry. `log-row.ts` imports all of these. No behaviour change for `logRow`: 11b's proofs and mutations still pass, and patches that no longer apply are regenerated. |
 | S2  | **The frozen columns are one function:** `rowFrozenColumns(...)` returns `Pick<typeof schema.entries.$inferInsert, 'unit' \| 'movementName' \| 'supersetId' \| 'supersetOrder' \| 'prescribedSnapshot'>`. The insert spreads it, and so does the revive. `movementId` and `activityTypeId` are never re-frozen, because a prescription's movement cannot change (`save-workout.ts:195` refuses a swap; a swap is a new card).                                                                                                                                                                                                                                                                                                        |
 | S3  | **Every in-place write bumps `updated_at`** on the rows it touches (`entries`, `entry_sets`, `entry_set_quantities`), as `strength-session.ts:486,518`, `practice.ts:36` and `bodyweight.ts:86` do (the LWW convention). Both writers are added to the tech-debt entry "Set-edit LWW uses server-`now()`…", so v1.5 sync finds every in-place writer.                                                                                                                                                                                                                                                                                                                                                                                |
-| S4  | **The writers do not parse.** The 12b action does (`log-row.ts:272`, as for 11b), so "a non-number is refused" is the contract's schema test (`shapes.test.ts`), named in the owed line's place. The writer's own proof is the blank (`bad_value`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| S4  | **The writers do not parse.** The action does (12d's, as 12b's does for `logRow`, `log-row.ts:272`), so "a non-number is refused" is the contract's schema test (`shapes.test.ts`), named in the owed line's place. The writer's own proof is the blank (`bad_value`).                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ### Change (`amendRow`)
 
@@ -250,9 +250,9 @@ is A1's. The remaining differences:
 
 - **Several hidden entries on a slot:** the fake keeps at most one per slot, so R3's pick has no
   counterpart there.
-- **The unit an amend is checked against:** the fake checks the prescription's current unit
-  (`found.item.unit`, `fakes.ts:308`); the writer checks the stored row's (A5). Q4 asks the contract
-  owner to align the fake.
+- **The unit an amend is checked against:** none. The contract owner aligned the fake (C28, #534): it
+  checks `loggedRowUnit(trackingType, logged)`, the stored unit, as A5 does. A row with no stored
+  quantity in its type's slot has a `null` unit, so an amend that sends a quantity is `bad_value` in both.
 - **The existing differences** listed in day-writers.md (archive, household, stored rounding).
 
 ## Risks
@@ -270,7 +270,7 @@ is A1's. The remaining differences:
 
 ## Out of scope
 
-- The Change action and its page (12b, 12d).
+- The Change action and its page (12d).
 - Bodyweight and practice, whose re-entry stays a new row (D35).
 - Keeping replaced client ids (v1.5).
 - **Pre-existing, filed in `docs/tech-debt.md` (lane E's, the board 2026-11-17; fixed in its own PR after 11c-i):** `updateStrengthSetById` (`strength-session.ts:450-530`)
@@ -284,9 +284,9 @@ is A1's. The remaining differences:
 - **Q2 (lane A): answered.** Lane A rewords the docblock in 0031.
 - **Q3, decided: split** _(maintainer, 2026-11-17, relayed by the board)_. **11c-i** is Change
   (S1–S4, A1–A8, `updateEntrySetRows`, the two owed lines, mutations 348–356); it lands S1 first and
-  gates 12b's Change action. **11c-ii** is the revive (R1–R8, the 10 and 3b rewrites, the claim
+  gates 12d. **11c-ii** is the revive (R1–R8, the 10 and 3b rewrites, the claim
   rewording, mutations 341–347 and 357). This plan merges on its own (#533); 11c-i and 11c-ii are each their own PR.
-- **Q4 (contract owner):** align the fake's `amendRow` to check the stored unit (A5)?
+- **Q4, answered:** the fake is aligned (contract change C28, #534).
 
 ## Review-response log
 
