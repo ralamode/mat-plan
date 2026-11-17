@@ -58,18 +58,24 @@ const ENTRY_ID = '019826b4-0000-7000-8000-0000000000e1';
 const HIDDEN_AT = '2026-11-17T18:30:00.000000Z';
 // Far from the real clock: an action that computed its own today would hand the DAL another day.
 const TODAY = '2031-03-04';
+// The row's day differs from today, so an action that passed `day` as `today` is caught.
+const YESTERDAY = '2031-03-03';
 const LOGGED = { ok: true, entryPublicId: ENTRY_ID, values: { reps: 5, quantities: [] } } as const;
 
 const writeInput = () => ({
   clientId: '019826b4-0000-7000-8000-0000000000c1',
   profilePublicId: PROFILE_ID,
-  day: TODAY,
+  day: YESTERDAY,
   workoutPublicId: '019826b4-0000-7000-8000-0000000000b1',
   prescriptionPublicId: '019826b4-0000-7000-8000-0000000000d1',
   set: 1,
   values: { reps: 5, quantities: [] },
 });
-const untickInput = () => ({ profilePublicId: PROFILE_ID, day: TODAY, entryPublicId: ENTRY_ID });
+const untickInput = () => ({
+  profilePublicId: PROFILE_ID,
+  day: YESTERDAY,
+  entryPublicId: ENTRY_ID,
+});
 const retickInput = () => ({ ...untickInput(), hiddenAt: HIDDEN_AT });
 
 beforeEach(() => vi.clearAllMocks());

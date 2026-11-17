@@ -444,9 +444,9 @@ a template row's `target_reps` (`TARGET_REPS_MAX`); and their copies on the log 
 `sessions.workout_name` and `supersets.prescription_group`. Since FAM-1 6a-i and 6a-ii, lane P's
 writers store `program_blocks.name` (and its `slug`, derived from it and re-derived on a rename),
 `workouts.name` and `description`, and each item's `notes`, `rest_after`, `superset_label` and `target_reps` (only ever a whole number, since 6a-ii's writer stores what `wholeReps` reads), but no screen reaches them until step 7b. Lane E's row writer (11b) copies the
-workout's name and superset label to the log side, reachable from step 12b. The week's labels (6b)
+workout's name and superset label to the log side; 12b gives it Server Actions, which a page first serves at step 12c. The week's labels (6b)
 and `copied_from_program_name` (6a-iii) are not written yet (§1a); each is bounded by a length CHECK
-pinned to its shared const. The steps that first wire a screen (7b, 12b) move them into the list
+pinned to its shared const. The steps that first wire a screen (7b, 12c) move them into the list
 above. FAM-1 step 5's two tables hold **no free text and no unused column**, so they add nothing
 here.
 

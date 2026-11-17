@@ -426,11 +426,21 @@ describe('inline refusals', () => {
     expect(document.activeElement).not.toBe(field(vest));
   });
 
-  it('every refusal of a ✓ but a retry has copy, and a stale one offers Reload', () => {
-    for (const reason of ROW_REFUSALS) {
-      const copy = refusalCopy(reason, 'tick');
+  it('each refusal of a ✓ offers Reload exactly when the page is out of date', () => {
+    // `closed_day` is not here: the screen turns read-only on it and shows no row message.
+    const reload: Record<Exclude<(typeof ROW_REFUSALS)[number], 'closed_day'>, boolean> = {
+      bad_value: true,
+      not_scheduled: true,
+      program_changed: true,
+      not_found: true,
+      slot_taken: true,
+      retry: false,
+      own_hidden: false,
+    };
+    for (const [reason, expected] of Object.entries(reload)) {
+      const copy = refusalCopy(reason as keyof typeof reload, 'tick');
       expect(copy.message, reason).not.toBe('');
-      if (reason === ROW_REFUSAL.bad_value) expect(copy.reload).toBe(true);
+      expect(copy.reload, reason).toBe(expected);
     }
   });
 

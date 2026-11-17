@@ -145,7 +145,7 @@ edited in place. The wiring (12b on) comes next; each step adds its files and in
     is lost). A saved Change shows its numbers until the page's data shows them too (the `amended`
     override in `use-row.ts`), and another phone's Change retires the line and its Undo.
 
-17. 🔴 **Today is read in the row actions and nowhere below** (plan row 12b; the 12b rules). The
+17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an
     argument, and the writer holds the row's `day` to the window itself (`rowDayOpen`: today and
     yesterday, never a later day, an archived athlete never). So a crafted older or future day

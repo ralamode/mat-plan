@@ -4,6 +4,7 @@ import { logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
   ROW_REFUSAL,
+  isoDaySchema,
   uuidSchema,
   type DayPlan,
   type RowResult,
@@ -39,7 +40,8 @@ const NOT_FOUND = { ok: false, reason: ROW_REFUSAL.not_found } as const;
 /**
  * The athlete's day, with `athletes` added: the household's live athletes, not archived, for the
  * switcher. `writable`, `future` and `canGoForward` are the resolver's (contract change C17).
- * `null` when the athlete is not in the caller's household, or the id is not a uuid (no query).
+ * `null` when the athlete is not in the caller's household, or the id is not a uuid or a day is
+ * not a day (no query).
  */
 export async function getDayPlan(args: {
   profilePublicId: string;
@@ -47,6 +49,8 @@ export async function getDayPlan(args: {
   today: string;
 }): Promise<DayPlan | null> {
   if (!uuidSchema.safeParse(args.profilePublicId).success) return null;
+  if (!isoDaySchema.safeParse(args.day).success || !isoDaySchema.safeParse(args.today).success)
+    return null;
   const scope = await getHouseholdScope();
   if (!scope) return null;
   const plan = await resolveDayPlan(db, { scope, ...args });

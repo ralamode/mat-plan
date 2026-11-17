@@ -1,4 +1,4 @@
-import { ACTIVITY_TYPE_KEYS, ROW_REFUSAL } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, PROFILE_KIND, ROW_REFUSAL } from '@mat-plan/shared';
 import { DAY_PLAN_FIXTURES } from '@mat-plan/shared/program/fixtures';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,21 +41,28 @@ const HIDDEN_AT = '2026-11-17T18:30:00.000000Z';
 const LOGGED = { ok: true, entryPublicId: ENTRY_ID, values: { reps: 5, quantities: [] } } as const;
 // A day far from the real clock, so a DAL that read one would hand the writer a different day.
 const TODAY = '2031-03-04';
+// The row's day differs from today, so a DAL that handed the writer `day` as `today` is caught.
+const YESTERDAY = '2031-03-03';
 const ATHLETES = [
-  { id: PROFILE_ID, name: 'Athlete One', kind: 'child', avatar: null },
-  { id: '019826b4-0000-7000-8000-000000000002', name: 'Athlete Two', kind: 'child', avatar: null },
+  { id: PROFILE_ID, name: 'Athlete One', kind: PROFILE_KIND.kid, avatar: null },
+  {
+    id: '019826b4-0000-7000-8000-000000000002',
+    name: 'Athlete Two',
+    kind: PROFILE_KIND.kid,
+    avatar: null,
+  },
 ];
 
 const write = {
   clientId: '019826b4-0000-7000-8000-0000000000c1',
   profilePublicId: PROFILE_ID,
-  day: TODAY,
+  day: YESTERDAY,
   workoutPublicId: '019826b4-0000-7000-8000-0000000000b1',
   prescriptionPublicId: '019826b4-0000-7000-8000-0000000000d1',
   set: 1,
   values: { reps: 5, quantities: [] },
 };
-const untick = { profilePublicId: PROFILE_ID, day: TODAY, entryPublicId: ENTRY_ID };
+const untick = { profilePublicId: PROFILE_ID, day: YESTERDAY, entryPublicId: ENTRY_ID };
 const retick = { ...untick, hiddenAt: HIDDEN_AT };
 
 beforeEach(() => {
@@ -65,11 +72,11 @@ beforeEach(() => {
 
 describe('getDayPlan (FAM-1 12b)', () => {
   it('resolves through the caller’s scope with the day and today handed in, and adds athletes', async () => {
-    const plan = await getDayPlan({ profilePublicId: PROFILE_ID, day: TODAY, today: TODAY });
+    const plan = await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: TODAY });
     expect(resolveDayPlan).toHaveBeenCalledWith(db, {
       scope: SCOPE,
       profilePublicId: PROFILE_ID,
-      day: TODAY,
+      day: YESTERDAY,
       today: TODAY,
     });
     expect(plan).toEqual({
@@ -82,17 +89,27 @@ describe('getDayPlan (FAM-1 12b)', () => {
     const flags = { writable: false, future: true, canGoForward: false };
     vi.mocked(resolveDayPlan).mockResolvedValueOnce({ ...RESOLVED, ...flags } as never);
     expect(
-      await getDayPlan({ profilePublicId: PROFILE_ID, day: TODAY, today: TODAY }),
+      await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: TODAY }),
     ).toMatchObject(flags);
   });
 
-  it('an athlete the resolver does not find, no household, or an id that is not a uuid: null', async () => {
+  it('an athlete the resolver does not find, no household, a non-uuid id or a non-day: null', async () => {
     vi.mocked(resolveDayPlan).mockResolvedValueOnce(null);
-    expect(await getDayPlan({ profilePublicId: PROFILE_ID, day: TODAY, today: TODAY })).toBeNull();
+    expect(
+      await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: TODAY }),
+    ).toBeNull();
 
     vi.mocked(getHouseholdScope).mockResolvedValueOnce(null);
-    expect(await getDayPlan({ profilePublicId: PROFILE_ID, day: TODAY, today: TODAY })).toBeNull();
-    expect(await getDayPlan({ profilePublicId: 'x', day: TODAY, today: TODAY })).toBeNull();
+    expect(
+      await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: TODAY }),
+    ).toBeNull();
+    expect(await getDayPlan({ profilePublicId: 'x', day: YESTERDAY, today: TODAY })).toBeNull();
+    expect(
+      await getDayPlan({ profilePublicId: PROFILE_ID, day: '2031-02-30', today: TODAY }),
+    ).toBeNull();
+    expect(
+      await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: 'tomorrow' }),
+    ).toBeNull();
     expect(resolveDayPlan).toHaveBeenCalledTimes(1);
   });
 });

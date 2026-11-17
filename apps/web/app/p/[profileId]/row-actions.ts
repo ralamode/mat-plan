@@ -10,6 +10,7 @@ import {
   type RowResult,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
+import type { z } from 'zod';
 
 import { enterMutation } from '@/app/p/mutation-entry';
 import { getActiveLocalDay } from '@/lib/active-timezone';
@@ -43,10 +44,24 @@ import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 const BAD_VALUE = { ok: false, reason: ROW_REFUSAL.bad_value } as const;
 const NOT_FOUND = { ok: false, reason: ROW_REFUSAL.not_found } as const;
 
-/** A writer's answer as the contract's, one field at a time; a success revalidates the day page. */
-function answer(result: RowResult, profilePublicId: string): RowResult {
+/**
+ * Steps 3 to 6, the same for the three writes; only the schema and the DAL call differ. Steps 1 and 2
+ * stay in each action's own body, where the session guard reads them
+ * (`app/pages-need-a-session.test.ts`). This is the one place today is read.
+ */
+async function writeRow<T extends { profilePublicId: string }>(
+  schema: z.ZodType<T>,
+  input: unknown,
+  write: (data: T, today: string) => Promise<RowResult>,
+): Promise<RowResult> {
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return BAD_VALUE;
+  const profile = await getProfileByPublicId(parsed.data.profilePublicId);
+  if (!profile) return NOT_FOUND;
+  const result = await write(parsed.data, await getActiveLocalDay());
   if (!result.ok) return { ok: false, reason: result.reason };
-  revalidatePath(athletePath(profilePublicId));
+  // The answer is built field by field, and only a success revalidates the athlete's day page.
+  revalidatePath(athletePath(profile.id));
   return {
     ok: true,
     entryPublicId: result.entryPublicId,
@@ -61,12 +76,7 @@ export async function logRowAction(input: unknown): Promise<RowResult> {
     async (): Promise<RowResult> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT);
       if (!entry.ok) return entry;
-      const parsed = rowWriteSchema.safeParse(input);
-      if (!parsed.success) return BAD_VALUE;
-      const profile = await getProfileByPublicId(parsed.data.profilePublicId);
-      if (!profile) return NOT_FOUND;
-      const result = await logDayRow(parsed.data, await getActiveLocalDay());
-      return answer(result, profile.id);
+      return writeRow(rowWriteSchema, input, logDayRow);
     },
   );
 }
@@ -77,12 +87,7 @@ export async function untickRowAction(input: unknown): Promise<RowResult> {
     async (): Promise<RowResult> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT);
       if (!entry.ok) return entry;
-      const parsed = rowUntickSchema.safeParse(input);
-      if (!parsed.success) return BAD_VALUE;
-      const profile = await getProfileByPublicId(parsed.data.profilePublicId);
-      if (!profile) return NOT_FOUND;
-      const result = await untickDayRow(parsed.data, await getActiveLocalDay());
-      return answer(result, profile.id);
+      return writeRow(rowUntickSchema, input, untickDayRow);
     },
   );
 }
@@ -93,12 +98,7 @@ export async function retickRowAction(input: unknown): Promise<RowResult> {
     async (): Promise<RowResult> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT);
       if (!entry.ok) return entry;
-      const parsed = rowRetickSchema.safeParse(input);
-      if (!parsed.success) return BAD_VALUE;
-      const profile = await getProfileByPublicId(parsed.data.profilePublicId);
-      if (!profile) return NOT_FOUND;
-      const result = await retickDayRow(parsed.data, await getActiveLocalDay());
-      return answer(result, profile.id);
+      return writeRow(rowRetickSchema, input, retickDayRow);
     },
   );
 }
