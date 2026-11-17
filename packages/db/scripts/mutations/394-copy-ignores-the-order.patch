@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 70189345..e4194770 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -124,7 +124,7 @@ export async function copyWorkout(
+           liveTemplateBlockIn(scope),
+         ),
+       )
+-      .orderBy(asc(schema.prescriptions.idx), asc(schema.prescriptionQuantities.slot));
++      .orderBy(asc(schema.prescriptions.id), asc(schema.prescriptionQuantities.slot));
+     const source = sourceRows[0];
+     if (!source) return refuse(PROGRAM_REFUSAL.not_found);
+     type Item = NonNullable<(typeof sourceRows)[number]['item']>;

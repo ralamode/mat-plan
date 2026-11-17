@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
-index e3ebeb13..6f5ad379 100644
+index 70189345..3d4e4b85 100644
 --- a/packages/db/src/writers/program/copy-workout.ts
 +++ b/packages/db/src/writers/program/copy-workout.ts
 @@ -12,7 +12,7 @@ import {
@@ -11,12 +11,12 @@ index e3ebeb13..6f5ad379 100644
  import { refuse } from './refuse';
  
  /**
-@@ -85,7 +85,7 @@ export async function copyWorkout(
+@@ -121,7 +121,7 @@ export async function copyWorkout(
          and(
            eq(schema.workouts.publicId, draft.workoutPublicId),
            isNull(schema.workouts.deletedAt),
 -          liveTemplateBlockIn(scope),
 +          programBlockInHousehold(scope),
          ),
-       );
-     if (!source) return refuse(PROGRAM_REFUSAL.not_found);
+       )
+       .orderBy(asc(schema.prescriptions.idx), asc(schema.prescriptionQuantities.slot));

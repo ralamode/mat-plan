@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
-index e3ebeb13..7d4fa8d1 100644
+index 70189345..6521c2e7 100644
 --- a/packages/db/src/writers/program/copy-workout.ts
 +++ b/packages/db/src/writers/program/copy-workout.ts
-@@ -159,7 +159,7 @@ export async function copyWorkout(
+@@ -173,7 +173,7 @@ export async function copyWorkout(
+           workoutId: made.id,
          })
          .returning({ id: schema.prescriptions.id });
-       const own = quantities.filter((q) => q.prescriptionId === sourceId);
 -      if (own.length > 0) {
 +      if (false && own.length > 0) {
          await tx
            .insert(schema.prescriptionQuantities)
-           .values(
+           .values(own.map((q) => ({ ...q, prescriptionId: copied!.id })));

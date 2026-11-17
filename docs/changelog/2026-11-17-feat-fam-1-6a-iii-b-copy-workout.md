@@ -11,6 +11,7 @@ step 7a-ii wires it.
   name.
 - It can go onto weekdays of the program's week, last on each, with a label. A retried copy adds
   nothing.
-- Seven new `db:mutations` patches (385–391) show the proofs fail when the copy loses its items or
+- Twelve new `db:mutations` patches (385–396) show the proofs fail when the copy loses its items or
   their numbers, names itself wrongly, checks the name before the retry, takes a removed program's
-  workout, or takes a day's first place.
+  workout or a removed card, loses the order or a range, records the wrong program, or takes a
+  day's first place.

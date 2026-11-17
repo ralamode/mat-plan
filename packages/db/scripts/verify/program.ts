@@ -25,7 +25,7 @@ import {
 } from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
 import type { TrackingType, WeekDraft, WorkoutDraft } from '@mat-plan/shared';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import type { HouseholdScope } from '../../src/scope';
@@ -1859,6 +1859,62 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     const content = (w: Awaited<ReturnType<typeof read>>) =>
       w!.items.map(({ prescriptionClientId: _id, ...item }) => item);
 
+    // The source as a person leaves it: its lone last card removed (hidden, with its quantity), the
+    // two supersets swapped (so stored order differs from write order), and one target a range.
+    const live = await read(home, source);
+    const resaved = await saveWorkout(exec, A_SCOPE, {
+      ...draft,
+      workoutPublicId: source,
+      items: [live!.items[2]!, live!.items[3]!, live!.items[0]!, live!.items[1]!],
+    });
+    assert.ok(resaved.ok, 'FAM-1 6a-iii-b: the source is edited before it is copied');
+    const [ranged] = await tx
+      .select({ id: schema.prescriptionQuantities.id })
+      .from(schema.prescriptionQuantities)
+      .innerJoin(
+        schema.prescriptions,
+        eq(schema.prescriptions.id, schema.prescriptionQuantities.prescriptionId),
+      )
+      .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+      .where(
+        and(
+          eq(schema.workouts.publicId, source),
+          isNull(schema.prescriptions.deletedAt),
+          isNull(schema.prescriptionQuantities.deletedAt),
+          sql`${schema.prescriptionQuantities.valueMin} is not null`,
+        ),
+      )
+      .limit(1);
+    assert.ok(ranged, 'FAM-1 6a-iii-b: the source has a target to make a range');
+    await tx
+      .update(schema.prescriptionQuantities)
+      .set({ valueMax: sql`${schema.prescriptionQuantities.valueMin} + 5` })
+      .where(eq(schema.prescriptionQuantities.id, ranged.id));
+    /** A workout's live quantities as stored, in item order: what `readWorkoutDraft` leaves out. */
+    const storedQuantities = (workoutPublicId: string) =>
+      tx
+        .select({
+          slot: schema.prescriptionQuantities.slot,
+          dimension: schema.prescriptionQuantities.dimension,
+          unit: schema.prescriptionQuantities.unit,
+          valueMin: schema.prescriptionQuantities.valueMin,
+          valueMax: schema.prescriptionQuantities.valueMax,
+        })
+        .from(schema.prescriptionQuantities)
+        .innerJoin(
+          schema.prescriptions,
+          eq(schema.prescriptions.id, schema.prescriptionQuantities.prescriptionId),
+        )
+        .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+        .where(
+          and(
+            eq(schema.workouts.publicId, workoutPublicId),
+            isNull(schema.prescriptions.deletedAt),
+            isNull(schema.prescriptionQuantities.deletedAt),
+          ),
+        )
+        .orderBy(asc(schema.prescriptions.idx), asc(schema.prescriptionQuantities.slot));
+
     // ── into its own program, with no name: the name and " (copy)" ──
     const clientId = newId();
     const mine = await copy({ clientId });
@@ -1879,6 +1935,16 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       content(copied),
       content(original),
       "FAM-1 6a-iii-b: the copy has the source's items, in order, with their numbers",
+    );
+    assert.equal(
+      copied!.items.length,
+      live!.items.length - 1,
+      "FAM-1 6a-iii-b: the source's removed card is not copied",
+    );
+    assert.deepEqual(
+      await storedQuantities(mine.workoutPublicId),
+      await storedQuantities(source),
+      "FAM-1 6a-iii-b: the copy's quantities are the source's, every column (a range included)",
     );
     const sourceCards = new Set(original!.items.map((i) => i.prescriptionClientId));
     assert.ok(
@@ -1934,6 +2000,31 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       (await read(away, there.workoutPublicId))!.name,
       original!.name,
       "FAM-1 6a-iii-b: a copy in another program keeps the workout's own name",
+    );
+    const provenance = async (workoutPublicId: string) =>
+      (
+        await tx
+          .select({
+            copiedFromWorkoutId: schema.workouts.copiedFromWorkoutId,
+            copiedFromProgramName: schema.workouts.copiedFromProgramName,
+          })
+          .from(schema.workouts)
+          .where(eq(schema.workouts.publicId, workoutPublicId))
+      )[0];
+    assert.deepEqual(
+      await provenance(there.workoutPublicId),
+      { copiedFromWorkoutId: src!.id, copiedFromProgramName: 'Kids program' },
+      "FAM-1 6a-iii-b: a copy into another program records the SOURCE program's name",
+    );
+    const renamed = await renameProgram(exec, A_SCOPE, {
+      programPublicId: home,
+      name: 'Renamed program',
+    });
+    assert.ok(renamed.ok, 'FAM-1 6a-iii-b: the source program renames');
+    assert.equal(
+      (await provenance(there.workoutPublicId))!.copiedFromProgramName,
+      'Kids program',
+      "FAM-1 6a-iii-b: the source program's name is frozen at copy time",
     );
     const week = await readWeek(exec, A_SCOPE, away);
     assert.deepEqual(
@@ -2071,6 +2162,12 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       );
     }
     assert.deepEqual(await counts(), unchanged, 'FAM-1 6a-iii-b: a refused copy writes nothing');
+    // The removed "Gone Copy" was in `away`: its name, re-cased, is free there again.
+    const freed = await copy({ toProgramPublicId: away, name: 'gone  copy' });
+    assert.ok(
+      'ok' in freed && freed.ok,
+      'FAM-1 6a-iii-b: a name a removed workout had is free again',
+    );
 
     // ── household B cannot copy A's workout into its own program ──
     assert.deepEqual(

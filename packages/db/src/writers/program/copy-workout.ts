@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, max } from 'drizzle-orm';
+import { and, asc, eq, isNull, max } from 'drizzle-orm';
 
 import {
   copyDraftSchema,
@@ -34,7 +34,8 @@ import { refuse } from './refuse';
  *   defaulted), `not_found` (the target program, or the source workout, is not the household's live
  *   one), `name_taken`.
  * - One transaction, locking the target program's block first, as every writer of a program does
- *   (lane guide invariant 12), so a copy and a save of the target cannot interleave.
+ *   (lane guide invariant 12), so a copy and a save of the target cannot interleave. The source is
+ *   read in one statement (not locked), so a save of the source in another program is seen whole.
  */
 export async function copyWorkout(
   exec: Executor,
@@ -71,24 +72,71 @@ export async function copyWorkout(
         : refuse(PROGRAM_REFUSAL.not_found);
     }
 
-    const [source] = await tx
+    // The source in ONE statement: its row, its live items in order and their live quantities, so a
+    // save of the source committing meanwhile (another program, not locked here) is seen whole or
+    // not at all. Not `FOR SHARE` on the source's block: a copy P→Q and a copy Q→P would each hold
+    // their target's lock and wait on the other's.
+    const sourceRows = await tx
       .select({
         id: schema.workouts.id,
         blockId: schema.workouts.blockId,
         name: schema.workouts.name,
         description: schema.workouts.description,
         programName: schema.programBlocks.name,
+        item: {
+          id: schema.prescriptions.id,
+          movementId: schema.prescriptions.movementId,
+          sets: schema.prescriptions.sets,
+          targetReps: schema.prescriptions.targetReps,
+          notes: schema.prescriptions.notes,
+          restAfter: schema.prescriptions.restAfter,
+          supersetLabel: schema.prescriptions.supersetLabel,
+          supersetOrder: schema.prescriptions.supersetOrder,
+        },
+        quantity: {
+          slot: schema.prescriptionQuantities.slot,
+          dimension: schema.prescriptionQuantities.dimension,
+          unit: schema.prescriptionQuantities.unit,
+          valueMin: schema.prescriptionQuantities.valueMin,
+          valueMax: schema.prescriptionQuantities.valueMax,
+        },
       })
       .from(schema.workouts)
       .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
+      .leftJoin(
+        schema.prescriptions,
+        and(
+          eq(schema.prescriptions.workoutId, schema.workouts.id),
+          isNull(schema.prescriptions.deletedAt),
+        ),
+      )
+      .leftJoin(
+        schema.prescriptionQuantities,
+        and(
+          eq(schema.prescriptionQuantities.prescriptionId, schema.prescriptions.id),
+          isNull(schema.prescriptionQuantities.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(schema.workouts.publicId, draft.workoutPublicId),
           isNull(schema.workouts.deletedAt),
           liveTemplateBlockIn(scope),
         ),
-      );
+      )
+      .orderBy(asc(schema.prescriptions.idx), asc(schema.prescriptionQuantities.slot));
+    const source = sourceRows[0];
     if (!source) return refuse(PROGRAM_REFUSAL.not_found);
+    type Item = NonNullable<(typeof sourceRows)[number]['item']>;
+    type Quantity = NonNullable<(typeof sourceRows)[number]['quantity']>;
+    const items: Array<{ item: Item; quantities: Quantity[] }> = [];
+    for (const row of sourceRows) {
+      if (!row.item) continue;
+      const last = items[items.length - 1];
+      const entry = last?.item.id === row.item.id ? last : { item: row.item, quantities: [] };
+      if (entry !== last) items.push(entry);
+      if (row.quantity) entry.quantities.push(row.quantity);
+    }
 
     const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);
     const folded = foldName(name);
@@ -107,46 +155,13 @@ export async function copyWorkout(
     // The block lock and the replay read above mean no twin of this copy can have landed first.
     if (!made.created) return refuse(PROGRAM_REFUSAL.retry);
 
-    const items = await tx
-      .select({
-        id: schema.prescriptions.id,
-        movementId: schema.prescriptions.movementId,
-        sets: schema.prescriptions.sets,
-        targetReps: schema.prescriptions.targetReps,
-        notes: schema.prescriptions.notes,
-        restAfter: schema.prescriptions.restAfter,
-        supersetLabel: schema.prescriptions.supersetLabel,
-        supersetOrder: schema.prescriptions.supersetOrder,
-      })
-      .from(schema.prescriptions)
-      .where(
-        and(eq(schema.prescriptions.workoutId, source.id), isNull(schema.prescriptions.deletedAt)),
-      )
-      .orderBy(asc(schema.prescriptions.idx));
-    const quantities =
-      items.length === 0
-        ? []
-        : await tx
-            .select({
-              prescriptionId: schema.prescriptionQuantities.prescriptionId,
-              slot: schema.prescriptionQuantities.slot,
-              dimension: schema.prescriptionQuantities.dimension,
-              unit: schema.prescriptionQuantities.unit,
-              valueMin: schema.prescriptionQuantities.valueMin,
-              valueMax: schema.prescriptionQuantities.valueMax,
-            })
-            .from(schema.prescriptionQuantities)
-            .where(
-              and(
-                inArray(
-                  schema.prescriptionQuantities.prescriptionId,
-                  items.map((i) => i.id),
-                ),
-                isNull(schema.prescriptionQuantities.deletedAt),
-              ),
-            );
-
-    for (const [idx, { id: sourceId, ...item }] of items.entries()) {
+    for (const [
+      idx,
+      {
+        item: { id: _sourceId, ...item },
+        quantities: own,
+      },
+    ] of items.entries()) {
       const [copied] = await tx
         .insert(schema.prescriptions)
         .values({
@@ -158,13 +173,10 @@ export async function copyWorkout(
           workoutId: made.id,
         })
         .returning({ id: schema.prescriptions.id });
-      const own = quantities.filter((q) => q.prescriptionId === sourceId);
       if (own.length > 0) {
         await tx
           .insert(schema.prescriptionQuantities)
-          .values(
-            own.map(({ prescriptionId: _from, ...q }) => ({ ...q, prescriptionId: copied!.id })),
-          );
+          .values(own.map((q) => ({ ...q, prescriptionId: copied!.id })));
       }
     }
 

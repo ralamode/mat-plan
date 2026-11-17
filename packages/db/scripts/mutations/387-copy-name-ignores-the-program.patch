@@ -1,10 +1,10 @@
 diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
-index e3ebeb13..a3f29253 100644
+index 70189345..771615bf 100644
 --- a/packages/db/src/writers/program/copy-workout.ts
 +++ b/packages/db/src/writers/program/copy-workout.ts
-@@ -90,7 +90,7 @@ export async function copyWorkout(
-       );
-     if (!source) return refuse(PROGRAM_REFUSAL.not_found);
+@@ -138,7 +138,7 @@ export async function copyWorkout(
+       if (row.quantity) entry.quantities.push(row.quantity);
+     }
  
 -    const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);
 +    const name = draft.name ?? source.name;

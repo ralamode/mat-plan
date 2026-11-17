@@ -198,7 +198,7 @@ flowchart TD
     `name_taken` (`copy-name-not-folded`). A replay is answered before any check
     (`copy-checks-name-before-replay`). The source must be a live workout of a live program of the
     household (`copy-takes-a-removed-programs-workout`; `insertWorkoutOwnedBy` refuses another
-    household's source by itself). It goes last on each weekday named (`copy-puts-itself-first`).
+    household's source by itself). It goes last on each weekday named (`copy-puts-itself-first`). Removed cards stay out and the stored order is kept (`copy-takes-removed-cards`, `copy-ignores-the-order`); every quantity column travels, a range included (`copy-drops-the-range`); the provenance names the SOURCE program, frozen (`copy-records-the-targets-name`); a name a removed workout had is free (`copy-name-counts-removed-workouts`). The source is read in one statement, not locked: locking it would let a copy P→Q and a copy Q→P deadlock.
 
 ## Changing it
 
