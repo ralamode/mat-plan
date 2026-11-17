@@ -727,7 +727,7 @@ is the point of the fakes.
 **The old forms leave in wave 1** (3b-page, D29): until 12c and 15, the day page is Bodyweight and
 Life only, which the maintainer confirmed in #412.
 
-**Size, honestly:** about **42 code PRs here** (the contract's 5, and 37 in lanes A, P, E, B and C: 7, 6, 5, 10 and 9), **plus lane S's 7** (planned in #412), which is the chart's 49;, up from the milestone's 23: some from splitting oversized
+**Size, honestly:** about **42 code PRs here** (the contract's 5, and 37 in lanes A, P, E, B and C: 7, 6, 5, 10 and 9), **plus lane S's 7** (planned in #412), which is the chart's 49, up from the milestone's 23: some from splitting oversized
 steps, the rest for work the first plan left unowned or took over from the feature thread (D22).
 
 ## 8. The prototype is the reference: who checks what against it
