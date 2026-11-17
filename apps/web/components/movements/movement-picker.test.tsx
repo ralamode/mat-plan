@@ -313,7 +313,7 @@ describe('one tag per row, by precedence', () => {
     type('garage circuit');
     expect(tagsFor('Garage Circuit')).toBeNull();
     expect(row().textContent).toContain(COPY.customItem);
-    expect(row().textContent).not.toContain(COPY.noEquipment);
+    expect(row().textContent).not.toContain(COPY.emptyEquipment);
   });
 });
 
@@ -1133,9 +1133,9 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     expect(row('Back Squat').textContent).toContain(
       `${TRACKING_TYPE_LABELS.weight_reps} · Barbell, Bench`,
     );
-    expect(row('Push-Ups').textContent).toContain(`· ${COPY.noEquipment}`);
+    expect(row('Push-Ups').textContent).toContain(`· ${COPY.emptyEquipment}`);
     expect(row('Garage Circuit').textContent).toContain(`· ${COPY.customItem}`);
-    expect(row('Garage Circuit').textContent).not.toContain(COPY.noEquipment);
+    expect(row('Garage Circuit').textContent).not.toContain(COPY.emptyEquipment);
   });
 
   it('shows the supervision label as text on its row, in both modes, at full contrast (P13)', () => {

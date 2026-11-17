@@ -226,7 +226,7 @@ export function rowMeta(option: MovementOptionDTO): string {
     option.owner === 'household'
       ? COPY.customItem
       : option.equipment.length === 0
-        ? COPY.noEquipment
+        ? COPY.emptyEquipment
         : COPY.equipmentList(option.equipment.map((item) => EQUIPMENT_LABELS[item]));
   return COPY.rowMeta(TRACKING_TYPE_LABELS[option.trackingType], needs);
 }

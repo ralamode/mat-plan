@@ -78,8 +78,12 @@ export const MOVEMENT_PICKER_COPY = {
   tagCurrent: 'current',
 
   // ── The row's second line (CAT-3 P13, P14) ──────────────────────────────────────────────────────
-  /** A library movement whose equipment set is empty: just you and the floor. */
-  noEquipment: 'No equipment',
+  /**
+   * A library movement whose equipment set is empty: just you and the floor. A LABEL, computed on
+   * the row from the set (`requiresNoEquipment`'s rule); the answer is stored nowhere (spec V5,
+   * whose scan forbids naming a field for it).
+   */
+  emptyEquipment: 'No equipment',
   /** The equipment a library row needs, as a locale's list ("Barbell, Bench"), never a `.join`. */
   equipmentList: (labels: readonly string[]) => formatList(labels, APP_LOCALE, 'unit'),
   /** The row's second line (P14): how it is logged, then what it needs. The tag joins with the same mark. */
