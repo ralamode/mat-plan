@@ -7,6 +7,7 @@ import {
   type ProgramResult,
 } from '@mat-plan/shared';
 import {
+  archivedAthleteNothingLogged,
   closedDayLoggedOnly,
   futurePreview,
   noProgram,
@@ -88,15 +89,18 @@ describe('AthleteSwitcher', () => {
   });
 
   it('on an archived athlete’s day (not listed), one live athlete is the way back', () => {
-    const other = todayTwoPrograms.athletes.find(
-      (a) => a.profilePublicId !== todayTwoPrograms.profilePublicId,
-    )!;
-    render(<AthleteSwitcher plan={{ ...todayTwoPrograms, athletes: [other] }} hrefFor={hrefFor} />);
+    const plan = archivedAthleteNothingLogged;
+    expect(plan.athletes).toHaveLength(1);
+    const other = plan.athletes[0]!;
+    expect(other.profilePublicId).not.toBe(plan.profilePublicId);
+    render(<AthleteSwitcher plan={plan} hrefFor={hrefFor} />);
     const links = within(screen.getByRole('navigation')).getAllByRole('link');
     expect(links).toHaveLength(1);
     expect(links[0]!.getAttribute('href')).toBe(hrefFor(other.profilePublicId));
     // The viewed athlete is not in the list, so no link is the current one.
     expect(links[0]!.getAttribute('aria-current')).toBeNull();
+    // Its whole name: the archived athlete's own name is not listed to be told apart from.
+    expect(links[0]!.textContent).toBe(other.name);
   });
 });
 

@@ -47,7 +47,10 @@ export function AthleteSwitcher({
   // Hidden only with nowhere to go. Not a count: `athletes` leaves an archived athlete out, so on
   // their day the list holds only the others, and one live athlete is the way back.
   if (!plan.athletes.some((a) => a.profilePublicId !== plan.profilePublicId)) return null;
-  const labels = switcherLabels(plan.athletes);
+  // Whole names when the viewed athlete is not listed (archived): their name is not here to be
+  // told apart from, so "Athlete" under "Athlete Two" would read as "this is you".
+  const viewedListed = plan.athletes.some((a) => a.profilePublicId === plan.profilePublicId);
+  const labels = viewedListed ? switcherLabels(plan.athletes) : plan.athletes.map((a) => a.name);
   return (
     <nav aria-label={PROGRAM_COPY.switcher} className={className}>
       <ul className="flex flex-wrap gap-2">

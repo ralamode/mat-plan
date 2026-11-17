@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { ON_PROGRAM, ROW_REFUSAL, type DayPlan, type RowResult } from '@mat-plan/shared';
 import {
-  archivedAthleteToday,
+  archivedAthleteNothingLogged,
   closedDayLoggedOnly,
+  closedDayNothingLogged,
   DAY_PLAN_FIXTURES,
   futurePreview,
   notOnAProgramThatDay,
@@ -530,11 +531,11 @@ describe('DayScreen: a day that shows only what was logged, with nothing logged'
     screen.queryByText(PROGRAM_COPY.nothingLogged(plan.day, plan.today));
 
   it('an older day says no workouts were logged, the day written as the date line writes it', () => {
-    const empty: DayPlan = { ...closedDayLoggedOnly, workouts: [] };
-    expect(empty.day).not.toBe(empty.today);
+    const empty = closedDayNothingLogged;
+    expect(empty.workouts).toHaveLength(0);
     show(empty);
-    // Pinned once: 2026-11-11 is a Wednesday, written as the page's date line writes it.
-    expect(said(empty)?.textContent).toBe('No workouts logged on Wed, Nov 11.');
+    // Pinned once: 2026-11-10 is a Tuesday, written as the page's date line writes it.
+    expect(said(empty)?.textContent).toBe('No workouts logged on Tue, Nov 10.');
     // Not a rest day: on a day read back, an empty program means skipped.
     expect(restNotice(empty)).toBeNull();
     // A static line in the section, after its heading: not a live region, no heading of its own.
@@ -545,8 +546,9 @@ describe('DayScreen: a day that shows only what was logged, with nothing logged'
   });
 
   it('an archived athlete’s today says it of today', () => {
-    expect(archivedAthleteToday.writable).toBe(false);
-    const empty: DayPlan = { ...archivedAthleteToday, workouts: [] };
+    const empty = archivedAthleteNothingLogged;
+    expect(empty.writable).toBe(false);
+    expect(empty.day).toBe(empty.today);
     show(empty);
     expect(said(empty)?.textContent).toBe('No workouts logged today.');
   });
