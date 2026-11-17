@@ -908,8 +908,8 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
   (and its kin) to a hook, and a child `git` obeys those over the directory it is started in. The
   pre-push hook runs the test suite, so a scratch repository's `git init`, `git add -A` and
   `git commit` all acted on the real one: `init` wrote `core.bare = true` into the shared
-  `.git/config`, which made the main checkout refuse every work-tree command for every worktree's
-  owner ("this operation must be run in a work tree"), and the commit put a tree holding only the
+  `.git/config`, which made the main checkout refuse every work-tree command for every lane that
+  uses it ("this operation must be run in a work tree"), and the commit put a tree holding only the
   scratch files on top of the branch. The push was refused by the same failing test, so nothing left
   the machine (CAT-3 C0a, #531, 2026-11-17). The same test passed when run by hand, where no
   `GIT_*` is set, which is why it was pushed.
@@ -922,7 +922,8 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
     directory, never this repository's.
   - **The repair, if it happens:** `git config --file <main checkout>/.git/config core.bare false`,
     then in the affected worktree `git reflog` to find the last real commit and `git reset <it>`
-    (mixed: the working files were never touched).
+    (mixed: the working files were never touched; anything you had staged is unstaged, not lost,
+    and is staged again by hand).
 
 - **Squashing a branch with `git reset --soft origin/main` reverts whatever landed on `main` since
   the branch was cut.** → `--soft` moves HEAD and keeps the tree, so the tree still holds the

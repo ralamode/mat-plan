@@ -173,14 +173,13 @@ describe('the record files only grow (V4, the merge-base check)', () => {
   const parentState = () => {
     const git = (...args: string[]) =>
       spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', env: clean }).stdout.trim();
-    const gitDir = git('rev-parse', '--absolute-git-dir');
     return {
       bare: git('config', '--get', 'core.bare'),
       isWorkTree: git('rev-parse', '--is-inside-work-tree'),
       head: git('rev-parse', 'HEAD'),
-      index: createHash('sha256')
-        .update(readFileSync(join(gitDir, 'index')))
-        .digest('hex'),
+      // What is staged, not the index file's bytes: a `git status` elsewhere rewrites the file's
+      // stat cache without staging anything, and must not fail this.
+      staged: createHash('sha256').update(git('ls-files', '--stage')).digest('hex'),
     };
   };
   let before: ReturnType<typeof parentState>;
