@@ -39,7 +39,27 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { appSources, code, WEB_DIR } from '@/test/source-scan';
 
 import { createFakeDayActions, createFakeProgramActions, type FakeProgramState } from './fakes';
-import { pickerOptions } from './picker-options';
+import { catalogPickerOptions, pickerOptions } from './picker-options';
+
+/**
+ * A library row for a test, under another name. 🔴 **Spread from a real one, never written out**:
+ * a library row's fields are whatever `catalogOptionOf` gives (its taxonomy among them), and the
+ * picker's option type requires them, so a hand-written literal here stops compiling the day that
+ * type gains a field. Weight × reps, like the row it stands in for.
+ */
+function libraryRow(over: {
+  readonly publicId: string;
+  readonly name: string;
+  readonly aliases: readonly string[];
+}): MovementOptionDTO {
+  const template = catalogPickerOptions.find(
+    (option) => option.trackingType === TRACKING_TYPE.weight_reps,
+  );
+  if (!template || template.owner !== 'catalog') {
+    throw new Error('the preview lists no library row that logs weight × reps');
+  }
+  return { ...template, ...over };
+}
 
 /**
  * The fakes follow the accepted prototype's rules (FAM-1 plan §8, "Behaviour"). Each rule a fake
@@ -1117,16 +1137,11 @@ describe('the fake ProgramActions: items and athletes', () => {
   it('a typed alias selects the item it is another name for, and adds nothing', async () => {
     // The fixture's items carry no aliases, so this seeds one catalog item that does, as the real
     // picker data will (`MOVEMENT_PICKER_ENTRIES`).
-    const rdl: MovementOptionDTO = {
+    const rdl = libraryRow({
       publicId: '019826b4-0000-7000-8000-0000000000d1',
       name: 'Romanian Deadlift',
-      trackingType: TRACKING_TYPE.weight_reps,
-      owner: 'catalog',
-      group: 'legs',
       aliases: ['RDL'],
-      unitDefault: null,
-      isBodyweight: false,
-    };
+    });
     const { actions, state } = builder({ items: [...pickerOptions, rdl] });
     for (const typed of ['RDL', ' rdl ', 'romanian deadlifts']) {
       expect(
@@ -1151,16 +1166,11 @@ describe('the fake ProgramActions: items and athletes', () => {
     // The picker lists a movement's own name before another movement's alias (CAT-3 spec P2,
     // contract change C30), so its guard offers the household's "RDL" for "rdl"; the answer must
     // be the same item, whichever order the list is in. (Until C30 both gave the catalog's.)
-    const catalog: MovementOptionDTO = {
+    const catalog = libraryRow({
       publicId: '019826b4-0000-7000-8000-0000000000d1',
       name: 'Romanian Deadlift',
-      trackingType: TRACKING_TYPE.weight_reps,
-      owner: 'catalog',
-      group: 'legs',
       aliases: ['RDL'],
-      unitDefault: null,
-      isBodyweight: false,
-    };
+    });
     const stray: MovementOptionDTO = {
       publicId: '019826b4-0000-7000-8000-0000000000d2',
       name: 'RDL',
