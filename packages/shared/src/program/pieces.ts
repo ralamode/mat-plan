@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { uuidSchema } from '../id';
-import { matchMovementOptions, type MatchableMovement } from '../movement-search';
+import { searchMovementOptions, type MatchableMovement } from '../movement-search';
 import { TRACKING_TYPES, type TrackingType } from '../movements';
 import { PROFILE_NAME_MAX } from '../profiles';
 import {
@@ -363,17 +363,28 @@ export function hasSetRows(type: TrackingType): boolean {
  * The item a typed name already names, or `undefined`: **the one definition of "this item exists"
  * for `newItem`**. The preview's fake reads it, and the real writer will (plan step 6a).
  *
- * It is the picker's own rule (`matchMovementOptions`), not a second one: the name's key equals an
- * item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups` are one item), or equals the
- * key of one of an item's aliases (`RDL`, `rdl`). Those are exactly the two cases in which the
- * picker withholds "add as new", so the server and the picker cannot disagree about a duplicate.
+ * It is the picker's own rule (`searchMovementOptions`), not a second one. Three cases, and they
+ * are exactly the three in which the picker withholds "add as new", so the server and the picker
+ * cannot disagree about a duplicate:
  *
- * When more than one item qualifies (a household item named `RDL` made before this rule, beside
- * the catalog's Romanian Deadlift), the first in the picker's order is the answer: a catalog item
- * before a household one, then by name. 🔴 **So `isCatalog` is required here**, where the picker's
- * own type leaves it optional: an option list passed without it would compile and silently pick by
- * name alone, and the server would then select a different item than the picker offers. A caller
- * holding `MovementOptionDTO`s maps `owner === 'catalog'` to it, as the picker does.
+ * 1. the name's key equals an item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups`
+ *    are one item);
+ * 2. it equals the key of one of an item's aliases (`RDL`, `rdl`);
+ * 3. **it spells an item once its equipment short forms are expanded** (`db row` for Dumbbell row;
+ *    contract change C30, the maintainer's decision of 2026-11-17: an abbreviation that spells a
+ *    movement is that movement).
+ *
+ * When more than one item qualifies, the answer is the picker's first row, which is the row its
+ * Enter picks: an item whose own name it is, before an item it is another name of, before one a
+ * short form spells; then a catalog item before a household one, then by name (CAT-3 spec P2).
+ * So a household item literally named `RDL`, made before this rule, is what `RDL` means in that
+ * household, and the catalog's Romanian Deadlift is still found by its own name. (Until C30 the
+ * catalog's item won that case; the picker now lists a movement's own name first, and the server
+ * follows it so the two never name different items.) 🔴 **`isCatalog` is required here**, where
+ * the picker's own type leaves it optional: an option list passed without it would compile and
+ * silently break a tie by name alone, and the server would then select a different item than the
+ * picker offers. A caller holding
+ * `MovementOptionDTO`s maps `owner === 'catalog'` to it, as the picker does.
  *
  * ⚠️ `options` must be every item the household can pick, with each catalog item's `aliases`. An
  * item left out can be duplicated; an alias left out is not honoured.
@@ -385,8 +396,11 @@ export function existingItem<T extends MatchableMovement & { readonly isCatalog:
   options: readonly T[],
   name: string,
 ): T | undefined {
-  const { matches, exact, aliasHit } = matchMovementOptions(options, name);
-  return exact || aliasHit !== null ? matches[0] : undefined;
+  const found = searchMovementOptions(options, { query: name });
+  // An exact name or an exact alias as typed is always the first row: only a row a short form
+  // spells shares its quality, and that row comes after it.
+  if (found.exact || found.aliasHit !== null) return found.matches[0];
+  return found.shortFormHit ?? undefined;
 }
 
 /** The prescribed numbers of one item, as a `DayItem` carries them in `target`. */

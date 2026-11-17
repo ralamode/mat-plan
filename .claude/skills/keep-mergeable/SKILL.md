@@ -100,6 +100,10 @@ git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
 
 ## 4. Prove it, then push fast-forward only
 
+Which of these to run locally, and which to leave to CI, is one list: [AGENTS.md](../../../AGENTS.md)
+→ "Local hooks vs CI merge-gates". A merge of `main` touching only fragments and docs needs no local
+test run; the push re-runs CI.
+
 ```bash
 pnpm install --frozen-lockfile                # AFTER the merge: main may have changed the lockfile
 pnpm verify && pnpm guides:check

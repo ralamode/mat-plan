@@ -46,10 +46,6 @@ describe('owed by the contract and lane B: filters and browse (chunk C0b-2, then
 });
 
 describe('owed by lane B: the picker (chunks B1 to B3)', () => {
-  it.todo('P6: the query never leaves the device: no URL parameter, action or log line carries it');
-  it.todo(
-    'P5: near and someWords each under its own heading, counted apart, never what Enter picks',
-  );
   it.todo('P14: every row shows its tracking type, in both picker modes');
   it.todo("P15: the picker's new states pass the accessibility scan at the narrow width");
 });

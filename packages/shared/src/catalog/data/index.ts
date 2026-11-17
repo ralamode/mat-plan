@@ -1,6 +1,7 @@
 import type { CatalogMovement } from '../entry';
 
 import { CATALOG_BATCH_01 } from './batch-01';
+import { CATALOG_BATCH_02 } from './batch-02';
 import { CATALOG_BATCH_05 } from './batch-05';
 
 /**
@@ -19,6 +20,7 @@ import { CATALOG_BATCH_05 } from './batch-05';
  */
 export const CATALOG_MOVEMENTS: readonly CatalogMovement[] = [
   ...CATALOG_BATCH_01,
+  ...CATALOG_BATCH_02,
   ...CATALOG_BATCH_05,
 ];
 
