@@ -43,7 +43,6 @@ export type Stamp = {
   name: string;
   /** The workout's name when the row was logged: what the session freezes (`sessions.workout_name`). */
   workout: string;
-  label: string;
   unit: Unit | null;
   values: RowValues;
 };
@@ -78,9 +77,13 @@ function weekdayOf(day: string): Weekday {
   return weekdaySchema.parse(localWeekday(day));
 }
 
-/** Today and yesterday (plan D32): the contract's own rule. */
-function isWritable(world: ProtoWorld, day: string): boolean {
-  return inWritableWindow(day, world.today);
+/**
+ * Today and yesterday (plan D32), and never for an archived athlete: the row writer refuses them, so
+ * their day reads like a closed one (`DayPlan.writable`; maintainer, 2026-11-17).
+ */
+function isWritable(world: ProtoWorld, athlete: string, day: string): boolean {
+  const archived = world.athletes.find((a) => a.id === athlete)?.archived === true;
+  return inWritableWindow(day, world.today) && !archived;
 }
 
 /** The unit an item logs in: fixed by its type, or the one its prescription names. */
@@ -144,12 +147,10 @@ export function stamped(world: ProtoWorld): World {
     // Adult One's Easy run is in `mi`, which is not a unit until step 3 (see `ProtoItem`). It gets no
     // stamp, and a fixture that reaches it throws in `stampOf` rather than inventing a unit.
     if (!item || (item.unit !== undefined && !unitSchema.safeParse(item.unit).success)) continue;
-    const slot = program.week[weekdayOf(entry.day)].find((s) => s.wid === entry.wid);
     stamps[entry.n] = {
       text: prescribedText(draftItem(world, workout, item)),
       name: world.catalog[item.iid].name,
       workout: workout.name,
-      label: slot?.label ?? '',
       unit: unitOf(world, item),
       values: rowValues(world, item, entry.v),
     };
@@ -190,7 +191,7 @@ function programRef(world: World, programId: string) {
  * Previous column of a closed day's set rows; it hides "Last time" there.)
  */
 function previous(world: World, athlete: string, iid: FixtureItemKey, set: number, day: string) {
-  if (!isWritable(world, day)) return null;
+  if (!isWritable(world, athlete, day)) return null;
   let best: ProtoEntry | null = null;
   for (const entry of world.entries) {
     if (entry.ath !== athlete || entry.iid !== iid || entry.set !== set || entry.day >= day)
@@ -333,7 +334,7 @@ function dayWorkout(
 }
 
 export function dayPlan(world: World, athlete: string, day: string): DayPlan {
-  const writable = isWritable(world, day);
+  const writable = isWritable(world, athlete, day);
   const future = day > world.today;
   const current = currentPrograms(world, athlete);
   // One order for `programs` and for `workouts`: the programs the athlete is on this day, the
@@ -358,7 +359,9 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     if (entry.ath !== athlete || entry.day !== day) continue;
     const program = programOf(world, entry.prog);
     if (slots.some((s) => s.program === program && s.slot.wid === entry.wid)) continue;
-    const slot = { wid: entry.wid, label: stampOf(world, entry).label };
+    // No label: it was the slot's heading, and the slot is gone (maintainer, 2026-11-17). The
+    // prototype shows the label the slot had; the database keeps a workout's name, not that.
+    const slot = { wid: entry.wid, label: '' };
     slots.push({ program, slot, scheduled: false });
   }
 
@@ -370,10 +373,11 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     today: world.today,
     writable,
     future,
-    athletes: world.athletes.map((a) => ({
-      profilePublicId: fixtureIds.athlete(a.id),
-      name: a.name,
-    })),
+    // The switcher's list, as the picker lists a household: an archived athlete is not in it,
+    // their own day included (`DayPlan.athletes`).
+    athletes: world.athletes
+      .filter((a) => !a.archived)
+      .map((a) => ({ profilePublicId: fixtureIds.athlete(a.id), name: a.name })),
     onProgram: on.length ? 'yes' : current.length ? 'not-this-day' : 'never',
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
     currentPrograms: current.map((a) => programRef(world, a.prog)),

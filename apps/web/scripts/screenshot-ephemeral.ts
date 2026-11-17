@@ -41,17 +41,15 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import {
   APP_HOME_PATH,
-  AMEND_COPY,
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
-  changeLabel,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
-import { logPractice, SEED_PROFILE_ROUTE, PRACTICE_MINUTES } from '../e2e/steps';
+import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -418,7 +416,7 @@ const STATES = {
   // V1-24 3b-bw — today's ✓ row under a "Last time" line: the closed-day fixture leaves an earlier
   // weigh-in and an empty today, so the line names its weekday or date.
   'bodyweight-last-time': seedClosedDays,
-  // V1-24 3b-bw — the editor with its field emptied (Save reads Clear), and the row after the clear.
+  // V1-24 3b-bw — the editor with its field emptied (the ✓ named Clear), and the row after the clear.
   // Interaction states on top of the already-logged fixture.
   'bodyweight-clear-armed': seedAlreadyLogged,
   'bodyweight-cleared': seedAlreadyLogged,
@@ -730,11 +728,11 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   /**
    * V1-24 PR 1b — the amend, open. The reviewable surface of the PR is a state two taps in: the
-   * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
-   * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
+   * fixture logs a weight, then Change opens the editor beneath it. Worth a state of its own because
+   * the LAYOUT is the thing under review (why: `single-value-amend.tsx`).
    */
   'bodyweight-editing': async (page) => {
-    const change = page.getByRole('button', { name: /^Change weight/ });
+    const change = page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) });
     if ((await change.count()) === 0) {
       throw new Error(
         'no Change control — this state needs the already-logged fixture to have run',
@@ -743,15 +741,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await change.click();
   },
   'bodyweight-clear-armed': async (page) => {
-    await page.getByRole('button', { name: /^Change weight/ }).click();
+    await page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) }).click();
     await page.getByLabel(/^Weight \(/).fill('');
     await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).waitFor();
-    // Save → Clear is a colour transition (`transition-all`); shoot it settled, not mid-fade.
+    // Shoot it settled, not mid-transition (`transition-all`).
     await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   },
   'bodyweight-cleared': async (page) => {
     // Retry-safe across the three widths: only the first finds a Change to clear.
-    const change = page.getByRole('button', { name: /^Change weight/ });
+    const change = page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) });
     if ((await change.count()) > 0) {
       await change.click();
       await page.getByLabel(/^Weight \(/).fill('');
@@ -761,9 +759,11 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   'bodyweight-editing-refused': async (page) => {
     const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
-    await section.getByRole('button', { name: /^Change weight/ }).click();
+    await section
+      .getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) })
+      .click();
     await section.getByLabel(/^Weight \(/).fill('845');
-    await section.getByRole('button', { name: AMEND_COPY.save }).click();
+    await section.getByRole('button', { name: BODYWEIGHT_COPY.saveLabel, exact: true }).click();
     await section.getByRole('alert').waitFor();
   },
   'practice-editing': async (page) => {
@@ -1450,9 +1450,7 @@ main().catch((err) => {
 });
 
 /** The logged practice's Change, whatever its value: `changeLabel`'s own prefix, never re-typed. */
-const PRACTICE_CHANGE = new RegExp(
-  `^${changeLabel(PRACTICE_COPY.changeSubject, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-);
+const PRACTICE_CHANGE = changePrefix(PRACTICE_COPY.changeSubject);
 
 /** The Life section, where the practice row lives (V1-24 3b-life-a). */
 function practiceSection(page: Page) {

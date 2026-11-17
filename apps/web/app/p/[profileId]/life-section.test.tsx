@@ -9,7 +9,6 @@ vi.mock('./actions', () => ({
 }));
 
 import {
-  AMEND_COPY,
   AMEND_ERROR_COPY,
   changeLabel,
   LIFE_COPY,
@@ -60,6 +59,10 @@ const submit = async (name: string) => {
     fireEvent.click(screen.getByRole('button', { name }));
   });
 };
+
+/** The inline ✓ / ✕ names the editor uses. */
+const PRACTICE_SAVE = PRACTICE_COPY.saveLabel;
+const PRACTICE_CANCEL = PRACTICE_COPY.cancelLabel;
 
 describe('LifeSection — its states', () => {
   it('writable and nothing logged: the practice button, and no Wake', () => {
@@ -166,7 +169,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     render(section({ logged: [practice(90)] }));
     open(90);
     fireEvent.change(field(), { target: { value: '45' } });
-    await submit(AMEND_COPY.save);
+    await submit(PRACTICE_SAVE);
     expect(editPracticeAction).toHaveBeenCalledWith({
       profilePublicId: '019826b4-0000-7000-8000-000000000001',
       entryId: practice(90).entryId,
@@ -178,7 +181,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     );
   });
 
-  it('Save reads Clear while the field is empty; a clear is shown and focus goes to the returning field', async () => {
+  it('the ✓ is named Clear while the field is empty; a clear is shown and focus goes to the returning field', async () => {
     const { rerender } = render(section({ logged: [practice(90)] }));
     open(90);
     fireEvent.change(field(), { target: { value: '' } });
@@ -195,14 +198,16 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     expect(returning.getAttribute('aria-describedby')).toBe(status.id);
   });
 
-  it('an archived athlete: Save stays Save, and a blank is refused before any request', async () => {
+  it('an archived athlete: the ✓ keeps its save name, and a blank is refused before any request', async () => {
     render(section({ writable: false, amendable: true, logged: [practice(90)] }));
     open(90);
     fireEvent.change(field(), { target: { value: '' } });
     expect(screen.queryByText(PRACTICE_COPY.clearHint)).toBeNull();
-    await submit(AMEND_COPY.save);
+    await submit(PRACTICE_SAVE);
     expect(editPracticeAction).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.blankSave);
+    expect(screen.getByRole('alert').textContent).toBe(
+      PRACTICE_COPY.blankSave.replace('✓', `✓${PRACTICE_SAVE}`),
+    );
   });
 
   it('an out-of-range value stays under the field; a stale one is the island alert', async () => {
@@ -213,7 +218,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
       reason: PRACTICE_AMEND_REFUSAL.bad_value,
     });
     fireEvent.change(field(), { target: { value: '5' } });
-    await submit(AMEND_COPY.save);
+    await submit(PRACTICE_SAVE);
     expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.outOfRange);
     expect(field().getAttribute('aria-invalid')).toBe('true');
 
@@ -222,7 +227,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
       reason: PRACTICE_AMEND_REFUSAL.stale,
     });
     fireEvent.change(field(), { target: { value: '60' } });
-    await submit(AMEND_COPY.save);
+    await submit(PRACTICE_SAVE);
     expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.staleWrite);
   });
 
@@ -238,7 +243,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     open(90);
     vi.mocked(editPracticeAction).mockResolvedValueOnce({ ok: false, reason });
     fireEvent.change(field(), { target: { value: '60' } });
-    await submit(AMEND_COPY.save);
+    await submit(PRACTICE_SAVE);
     expect(screen.getByRole('alert').textContent).toBe(copy());
   });
 
@@ -275,8 +280,11 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
     // The editor opens on the OTHER number (90), so the alert naming 60 stays while it is open
     // (maintainer, 2026-11-16); Cancel drops it.
     open(90);
-    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.dayTaken(60));
-    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    const kept = screen.getByRole('alert');
+    expect(kept.textContent).toBe(PRACTICE_COPY.dayTaken(60));
+    // …and it describes the editor's field, so a screen reader hears the 60 that was not saved.
+    expect(field().getAttribute('aria-describedby')?.split(' ')).toContain(kept.id);
+    fireEvent.click(screen.getByRole('button', { name: PRACTICE_CANCEL }));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

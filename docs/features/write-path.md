@@ -812,7 +812,8 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
     wifi retries the POST, the row has already moved, and answering _"someone else changed this"_
     would be a conflict with nobody, over a value that is already correct.
 
-- **⚠️ A BLANK amend is a hide, not an UPDATE (V1-24 3b-bw).** `editBodyweightAction` reads the row
+- **⚠️ A BLANK amend is a hide, not an UPDATE (V1-24 3b-bw).** On the day page it is an empty ✓ in
+  the inline Change (named `Clear weight`; the hint under the field says so). `editBodyweightAction` reads the row
   first (`bodyweightRowForAmend`, which sees a hidden row and returns only its day), bounds
   the write by **the row's own day** through `resolveDeclaredDay` (a posted `day` is never read), then
   sends a blank to `clearBodyweight` (`…/writers/single-value.ts`) and a number to the guarded UPDATE.

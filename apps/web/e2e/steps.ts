@@ -3,7 +3,6 @@ import { addDays, DEFAULT_BODYWEIGHT_UNIT, PRACTICE_UNIT } from '@mat-plan/share
 import { expect, type Page } from '@playwright/test';
 
 import {
-  AMEND_COPY,
   BODYWEIGHT_COPY,
   changeLabel,
   DEFAULT_TIME_ZONE,
@@ -75,9 +74,20 @@ export const lifeSection = (page: Page) =>
 export const loggedWeight = (page: Page, value: string) =>
   bodyweightSection(page).getByText(shownWeight(value), { exact: true });
 
+/**
+ * A Change button for `subject`, whatever value it names: `changeLabel`'s own prefix, escaped, never
+ * re-typed (`Change weight — `), so a renamed subject moves every locator with it.
+ */
+export function changePrefix(subject: string): RegExp {
+  return new RegExp(`^${changeLabel(subject, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+}
+
 /** The logged row's Change, named with its value. */
 export const changeWeight = (page: Page, value: string) =>
-  bodyweightSection(page).getByRole('button', { name: changeLabel('weight', shownWeight(value)) });
+  bodyweightSection(page).getByRole('button', {
+    name: changeLabel(BODYWEIGHT_COPY.changeSubject, shownWeight(value)),
+    exact: true,
+  });
 
 /** How the app displays a weight the specs log in the default unit (`84.5` → `84.5 lb`). */
 export const shownWeight = (value: string) =>
@@ -171,13 +181,13 @@ export async function changePractice(page: Page, from: string, minutes: string):
   await practiceChange(page, from).click();
   const field = life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
   await field.fill(minutes);
-  await life.getByRole('button', { name: AMEND_COPY.save, exact: true }).click();
+  await life.getByRole('button', { name: PRACTICE_COPY.saveLabel, exact: true }).click();
   const to = formatValueUnit(Number(minutes), PRACTICE_UNIT);
   await expect(practiceChange(page, to)).toBeFocused({ timeout: 15_000 });
   await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedChanged(to));
 }
 
-/** Clear the logged practice shown as `from`: empty the field, Save reads Clear; the cleared line is
+/** Clear the logged practice shown as `from`: empty the field, the ✓ is named Clear; the cleared line is
  * shown and focus lands on the empty minutes field that comes back (V1-24 3b-life A3, A4). */
 export async function clearPractice(page: Page, from: string): Promise<void> {
   const life = lifeSection(page);
@@ -195,9 +205,7 @@ export async function clearPractice(page: Page, from: string): Promise<void> {
 export async function clearAnyPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
   const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
-  const anyChange = life.getByRole('button', {
-    name: new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-  });
+  const anyChange = life.getByRole('button', { name: changePrefix(PRACTICE_COPY.changeSubject) });
   if ((await anyChange.count()) === 0) return;
   const shown = (await anyChange.getAttribute('aria-label'))!.slice(prefix.length);
   await clearPractice(page, shown);

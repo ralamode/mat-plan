@@ -2,6 +2,7 @@
 
 import type { ProgramList, ProgramView } from '@mat-plan/shared';
 import {
+  DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
   PROGRAM_LIST_FIXTURES,
   PROGRAM_VIEW_FIXTURES,
@@ -159,8 +160,12 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
     if (failNext) made.failNext();
     return made;
   });
-  const athlete = plan.athletes.find((a) => a.profilePublicId === plan.profilePublicId);
-  if (!athlete) throw new Error(`program preview: ${fixture} does not list its own athlete`);
+  // The page's heading is the profile's name, which the page has from the profile and not from
+  // the plan: `plan.athletes` is the switcher's list, and an archived athlete is not in it. So the
+  // name comes from the world the fixture was built from.
+  const { world, athlete: athleteId } = named(DAY_PLAN_FIXTURE_SOURCES, fixture);
+  const athlete = world.athletes.find((a) => a.id === athleteId);
+  if (!athlete) throw new Error(`program preview: ${fixture}'s world does not hold its athlete`);
   return (
     <>
       {/* The day page's own heading: on the real page it is the page's, not the screen's. */}

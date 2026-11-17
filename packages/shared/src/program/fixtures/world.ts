@@ -75,7 +75,8 @@ export type ProtoEntry = {
 
 export type ProtoWorld = {
   today: string;
-  athletes: Array<{ id: string; name: string }>;
+  /** `archived` is not the prototype's: one fixture sets it, for a rule no prototype state reaches. */
+  athletes: Array<{ id: string; name: string; archived?: boolean }>;
   catalog: Record<FixtureItemKey, { name: string; type: TrackingType }>;
   programs: ProtoProgram[];
   /** Each person's programs, in their own order. `to` is the first day they are off it. */

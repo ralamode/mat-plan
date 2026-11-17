@@ -121,7 +121,9 @@ describe('BodyweightSection — its states', () => {
     // THE half that stops the second submit: no create form.
     expect(screen.queryByLabelText('Weight')).toBeNull();
     expect(screen.queryByRole('button', { name: BODYWEIGHT_COPY.logLabel })).toBeNull();
-    expect(screen.getByRole('button', { name: changeLabel('weight', shown(w)) })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) }),
+    ).toBeTruthy();
   });
 
   it('several weights → all of them, never silently the newest', () => {
@@ -191,7 +193,7 @@ describe('BodyweightSection — the ✓ (plan W3, W6)', () => {
     const w = weight(84.5);
     rerender(section({ logged: [w] }));
     expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: changeLabel('weight', shown(w)) }),
+      screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) }),
     );
   });
 
@@ -208,7 +210,11 @@ describe('BodyweightSection — the ✓ (plan W3, W6)', () => {
     rerender(section({ logged: [weight(85)] }));
     expect(screen.getByRole('alert').textContent).toBe(BODYWEIGHT_COPY.dayTaken);
     // Opening Change dismisses it: it was about a log, not the value now being changed.
-    fireEvent.click(screen.getByRole('button', { name: changeLabel('weight', shown(weight(85))) }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(weight(85))),
+      }),
+    );
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -239,8 +245,10 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
   const amendInput = () =>
     screen.queryByLabelText(AMEND_COPY.valueLabel(W.unit)) as HTMLInputElement | null;
   const changeButton = (w: LoggedBodyweight = W) =>
-    screen.getByRole('button', { name: changeLabel('weight', shown(w)) });
+    screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) });
   const open = (w: LoggedBodyweight = W) => fireEvent.click(changeButton(w));
+  const SAVE = BODYWEIGHT_COPY.saveLabel;
+  const CANCEL = BODYWEIGHT_COPY.cancelLabel;
 
   it('opens with the saved value SELECTED, so the first digit replaces it', () => {
     render(section({ logged: [W] }));
@@ -248,31 +256,33 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     const input = amendInput()!;
     expect(document.activeElement).toBe(input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
-    // v12's order: Cancel, then Save. The value stays visible above the editor.
-    const buttons = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(buttons).toEqual([AMEND_COPY.cancel, AMEND_COPY.save]);
+    // The icon-only pair on the field's line: ✓ then ✕ (maintainer, 2026-11-16). The value stays
+    // visible above the editor.
+    const buttons = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(buttons).toEqual([SAVE, CANCEL]);
+    expect(input.parentElement!.contains(screen.getByRole('button', { name: CANCEL }))).toBe(true);
     expect(screen.getByText(shown(W), { exact: false })).toBeTruthy();
   });
 
-  it('the hint is always there, and Save reads Clear while the field is empty', () => {
+  it('the hint is always there, and the ✓ is named Clear while the field is empty', () => {
     render(section({ logged: [W] }));
     open();
     const hint = screen.getByText(BODYWEIGHT_COPY.clearHint);
     expect(amendInput()!.getAttribute('aria-describedby')).toContain(hint.id);
     fireEvent.change(amendInput()!, { target: { value: '  ' } });
+    // Same ✓, same look (no red Clear); only its name follows the clear.
     const clear = screen.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel });
-    expect(clear.textContent).toBe(BODYWEIGHT_COPY.clear);
-    expect(clear.getAttribute('data-variant')).toBe('destructive');
+    expect(clear.getAttribute('data-variant')).toBe('default');
     fireEvent.change(amendInput()!, { target: { value: '8' } });
-    expect(screen.getByRole('button', { name: AMEND_COPY.save })).toBeTruthy();
+    expect(screen.getByRole('button', { name: SAVE })).toBe(clear);
   });
 
-  it('an archived athlete: Save stays Save, no hint, and a blank is refused before any request', async () => {
+  it('an archived athlete: the ✓ keeps its save name, no hint, and a blank is refused before any request', async () => {
     render(section({ logged: [W], writable: false, amendable: true }));
     open();
     expect(screen.queryByText(BODYWEIGHT_COPY.clearHint)).toBeNull();
     fireEvent.change(amendInput()!, { target: { value: '' } });
-    const save = screen.getByRole('button', { name: AMEND_COPY.save });
+    const save = screen.getByRole('button', { name: SAVE });
     // Move focus OFF the field first: the editor focused it on open, so asserting it after the tap
     // would pass with the refusal's own focus call deleted (docs/lessons.md, focus assertions).
     save.focus();
@@ -281,7 +291,10 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
       fireEvent.click(save);
     });
     expect(editBodyweightAction).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toBe(BODYWEIGHT_COPY.blankSave);
+    // The copy names the ✓; a screen reader hears its name in the glyph's place.
+    expect(screen.getByRole('alert').textContent).toBe(
+      BODYWEIGHT_COPY.blankSave.replace('✓', `✓${SAVE}`),
+    );
     expect(document.activeElement).toBe(amendInput());
   });
 
@@ -290,7 +303,7 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     open();
     fireEvent.change(amendInput()!, { target: { value: '85.2' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+      fireEvent.click(screen.getByRole('button', { name: SAVE }));
     });
     const after = weight(85.2, 'entry-a');
     rerender(section({ logged: [after] }));
@@ -370,10 +383,45 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(statusText()).toBe('');
   });
 
+  it('Escape cancels from the field and from the ✓, and returns focus to Change', () => {
+    render(section({ logged: [W] }));
+    open();
+    fireEvent.keyDown(amendInput()!, { key: 'Escape' });
+    expect(amendInput()).toBeNull();
+    expect(document.activeElement).toBe(changeButton());
+    open();
+    fireEvent.keyDown(screen.getByRole('button', { name: SAVE }), { key: 'Escape' });
+    expect(amendInput()).toBeNull();
+    expect(document.activeElement).toBe(changeButton());
+  });
+
+  it('while a save is in flight, Escape and the ✕ do nothing, and the ✕ is hidden', async () => {
+    let resolve!: (r: { ok: true }) => void;
+    vi.mocked(editBodyweightAction).mockImplementationOnce(
+      () => new Promise((r) => (resolve = r as typeof resolve)),
+    );
+    render(section({ logged: [W] }));
+    open();
+    fireEvent.change(amendInput()!, { target: { value: '85' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SAVE }));
+    });
+    expect(screen.getByRole('button', { name: SAVE }).getAttribute('aria-busy')).toBe('true');
+    // jsdom loads no CSS, so the class is the only check that it is hidden (no e2e holds a save in
+    // flight); the click below proves the guard does not rest on CSS.
+    const x = screen.getByRole('button', { name: CANCEL });
+    expect(x.className).toMatch(/\binvisible\b/);
+    fireEvent.keyDown(amendInput()!, { key: 'Escape' });
+    expect(amendInput()).not.toBeNull();
+    fireEvent.click(x); // the ✕ is still painted for a moment in a real browser
+    expect(amendInput()).not.toBeNull();
+    await act(async () => resolve({ ok: true }));
+  });
+
   it('Cancel returns focus to Change', () => {
     render(section({ logged: [W] }));
     open();
-    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    fireEvent.click(screen.getByRole('button', { name: CANCEL }));
     expect(document.activeElement).toBe(changeButton());
   });
 
@@ -385,7 +433,7 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     render(section({ logged: [W] }));
     open();
     fireEvent.change(amendInput()!, { target: { value: '85' } });
-    const save = screen.getByRole('button', { name: AMEND_COPY.save });
+    const save = screen.getByRole('button', { name: SAVE });
     save.focus(); // off the field, so the refusal's focus hand-off is what puts it back
     await act(async () => {
       fireEvent.click(save);
@@ -393,7 +441,7 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.staleWrite);
     expect(statusText()).toBe('');
     expect(document.activeElement).toBe(amendInput());
-    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    fireEvent.click(screen.getByRole('button', { name: CANCEL }));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -408,10 +456,10 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     open();
     fireEvent.change(amendInput()!, { target: { value: '845' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+      fireEvent.click(screen.getByRole('button', { name: SAVE }));
     });
     expect(screen.getByRole('alert').textContent).toBe(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
-    fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.cancel }));
+    fireEvent.click(screen.getByRole('button', { name: CANCEL }));
     open();
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -429,7 +477,7 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     amendInput()!.blur(); // jsdom does not blur on click; a phone's tap does
     expect(document.activeElement).toBe(document.body);
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+      fireEvent.click(screen.getByRole('button', { name: SAVE }));
     });
     expect(document.activeElement).toBe(amendInput());
   });
@@ -444,9 +492,11 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     open();
     fireEvent.change(amendInput()!, { target: { value: '85' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+      fireEvent.click(screen.getByRole('button', { name: SAVE }));
     });
-    expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.notFound('weight'));
+    expect(screen.getByRole('alert').textContent).toBe(
+      AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun),
+    );
   });
 });
 
