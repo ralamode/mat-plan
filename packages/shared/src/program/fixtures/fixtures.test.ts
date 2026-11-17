@@ -853,6 +853,24 @@ describe('showsOnlyLogged: one rule for a day that shows only what was logged (C
     // A future day lists what is coming, though nothing is logged there either.
     expect(dayPlan(world, 'a1', '2026-11-16').workouts.length).toBeGreaterThan(0);
   });
+
+  it('🔴 keeps a workout with no items on a future day: the filter is the function, both halves', () => {
+    // A workout nobody has put an item in yet, on Mondays. With no items it has nothing "logged",
+    // so only the day's kind decides whether it is listed: yes on a future or a writable day, no
+    // on a closed one. A filter that forgot the future half would drop it from the look-ahead.
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'];
+    const withEmpty = edit(world, (draft) => {
+      const family = programOf(draft, 'p1');
+      family.workouts.push({ wid: 'w950', name: 'Empty so far', desc: '', rests: {}, items: [] });
+      family.week[1].push({ label: '', wid: 'w950' });
+    });
+    const names = (day: string) => dayPlan(withEmpty, 'a1', day).workouts.map((w) => w.name);
+    // Monday the 16th is a future day; Monday the 9th is closed.
+    expect(showsOnlyLogged(dayPlan(withEmpty, 'a1', '2026-11-16'))).toBe(false);
+    expect(names('2026-11-16')).toContain('Empty so far');
+    expect(showsOnlyLogged(dayPlan(withEmpty, 'a1', '2026-11-09'))).toBe(true);
+    expect(names('2026-11-09')).not.toContain('Empty so far');
+  });
 });
 
 describe('where a DayPlan fixture comes from (C17)', () => {
