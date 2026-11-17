@@ -2,6 +2,7 @@ import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-p
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
 import { CLOSED_DAY_NOTICE, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
+import { onDayText } from '@/lib/date';
 import { formatList, plural } from '@/lib/i18n/plural';
 
 import type { RowWriteKind, TypedProblem } from './row-values';
@@ -118,6 +119,13 @@ export const PROGRAM_COPY = {
   restAll: (day: string) => `Rest day. Nothing is scheduled on ${weekdayName(localWeekday(day))}s.`,
   /** Some programs rest, on a day with two or more. */
   restSome: (programs: readonly string[]) => `Rest day on ${formatList(programs)}.`,
+  /**
+   * The rest lines' twin (`showsOnlyLogged`), on a day that shows only what was logged and has no
+   * workouts (maintainer, 2026-11-17). "Workouts", because Bodyweight and Life sit above it with
+   * their own "Nothing logged." and may hold a weigh-in or a practice. The day as the page's date
+   * line writes it (`onDayText`): a weekday alone is ambiguous months back.
+   */
+  nothingLogged: (day: string, today: string) => `No workouts logged ${onDayText(day, today)}.`,
 } as const;
 
 /** What the field says when a typed value cannot be sent. The field takes focus. */
