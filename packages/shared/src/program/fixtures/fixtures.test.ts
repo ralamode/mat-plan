@@ -637,6 +637,28 @@ describe('closed-day-program-since-left: the order of a day’s programs, and a 
     expect(plan.workouts.map((w) => w.name)).toEqual(['Morning habits', 'Run and core']);
   });
 
+  it('🔴 keeps a program current when the athlete came off it and is on it again', () => {
+    // Current is a property of the program, not of an assignment row. On a day of the earlier
+    // stretch, the program has its order and is not sorted after the others.
+    const world = {
+      ...source.world,
+      assign: {
+        ...source.world.assign,
+        a1: [...(source.world.assign.a1 ?? []), { prog: 'p3', from: '2026-11-14' }],
+      },
+    };
+    const day = dayPlan(world, 'a1', plan.day);
+    expect(day.currentPrograms.map((p) => p.name)).toEqual([
+      'Family program',
+      'Stretching',
+      'Adult One’s program',
+    ]);
+    expect(day.programs.map((p) => [p.name, p.order])).toEqual([
+      ['Family program', 0],
+      ['Adult One’s program', 2],
+    ]);
+  });
+
   it('shows the live name on a day that is still writable', () => {
     // The same rename, seen on yesterday: a scheduled workout on a writable day is the live one.
     const yesterday = dayPlan(source.world, 'a1', '2026-11-13');
@@ -726,6 +748,24 @@ describe('the rows of a set-based item (C17: the shape’s rule, in the builder)
       [5, true],
       [6, true],
     ]);
+  });
+
+  it('gives a type with one row exactly that row', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'];
+    const grip = world.entries.find(
+      (e) => e.ath === 'a1' && e.day === world.today && e.iid === 'grip',
+    )!;
+    const stray = { ...grip, n: 995, set: 2 };
+    const plan = dayPlan(
+      {
+        ...world,
+        entries: [...world.entries, stray],
+        stamps: { ...world.stamps, [stray.n]: world.stamps[grip.n]! },
+      },
+      'a1',
+      world.today,
+    );
+    expect(item(plan, 'Morning habits', 'Grip: rice bucket').rows.map((r) => r.set)).toEqual([1]);
   });
 
   it('🔴 does not list a gap below a logged extra set: an added set is a row only while logged', () => {

@@ -75,7 +75,12 @@ const dayItemSchema = z.object({
   itemPublicId: uuidSchema,
   name: movementLabelSchema,
   trackingType: trackingTypeSchema,
-  /** For display. The numbers a screen works with are `target`. */
+  /**
+   * For display. The numbers a screen works with are `target`. The live prescription's text where
+   * the live item shows; **where only logged rows show, what the item's first-logged row was
+   * logged against** (the earliest `created_at`, then the lower id). Each row carries its own in
+   * `logged.prescribedText`.
+   */
   prescribedText: prescribedTextSchema,
   /**
    * The prescribed numbers: what a row's empty fields show as placeholders, and what an empty ✓
@@ -106,8 +111,8 @@ const dayWorkoutSchema = z.object({
   /**
    * The workout's live name where the live workout shows (a scheduled workout on a writable or a
    * future day). **Where only logged rows show (a closed day, a workout that left the week), the
-   * name the session froze when its first row was logged** (plan D7: the page and the export
-   * agree), so a later rename does not rewrite an old day.
+   * session's frozen name** (`sessions.workout_name`, plan D7: the page and the export agree),
+   * so a later rename does not rewrite an old day.
    */
   name: workoutNameSchema,
   description: nullableNoteSchema,
@@ -126,8 +131,12 @@ const dayWorkoutSchema = z.object({
    *
    * **Removed items: one per removed prescription**, in the order their first row was logged. Rows
    * whose prescription has been purged (no id left to group by) group by movement. Each is built
-   * from its entries alone (plan D7): the frozen name and prescribed text, no target, no notes, no
-   * superset, no PREVIOUS. Its `unit` is the unit its entries were stored in, and `null` when its
+   * from its entries alone (plan D7): the frozen name and prescribed text of its lowest-numbered
+   * set's entry (the first logged, if two share a number), no target, no notes, no superset, no
+   * PREVIOUS. **It is its own item even when the workout holds the same movement again**: the rows
+   * belong to the prescription they were logged against, never to a later one of that movement.
+   * (The fixtures key an item by its movement, so they cannot hold that case; the day resolver's
+   * own proof does.) Its `unit` is the unit its entries were stored in, and `null` when its
    * type has no quantity (a Check, Reps): decided by the type, since a Count may log in `count`.
    */
   items: z.array(dayItemSchema),
@@ -140,7 +149,8 @@ const dayWorkoutSchema = z.object({
  *
  * `workouts` is in the page's order: the day's programs in `programs`' order (the athlete's own;
  * a program since left comes last), then each program's week order (plan D8; a label never
- * sorts), then any workout that left the week. **On a closed day a workout
+ * sorts), then any workout that left the week, those in the order their first row that day was
+ * logged, whichever program they are in. **On a closed day a workout
  * with no logged row is absent**; a writable or future day lists every scheduled workout.
  * Bodyweight, Life and the "Day cleared" banner are not here: they are lane S's own sections,
  * composed beside the day screen.
@@ -177,7 +187,9 @@ export const dayPlanSchema = z.object({
   /**
    * The programs the athlete is on THIS day, in the order the page lists them. `order` is the
    * program's index in `currentPrograms`; `null` for a program they have since come off, which
-   * sorts after the current ones.
+   * sorts after the current ones. Programs since left keep their own order among themselves
+   * (their assignment's `idx`, then its id). **Current is a property of the program**: one the
+   * athlete came off and is on again has its `order` on a day of the earlier stretch too.
    */
   programs: z.array(programRefSchema.extend({ order: z.number().int().min(0).nullable() })),
   workouts: z.array(dayWorkoutSchema),

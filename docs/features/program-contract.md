@@ -163,13 +163,17 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
 2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
    `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
-   transcription to equal them. A fixture is changed by changing the prototype first.
+   transcription to equal them. A fixture is changed by changing the prototype first. **Two
+   fixtures are not prototype states and say so**: `every-type-once`, and
+   `closed-day-program-since-left` (C17). Each is the prototype's data arranged to reach a rule no
+   prototype state reaches.
 3. **A fixture is tested from both sides.** The screen renders it; the data lane seeds the state it
    describes and asserts its query deep-equals it, through `packages/db/scripts/verify/normalize-fixture.ts`.
 4. 🔴 **Fakes on the preview route, real actions in production, never a mix** (plan §6). Nothing
-   outside `apps/web/app/design/program/` imports the fakes, `picker-options` or the fixtures
-   subpath, and nothing outside it names the route: `fakes.test.ts` and `preview-registry.test.ts`
-   scan for both.
+   in `apps/web` outside `apps/web/app/design/program/` imports the fakes, `picker-options` or the
+   fixtures subpath, and nothing outside it names the route: `fakes.test.ts` and
+   `preview-registry.test.ts` scan `apps/web` for both. The data lanes' proofs in
+   `packages/db/scripts/verify/` do import the fixtures subpath: that is invariant 3.
 5. **A fake follows the prototype's rules and each rule has a test** (`fakes.test.ts`; plan §8,
    "Behaviour"). A fake and a real action parse an input with the same schema, so a screen sees the
    same refusal on the preview route and in production.
@@ -316,7 +320,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - **Rows:** every prescribed set, plus each logged set beyond them. A gap below a logged extra
       set is not a row and is not counted.
     - **One order for a day's programs and its workouts:** current programs in the athlete's order,
-      then any program since left (`order: null`). `closed-day-program-since-left` holds it.
+      then any program since left (`order: null`), those in their own order (`idx`, then id).
+      Current is a property of the program, not of an assignment row.
+      `closed-day-program-since-left` holds it.
     - **Where only logged rows show, a workout has the name it was logged under**, not its name
       now. The same fixture holds a workout renamed after logging.
       The day resolver, not the DAL, sets `writable`, `future` and `canGoForward`, from the `today`

@@ -90,9 +90,10 @@ export const FIXTURE_ITEMS = deepFreeze(
  * query for `athlete` on `day` with `world.today` as today, and asserts the result deep-equals the
  * fixture of the same name (through step 0c's normalizer).
  *
- * `before` is the world before an edit, for a fixture that describes "logged, then the program
- * changed", and `null` otherwise. A proof seeds `before`, logs its entries, then applies the edit
- * with the real writers and so reaches `world`. `world`'s entries are `before`'s, stamps included.
+ * `before` is the world before a change, for a fixture that describes "logged, then something
+ * changed" (a program edited, or the athlete's programs reordered), and `null` otherwise. A proof
+ * seeds `before`, logs its entries, then makes the change with the real writers and so reaches
+ * `world`. `world`'s entries are `before`'s, stamps included.
  *
  * ⚠️ `assign[...].to` is the first day OFF the program (the prototype's rule); the database's
  * `active_to` is the inclusive last day, so `to` minus one.
