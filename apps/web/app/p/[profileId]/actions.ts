@@ -620,9 +620,9 @@ export async function editBodyweightAction(
     });
     // Not theirs, not a weigh-in, or gone: one message, so a crafted id learns nothing a stale one
     // wouldn't.
-    if (!row) return refuse(AMEND_ERROR_COPY.notFound('weight'));
+    if (!row) return refuse(AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun));
     const day = await resolveDeclaredDay(row.day);
-    if (!day.ok) return refuse(AMEND_ERROR_COPY.dayReadOnly('weight'));
+    if (!day.ok) return refuse(AMEND_ERROR_COPY.dayReadOnly(BODYWEIGHT_COPY.noun));
 
     const { value } = parsed.data;
     if (value === null) {
@@ -646,7 +646,9 @@ export async function editBodyweightAction(
         return { ok: true, error: null };
       }
       return refuse(
-        'stale' in cleared ? AMEND_ERROR_COPY.staleWrite : AMEND_ERROR_COPY.notFound('weight'),
+        'stale' in cleared
+          ? AMEND_ERROR_COPY.staleWrite
+          : AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun),
       );
     }
 
@@ -667,7 +669,7 @@ export async function editBodyweightAction(
       entryId: parsed.data.entryId,
     });
     // (a) The row is gone, was never theirs, or is not an amendable bodyweight.
-    if (!current) return refuse(AMEND_ERROR_COPY.notFound('weight'));
+    if (!current) return refuse(AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun));
     // (b) REPLAY: the row already holds exactly what was asked for. One effect, success.
     if (current.value === value && current.unit === parsed.data.unit) {
       revalidatePath(athletePath(profile.id));

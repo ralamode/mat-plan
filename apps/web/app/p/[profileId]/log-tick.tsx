@@ -1,8 +1,6 @@
 'use client';
 
-import { Check, LoaderCircle } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
+import { TickButton } from '@/components/ui/tick-button';
 
 /**
  * The ✓ that logs a single value (V1-24 3b-bw W4; shared with practice at 3b-life-b B2, B3).
@@ -12,7 +10,7 @@ import { Button } from '@/components/ui/button';
  * - **Filled (primary, never the done green) while its field holds a value** _(maintainer,
  *   2026-11-16)_: with a weight field and a minutes field on one page, a kid can fill both and tap one
  *   ✓, and a ready-but-unsent row must not look like an empty one.
- * - **Pending:** a spinner replaces the glyph, with `aria-busy`. `icon-lg` keeps it 44px.
+ * - **Pending:** `TickButton`'s spinner, with `aria-busy` and its name kept.
  */
 export function LogTick({
   label,
@@ -26,21 +24,13 @@ export function LogTick({
   ready: boolean;
 }) {
   return (
-    <Button
+    <TickButton
       type="submit"
       variant={ready ? 'default' : 'outline'}
-      size="icon-lg"
-      disabled={pending}
-      aria-busy={pending || undefined}
-      aria-label={label}
+      label={label}
+      pending={pending}
       data-ready={ready || undefined}
-    >
-      {pending ? (
-        <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
-      ) : (
-        <Check aria-hidden="true" className="size-5" />
-      )}
-    </Button>
+    />
   );
 }
 

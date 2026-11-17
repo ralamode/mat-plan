@@ -1688,7 +1688,7 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     vi.mocked(ownedBodyweightValue).mockResolvedValueOnce(null);
     const res = await editBodyweightAction(initial, amendForm());
     expect(res.ok).toBe(false);
-    expect(res.error).toBe(AMEND_ERROR_COPY.notFound('weight'));
+    expect(res.error).toBe(AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun));
     // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
@@ -1762,7 +1762,7 @@ describe('editBodyweightAction — a blank clears, bounded by the row’s own da
   it('a clear of a row that is not theirs → the one not-found message', async () => {
     vi.mocked(clearBodyweightEntry).mockResolvedValueOnce({ notFound: true });
     const res = await editBodyweightAction(initial, amendForm({ value: '' }));
-    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound('weight') });
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun) });
   });
 
   it('a clear never consults the amend’s re-read (the writer answers its own replay)', async () => {
@@ -1784,7 +1784,7 @@ describe('editBodyweightAction — a blank clears, bounded by the row’s own da
     const fd = amendForm({ value });
     fd.set('day', localDay());
     const res = await editBodyweightAction(initial, fd);
-    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.dayReadOnly('weight') });
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.dayReadOnly(BODYWEIGHT_COPY.noun) });
     expect(editBodyweight).not.toHaveBeenCalled();
     expect(clearBodyweightEntry).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
@@ -1793,7 +1793,7 @@ describe('editBodyweightAction — a blank clears, bounded by the row’s own da
   it('a row the pre-read cannot see → not found, and no writer runs', async () => {
     vi.mocked(bodyweightRowDay).mockResolvedValueOnce(null);
     const res = await editBodyweightAction(initial, amendForm());
-    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound('weight') });
+    expect(res).toEqual({ ok: false, error: AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun) });
     expect(editBodyweight).not.toHaveBeenCalled();
   });
 

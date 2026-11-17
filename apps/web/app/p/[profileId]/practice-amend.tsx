@@ -31,7 +31,7 @@ function outcomeFor(reason: PracticeAmendRefusal): AmendOutcome {
 }
 
 /**
- * Change a logged wrestling practice, or clear it with a blank Save (V1-24 3b-life A3). The editor is
+ * Change a logged wrestling practice, or clear it with a blank ✓ (V1-24 3b-life A3). The editor is
  * `SingleValueAmend`; this is practice's wrapper: a numeric keypad, the unit as the metric's own (the
  * writers pin it, so nothing posts it), and **the edge** of the FAM-1 contract `editPracticeAction`
  * speaks: FormData stops here, the action takes typed input, and each refusal reason becomes copy.
@@ -51,7 +51,6 @@ export function PracticeAmend({
       logged={{ entryId: logged.entryId, value: logged.minutes, unit: PRACTICE_UNIT }}
       canClear={canClear}
       copy={PRACTICE_COPY}
-      changeSubject={PRACTICE_COPY.changeSubject}
       fieldLabel={PRACTICE_COPY.fieldLabel}
       inputMode="numeric"
       parse={parsePracticeMinutes}
