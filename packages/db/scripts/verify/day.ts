@@ -60,7 +60,7 @@ import {
  *   with hand-written timestamps (eleven, plus the two whose only change is an archive), and
  *   deep-equals it with ids mapped exactly; 12a-ii adds the other four of the six with a `before`;
  * - **step 11c-i (`verifyAmend`, after 11b's)**: Change, `amendRow`, as
- *   `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan lists it, with mutations 348–356. A
+ *   `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan lists it, with mutations 348–356 and 358–363. A
  *   non-number is the contract's schema test (`rowAmendSchema`), since the action parses (plan S4);
  * - step 11c-ii: the D35 revive;
  * - step 14: template rows of each type in the export.
@@ -1554,7 +1554,7 @@ async function verifyRowWriter(): Promise<void> {
 
 /**
  * Change, as `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan → Change lists it. Each
- * mutation (348–356, `scripts/mutations/README.md`) names the assertion here that it turns red.
+ * mutation (348–356 and 358–363, `scripts/mutations/README.md`) names the assertion here that it turns red.
  */
 async function verifyAmend(): Promise<void> {
   const primary = QUANTITY_SLOT.primary;
@@ -1761,7 +1761,7 @@ async function verifyAmend(): Promise<void> {
       expectRefused(
         await f.amend(old.entryPublicId, { reps: 12, quantities: [] }),
         ROW_REFUSAL.closed_day,
-        'FAM-1 11c-i Change 4: the day before yesterday is closed_day',
+        'FAM-1 11c-i Change 4: a week back is closed_day',
       );
       const yesterday = expectOk(
         await f.tick({ prescriptionPublicId: f.p.reps.publicId, day: YESTERDAY }),
@@ -1848,6 +1848,25 @@ async function verifyAmend(): Promise<void> {
         await f.amend(foreign.entryPublicId, { quantities: [] }),
         ROW_REFUSAL.not_found,
         'FAM-1 11c-i Change 5: another household’s row is not_found',
+      );
+      // Another household's PROFILE under H's scope, naming its own row, and an unknown profile.
+      // `openProfile` refuses both; `rowWorkout`'s scope would too, so this is a second guard with no
+      // patch of its own (no patch can redden it through Change).
+      const foreignBefore = await rowState(tx, foreign.entryPublicId);
+      for (const [title, profilePublicId] of [
+        ['another household’s profile', f.foreigner.publicId],
+        ['an unknown profile', newId()],
+      ] as const) {
+        expectRefused(
+          await f.amend(foreign.entryPublicId, { quantities: [] }, { profilePublicId }),
+          ROW_REFUSAL.not_found,
+          `FAM-1 11c-i Change 5: ${title} is not_found`,
+        );
+      }
+      assert.deepEqual(
+        (await rowState(tx, foreign.entryPublicId)).values,
+        foreignBefore.values,
+        'FAM-1 11c-i Change 5: and another household’s row is not written',
       );
       const weighIn = await f.weighIn(false);
       expectRefused(
