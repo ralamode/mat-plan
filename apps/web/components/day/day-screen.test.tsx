@@ -17,7 +17,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
-import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
+import { DAY_COPY, PROGRAM_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
+import { restNotice } from './day-notices';
 import {
   card,
   field,
@@ -525,15 +526,22 @@ describe('a day that cannot be written', () => {
 });
 
 describe('DayScreen: a day that shows only what was logged, with nothing logged', () => {
-  const said = (plan: DayPlan) => screen.queryByText(DAY_COPY.nothingLogged(plan.day, plan.today));
+  const said = (plan: DayPlan) =>
+    screen.queryByText(PROGRAM_COPY.nothingLogged(plan.day, plan.today));
 
   it('an older day says no workouts were logged, the day written as the date line writes it', () => {
     const empty: DayPlan = { ...closedDayLoggedOnly, workouts: [] };
     expect(empty.day).not.toBe(empty.today);
     show(empty);
-    expect(said(empty)?.textContent).toMatch(/^No workouts logged on \w{3}, \w{3} \d{1,2}\.$/);
+    // Pinned once: 2026-11-11 is a Wednesday, written as the page's date line writes it.
+    expect(said(empty)?.textContent).toBe('No workouts logged on Wed, Nov 11.');
     // Not a rest day: on a day read back, an empty program means skipped.
-    expect(screen.queryByText(/Rest day/)).toBeNull();
+    expect(restNotice(empty)).toBeNull();
+    // A static line in the section, after its heading: not a live region, no heading of its own.
+    const line = said(empty)!;
+    expect(line.closest('[aria-live],[role=status],[role=alert]')).toBeNull();
+    expect(line.closest('section')?.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([DAY_COPY.heading]);
   });
 
   it('an archived athlete’s today says it of today', () => {
@@ -549,11 +557,12 @@ describe('DayScreen: a day that shows only what was logged, with nothing logged'
       { ...sundayRestStretchOnly, workouts: [] }, // writable: a rest day, which says so
       { ...futurePreview, workouts: [] },
       { ...closedDayLoggedOnly, workouts: [], onProgram: ON_PROGRAM['not-this-day'] },
+      { ...closedDayLoggedOnly, workouts: [], onProgram: ON_PROGRAM.never },
       notOnAProgramThatDay,
     ];
     for (const plan of cases) {
       show(plan);
-      expect(screen.queryByText(/^No workouts logged/)).toBeNull();
+      expect(said(plan)).toBeNull();
       cleanup();
     }
   });

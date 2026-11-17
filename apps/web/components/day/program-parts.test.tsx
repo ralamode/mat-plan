@@ -24,7 +24,7 @@ import { athletePath } from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
-import { restNotice } from './day-screen';
+import { restNotice } from './day-notices';
 import { NotOnAProgram } from './not-on-a-program';
 import { ProgramLine } from './program-line';
 
