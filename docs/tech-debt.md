@@ -98,8 +98,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Partly fixed (FAM-1 7a-i):** a program write's error (create, rename, save a workout) is
   rethrown by `apps/web/lib/dal/program/quiet-db-errors.ts` with only the operation, the error's
   type, the SQLSTATE and the stack's frame lines, so the gate above is met. **Still open:** every
-  other writer (`lib/dal/entries.ts`, `lib/dal/profiles.ts`, lane E's `lib/dal/day/`). The next one
-  to need it moves the helper to `lib/dal/` under a general name rather than copying it.
+  other writer. **Gate for the rest:** 12b, the first real ✓ _(FAM-1 board, 2026-11-17)_: that PR
+  moves the helper to `apps/web/lib/dal/` (shared) rather than copying it, and applies it in
+  `lib/dal/day/`; `lib/dal/entries.ts` and `lib/dal/profiles.ts` follow in `V1-9b` B1-2.
 
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
