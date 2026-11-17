@@ -137,7 +137,7 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
     and the row's frozen snapshot cannot diverge.
 18. **E6 — superset placement**: a group sits at its first member's `idx`; members by
     `(superset_order, idx)`; `superset.order` is the place in the group; a rest only for a shown group
-    of two or more, off its last member. Mutations 232, 244.
+    of two or more, off its last member. Mutations 232, 244, 249.
 19. **E7 — exports**: `resolveDayPlan` and its type, by name only.
     **C21 — ids only for what is live**: a logged workout under a hidden program or a hidden workout
     shows like one that left the week, but built from its entries alone (no description, every item a
