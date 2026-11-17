@@ -29,7 +29,14 @@ import {
   practiceRowForAmend,
 } from '../../src/writers/single-value';
 import { findAmendablePractice, updatePracticeEntryById } from '../../src/writers/practice';
-import { asTx, expectRejectedBy, rolledBack, type VerifyContext } from './harness';
+import {
+  asTx,
+  expectRejectedBy,
+  orFail,
+  rolledBack,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 
 /**
  * `db:verify` proofs for SINGLE VALUES (bodyweight, practice) and Clear this day.
@@ -56,33 +63,54 @@ const HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b000';
 const ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b001';
 const SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b002';
 
+/**
+ * A household of its own with an athlete and a sibling (each section's world, built once here). The
+ * labels name the section, so a failure's rows are recognisable; every caller is inside `rolledBack`.
+ */
+async function singleValueWorld(
+  tx: VerifyTx,
+  ids: { hh: string; athlete: string; sibling: string },
+  label: string,
+) {
+  const [hh] = await tx
+    .insert(schema.households)
+    .values({ publicId: ids.hh, name: `Verify ${label} HH` })
+    .returning({ id: schema.households.id });
+  const [athlete, sibling] = await tx
+    .insert(schema.profiles)
+    .values([
+      {
+        publicId: ids.athlete,
+        name: `Verify ${label} Athlete`,
+        kind: PROFILE_KIND.kid,
+        householdId: hh.id,
+      },
+      {
+        publicId: ids.sibling,
+        name: `Verify ${label} Sibling`,
+        kind: PROFILE_KIND.kid,
+        householdId: hh.id,
+      },
+    ])
+    .returning({ id: schema.profiles.id });
+  return { hh, scope: householdScopeForScript(hh.id), athlete, sibling };
+}
+
 // ── V1-24 3b-bw — Clear a weigh-in, the pre-read, and "Last time" (plan W9, W10) ─────────────────────
 async function verifyBodyweightClear({ B_SCOPE }: VerifyContext): Promise<void> {
   // Every write here is rolled back (`rolledBack`), so no later module counts these rows.
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const [hh] = await tx
-      .insert(schema.households)
-      .values({ publicId: HH_PUBLIC_ID, name: 'Verify 3b-bw HH' })
-      .returning({ id: schema.households.id });
-    const S_SCOPE = householdScopeForScript(hh.id);
-    const [athlete, sibling] = await tx
-      .insert(schema.profiles)
-      .values([
-        {
-          publicId: ATHLETE_PUBLIC_ID,
-          name: 'Verify 3b-bw Athlete',
-          kind: PROFILE_KIND.kid,
-          householdId: hh.id,
-        },
-        {
-          publicId: SIBLING_PUBLIC_ID,
-          name: 'Verify 3b-bw Sibling',
-          kind: PROFILE_KIND.kid,
-          householdId: hh.id,
-        },
-      ])
-      .returning({ id: schema.profiles.id });
+    const {
+      hh,
+      scope: S_SCOPE,
+      athlete,
+      sibling,
+    } = await singleValueWorld(
+      tx,
+      { hh: HH_PUBLIC_ID, athlete: ATHLETE_PUBLIC_ID, sibling: SIBLING_PUBLIC_ID },
+      '3b-bw',
+    );
 
     const [weighIn] = await tx
       .select({ id: schema.activityTypes.id })
@@ -427,28 +455,20 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       '3b-0: the practice index is (profile, day), live practice rows only',
     );
 
-    const [hh] = await tx
-      .insert(schema.households)
-      .values({ publicId: PRACTICE_HH_PUBLIC_ID, name: 'Verify 3b-0 HH' })
-      .returning({ id: schema.households.id });
-    const SCOPE = householdScopeForScript(hh.id);
-    const [athlete, sibling] = await tx
-      .insert(schema.profiles)
-      .values([
-        {
-          publicId: PRACTICE_ATHLETE_PUBLIC_ID,
-          name: 'Verify 3b-0 Athlete',
-          kind: PROFILE_KIND.kid,
-          householdId: hh.id,
-        },
-        {
-          publicId: PRACTICE_SIBLING_PUBLIC_ID,
-          name: 'Verify 3b-0 Sibling',
-          kind: PROFILE_KIND.kid,
-          householdId: hh.id,
-        },
-      ])
-      .returning({ id: schema.profiles.id });
+    const {
+      hh,
+      scope: SCOPE,
+      athlete,
+      sibling,
+    } = await singleValueWorld(
+      tx,
+      {
+        hh: PRACTICE_HH_PUBLIC_ID,
+        athlete: PRACTICE_ATHLETE_PUBLIC_ID,
+        sibling: PRACTICE_SIBLING_PUBLIC_ID,
+      },
+      '3b-0',
+    );
     const typeId = async (key: string) =>
       (
         await tx
@@ -486,13 +506,6 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     });
     // A writer or restore that THROWS fails the named proof, not the run: a mutation that brings back
     // a bare 23505 must go red on the assertion that names it (the mutation gate reads the first one).
-    const orFail = async <T>(what: string, run: () => Promise<T>): Promise<T> => {
-      try {
-        return await run();
-      } catch (e) {
-        assert.fail(`${what} (threw: ${String((e as Error).message).slice(0, 120)})`);
-      }
-    };
     const outcomes = async (profileId: number, values: CheckinInsertValue[], what: string) =>
       (await orFail(what, () => writeCheckinEntries(exec, { profileId, values }))).map(
         (r) => r.outcome,
@@ -783,28 +796,20 @@ const AMEND_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b1a2';
 async function verifyPracticeAmend({ B_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const [hh] = await tx
-      .insert(schema.households)
-      .values({ publicId: AMEND_HH_PUBLIC_ID, name: 'Verify 3b-life HH' })
-      .returning({ id: schema.households.id });
-    const SCOPE = householdScopeForScript(hh.id);
-    const [athlete, sibling] = await tx
-      .insert(schema.profiles)
-      .values([
-        {
-          publicId: AMEND_ATHLETE_PUBLIC_ID,
-          name: 'Verify 3b-life Athlete',
-          kind: PROFILE_KIND.kid,
-          householdId: hh.id,
-        },
-        {
-          publicId: AMEND_SIBLING_PUBLIC_ID,
-          name: 'Verify 3b-life Sibling',
-          kind: PROFILE_KIND.kid,
-          householdId: hh.id,
-        },
-      ])
-      .returning({ id: schema.profiles.id });
+    const {
+      hh,
+      scope: SCOPE,
+      athlete,
+      sibling,
+    } = await singleValueWorld(
+      tx,
+      {
+        hh: AMEND_HH_PUBLIC_ID,
+        athlete: AMEND_ATHLETE_PUBLIC_ID,
+        sibling: AMEND_SIBLING_PUBLIC_ID,
+      },
+      '3b-life',
+    );
     const [practiceType] = await tx
       .select({ id: schema.activityTypes.id })
       .from(schema.activityTypes)

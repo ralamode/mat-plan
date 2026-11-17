@@ -1,8 +1,10 @@
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import type { HideReason } from '@mat-plan/shared';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
 import type { Executor } from '../writers/executor';
+import { hiddenAtText } from '../writers/hide';
 import { isLiveProfile } from '../writers/ownership';
 
 /**
@@ -20,12 +22,11 @@ import { isLiveProfile } from '../writers/ownership';
  * `packages/db/src/scope.test.ts`'s rule that exactly one module names that field still holds.
  */
 
-/** `deleted_at` as the fixed-format UTC text a hide token is — the same expression `hide.ts` uses. */
-const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
-
 export type HiddenEntryRow = {
   entryPublicId: string;
   hiddenAt: string;
+  /** `'clear_day'` for an entry hidden by Clear this day (B2-0), else NULL: the banner's event filter. */
+  hideReason: HideReason | null;
   kind: string | null;
   metricKey: string | null;
   movementName: string | null;
@@ -53,6 +54,7 @@ export async function hiddenEntriesForDay(
     .select({
       entryPublicId: schema.entries.publicId,
       hiddenAt: hiddenAtText,
+      hideReason: sql<HideReason | null>`${schema.entries.hideReason}`,
       kind: schema.entries.kind,
       metricKey: schema.entries.metricKey,
       movementName: schema.entries.movementName,
