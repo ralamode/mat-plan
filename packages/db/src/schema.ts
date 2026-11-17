@@ -510,7 +510,7 @@ export const entries = pgTable(
       .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'practice_minutes'`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
-    // Lane A tech-debt (0029, NOT VALID; validated by a later migration). Non-negative is a fact of today's catalog:
+    // Lane A tech-debt (0029 NOT VALID, validated by 0031). Non-negative is a fact of today's catalog:
     // a signed metric (a delta) must relax this CHECK first. `'NaN' >= 0` is TRUE in Postgres, so NaN
     // is refused by name.
     check(
@@ -599,8 +599,10 @@ export const entrySets = pgTable(
  * replay that straddles a soft-delete", which was true of a partial index — such a replay twinned.
  * The index is non-partial now, so it DOES collide across a soft-delete, and this insert carries no
  * `ON CONFLICT` at all. That would be a raw `23505` were it reachable; it is not, because every
- * quantity's `client_id` is server-minted per insert (`newId()`) and these rows are written only
- * when the parent entry was freshly created. Nothing addresses a quantity directly — a set's
+ * quantity row gets a fresh `client_id` at its insert (`newId()` in the writers; the one hand-run
+ * correction that added a quantity, `kb-swings-2026-09-28`, used `crypto.randomUUID()`). The app
+ * inserts quantity rows only in `insertEntrySetRows`, alongside the `entry_sets` rows they belong to,
+ * written in the same call; an amend UPDATEs `value_num` in place and inserts or deletes no row. Nothing addresses a quantity directly — a set's
  * `public_id` plus its slot is the address — so there is no `public_id`.
  *
  * ⚠️ `ON DELETE CASCADE` is hard-delete only, and the app only ever SOFT-deletes. Every reader must
@@ -654,7 +656,7 @@ export const entrySetQuantities = pgTable(
     uniqueIndex('uq_entry_set_quantities_client_id').on(t.clientId),
     // `weight_num` never had this (enforced only in parseLoad); the typed column gets it in the DB.
     check('entry_set_quantities_value_num_check', sql`${t.valueNum} >= 0`),
-    // `'NaN' >= 0` is TRUE in Postgres, so the check above admits NaN (0029, NOT VALID; validated by a later migration).
+    // `'NaN' >= 0` is TRUE in Postgres, so the check above admits NaN (0029 NOT VALID, validated by 0031).
     check('entry_set_quantities_value_num_not_nan_check', sql`${t.valueNum} <> 'NaN'`),
   ],
 );
@@ -1100,7 +1102,7 @@ export const rampTargets = pgTable(
       .on(t.profileId, t.metricKey, t.weekStart)
       .where(sql`${t.deletedAt} is null`),
     check('ramp_targets_target_value_check', sql`${t.targetValue} >= 0`),
-    // As `entry_set_quantities_value_num_not_nan_check` (0029, NOT VALID; validated by a later migration).
+    // As `entry_set_quantities_value_num_not_nan_check` (0029 NOT VALID, validated by 0031).
     check('ramp_targets_target_value_not_nan_check', sql`${t.targetValue} <> 'NaN'`),
   ],
 );
@@ -1138,8 +1140,8 @@ export const programBlocks = pgTable(
       .on(t.householdId, t.slug)
       .where(sql`${t.deletedAt} is null`),
     check('program_blocks_kind_check', sql`${t.kind} in ('legacy', 'template')`),
-    // PROGRAM_NAME_MAX, exactly `workouts_name_length_check`'s form, on every row (0029, NOT VALID;
-    // validated by a later migration, after a read-only production check of all four CHECKs). Pinned by db:verify.
+    // PROGRAM_NAME_MAX, exactly `workouts_name_length_check`'s form, on every row (0029 NOT VALID,
+    // validated by 0031, each after a read-only production check of all four CHECKs). Pinned by db:verify.
     check(
       'program_blocks_name_length_check',
       sql`char_length(btrim(${t.name})) >= 1 and char_length(${t.name}) <= 60`,
@@ -1522,11 +1524,12 @@ export const prescriptionTargets = pgTable(
  *   today, and is no longer open. `queries/program-assignments.ts` → `assignmentOnDay` is the ONE
  *   spelling; due adds a live weekday row for `localWeekday(D)` (`assignmentDueOn`).
  * - **current as of T**: live and (`active_to IS NULL` or `T <= active_to`): on today, or starting later
- *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: `DayPlan.currentPrograms`
- *   and `ProgramOrder` list each program ONCE (the schema refuses a repeat), placed by its open or
+ *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: `ProgramOrder`
+ *   lists each program ONCE (`programOrderSchema` refuses a repeat) and the reader builds
+ *   `DayPlan.currentPrograms` one per program, each placed by its open or
  *   upcoming row's `idx`, or by the closed row's when it has no other; a reorder writes the place onto
  *   that row. Amendment 4's writers leave at most one current row per program (a same-day put-on
- *   reopens), so "once" is defensive: the schema itself allows two (`db:verify` shows the shape). Readers order by `(idx, id)` (A2 §7): on the
+ *   reopens), so "once" is defensive: the table itself allows two (`db:verify` shows the shape). Readers order by `(idx, id)` (A2 §7): on the
  *   take-off day a closed row and another program's open row may share an `idx`, because the order key
  *   covers open rows only.
  *
