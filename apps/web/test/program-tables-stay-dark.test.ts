@@ -199,7 +199,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // caller's household first (AGENTS.md → DAL). Its tests mock them, so they may name them too.
   const PROGRAM_DAL = 'apps/web/lib/dal/program/';
   // The day DAL (12b) may import ONE lane P read: whether a workout id is the household's, for its
-  // scope-miss report. Lane C's importer pin (#528, `lib/dal/day/importers.test.ts`) names the same.
+  // scope-miss report. Lane C's importer pin (#528, open: `lib/dal/day/importers.test.ts`) names the same.
   const DAY_DAL = 'apps/web/lib/dal/day/';
   const DAY_DAL_MAY_IMPORT = ['workoutInHousehold'];
 
@@ -222,17 +222,20 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     const mayImport = (f: string, src: string) =>
       f.startsWith(PROGRAM_DAL) || (f.startsWith(DAY_DAL) && !notForTheDay.test(src));
     expect(importing.filter((f) => !mayImport(f, code(join(REPO, f))))).toEqual([]);
-    // Neither DAL hands a lane P name on: a re-export would let any file reach it through the DAL
-    // without naming `@mat-plan/db`. ⚠️ A local `export { name }` after the import is not read.
+    // Neither DAL hands a lane P name on: a re-export (from the package, or of a local binding)
+    // would let any file reach it through the DAL without naming `@mat-plan/db`.
     const reexports = new RegExp(
       `export\\s*(?:type\\s*)?\\{[^}]*\\b(?:${laneP.join('|')})\\b[^}]*\\}\\s*from\\s*['"]@mat-plan\\/db['"]`,
     );
+    const localReexport = new RegExp(
+      `export\\s*(?:type\\s*)?\\{[^}]*\\b(?:${laneP.join('|')})\\b[^}]*\\}(?!\\s*from)|export\\s+(?:const|let|var)\\s+\\w+\\s*=\\s*(?:${laneP.join('|')})\\b`,
+    );
     expect(
-      web.filter(
-        (f) =>
-          (f.startsWith(PROGRAM_DAL) || f.startsWith(DAY_DAL)) &&
-          reexports.test(code(join(REPO, f))),
-      ),
+      web.filter((f) => {
+        if (!f.startsWith(PROGRAM_DAL) && !f.startsWith(DAY_DAL)) return false;
+        const src = code(join(REPO, f));
+        return reexports.test(src) || localReexport.test(src);
+      }),
     ).toEqual([]);
     const one = "import { workoutInHousehold } from '@mat-plan/db';";
     const two = "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';";
@@ -243,6 +246,10 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(mayImport('apps/web/lib/dal/program/x.ts', two)).toBe(true);
     expect(reexports.test("export { workoutInHousehold } from '@mat-plan/db';")).toBe(true);
     expect(reexports.test("import { workoutInHousehold } from '@mat-plan/db';")).toBe(false);
+    expect(localReexport.test('export { workoutInHousehold as isOurs };')).toBe(true);
+    expect(localReexport.test('export const alsoOurs = workoutInHousehold;')).toBe(true);
+    expect(localReexport.test("export { workoutInHousehold } from '@mat-plan/db';")).toBe(false);
+    expect(localReexport.test('export const dayRows = readDayRows;')).toBe(false);
     // The day DAL's allowance is that one name: any other lane P name there, alone or beside it,
     // still fails.
     expect(laneP).toEqual(expect.arrayContaining(DAY_DAL_MAY_IMPORT));
