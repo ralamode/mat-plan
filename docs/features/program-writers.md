@@ -40,11 +40,12 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/program-name.ts`   | What both share: `programNameTaken` (folded, live templates only), `freeProgramSlug` (`-2`, `-3`… past every live block) and `lostSlugRace`, which recognises the race by `schema.ts`'s `PROGRAM_BLOCK_SLUG_UNIQUE_INDEX` (FAM-1 step 5). |
 | `packages/db/src/writers/program/save-workout.ts`   | `saveWorkout`: the editor's full draft. Matches rows by `prescriptionClientId` (D19), hides gone cards, places through the band.                                                                                                          |
 | `packages/db/src/writers/program/save-week.ts`      | `saveWeek`: the week editor's full week. A slot keeps its row while its workout stays on that day; a gone slot is hidden; places go through the band.                                                                                     |
+| `packages/db/src/writers/program/refuse.ts`         | `refuse`: the writers' typed refusal.                                                                                                                                                                                                     |
 | `packages/db/src/writers/program/shift-band.ts`     | `shiftIntoBand`: move a set of placed rows out of the way (`idx + SHIFT_BAND`) so their final places can be written.                                                                                                                      |
 | `packages/db/src/writers/program/index.ts`          | The writers behind `ProgramActions`, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                  |
-| `packages/db/src/queries/program/exists.ts`         | `programIn`, `workoutIn`: scoped existence, for the DAL's scope-miss report after a `not_found` and for 7b's pages.                                                                                                                       |
+| `packages/db/src/queries/program/exists.ts`         | `programIn`, `workoutIn`: scoped existence (and `liveProgramBlockId`, the program's internal id for a read, not published), for the DAL's scope-miss report after a `not_found` and for 7b's pages.                                       |
 | `packages/db/src/queries/program/workout.ts`        | `readWorkoutDraft`: a saved workout as the editor loads it. Deep-equals the contract's `heavy-a-draft`.                                                                                                                                   |
-| `packages/db/src/queries/program/week.ts`           | `readWeek`: a program's week as `WeekDraft['days']`, every weekday present, live slots of live workouts in order.                                                                                                                         |
+| `packages/db/src/queries/program/week.ts`           | `readWeek`: a program's week as `WeekDraft['days']`, every weekday present, live slots of live workouts in order; `emptyWeek`.                                                                                                            |
 | `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                           |
 | `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                 |
 | `packages/db/src/queries/program/index.ts`          | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                     |
@@ -102,7 +103,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
     `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
     unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use the same helper. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
 12. **Every refusal comes before the first write**, and the whole save is one transaction (a
-    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities. The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
+    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
     `save-takes-any-households-item`) and of the type the draft says; a type's fields are
     `TRACKING_TYPE_FIELDS`' (Reps a whole number 1 to 1000; at most one quantity, in the type's slot
     and units); supersets are neighbours, numbered 1..n, at least two, with the rest on the last.
@@ -138,15 +139,24 @@ flowchart TD
     and changed items, or drop such cards from the read.
 
 15. 🔴 **A week is saved whole, matched by (weekday, workout)** (6b). A slot keeps its row while its
-    workout stays on that day; only its place and label change. A slot taken off a day is hidden,
-    which frees both partial keys (`uq_block_day_workouts_slot`, `uq_block_day_workouts_once_per_day`),
-    so the workout can go back on that day as a new row (mutations `week-keeps-a-removed-slot`,
-    `week-replaces-every-slot`). A week saved unchanged writes nothing. Moved slots go through the
-    band (`week-skips-the-band`). Refusals, in order: `invalid` (the schema), `once_per_day` (a
-    workout twice on a day, also when the ids differ only in case; the schema's own repeat check is
-    answered `once_per_day` too), `not_found` (the program, or a workout that is not one of its live
-    workouts: `week-takes-any-programs-workout`). It locks the block only: it writes no workout row,
-    and the block lock already serialises it with `saveWorkout`.
+    workout stays on that day; only its place and label change, together when both do
+    (`week-moved-slot-keeps-old-label`). A slot taken off a day is hidden **before** anything is
+    placed, so one save can take a slot off and fill its place (`week-keeps-a-removed-slot`,
+    `week-hides-gone-slots-last`); the workout can go back on that day later as a new row. Only the
+    program's own slots are read and written (`week-reads-every-blocks-slots`). A week saved
+    unchanged writes nothing, proved by `ctid`, since `updated_at` cannot see a rewrite inside one
+    transaction (`week-rewrites-kept-slots`, `week-replaces-every-slot`). Moved slots, and only
+    those, go through the band (`week-skips-the-band`, `week-band-moves-unmoved-slots`).
+    **Refusals, in the preview fake's order:** `once_per_day` when a day names a workout twice,
+    whatever else is wrong with the draft and also when the ids differ only in case (read from the
+    raw input as the fake reads it: `week-repeat-loses-to-other-errors`); then `invalid` (the
+    schema); then `not_found` (the program, or a workout that is not one of its live workouts:
+    `week-takes-any-programs-workout`, `week-takes-a-hidden-workout`). `readWeek` leaves out a hidden
+    workout's slot (`week-read-shows-a-hidden-workout`), and saving the week as read hides it.
+    ⚠️ **An accepted race:** a ✓ checks `isScheduledOn` unlocked, so a `saveWeek` that takes the
+    workout off that day can commit between the check and the entry. The log keeps a real entry, and
+    the day resolver already shows a logged workout that left the week. A lock would make every ✓
+    wait on program saves.
 
 ## Changing it
 

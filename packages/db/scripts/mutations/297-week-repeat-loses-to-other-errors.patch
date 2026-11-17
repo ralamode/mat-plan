@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 845b811a..9d5fe394 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -60,7 +60,8 @@ export async function saveWeek(
+   scope: HouseholdScope,
+   input: unknown,
+ ): Promise<ProgramResult> {
+-  if (repeatsOnADay(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
++  if (repeatsOnADay(input) && (weekDraftSchema.safeParse(input).error?.issues.length ?? 1) === 1)
++    return refuse(PROGRAM_REFUSAL.once_per_day);
+   const parsed = weekDraftSchema.safeParse(input);
+   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
+   // Postgres compares a uuid in any case and answers in lower case; ids compare in JS below.

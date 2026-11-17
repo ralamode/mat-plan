@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
-index b516d635..d12c8308 100644
+index 845b811a..5ae3db4e 100644
 --- a/packages/db/src/writers/program/save-week.ts
 +++ b/packages/db/src/writers/program/save-week.ts
-@@ -137,7 +137,7 @@ export async function saveWeek(
-     if (gone.length + moved.length + relabelled.length + added.length === 0) return { ok: true };
- 
-     // Hidden first: a gone slot frees its place and its once-a-day key for what replaces it.
+@@ -138,7 +138,7 @@ export async function saveWeek(
+     // Hidden first: a gone slot frees its place (`uq_block_day_workouts_slot`) for a slot added or
+     // moved there in this save. (Its once-a-day key is never reused in the same save: a gone key and
+     // an added one differ by construction.)
 -    if (gone.length > 0) {
 +    if (false) {
        await tx

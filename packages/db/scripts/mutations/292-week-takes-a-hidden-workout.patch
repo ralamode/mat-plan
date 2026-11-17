@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 845b811a..92e22fb2 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -84,7 +84,7 @@ export async function saveWeek(
+     const workouts = await tx
+       .select({ id: schema.workouts.id, publicId: schema.workouts.publicId })
+       .from(schema.workouts)
+-      .where(and(eq(schema.workouts.blockId, block.id), isNull(schema.workouts.deletedAt)));
++      .where(eq(schema.workouts.blockId, block.id));
+     const workoutId = new Map(workouts.map((w) => [w.publicId, w.id]));
+ 
+     const wanted: Array<{

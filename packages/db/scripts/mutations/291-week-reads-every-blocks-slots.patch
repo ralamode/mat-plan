@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 845b811a..ea9d66c0 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -111,10 +111,7 @@ export async function saveWeek(
+       })
+       .from(schema.blockDayWorkouts)
+       .where(
+-        and(
+-          eq(schema.blockDayWorkouts.blockId, block.id),
+-          isNull(schema.blockDayWorkouts.deletedAt),
+-        ),
++        and(isNull(schema.blockDayWorkouts.deletedAt)),
+       );
+     const liveByKey = new Map(live.map((row) => [slotKey(row.weekday, row.workoutId), row]));
+ 

@@ -4,7 +4,6 @@ import {
   PROGRAM_REFUSAL,
   WEEKDAYS,
   weekDraftSchema,
-  type ProgramRefusal,
   type ProgramResult,
   type Weekday,
 } from '@mat-plan/shared';
@@ -13,19 +12,27 @@ import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { liveTemplateBlockIn } from '../ownership';
+import { refuse } from './refuse';
 import { shiftIntoBand } from './shift-band';
 
-const refuse = (reason: ProgramRefusal) => ({ ok: false as const, reason });
-
 /**
- * Whether every issue is the week schema's "a workout runs at most once a day" refinement: a
- * `custom` issue on one day (`['days', weekday]`). Every other check in `weekDraftSchema` lands on a
- * field inside a slot, or on the draft itself.
+ * **Does a day name one workout twice?** Read from the raw input, as the preview fake reads it
+ * (`repeatsAWorkout`, `apps/web/app/design/program/fakes.ts`), so a draft with a repeat answers
+ * `once_per_day` whatever else is wrong with it, on the preview route and in production alike (lane
+ * guide invariant 6). Ids are compared in lower case: Postgres compares a uuid in any case.
  */
-type Issues = NonNullable<ReturnType<typeof weekDraftSchema.safeParse>['error']>['issues'];
-const onlyRepeats = (issues: Issues) =>
-  issues.length > 0 &&
-  issues.every((i) => i.code === 'custom' && i.path.length === 2 && i.path[0] === 'days');
+function repeatsOnADay(input: unknown): boolean {
+  const days = (input as { days?: unknown } | null)?.days;
+  if (typeof days !== 'object' || days === null) return false;
+  return Object.values(days).some((slots) => {
+    if (!Array.isArray(slots)) return false;
+    const ids = slots.map((slot: { workoutPublicId?: unknown } | null) => {
+      const id = slot?.workoutPublicId;
+      return typeof id === 'string' ? id.toLowerCase() : id;
+    });
+    return new Set(ids).size !== ids.length;
+  });
+}
 
 /** A live slot's address within its block: a workout appears at most once a day. */
 const slotKey = (weekday: number, workoutId: number) => `${weekday}:${workoutId}`;
@@ -35,10 +42,10 @@ const slotKey = (weekday: number, workoutId: number) => `${weekday}:${workoutId}
  * weekday, its workouts in order, each with an optional label. Correct on a bare `db` or inside a
  * transaction: its writes run in one.
  *
- * - **Refusals, before anything is written:** a draft the schema refuses is `invalid`, except a
- *   workout twice on one day, which is `once_per_day` (also when the two ids differ only in case);
- *   a program that is not this household's live program, or a workout that is not one of its live
- *   workouts, is `not_found`.
+ * - **Refusals, before anything is written,** in the preview fake's order: a workout twice on one
+ *   day is `once_per_day`, whatever else is wrong (also when the two ids differ only in case); any
+ *   other draft the schema refuses is `invalid`; a program that is not this household's live
+ *   program, or a workout that is not one of its live workouts, is `not_found`.
  * - **A slot keeps its row** while its workout stays on that day: only its place and label change.
  *   A slot that is gone is hidden, which frees its place and its once-a-day key (both unique indexes
  *   are partial on live rows), so the same workout can be put back on that day later. A week saved
@@ -53,12 +60,9 @@ export async function saveWeek(
   scope: HouseholdScope,
   input: unknown,
 ): Promise<ProgramResult> {
+  if (repeatsOnADay(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
   const parsed = weekDraftSchema.safeParse(input);
-  if (!parsed.success) {
-    return refuse(
-      onlyRepeats(parsed.error.issues) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
-    );
-  }
+  if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
   // Postgres compares a uuid in any case and answers in lower case; ids compare in JS below.
   const programPublicId = parsed.data.programPublicId.toLowerCase();
   const days = WEEKDAYS.map((weekday) => ({
@@ -68,11 +72,6 @@ export async function saveWeek(
       label: slot.label,
     })),
   }));
-  for (const { slots } of days) {
-    if (new Set(slots.map((s) => s.workoutPublicId)).size !== slots.length) {
-      return refuse(PROGRAM_REFUSAL.once_per_day);
-    }
-  }
 
   return exec.transaction(async (tx) => {
     const [block] = await tx
@@ -136,7 +135,9 @@ export async function saveWeek(
     const gone = live.filter((row) => !kept.has(row.id)).map((row) => row.id);
     if (gone.length + moved.length + relabelled.length + added.length === 0) return { ok: true };
 
-    // Hidden first: a gone slot frees its place and its once-a-day key for what replaces it.
+    // Hidden first: a gone slot frees its place (`uq_block_day_workouts_slot`) for a slot added or
+    // moved there in this save. (Its once-a-day key is never reused in the same save: a gone key and
+    // an added one differ by construction.)
     if (gone.length > 0) {
       await tx
         .update(schema.blockDayWorkouts)

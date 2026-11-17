@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
-index b516d635..8dc44c7b 100644
+index 845b811a..a881fd6a 100644
 --- a/packages/db/src/writers/program/save-week.ts
 +++ b/packages/db/src/writers/program/save-week.ts
-@@ -85,7 +85,7 @@ export async function saveWeek(
+@@ -84,7 +84,7 @@ export async function saveWeek(
      const workouts = await tx
        .select({ id: schema.workouts.id, publicId: schema.workouts.publicId })
        .from(schema.workouts)

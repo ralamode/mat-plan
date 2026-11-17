@@ -9,7 +9,6 @@ import {
   trackingTypeSchema,
   UNIT_DIMENSION_BY_CODE,
   wholeReps,
-  type ProgramRefusal,
   type ProgramResult,
   type WorkoutDraftItem,
 } from '@mat-plan/shared';
@@ -18,9 +17,8 @@ import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { insertWorkoutOwnedBy, liveTemplateBlockIn, movementIsAvailableTo } from '../ownership';
+import { refuse } from './refuse';
 import { shiftIntoBand } from './shift-band';
-
-const refuse = (reason: ProgramRefusal) => ({ ok: false as const, reason });
 
 /**
  * A saved draft's supersets (§4 "As built", maintainer; plan D14): each group's items are

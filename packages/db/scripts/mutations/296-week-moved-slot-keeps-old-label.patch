@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 845b811a..262de179 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -129,7 +129,7 @@ export async function saveWeek(
+         continue;
+       }
+       kept.add(row.id);
+-      if (row.idx !== slot.idx) moved.push({ id: row.id, idx: slot.idx, label: slot.label });
++      if (row.idx !== slot.idx) moved.push({ id: row.id, idx: slot.idx, label: row.label });
+       else if (row.label !== slot.label) relabelled.push({ id: row.id, label: slot.label });
+     }
+     const gone = live.filter((row) => !kept.has(row.id)).map((row) => row.id);

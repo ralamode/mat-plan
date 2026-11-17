@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
-index b516d635..7dd8242f 100644
+index 845b811a..25b81341 100644
 --- a/packages/db/src/writers/program/save-week.ts
 +++ b/packages/db/src/writers/program/save-week.ts
-@@ -124,7 +124,7 @@ export async function saveWeek(
+@@ -123,7 +123,7 @@ export async function saveWeek(
      const relabelled: Array<{ id: number; label: string | null }> = [];
      const added: typeof wanted = [];
      for (const slot of wanted) {
