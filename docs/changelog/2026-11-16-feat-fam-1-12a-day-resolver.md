@@ -12,4 +12,6 @@
   regenerated). `db:verify` seeds the ten fixtures with no `before`, deep-equals each with ids mapped
   exactly, and round-trips the returned ids through the row writer; new proofs cover ownership
   (planted runbook (f), (g) and (h) rows), hidden rows, superset and program order, look-ahead and
-  PREVIOUS, with nine new mutations (230–238). The four fixtures with a `before` are 12a-ii's.
+  PREVIOUS, the hidden-program ids (C21) and an entry in another profile's session (runbook pre-flight
+  (i), added), with eighteen new mutations (230–247). Of the five fixtures with a `before`, 12a-i
+  proves `archived-athlete-today` (its only change is the archive); the other four are 12a-ii's.

@@ -55,8 +55,8 @@ import {
  *   that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–181; 120 is unused, see there);
  * - **step 12a-i**: the day resolver and PREVIOUS, in `./day-plan.ts` (`verifyDayPlan`, called at
  *   the end of `verifyDay`): it seeds the state each `DayPlan` fixture with no `before` describes,
- *   with hand-written timestamps, and deep-equals it with ids mapped exactly; 12a-ii adds the four
- *   with a `before`;
+ *   with hand-written timestamps (and `archived-athlete-today`), and deep-equals it with ids mapped
+ *   exactly; 12a-ii adds the other four with a `before`;
  * - step 11c: amend each type; a non-number is refused; an older day is refused;
  * - step 14: template rows of each type in the export.
  *

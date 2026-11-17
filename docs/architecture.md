@@ -493,13 +493,13 @@ flowchart TB
   P["profile: isLiveProfile(scope)<br/>missing or foreign → null"]
   W["writable = inWritableWindow(day, today) ∧ ¬archived (R1)<br/>future = day > today"]
   subgraph LIVE["Live branch — anchored on the assignment (E1)"]
-    A["dayAssignments: liveTemplateBlockIn(scope) ∧ programBlockOfProfile<br/>flags: onProgramOn(day) · assignmentCurrentAsOf(today) · onProgramOn(day + 1)"]
+    A["dayAssignments: liveAthleteTemplateBlockIn(scope, profile)<br/>flags: onProgramOn(day) · assignmentCurrentAsOf(today) · onProgramOn(day + 1)"]
     S["weekSlotsOn(blocks on the day): weekSlotOn(day), live workouts"]
     PR["live prescriptions + live quantities<br/>prescriptionTerms → target, unit, text (E5)"]
   end
   subgraph LOGGED["Logged branch — anchored on the athlete (E1)"]
     E["entries: programRowOf(profile, day) ∧ movement_id IS NOT NULL (E4) ∧ live (E3)"]
-    J["⟕ scoped workout, ⟕ scoped prescription<br/>(each ⋈ its own block: templateBlockIn ∧ programBlockOfProfile)<br/>WHERE a set FK resolved in scope, else the row is dropped"]
+    J["⟕ scoped workout, ⟕ scoped prescription<br/>(each ⋈ its own block: athleteTemplateBlockIn)<br/>WHERE a set FK resolved in scope, and the session is the athlete's own,<br/>else the row is dropped"]
     V["readRowValues: one live set per row, else throw"]
   end
   M["movements: movementIsAvailableTo(scope) (E2)"]
@@ -509,6 +509,7 @@ flowchart TB
   DAL --> P --> W
   W --> A --> S --> PR
   W --> E --> J --> V
+  J -->|"live workouts that left the week"| PR
   PR --> M
   J --> M
   M --> PV --> OUT
@@ -518,8 +519,9 @@ flowchart TB
 🔴 **Two anchors, one scope.** What is on the day comes from the athlete's assignments on live template
 blocks of the scope and of the athlete's own household; what was logged comes from the athlete's own
 program rows, whose workout and prescription pointers are resolved through scoped subqueries. A
-pointer that is set but does not resolve in scope (runbook pre-flight (f), (g)) drops the row; a NULL
-one (a purge) keeps it with null ids. A weigh-in, a practice or a check-in never enters a `DayPlan`
+pointer that is set but does not resolve in scope (runbook pre-flight (f), (g)), or a session of
+another profile ((i)), drops the row; a NULL one (a purge) keeps it with null ids. A logged workout of
+a hidden program or a hidden workout carries an id only for what is still live (C21). A weigh-in, a practice or a check-in never enters a `DayPlan`
 (E4). Every rule has a `db:verify` proof in `scripts/verify/day-plan.ts`, against the contract's
 fixtures with ids mapped exactly.
 

@@ -80,8 +80,9 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  * an unlogged row ticks through `logRow` with the returned ids, a logged set answers `slot_taken`,
  * and a returned `entryPublicId` un-ticks through `untickRow`.
  *
- * 12a-i proves the fixtures whose `before` is `null`, chosen by that test, not by a list. The four
- * with a `before` are 12a-ii's: they need the program edits replayed after logging.
+ * 12a-i proves the fixtures whose `before` is `null`, chosen by that test, not by a list, and
+ * `archived-athlete-today` in `verifyRules` (its only change is the archive). The other four of the
+ * five with a `before` are 12a-ii's: they need the program edits replayed after logging.
  */
 export async function verifyDayPlan(): Promise<void> {
   await verifyFixtures();

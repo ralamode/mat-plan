@@ -165,12 +165,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
   [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
 
-### The day resolver's proof seeds programs by direct insert (added 2026-11-16, FAM-1 step 12a-i)
+### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i)
 
-- **What & why it's debt:** `packages/db/scripts/verify/day-plan.ts`'s seeder writes programs,
-  workouts, the week, prescriptions, quantities and assignments (with their seven weekday rows) by
-  direct `INSERT`, because lane P's writers for them did not exist when 12a-i was built. Its entries
-  go through the real row writer.
+- **What & why it's debt:** `packages/db/scripts/verify/day-plan.ts`'s seeder writes the week
+  (`block_day_workouts`), prescriptions with their quantities, and assignments with their seven
+  weekday rows by direct `INSERT`, because lane P's writers for them do not exist yet. Programs and
+  workouts go through `insertProgramBlockOwnedBy` and `insertWorkoutOwnedBy`; entries through the
+  real row writer.
 - **Impact:** a rule a lane P writer enforces (a rest note only on a group's last item, a slot key, a
   put-on's weekday rows) can differ from what the seeder writes, and the deep-equal would not notice.
 - **The fix:** fold the direct inserts into lane P's `seedProgramFixtures` at step 6c, so the proof
