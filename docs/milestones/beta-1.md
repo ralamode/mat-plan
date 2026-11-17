@@ -96,8 +96,6 @@ cover the Today an invited family will see and the new tables.
 
 ```mermaid
 flowchart LR
-  N[0 · now: PII purge, merge gates] --> AU
-  O[1 · ops: previews, seed split, restore] --> AU
   ONB[ONB-0 · first run ✅] --> S
   PRIV[PRIV-1 · notice, consent, deletion ✅] --> P1[PRIV-2 PR 1 · correct + fill notice.md ✅]
   P1 --> P2[PRIV-2 PR 2 · serve /privacy ✅]
@@ -106,21 +104,31 @@ flowchart LR
   T --> AU[3 · AUTH-1 ✅ · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅ 1c-2 ✅<br/>1c-3a ✅ 1c-3b ✅ 1c-4a ✅ 1c-4 ✅ 1d ✅]
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, V1-9b]
-  S --> F[FAM-1 · the family program]
-  S --> K[14 · CAT-3 · the movement library]
-  K --> R[fresh start of the live app]
+  S --> F[FAM-1 · the family program, to step 15]
+  O[1 · ops: seed split OPS-2, restore drill OPS-3] --> F
+  K[14 · CAT-3 · the movement library] --> R[fresh start of the live app]
+  F --> R
+  O --> R
+  P3[PRIV-3 · deleting a family] --> R
   F --> W[FAM-1 step 16 · the week of real use]
   R --> W
   W --> B0[phone run-through, PRIV-1 sign-off · Beta 0 ends]
+  N[0 · PII scan, required checks DX-5a] --> B0
+  O --> B0
+  P3 --> B0
   B0 --> I[Beta 1 · ONB-2, then invite family #1]
   T2 --> I
 ```
 
 _Redrawn 2026-11-17:_ the chart ended at "invite family #1" from step 4, which has not been the
 path since 2026-11-14 (no family is invited before Beta 1, and Beta 0 ends with `FAM-1`), and it
-drew neither `FAM-1` nor item 14, `CAT-3`. `FAM-1`'s own steps are in
-[its milestone](./fam-1-family-program.md); `CAT-3`'s chunks are in
-[its spec](../specs/cat-3-movement-library.md). A `CAT-3` PR marks node 14.
+drew neither `FAM-1` nor item 14, `CAT-3`. It also fed the open ops and gate work into `AUTH-1`,
+which shipped without it: the seed split, the restore drill, deleting a family, the PII scan and
+required checks are drawn where they are still owed. `CAT-3` waits for nothing in step 4, so it
+starts its own line; its fresh start waits for `FAM-1` step 15, `OPS-2` and `PRIV-3`. **A `FAM-1`
+PR takes its step ids from [the FAM-1 plan](../plans/fam-1-family-program.md) §5 to §7**, never
+from a chart; `CAT-3`'s chunks are in [its spec](../specs/cat-3-movement-library.md). A `CAT-3` PR
+marks node 14.
 
 **This is the canonical chart.** Every PR in this milestone embeds it with its own step marked
 (`AGENTS.md` → "Milestone PRs also embed a progress chart"), so a reviewer sees what is still between
