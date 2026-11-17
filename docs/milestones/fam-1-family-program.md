@@ -146,7 +146,7 @@ a description until it has its own row.
 > 🔴 **Do not copy a step's label from this chart or table.** Several ids mean something else in the
 > plan: here 11a is "log writer, new kinds" and 11b is "strength writer on workouts"; in the plan
 > 11a is a refactor that extracts the session helpers, **11b is the one row writer for every type**,
-> and 11c is Change. A PR
+> and 11c-i is Change (11c-ii is the revive). A PR
 > title, a branch name or a step note takes its id and its wording from the plan's §5 _(a lane copied
 > the old labels by mistake, 2026-11-16)_.
 
@@ -250,7 +250,7 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## The schedule: in a row, and in lanes
 
-The same 50 PRs drawn twice: one after another, and in the lanes of
+The same 51 PRs drawn twice: one after another, and in the lanes of
 [the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
 PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
 Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
@@ -266,11 +266,11 @@ gantt
   The contract, 5 PRs          :done, r0, 0, 5
   Lane A's 7 PRs (merged)      :done, r1, 5, 12
   Lane P's 6 PRs               :r2, 12, 18
-  Lane E's 6 PRs               :r3, 18, 24
-  Lane B's 10 PRs              :r4, 24, 34
-  Lane C's 9 PRs               :r5, 34, 43
-  Lane S's 7 PRs               :r6, 43, 50
-  All 50 PRs merged            :milestone, rm, 50, 50
+  Lane E's 7 PRs               :r3, 18, 25
+  Lane B's 10 PRs              :r4, 25, 35
+  Lane C's 9 PRs               :r5, 35, 44
+  Lane S's 7 PRs               :r6, 44, 51
+  All 51 PRs merged            :milestone, rm, 51, 51
 
   section Contract
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
@@ -291,8 +291,8 @@ gantt
   section E · day data
   11a                          :done, e1, 4, 5
   11b row writer               :crit, done, e2, 5, 7
-  12a-i the day's read         :crit, e3, 7, 8
-  14, 11c                      :e4, 8, 9
+  12a-i the day's read         :crit, done, e3, 7, 8
+  14, 11c (11c-i, 11c-ii)      :e4, 8, 9
   12a-ii replayed fixtures     :e5, 9, 10
 
   section B · builder
@@ -320,7 +320,7 @@ gantt
   3b-page (merged)             :done, s1, 1, 2
   3b-bw                        :done, s2, 2, 3
   3b-0                         :done, s3, 6, 7
-  3b-life (merged), B2-0       :active, s4, 7, 8
+  3b-life, B2-0 (merged)       :done, s4, 7, 8
   B1-2                         :s5, 8, 9
   B2                           :s6, 10, 11
 
@@ -332,7 +332,7 @@ gantt
 
 **What it shows**
 
-- **In a row, 50 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
+- **In a row, 51 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
@@ -344,17 +344,19 @@ gantt
 - **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
   critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a
   change after logging; it waits for lane P's writers and gates 15, not the day page (12c).
+- **11c is two PRs since 2026-11-17** (11c-i, Change; 11c-ii, the D35 revive), in 11c's one slot.
+  12d's Change action waits for 11c-i only.
 - **6a is three PRs since 2026-11-16** (6a-i, 6a-ii, 6a-iii). The row above counts them; the lanes
   picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's three takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 31 of the 50). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 33 of the 51). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
-  themselves. Since then: all of lane A's chain; lane E's 11a and 11b; lane B's six screen steps
-  (8a to 10b) and 7a-i; lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0 and 3b-life.
+  themselves. Since then: all of lane A's chain; lane E's 11a, 11b and 12a-i (#505); lane B's six screen steps
+  (8a to 10b) and 7a-i; lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
   6a-i and 6a-ii are merged and 6a-iii is not, so 6a's bar is part merged; so are 7a's bar
-  (7a-i is merged, 7a-ii is not) and the bar that holds 3b-life and B2-0. A bar is marked here when its PRs are on `main`.
+  (7a-i is merged, 7a-ii is not). A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
@@ -522,7 +524,7 @@ These needs had no row before this draft. Each now has a home:
 ## FAM-1 exit criteria — done when
 
 > The step numbers in parentheses are this document's original ones. [The plan's §5](../plans/fam-1-family-program.md)
-> splits some of them: 4a → 4a-i, 4a-ii · 6 → 6a–6d · 11a, 11b → 11b (one row writer) and 11c · 12 →
+> splits some of them: 4a → 4a-i, 4a-ii · 6 → 6a–6d · 11a, 11b → 11b (one row writer) and 11c-i, 11c-ii · 12 →
 > 12a–12f · 15b → 6d and 15.
 
 - [ ] A parent creates a program with more workouts than the old cap of three, each with a
