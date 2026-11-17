@@ -20,6 +20,11 @@ import { keyBySelf } from '../enums';
  *
  * One code per thing a person owns or has access to. `machine` is any selectorised machine that has
  * no code of its own; `anchor` is a fixed point for a band or the feet; `ball` is any small ball.
+ * A sled's tow strap comes with `sled`; the two ropes are two things to own, so there is no plain
+ * `rope`.
+ *
+ * ⚠️ **A required set cannot say "this or that".** A goblet squat names one of dumbbell and
+ * kettlebell, and a filter for the other does not show it (spec rule 8, a known limit).
  */
 export const EQUIPMENT = [
   'barbell',
@@ -49,7 +54,8 @@ export const EQUIPMENT = [
   'step',
   'wall',
   'sled',
-  'rope',
+  'battle_rope',
+  'climbing_rope',
   'heavy_bag',
   'mat',
   'foam_roller',
@@ -60,12 +66,18 @@ export const EQUIPMENT = [
   'rowing_machine',
   'ski_ergometer',
   'treadmill',
+  'stationary_bike',
   'climbing_machine',
   'back_extension_bench',
+  'glute_ham_developer',
   'towel',
   'anchor',
   'hill_or_stairs',
   'ball',
+  'cones',
+  'hurdles',
+  'agility_ladder',
+  'pool',
   'partner',
 ] as const;
 export type Equipment = (typeof EQUIPMENT)[number];
@@ -102,7 +114,8 @@ export const EQUIPMENT_LABELS = {
   step: 'Step',
   wall: 'Wall',
   sled: 'Sled',
-  rope: 'Rope',
+  battle_rope: 'Battle rope',
+  climbing_rope: 'Climbing rope',
   heavy_bag: 'Heavy bag',
   mat: 'Mat',
   foam_roller: 'Foam roller',
@@ -113,12 +126,18 @@ export const EQUIPMENT_LABELS = {
   rowing_machine: 'Rowing machine',
   ski_ergometer: 'Ski ergometer',
   treadmill: 'Treadmill',
+  stationary_bike: 'Stationary bike',
   climbing_machine: 'Climbing machine',
   back_extension_bench: 'Back-extension bench',
+  glute_ham_developer: 'Glute-ham developer',
   towel: 'Towel',
   anchor: 'Anchor point',
   hill_or_stairs: 'Hill or stairs',
   ball: 'Ball',
+  cones: 'Cones',
+  hurdles: 'Hurdles',
+  agility_ladder: 'Agility ladder',
+  pool: 'Pool',
   partner: 'Partner',
 } as const satisfies Record<Equipment, string>;
 
@@ -214,6 +233,14 @@ export const SUPERVISION_KIND = keyBySelf(SUPERVISION);
 export const SUPERVISION_LABELS = {
   coach: 'Learn with a coach present',
 } as const satisfies Record<Supervision, string>;
+
+/**
+ * What kind of media an entry may point at (decision K18). Nothing points at any yet.
+ */
+export const MEDIA_KINDS = ['video', 'animation'] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+export const mediaKindSchema = z.enum(MEDIA_KINDS);
+export const MEDIA_KIND = keyBySelf(MEDIA_KINDS);
 
 /**
  * Short forms people type for a piece of equipment, expanded **inside the search only** (spec P3):

@@ -79,6 +79,8 @@ describe('the approvals check', () => {
     primaryMuscle: 'glutes',
     secondaryMuscles: ['hamstrings'],
     supervision: 'coach',
+    instructions: 'Hold the weight at your chest and sit down between your heels.',
+    media: { kind: 'video', key: 'cup-squat' },
   };
   const fields = Object.keys(EDITED) as (keyof typeof EDITED)[];
   const edited = (field: keyof typeof EDITED): CatalogMovement => ({

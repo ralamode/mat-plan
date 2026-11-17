@@ -420,8 +420,8 @@ here; a change goes through the contract owner.**
 
 | File                                            | What it holds                                                                                                                                                                                                                                              |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT`, `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels) and `QUERY_SHORT_FORMS`. In the root barrel.                                                                                                          |
-| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id) and `requiresNoEquipment`. In the root barrel.                                                                                                                              |
+| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT` (52 codes), `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels), `MEDIA_KINDS`, and `QUERY_SHORT_FORMS`. In the root barrel.                                                                               |
+| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id), `catalogInstructionsSchema`, `catalogMediaSchema`, their caps, and `requiresNoEquipment`. In the root barrel.                                                              |
 | `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries) and `CATALOG_FIXTURE_IDS`. The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                  |
 | `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                        |
 | `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide. |
@@ -455,6 +455,12 @@ Invariants (the spec's rules, as they bind code here):
    retired. So its short alias is `SLRDL`, not `RDL`.
 8. **A data file imports the entry type and its own directory, nothing else**: `catalog/data/`
    holds literal entries, never code.
+9. **Instructions are our own words, written as they will be read; media is reserved.** An
+   entry's optional `instructions` is one or more plain lines (no blank line, no space at a line's
+   end, at most `CATALOG_INSTRUCTIONS_MAX` characters), reviewed and hashed with the entry. Its
+   optional `media` is a kind and a key into the app's own store, **never a URL**, and no entry in
+   the library or the fixture may set it until a media plan lifts that test. Both stay in the
+   const and are read by slug, like aliases: no column holds them.
 
 ## Changing it
 

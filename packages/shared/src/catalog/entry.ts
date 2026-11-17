@@ -7,15 +7,61 @@ import {
   movementSlug,
   trackingTypeSchema,
 } from '../movements';
-import { hasCommaOrLineBreak } from '../text';
+import { hasCommaOrLineBreak, hasControlChar } from '../text';
 import { unitSchema } from '../units';
 import {
   equipmentSchema,
+  mediaKindSchema,
   MODALITY,
   modalitySchema,
   muscleSchema,
   supervisionSchema,
 } from './vocabulary';
+
+/** The most characters an entry's instructions may have: a few short lines, read on a phone. */
+export const CATALOG_INSTRUCTIONS_MAX = 600;
+
+/**
+ * How to do the movement, **in our own words** (decision K17): one or more lines, each a plain
+ * sentence or two. Written here and reviewed with the entry; never taken from a source (K16).
+ *
+ * Held to its written form, so the approval hash is of what a person will read: no blank line, no
+ * space at either end of a line, no control character, no carriage return. It describes the
+ * movement. It names no load, no dose and no readiness or medical claim (K13).
+ */
+export const catalogInstructionsSchema = z
+  .string()
+  .min(1)
+  .max(CATALOG_INSTRUCTIONS_MAX)
+  .refine(
+    (text) => text.split('\n').every((line) => line !== '' && line === line.trim()),
+    'each line has words and no space at either end',
+  )
+  .refine(
+    (text) => text.split('\n').every((line) => !hasControlChar(line)),
+    'no control character',
+  );
+
+/** The most characters a media key may have. */
+export const CATALOG_MEDIA_KEY_MAX = 80;
+
+/**
+ * A pointer to a video or an animation of the movement (decision K18). **Reserved: no entry has
+ * one yet**, and none may until media has its own plan (where it is hosted, who can see it).
+ *
+ * 🔴 **`key` names a file in the app's own media store. It is never a URL.** An address on someone
+ * else's site would send a child's device to a third party, could change after it was reviewed,
+ * and would put an outbound link in reviewed data. So a key is lower-case words joined by `-` or
+ * `_`: nothing that can spell a scheme, a host or a path.
+ */
+export const catalogMediaSchema = z.strictObject({
+  kind: mediaKindSchema,
+  key: z
+    .string()
+    .max(CATALOG_MEDIA_KEY_MAX)
+    .regex(/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/, 'lower-case words joined by - or _'),
+});
+export type CatalogMedia = z.infer<typeof catalogMediaSchema>;
 
 /**
  * One movement of the library, as the catalog const holds it
@@ -38,6 +84,9 @@ import {
  * - **A `strength` entry has a `pattern` and a primary muscle.** Other modalities may have
  *   neither: a run has no lift pattern and no one muscle.
  * - **The primary muscle is not also a secondary**, and no list repeats a member.
+ * - **`instructions` and `media` are optional** (`catalogInstructionsSchema`,
+ *   `catalogMediaSchema`). Like aliases and the supervision label they stay in the const and are
+ *   read by slug (spec rule 11): reviewed text is never copied into a row that could drift from it.
  */
 export const catalogMovementSchema = z
   .strictObject({
@@ -58,6 +107,10 @@ export const catalogMovementSchema = z
     secondaryMuscles: z.array(muscleSchema),
     /** Absent on all but the few movements the maintainer marks (K14). */
     supervision: supervisionSchema.optional(),
+    /** How to do it, in our own words (K17). Absent until written. */
+    instructions: catalogInstructionsSchema.optional(),
+    /** Reserved (K18): absent on every entry until media has its own plan. */
+    media: catalogMediaSchema.optional(),
   })
   .superRefine((entry, ctx) => {
     const names = [entry.name, ...entry.aliases];

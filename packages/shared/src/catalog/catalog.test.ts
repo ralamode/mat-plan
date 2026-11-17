@@ -10,7 +10,13 @@ import { movementNameKey } from '../movement-search';
 import { MOVEMENT_NAME_MAX, MOVEMENT_PATTERNS, movementSlug, TRACKING_TYPES } from '../movements';
 import { code, reachedFrom, specifiersOf, SRC } from '../test-support/source-graph';
 import { CATALOG_MOVEMENTS } from './data';
-import { catalogMovementSchema, requiresNoEquipment, type CatalogMovement } from './entry';
+import {
+  CATALOG_INSTRUCTIONS_MAX,
+  CATALOG_MEDIA_KEY_MAX,
+  catalogMovementSchema,
+  requiresNoEquipment,
+  type CatalogMovement,
+} from './entry';
 import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS } from './fixture';
 import {
   EQUIPMENT,
@@ -153,6 +159,56 @@ describe('one entry (V2)', () => {
     expect(accepts({ ...base, supervision: null })).toBe(false);
   });
 
+  it('takes instructions as plain lines, in the form they will be read (K17)', () => {
+    const lines = (...text: string[]) => ({ ...base, instructions: text.join('\n') });
+    expect(accepts(lines('Stand tall.'))).toBe(true);
+    expect(accepts(lines('Stand tall.', 'Sit down. Stand up.'))).toBe(true);
+    const { instructions: _, ...without } = base;
+    expect(accepts(without)).toBe(true);
+    // Not empty, no blank line, no space at a line's end, no tab, no carriage return, not too long.
+    expect(accepts({ ...base, instructions: '' })).toBe(false);
+    expect(accepts(lines('Stand tall.', '', 'Sit down.'))).toBe(false);
+    expect(accepts(lines('Stand tall. ', 'Sit down.'))).toBe(false);
+    expect(accepts(lines(' Stand tall.'))).toBe(false);
+    expect(accepts(lines('Stand tall.', 'Sit down.\n'))).toBe(false);
+    expect(accepts(lines('Stand\ttall.'))).toBe(false);
+    expect(accepts(lines('Stand tall.\r', 'Sit down.'))).toBe(false);
+    expect(accepts(lines('Stand tall.\u0000'))).toBe(false);
+    expect(accepts(lines('x'.repeat(CATALOG_INSTRUCTIONS_MAX)))).toBe(true);
+    expect(accepts(lines('x'.repeat(CATALOG_INSTRUCTIONS_MAX + 1)))).toBe(false);
+    expect(accepts({ ...base, instructions: null })).toBe(false);
+  });
+
+  it('🔴 takes a media key into our own store, never an address (K18)', () => {
+    const media = (key: string, kind = 'video') => ({ ...base, media: { kind, key } });
+    expect(accepts(media('goblet-squat'))).toBe(true);
+    expect(accepts(media('goblet_squat_2', 'animation'))).toBe(true);
+    expect(accepts(media('x'.repeat(CATALOG_MEDIA_KEY_MAX)))).toBe(true);
+    for (const key of [
+      'https://example.test/v/abc',
+      '//example.test/abc',
+      'example.test/abc',
+      'folder/goblet-squat',
+      'goblet-squat.mp4',
+      'goblet squat',
+      'Goblet-squat',
+      '../goblet-squat',
+      'goblet--squat',
+      '-goblet',
+      'goblet?x=1',
+      'data:video',
+      '',
+      'x'.repeat(CATALOG_MEDIA_KEY_MAX + 1),
+    ]) {
+      expect(accepts(media(key)), key).toBe(false);
+    }
+    expect(accepts(media('goblet-squat', 'image'))).toBe(false);
+    expect(accepts({ ...base, media: { kind: 'video', key: 'a', url: 'https://x.test' } })).toBe(
+      false,
+    );
+    expect(accepts({ ...base, media: 'goblet-squat' })).toBe(false);
+  });
+
   it('takes words from the vocabularies only', () => {
     expect(accepts({ ...base, equipment: ['kettle'] })).toBe(false);
     expect(accepts({ ...base, primaryMuscle: 'core' })).toBe(false);
@@ -232,6 +288,16 @@ describe('the checks a whole list is held to, on samples', () => {
   });
 });
 
+describe('media is reserved (K18)', () => {
+  it('🔴 no entry points at any media yet, in the library or in the test library', () => {
+    // The field exists so a later plan can fill it. Until that plan says where media is hosted
+    // and who can see it, an entry that sets one fails here; the contract owner lifts this.
+    for (const entry of [...CATALOG_MOVEMENTS, ...CATALOG_FIXTURE]) {
+      expect(entry.media, entry.slug).toBeUndefined();
+    }
+  });
+});
+
 describe('the collision check itself', () => {
   it('sees a shared slug, a shared name key and an alias that is another entry’s name', () => {
     const other = { ...base, slug: 'cup_squat', name: 'Cup squat' };
@@ -261,6 +327,9 @@ describe('CATALOG_FIXTURE covers what it says it covers', () => {
     expect(some((e) => e.equipment.length === 2)).toBe(true);
     expect(some((e) => e.aliases.length > 0)).toBe(true);
     expect(some((e) => e.supervision === 'coach')).toBe(true);
+    expect(some((e) => e.instructions !== undefined && e.instructions.includes('\n'))).toBe(true);
+    expect(some((e) => e.instructions !== undefined && !e.instructions.includes('\n'))).toBe(true);
+    expect(some((e) => e.instructions === undefined)).toBe(true);
     expect(some((e) => e.isBodyweight && e.equipment.length > 0)).toBe(true);
     // One movement logged two ways is two entries.
     const rowing = CATALOG_FIXTURE.filter((e) => e.equipment.includes('rowing_machine'));

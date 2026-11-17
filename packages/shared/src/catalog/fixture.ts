@@ -11,8 +11,8 @@ import type { CatalogMovement } from './entry';
  *
  * It covers, on purpose: every tracking type and every modality; every lift pattern; an empty
  * equipment set (with and without a primary muscle) and a two-item set; an entry with no primary
- * muscle; aliases; a supervision label; a movement logged two ways as two entries (the rowing
- * machine); and the shapes the search's vectors need (a compact "trapbar" and "medball", a short
+ * muscle; aliases; a supervision label; instructions of one line and of several, and entries with
+ * none; a movement logged two ways as two entries (the rowing machine); and the shapes the search's vectors need (a compact "trapbar" and "medball", a short
  * alias, a "db" short form). `catalog.test.ts` holds each of those.
  *
  * Its slugs and name keys are disjoint from the legacy `MOVEMENT_SEED_ROWS`, which a fixtures
@@ -49,6 +49,12 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     equipment: ['dumbbell'],
     primaryMuscle: 'quadriceps',
     secondaryMuscles: ['glutes'],
+    instructions: [
+      'Hold one dumbbell upright against your chest with both hands.',
+      'Stand with your feet a little wider than your hips.',
+      'Sit down between your heels with your chest up and your elbows inside your knees.',
+      'Stand back up by pushing the floor away.',
+    ].join('\n'),
   },
   {
     ...lift,
@@ -160,6 +166,11 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     equipment: [],
     primaryMuscle: 'obliques',
     secondaryMuscles: ['abdominals'],
+    instructions: [
+      'Lie on one side with your elbow under your shoulder and your feet stacked.',
+      'Lift your hips until your body is one straight line from head to heels.',
+      'Hold and keep breathing. Then swap sides.',
+    ].join('\n'),
   },
   {
     ...lift,
@@ -258,6 +269,7 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     equipment: [],
     primaryMuscle: null,
     secondaryMuscles: [],
+    instructions: 'Run at a pace where you could still talk in full sentences.',
   },
   {
     ...other,
