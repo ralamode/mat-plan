@@ -10,15 +10,28 @@ import { liveTemplateBlockIn } from '../../writers/ownership';
 /**
  * Whether `prescriptionPublicId` names a live prescription of one of this household's live programs.
  * It takes no program or workout id. This is the prescription half of the day DAL's scope-miss
- * report (FAM-1 12b). The workout half is lane P's `workoutInHousehold`. After the row writer
- * answers `not_found`, the DAL asks for the workout first, then the prescription, in the writer's
- * order, and reports only the first miss.
+ * report (FAM-1 12b). The workout half is lane P's planned `workoutInHousehold` (step 6a-iii,
+ * `queries/program/exists.ts`), which is not written yet. After the row writer answers `not_found`,
+ * the DAL asks for the workout first, then the prescription, in the writer's order, and reports only
+ * the first miss.
  *
- * The rule is `workoutIn`'s (`queries/program/exists.ts`), without the program id:
- * - the row is live;
+ * The rule follows `workoutIn` (`queries/program/exists.ts`), without the program id:
+ * - the prescription row is live;
  * - its block passes `liveTemplateBlockIn(scope)`: this household's, `kind = template`, and live.
+ *   `prescriptions.block_id` is always its workout's block (the composite FK
+ *   `prescriptions_workout_block_fkey`).
  *
- * An id that is not a uuid answers `false`, never a 22P02.
+ * The workout's own liveness is NOT read. A live prescription under a hidden workout answers `true`.
+ * Only a mismatched pair would reach that case, and no writer hides a workout today.
+ *
+ * An id that is not a uuid answers `false`, never a 22P02. Any case of a valid id is found:
+ * `public_id` is a `uuid` column, compared by value.
+ *
+ * ⚠️ **A hidden prescription of this household's own answers `false` too**, so a crafted write that
+ * pairs a live workout with another workout's hidden prescription is reported as a miss
+ * (`unknown_resource`) though the id never left the household. That is telemetry only, since the
+ * day page always sends a matching pair, and it is lane P's `workoutIn` rule, taken as the board asked
+ * ("a live row whose block is in the scope", 2026-11-17).
  */
 export async function prescriptionLiveIn(
   exec: Executor,

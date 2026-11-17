@@ -3,7 +3,7 @@
 scope, prescriptionPublicId)` (`packages/db/src/queries/day/prescription-live-in.ts`) answers
   whether an id names a live prescription of one of the household's live programs; a malformed id is
   `false`. After the row writer answers `not_found`, 12b's day DAL checks the workout first (lane P's
-  `workoutInHousehold`), then the prescription, and reports only the first miss, as the program
+  planned `workoutInHousehold`, step 6a-iii, not written yet), then the prescription, and reports only the first miss, as the program
   builder's `reportProgramMiss` does. `db:verify` proves it against another household, an unknown id,
-  a hidden prescription and a hidden program; mutations 251 and 252 drop its household and liveness
-  conjuncts.
+  a legacy program, a hidden prescription and a hidden program; mutations 251–254 drop its
+  household, liveness, template and program-liveness conjuncts.

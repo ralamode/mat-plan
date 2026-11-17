@@ -1579,6 +1579,12 @@ async function verifyRules(): Promise<void> {
         false,
         "FAM-1 12b: prescriptionLiveIn: F does not find H's prescription",
       );
+      // The id is compared by value, so a later text or JS-side comparison fails here (C25).
+      assert.equal(
+        await isIn(H_SCOPE, publicId.toUpperCase()),
+        true,
+        'FAM-1 12b: prescriptionLiveIn: an upper-case spelling of its own id is found',
+      );
       assert.equal(
         await isIn(H_SCOPE, 'not-a-uuid'),
         false,
@@ -1588,6 +1594,33 @@ async function verifyRules(): Promise<void> {
         await isIn(H_SCOPE, newId()),
         false,
         'FAM-1 12b: prescriptionLiveIn: an unknown id is false',
+      );
+      // A live prescription of a LIVE legacy block of H's own: not a program the day page logs to.
+      const [legacy] = await sp
+        .insert(schema.programBlocks)
+        .values({
+          publicId: newId(),
+          householdId: H.householdId,
+          slug: 'verify-12b-legacy',
+          name: 'Legacy program',
+          kind: PROGRAM_BLOCK_KIND.legacy,
+        })
+        .returning({ id: schema.programBlocks.id });
+      const [legacyRx] = await sp
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId: legacy.id,
+          dayRole: 'strength',
+          movementId: H.movements.get('dbbench')!,
+          idx: 0,
+          sets: 3,
+        })
+        .returning({ publicId: schema.prescriptions.publicId });
+      assert.equal(
+        await isIn(H_SCOPE, legacyRx.publicId),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a prescription of a legacy program is false',
       );
       await sp
         .update(schema.prescriptions)
@@ -1613,7 +1646,7 @@ async function verifyRules(): Promise<void> {
       );
     });
     console.log(
-      '✓ FAM-1 12b: prescriptionLiveIn (own, other household, malformed, hidden, hidden program)',
+      '✓ FAM-1 12b: prescriptionLiveIn (own, other household, malformed, legacy, hidden, hidden program)',
     );
   });
 }
