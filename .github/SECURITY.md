@@ -340,10 +340,17 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
     or incoherent report, or a committed setting that disarmed the audit. The only lenient case is an
     unreachable registry on a PR that changes no dependency input, which warns: a registry outage must
     not be a merge outage. It is never lenient on `main`. The guard's header has the mechanics.
-  - **There is no suppression mechanism** (deferred to SEC-5c). Until one exists, the escape from a
-    production advisory is to fix it, re-classify the dependency as dev if that is honest, or merge
-    red. And an advisory's `patched_versions` is never evidence that a fix exists — pnpm infers that
-    field, and this repo's own `braces` high names a version that was never released.
+  - **The one escape that keeps the gate green is a reasoned, expiring exception** (SEC-5c,
+    [plan](../docs/plans/sec-5c-advisory-exceptions.md)), only when **no fix is published**: an entry
+    in `.github/audit-exceptions.json` naming the advisory, its module, `high` (a `critical` is never
+    exceptable), every reported path, the exposure reasoning, and dates no more than 30 days apart,
+    `added` never in the future. It fails when it expires, when it excepts nothing, or when a listed
+    path is no longer reported, and every run that uses one prints a warning naming it. Renewing is a
+    reviewed PR that re-checks that no fix exists, and **any diff to that file is itself a review flag**
+    (CI runs the PR's own copy of the guard). Otherwise the escape is to fix it, re-classify the
+    dependency as dev if that is honest, or merge red. An advisory's `patched_versions` is never
+    evidence that a fix exists — pnpm infers that field, and this repo's own `braces` high names a
+    version that was never released.
 - **Every GitHub Action is pinned to a full commit SHA with a bare `# vX.Y.Z` comment** (SEC-2,
   [plan](../docs/plans/sec-2-pin-actions.md)); this is the one statement of the rule. A tag can be
   moved by whoever controls it, and `migrate.yml` holds the prod DB credential. Nothing may follow the
