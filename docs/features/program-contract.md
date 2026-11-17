@@ -352,11 +352,13 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       database keeps the workout's name on the session and has nowhere to keep that label.
 
 25. **An id in a `DayWorkout` is one the household can use now** (contract change C21, from 12a-i's
-    code review). `programPublicId` is non-null only for a live program, which is then in
-    `DayPlan.programs`; `workoutPublicId` only for a live workout of a live program. Hidden or
-    purged, the id is `null` and the frozen name remains. A logged workout that is no longer live
-    shows like one that left the week, with every item built from its entries alone and
-    `progress` 0 of 0, so a hidden program's own text never reappears. No FAM-1 action hides a
+    code review). `programPublicId` is non-null only for a live program; `workoutPublicId` only for
+    a live workout of a live program. Hidden or purged, the id is `null` and the frozen name
+    remains. `DayPlan.programs` and `currentPrograms` hold live programs only. A logged workout
+    that is no longer live has `scheduled: false` and no label, as one that left the week does,
+    and further has no description, every item built as a removed item is, and `progress` 0 of 0,
+    so a hidden program's own text never reappears. (A workout that merely left the week is still
+    live and keeps its description, its live items and its count.) No FAM-1 action hides a
     program, and no fixture holds this: the day resolver's own proof does.
 
 ## Traps
