@@ -7,7 +7,7 @@ import { bodyweightSection, changePrefix, isoDaysAgo, SEED_PROFILE_ROUTE } from 
 /**
  * Day navigation (V1-15).
  *
- * Motivated by a real confusion: Ray logged a session from a tab left open overnight and could not
+ * Motivated by a real confusion: the maintainer logged a session from a tab left open overnight and could not
  * tell which date it wrote to. The date is now in the URL, so the question is answerable by looking.
  */
 
@@ -18,8 +18,9 @@ test('yesterday is reachable even on a profile created today', async ({ page }) 
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
   const nav = page.getByRole('navigation', { name: 'Change day' });
   await expect(nav.getByRole('link', { name: /^Previous day/ })).toBeVisible();
-  // Forward IS at its bound on today — the future is never reachable, and it says so as a disabled
-  // button rather than a missing control.
+  // Forward IS at its bound on today for an athlete on no program — look-ahead goes forward only
+  // while on a program the next day (FAM-1 12c) — and it says so as a disabled button rather than a
+  // missing control.
   await expect(nav.getByRole('button', { name: /^Next day/ })).toBeDisabled();
 });
 
@@ -41,10 +42,13 @@ test('a dated URL renders that day, and paging forward from it returns toward to
 test('yesterday KEEPS its forms — the UI must not be stricter than the server', async ({
   page,
 }) => {
-  // The server accepts a write within ±1 day (resolveDeclaredDay). A UI that hid yesterday's forms
-  // would refuse what the endpoint allows — and it is exactly how Ray's 09/29 session, submitted on
-  // 09/30 from a stale tab, succeeded.
+  // The server accepts a write for today and yesterday (resolveDeclaredDay). A UI that hid
+  // yesterday's forms would refuse what the endpoint allows — and it is exactly how the maintainer's
+  // 09/29 session, submitted on 09/30 from a stale tab, succeeded.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
+  // The date line names it (FAM-1 12c, v12's day label), so a pinned tab opened the next morning
+  // says it is yesterday.
+  await expect(page.getByText(/^Yesterday ·/)).toBeVisible();
   // A writable day offers the weigh-in: the field, or once logged, Change. A read-only day shows
   // neither, so this is the assertion that can fail.
   const section = bodyweightSection(page);
@@ -61,6 +65,8 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
 // unreachable here. The gating logic is unit-tested (`isWritableDay`), but this path has no e2e.
 // Closing it needs a backdated fixture profile; noted rather than left as a silent gap.
 
+// A future day for an athlete on no program renders today (FAM-1 12c: look-ahead is only while on a
+// program); the seed athletes have none until step 6c's fixtures, so this is that case.
 test('the future is clamped, and a malformed date renders today rather than 404ing', async ({
   page,
 }) => {

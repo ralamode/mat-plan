@@ -4,7 +4,7 @@ import { type DayItem } from '@mat-plan/shared';
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS, NAME_WRAP_CLASS, SAVING_LABEL } from '@/lib/constants';
+import { INPUT_CLASS, NAME_WRAP_CLASS, SAVING_LABEL, TICK_FOCUS_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
@@ -32,16 +32,6 @@ export const LOGGED_CARD_CLASS = 'border-done';
 export const TINT_CLASS = 'bg-done-surface';
 export const secondaryText = (onTint: boolean) =>
   onTint ? 'text-done-muted-foreground' : 'text-muted-foreground';
-
-/**
- * The ✓'s focus ring (design.md): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
- * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
- *
- * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline
- * style to `none` through a variable that `outline-3` reads, so without it no ring is drawn.
- */
-export const TICK_FOCUS_CLASS =
-  'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
 /**
  * A field's focus ring: the ✓'s foreground outline, since `INPUT_CLASS`'s `ring-ring/50` is under 3:1

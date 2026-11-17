@@ -699,6 +699,17 @@ export const LIFE_COPY = {
  */
 export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus-visible:ring-3';
 
+/**
+ * The ✓'s focus ring (design.md), and any Tab stop that needs one at ≥3:1 (the day page's athlete
+ * switcher, FAM-1 12c): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
+ * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
+ *
+ * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline
+ * style to `none` through a variable that `outline-3` reads, so without it no ring is drawn.
+ */
+export const TICK_FOCUS_CLASS =
+  'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
+
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
 
