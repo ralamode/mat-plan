@@ -38,6 +38,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { resolveDayPlan, type ResolvedDayPlan } from '../../src/queries/day/day-plan';
+import { prescriptionLiveIn } from '../../src/queries/day/prescription-live-in';
 import type { HouseholdScope } from '../../src/scope';
 import { logRow, untickRow } from '../../src/writers/day/log-row';
 import { hideEntries } from '../../src/writers/hide';
@@ -1564,5 +1565,55 @@ async function verifyRules(): Promise<void> {
       );
     });
     console.log('✓ FAM-1 12a E4: bodyweight, practice and check-in never enter a DayPlan');
+
+    // ── prescriptionLiveIn: 12b's scope-miss read, the same `false` for every miss ──
+    await inSavepoint(tx, async (sp) => {
+      const pId = H.prescriptions.get('w2:dbbench')!;
+      const publicId = H.ids.get(fixtureIds.prescription('w2', 'dbbench'))!;
+      const blockId = H.blocks.get('p1')!;
+      const isIn = (scope: HouseholdScope, id = publicId) =>
+        prescriptionLiveIn(asTx(sp), scope, id);
+      assert.equal(await isIn(H_SCOPE), true, 'FAM-1 12b: prescriptionLiveIn finds its own');
+      assert.equal(
+        await isIn(F_SCOPE),
+        false,
+        "FAM-1 12b: prescriptionLiveIn: F does not find H's prescription",
+      );
+      assert.equal(
+        await isIn(H_SCOPE, 'not-a-uuid'),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a malformed id is false',
+      );
+      assert.equal(
+        await isIn(H_SCOPE, newId()),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: an unknown id is false',
+      );
+      await sp
+        .update(schema.prescriptions)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.prescriptions.id, pId));
+      assert.equal(
+        await isIn(H_SCOPE),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a hidden prescription is false',
+      );
+      await sp
+        .update(schema.prescriptions)
+        .set({ deletedAt: null })
+        .where(eq(schema.prescriptions.id, pId));
+      await sp
+        .update(schema.programBlocks)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.programBlocks.id, blockId));
+      assert.equal(
+        await isIn(H_SCOPE),
+        false,
+        'FAM-1 12b: prescriptionLiveIn: a prescription of a hidden program is false',
+      );
+    });
+    console.log(
+      '✓ FAM-1 12b: prescriptionLiveIn (own, other household, malformed, hidden, hidden program)',
+    );
   });
 }

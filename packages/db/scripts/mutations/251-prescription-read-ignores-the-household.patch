@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/day/prescription-live-in.ts b/packages/db/src/queries/day/prescription-live-in.ts
+index 96909b63..0ce08255 100644
+--- a/packages/db/src/queries/day/prescription-live-in.ts
++++ b/packages/db/src/queries/day/prescription-live-in.ts
+@@ -34,7 +34,6 @@ export async function prescriptionLiveIn(
+       and(
+         eq(schema.prescriptions.publicId, prescriptionPublicId),
+         isNull(schema.prescriptions.deletedAt),
+-        liveTemplateBlockIn(scope),
+       ),
+     )
+     .limit(1);
