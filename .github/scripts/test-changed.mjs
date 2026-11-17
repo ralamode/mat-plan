@@ -77,14 +77,26 @@ const git = (root, args) =>
 const nul = (s) => s.split('\0').filter(Boolean);
 
 /**
- * The files vitest's `--changed <base>` sees (cli-api: `base...HEAD`, staged, other + modified), with
- * `--no-renames` so a move's source path counts too.
+ * The files this push carries: the COMMITTED diff `base...HEAD`, with `--no-renames` so a move's
+ * source path counts too.
+ *
+ * 🔴 **Commits only, never the working tree** (2026-11-17). An earlier version used vitest's
+ * `--changed <base>`, which also counts staged, unstaged and untracked files. A worktree with a
+ * mutation patch left applied, or with other local edits, then selected tests the push never carried:
+ * lane E's db-and-docs push ran the editor suites for about 22 minutes under load. A push sends
+ * commits, so the hook tests commits.
  */
 export function changedFiles(root, base) {
   return [
+    ...new Set(nul(git(root, ['diff', '--name-only', '--no-renames', '-z', `${base}...HEAD`]))),
+  ].sort();
+}
+
+/** Local changes the push does not carry: reported, never tested here. */
+export function uncommitted(root) {
+  return [
     ...new Set([
-      ...nul(git(root, ['diff', '--name-only', '--no-renames', '-z', `${base}...HEAD`])),
-      ...nul(git(root, ['diff', '--cached', '--name-only', '--no-renames', '-z'])),
+      ...nul(git(root, ['diff', '--cached', '--name-only', '-z'])),
       ...nul(git(root, ['ls-files', '-z', '--other', '--modified', '--exclude-standard'])),
     ]),
   ].sort();
@@ -139,6 +151,14 @@ const vitest = (root, args) =>
     stdio: 'inherit',
   }).status ?? 1;
 
+/** `vitest related --run --passWithNoTests <files>`: the tests whose import graph reaches `files`. */
+const vitestRelated = (root, files) =>
+  spawnSync(
+    'pnpm',
+    ['--filter', 'web', 'exec', 'vitest', 'related', '--run', '--passWithNoTests', ...files],
+    { cwd: root, stdio: 'inherit' },
+  ).status ?? 1;
+
 function main(argv) {
   const flag = (name) => argv.includes(name);
   const at = argv.indexOf('--base');
@@ -150,9 +170,16 @@ function main(argv) {
   }
   const base = defaultBase(at >= 0 ? argv[at + 1] : undefined);
   const plan = select(changedFiles(root, base), scannerFiles);
+  const local = uncommitted(root);
   if (flag('--dry-run')) {
     print(plan, base);
+    for (const f of local) console.log(`untested-local: ${f}`);
     return 0;
+  }
+  if (local.length) {
+    console.log(
+      `test-changed: ${local.length} uncommitted file(s) are not part of this push and are not tested here.`,
+    );
   }
   if (plan.mode === 'none') {
     console.log(`test-changed: ${plan.reason}.`);
@@ -168,7 +195,14 @@ function main(argv) {
   );
   // Both run even if the first fails, so one push reports everything it would have caught.
   // `--passWithNoTests`: a changed file no test imports is "nothing reached", not a failure.
-  const traced = plan.traced.length ? vitest(root, ['--changed', base, '--passWithNoTests']) : 0;
+  // `vitest related` takes the committed files as ABSOLUTE paths: it resolves a path against its own
+  // root (apps/web), so a repo-relative path would silently match nothing.
+  const traced = plan.traced.length
+    ? vitestRelated(
+        root,
+        plan.traced.map((f) => join(root, f)),
+      )
+    : 0;
   const scanned = plan.scanners.length
     ? vitest(
         root,

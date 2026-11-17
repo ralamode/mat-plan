@@ -46,15 +46,32 @@ g commit -qam 'feat: lb'
 out="$(dry)"
 if has "$out" 'mode: changed' && has "$out" 'traced: packages/shared/src/units.ts' &&
   has "$out" 'scanner: apps/web/app/pages-need-a-session.test.ts'; then
-  ok 'a packages/shared file is handed to vitest --changed (which reaches its test), plus the scanners'
+  ok 'a committed packages/shared file is traced (vitest related reaches its test), plus the scanners'
 else bad 'packages/shared change' "$out"; fi
 
 reset
 put 'apps/web/app/p/[profileId]/new/page.tsx' 'export default function Page() {}'
-out="$(dry)" # untracked, as vitest's --changed also counts it
+g add -A && g commit -qm 'feat: a page'
+out="$(dry)"
 if has "$out" 'scanner: apps/web/app/pages-need-a-session.test.ts'; then
-  ok 'a new page.tsx (untracked) selects pages-need-a-session'
+  ok 'a new committed page.tsx selects pages-need-a-session'
 else bad 'new page.tsx' "$out"; fi
+
+# 🔴 The working tree is not the push (2026-11-17: an applied mutation patch made a db push run the
+# editor suites). An uncommitted edit is reported, never traced.
+reset
+put packages/shared/src/units.ts 'export const UNITS = ["kg", "st"];' # modified, NOT committed
+put docs/guide.md '# guide, revised'
+g commit -qam 'docs: guide' -- docs/guide.md
+out="$(dry)"
+if has "$out" 'untested-local: packages/shared/src/units.ts' && ! printf '%s' "$out" | grep -q '^traced:'; then
+  ok 'an uncommitted edit is reported as untested-local and never traced'
+else bad 'uncommitted edit' "$out"; fi
+
+# The real run must not hand vitest --changed (which re-adds the working tree).
+if ! grep -qE "'--changed'" "$script" && grep -qF "'related'" "$script"; then
+  ok 'the real run uses vitest related on committed files, never --changed'
+else bad 'the run still uses --changed'; fi
 
 reset
 put docs/privacy/notice.md '# notice, revised'
