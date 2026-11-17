@@ -3199,7 +3199,7 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   );
 }
 
-// ── Lane A tech-debt: four CHECKs added NOT VALID (migration 0029; validated by the next) ──────────
+// ── Lane A tech-debt: four CHECKs added NOT VALID (migration 0029; validated by PR 2) ──────────────
 
 /** The four constraints 0029 adds NOT VALID; the validating migration flips each to valid. */
 const TECH_DEBT_CHECKS = [

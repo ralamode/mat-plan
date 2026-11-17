@@ -1,5 +1,5 @@
--- Lane A tech-debt, PR 1 of 2: four CHECKs on populated tables, added NOT VALID (validated by the next
--- migration, in its own PR). Ledger: docs/tech-debt.md ("program_blocks.name has no length CHECK"; "A
+-- Lane A tech-debt, PR 1 of 2: four CHECKs on populated tables, added NOT VALID (validated by a later
+-- migration, in PR 2). Ledger: docs/tech-debt.md ("program_blocks.name has no length CHECK"; "A
 -- logged quantity's CHECK admits NaN"). The maintainer chose two PRs for all four, and to include the
 -- entries value (2026-11-16).
 --
