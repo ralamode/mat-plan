@@ -4,15 +4,11 @@ import { isBlankEntry, type Unit } from '@mat-plan/shared';
 import { useActionState, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import {
-  AMEND_COPY,
-  changeLabel,
-  INPUT_CLASS,
-  SAVING_LABEL,
-  type SingleValueCopy,
-} from '@/lib/constants';
+import { InlineEditActions } from '@/components/ui/inline-edit-actions';
+import { AMEND_COPY, changeLabel, INPUT_CLASS, type SingleValueCopy } from '@/lib/constants';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 
+import { TickedCopy } from './log-tick';
 import { useSingleValueLive } from './single-value-live';
 
 /** What a submit answered, in the editor's own terms: each row's wrapper maps its action to this. */
@@ -21,7 +17,7 @@ export type AmendOutcome = { ok: true } | { ok: false; error: string; field?: st
 const NOT_SUBMITTED: AmendOutcome = { ok: true };
 
 /**
- * Change an already-logged single value, or clear it with a blank Save (V1-24 3b-bw W5; shared with
+ * Change an already-logged single value, or clear it with a blank ✓ (V1-24 3b-bw W5; shared with
  * practice at 3b-life A2). The bodyweight and practice rows pass their copy, their field's name and
  * keypad, and a `submit` that runs their action and maps its answer to an `AmendOutcome`.
  *
@@ -30,25 +26,36 @@ const NOT_SUBMITTED: AmendOutcome = { ok: true };
  * A day before yesterday is read-only (`dayPageFlags`), so the section does not pass this control
  * there, and both actions refuse it too: they bound the write by the row's own day.
  *
- * ## The editor STACKS, and that is not styling
+ * ## The editor drops beneath the value, and its line never wraps
  *
- * At 360px the row has ~294px usable and an inline editor is wider. Flex would WRAP it, not overflow,
- * so the number being corrected would land in a narrow box in the gutter, and neither CI gate can see
- * that. So the form is `w-full` and drops beneath the value deterministically, then stacks inside
- * itself. This is the one full statement of that argument; the receipts, the a11y spec and the
- * screenshot script point here.
+ * At 360px the row has ~294px usable, and an editor beside the value would WRAP, not overflow, so the
+ * number being corrected would land in a narrow box in the gutter, and neither CI gate can see that.
+ * So the form is `w-full` and drops beneath the value deterministically. Its first line is the field,
+ * the unit and the icon-only ✓ / ✕ (`InlineEditActions`, maintainer 2026-11-16): ~139px fixed, so the
+ * field (`flex-1 min-w-0`) keeps ~155px. That line is `flex` with NO `flex-wrap`: a ✕ dropped onto its
+ * own line would pass every gate, so the a11y spec measures that the pair shares the field's row. The
+ * hint and any error sit beneath. This is the one full statement of that argument; the receipts, the
+ * a11y spec and the screenshot script point here.
  *
  * ## The unit is text, never a picker
  *
  * A two-option picker beside the number is one thumb-drag from turning `84.5 lb` into `84.5 kg`.
  * Each writer pins the unit, so a crafted mismatch matches no row.
  *
- * ## A blank Save clears, and says so before it is tapped
+ * ## A blank ✓ clears, and the hint says so before it is tapped
  *
- * While the field is empty after trim, Save reads **Clear** (destructive), and the line under the field
- * always says how the value is removed. `isBlankEntry` is the one predicate the label, the report and
- * the server share. An archived athlete (`canClear` false) keeps Save and no hint, and a blank is
- * refused: their page has no empty field to re-enter a cleared value into.
+ * The ✓ looks the same whether it saves or clears (maintainer, 2026-11-16: no red Clear, no trash);
+ * the line under the field always says a blank clears, and the ✓'s NAME follows the same predicate
+ * as the clear (`clears`): `Clear bodyweight` while it would clear. `isBlankEntry` is the one
+ * predicate the name, the report and the server share. An archived athlete (`canClear` false) keeps
+ * the save name and no hint, and a blank is refused: their page has no empty field to re-enter a
+ * cleared value into.
+ *
+ * ## Escape cancels, from anywhere in the editor, but never mid-save
+ *
+ * The form catches it, so it works from the field and from either button. While a save is in flight
+ * it does nothing: the write would still land behind a closed editor (the ✕ hides for the same
+ * reason).
  */
 export function SingleValueAmend({
   logged,
@@ -146,6 +153,13 @@ export function SingleValueAmend({
   const blank = isBlankEntry(value);
   const clears = blank && canClear;
   const valueErr = blankRefused ? copy.blankSave : fresh && !state.ok ? state.field : undefined;
+  const saveLabel = clears ? copy.clearLabel : AMEND_COPY.saveLabel(changeSubject);
+  const cancel = () => {
+    setEditing(false);
+    live.dismiss();
+    // The editor is about to unmount; hand focus back to the Change that opened it.
+    live.claimFocus(['change']);
+  };
   const describedBy =
     // A kept "already logged" alert (the only one that survives Change opening) names the number
     // that was not saved, so the field this editor focuses is described by it too.
@@ -188,6 +202,12 @@ export function SingleValueAmend({
           inputRef.current?.focus();
         }
       }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!pending) cancel();
+      }}
       className="flex w-full flex-col gap-2"
     >
       {/* Guards and the address, not edits: each writer pins what it must. `seenValue` is what makes
@@ -197,6 +217,7 @@ export function SingleValueAmend({
       ))}
       <input type="hidden" name="seenValue" value={logged.value} readOnly />
 
+      {/* No flex-wrap: the ✓ and ✕ stay on the field's line (the docblock's width math). */}
       <div className="flex items-center gap-2">
         <label htmlFor={ids.value} className="sr-only">
           {fieldLabel}
@@ -218,11 +239,17 @@ export function SingleValueAmend({
           }}
           aria-invalid={valueErr ? true : undefined}
           aria-describedby={describedBy}
-          className={`${INPUT_CLASS} w-24`}
+          className={`${INPUT_CLASS} min-w-0 flex-1`}
         />
         <span aria-hidden="true" className="text-base">
           {logged.unit}
         </span>
+        <InlineEditActions
+          confirm={{ label: saveLabel, type: 'submit' }}
+          cancelLabel={AMEND_COPY.cancelLabel(changeSubject)}
+          onCancel={cancel}
+          pending={pending}
+        />
       </div>
 
       {canClear ? (
@@ -231,54 +258,11 @@ export function SingleValueAmend({
           {copy.clearHint}
         </p>
       ) : null}
-      {/* ABOVE the buttons, so a wrapped 360px editor never pushes the message out of reach. */}
       {valueErr ? (
         <p id={ids.error} role="alert" className="text-destructive text-sm">
-          {valueErr}
+          <TickedCopy text={valueErr} buttonLabel={saveLabel} />
         </p>
       ) : null}
-
-      {/* v12's order: Cancel, then the action. */}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={pending}
-          className="flex-1"
-          onClick={() => {
-            setEditing(false);
-            live.dismiss();
-            // Cancel is about to unmount; hand focus back to the Change that opened the editor.
-            live.claimFocus(['change']);
-          }}
-        >
-          {AMEND_COPY.cancel}
-        </Button>
-        <Button
-          type="submit"
-          size="sm"
-          variant={clears ? 'destructive' : 'default'}
-          disabled={pending}
-          aria-label={clears && !pending ? copy.clearLabel : undefined}
-          // The destructive variant's own fill (`bg-destructive/10`) puts its red text under AA even on
-          // a plain surface (a11y.spec.ts scans this state), so Clear keeps the red text and a red
-          // edge on the page's own background, and its hover stays a faint tint.
-          className={
-            clears
-              ? 'border-destructive/60 hover:bg-destructive/5 dark:hover:bg-destructive/10 flex-1 bg-transparent dark:bg-transparent'
-              : 'flex-1'
-          }
-        >
-          {pending
-            ? clears
-              ? copy.clearing
-              : SAVING_LABEL
-            : clears
-              ? copy.clear
-              : AMEND_COPY.save}
-        </Button>
-      </div>
     </form>
   );
 }

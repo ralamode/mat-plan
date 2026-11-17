@@ -418,7 +418,7 @@ const STATES = {
   // V1-24 3b-bw — today's ✓ row under a "Last time" line: the closed-day fixture leaves an earlier
   // weigh-in and an empty today, so the line names its weekday or date.
   'bodyweight-last-time': seedClosedDays,
-  // V1-24 3b-bw — the editor with its field emptied (Save reads Clear), and the row after the clear.
+  // V1-24 3b-bw — the editor with its field emptied (the ✓ named Clear), and the row after the clear.
   // Interaction states on top of the already-logged fixture.
   'bodyweight-clear-armed': seedAlreadyLogged,
   'bodyweight-cleared': seedAlreadyLogged,
@@ -763,7 +763,9 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
     await section.getByRole('button', { name: /^Change weight/ }).click();
     await section.getByLabel(/^Weight \(/).fill('845');
-    await section.getByRole('button', { name: AMEND_COPY.save }).click();
+    await section
+      .getByRole('button', { name: AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject) })
+      .click();
     await section.getByRole('alert').waitFor();
   },
   'practice-editing': async (page) => {

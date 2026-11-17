@@ -383,22 +383,41 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   await section.getByRole('button', { name: /^Change weight/ }).click();
   await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
   await expectNoAxeViolations(page, 'weigh-in (editing)');
-  // V1-24 3b-bw: emptied, Save reads Clear in the destructive style (the row drops its tint while editing).
+  // Emptied, the ✓ is named Clear (same look; the hint says a blank clears; the row drops its tint
+  // while editing).
   const editorField = section.getByLabel(/^Weight \(/);
   await editorField.fill('');
   const clear = section.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel });
   await expect(clear).toBeVisible();
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
-  await expectNoAxeViolations(page, 'weigh-in (editing, Save reads Clear)');
+  await expectNoAxeViolations(page, 'weigh-in (editing, the ✓ named Clear)');
   // …and with a field error under it: the error text is the pair the done tint must never carry
   // (`app/done-tokens.test.ts`), which is why the row drops its tint while the editor is open.
   await editorField.fill('845');
-  await section.getByRole('button', { name: AMEND_COPY.save }).click();
+  await section
+    .getByRole('button', { name: AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject) })
+    .click();
   await expect(section.getByRole('alert')).toHaveText(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
   await expectNoAxeViolations(page, 'weigh-in (editing, a refused value)');
   await editorField.fill(widest);
   await expectTapTargets(page, 'weigh-in (editing)');
   await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');
+
+  // The icon-only ✓ and ✕ share the FIELD's line at 360px, each a full 44px wide (maintainer,
+  // 2026-11-16). None of the gates above sees a ✕ wrapped onto its own line (`single-value-amend.tsx`).
+  const editorBox = (await editorField.boundingBox())!;
+  for (const name of [
+    AMEND_COPY.saveLabel(BODYWEIGHT_COPY.changeSubject),
+    AMEND_COPY.cancelLabel(BODYWEIGHT_COPY.changeSubject),
+  ]) {
+    const box = (await section.getByRole('button', { name }).boundingBox())!;
+    expect(box.width, `${name} is at least 44px wide`).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+    expect(
+      Math.abs(editorBox.y + editorBox.height / 2 - (box.y + box.height / 2)),
+      `${name} sits on the field's line at 360px`,
+    ).toBeLessThanOrEqual(2);
+    expect(box.x, `${name} is right of the field`).toBeGreaterThan(editorBox.x + editorBox.width);
+  }
 });
 
 /**

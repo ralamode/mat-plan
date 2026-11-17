@@ -171,13 +171,15 @@ export async function changePractice(page: Page, from: string, minutes: string):
   await practiceChange(page, from).click();
   const field = life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
   await field.fill(minutes);
-  await life.getByRole('button', { name: AMEND_COPY.save, exact: true }).click();
+  await life
+    .getByRole('button', { name: AMEND_COPY.saveLabel(PRACTICE_COPY.changeSubject), exact: true })
+    .click();
   const to = formatValueUnit(Number(minutes), PRACTICE_UNIT);
   await expect(practiceChange(page, to)).toBeFocused({ timeout: 15_000 });
   await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedChanged(to));
 }
 
-/** Clear the logged practice shown as `from`: empty the field, Save reads Clear; the cleared line is
+/** Clear the logged practice shown as `from`: empty the field, the ✓ is named Clear; the cleared line is
  * shown and focus lands on the empty minutes field that comes back (V1-24 3b-life A3, A4). */
 export async function clearPractice(page: Page, from: string): Promise<void> {
   const life = lifeSection(page);

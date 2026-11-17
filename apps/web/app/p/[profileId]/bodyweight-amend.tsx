@@ -30,7 +30,7 @@ export function BodyweightAmend({
       logged={logged}
       canClear={canClear}
       copy={BODYWEIGHT_COPY}
-      changeSubject="weight"
+      changeSubject={BODYWEIGHT_COPY.changeSubject}
       fieldLabel={AMEND_COPY.valueLabel(logged.unit)}
       inputMode="decimal"
       parse={parseTypedWeight}

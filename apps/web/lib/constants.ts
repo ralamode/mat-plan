@@ -709,11 +709,12 @@ export const LOGGED_SR_LABEL = 'Logged';
  * The copy a single value's Change editor and its island share (V1-24 3b-life A2): one template per
  * subject, so bodyweight and practice cannot drift into two spellings of "changed to" or "cleared".
  *
- * - `clear` / `clearLabel`: Save's label while the editor's field is empty (plan W5), and its name.
- * - `clearing`: Clear's pending label; it names the act, as `SAVING_LABEL` does.
- * - `clearHint`: always under the open editor, so a blank Save is never a surprise. "Clear", not
+ * - `clearLabel`: the ✓'s accessible name while the editor's field is empty and a ✓ clears (plan W5;
+ *   the icon-only pair, 2026-11-16). The ✓ looks the same either way; the hint says a blank clears.
+ * - `clearHint`: always under the open editor, so a blank ✓ is never a surprise. "Clear", not
  *   "remove": the row is hidden, not erased, until `PRIV-3` (delete-and-restore.md's trap).
- * - `blankSave`: an archived athlete's empty Save, refused (there is no field to re-enter into).
+ * - `blankSave`: an archived athlete's empty ✓, refused (there is no field to re-enter into). It names
+ *   the ✓, so it renders through `TickedCopy` and a screen reader hears the ✓'s name.
  * - `announced*`: what the live region says (plan W6); a clear's line is SHOWN as well, because it
  *   leaves nothing else on screen.
  */
@@ -724,9 +725,7 @@ function singleValueCopy(o: {
   blankSave: string;
 }) {
   return {
-    clear: 'Clear',
     clearLabel: o.clearLabel,
-    clearing: 'Clearing…',
     clearHint: o.clearHint,
     blankSave: o.blankSave,
     announcedLogged: LIFE_COPY.announced(o.subject),
@@ -787,11 +786,13 @@ export const BODYWEIGHT_COPY = {
   },
   /** A read-only day with nothing logged (v12, and Life's) — otherwise the section is a bare heading. */
   noneOnClosedDay: NOTHING_LOGGED,
+  /** `changeLabel`'s subject (`Change weight — 84.5 lb`), and the inline ✓ / ✕ names'. */
+  changeSubject: 'weight',
   ...singleValueCopy({
     subject: 'Bodyweight',
     clearLabel: 'Clear bodyweight',
     clearHint: 'To clear this weigh-in, leave the field empty.',
-    blankSave: 'Enter your bodyweight, then Save.',
+    blankSave: 'Enter your bodyweight, then ✓.',
   }),
 } as const;
 
@@ -823,7 +824,7 @@ export const PRACTICE_COPY = {
     // "That day", not "today": Change renders on yesterday too, the evening-after path this is for.
     clearHint:
       'To clear this practice, leave the field empty. Two practices that day? Enter the total.',
-    blankSave: 'Enter the minutes, then Save.',
+    blankSave: 'Enter the minutes, then ✓.',
   }),
   /** A refused amend or log (`bad_value`): the one rule, its range from the shared consts. */
   outOfRange: `Enter whole minutes, ${PRACTICE_MINUTES_MIN} to ${PRACTICE_MINUTES_MAX}.`,
@@ -888,6 +889,11 @@ export const AMEND_COPY = {
   change: 'Change',
   save: 'Save',
   cancel: 'Cancel',
+  /** The inline ✓'s name (`Save weight`): icon-only, so the name says what it saves. */
+  saveLabel: (subject: string) => `Save ${subject}`,
+  /** The inline ✕'s name (`Cancel changing weight`), shared by every inline Change, so two open
+   *  editors are not two identical "Cancel"s in a screen reader's list. */
+  cancelLabel: (subject: string) => `Cancel changing ${subject}`,
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */
   valueLabel: (unit: string) => `Weight (${unit})`,
