@@ -92,12 +92,12 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Gate (added at FAM-1 4b):** fixed before the step that makes save-workout reachable (6a's writer
   behind a screen). 0025 adds `prescriptions.notes` (up to `FREE_TEXT_NOTE_MAX` characters an adult types per exercise, which
   can hold health detail about a child), so the first failed save would put that text in the log.
-- **Partly fixed (FAM-1 7a-i):** a program write's error (create, rename, save a workout) is
-  rethrown by `apps/web/lib/dal/program/quiet-db-errors.ts` with only the operation, the error's
-  type, the SQLSTATE and the stack's frame lines, so the gate above is met. **Still open:** every
-  other writer. **Gate for the rest:** 12b, the first real ✓ _(FAM-1 board, 2026-11-17)_: that PR
-  moves the helper to `apps/web/lib/dal/` (shared) rather than copying it, and applies it in
-  `lib/dal/day/`; `lib/dal/entries.ts` and `lib/dal/profiles.ts` follow in `V1-9b` B1-2.
+- **Partly fixed (FAM-1 7a-i, 12b):** a program write's error (create, rename, save a workout), and
+  since 12b a day row write's (log, un-tick, re-tick), is rethrown by
+  `apps/web/lib/dal/quiet-db-errors.ts` (shared since 12b, moved out of `lib/dal/program/`) with only
+  the operation, the error's type, the SQLSTATE and the stack's frame lines, so the gate above is
+  met. **Still open:** `lib/dal/entries.ts` and `lib/dal/profiles.ts`, which follow in `V1-9b` B1-2
+  _(FAM-1 board, 2026-11-17)_.
 
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
