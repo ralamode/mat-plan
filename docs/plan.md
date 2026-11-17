@@ -2317,13 +2317,16 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   runbook's hand-maintained delete order, and the panel found exactly that class of defect by
   reading. _(Beta 0.)_
 
-  📐 **Planned 2026-11-13** ([plan](./plans/priv-3-guarded-deletion.md)); four-lens panel, plan only.
-  The work is four PRs:
+  📐 **Planned 2026-11-13, refreshed 2026-11-17** ([plan](./plans/priv-3-guarded-deletion.md)), plan
+  only. The work is four PRs:
   1. The shared per-household table list (`packages/db/src/household-graph.ts`) and its `db:verify`
-     catalog proof. `OPS-3` builds on this list.
+     catalog proof. `OPS-3` builds on this list, and FAM-1 step 5's athlete list becomes a filter of it.
   2. A delete core in `packages/db`, typed `OwnerScope`.
   3. The `erase-household` correction that wraps the core.
-  4. The per-athlete erasure the notice already promises.
+  4. `erase-athlete`, which scripts step 5's manual "Erase one athlete" runbook.
+
+  A household or athlete that still carries a committed seed id is refused until `SEC-6` re-keys it
+  (`OPS-2` Q2, _maintainer, 2026-11-16_).
 
   The purge window `N` (item 2) is a deferred section of the same plan, built after `V1-9b` B1-3. The
   plan proposes 30 days. ⚠️ **The plan recommends against the `--household` flag described above**: it
