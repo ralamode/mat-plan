@@ -236,6 +236,19 @@ export const dayPlanSchema = z.object({
 export type DayPlan = z.infer<typeof dayPlanSchema>;
 
 /**
+ * **A day that shows only what was logged**: not writable, and not a future day. That is a day
+ * before yesterday, and an archived athlete's today or yesterday (contract change C23).
+ *
+ * On such a day a workout nobody logged is absent from `workouts`, an item with no logged row is
+ * absent from its workout, and PREVIOUS is `null`. A future day is not one: it shows what is
+ * coming, with no rows. One function, so the fixture builder, the day resolver and the day screen
+ * (its "No workouts logged on <day>." line) ask the same question the same way.
+ */
+export function showsOnlyLogged(day: Pick<DayPlan, 'writable' | 'future'>): boolean {
+  return !day.writable && !day.future;
+}
+
+/**
  * The parts of a day, by name: one of `DayPlan.workouts`, one of its `items`, one of an item's
  * `rows`. Derived from the schemas above, so they are `DayPlan['workouts'][number]` and so on;
  * import these rather than re-deriving them.

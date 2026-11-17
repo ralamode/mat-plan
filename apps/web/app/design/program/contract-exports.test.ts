@@ -6,6 +6,7 @@ import {
   PLAIN_DECIMAL,
   QUANTITY_SLOT,
   quantityText,
+  showsOnlyLogged,
   slotQuantity,
   supersetLabels,
   TRACKING_TYPE,
@@ -122,6 +123,13 @@ describe('the helpers, with the arguments the lanes pass', () => {
     expectTypeOf(PLAIN_DECIMAL).toEqualTypeOf<RegExp>();
     const typed = ' 5.5 '.trim();
     expect(isPlainDecimal(typed)).toBe(PLAIN_DECIMAL.test(typed));
+  });
+
+  it('showsOnlyLogged takes a day plan, or just its two flags (C23)', () => {
+    expectTypeOf(showsOnlyLogged).toBeCallableWith(everyTypeOnce);
+    expectTypeOf(showsOnlyLogged).toBeCallableWith({ writable: false, future: false });
+    expectTypeOf(showsOnlyLogged(everyTypeOnce)).toEqualTypeOf<boolean>();
+    expect(showsOnlyLogged(everyTypeOnce)).toBe(false);
   });
 
   it('MONDAY_FIRST is weekdays, so each one indexes a program’s week', () => {

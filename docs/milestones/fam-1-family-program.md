@@ -264,7 +264,7 @@ gantt
 
   section In a row
   The contract, 5 PRs          :done, r0, 0, 5
-  Lane A's 7 PRs               :r1, 5, 12
+  Lane A's 7 PRs (merged)      :done, r1, 5, 12
   Lane P's 6 PRs               :r2, 12, 18
   Lane E's 6 PRs               :r3, 18, 24
   Lane B's 10 PRs              :r4, 24, 34
@@ -276,41 +276,41 @@ gantt
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
 
   section A · schema
-  3 tracking types             :crit, a1, 1, 2
-  4a-i, 1                      :crit, a2, 2, 3
-  4a-ii, 5b                    :crit, a3, 3, 4
-  4b                           :crit, a4, 4, 5
-  5                            :crit, a5, 5, 6
+  3 tracking types             :crit, done, a1, 1, 2
+  4a-i, 1                      :crit, done, a2, 2, 3
+  4a-ii, 5b                    :crit, done, a3, 3, 4
+  4b                           :crit, done, a4, 4, 5
+  5                            :crit, done, a5, 5, 6
 
   section P · program data
-  6a (three PRs)               :p1, 5, 6
+  6a (6a-i merged)             :active, p1, 5, 6
   6b                           :p2, 6, 7
   6c                           :p3, 7, 8
   6d                           :p4, 8, 9
 
   section E · day data
-  11a                          :e1, 4, 5
-  11b row writer               :crit, e2, 5, 7
+  11a                          :done, e1, 4, 5
+  11b row writer               :crit, done, e2, 5, 7
   12a-i the day's read         :crit, e3, 7, 8
   14, 11c                      :e4, 8, 9
   12a-ii replayed fixtures     :e5, 9, 10
 
   section B · builder
-  8a lists and program page    :b1, 1, 2
-  8 workout editor             :b2, 2, 3
-  8b supersets                 :b3, 3, 4
-  9 picker                     :b4, 4, 5
-  10 week editor               :b5, 5, 6
-  10b dialogs                  :b6, 6, 7
+  8a lists and program page    :done, b1, 1, 2
+  8 workout editor             :done, b2, 2, 3
+  8b supersets                 :done, b3, 3, 4
+  9 picker                     :done, b4, 4, 5
+  10 week editor               :done, b5, 5, 6
+  10b dialogs                  :done, b6, 6, 7
   7a-i, 7a-ii actions          :b7, 7, 8
   7b pages                     :b8, 8, 9
   15 put on, take off          :crit, b9, 10, 11
 
   section C · day page
-  13 rows and ✓                :c1, 1, 2
-  13b set rows, supersets      :c2, 2, 3
-  13b-ii Change                :c2b, 3, 4
-  13d look ahead, closed days  :c3, 3, 4
+  13 rows and ✓                :done, c1, 1, 2
+  13b set rows, supersets      :done, c2, 2, 3
+  13b-ii Change                :done, c2b, 3, 4
+  13d look ahead, closed days  :done, c3, 3, 4
   12b first real ✓             :crit, c4, 8, 9
   12c on the day page          :crit, c5, 9, 10
   12d Change                   :crit, c6, 10, 11
@@ -318,9 +318,9 @@ gantt
 
   section S · single values
   3b-page (merged)             :done, s1, 1, 2
-  3b-bw                        :s2, 2, 3
-  3b-0                         :s3, 6, 7
-  3b-life, B2-0                :s4, 7, 8
+  3b-bw                        :done, s2, 2, 3
+  3b-0                         :done, s3, 6, 7
+  3b-life (merged), B2-0       :active, s4, 7, 8
   B1-2                         :s5, 8, 9
   B2                           :s6, 10, 11
 
@@ -349,8 +349,12 @@ gantt
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's three takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged.** The contract's five PRs and the plan update were opened and merged on
-  2026-11-15, partly in parallel themselves; lane S's 3b-page merged the same day (#418).
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 29 of the 50). The
+  contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
+  themselves. Since then: all of lane A's chain; lane E's 11a and 11b; lane B's six screen steps
+  (8a to 10b); lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0 and 3b-life.
+  6a-i is merged and 6a-ii and 6a-iii are not, so 6a's bar is part merged; so is the bar that
+  holds 3b-life and B2-0. A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
