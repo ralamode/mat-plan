@@ -2,6 +2,35 @@ import { MOVEMENT_PICKER_GROUP_LABELS, type MovementPickerGroup } from '@mat-pla
 
 import { formatList, plural, quote } from '@/lib/i18n/plural';
 
+/** See `asTypedHint` below for why every word of it is load-bearing. */
+const asTypedHintText = (name: string) =>
+  `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
+
+const statusNoMatches = 'No matches.';
+/**
+ * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
+ * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
+ * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
+ * forms are named categories rather than a comparison, and a locale with more of them adds keys
+ * here instead of needing this sentence rewritten.
+ */
+const statusSomeWords = (n: number) =>
+  `${plural(n, {
+    one: `${n} movement matches`,
+    other: `${n} movements match`,
+  })} some of your words.`;
+/** The near misses' count: the same noun as the `near` heading (a test holds the two together). */
+const statusNear = (n: number) =>
+  plural(n, { one: `${n} similar name.`, other: `${n} similar names.` });
+/**
+ * Leads the create hint while a similar name is listed (UX panel, B1): the button carries the
+ * person's own spelling, so the hint next to it names the movement they may mean and says what to
+ * do, without claiming a typo. `where` is where the list sits from the button: above the footer in
+ * single mode, below the top in multi.
+ */
+const similarListed = (name: string, where: 'above' | 'below') =>
+  `${quote(name)} is ${where}. Tap it if that's the one.`;
+
 /**
  * Every string the movement picker shows — the picker itself, the card hint, the Save line and the
  * footer's guard copy (PICK-1 Decision 8, reuse S4).
@@ -33,6 +62,13 @@ export const MOVEMENT_PICKER_COPY = {
   household: 'Your household',
   matches: 'Matches',
   someWords: 'Matches some of your words',
+  /**
+   * Near misses (CAT-3 spec P4, P5), shown above `someWords`. ⚠️ **Interim wording: the prototype
+   * (P0) owns the final heading.** Not "Close spellings": the sheet's ✕ and its last button already
+   * say "Close", and a screen reader may voice the heading as the verb. Not "Did you mean": that
+   * tells someone who typed a new movement correctly that they misspelt it (UX panel, B1).
+   */
+  near: 'Similar names',
   groupLabel: (group: MovementPickerGroup) => MOVEMENT_PICKER_GROUP_LABELS[group],
 
   // ── Row tags, one per row by precedence (UX2 S2, UX3 4, UX1 8) ──────────────────────────────────
@@ -64,19 +100,21 @@ export const MOVEMENT_PICKER_COPY = {
    * precisely why it has to be a rule rather than a thing noticed later.
    */
   statusCount: (n: number) => plural(n, { one: `${n} match.`, other: `${n} matches.` }),
-  statusNoMatches: 'No matches.',
+  statusNoMatches,
+  statusSomeWords,
+  statusNear,
   /**
-   * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
-   * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
-   * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
-   * forms are named categories rather than a comparison, and a locale with more of them adds keys
-   * here instead of needing this sentence rewritten.
+   * The status with no matches (CAT-3 P5): "No matches." once, then each list's own count, similar
+   * names first, each only when it holds a row.
    */
-  statusSomeWords: (n: number) =>
-    `No matches. ${plural(n, {
-      one: `${n} movement matches`,
-      other: `${n} movements match`,
-    })} some of your words.`,
+  statusNone: (near: number, someWords: number) =>
+    [
+      statusNoMatches,
+      near > 0 ? statusNear(near) : null,
+      someWords > 0 ? statusSomeWords(someWords) : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
 
@@ -98,8 +136,12 @@ export const MOVEMENT_PICKER_COPY = {
    * PR that edits this string; promising it now would be the app telling someone a recovery exists
    * when it does not.
    */
-  asTypedHint: (name: string) =>
-    `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`,
+  asTypedHint: asTypedHintText,
+
+  similarListed,
+  /** Single mode's footer hint while a similar name is listed: the name, then the warning. */
+  asTypedHintNear: (similar: string, typed: string) =>
+    `${similarListed(similar, 'above')} ${asTypedHintText(typed)}`,
 
   // ── The card, and the Save line (PR 4 renders these; the strings live here) ─────────────────────
   /** The Movement field's button when no movement is chosen yet. */
