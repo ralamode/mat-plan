@@ -715,6 +715,14 @@ do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prin
   `sh -c` chain kept running). After stopping one, end the chain's processes, then run the check
   above and `git apply -R` what it prints.
 
+- 🔴 **A merge commit carried conflict markers, and Prettier hid them.** FAM-1 6b (#522): a merge's
+  output was cut short (`| tail -3`), only one of two conflicts was read, and `git add -A` committed
+  `data-inventory.md` with `<<<<<<<` in it. Prettier then rewrote the `>>>>>>>` lines as blockquotes
+  (`> > > > > > >`), so `format:check` stayed green, and the second-pass review found it.
+  → After a merge, list the conflicts with `git diff --name-only --diff-filter=U`, never from the
+  merge's own output, and before committing run
+  `git grep -nE '^(<<<<<<<|=======$|>>>>>>>)|^> > > > >' -- . ':!*.patch'`.
+
 - 🔴 **THE RECURRING ONE, named because it keeps coming back in different clothes: a proof whose
   EXPECTATION is derived from the thing it is proving.** Seven instances across `#364`–`PICK-1` PR 3,
   and the code was sound in every one — what was wrong was the proof. Two shapes:

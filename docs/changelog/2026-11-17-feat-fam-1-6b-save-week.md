@@ -11,6 +11,6 @@ FAM-1 step 6b, lane P: the database side of the week editor. Nothing in the app 
   workout twice on one day (`once_per_day`, whatever else is wrong, as the preview answers it, and also when the two ids differ only in case), and a
   program or workout the household's program does not have (`not_found`).
 - `readWeek` loads a program's week in the editor's shape: every weekday, a rest day as `[]`.
-- Twelve new `db:mutations` patches (145–147, 149, 290–297) show the proofs fail when the band,
+- Fourteen new `db:mutations` patches (145–147, 149, 290–299) show the proofs fail when the band,
   the hiding of a removed slot or its order, the slot matching, the program or household check, a
-  hidden workout, a moved slot's label or the refusal order is broken.
+  hidden workout, a moved slot's label or stamp, the insert order or the refusal order is broken.

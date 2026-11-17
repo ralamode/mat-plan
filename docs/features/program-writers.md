@@ -155,7 +155,7 @@ flowchart TD
     program's own slots are read and written (`week-reads-every-blocks-slots`). A week saved
     unchanged writes nothing, proved by `ctid`, since `updated_at` cannot see a rewrite inside one
     transaction (`week-rewrites-kept-slots`, `week-replaces-every-slot`). Moved slots, and only
-    those, go through the band (`week-skips-the-band`, `week-band-moves-unmoved-slots`).
+    those, go through the band (`week-skips-the-band`, `week-band-moves-unmoved-slots`); added slots are inserted after that, so a slot can go in front of a kept one (`week-inserts-before-the-band`). A moved or relabelled slot is stamped with `updated_at` (`week-move-skips-the-stamp`).
     **Refusals, in the preview fake's order:** `once_per_day` when a day names a workout twice,
     whatever else is wrong with the draft and also when the ids differ only in case (after a refused
     parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `invalid` (the

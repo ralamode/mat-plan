@@ -1170,9 +1170,55 @@ async function verifySaveWeek({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
     );
     await noneInBand('a partial reorder');
 
+    // ── a new slot put in front of a kept one, in one save: the kept one moves out of its place first ──
+    const sundayOne = weekOf({ ...partial, 0: [slot(a)] });
+    assert.deepEqual(await save(sundayOne), { ok: true }, 'FAM-1 6b: a one-slot Sunday saves');
+    const [sundayA] = await liveOn(0);
+    const sundayTwo = weekOf({ ...partial, 0: [slot(b), slot(a)] });
+    assert.deepEqual(
+      await save(sundayTwo),
+      { ok: true },
+      'FAM-1 6b: a slot added in front of a kept one saves (the kept one moves first)',
+    );
+    const sunday = await liveOn(0);
+    assert.deepEqual(
+      sunday.map((r) => [r.id === sundayA!.id, r.idx]),
+      [
+        [false, 0],
+        [true, 1],
+      ],
+      'FAM-1 6b: the kept slot keeps its row at its new place, and the added one is a new row',
+    );
+
+    // ── a moved or relabelled slot is stamped; an untouched one is not ──
+    const old = new Date('2000-01-01T00:00:00Z');
+    const ourBlock = sunday[0]!.blockId;
+    await tx
+      .update(schema.blockDayWorkouts)
+      .set({ updatedAt: old })
+      .where(eq(schema.blockDayWorkouts.blockId, ourBlock));
+    const restSunday = weekOf({ ...partial, 0: [slot(a, 'Easy'), slot(b)] });
+    assert.deepEqual(await save(restSunday), { ok: true }, 'FAM-1 6b: reordering Sunday saves');
+    const stamped = (await liveOn(0)).map((r) => r.id);
+    const stamps = await tx
+      .select({ id: schema.blockDayWorkouts.id, updatedAt: schema.blockDayWorkouts.updatedAt })
+      .from(schema.blockDayWorkouts)
+      .where(
+        and(
+          eq(schema.blockDayWorkouts.blockId, ourBlock),
+          isNull(schema.blockDayWorkouts.deletedAt),
+        ),
+      );
+    assert.ok(
+      stamps.every((r) =>
+        stamped.includes(r.id) ? r.updatedAt > old : r.updatedAt.getTime() === old.getTime(),
+      ),
+      'FAM-1 6b: a moved slot is stamped with updated_at, and an untouched one is not',
+    );
+
     // ── a label change keeps the row ──
     const friday = (await liveOn(5))[0]!;
-    const relabelled = weekOf({ ...partial, 5: [slot(c, 'Late')] });
+    const relabelled = weekOf({ ...restSunday, 5: [slot(c, 'Late')] });
     assert.deepEqual(await save(relabelled), { ok: true }, 'FAM-1 6b: relabelling a slot saves');
     assert.deepEqual(
       (await liveOn(5)).map((r) => [r.id, r.label]),

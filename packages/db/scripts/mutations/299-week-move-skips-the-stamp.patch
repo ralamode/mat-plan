@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 61e60d91..c9760357 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -141,7 +141,7 @@ export async function saveWeek(
+     for (const { id, ...values } of [...moved, ...relabelled]) {
+       await tx
+         .update(schema.blockDayWorkouts)
+-        .set({ ...values, updatedAt: sql`now()` })
++        .set({ ...values })
+         .where(eq(schema.blockDayWorkouts.id, id));
+     }
+     if (added.length > 0) {
