@@ -52,24 +52,26 @@ can rebuild.
 
 ## Decisions already made
 
-| #   | Decision                                                                                                                                                                                                                                                                                         | Settled                                             |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| K1  | CAT-3 is in Beta 0: **schema first** (reference tables seeded from `packages/shared`: equipment, muscles, a movement's primary muscle plus secondaries; tracking type reconciled with FAM-1's, not added beside it), **then data**                                                               | maintainer, 2026-11-17 (relayed by the FAM-1 board) |
-| K2  | Any outside source's licence is rechecked against the actual files, at a pinned revision, before anything is taken from it. Nothing is taken (K16), so this binds only if K16 is ever reopened                                                                                                   | same                                                |
-| K3  | The movements the maintainer's household trains with must be in the library at launch                                                                                                                                                                                                            | same                                                |
-| K4  | **Nothing is preserved.** The 35 seeded movements and the logs in production need not be kept; no design may depend on an old movement id or an old log. Any production delete still needs the maintainer's explicit go at the time                                                              | same                                                |
-| K5  | Test and preview fixtures stop using the household's own program shape once the library lands                                                                                                                                                                                                    | same                                                |
-| K6  | The library and the fresh start land **before** the trial week                                                                                                                                                                                                                                   | maintainer, 2026-11-17 (roadmap thread)             |
-| K7  | The fresh start removes **everything**: the seeded household is deleted and the household signs in again under a household with ordinary ids                                                                                                                                                     | same                                                |
-| K8  | The picker gets **all** of CAT-3's search work in Beta 0: equipment and muscle filters, a computed "No equipment", typo-forgiving matching and relevance ranking                                                                                                                                 | same                                                |
-| K9  | The maintainer reviews **every** entry, in batches, in a sheet, before it enters the library                                                                                                                                                                                                     | same                                                |
-| K10 | The table stays `movements`. A household's own item is a `movements` row with a `household_id` (TEN-2)                                                                                                                                                                                           | TEN-2; restated                                     |
-| K11 | An item's tracking type is one of FAM-1's seven and is set once (`packages/shared/src/movements.ts` → `TRACKING_TYPES`; FAM-1 plan D1, D25). CAT-3 adds none                                                                                                                                     | FAM-1 plan                                          |
-| K12 | Fuzzy matching runs in shared TypeScript over the option list, never in SQL ([lessons](../lessons.md), "`CREATE EXTENSION` in a migration…")                                                                                                                                                     | lessons; restated                                   |
-| K13 | "The LLM never authors loads" is untouched: an entry holds no load, no dose and no readiness claim                                                                                                                                                                                               | [AGENTS.md](../../AGENTS.md)                        |
-| K14 | **A supervision label only where it applies:** a short label on the few movements the maintainer marks; nothing on the rest                                                                                                                                                                      | maintainer, 2026-11-17, after the panel             |
-| K15 | **The fresh start is not a normal deletion:** no waiting period, it does not wait for `OPS-3`'s restore drill, and the household's sign-in accounts are kept. (This spec still cuts a restore branch first and deletes it after 7 days, as AGENTS.md requires)                                   | same                                                |
-| K16 | **The library is authored and reviewed in-house, and it is extensive.** Every entry is written here, in our own words, in reviewed batches; nothing is imported and no source's descriptions, instructions or media are used. No tracked file records where an entry came from or names a source | maintainer, 2026-11-17 (relayed by the FAM-1 board) |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Settled                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| K1  | CAT-3 is in Beta 0: **schema first** (reference tables seeded from `packages/shared`: equipment, muscles, a movement's primary muscle plus secondaries; tracking type reconciled with FAM-1's, not added beside it), **then data**                                                                                                                                                                                                                                                                                      | maintainer, 2026-11-17 (relayed by the FAM-1 board)                                |
+| K2  | Any outside source's licence is rechecked against the actual files, at a pinned revision, before anything is taken from it. Nothing is taken (K16), so this binds only if K16 is ever reopened                                                                                                                                                                                                                                                                                                                          | same                                                                               |
+| K3  | The movements the maintainer's household trains with must be in the library at launch                                                                                                                                                                                                                                                                                                                                                                                                                                   | same                                                                               |
+| K4  | **Nothing is preserved.** The 35 seeded movements and the logs in production need not be kept; no design may depend on an old movement id or an old log. Any production delete still needs the maintainer's explicit go at the time                                                                                                                                                                                                                                                                                     | same                                                                               |
+| K5  | Test and preview fixtures stop using the household's own program shape once the library lands                                                                                                                                                                                                                                                                                                                                                                                                                           | same                                                                               |
+| K6  | The library and the fresh start land **before** the trial week                                                                                                                                                                                                                                                                                                                                                                                                                                                          | maintainer, 2026-11-17 (roadmap thread)                                            |
+| K7  | The fresh start removes **everything**: the seeded household is deleted and the household signs in again under a household with ordinary ids                                                                                                                                                                                                                                                                                                                                                                            | same                                                                               |
+| K8  | The picker gets **all** of CAT-3's search work in Beta 0: equipment and muscle filters, a computed "No equipment", typo-forgiving matching and relevance ranking                                                                                                                                                                                                                                                                                                                                                        | same                                                                               |
+| K9  | The maintainer reviews **every** entry, in batches, in a sheet, before it enters the library                                                                                                                                                                                                                                                                                                                                                                                                                            | same                                                                               |
+| K10 | The table stays `movements`. A household's own item is a `movements` row with a `household_id` (TEN-2)                                                                                                                                                                                                                                                                                                                                                                                                                  | TEN-2; restated                                                                    |
+| K11 | An item's tracking type is one of FAM-1's seven and is set once (`packages/shared/src/movements.ts` → `TRACKING_TYPES`; FAM-1 plan D1, D25). CAT-3 adds none                                                                                                                                                                                                                                                                                                                                                            | FAM-1 plan                                                                         |
+| K12 | Fuzzy matching runs in shared TypeScript over the option list, never in SQL ([lessons](../lessons.md), "`CREATE EXTENSION` in a migration…")                                                                                                                                                                                                                                                                                                                                                                            | lessons; restated                                                                  |
+| K13 | "The LLM never authors loads" is untouched: an entry holds no load, no dose and no readiness claim                                                                                                                                                                                                                                                                                                                                                                                                                      | [AGENTS.md](../../AGENTS.md)                                                       |
+| K14 | **A supervision label only where it applies:** a short label on the few movements the maintainer marks; nothing on the rest                                                                                                                                                                                                                                                                                                                                                                                             | maintainer, 2026-11-17, after the panel                                            |
+| K15 | **The fresh start is not a normal deletion:** no waiting period, it does not wait for `OPS-3`'s restore drill, and the household's sign-in accounts are kept. (This spec still cuts a restore branch first and deletes it after 7 days, as AGENTS.md requires)                                                                                                                                                                                                                                                          | same                                                                               |
+| K16 | **The library is authored and reviewed in-house, and it is extensive.** Every entry is written here, in our own words, in reviewed batches; nothing is imported and no source's descriptions, instructions or media are used. No tracked file records where an entry came from or names a source                                                                                                                                                                                                                        | maintainer, 2026-11-17 (relayed by the FAM-1 board)                                |
+| K17 | **An entry may carry written instructions, in our own words:** a few plain lines on how to do the movement, optional per entry, reviewed with the entry in its batch. They describe the movement and name no load, dose, readiness or medical claim (K13). Like aliases they stay in the reviewed const (rule 11). They hold no web address and no character a reader cannot see. **On a movement with a supervision label they never read as a guide to doing it alone, and the label shows wherever they show** (P13) | maintainer, 2026-11-17 (relayed by the FAM-1 board), after the spec merged         |
+| K18 | **An entry has a place for a video or an animation, and it is empty.** The field is reserved: no entry sets it until media has its own plan (where it is hosted, who may see it). It holds a key into the app's own store, never a URL: an outside address sends a child's device to a third party and can change after review                                                                                                                                                                                          | same; the key-not-URL shape is the roadmap thread's, for the maintainer to confirm |
 
 ## Design, in twelve rules
 
@@ -113,13 +115,20 @@ can rebuild.
 8. **Equipment is a required set.** Anything beyond a floor and open space is equipment: a wall, a
    step, a bench, a bar, a partner. **"No equipment" is computed** from an empty set, never stored.
    _Bodyweight_ is a different property (`is_bodyweight`): a pull-up is bodyweight and needs a bar.
+   **A known limit: a set cannot say "this or that".** A goblet squat names one of dumbbell and
+   kettlebell, so a filter for the other does not show it; the name still finds it. An entry
+   names the tool most people use, and "either" equipment waits for "my equipment" (out of scope).
 9. **Muscles are anatomy only**, one optional primary and any secondaries. What kind of training a
    movement is goes in `modality` (strength, conditioning, mobility, skill). `pattern` keeps its
    eleven lift patterns and is required only for strength.
 10. **One entry, one tracking type.** A movement people log two ways is two entries whose names say
     which ("Rowing machine", "Rowing machine intervals"; "Pull-up", "Weighted pull-up").
-11. **Aliases and the supervision label are fields of the entry and stay in the const.** The option
-    read attaches them by slug, as `MOVEMENT_PICKER_ENTRIES` attaches aliases today. Equipment and
+11. **Aliases, the supervision label, the instructions (K17) and the media pointer (K18) are
+    fields of the entry and stay in the const.** The option
+    read attaches aliases and the label by slug, as `MOVEMENT_PICKER_ENTRIES` attaches aliases
+    today; instructions are read by slug only where they are shown, never sent with the whole
+    option list. `movements.cues` and `movements.video_url` exist, have no reader and stay unused:
+    reviewed text is not copied into a row that could drift from the reviewed file. Equipment and
     muscles are tables (K1) and nothing queries them in SQL yet (K12); a later SQL filter will not
     find aliases there. **A household's own items carry no taxonomy in Beta 0.**
 12. **Names are the movement, in sentence case, singular.** Equipment appears in a name only where
@@ -141,7 +150,13 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   when: `name` passes `movementNameSchema` (a comma or a line break is refused: the CSV export
   prints the slug); each alias passes `movementLabelSchema`; the primary muscle is not also a
   secondary; a `strength` entry has a `pattern` and a primary muscle; `supervision` is absent or a
-  `SUPERVISION` member; the slug is `movementSlug` of the name or of an alias.
+  `SUPERVISION` member; the slug is `movementSlug` of the name or of an alias and holds no comma
+  or line break; `instructions` is absent or one or more plain lines of at most
+  `CATALOG_INSTRUCTIONS_MAX` characters in all, each with a letter, with no blank line, no space
+  at a line's end, no character a reader cannot see (a control or format character, a line or
+  paragraph separator) and no web address (K17); `media` is absent or a kind from `MEDIA_KINDS` with a key that
+  cannot spell a URL or a path (K18). **No entry in `CATALOG_MOVEMENTS` or `CATALOG_FIXTURE` shall
+  set `media`** until a media plan lifts that test.
 - **V3.** Across `CATALOG_MOVEMENTS`, and separately across `CATALOG_FIXTURE`, no two entries shall
   share a slug, and no name or alias shall share a `movementNameKey` with another entry's name or
   alias (the existing test in `movement-picker-catalog.test.ts`, moved). No alias shall be a
@@ -194,7 +209,9 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
 
 - **E1.** The catalog seed shall take its list as an argument and, on a database with no global
   movements (a scratch instance in `db:verify`, run with `CATALOG_MOVEMENTS`), leave exactly one
-  catalog row per entry with its fields and its equipment and muscle rows, written in one
+  catalog row per entry with its stored fields (never its aliases, supervision label,
+  instructions or media, which no column holds: rule 11) and its equipment and muscle rows,
+  written in one
   transaction (a forced failure mid-list leaves none), each join row keyed to the id its insert
   returned, never to a slug lookup.
 - **E2.** If a global row already holds an entry's slug, then the seed shall leave that row and its
@@ -246,7 +263,8 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
 - **P3.** `QUERY_SHORT_FORMS` (db, kb, bb, ez, …) shall expand a query word inside
   `searchMovementOptions` only, after the fold and never in `movementNameKey`; rows found only
   through an expansion are added after the other matches and count as matches. "db row" shall find
-  Dumbbell row. The two old aliases that are equipment short forms (`KB`, `DB bench`) are retired;
+  Dumbbell row. When nothing matches, the expanded words are also read for `someWords` and for
+  `near`. A short form never makes `exact` or `aliasHit` true (P1). The two old aliases that are equipment short forms (`KB`, `DB bench`) are retired;
   the other four (`RDL`, `BSS`, `OHP`, `hip thrust`) become their entries' aliases.
 - **P4.** `near` shall hold fuzzy candidates, computed **only when the unfiltered `matches` are
   empty**: a query word of five or more letters within one edit (insert, delete, substitute, or a
@@ -255,12 +273,19 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   squat; "dedlift" shall find a deadlift; "kettelbell swing" shall find Kettlebell swing. "dress"
   shall not find a press (the first letter); "split" shall not find a squat (three edits); "hand"
   shall not find a hang (four letters); a query with any row in the unfiltered `matches` shall
-  have an empty `near`.
+  have an empty `near`. **Every word of the query must be in the option** (part of its name, or a
+  near miss of one of its words), so "kettelbell swing" does not bring every kettlebell movement;
+  a word under five letters must be part of the name as typed. Closest first.
+  _(As built in C0b-1: a word of an **alias** counts for a near miss, and only an exact alias
+  counts for a match. Whether an alias should match as it is typed is put to the prototype, P0.)_
 - **P5.** `near` and `someWords` shall each be shown under its own heading, `near` first, each
   counted separately in the status text, with a row that is in `near` not repeated under
   `someWords`; neither shall be what Enter picks; and while either holds a row the create button
   stays the quiet one.
-- **P6.** The query shall be cut to `MOVEMENT_NAME_MAX` and a fixed word count before matching; no
+- **P6.** The query shall be cut to `MOVEMENT_NAME_MAX` characters before anything reads it, and
+  a query of more than `SEARCH_WORDS_MAX` words shall get the plain match only, with no short form
+  expanded and no near miss (the plain match reads every word, so P1 holds for any name a person
+  can type, and no row is ever found without a word that was typed); no
   `RegExp` shall be built from a query or a catalog string; and the query text shall never leave
   the device (no URL parameter, server action or log line carries it: a source scan).
 
@@ -301,7 +326,8 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   for every athlete, in both picker modes, never dropped for another tag. The label shall never
   hide, block or reorder an option, and nothing but the option read and the picker row shall read
   the field (a source scan). Its wording describes the movement and the adult, never the athlete:
-  no age, level, "ready", "safe" or warning mark.
+  no age, level, "ready", "safe" or warning mark. **Wherever an entry's instructions are shown,
+  its label is shown with them** (K17).
 - **P14.** Every row shall show its tracking type's label in both picker modes (rule 10).
 - **P15.** The picker's states (the filter control open; a hidden-items line and its "shown"
   state; `near` and `someWords` together; nothing under a filter; an exact hit outside the
@@ -356,14 +382,16 @@ would claim lane N's directory); `movement-search.ts` moves there from
 
 - V1's vocabularies; `catalogMovementSchema` and `CatalogMovement` (V2): `slug`, `name`, `aliases`,
   `modality`, `pattern`, `trackingType`, `unitDefault`, `isBodyweight`, `equipment`,
-  `primaryMuscle`, `secondaryMuscles`, `supervision`; `requiresNoEquipment` (V5);
+  `primaryMuscle`, `secondaryMuscles`, `supervision`, `instructions`, `media`;
+  `requiresNoEquipment` (V5);
 - in `catalog/data/` (lane N's directory; C0a creates these three files, the one exception):
   `CATALOG_MOVEMENTS` (**empty**), the lockfile (`shipped.json`: slug to tracking type) and
   `approved.json` (batch to slug to hash), with V4's and D3's checks; the `./catalog/data` entry in
   `packages/shared/package.json`'s `exports`;
 - `CATALOG_FIXTURE`: about twenty generic entries covering every tracking type and modality, an
   empty equipment set, a two-item set, no primary muscle, a supervision value, and the entries
-  `VECTORS` needs (a trap-bar, a medicine-ball and a carry entry, and one aliased `RDL`). Fixture
+  `VECTORS` needs (a trap-bar, a medicine-ball and a carry entry, and one with a short alias:
+  `SLRDL`, not `RDL`, which the legacy picker still answers to). Fixture
   ids come from `packages/shared/src/program/fixtures/ids.ts` → `fixtureIds` (a new kind) and sit
   beside the entry, never in it;
 - the tests not yet written, per consumer, as `it.todo` in `packages/shared/src/catalog/owed.test.ts`
@@ -372,17 +400,24 @@ would claim lane N's directory); `movement-search.ts` moves there from
 Starting lists, final in C0a's own review (a code is the lower-case word with underscores):
 
 - **Equipment:** barbell, EZ bar, trap bar, plates, dumbbell, kettlebell, medicine ball, sandbag,
-  weight vest, ankle weights, wrist weights, weight belt, bench, rack, pull-up bar, dip bars,
+  weight vest, ankle weights, wrist weights, weight belt, any weight (a load of the athlete's own
+  choosing, simply held or set in place; an entry names a belt or a vest where the way the load
+  is carried is part of the movement), bench, rack, pull-up bar, dip bars,
   rings, parallettes, suspension trainer, band, cable machine, machine (any other selectorised
-  machine), landmine, box, step, wall, sled, rope, heavy bag, mat, foam roller, exercise ball, ab
-  wheel, jump rope, air bike, rowing machine, ski ergometer, treadmill, climbing machine,
-  back-extension bench, towel, anchor (a fixed point for a band or the feet), hill or stairs,
-  ball (any small ball), partner.
+  machine), landmine, box, step, wall, sled (its tow strap included), battle rope, climbing rope,
+  heavy bag, mat, foam roller, exercise ball, ab wheel, jump rope, air bike, rowing machine, ski
+  ergometer, treadmill, stationary bike, climbing machine, back-extension bench, glute-ham
+  developer, towel, anchor (a fixed point for a band or the feet), hill or stairs, ball (any
+  small ball), cones, hurdles, agility ladder, pool, partner. _(53 codes: 52 as built in C0a, and
+  `any_weight` from the first batch review, contract change C29. The
+  last eight came from lane N's names pass over about 490 names, before any table existed; plain
+  `rope` went, because the two ropes are two things to own.)_
 - **Muscles:** neck, traps, shoulders, chest, upper back, lats, lower back, biceps, triceps,
   forearms, abdominals, obliques, hip flexors, glutes, adductors, abductors, quadriceps,
   hamstrings, calves, shins. Labels on screen are plain words ("inner thigh"), settled by P0.
 - **Modalities:** strength, conditioning, mobility, skill.
 - **Supervision:** one member to start, `coach` ("learn with a coach present"); wording from P0.
+- **Media kinds:** video, animation (K18; no entry uses one yet).
 - **Short forms:** db, kb, bb, ez, trx, with the equipment each stands for.
 
 **C0b-1: search** (unblocks B1; needs no prototype). P1 to P6 and their vectors. The fuzzy helper
@@ -400,13 +435,20 @@ heading function. The preview's picker options are `CATALOG_FIXTURE` **plus** to
 ## The review sheet (K9)
 
 The entries are reviewed in a private spreadsheet of the maintainer's, never linked from the
-repository. One row an entry: its slug and fields, then a decision column (OK, or the change
-wanted). A batch is about 50 rows and has a number. An approved batch becomes one PR, "catalog
+repository. One row an entry: its slug and fields, its instructions where written (K17), then a
+decision column (OK, or the change wanted). A batch is about 50 rows and has a number. An approved batch becomes one PR, "catalog
 batch N", that adds those entries and their `approved.json` and `shipped.json` lines, and the
 maintainer merges it (D3). The list of what the household needs (K3) is kept privately; the
 roadmap thread checks each batch against it and says in the last batch's PR that the launch list
 is covered, without naming it. Entries are drafted from general knowledge, in our own words,
 never by copying any one list record by record.
+
+**What the library covers is the data lane's own list, by family of movement** _(maintainer,
+2026-11-17)_. Any outside list is used once, privately, after that list is drafted, to notice a
+well-known movement that is missing; such a movement is then named and described by us, like any
+other. No outside list is mirrored or walked entry by entry, and nothing is copied from one.
+**A bodyweight movement that can be loaded is two entries** (rule 10; maintainer, 2026-11-17):
+"Dip" logged as reps, "Weighted dip" as weight and reps.
 
 ## The fresh start, in order
 
@@ -452,7 +494,7 @@ step-2 branch; if it ever is, steps 3 to 8 are run again.
 | **B2** filters         | lane B                    | P7 to P10, P13 to P15                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | After C0b-2 and B1                                                  |
 | **P11** option read    | lane P, a seam            | The read returns taxonomy; `apps/web/lib/dal/program/` maps it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | After FAM-1 6a-iii and A2                                           |
 | **B3** browse          | lane B                    | P12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After B2 and P11                                                    |
-| **RC** create          | `PRIV-3`'s owner          | A guarded `create-household` correction built on `registry.ts` → `householdClaim`'s logic, factored out (the account from the environment, its shape check, `fixtureBindIsAllowed`): takes **no household id**, mints ordinary ids, binds one or more accounts to the one new household in one run, checks inside its transaction that none has a live membership, prints counts only. It creates `SEED_PUBLIC_IDS` in `packages/shared/src/seed-ids.ts` (moved here from `PRIV-3` 2b by R0), and `householdClaim` itself gains the refusal of any id in it                                                                                                                                                                                                                  | Before R2                                                           |
+| **RC** create          | `PRIV-3`'s owner          | A guarded `create-household` correction built on `registry.ts` → `householdClaim`'s logic, factored out (the account from the environment, its shape check, `fixtureBindIsAllowed`): takes **no household id**, mints ordinary ids, binds one or more accounts to the one new household in one run, checks inside its transaction that none has a live membership, prints counts only. It creates `SEED_PUBLIC_IDS` in `packages/shared/src/seed-ids.ts` (moved here from `PRIV-3` 2b by R0), and `householdClaim` itself gains the refusal, **in production**, of any id in it (a local or preview database may still claim the seeded household, under the rule `seed.ts` uses for fixtures). **Every account it binds is an owner** _(maintainer, 2026-11-17)_            | Before R2                                                           |
 | **R0** deltas          | the plans' owners         | `PRIV-3`: a dated one-shot correction that takes no target, erases the seeded household through 2a's core, refuses outside production and once the target is gone, has a pure, unit-tested gate, and leaves `erase-household`'s seed-id refusal and its proof unchanged (or `OPS-2` D9's re-key run just before; the owner chooses); `PRIV-3`'s order no longer puts `OPS-3` ahead of 2a for this run, and `SEED_PUBLIC_IDS` moves from its 2b to chunk RC. `OPS-2` Q2, D8, D9 and `SEC-6`'s row say K7 and K15; `SEC-6`'s acceptance is narrowed to households, profiles and movements, and its `rate-limit.ts` clause keeps an owner. The notice's sentences on the seeded athletes and on shared movement names; inventory §1b's paragraph on leftover global rows and §8 | Before R1                                                           |
 | **R1** runbook         | `PRIV-3`'s owner          | R1 to R4; step 5's correction; inventory §5's two new removal paths                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After `PRIV-3` 2a, RC, R0                                           |
 | **R2** the fresh start | the maintainer            | R5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | After R1 and the preconditions. **The maintainer's go at the time** |
@@ -506,20 +548,23 @@ The seam files are in the frontmatter comment; the board orders them.
 
 ## Assumptions I'm making
 
-| Assumption                                                                                           | Checked by                      | If false                                                        |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------- |
-| A few hundred options can be matched on each keystroke on a phone, with keys folded once a list      | B1 measures it at 500 entries   | `near` runs after a pause                                       |
-| The option payload for a few hundred entries is acceptable on the builder's pages                    | P11 measures the bytes          | The picker loads options when it opens                          |
-| Review takes one to three minutes an entry, so 500 entries is 8 to 25 hours of the maintainer's time | The first batch                 | The launch size moves, not the gate                             |
-| Production holds no global movement written by the app (measured zero, [plan.md](../plan.md), TEN-2) | The ownership report, before R2 | R3's refusal fires; the rows are looked at before anything runs |
-| The starting lists lack nothing a batch needs                                                        | C0a's review                    | A list grows; after A1 that is a migration                      |
+| Assumption                                                                                                                                                                                                          | Checked by                      | If false                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------- |
+| A few hundred options can be matched on each keystroke on a phone, with keys folded once a list                                                                                                                     | B1 measures it at 500 entries   | `near` runs after a pause                                       |
+| The option payload for a few hundred entries is acceptable on the builder's pages                                                                                                                                   | P11 measures the bytes          | The picker loads options when it opens                          |
+| Review takes one to three minutes an entry, so 500 entries is 8 to 25 hours of the maintainer's time (set before K17: an entry with instructions has a few lines more to read, so the upper figure is the likelier) | The first batch                 | The launch size moves, not the gate                             |
+| Production holds no global movement written by the app (measured zero, [plan.md](../plan.md), TEN-2)                                                                                                                | The ownership report, before R2 | R3's refusal fires; the rows are looked at before anything runs |
+| The starting lists lack nothing a batch needs                                                                                                                                                                       | C0a's review                    | A list grows; after A1 that is a migration                      |
 
 ## Out of scope
 
 - Progressions and "easier / harder" links (`LADDER-1`); "my equipment", presets, substitutions.
 - Taxonomy on a household's own items (when it comes, S4's CHECK goes and rule 2's "global" half
   is what still tells a catalog row apart); a richer new-item form; a household's own aliases.
-- Images, video, cues (`movements.cues` and `video_url` have no reader), translations.
+- Any image, video or animation itself, and where it is hosted (K18 reserves the field only);
+  the columns `movements.cues` and `video_url` (no reader, rule 11); translations.
+- **Where instructions are shown** is not decided: the picker prototype (P0) proposes it, and a
+  day-page surface would be its own row. C0a carries the text; no screen reads it yet.
 - A left/right field and rep ranges on a program row (`SIDE-1`, `TGT-1`).
 - Interval timing (`TIMER-1`); computed summaries (`PROGS-2`).
 - Recording searches that found nothing. In Beta 0 the gap signal is the household's own items,
@@ -661,6 +706,31 @@ and UX. Every blocking and should-fix finding is listed; "→" is what changed.
 - _"Nothing passes the filters" missed rows that were only near matches; P4's last clause could
   be read against P5 (UX)._ → P10; P4.
 - _F1's list of readers named the wrong files (correctness)._ → F1.
+
+**After the spec merged (2026-11-17), in C0a's PR**
+
+- _The maintainer, relayed by the board: written instructions in our own words, and a place for a
+  video or an animation later._ → K17, K18; rule 11; V2; the review sheet's column.
+- _Lane N's names pass (about 490 names against the vocabularies): eight equipment words missing,
+  plain `rope` ambiguous; a required set cannot say "or"._ → the equipment list (52 codes); rule
+  8's known limit.
+- _C0a's review: the spec's fixture alias `RDL` is one the legacy picker still answers to._ →
+  `SLRDL`.
+
+**After the spec merged (2026-11-17), in C0b-1's PR**
+
+- _The maintainer: what the library covers; loaded bodyweight movements; the role of each bound
+  account._ → § The review sheet; the RC row.
+- _Lane N on the RC row: a literal "refusal of any id" breaks five callers that claim the seeded
+  household on purpose._ → the refusal is production's.
+- _C0b-1 as built: P6's word cap cannot apply to the plain match without breaking P1; how words
+  combine in a near miss; short forms and the fallbacks._ → P3, P4, P6.
+
+**From the first batch review (2026-11-17), contract change C29**
+
+- _The maintainer: a weighted plank needs "just weight, they can choose how to add the weight";
+  "Obliques", not "Side abs"._ → the equipment code `any_weight`; the label of `obliques`. Both are
+  still edits: no table exists yet.
 
 **Rejected, with the reason**
 

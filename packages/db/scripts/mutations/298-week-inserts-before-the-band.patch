@@ -1,0 +1,28 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 61e60d91..6054c605 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -125,6 +125,11 @@ export async function saveWeek(
+         .set({ deletedAt: sql`now()` })
+         .where(inArray(schema.blockDayWorkouts.id, gone));
+     }
++    if (added.length > 0) {
++      await tx
++        .insert(schema.blockDayWorkouts)
++        .values(added.map((slot) => ({ blockId: block.id, ...slot })));
++    }
+     if (moved.length > 0) {
+       await shiftIntoBand(
+         tx,
+@@ -144,11 +149,6 @@ export async function saveWeek(
+         .set({ ...values, updatedAt: sql`now()` })
+         .where(eq(schema.blockDayWorkouts.id, id));
+     }
+-    if (added.length > 0) {
+-      await tx
+-        .insert(schema.blockDayWorkouts)
+-        .values(added.map((slot) => ({ blockId: block.id, ...slot })));
+-    }
+     return { ok: true };
+   });
+ }

@@ -10,6 +10,7 @@ import {
   entryUnitFor,
   fillRowValues,
   itemUnit,
+  loggedRowUnit,
   prescribedTarget,
   rowValuesSchema,
   TRACKING_TYPE_FIELDS,
@@ -310,5 +311,96 @@ describe('itemUnit: the unit an item logs in (`DayItem.unit`)', () => {
       }
     }
     expect(checked).toBeGreaterThan(20);
+  });
+});
+
+describe('loggedRowUnit: the unit an amend is judged in (C28)', () => {
+  const logged = { reps: 5, quantities: [primary('lb', 30)] };
+
+  it('is the stored quantity’s unit in the type’s slot', () => {
+    expect(loggedRowUnit(TRACKING_TYPE.weight_reps, logged)).toBe('lb');
+    expect(loggedRowUnit(TRACKING_TYPE.duration, { quantities: [primary('min', 20)] })).toBe('min');
+  });
+
+  it('is null for a type with no quantity, whatever the row holds', () => {
+    for (const type of TRACKING_TYPES.filter((t) => !TRACKING_TYPE_FIELDS[t].slot)) {
+      expect(loggedRowUnit(type, logged), type).toBeNull();
+    }
+    expect(TRACKING_TYPES.some((t) => !TRACKING_TYPE_FIELDS[t].slot)).toBe(true);
+  });
+
+  it('is null for a row with no quantity in the slot its type has', () => {
+    expect(loggedRowUnit(TRACKING_TYPE.weight_reps, { reps: 5, quantities: [] })).toBeNull();
+  });
+
+  it('🔴 reads the type’s own slot, never whichever quantity comes first', () => {
+    // Every type with a quantity names one slot; a row may hold a quantity in another.
+    const slots = Object.values(QUANTITY_SLOT);
+    let checked = 0;
+    for (const type of TRACKING_TYPES) {
+      const { slot } = TRACKING_TYPE_FIELDS[type];
+      const [unit] = unitsForTrackingType(type);
+      const elsewhere = slots.find((other) => other !== slot);
+      if (!slot || !unit || !elsewhere) continue;
+      const other = { slot: elsewhere, unit: 'lb' as const, value: 1 };
+      const own = { slot, unit, value: 2 };
+      expect(loggedRowUnit(type, { quantities: [other] }), type).toBeNull();
+      expect(loggedRowUnit(type, { quantities: [other, own] }), type).toBe(unit);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(3);
+  });
+
+  it('🔴 is null for a unit the type cannot be in, so the fake stores no such row', () => {
+    // A row logged when the item was another type: a Duration holding pounds, seconds in minutes.
+    const lbOnADuration = { quantities: [primary('lb', 30)] };
+    expect(loggedRowUnit(TRACKING_TYPE.duration, lbOnADuration)).toBeNull();
+    expect(loggedRowUnit(TRACKING_TYPE.time_sets, { quantities: [primary('min', 2)] })).toBeNull();
+    const stored = {
+      trackingType: TRACKING_TYPE.duration,
+      unit: loggedRowUnit(TRACKING_TYPE.duration, lbOnADuration),
+    };
+    expect(fillRowValues(stored, { quantities: [primary('lb', 40)] }, null)).toBeNull();
+    expect(fillRowValues(stored, { quantities: [primary('min', 40)] }, null)).toBeNull();
+    // Every unit a type may be in is one it can be changed in.
+    for (const type of TRACKING_TYPES.filter((t) => TRACKING_TYPE_FIELDS[t].slot)) {
+      for (const unit of unitsForTrackingType(type)) {
+        const slot = TRACKING_TYPE_FIELDS[type].slot!;
+        expect(loggedRowUnit(type, { quantities: [{ slot, unit, value: 1 }] }), type).toBe(unit);
+      }
+    }
+  });
+
+  it('🔴 a row logged in lb is changed in lb after its item moved to kg, and never in kg', () => {
+    const stored = {
+      trackingType: TRACKING_TYPE.weight_reps,
+      unit: loggedRowUnit(TRACKING_TYPE.weight_reps, logged),
+    };
+    const inLb = { reps: 6, quantities: [primary('lb', 35)] };
+    const inKg = { reps: 6, quantities: [primary('kg', 16)] };
+    expect(fillRowValues(stored, inLb, null)).toEqual(inLb);
+    expect(fillRowValues(stored, inKg, null)).toBeNull();
+    // Judged against the item as it reads now, the answers would be the other way round: the kg
+    // number accepted onto a row stored in lb.
+    const now = { ...bench, unit: 'kg' as const };
+    expect(fillRowValues(now, inKg, null)).toEqual(inKg);
+    expect(fillRowValues(now, inLb, null)).toBeNull();
+  });
+
+  it('is the item’s own unit for every logged row the fixtures hold', () => {
+    // No fixture describes a unit edited after logging, so the two agree everywhere today; the
+    // sample above is the case where they do not.
+    let checked = 0;
+    for (const plan of Object.values(DAY_PLAN_FIXTURES)) {
+      for (const item of plan.workouts.flatMap((w) => w.items)) {
+        for (const row of item.rows) {
+          if (!row.logged || !TRACKING_TYPE_FIELDS[item.trackingType].slot) continue;
+          if (row.logged.values.quantities.length === 0) continue;
+          expect(loggedRowUnit(item.trackingType, row.logged.values)).toBe(item.unit);
+          checked += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
   });
 });

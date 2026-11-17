@@ -25,6 +25,7 @@ export * from './catalog-seed';
 export * from './catalog-activity-types';
 export * from './catalog-metrics';
 export * from './catalog-movements';
+export * from './catalog';
 export * from './activity-metric-map';
 export * from './ramp-schedule';
 export * from './sessions';
