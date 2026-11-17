@@ -27,7 +27,7 @@ import {
   type FakeProgramState,
   type FakePrograms,
 } from './fakes';
-import { pickerOptions } from './picker-options';
+import { pickerOptions, previewHowTo } from './picker-options';
 import { dayPreviewHrefFor, type PreviewSelection } from './preview-registry';
 
 /**
@@ -77,6 +77,9 @@ export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) 
               <WorkoutEditorScreen
                 draft={draft}
                 picker={{ options: state.items }}
+                // "How to" for a library row: the preview's stand-in for the real page's server
+                // action, read over the test library (CAT-3 spec P16).
+                howTo={previewHowTo}
                 actions={actions}
                 // The draft's own program, as the real page loads it (7b): the back link names it
                 // and the editor says who a change applies to. Read from the fake's list, so a
