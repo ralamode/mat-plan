@@ -261,9 +261,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 
 15. **`newItem` makes no second item for a name or an alias that already names one in the
     household's list, and it answers with the item's own name.** A typed name that `existingItem` matches selects that item
-    (`existed: true`); it is not a refusal. The picker withholds "add as new" for `exact` and
-    `aliasHit`; `existingItem` also answers, from C30, for `shortFormHit` (`db row` is Dumbbell
-    row), which the pickers read once they call `searchMovementOptions` (CAT-3 chunk B1). So the client's guard and the server's answer
+    (`existed: true`); it is not a refusal. The picker withholds "add as new" for the same
+    three cases (`exact`, `aliasHit`, and since C30 and CAT-3 chunk B1 `shortFormHit`: `db row`
+    is Dumbbell row). So the client's guard and the server's answer
     are one rule: the guard saves a round trip, the server holds when the page is stale or the call
     did not come from the picker. `name` is on every success (the stored name, which is not always
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
