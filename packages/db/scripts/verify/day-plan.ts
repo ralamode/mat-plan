@@ -1421,6 +1421,29 @@ async function verifyRules(): Promise<void> {
         'FAM-1 12a C24: the program no assignment covers is not one of the day’s programs',
       );
     });
+    await inSavepoint(tx, async (sp) => {
+      // `onProgram` still follows the assignments: Athlete Two's only program is the Family program,
+      // and their Nov 12 Morning habits stays listed after the assignment is soft-deleted.
+      await sp
+        .update(schema.programAssignments)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.programAssignments.profileId, H.profiles.get('a2')!.id));
+      const nov12 = '2026-11-12';
+      const plan = await resolve(sp, H, 'a2', nov12, addDays(nov12, 1));
+      const morning = workoutOf(plan, H, 'w1');
+      assert.deepEqual(
+        [
+          plan.onProgram,
+          plan.programs,
+          morning?.programPublicId,
+          morning?.scheduled,
+          morning?.label,
+          morning?.items.map((it) => it.rows.length),
+        ],
+        [ON_PROGRAM.never, [], H.ids.get(fixtureIds.program('p1')), false, null, [1, 1, 3]],
+        'FAM-1 12a C24: with no program left, the day is never on one and still lists the logged workout',
+      );
+    });
     console.log('✓ FAM-1 12a C24: a workout no assignment covers keeps its ids');
 
     // ── Look-ahead (canGoForward) ───────────────────────────────────────────────────────────────
