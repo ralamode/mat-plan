@@ -1864,13 +1864,16 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     const content = (w: Awaited<ReturnType<typeof read>>) =>
       w!.items.map(({ prescriptionClientId: _id, ...item }) => item);
 
-    // The source as a person leaves it: its lone last card removed (hidden, with its quantity), the
-    // two supersets swapped (so stored order differs from write order), and one target a range.
+    // The source as a person leaves it: superset B's two cards removed (hidden, with their
+    // quantities); the lone last card (Time per set) moved first, so stored order differs from write
+    // order, and its target cleared, so a LIVE card has a hidden quantity; one target a range.
     const live = await read(home, source);
+    const lone = live!.items[4]!;
+    assert.ok(lone.quantities.length > 0, 'FAM-1 6a-iii-b: the lone card has a target to clear');
     const resaved = await saveWorkout(exec, A_SCOPE, {
       ...draft,
       workoutPublicId: source,
-      items: [live!.items[2]!, live!.items[3]!, live!.items[0]!, live!.items[1]!],
+      items: [{ ...lone, quantities: [] }, live!.items[0]!, live!.items[1]!],
     });
     assert.ok(resaved.ok, 'FAM-1 6a-iii-b: the source is edited before it is copied');
     const [ranged] = await tx
@@ -1943,8 +1946,8 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     );
     assert.equal(
       copied!.items.length,
-      live!.items.length - 1,
-      "FAM-1 6a-iii-b: the source's removed card is not copied",
+      live!.items.length - 2,
+      "FAM-1 6a-iii-b: the source's removed cards are not copied",
     );
     assert.deepEqual(
       await storedQuantities(mine.workoutPublicId),
@@ -2030,6 +2033,16 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       (await provenance(there.workoutPublicId))!.copiedFromProgramName,
       'Kids program',
       "FAM-1 6a-iii-b: the source program's name is frozen at copy time",
+    );
+    assert.deepEqual(
+      content(await read(away, there.workoutPublicId)),
+      content(original),
+      "FAM-1 6a-iii-b: a copy into another program has the source's items too",
+    );
+    assert.deepEqual(
+      await storedQuantities(there.workoutPublicId),
+      await storedQuantities(source),
+      'FAM-1 6a-iii-b: …and its quantities',
     );
     const week = await readWeek(exec, A_SCOPE, away);
     assert.deepEqual(
@@ -2173,6 +2186,19 @@ async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       'ok' in freed && freed.ok,
       'FAM-1 6a-iii-b: a name a removed workout had is free again',
     );
+
+    // ── a replay still answers after the source is removed (another device, meanwhile) ──
+    const settled = await counts();
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, source));
+    assert.deepEqual(
+      await copy({ clientId }),
+      { ok: true, workoutPublicId: mine.workoutPublicId },
+      'FAM-1 6a-iii-b: a replayed copy answers the same workout after its source is removed',
+    );
+    assert.deepEqual(await counts(), settled, 'FAM-1 6a-iii-b: …and adds nothing');
 
     // ── household B cannot copy A's workout into its own program ──
     assert.deepEqual(

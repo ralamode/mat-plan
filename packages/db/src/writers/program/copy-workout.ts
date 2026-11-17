@@ -28,7 +28,9 @@ import { refuse } from './refuse';
  *   **A name a live workout of the target already has, folded, answers `name_taken`**, whichever
  *   way it was chosen: never two workouts of one name in a program.
  * - **A replay** (the same `clientId`, into the same program) answers the first copy's workout and
- *   writes nothing, before any check; a replay of a copy removed since is `not_found`.
+ *   writes nothing. It is checked once the target program is found, before the source and the
+ *   name, so it still answers after the source was removed; a replay of a copy removed since, or
+ *   into a program removed since, is `not_found`.
  * - **Weekdays**: the copy goes last on each day named, with `label`. It is new, so no day holds it.
  * - Refusals, before anything is written: `invalid` (the schema; a blank `name` is refused, not
  *   defaulted), `not_found` (the target program, or the source workout, is not the household's live
