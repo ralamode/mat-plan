@@ -2,20 +2,6 @@ import { MOVEMENT_PICKER_GROUP_LABELS, type MovementPickerGroup } from '@mat-pla
 
 import { formatList, plural, quote } from '@/lib/i18n/plural';
 
-/**
- * Every string the movement picker shows — the picker itself, the card hint, the Save line and the
- * footer's guard copy (PICK-1 Decision 8, reuse S4).
- *
- * 🔴 **Its own module, NOT `lib/constants.ts`.** `AUTH-1` 1c edits that file, and a whole feature's
- * copy landing in it is a guaranteed conflict for no benefit. `MOV-1` **adds to THIS file** — its
- * plan's file table lists this path as `EDIT (PICK-1 creates it)` and puts `MOVEMENT_RENAME_COPY`
- * beside this const (`mov-1-rename-movement.md`, § Files). Nothing is renamed later; an earlier
- * version of this comment invented a `movement-copy.ts` and an obligation to converge on it.
- *
- * ⚠️ **Several of these are functions, not strings, and that is deliberate** — a template literal
- * built at the call site is how the same sentence ends up phrased two ways on two screens. The
- * pluralisation lives here too, for the same reason.
- */
 /** See `asTypedHint` below for why every word of it is load-bearing. */
 const asTypedHintText = (name: string) =>
   `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
@@ -45,6 +31,20 @@ const statusNear = (n: number) =>
 const similarListed = (name: string, where: 'above' | 'below') =>
   `${quote(name)} is ${where}. Tap it if that's the one.`;
 
+/**
+ * Every string the movement picker shows — the picker itself, the card hint, the Save line and the
+ * footer's guard copy (PICK-1 Decision 8, reuse S4).
+ *
+ * 🔴 **Its own module, NOT `lib/constants.ts`.** `AUTH-1` 1c edits that file, and a whole feature's
+ * copy landing in it is a guaranteed conflict for no benefit. `MOV-1` **adds to THIS file** — its
+ * plan's file table lists this path as `EDIT (PICK-1 creates it)` and puts `MOVEMENT_RENAME_COPY`
+ * beside this const (`mov-1-rename-movement.md`, § Files). Nothing is renamed later; an earlier
+ * version of this comment invented a `movement-copy.ts` and an obligation to converge on it.
+ *
+ * ⚠️ **Several of these are functions, not strings, and that is deliberate** — a template literal
+ * built at the call site is how the same sentence ends up phrased two ways on two screens. The
+ * pluralisation lives here too, for the same reason.
+ */
 export const MOVEMENT_PICKER_COPY = {
   /** The sheet's title on the log form. `D2`'s editor passes its own. */
   title: 'Choose a movement',

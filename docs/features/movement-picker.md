@@ -152,8 +152,11 @@ path and **creating** the deliberate one.
       is withheld by the same rule as the item form and the server's `existingItem`.
     - **The dedupe is the component's**, not the contract's: a row in `near` is dropped from
       `someWords` before anything (heading, count, hint, button) reads either.
+    - **Enter with nothing to pick** (several matches, similar names, some-words) puts a touch
+      screen's keyboard away so the rows show; it still picks nothing.
     - **The create hint names a near miss only** (`similar = near[0]`), never the first of several
-      some-words rows, which would point a new movement at an arbitrary one. It is visible and tied
+      some-words rows, which would point a new movement at an arbitrary one, and never a row already
+      ticked in multi mode, where the tap it suggests would untick it. It is visible and tied
       to the button by `aria-describedby`: in multi mode the button sits above the list
       (invariant 12), so the hint is what reaches a keyboard first.
     - **The query stays in the picker** (P6). Its modules import only an allowlist, and a scan bans

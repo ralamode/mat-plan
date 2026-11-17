@@ -555,7 +555,12 @@ export function MovementPicker({
               issue={typedNameIssue}
               loud={!hasCandidates}
               noMatch={deferredTrimmed !== '' && !hasCandidates}
-              similar={offersTyped ? similar?.name : undefined}
+              // Never a ticked row: tapping it would untick what the person meant to keep.
+              similar={
+                offersTyped && similar && !selectedSet.has(similar.publicId)
+                  ? similar.name
+                  : undefined
+              }
             />
           ) : null}
           {deferredTrimmed === '' ? (

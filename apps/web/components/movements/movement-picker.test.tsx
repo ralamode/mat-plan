@@ -733,6 +733,17 @@ describe('multi-select', () => {
     expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('false');
   });
 
+  it('a similar name that is already ticked is not named: tapping it would untick it', () => {
+    render(<MultiHarness data={data} />);
+    open();
+    type('bulgarian', 'Search items');
+    fireEvent.click(box('Bulgarian Split Squat'));
+    type('bulgarain', 'Search items');
+    expect(box('Bulgarian Split Squat').getAttribute('aria-checked')).toBe('true');
+    const create = screen.getByRole('button', { name: 'New item: bulgarain' });
+    expect(create.getAttribute('aria-describedby')).toBeNull();
+  });
+
   it('several some-words rows name no movement under the create button', () => {
     render(<MultiHarness data={data} />);
     open();
@@ -751,7 +762,8 @@ describe('multi-select', () => {
 const PICKER_DIRS = ['components/movements', 'lib/movements'];
 const pickerSources = () =>
   PICKER_DIRS.flatMap((dir) =>
-    readdirSync(dir)
+    // Recursive: a later chunk's subfolder (B2's filters) is scanned too.
+    readdirSync(dir, { recursive: true, encoding: 'utf8' })
       .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
       .map((f) => {
         const path = `${dir}/${f}`;
