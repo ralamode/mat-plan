@@ -105,16 +105,19 @@ flowchart LR
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, V1-9b]
   S --> F[FAM-1 · the family program, to step 15]
-  O[1 · ops: seed split OPS-2, restore drill OPS-3] --> F
   K[14 · CAT-3 · the movement library] --> R[fresh start of the live app]
   F --> R
-  O --> R
-  P3[PRIV-3 · deleting a family] --> R
+  O2[1 · the seed split OPS-2] --> R
+  O2 --> P3a[PRIV-3 2a · the erasure core]
+  P3a --> R
   F --> W[FAM-1 step 16 · the week of real use]
   R --> W
   W --> B0[phone run-through, PRIV-1 sign-off · Beta 0 ends]
   N[0 · PII scan, required checks DX-5a] --> B0
-  O --> B0
+  O2 --> B0
+  O3[1 · the restore drill OPS-3] --> P3[PRIV-3 · deleting a family, the rest]
+  P3a --> P3
+  O3 --> B0
   P3 --> B0
   B0 --> I[Beta 1 · ONB-2, then invite family #1]
   T2 --> I
@@ -125,7 +128,9 @@ path since 2026-11-14 (no family is invited before Beta 1, and Beta 0 ends with 
 drew neither `FAM-1` nor item 14, `CAT-3`. It also fed the open ops and gate work into `AUTH-1`,
 which shipped without it: the seed split, the restore drill, deleting a family, the PII scan and
 required checks are drawn where they are still owed. `CAT-3` waits for nothing in step 4, so it
-starts its own line; its fresh start waits for `FAM-1` step 15, `OPS-2` and `PRIV-3`. **A `FAM-1`
+starts its own line; its fresh start waits for `FAM-1` step 15, `OPS-2` PR 1 and `PRIV-3` 2a, and
+**not** for the restore drill or the rest of `PRIV-3` (the maintainer's decision, item 14 below).
+`FAM-1` itself waits for neither ops item (FAM-1 plan D10). **A `FAM-1`
 PR takes its step ids from [the FAM-1 plan](../plans/fam-1-family-program.md) §5 to §7**, never
 from a chart; `CAT-3`'s chunks are in [its spec](../specs/cat-3-movement-library.md). A `CAT-3` PR
 marks node 14.
