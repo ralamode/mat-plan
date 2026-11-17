@@ -15,15 +15,6 @@ import { describe, it } from 'vitest';
  * These are a to-do list, not skipped tests: nothing here was ever a passing test.
  */
 
-describe('WorkoutDraft: owed by its consumers', () => {
-  it.todo('6a: a replayed saveWorkout adds nothing');
-  it.todo('6a: a reorder keeps logged rows attached (items are matched by prescriptionClientId)');
-  it.todo('6a: changing an item replaces its row and mints a new prescriptionClientId');
-  it.todo('6a: a refusal is a typed result (name_taken, invalid, not_found), never thrown');
-  it.todo('6a: an empty name is refused; a duplicate name in the program is refused');
-  it.todo('6a: the workout query deep-equals heavy-a-draft');
-});
-
 describe('WeekDraft: owed by its consumers', () => {
   it.todo('6b: a workout runs at most once on a weekday (once_per_day)');
   it.todo('6b: a removed slot frees its place');

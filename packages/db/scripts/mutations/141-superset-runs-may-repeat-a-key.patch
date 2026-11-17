@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index d5874bce..96b35933 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -39,7 +39,7 @@ export function supersetsAreWellFormed(items: readonly WorkoutDraftItem[]): bool
+     }
+     const previous = items[i - 1]?.superset?.group ?? null;
+     const place = previous === group ? items[i - 1]!.superset!.order + 1 : 1;
+-    if (closed.has(group) || item.superset!.order !== place) return false;
++    if (item.superset!.order !== place) return false;
+     const last = (items[i + 1]?.superset?.group ?? null) !== group;
+     if (last) {
+       if (place < 2) return false;

@@ -160,4 +160,63 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     const web = files.filter((f) => f.startsWith('apps/web/'));
     expect(web.filter((f) => HELPERS.test(code(join(REPO, f))))).toEqual([]);
   });
+
+  // FAM-1 6a-ii (the board's seam turn): `@mat-plan/db` exports lane P's writers and reads through
+  // the lane's two barrels. Their names are also `ProgramActions` members, which the screens and the
+  // preview's fake implement, so the scan matches an import or re-export of one FROM THE PACKAGE, not
+  // the bare name. The names are read from the barrels, so a later step's export is covered without
+  // an edit here. Step 7a changes this case.
+  const LANE_P_BARRELS = [
+    'packages/db/src/writers/program/index.ts',
+    'packages/db/src/queries/program/index.ts',
+  ];
+  /** The names an `export { … } from` barrel publishes: `a as b` publishes `b`. */
+  const published = (src: string) =>
+    [...src.matchAll(/export\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
+      m[1]!
+        .split(',')
+        .map((n) =>
+          n
+            .trim()
+            .split(/\s+as\s+/)
+            .at(-1)!,
+        )
+        .filter(Boolean),
+    );
+  const laneP = LANE_P_BARRELS.flatMap((b) => published(code(join(REPO, b))));
+  const fromDb = (names: readonly string[]) =>
+    new RegExp(
+      `(?:import|export)\\s*(?:type\\s*)?\\{[^}]*\\b(?:${names.join('|')})\\b[^}]*\\}\\s*from\\s*['"]@mat-plan\\/db['"]`,
+    );
+  // The forms that would reach a writer without naming it in braces.
+  const WHOLE_PACKAGE =
+    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)|export\s*\*\s*(?:as\s+\w+\s*)?from\s*['"]@mat-plan\/db['"]/;
+
+  it("apps/web imports none of lane P's program writers or reads yet (step 7a wires them)", () => {
+    for (const barrel of LANE_P_BARRELS) {
+      // A barrel that re-exports a whole module publishes names this scan cannot read.
+      expect(code(join(REPO, barrel)), `${barrel} names what it publishes`).not.toMatch(
+        /export\s*\*/,
+      );
+    }
+    expect(laneP, 'the barrels name what they publish').toEqual(
+      expect.arrayContaining(['createProgram', 'renameProgram', 'saveWorkout', 'readWorkoutDraft']),
+    );
+    const named = fromDb(laneP);
+    const web = files.filter((f) => f.startsWith('apps/web/'));
+    expect(web.filter((f) => named.test(code(join(REPO, f))))).toEqual([]);
+    expect(web.filter((f) => WHOLE_PACKAGE.test(code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: each form is caught, and a ProgramActions member is not.
+    expect(named.test("import { db, saveWorkout } from '@mat-plan/db';")).toBe(true);
+    expect(named.test("export { readWorkoutDraft } from '@mat-plan/db';")).toBe(true);
+    expect(named.test('async saveWorkout(draft) {')).toBe(false);
+    expect(WHOLE_PACKAGE.test("import * as db from '@mat-plan/db';")).toBe(true);
+    expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
+    expect(WHOLE_PACKAGE.test("export * from '@mat-plan/db';")).toBe(true);
+    expect(WHOLE_PACKAGE.test("export * as db from '@mat-plan/db';")).toBe(true);
+    // The scan's own parser: an alias publishes its right-hand name. ⚠️ It reads `export { … } from`
+    // only; a barrel's local `export function` or `export { x }` would publish a name it cannot see,
+    // so the barrels keep to that one form.
+    expect(published("export { readA as readB, readC } from './x';")).toEqual(['readB', 'readC']);
+  });
 });

@@ -97,6 +97,7 @@ safe in a `'use client'` component; those two are the proof modules' and come fr
 | `entryUnitFor(type, prescribedUnit)`, `ENTRY_UNIT_WITHOUT_QUANTITY`                                   | `packages/shared/src/program/pieces.ts`                                           | The unit a logged row's entry stores: `bool` for a Check, `count` for Reps, else the prescribed unit (plan §2). For the row writer and the export.                                                                                                                                                                                                                                                             |
 | `itemUnit(trackingType, quantities)`                                                                  | `packages/shared/src/program/pieces.ts`                                           | The unit an item logs in, which is `DayItem.unit`: `null` for a Check or Reps, the type's fixed unit, else the prescription's unit in the type's slot. One definition for the day's read and the row writer, because `fillRowValues` refuses a quantity in any other unit.                                                                                                                                     |
 | `DAY_PLAN_FIXTURE_SOURCES`, `DayPlanFixtureSource`, `World`, `workoutDraft`, `programOf`, `workoutOf` | `packages/shared/src/program/fixtures/index.ts` (the `/program/fixtures` subpath) | What each `DayPlan` fixture was built from: `{ world, athlete, day, before }`. A data lane's proof seeds `world` and deep-equals the fixture of the same name. `before` is the world before an edit, or `null`. `workoutDraft(world, programId, wid)` gives a workout as a `WorkoutDraft`, ready for the writer.                                                                                               |
+| `showsOnlyLogged(day)`                                                                                | `packages/shared/src/program/day-shapes.ts`                                       | Whether a day shows only what was logged: not writable and not a future day (a day before yesterday; an archived athlete's today or yesterday). There, an unlogged workout or item is absent and PREVIOUS is `null`. The fixture builder, the day resolver and the day screen all ask it (C23).                                                                                                                |
 | `inWritableWindow(day, today)`, `WRITABLE_DAY_RADIUS`                                                 | `packages/shared/src/day.ts`                                                      | Today and yesterday, never a day after today (plan D20, D32): what `DayPlan.writable` means and what a row write is held to. Pure; the caller supplies `today`. ⚠️ The older forms' `isWritableDay` (web) also accepts tomorrow until step 12c.                                                                                                                                                                |
 | `DEFAULT_TRACKING_TYPE`                                                                               | `packages/shared/src/movements.ts`                                                | The type an item gets when none is named: `weight_reps`, the `movements.tracking_type` column's default. `packages/db/src/tracking-type-default.test.ts` holds the const and the schema's default equal.                                                                                                                                                                                                       |
 | `rolledBack(fn)`                                                                                      | `packages/db/scripts/verify/harness.ts`                                           | For `db:verify` proof modules, not the app: runs a proof's writes in a transaction that is always rolled back, and rethrows the proof's own failure. Imported from `./harness`, beside `asTx` and `expectRejectedBy`.                                                                                                                                                                                          |
@@ -163,9 +164,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
 2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
    `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
-   transcription to equal them. A fixture is changed by changing the prototype first. **Three
+   transcription to equal them. A fixture is changed by changing the prototype first. **Five
    fixtures are not prototype states and say so**: `every-type-once`,
-   `closed-day-program-since-left` (C17) and `archived-athlete-today` (C18). Each is the
+   `closed-day-program-since-left` (C17), `archived-athlete-today` (C18),
+   `closed-day-nothing-logged` and `archived-athlete-nothing-logged` (C22). Each is the
    prototype's data arranged to reach a rule no prototype state reaches. **And one field of one
    fixture differs from the prototype's own state, by the maintainer's decision** (2026-11-17):
    the workout that left the week in `workout-left-the-week` has no label, where v12 shows the
@@ -358,7 +360,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     that is no longer live has `scheduled: false` and no label, as one that left the week does,
     and further has no description, every item built as a removed item is, and `progress` 0 of 0,
     so a hidden program's own text never reappears. (A workout that merely left the week is still
-    live and keeps its description, its live items and its count.) No FAM-1 action hides a
+    live and keeps its description, its live items and its count.) **Liveness decides, never the
+    assignment** (C24): a live workout logged on a day no live assignment covers any more is
+    shown as one that left the week, ids kept, though its program is not in that day's
+    `programs`; `onProgram` still follows the assignments. No FAM-1 action hides a
     program, and no fixture holds this: the day resolver's own proof does.
 
 ## Traps

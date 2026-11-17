@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index 82312055..a588017e 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -148,7 +148,7 @@ export async function saveWorkout(
+               trackingType: schema.movements.trackingType,
+             })
+             .from(schema.movements)
+-            .where(and(inArray(schema.movements.publicId, itemIds), movementIsAvailableTo(scope)));
++            .where(inArray(schema.movements.publicId, itemIds));
+     const movementOf = new Map(movements.map((m) => [m.publicId, m]));
+     if (movementOf.size !== itemIds.length) return refuse(PROGRAM_REFUSAL.not_found);
+     for (const item of draft.items) {

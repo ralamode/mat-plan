@@ -1,18 +1,24 @@
 import assert from 'node:assert/strict';
 
 import {
+  MAX_REPS_PER_SET,
   movementSlug,
   newId,
   PROGRAM_BLOCK_KIND,
   PROGRAM_NAME_MAX,
   PROGRAM_REFUSAL,
   PROGRAM_SEED,
+  QUANTITY_SLOT,
+  TRACKING_TYPE,
 } from '@mat-plan/shared';
+import { heavyADraft } from '@mat-plan/shared/program/fixtures';
+import type { WorkoutDraft } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import type { HouseholdScope } from '../../src/scope';
 import {
+  insertMovementOwnedBy,
   insertProgramBlockOwnedBy,
   programBlockInHousehold,
   programBlockIsLegacy,
@@ -20,7 +26,11 @@ import {
 import { createProgram } from '../../src/writers/program/create-program';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
+import { programIn, readWorkoutDraft, workoutIn } from '../../src/queries/program';
+import { saveWorkout } from '../../src/writers/program/save-workout';
+import { SHIFT_BAND } from '../../src/writers/program/shift-band';
 import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import { normalizeFixture } from './normalize-fixture';
 
 /**
  * `db:verify` proofs for the PROGRAM writers and reads.
@@ -52,6 +62,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyCreateProgram(ctx);
   await verifyRenameProgram(ctx);
   await verifySlugRace(ctx);
+  await verifySaveWorkout(ctx);
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -406,4 +417,592 @@ async function verifySlugRace({ A_SCOPE }: VerifyContext): Promise<void> {
     );
   });
   console.log('✓ FAM-1 6a-i: the slug race (lostSlugRace; both writers answer retry)');
+}
+
+/**
+ * `heavy-a-draft` re-keyed onto rows of `scope`'s household: a program, and one item per fixture item
+ * (made as the household's own, named and typed as the fixture says). The draft keeps the fixture's
+ * own client ids, so the saved workout can deep-equal the fixture.
+ */
+async function seedHeavyA(tx: VerifyTx, scope: HouseholdScope) {
+  const exec = asTx(tx);
+  const programPublicId = await mustCreate(tx, scope, 'Kids program');
+  const itemIds = new Map<string, string>();
+  for (const item of heavyADraft.items) {
+    if (itemIds.has(item.itemPublicId)) continue;
+    const publicId = newId();
+    await insertMovementOwnedBy(exec, scope, {
+      publicId,
+      slug: `fam-1-6a-ii-${movementSlug(item.itemName)}`,
+      name: item.itemName,
+      isBodyweight: false,
+      trackingType: item.trackingType,
+    });
+    itemIds.set(item.itemPublicId, publicId);
+  }
+  const draft: WorkoutDraft = {
+    ...heavyADraft,
+    programPublicId,
+    workoutPublicId: null,
+    items: heavyADraft.items.map((item) => ({
+      ...item,
+      itemPublicId: itemIds.get(item.itemPublicId)!,
+    })),
+  };
+  return { programPublicId, draft, itemIds };
+}
+
+/** The workout's prescription rows, live and hidden, by client id. */
+async function rowsOf(tx: VerifyTx, workoutPublicId: string) {
+  const rows = await tx
+    .select({
+      id: schema.prescriptions.id,
+      clientId: schema.prescriptions.clientId,
+      idx: schema.prescriptions.idx,
+      deletedAt: schema.prescriptions.deletedAt,
+    })
+    .from(schema.prescriptions)
+    .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+    .where(eq(schema.workouts.publicId, workoutPublicId));
+  return new Map(rows.map((r) => [r.clientId!, r]));
+}
+
+async function quantityRows(tx: VerifyTx, workoutPublicId: string) {
+  const rows = await tx
+    .select({
+      id: schema.prescriptionQuantities.id,
+      deletedAt: schema.prescriptionQuantities.deletedAt,
+    })
+    .from(schema.prescriptionQuantities)
+    .innerJoin(
+      schema.prescriptions,
+      eq(schema.prescriptions.id, schema.prescriptionQuantities.prescriptionId),
+    )
+    .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+    .where(eq(schema.workouts.publicId, workoutPublicId));
+  return { all: rows.length, live: rows.filter((r) => r.deletedAt === null).length };
+}
+
+/** Every program row the proofs can write, with its place, hide and update stamp: "nothing changed". */
+async function snapshot(tx: VerifyTx) {
+  const prescriptions = await tx
+    .select({
+      id: schema.prescriptions.id,
+      idx: schema.prescriptions.idx,
+      deletedAt: schema.prescriptions.deletedAt,
+      updatedAt: schema.prescriptions.updatedAt,
+    })
+    .from(schema.prescriptions)
+    .orderBy(schema.prescriptions.id);
+  const quantities = await tx
+    .select({
+      id: schema.prescriptionQuantities.id,
+      deletedAt: schema.prescriptionQuantities.deletedAt,
+      updatedAt: schema.prescriptionQuantities.updatedAt,
+    })
+    .from(schema.prescriptionQuantities)
+    .orderBy(schema.prescriptionQuantities.id);
+  const workouts = await tx
+    .select({
+      id: schema.workouts.id,
+      name: schema.workouts.name,
+      updatedAt: schema.workouts.updatedAt,
+    })
+    .from(schema.workouts)
+    .orderBy(schema.workouts.id);
+  return { prescriptions, quantities, workouts };
+}
+
+async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { programPublicId, draft } = await seedHeavyA(tx, A_SCOPE);
+
+    // ── a new workout saves, and the read deep-equals the contract's fixture ──
+    const saved = await saveWorkout(exec, A_SCOPE, draft);
+    assert.ok(saved.ok, 'FAM-1 6a-ii: saving heavy-a-draft succeeds');
+    const workoutPublicId = saved.workoutPublicId;
+    const read = await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId });
+    assert.deepEqual(
+      normalizeFixture(read),
+      normalizeFixture(heavyADraft),
+      'FAM-1 6a-ii: the workout read deep-equals the heavy-a-draft fixture',
+    );
+
+    // ── a replay (the same new-workout draft) answers the same workout and adds nothing ──
+    const before = {
+      rows: (await rowsOf(tx, workoutPublicId)).size,
+      q: await quantityRows(tx, workoutPublicId),
+    };
+    for (const replay of [draft, { ...draft, workoutPublicId }]) {
+      assert.deepEqual(
+        await saveWorkout(exec, A_SCOPE, replay),
+        { ok: true, workoutPublicId },
+        'FAM-1 6a-ii: a replayed saveWorkout answers the same workout',
+      );
+    }
+    assert.equal(
+      (await rowsOf(tx, workoutPublicId)).size,
+      before.rows,
+      'FAM-1 6a-ii: a replayed saveWorkout adds no prescription',
+    );
+    assert.deepEqual(
+      await quantityRows(tx, workoutPublicId),
+      before.q,
+      'FAM-1 6a-ii: a replayed saveWorkout adds no quantity, hidden ones included',
+    );
+
+    // ── a reorder keeps every row (and so the entries logged against it); only places change ──
+    const original = await rowsOf(tx, workoutPublicId);
+    const items = draft.items;
+    // B-group first, then A, then the lone item: every place but the last changes, and pairs swap.
+    const reordered = {
+      ...draft,
+      workoutPublicId,
+      items: [items[2]!, items[3]!, items[0]!, items[1]!, items[4]!],
+    };
+    assert.deepEqual(
+      await saveWorkout(exec, A_SCOPE, reordered).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true, workoutPublicId },
+      'FAM-1 6a-ii: a reorder that swaps places saves (through the band)',
+    );
+    const after = await rowsOf(tx, workoutPublicId);
+    for (const [index, item] of reordered.items.entries()) {
+      const row = after.get(item.prescriptionClientId)!;
+      assert.equal(
+        row.id,
+        original.get(item.prescriptionClientId)!.id,
+        'FAM-1 6a-ii: a reorder keeps logged rows attached (the same prescription row)',
+      );
+      assert.equal(row.idx, index, 'FAM-1 6a-ii: each row takes its new place');
+    }
+    assert.ok(
+      [...after.values()].every((r) => r.idx < SHIFT_BAND),
+      'FAM-1 6a-ii: no row is left in the band',
+    );
+    const readBack = await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId });
+    assert.deepEqual(
+      readBack?.items.map((i) => i.prescriptionClientId),
+      reordered.items.map((i) => i.prescriptionClientId),
+      'FAM-1 6a-ii: the read returns the new order',
+    );
+
+    // ── changing a card's item replaces its row; the editor minted a new client id ──
+    const [swapFrom, swapTo] = [reordered.items[4]!, reordered.items[3]!];
+    const swapped = {
+      ...reordered,
+      items: [
+        ...reordered.items.slice(0, 4),
+        {
+          ...swapFrom,
+          prescriptionClientId: newId(),
+          itemPublicId: swapTo.itemPublicId,
+          itemName: swapTo.itemName,
+          trackingType: swapTo.trackingType,
+          sets: 3,
+          targetReps: '10',
+          quantities: [],
+        },
+      ],
+    };
+    assert.ok((await saveWorkout(exec, A_SCOPE, swapped)).ok, 'FAM-1 6a-ii: a swapped item saves');
+    const swappedRows = await rowsOf(tx, workoutPublicId);
+    assert.ok(
+      swappedRows.get(swapFrom.prescriptionClientId)?.deletedAt,
+      "FAM-1 6a-ii: changing an item hides the old card's row",
+    );
+    assert.ok(
+      swappedRows.get(swapped.items[4]!.prescriptionClientId)?.deletedAt === null,
+      'FAM-1 6a-ii: changing an item writes a new row under the new client id',
+    );
+    const hiddenQuantities = await tx
+      .select({ id: schema.prescriptionQuantities.id })
+      .from(schema.prescriptionQuantities)
+      .where(
+        and(
+          eq(
+            schema.prescriptionQuantities.prescriptionId,
+            swappedRows.get(swapFrom.prescriptionClientId)!.id,
+          ),
+          isNull(schema.prescriptionQuantities.deletedAt),
+        ),
+      );
+    assert.equal(
+      hiddenQuantities.length,
+      0,
+      "FAM-1 6a-ii: a removed card's quantities are hidden too",
+    );
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items.map(
+        (i) => i.prescriptionClientId,
+      ),
+      swapped.items.map((i) => i.prescriptionClientId),
+      'FAM-1 6a-ii: the read leaves out a hidden card',
+    );
+
+    // ── editing a kept card persists every field; a kept card's removed target is hidden ──
+    const timed = { ...swapFrom, prescriptionClientId: newId(), superset: null, restAfter: null };
+    const edited = {
+      ...swapped,
+      items: [
+        // The B pair leaves its group (superset and rest cleared on the update path).
+        { ...swapped.items[0]!, superset: null, restAfter: null },
+        { ...swapped.items[1]!, superset: null, restAfter: null },
+        {
+          ...swapped.items[2]!,
+          sets: 5,
+          targetReps: '6',
+          notes: 'New note',
+          quantities: [{ ...swapped.items[2]!.quantities[0]!, value: 35 }],
+        },
+        // The A pair's last item takes a new rest.
+        { ...swapped.items[3]!, restAfter: 'Two minutes after each round' },
+        swapped.items[4]!,
+        timed,
+      ],
+    };
+    assert.ok((await saveWorkout(exec, A_SCOPE, edited)).ok, 'FAM-1 6a-ii: an edit saves');
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items,
+      edited.items,
+      "FAM-1 6a-ii: an edited card's sets, reps, notes, target, superset and rest persist",
+    );
+    const beforeClear = await quantityRows(tx, workoutPublicId);
+    const cleared = {
+      ...edited,
+      items: [...edited.items.slice(0, -1), { ...timed, quantities: [] }],
+    };
+    assert.ok(
+      (await saveWorkout(exec, A_SCOPE, cleared)).ok,
+      'FAM-1 6a-ii: a cleared target saves',
+    );
+    assert.deepEqual(
+      await quantityRows(tx, workoutPublicId),
+      { all: beforeClear.all, live: beforeClear.live - 1 },
+      "FAM-1 6a-ii: a kept card's removed target is hidden, not deleted",
+    );
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items.at(-1)
+        ?.quantities,
+      [],
+      'FAM-1 6a-ii: the read leaves out a hidden quantity',
+    );
+
+    // ── refusals are typed results, never thrown, and write nothing ──
+    const live = cleared;
+    // An id in upper case is the same id (Postgres compares uuids in any case): the save is the same
+    // save, and adds no row.
+    const upperCase = {
+      ...live,
+      workoutPublicId: workoutPublicId.toUpperCase(),
+      items: live.items.map((item) => ({
+        ...item,
+        prescriptionClientId: item.prescriptionClientId.toUpperCase(),
+        itemPublicId: item.itemPublicId.toUpperCase(),
+      })),
+    };
+    const beforeUpper = await snapshot(tx);
+
+    assert.deepEqual(
+      await saveWorkout(exec, A_SCOPE, upperCase).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true, workoutPublicId },
+      'FAM-1 6a-ii: ids in upper case are the same ids',
+    );
+    assert.deepEqual(
+      (await snapshot(tx)).prescriptions.map((r) => [r.id, r.deletedAt]),
+      beforeUpper.prescriptions.map((r) => [r.id, r.deletedAt]),
+      'FAM-1 6a-ii: an upper-case save hides and adds no row',
+    );
+    const beforeReplay = await snapshot(tx);
+    // A new workout's replay is found by its client id: in upper case it is still the replay.
+    assert.deepEqual(
+      await saveWorkout(exec, A_SCOPE, {
+        ...draft,
+        workoutClientId: draft.workoutClientId.toUpperCase(),
+        workoutPublicId: null,
+        name: live.name,
+        items: live.items, // its current state: a replay changes nothing
+      }).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true, workoutPublicId },
+      "FAM-1 6a-ii: a new workout's replay with an upper-case client id is the replay",
+    );
+    // ...and changes nothing. (updated_at is not compared: now() is one value in this transaction.)
+    const kept = (x: Awaited<ReturnType<typeof snapshot>>) => ({
+      prescriptions: x.prescriptions.map((r) => [r.id, r.idx, r.deletedAt]),
+      quantities: x.quantities.map((r) => [r.id, r.deletedAt]),
+    });
+    assert.deepEqual(
+      kept(await snapshot(tx)),
+      kept(beforeReplay),
+      "FAM-1 6a-ii: a new workout's upper-case replay hides, moves and adds nothing",
+    );
+    const other = await saveWorkout(exec, A_SCOPE, {
+      ...draft,
+      workoutClientId: newId(),
+      name: 'Light A',
+      items: [],
+    });
+    assert.ok(other.ok, 'FAM-1 6a-ii: a second workout saves');
+    const bProgram = await mustCreate(tx, B_SCOPE, 'Theirs');
+    const bWorkout = await saveWorkout(exec, B_SCOPE, {
+      ...draft,
+      programPublicId: bProgram,
+      workoutClientId: newId(),
+      name: 'Their workout',
+      items: [],
+    });
+    assert.ok(bWorkout.ok, "FAM-1 6a-ii: household B's own workout saves");
+    const aOther = await mustCreate(tx, A_SCOPE, 'Other A program');
+    const aOtherWorkout = await saveWorkout(exec, A_SCOPE, {
+      ...draft,
+      programPublicId: aOther,
+      workoutClientId: newId(),
+      name: 'Other workout',
+      items: [],
+    });
+    assert.ok(aOtherWorkout.ok, "FAM-1 6a-ii: a workout of A's other program saves");
+    const plank = newId();
+    await insertMovementOwnedBy(exec, A_SCOPE, {
+      publicId: plank,
+      slug: 'fam-1-6a-ii-plank',
+      name: 'Plank hold',
+      isBodyweight: false,
+      trackingType: TRACKING_TYPE.duration,
+    });
+    const bItem = newId();
+    await insertMovementOwnedBy(exec, B_SCOPE, {
+      publicId: bItem,
+      slug: 'fam-1-6a-ii-theirs',
+      name: 'Their item',
+      isBodyweight: false,
+      trackingType: live.items[4]!.trackingType,
+    });
+    // Single items with no superset, so each case is refused for its own reason and no other.
+    const solo = <T extends (typeof live.items)[number]>(item: T) => ({
+      ...item,
+      superset: null,
+      restAfter: null,
+    });
+    const weighted = solo(live.items[2]!); // dbbench: Weight × reps, a known card
+    const reps = solo(live.items[4]!); // the swapped-in Reps item, a known card
+    const timedCard = solo(live.items[5]!); // Time per set, a known card
+    const duration = {
+      ...reps,
+      prescriptionClientId: newId(),
+      itemPublicId: plank,
+      itemName: 'Plank hold',
+      trackingType: TRACKING_TYPE.duration,
+      sets: null,
+      targetReps: null,
+    };
+    const only = (...its: unknown[]) => ({ ...live, items: its });
+    const cases: Array<[string, unknown, string]> = [
+      ['an empty name', { ...live, name: '' }, PROGRAM_REFUSAL.invalid],
+      [
+        'two cards whose ids differ only in case',
+        only(reps, { ...reps, prescriptionClientId: reps.prescriptionClientId.toUpperCase() }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      ['a set-based item with no sets', only({ ...reps, sets: null }), PROGRAM_REFUSAL.invalid],
+      [
+        'reps that are not a whole number',
+        only({ ...reps, targetReps: '8-12' }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'reps over the cap',
+        only({ ...reps, targetReps: String(MAX_REPS_PER_SET + 1) }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a quantity on a type with none',
+        only({ ...reps, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 5 }] }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a quantity in the wrong unit',
+        only({ ...weighted, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 5 }] }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a superset of one',
+        only({ ...reps, superset: { group: 'z', order: 1 } }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a split superset (two runs under one key)',
+        only(
+          live.items[2]!,
+          live.items[3]!,
+          reps,
+          { ...live.items[0]!, superset: { group: live.items[2]!.superset!.group, order: 1 } },
+          { ...live.items[1]!, superset: { group: live.items[2]!.superset!.group, order: 2 } },
+        ),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a misnumbered superset',
+        only(
+          { ...live.items[2]!, superset: { ...live.items[2]!.superset!, order: 2 } },
+          { ...live.items[3]!, superset: { ...live.items[3]!.superset!, order: 1 } },
+        ),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a Duration prescribed in seconds',
+        only({
+          ...duration,
+          quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'sec', value: 30 }],
+        }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a Time per set prescribed in minutes',
+        only({
+          ...timedCard,
+          quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'min', value: 1 }],
+        }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        "a target over its unit's ceiling",
+        only({ ...weighted, quantities: [{ ...weighted.quantities[0]!, value: 99_999 }] }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a rest on a non-last item',
+        only({ ...live.items[2]!, restAfter: 'Rest' }, live.items[3]!),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        "a type that is not the item's own",
+        only({ ...weighted, trackingType: TRACKING_TYPE.reps, quantities: [] }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a known client id under another item',
+        only({
+          ...weighted,
+          itemPublicId: reps.itemPublicId,
+          itemName: reps.itemName,
+          trackingType: reps.trackingType,
+          quantities: [],
+        }),
+        PROGRAM_REFUSAL.invalid,
+      ],
+      ["a removed card's client id", only(reps, solo(swapFrom)), PROGRAM_REFUSAL.invalid],
+      [
+        "another household's program",
+        { ...live, programPublicId: bProgram },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      ['an unknown workout', { ...live, workoutPublicId: newId() }, PROGRAM_REFUSAL.not_found],
+      [
+        "another household's workout, in A's program",
+        { ...live, workoutPublicId: bWorkout.ok ? bWorkout.workoutPublicId : '' },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        "a workout of A's other program",
+        { ...live, workoutPublicId: aOtherWorkout.ok ? aOtherWorkout.workoutPublicId : '' },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an unknown item',
+        only({ ...reps, prescriptionClientId: newId(), itemPublicId: newId() }),
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        "another household's item",
+        only({
+          ...reps,
+          prescriptionClientId: newId(),
+          itemPublicId: bItem,
+          itemName: 'Their item',
+        }),
+        PROGRAM_REFUSAL.not_found,
+      ],
+      ["another workout's name, folded", { ...live, name: 'light  A' }, PROGRAM_REFUSAL.name_taken],
+    ];
+    const settled = await snapshot(tx);
+    for (const [what, input, reason] of cases) {
+      assert.deepEqual(
+        await saveWorkout(exec, A_SCOPE, input).catch((e: unknown) => ({ threw: String(e) })),
+        { ok: false, reason },
+        `FAM-1 6a-ii: saving ${what} is ${reason}`,
+      );
+    }
+    assert.deepEqual(
+      await snapshot(tx),
+      settled,
+      'FAM-1 6a-ii: a refused save writes nothing (every row, place and updated_at as it was)',
+    );
+
+    // ── another household: B cannot save into A's workout, nor read it ──
+    assert.deepEqual(
+      await saveWorkout(exec, B_SCOPE, live),
+      { ok: false, reason: PROGRAM_REFUSAL.not_found },
+      "FAM-1 6a-ii: household B saving A's workout is not_found",
+    );
+    assert.equal(
+      await readWorkoutDraft(exec, B_SCOPE, { programPublicId, workoutPublicId }),
+      null,
+      "FAM-1 6a-ii: household B reads nothing of A's workout",
+    );
+
+    // ── removing every card hides every row; the workout stays, empty ──
+    assert.ok(
+      (await saveWorkout(exec, A_SCOPE, { ...live, items: [] })).ok,
+      'FAM-1 6a-ii: an empty save',
+    );
+    assert.ok(
+      [...(await rowsOf(tx, workoutPublicId)).values()].every((r) => r.deletedAt !== null),
+      'FAM-1 6a-ii: removed cards are hidden, never deleted',
+    );
+    assert.equal(
+      (await quantityRows(tx, workoutPublicId)).live,
+      0,
+      'FAM-1 6a-ii: and so are their quantities',
+    );
+    assert.deepEqual(
+      (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items,
+      [],
+      'FAM-1 6a-ii: an emptied workout reads back with no items',
+    );
+
+    // ── programIn / workoutIn: scoped existence, the same `false` for every miss ──
+    assert.equal(
+      await programIn(exec, A_SCOPE, programPublicId),
+      true,
+      'FAM-1 6a-ii: programIn finds its own program',
+    );
+    assert.equal(
+      await programIn(exec, B_SCOPE, programPublicId),
+      false,
+      "FAM-1 6a-ii: programIn: B does not find A's program",
+    );
+    assert.equal(
+      await programIn(exec, A_SCOPE, 'not-a-uuid'),
+      false,
+      'FAM-1 6a-ii: programIn: a malformed id is false',
+    );
+    assert.equal(
+      await workoutIn(exec, A_SCOPE, programPublicId, workoutPublicId),
+      true,
+      'FAM-1 6a-ii: workoutIn finds its own workout',
+    );
+    assert.equal(
+      await workoutIn(exec, B_SCOPE, programPublicId, workoutPublicId),
+      false,
+      "FAM-1 6a-ii: workoutIn: B does not find A's workout",
+    );
+    assert.equal(
+      await workoutIn(exec, A_SCOPE, aOther, workoutPublicId),
+      false,
+      'FAM-1 6a-ii: workoutIn: a workout under another program of the household is false',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6a-ii: saveWorkout (fixture read, replay, reorder, swap, refusals, households)',
+  );
 }

@@ -31,7 +31,9 @@ export async function createProgram(
 ): Promise<ProgramResult<{ programPublicId: string }>> {
   const parsed = createProgramSchema.safeParse(input);
   if (!parsed.success) return { ok: false, reason: PROGRAM_REFUSAL.invalid };
-  const { clientId, name } = parsed.data;
+  const { name } = parsed.data;
+  // Postgres compares a uuid in any case; `programNameTaken`'s exclusion compares in JS.
+  const clientId = parsed.data.clientId.toLowerCase();
 
   const answer = async (): Promise<ProgramResult<{ programPublicId: string }> | null> => {
     const block = await programBlockByClientId(exec, scope, clientId);

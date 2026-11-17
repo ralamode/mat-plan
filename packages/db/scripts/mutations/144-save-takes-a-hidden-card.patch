@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index d5c2e961..c8d9cdb0 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -205,7 +205,7 @@ export async function saveWorkout(
+     for (const item of draft.items) {
+       const row = rowOf.get(item.prescriptionClientId);
+       const movementId = movementOf.get(item.itemPublicId)!.id;
+-      if (row && (row.deletedAt !== null || row.movementId !== movementId)) {
++      if (row && row.movementId !== movementId) {
+         return refuse(PROGRAM_REFUSAL.invalid);
+       }
+     }
