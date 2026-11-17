@@ -717,6 +717,16 @@ own that the page does not serve**: a stale link to a program since removed, or 
 an athlete who is not on its program, sends that id at `info` with the outcome `unknown_resource`. Retention is Sentry's, in §8. The alert
 that reads it is in [runbooks.md](../runbooks.md) → "A cross-household scope miss".
 
+**Every other Sentry event has public ids masked** (2026-11-16). An athlete's pages put their
+public id in the URL path (`/p/<id>`), and the SDK copied it onto each event: the request URL, the
+transaction name and Next's `contexts.nextjs.request_path`. Exception messages could carry a row's
+`client_id` too. `apps/web/lib/sentry-scrub.ts` now replaces every UUID in every string it scrubs
+with `:id`, so an ordinary error report keeps only the route's shape (`/p/:id`). Before this, every
+error report from an athlete's page carried their id. The day page's `?d=` query was never sent: the
+SDK strips queries, and the scrubber now cuts them too, as a precaution. The scope-miss event above is
+the one exception: its id in `contexts.scope_miss.resource` is put back after the masking, on
+purpose, and only when it is a well-formed UUID.
+
 **One thing the code does not guarantee:** TLS. `client.ts` **upgrades** an `sslmode` that is already
 present to `verify-full`, and explicitly does not invent one if absent; nothing validates that
 `DATABASE_URL` carries it. Whether production is `verify-full` is an environment fact to confirm, not a

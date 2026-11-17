@@ -1,0 +1,5 @@
+# Error reports no longer carry an athlete's id
+
+An athlete's pages put their public id in the URL path (`/p/<id>`), and the Sentry SDK copies that path into the request URL, the transaction name (`GET /p/<id>`) and Next's `contexts.nextjs.request_path` (from `captureRequestError`). Exception messages could also carry a row's `client_id`. So every error report from an athlete's page carried their id. C11's review found it on 2026-11-16; it predates C11.
+
+`apps/web/lib/sentry-scrub.ts` now replaces every UUID in every string it scrubs with `:id`. The one deliberate id, the scope-miss event's `contexts.scope_miss.resource` from `reportScopeMiss`, is restored afterwards, and only when it's a well-formed UUID. As a precaution it also cuts the query off the request URL and breadcrumb addresses. The SDK already strips the query (`filterUrlQuery`), so the day page's `?d=` was never sent. The test fixture is shaped from a real `captureRequestError` event. The runbook's live Sentry check gains a line for this.
