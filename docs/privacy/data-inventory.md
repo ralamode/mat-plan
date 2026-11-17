@@ -717,6 +717,14 @@ own that the page does not serve**: a stale link to a program since removed, or 
 an athlete who is not on its program, sends that id at `info` with the outcome `unknown_resource`. Retention is Sentry's, in §8. The alert
 that reads it is in [runbooks.md](../runbooks.md) → "A cross-household scope miss".
 
+**Every other Sentry event has ids and days masked out of its addresses** (2026-11-16). The app's
+pages put an athlete's, a program's or a workout's public id, and the day viewed, in the URL path,
+and the SDK records the page's URL on each event. `apps/web/lib/sentry-scrub.ts` → `maskUrlPath`
+replaces every id with `:id` and every day with `:date` in the request URL, the transaction name,
+span descriptions and breadcrumb addresses, so an ordinary error report keeps only the route's
+shape (`/p/:id/:date`). Before this, every error report from an athlete's page carried their id. The
+scope-miss event above is unaffected: its id is not in a URL field.
+
 **One thing the code does not guarantee:** TLS. `client.ts` **upgrades** an `sslmode` that is already
 present to `verify-full`, and explicitly does not invent one if absent; nothing validates that
 `DATABASE_URL` carries it. Whether production is `verify-full` is an environment fact to confirm, not a

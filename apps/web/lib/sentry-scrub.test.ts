@@ -11,6 +11,7 @@ import {
   beforeSendTransactionScrubbed,
   scrubSentryEvent,
   SENTRY_DATA_COLLECTION,
+  maskUrlPath,
 } from './sentry-scrub';
 
 /**
@@ -462,5 +463,53 @@ describe('scrubSentryEvent — a rejected row never leaves the server (Postgres 
     } as Parameters<typeof beforeSendLogScrubbed>[0]);
     const crumb = beforeBreadcrumbScrubbed({ message: `x\nDETAIL: ${KEY}`, data: { detail: ROW } });
     expect(JSON.stringify({ log, crumb })).not.toContain('Saturday hill sprints');
+  });
+});
+
+describe('scrubSentryEvent — a page address never names an athlete (C11 review, 2026-11-16)', () => {
+  const ATHLETE = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f8091';
+  const PROGRAM = '0193a4b2-7c1d-7e2f-8a3b-4c5d6e7f80ff';
+  const page = `https://www.mat-plan.dev/p/${ATHLETE}/2026-11-16`;
+
+  it('masks ids and the day in the request URL, keeping the route shape', () => {
+    const event = scrubSentryEvent({ request: { url: page } } as Event);
+    expect(event.request?.url).toBe('https://www.mat-plan.dev/p/:id/:date');
+  });
+
+  it('masks the duplicate under contexts.request, the transaction name and span descriptions', () => {
+    const event = scrubSentryEvent({
+      transaction: `GET /p/${ATHLETE}`,
+      contexts: { request: { url: page } },
+      spans: [{ description: `GET /programs/${PROGRAM}` }],
+    } as unknown as Event);
+    expect(event.contexts?.request?.url).toBe('https://www.mat-plan.dev/p/:id/:date');
+    expect(event.transaction).toBe('GET /p/:id');
+    expect(event.spans?.[0]?.description).toBe('GET /programs/:id');
+  });
+
+  it('masks navigation and fetch breadcrumbs (from, to, url)', () => {
+    const crumb = beforeBreadcrumbScrubbed({
+      category: 'navigation',
+      data: { from: `/p/${ATHLETE}`, to: `/programs/${PROGRAM}`, url: page },
+    });
+    expect(crumb?.data).toEqual({
+      from: '/p/:id',
+      to: '/programs/:id',
+      url: 'https://www.mat-plan.dev/p/:id/:date',
+    });
+  });
+
+  it('KEEPS the deliberate scope-miss id: it is not a URL field (household.ts → reportScopeMiss)', () => {
+    const event = scrubSentryEvent({
+      request: { url: page },
+      contexts: { scope_miss: { kind: 'program', resource: PROGRAM, outcome: 'cross_household' } },
+    } as unknown as Event);
+    expect(event.request?.url).toBe('https://www.mat-plan.dev/p/:id/:date');
+    expect(event.contexts?.scope_miss).toMatchObject({ resource: PROGRAM });
+  });
+
+  it('leaves a non-date segment and a plain number alone', () => {
+    expect(maskUrlPath('/p/new?x=1')).toBe('/p/new?x=1');
+    expect(maskUrlPath('/api/export/2026-11')).toBe('/api/export/2026-11');
   });
 });
