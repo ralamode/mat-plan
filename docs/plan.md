@@ -1133,7 +1133,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   cannot pass at `high` today ([tech-debt](./tech-debt.md)), so this reports, it does not gate.
 
 - **SEC-5c — the expiring audit allowlist.** _(maintainer, 2026-10-06; cut out of SEC-5 by its scope
-  lens.)_ **Build it the first time an unfixable `high` actually lands in the `--prod` tree** — not
+  lens.)_ ✅ **Built 2026-11-17** ([plan](./plans/sec-5c-advisory-exceptions.md)), the day picomatch
+  GHSA-fc5q-39xc-vjpf (no published fix) reached the `--prod` tree; the maintainer chose it over merging
+  red or pausing merges. The original reasoning follows. **Build it the first time an unfixable `high` actually lands in the `--prod` tree** — not
   before. SEC-5 shipped without it on purpose: `audit --prod` is clean, so the file would ship empty,
   and in the draft it was 60% of the guard and 17 of its 26 test cases. The reviewed design is
   preserved in the plan's history (#237) and is worth re-reading then — in particular that **V10 is
