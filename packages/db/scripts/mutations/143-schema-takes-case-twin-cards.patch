@@ -1,0 +1,13 @@
+diff --git a/packages/shared/src/program/program-shapes.ts b/packages/shared/src/program/program-shapes.ts
+index f10d1bac..157d8a06 100644
+--- a/packages/shared/src/program/program-shapes.ts
++++ b/packages/shared/src/program/program-shapes.ts
+@@ -93,7 +93,7 @@ export const workoutDraftSchema = z.object({
+   items: z
+     .array(workoutDraftItemSchema)
+     .max(MAX_WORKOUT_ITEMS)
+-    .refine((items) => distinct(items.map((item) => item.prescriptionClientId)), {
++    .refine(() => true, {
+       message: 'each card has its own prescriptionClientId',
+     }),
+ });
