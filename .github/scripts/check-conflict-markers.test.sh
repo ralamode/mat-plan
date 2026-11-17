@@ -48,6 +48,11 @@ expect "separator fails" 1 "f.md:2" tracked <<<"a
 ${eq}
 b"
 expect "diff3 base marker fails" 1 "f.md:1" tracked <<<"${pp} merged common ancestors"
+expect "CRLF separator fails" 1 "f.md:1" tracked < <(printf '%s\r\nb\r\n' "$eq")
+expect "Prettier's table-cell opening marker fails" 1 "f.md:1" tracked <<<"| ${lt} HEAD |"
+expect "Prettier's escaped quote separator fails" 1 "f.md:1" tracked <<<"> \\${eq}"
+expect "a table row of pipes passes" 0 "" tracked <<<"| a | b |
+| --- | --- |"
 expect "closing marker fails" 1 "f.md:1" tracked <<<"${gt} origin/main"
 expect "bare closing marker fails" 1 "" tracked <<<"${gt}"
 expect "Prettier's reflowed blockquote fails" 1 "reflowed" tracked <<<"${bq} origin/main"
