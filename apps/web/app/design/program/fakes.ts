@@ -9,6 +9,7 @@ import {
   MONDAY_FIRST,
   existingItem,
   fillRowValues,
+  loggedRowUnit,
   newId,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -304,8 +305,12 @@ export function createFakeDayActions(
         if (!found.workout.scheduled) return refuse(ROW_REFUSAL.not_scheduled);
         // A row whose item left the workout can be un-ticked and ticked back, nothing more.
         if (!found.item.prescriptionPublicId) return refuse(ROW_REFUSAL.program_changed);
-        // No prescription to fall back on: a blank keeps the number that is there.
-        const values = fillRowValues(found.item, parsed.data.values, null);
+        // No prescription to fall back on: a blank keeps the number that is there. The numbers
+        // are judged against the row as it was LOGGED, as the writer does (C28): its type's
+        // fields, in the unit it was stored in, which is not the item's once that was edited.
+        const { trackingType } = found.item;
+        const stored = { trackingType, unit: loggedRowUnit(trackingType, found.logged.values) };
+        const values = fillRowValues(stored, parsed.data.values, null);
         if (!values) return refuse(ROW_REFUSAL.bad_value);
 
         found.logged.values = values;

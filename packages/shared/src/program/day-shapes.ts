@@ -348,7 +348,10 @@ export type RowRetick = z.infer<typeof rowRetickSchema>;
  * Change a logged row's numbers in place. The writable window is taken from the entry's own day.
  *
  * **`values` holds every number the row's tracking type has** (`TRACKING_TYPE_FIELDS`): the reps
- * where the type has reps, and the one quantity in the type's slot, in the unit the item logs in.
+ * where the type has reps, and the one quantity in the type's slot, **in the unit the row was
+ * logged in** (`loggedRowUnit`; contract change C28). That is the unit the item logs in unless the
+ * prescription's unit was edited after the row was logged: a row logged in lb is changed in lb,
+ * and a number in the item's new unit answers `bad_value`.
  * Unlike `RowWrite`, nothing is filled in from the prescription: a field left out is a blank, and a
  * blank answers `bad_value` and keeps the number that is there (plan §8, "Change keeps the old
  * number if the new one is blank or not a number").
