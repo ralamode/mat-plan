@@ -15,6 +15,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The strength fix-a-set path can change a program row on any day (found 2026-11-17, FAM-1 11c's panel)
+
+- **What & why it's debt:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`)
+  edits any LIVE set of the profile, on any day, through `ownedEntryIds`. A program row of the
+  Weight × reps type passes its shape guards (mass, done, not bodyweight), so a crafted fix-a-set
+  request can change a program row's numbers outside D20's writable window (today and yesterday).
+  The day page's own Change (`amendRow`, 11c-i) keeps the window; this older path does not.
+- **Reach:** within the household only, and on the athlete's own history: `ownedEntryIds` rides
+  `isLiveProfile(profilePublicId, scope)`, so another household's set is never reached. Any member of
+  the household may correct any of its athletes by design (ADR 0008 Decision 4); what is missing is
+  the window, not the ownership.
+- **The fix:** the fix-a-set path refuses a program row (`entries.prescription_id IS NOT NULL`)
+  whose day is outside `rowDayOpen`. A `db:verify` boundary proof and a mutation.
+- **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
+- **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
+
 ### `program_blocks.name` has no length CHECK (found 2026-11-16, lane P's 6a-i review)
 
 - **What & why it's debt:** `workouts.name` and every other program text carry a length CHECK pinned

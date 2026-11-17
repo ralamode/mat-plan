@@ -3,7 +3,7 @@
 > Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step
 > 11c, decisions D20 and D35. Branch: `feat/fam-1-11c-amend-row`. Lane E
 > ([day-writers.md](../features/day-writers.md)). **Rev 2**, after a six-lens panel (§ Review-response
-> log). Q3 (the split) is open with the board.
+> log). **Split** _(maintainer, 2026-11-17, relayed by the board)_: 11c-i is Change, 11c-ii is the revive, under this one plan.
 
 ## Goal
 
@@ -260,7 +260,7 @@ is A1's. The remaining differences:
 - The Change action and its page (12b, 12d).
 - Bodyweight and practice, whose re-entry stays a new row (D35).
 - Keeping replaced client ids (v1.5).
-- **Pre-existing, filed with the board:** `updateStrengthSetById` (`strength-session.ts:450-530`)
+- **Pre-existing, filed in `docs/tech-debt.md` (lane E's, the board 2026-11-17; fixed in its own PR after 11c-i):** `updateStrengthSetById` (`strength-session.ts:450-530`)
   edits any live set of the profile on any day, so a crafted fix-a-set request can change a
   Weight×reps program row outside D20's window.
 
@@ -269,12 +269,10 @@ is A1's. The remaining differences:
 - **Q1 (lane S): answered yes, then reversed by the panel (R8).** The UPDATE stays in `log-row.ts`.
   Lane S was told why, and asked whether the reworded claim works for them.
 - **Q2 (lane A): answered.** Lane A rewords the docblock in 0031.
-- **Q3 (the board):** split into two PRs under this one plan?
-  - **11c-i:** Change (`row-steps.ts`, `amend-row.ts`, `updateEntrySetRows`, the owed lines). It
-    gates 12b's Change action.
-  - **11c-ii:** the revive (R1–R8, the 10/3b rewrites, the claim rewording).
-  - Recommended: yes. Together they are well over the 400-line target, and Change should not wait on
-    the revive's seams. If the answer is yes, 11c-i lands S1 first.
+- **Q3, decided: split** _(maintainer, 2026-11-17, relayed by the board)_. **11c-i** is Change
+  (S1–S4, A1–A8, `updateEntrySetRows`, the two owed lines, mutations 348–356); it lands S1 first and
+  gates 12b's Change action. **11c-ii** is the revive (R1–R8, the 10 and 3b rewrites, the claim
+  rewording, mutations 341–347). This PR (#533) carries the plan and 11c-i; 11c-ii is its own PR.
 - **Q4 (contract owner):** align the fake's `amendRow` to check the stored unit (A5)?
 
 ## Review-response log
