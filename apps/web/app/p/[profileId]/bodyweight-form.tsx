@@ -4,18 +4,17 @@ import {
   BODYWEIGHT_UNITS,
   type BodyweightUnit,
   DEFAULT_BODYWEIGHT_UNIT,
-  isBlankWeight,
+  isBlankEntry,
   newId,
 } from '@mat-plan/shared';
-import { Check, LoaderCircle } from 'lucide-react';
 import { useActionState, useId, useLayoutEffect, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { BODYWEIGHT_COPY, INPUT_CLASS } from '@/lib/constants';
 
 import { type ActionState, INITIAL_ACTION_STATE } from './action-state';
 import { logBodyweightAction } from './actions';
 import { DayField } from './day-field';
+import { LogTick, TickedCopy } from './log-tick';
 import { useSingleValueLive } from './single-value-live';
 
 /**
@@ -89,7 +88,12 @@ export function BodyweightForm({
   const valueErr = blank ? BODYWEIGHT_COPY.blankLog : state.fieldErrors?.value?.[0];
   // The island's status is in it too: after a clear, focus lands here, and arriving focus reads
   // "Bodyweight cleared. It was 84.5 lb." even if it pre-empted the live region's announcement.
-  const describedBy = [lastTime ? ids.hint : null, valueErr ? ids.error : null, live.statusId]
+  const describedBy = [
+    lastTime ? ids.hint : null,
+    valueErr ? ids.error : null,
+    live.alertId,
+    live.statusId,
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -99,7 +103,7 @@ export function BodyweightForm({
       onSubmit={(e) => {
         // An empty ✓ is refused here, synchronously, so focus lands on the field inside the same tap
         // and the phone opens its keypad. No request is sent.
-        if (isBlankWeight(value)) {
+        if (isBlankEntry(value)) {
           e.preventDefault();
           setBlank(true);
           inputRef.current?.focus();
@@ -161,43 +165,21 @@ export function BodyweightForm({
             ))}
           </select>
         </div>
-        {/* Outline, so an unlogged ✓ never reads as done: the filled tick is the logged row's. */}
-        <Button
-          type="submit"
-          variant="outline"
-          size="icon-lg"
-          disabled={pending}
-          aria-busy={pending || undefined}
-          aria-label={BODYWEIGHT_COPY.logLabel}
-        >
-          {pending ? (
-            <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
-          ) : (
-            <Check aria-hidden="true" className="size-5" />
-          )}
-        </Button>
+        {/* Outline while empty, filled while a weight waits to be sent (`log-tick.tsx`). */}
+        <LogTick label={BODYWEIGHT_COPY.logLabel} pending={pending} ready={!isBlankEntry(value)} />
       </div>
 
       {valueErr ? (
         <p id={ids.error} role="alert" className="text-destructive text-sm">
           {/* The copy names the ✓; the glyph is hidden from a screen reader, which hears the
               button's own name in its place. */}
-          {valueErr === BODYWEIGHT_COPY.blankLog ? <TickedCopy text={valueErr} /> : valueErr}
+          {valueErr === BODYWEIGHT_COPY.blankLog ? (
+            <TickedCopy text={valueErr} buttonLabel={BODYWEIGHT_COPY.logLabel} />
+          ) : (
+            valueErr
+          )}
         </p>
       ) : null}
     </form>
-  );
-}
-
-/** Copy that names the ✓: the glyph is `aria-hidden`, and the button's own name is read in its place. */
-function TickedCopy({ text }: { text: string }) {
-  const [before, after] = text.split('✓');
-  return (
-    <>
-      {before}
-      <span aria-hidden="true">✓</span>
-      <span className="sr-only">{BODYWEIGHT_COPY.logLabel}</span>
-      {after}
-    </>
   );
 }

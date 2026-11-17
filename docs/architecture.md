@@ -433,6 +433,53 @@ function, `packages/db` could not call it and the agreement could only be assert
 the 13 seeded are open. Only `IS NULL` takes the fallback branch. NULL means "logged before chunk 2,
 or logged with no day role"; everything else freezes, so chunk 4's edits cannot rewrite history.
 
+**Since FAM-1 11b the snapshot has two freezing paths.** The flow above is the strength writer's (a
+day-role prescription, matched by movement). A program row (§2i) freezes its own prescription's text
+inside its transaction, through `prescribedText` (`@mat-plan/shared/program/prescribed-text`), the
+renderer the day page and the export share; its `''` (a Check) is the same real value as above. The
+export's NULL fallback reaches only the first path's rows: a program row is never written NULL.
+
+## 2i. Logging a program row — `logRow` (FAM-1 11b)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as Server Action (12b)
+  participant W as logRow (packages/db)
+  participant DB as Postgres (one transaction)
+  A->>W: scope, today, workout_item id, RowWrite
+  W->>DB: profile in scope (isLiveProfile); archived?
+  Note over W: outside the window (today, yesterday) → closed_day
+  W->>DB: who holds clientId? (unguarded, pinned)
+  alt held by this write
+    DB-->>W: live → ok with stored values · hidden → own_hidden
+  else held by anything else
+    DB-->>W: not_found
+  end
+  W->>DB: workout: templateBlockIn(scope) ∧ programBlockOfProfile
+  W->>DB: prescription IN that workout + live quantities
+  W->>DB: movement available to the household
+  W->>DB: scheduledOn(block, workout, weekday of the day)
+  Note over W: set and values: fillRowValues(prescribedTarget) → else bad_value
+  W->>DB: INSERT session ON CONFLICT DO NOTHING → re-select exactly one
+  W->>DB: INSERT superset (if grouped) → re-select exactly one
+  W->>DB: INSERT entry ON CONFLICT DO NOTHING (client_id, row arbiter)
+  alt not inserted
+    W->>DB: classify the holder again; else a live row on the set → slot_taken
+  else inserted
+    W->>DB: INSERT entry_sets + entry_set_quantities
+  end
+  W-->>A: RowResult (a refusal after an insert rolls back by RowRefused)
+```
+
+🔴 **The order is the contract**, and every step has a `db:verify` proof with its own mutation
+(`scripts/verify/day.ts`). The replay answers before the program checks, so a retry after the program
+changed answers as the first call did. A refusal is thrown as `RowRefused` and caught at the
+transaction's edge, so a session the call created is never left behind. Un-tick and re-tick are the
+same profile and window steps, then `hideEntries` / `restoreHidden` (§2h) on a program row of that
+athlete and day only. Step 5's "on the program that day" check is owed
+([day-writers.md](./features/day-writers.md)).
+
 ## 2d. Program read path — today's weekday → the kid's prescribed movements (V1-10)
 
 > ⚠️ **Not on the day page since V1-24 3b-page (2026-11-15, #418).** The page no longer calls
@@ -639,7 +686,7 @@ flowchart TB
   CHK["✓ CHECK: at-most-one of movement_id / metric_key"]
 ```
 
-### 4b. The program tables (FAM-1, through 4b)
+### 4b. The program tables (FAM-1, through step 5)
 
 A household's program is a `program_blocks` row (`kind` is `template` for a block built in the
 app, `legacy` for the seeded one). Its workouts are `workouts`; the week template places them on weekdays through
@@ -647,8 +694,11 @@ app, `legacy` for the seeded one). Its workouts are `workouts`; the week templat
 `prescription_quantities`. Two links run from the log side back to the plan: `sessions.workout_id`
 and `entries.prescription_id`. Both are `ON DELETE SET NULL` and identity only: what was asked
 is frozen on the log row (`sessions.workout_name`, `entries.prescribed_snapshot`), so a rename or
-purge never rewrites history. Who is on which block (assignments) arrives with FAM-1 step 5, which
-adds its tables here.
+purge never rewrites history. Who is on which program is `program_assignments` (FAM-1 step 5): one
+row per athlete and program from `active_from` through `active_to` (inclusive; NULL while open), with
+`program_assignment_weekdays` saying which days it is due. A template block reaches an athlete only
+through an assignment; "on day D" and "due on D" are spelled once, in
+`packages/db/src/queries/program-assignments.ts`.
 
 ```mermaid
 erDiagram
@@ -667,6 +717,9 @@ erDiagram
   profiles ||--o{ prescription_targets : "profile_id"
   workouts |o--o{ sessions : "workout_id, SET NULL (4a-ii)"
   prescriptions |o--o{ entries : "prescription_id, SET NULL (4a-ii)"
+  program_blocks ||--o{ program_assignments : "block_id (5); template blocks only, writer-enforced"
+  profiles ||--o{ program_assignments : "profile_id (5); same household, writer-enforced"
+  program_assignments ||--o{ program_assignment_weekdays : "assignment_id (5)"
 
   program_blocks {
     bigint id PK
@@ -721,6 +774,17 @@ erDiagram
     bigint prescription_id FK "identity only"
     int prescription_set "1-based; marks a row logged in a program"
     text prescribed_snapshot "what was asked, frozen"
+  }
+  program_assignments {
+    bigint profile_id FK
+    bigint block_id FK
+    int idx "the athlete's program order"
+    date active_from "NOT NULL"
+    date active_to "inclusive last day; NULL while open"
+  }
+  program_assignment_weekdays {
+    bigint assignment_id FK
+    int weekday "0 is Sunday"
   }
 ```
 

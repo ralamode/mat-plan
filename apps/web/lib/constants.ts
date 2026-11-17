@@ -1,5 +1,9 @@
 import {
+  ACTIVITY_TYPE_KEYS,
   MAX_HOUSEHOLD_ATHLETES,
+  PRACTICE_MINUTES_MAX,
+  PRACTICE_MINUTES_MIN,
+  type PracticeMinutesProblem,
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
   type Unit,
@@ -10,10 +14,11 @@ import {
 } from '@mat-plan/shared';
 
 import { plural } from './i18n/plural';
+import { LIFE_ACTIVITIES } from './life/life-activities';
 
 /**
- * App-only, cross-feature constants. **No server or IO dependencies** — only `@mat-plan/shared`'s
- * pure values — so it is safe to import from a `'use client'` component, from the Edge proxy, and
+ * App-only, cross-feature constants. **No server or IO dependencies** — only pure modules
+ * (`@mat-plan/shared`, `./i18n/plural`, `./life/life-activities`) — so it is safe to import from a `'use client'` component, from the Edge proxy, and
  * from `lib/access-gate.ts` (which takes `PRIVACY_PATH` from here) without dragging server code into
  * the client bundle. Named here so a value that must stay in sync across files (a cookie name, the
  * tz default, a published URL) can't drift.
@@ -676,13 +681,11 @@ export const LOGGED_ROW_CLASS =
   'border-done bg-done-surface text-card-foreground has-[form]:bg-background';
 
 /**
- * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day: the
- * one-tap button writes minutes nobody typed, so the row is where a person first sees them.
+ * The Life section's copy (V1-24 3b-page). The logged row names the value, on every day (typed since
+ * 3b-life-b; the practice row's own copy is `PRACTICE_COPY`).
  */
 export const LIFE_COPY = {
   heading: 'Life',
-  /** `Wrestling practice · 90 min`; the label alone when the entry carries no value. */
-  logged: (label: string, value: string | null) => (value === null ? label : `${label} · ${value}`),
   /** A read-only day with nothing logged; otherwise the section is a bare heading. */
   noneOnClosedDay: NOTHING_LOGGED,
   /** What the status region announces after a log. */
@@ -690,16 +693,65 @@ export const LIFE_COPY = {
 } as const;
 
 /**
- * The ring on an element focused by script after a save (`SavedAnnouncer`), never by Tab: the Life
- * rows (the bodyweight row hands focus to Change instead since V1-24 3b-bw). With `tabIndex={-1}` at the use site.
+ * The ring on an element focused by script, never by Tab (the program builder's headings and the
+ * athlete switcher). With `tabIndex={-1}` at the use site. The day page's rows hand focus to a real
+ * control instead since V1-24 3b-life.
  */
 export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus-visible:ring-3';
 
-/** The logged rows' element id: the focus target after a log (`SavedAnnouncer`). */
-export const LIFE_LOGGED_ID = 'life-logged';
-
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
+
+/** The sr-only word beside a logged single value's tick, so it reads "Logged 84.5 lb" (3b-bw W4). */
+export const LOGGED_SR_LABEL = 'Logged';
+
+/**
+ * The copy a single value's Change editor and its island share (V1-24 3b-life A2): one template per
+ * subject, so bodyweight and practice cannot drift into two spellings of "changed to" or "cleared".
+ *
+ * - `changeSubject`: `changeLabel`'s subject (`Change weight — 84.5 lb`); the ✓ and ✕ names below
+ *   are built from it, so one row never names its value with two different nouns.
+ * - `saveLabel` / `clearLabel` / `cancelLabel`: the inline ✓'s name (`Save weight`, or `Clear
+ *   weight` while an empty ✓ would clear: plan W5; the icon-only pair, 2026-11-16) and the ✕'s. The
+ *   ✓ looks the same either way; the hint says a blank clears.
+ * - `clearHint`: always under the open editor, so a blank ✓ is never a surprise. "Clear", not
+ *   "remove": the row is hidden, not erased, until `PRIV-3` (delete-and-restore.md's trap).
+ * - `blankSave`: an archived athlete's empty ✓, refused (there is no field to re-enter into). It names
+ *   the ✓, so it renders through `TickedCopy` and a screen reader hears the ✓'s name.
+ * - `announced*`: what the live region says (plan W6); a clear's line is SHOWN as well, because it
+ *   leaves nothing else on screen.
+ */
+function singleValueCopy(o: {
+  subject: string;
+  changeSubject: string;
+  clearHint: string;
+  blankSave: string;
+}) {
+  return {
+    changeSubject: o.changeSubject,
+    saveLabel: inlineSaveLabel(o.changeSubject),
+    clearLabel: `Clear ${o.changeSubject}`,
+    cancelLabel: inlineCancelLabel(o.changeSubject),
+    clearHint: o.clearHint,
+    blankSave: o.blankSave,
+    announcedLogged: LIFE_COPY.announced(o.subject),
+    announcedChanged: (value: string) => `${o.subject} changed to ${value}`,
+    announcedCleared: (value: string) => `${o.subject} cleared. It was ${value}.`,
+  } as const;
+}
+
+export type SingleValueCopy = ReturnType<typeof singleValueCopy>;
+
+/** An inline ✓'s name (`Save weight`): icon-only, so the name says what it saves. */
+function inlineSaveLabel(subject: string): string {
+  return `Save ${subject}`;
+}
+
+/** An inline ✕'s name (`Cancel changing weight`), for every inline Change (`AMEND_COPY.cancelLabel`),
+ *  so two open editors are not two identical "Cancel"s in a screen reader's list. */
+function inlineCancelLabel(subject: string): string {
+  return `Cancel changing ${subject}`;
+}
 
 /**
  * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
@@ -717,26 +769,14 @@ export const BODYWEIGHT_COPY = {
   logLabel: 'Log bodyweight',
   /** An empty ✓, refused in the browser before any request (plan W3). */
   blankLog: 'Enter your bodyweight, then ✓.',
-  /** An archived athlete's empty Save (plan W5): their page has no empty field to re-enter into. */
-  blankSave: 'Enter your bodyweight, then Save.',
   /** The sr-only word beside a logged row's tick, so it reads "Logged 84.5 lb". */
-  logged: 'Logged',
+  logged: LOGGED_SR_LABEL,
   /**
    * The muted hint over the unlogged row (plan W10): `Last time 72.5 lb`, with the day when it was not
    * yesterday (`· Tue`, or `· Nov 3` from a week back). Never a placeholder or a prefill.
    */
   lastTime: (value: string, when: string | null) =>
     when ? `${LAST_TIME_PREFIX} ${value} · ${when}` : `${LAST_TIME_PREFIX} ${value}`,
-  /** Save's label while the editor's field is empty (plan W5), and its accessible name. */
-  clear: 'Clear',
-  clearLabel: 'Clear bodyweight',
-  /** Clear's pending label: it names the act, as `SAVING_LABEL` and `adding` do for theirs. */
-  clearing: 'Clearing…',
-  /**
-   * Always under the open editor (plan W5), so a blank Save is never a surprise. "Clear", not
-   * "remove": the row is hidden, not erased, until `PRIV-3` (delete-and-restore.md's trap).
-   */
-  clearHint: 'To clear this weigh-in, leave the field empty.',
   /**
    * More than one live row (the pre-1c duplicates, or a two-phone race): `2 weights logged: 84.5 lb,
    * 845 lb`. The row never silently picks one — a hidden duplicate is uncorrectable twice over.
@@ -763,12 +803,86 @@ export const BODYWEIGHT_COPY = {
   },
   /** A read-only day with nothing logged (v12, and Life's) — otherwise the section is a bare heading. */
   noneOnClosedDay: NOTHING_LOGGED,
-  /** What the live region says after each action (v12's handlers; plan W6). */
-  announcedLogged: LIFE_COPY.announced('Bodyweight'),
-  announcedChanged: (value: string) => `Bodyweight changed to ${value}`,
-  /** Shown as well as spoken: a clear leaves nothing else on screen to show it happened. */
-  announcedCleared: (value: string) => `Bodyweight cleared. It was ${value}.`,
+  /** `AMEND_ERROR_COPY`'s subject: `the weight wasn't changed` (as `PRACTICE_COPY.noun`). */
+  noun: 'weight',
+  ...singleValueCopy({
+    subject: 'Bodyweight',
+    changeSubject: 'weight',
+    clearHint: 'To clear this weigh-in, leave the field empty.',
+    blankSave: 'Enter your bodyweight, then ✓.',
+  }),
 } as const;
+
+/** The practice activity's label, from the one list that also names its button (one source). */
+/** The sr-only words after the practice label that make the field's name (`… minutes`). */
+const PRACTICE_FIELD_SUFFIX = ' minutes';
+
+const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
+  (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
+)!.label;
+
+/**
+ * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
+ * the day's TOTAL, and the hint says so (plan A3).
+ */
+export const PRACTICE_COPY = {
+  label: PRACTICE_LABEL,
+  /** `AMEND_ERROR_COPY`'s subject: `the practice wasn't changed`. */
+  noun: 'practice',
+  /** The log row's sr-only suffix after its visible label, so its name is `fieldLabel`. */
+  fieldLabelSuffix: PRACTICE_FIELD_SUFFIX,
+  /** The field's accessible name on BOTH rows (log and Change); the visible `min` is `aria-hidden`. */
+  fieldLabel: `${PRACTICE_LABEL}${PRACTICE_FIELD_SUFFIX}`,
+  ...singleValueCopy({
+    subject: PRACTICE_LABEL,
+    changeSubject: PRACTICE_LABEL.toLowerCase(),
+    // "That day", not "today": Change renders on yesterday too, the evening-after path this is for.
+    clearHint:
+      'To clear this practice, leave the field empty. Two practices that day? Enter the total.',
+    blankSave: 'Enter the minutes, then ✓.',
+  }),
+  /** A refused amend or log (`bad_value`): the one rule, its range from the shared consts. */
+  outOfRange: `Enter whole minutes, ${PRACTICE_MINUTES_MIN} to ${PRACTICE_MINUTES_MAX}.`,
+  // ── Logging (V1-24 3b-life-b B1, B2, B5) ────────────────────────────────────────────────────────
+  /** The ✓'s accessible name. */
+  logLabel: `Log ${PRACTICE_LABEL.toLowerCase()}`,
+  /** An empty ✓, refused in the browser before any request. */
+  blankLog: 'Enter the minutes, then ✓.',
+  /**
+   * A number that reads as hours: the floor's reason, said plainly _(maintainer, 2026-11-16)_. For a
+   * whole 1–5 the sum is done for them (`2 hours is 120`); otherwise a fixed example, in words, not
+   * the ½ glyph. (6 hours and up would be over the 300 cap anyway.)
+   */
+  hoursNotMinutes: (typed: string) => {
+    const t = typed.trim();
+    const hours = /^0*[1-5]$/.test(t) ? Number(t) : null;
+    return hours === null
+      ? 'Minutes, not hours: 1 and a half hours is 90.'
+      : `Minutes, not hours: ${hours} ${hours === 1 ? 'hour is' : 'hours is'} ${hours * 60}.`;
+  },
+  /** A tab still on the one-tap bundle posts no minutes; a reload brings the field. */
+  reloadToLog: 'Reload the page to log practice.',
+  /**
+   * A practice already holds the day (3b-0's index): say what happened to THIS number, and how to make
+   * it count. No claim about "another phone": a second tab on the same phone gets this too.
+   */
+  dayTaken: (minutes: number) =>
+    `A practice is already logged for this day, so your ${minutes} min wasn't saved. Tap Change to make it ${minutes}, or enter the total if it was a second practice.`,
+  /** The id is held by a different row (a crafted reuse): nothing saved; the form mints a new id. */
+  notSaved: "That wasn't saved. Tap ✓ to try again.",
+  /** This athlete's own CLEARED practice holds the id: nothing logged; the form mints a new id. */
+  clearedEarlier: 'That practice was cleared earlier, so nothing was logged. Tap ✓ to log it now.',
+} as const;
+
+/**
+ * Each typed-entry problem's message, for the form (before the request) and the action alike: one map,
+ * and a `Record`, so a new problem in `practiceMinutesProblem` is a compile error until it has copy.
+ */
+export const PRACTICE_PROBLEM_COPY: Record<PracticeMinutesProblem, (typed: string) => string> = {
+  blank: () => PRACTICE_COPY.blankLog,
+  hours: (typed) => PRACTICE_COPY.hoursNotMinutes(typed),
+  range: () => PRACTICE_COPY.outOfRange,
+};
 
 /**
  * The accessible name for an amend control — `Change weight — 84.5 lb` (V1-24 PR 1b).
@@ -790,6 +904,8 @@ export const AMEND_COPY = {
   change: 'Change',
   save: 'Save',
   cancel: 'Cancel',
+  /** The inline ✕'s name for a row with no `SingleValueCopy` (lane C's set rows). */
+  cancelLabel: inlineCancelLabel,
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */
   valueLabel: (unit: string) => `Weight (${unit})`,

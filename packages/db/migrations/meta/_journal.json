@@ -190,6 +190,20 @@
       "when": 1794845567367,
       "tag": "0026_v1_24_3b0_practice_one_per_day",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794859957827,
+      "tag": "0027_fam1_5_program_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794868579974,
+      "tag": "0028_scale3_role_statement_timeout",
+      "breakpoints": true
     }
   ]
 }

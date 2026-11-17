@@ -280,7 +280,7 @@ export function unitChangedText(item: string, value: number, from: Unit, to: Uni
 export function fieldsToFixText(count: number): string {
   return count === 1
     ? 'One field needs fixing before saving.'
-    : 'Some fields need fixing before saving.';
+    : `${count} fields need fixing before saving.`;
 }
 
 /** What a refused Save says in the save bar. `name_taken` is said under the name as well. */
@@ -532,3 +532,137 @@ export const undoLabel = (workout: string, day: number) =>
 
 /** A day that already has the chosen workout, in the days fieldset. */
 export const hasItLabel = (day: number) => `${weekdayName(day)}, ${WEEK_COPY.hasIt}`;
+
+/** The Put-on dialog's words (FAM-1 step 10b; the prototype's `openStart`). */
+export const PUT_ON_COPY = {
+  open: 'Put someone on this program…',
+  everyoneOn: 'Everyone in the household is on it.',
+  who: 'Who',
+  intro: 'This adds a program; their other programs stay.',
+  starting: 'Starting',
+  onIt: 'on it',
+  noProgramYet: 'no program yet',
+  pickSomeone: 'Pick someone first',
+  start: 'Start',
+  startPending: 'Starting…',
+  failed: 'Couldn’t start them. Try again.',
+  stale: 'This program changed somewhere else. It now shows the latest; no one was started.',
+  dayChanged: 'The day has changed since this page loaded. It now shows today; no one was started.',
+} as const;
+
+export const putOnTitle = (program: string) => `Put someone on ${program}`;
+export const keepsText = (programs: readonly string[]) =>
+  programs.length ? `keeps ${formatList(programs)}` : PUT_ON_COPY.noProgramYet;
+export const lastDayText = (day: string) => `last day ${formatDayShort(day)}`;
+export const candidateOnLabel = (name: string, hint: string) => `${name}, ${hint}`;
+export const startLabel = (count: number, program: string) =>
+  count ? `${PUT_ON_COPY.start} ${count} on ${program}` : PUT_ON_COPY.start;
+export const fromText = (when: 'today' | 'tomorrow', day: string) =>
+  `${when === 'today' ? 'Today' : 'Tomorrow'}, ${formatDayShort(day)}`;
+
+/**
+ * What the chosen start changes, named (the trust lens): the workouts that go on their page that
+ * day, or that the day has none and when the first one is. Today also says what was logged stays.
+ */
+export function startEffectText(
+  when: 'today' | 'tomorrow',
+  workouts: readonly string[],
+  next: { day: string; workouts: readonly string[] } | null,
+): string {
+  const day = when === 'today' ? 'Today' : 'Tomorrow';
+  const kept = when === 'today' ? ' What they’ve already logged today stays.' : '';
+  if (workouts.length) {
+    return `${day}: ${formatList(workouts)} ${workouts.length > 1 ? 'go' : 'goes'} on their page.${kept}`;
+  }
+  const first = next ? ` Their first workout is ${formatDayShort(next.day)}.` : '';
+  return `${day}: nothing from this program.${first}${kept}`;
+}
+
+/** Shown when someone ticked keeps another program: where this one goes in their day's order. */
+export const orderHintText = (program: string) =>
+  `${program} goes where it sits in the Programs list. Each person can change their order from their day page.`;
+/** Shown when someone ticked keeps another program and Take off is wired: how to switch instead. */
+export const switchHintText = (programs: readonly string[]) =>
+  `To switch instead, start tomorrow, then take them off ${formatList(programs)} from that program’s page.`;
+export function startedText(
+  names: readonly string[],
+  program: string,
+  from: string,
+  today: string,
+) {
+  const when = from === today ? 'today' : `on ${formatDayShort(from)}`;
+  return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${when}.`;
+}
+/** Someone put back on after a Take off: they never left, whatever the start date (C15). */
+export const backOnText = (names: readonly string[], program: string) =>
+  `${formatList(names)} ${names.length > 1 ? 'stay' : 'stays'} on ${program}.`;
+
+/** The Copy dialog's words (FAM-1 step 10b; the prototype's `openCopy`). */
+export const COPY_COPY = {
+  open: 'Copy to…',
+  to: 'To',
+  chooseProgram: 'Choose a program',
+  chooseFirst: 'Choose where to copy it',
+  days: 'On which days',
+  optional: '(optional)',
+  labelHint: 'Shown above the workout on those days.',
+  separate: 'The copy is separate: editing one never changes the other.',
+  copy: 'Copy',
+  copying: 'Copying…',
+  name: 'Name',
+  nameMissing: 'Give the copy a name.',
+  nameInvalid: 'A name is one line of plain text.',
+  failed: 'Couldn’t copy it. Try again.',
+  stale: 'This program changed somewhere else. It now shows the latest; nothing was copied.',
+} as const;
+
+/** The trigger's name: the visible words first (WCAG 2.5.3), then which workout. */
+export const copyToLabel = (workout: string) => `${COPY_COPY.open} a program: ${workout}`;
+export const copyTitle = (workout: string) => `Copy ${workout}`;
+export const thisProgramOption = (program: string) => `This program: ${program}`;
+
+export const copyTakenText = (name: string) =>
+  `There’s already a ${name} here. Give the copy another name.`;
+/** A copy to another program keeps its name; that program already has one. */
+export const copyTakenElsewhereText = (program: string, name: string) =>
+  `${program} already has a ${name}. Give the copy another name.`;
+
+/** Who sees the copy: the people on the target program. */
+export const targetPeopleText = (program: string, people: readonly string[]) =>
+  people.length
+    ? `On ${program}: ${formatList(people)}. They’ll see it on the days you pick.`
+    : `No one is on ${program} yet.`;
+/** An athlete on both programs who already does this workout on a picked day. */
+export const doubleText = (
+  athlete: string,
+  workout: string,
+  days: readonly number[],
+  program: string,
+) =>
+  `${athlete} already does ${workout} on ${formatList(days.map((d) => weekdayName(d, 'short')))} (${program}).`;
+export const putOnInsteadText = (program: string) =>
+  `If you want someone to get every change to ${program}, put them on it instead: they get its whole week, and every later change.`;
+
+export function copiedText(
+  workout: string,
+  target: string,
+  days: readonly number[],
+  sameProgram: boolean,
+): string {
+  const on = days.length ? `, on ${formatList(days.map((d) => weekdayName(d, 'short')))}` : '';
+  return sameProgram
+    ? `${workout} added${on}.`
+    : `${workout} copied to ${target}${on}. Editing one won’t change the other.`;
+}
+
+/**
+ * A loaded number the card cannot hold (FAM-1 editor): what it was, and what to do. Information
+ * only; the field stays empty for a person to type (plan D27).
+ */
+export function droppedText(was: { value: number; unit: Unit }, fixedUnit: Unit | null): string {
+  const unit = (u: Unit) => (UNIT_LABELS[u] ?? u).toLowerCase();
+  const saved = `This was saved as ${was.value} ${unit(was.unit)}`;
+  return fixedUnit
+    ? `${saved}, which this item can’t hold. Enter it in ${unit(fixedUnit)}.`
+    : `${saved}. Choose a unit and enter it again.`;
+}

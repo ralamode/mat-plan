@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-import { CLOSED_DAY_NOTICE } from '../lib/constants';
+import { BODYWEIGHT_COPY, CLOSED_DAY_NOTICE } from '../lib/constants';
 
-import { bodyweightSection, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
+import { bodyweightSection, changePrefix, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * Day navigation (V1-15).
@@ -51,7 +51,7 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   await expect(
     section
       .getByLabel('Weight', { exact: true })
-      .or(section.getByRole('button', { name: /^Change weight/ })),
+      .or(section.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) })),
   ).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
 });

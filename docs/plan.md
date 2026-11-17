@@ -379,7 +379,9 @@ now and dearer once FAM-1's lanes have written their actions and reads, or once 
   existing transaction. ⚠️ **If it is (1), check what else runs as that role:** a role-level timeout
   also bounds the migration runner, `db:seed` and any backfill, which need their own session-level
   override on the unpooled connection. A second attempt owes a `docs/lessons.md` entry. A migration
-  owes the `db-migration` skill and the db-safety lens. _(Beta 0.)_
+  owes the `db-migration` skill and the db-safety lens. _(Beta 0.)_ **Plan:**
+  [scale-3-statement-timeout.md](./plans/scale-3-statement-timeout.md) (the role-level default; probe
+  results in the plan; the seed gets no override, reasoned there).
 - <a id="scale-4"></a>**SCALE-4 — the rules that are written down but not wired (one docs PR).** Nine
   places where a doc states something the code does not do. For each, fix the claim (mark it "planned,
   not wired yet" with its owner row) or fix the code; almost always the claim. The nine: `Intl`
@@ -2963,7 +2965,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
     [PR 3b plan](./plans/v1-24-3b-logs-in-place.md): **3b-0** ✅ #461 one practice per day in the database ·
     **3b-page** ✅ #418 the old Check-ins and Strength forms, the "Logged entries" list and the
     "Calisthenics today" card leave the page; a logged practice shows its minutes · **3b-bw** ✅ #442 bodyweight logs with ✓ under a "Last time" hint, and a blank Save on Change clears it ·
-    **3b-life** practice is an empty minutes field, entered once then changed; no Wake. Earlier entries
+    **3b-life-a** ✅ #479 a logged practice can be changed, and emptying the field clears it · **3b-life-b** ✅ #492 practice is logged by typing the minutes (10–300), and Wake can no longer be logged. Earlier entries
     are not shown until FAM-1 is done, and days before yesterday are read-only.
   - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
     re-run just before 1d merges. `migrate.yml` runs on every push to main with no gate, so a 1d that

@@ -15,6 +15,18 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### `program_blocks.name` has no length CHECK (found 2026-11-16, lane P's 6a-i review)
+
+- **What & why it's debt:** `workouts.name` and every other program text carry a length CHECK pinned
+  to its shared const by `db:verify`; `program_blocks.name` (migration `0007`) has none. A template
+  block's name is bounded only by `PROGRAM_NAME_MAX` in zod, so a writer that skips the schema would
+  store any length.
+- **Why not fixed in passing:** the column is populated (the seeded and archived blocks), so the CHECK
+  is `NOT VALID` in one migration and `VALIDATE` in a second PR, after a read of production's longest
+  name. Scoped `kind = 'template' or …` if a legacy name exceeds it, as 0025 did for `target_reps`.
+- **Owner:** lane A (FAM-1). **Trigger:** after FAM-1 step 5 (`0027`) is applied.
+- **Severity:** low (nothing writes a template block outside the zod-validated writers).
+
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
@@ -46,6 +58,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   step:** nothing in FAM-1 depends on it and the migration queue is taken until step 5 is applied;
   it is the first migration after that. Owner: the Platform thread.
 - **Severity:** low.
+
+### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel)
+
+- **What & why it's debt:** `writeCheckinEntries` (a practice) and `insertBodyweightEntry` (a
+  weigh-in) are skipped by their day index when another live row holds the day, then re-read to say
+  why. If that other row is cleared between the skipped insert and the re-read, nothing holds the day
+  or the id, and the writer throws (`neither inserted nor held`), so the person sees `error.tsx`.
+- **Impact:** low. It takes a second phone's ✓ within milliseconds of a clear on the same athlete's
+  same day, in a one-household app; a reload logs normally. Bodyweight has had it since #442, practice
+  since its clear (3b-life-a).
+- **Fix:** re-run the insert once for exactly those items before throwing. Provable on PGlite only
+  with a statement-level `AFTER INSERT` trigger that hides the holder inside the insert (the
+  correctness lens's stage), which costs more than the race; build it if it is ever seen.
+- **Severity:** low. **Accepted** _(V1-24 3b-life plan, 2026-11-16)_.
 
 ### A failed query's params reach Vercel's runtime logs (found 2026-11-16, #447 privacy review)
 
@@ -131,6 +157,20 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   **4.54** on accent and 4.96 on background. An L shift of 0.011 is not perceptible, and it clears
   the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
   [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
+
+### Two reads of a logged row's live sets and quantities (added 2026-11-16, FAM-1 step 11b)
+
+- **What & why it's debt:** `packages/db/src/queries/day/stored-row-values.ts` (`readRowValues`, the
+  row writer's replay and re-tick answer) and the app DAL's day read
+  (`apps/web/lib/dal/entries.ts`, the live `entry_sets` and then their quantities) are the same two
+  queries with the same load-bearing parent filter. 11b wrote the first in `packages/db` because the
+  writer cannot import the app DAL; folding the DAL onto it changes a lane-S file, so it was left.
+- **Impact:** a change to the parent filter made in one copy (the set-liveness rule) leaves the other
+  reading by the old rule. The writer's copy is guarded by mutation 172; the DAL's is not.
+- **The fix:** the DAL calls `readRowValues` (or a sibling that also returns the set ids and
+  statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
+  one from the start.
+- **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
 
 ### The a11y checks have two copies (added 2026-11-15, FAM-1 step 0b)
 
@@ -619,7 +659,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
 
 ### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
 
-- **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
+- **What & why:** `saved-announcer.tsx` (deleted at V1-24 3b-life-a), `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
   an effect. What TRIGGERS each is deliberately different (B5: an island announces its own save,
   never a value diff), but the presentational half is copied.
@@ -629,16 +669,17 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ✅ **Half of the destination exists as of `PROF-1` a-r (2026-11-07): `apps/web/components/ui/announcer.tsx`.**
   It owns the REGION — the `role="status"` element and the mounted-while-empty rule — and deliberately
   **not** the trigger: the four copies differ in _what_ announces, and that difference is load-bearing
-  (`saved-announcer.tsx` explains why a value→value change must not announce). The transition half is
+  (a value→value change, such as paging to a logged day, must not announce). The transition half is
   already single-sourced for action results, in `use-on-action-success.ts`.
   ⚠️ **The count is still four.** a-r is the component's first consumer and converted none of them, so
   this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b
   are the next consumers.
   ✅ **Down to three (V1-24 3b-bw, 2026-11-16).** `bodyweight-amend.tsx`'s own region is gone: the
   bodyweight row reports to `single-value-live.tsx`, which renders `Announcer` once (with a
-  `messageKey`, so a repeated message re-announces) and owns a single-use focus claim. 3b-life moves
-  the Life row onto it and retires `saved-announcer.tsx`'s last consumer, leaving `editable-set.tsx`
-  and the `StrengthForm` island.
+  `messageKey`, so a repeated message re-announces) and owns a single-use focus claim.
+  ✅ **Down to two (V1-24 3b-life-a, 2026-11-16).** The Life row reports to the same island, and
+  `saved-announcer.tsx` is deleted (it had no other consumer), leaving `editable-set.tsx` and the
+  `StrengthForm` island.
   ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
   `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
   `messageKey` when that lane next touches it.

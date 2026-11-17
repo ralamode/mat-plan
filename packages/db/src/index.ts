@@ -48,6 +48,8 @@ export * from './queries/hidden-entries';
 // V1-24 3b-bw: Clear on the day page, through `hideEntries`. Its pre-read sees a hidden row too, but
 // returns only its day (delete-and-restore.md's reader audit).
 export * from './writers/single-value';
+// V1-24 3b-life: the practice amend's guarded UPDATE and its re-read (the clear is in single-value).
+export * from './writers/practice';
 export * from './queries/last-bodyweight';
 // The single-sourced find-or-create for `movements` (TEN-1 1d). Extracted so db:verify proves the
 // catalog's CROSS-HOUSEHOLD behaviour against the same function the app runs — `movements` has no
@@ -59,10 +61,12 @@ export * from './writers/movement-catalog';
 export * from './writers/profile';
 export * from './writers/ownership';
 export * from './writers/strength-session';
+// FAM-1 11b: the row writer, its un-tick and its re-tick, for step 12b's Server Actions.
+export * from './writers/day';
 // FAM-1 lane P (6a-ii; the board's seam turn): the program writers behind ProgramActions and the
-// builder's reads. Named, so the lane's helpers stay in the package.
+// builder's reads, each through the lane's own barrel, so the lane's helpers stay in the package.
 export * from './writers/program';
-export { readWorkoutDraft } from './queries/program/workout';
+export * from './queries/program';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
 // tooling (e.g. the ephemeral screenshot fixture) can target the seeded profile by
 // its stable id instead of re-typing the UUID (constants convention, single source).

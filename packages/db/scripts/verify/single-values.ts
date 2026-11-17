@@ -7,6 +7,7 @@ import {
   ENTRY_STATUS,
   METRIC_KEYS,
   newId,
+  PRACTICE_UNIT,
   PROFILE_KIND,
   RESTORE_REASON,
   SEED_ACTIVITY_TYPE_KEYS,
@@ -21,7 +22,13 @@ import { hideEntries, restoreHidden } from '../../src/writers/hide';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
 import { insertBodyweightEntry } from '../../src/writers/bodyweight';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
-import { bodyweightRowForAmend, clearBodyweight } from '../../src/writers/single-value';
+import {
+  bodyweightRowForAmend,
+  clearBodyweight,
+  clearPractice,
+  practiceRowForAmend,
+} from '../../src/writers/single-value';
+import { findAmendablePractice, updatePracticeEntryById } from '../../src/writers/practice';
 import { asTx, expectRejectedBy, rolledBack, type VerifyContext } from './harness';
 
 /**
@@ -42,6 +49,7 @@ import { asTx, expectRejectedBy, rolledBack, type VerifyContext } from './harnes
 export async function verifySingleValues(ctx: VerifyContext): Promise<void> {
   await verifyBodyweightClear(ctx);
   await verifyPracticeOnePerDay();
+  await verifyPracticeAmend(ctx);
 }
 
 const HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b000';
@@ -763,6 +771,215 @@ async function verifyPracticeOnePerDay(): Promise<void> {
 
     console.log(
       '✓ V1-24 3b-0: one live practice per (profile, day): the index refuses by name and frees a hidden day; the insert answers replay (metric and day pinned), day_taken, own_hidden and conflict in order, per row in a batch; Restore all into a re-entered day answers slot_taken for the practice alone; the migration sets its timeouts, locks, pre-checks and builds in that order',
+    );
+  });
+}
+
+const AMEND_HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b1a0';
+const AMEND_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b1a1';
+const AMEND_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b1a2';
+
+// ── V1-24 3b-life-a — change and clear a practice: the amend, its re-read, the pre-read (plan A6) ──
+async function verifyPracticeAmend({ B_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const [hh] = await tx
+      .insert(schema.households)
+      .values({ publicId: AMEND_HH_PUBLIC_ID, name: 'Verify 3b-life HH' })
+      .returning({ id: schema.households.id });
+    const SCOPE = householdScopeForScript(hh.id);
+    const [athlete, sibling] = await tx
+      .insert(schema.profiles)
+      .values([
+        {
+          publicId: AMEND_ATHLETE_PUBLIC_ID,
+          name: 'Verify 3b-life Athlete',
+          kind: PROFILE_KIND.kid,
+          householdId: hh.id,
+        },
+        {
+          publicId: AMEND_SIBLING_PUBLIC_ID,
+          name: 'Verify 3b-life Sibling',
+          kind: PROFILE_KIND.kid,
+          householdId: hh.id,
+        },
+      ])
+      .returning({ id: schema.profiles.id });
+    const [practiceType] = await tx
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.wrestling_practice));
+    // Another metric, written in MINUTES: so a refusal of it proves the METRIC pin, not the unit pin
+    // (lessons: a negative fixture covered by two conjuncts proves neither).
+    const [otherMetric] = await tx
+      .select({ key: schema.metricDefinitions.key })
+      .from(schema.metricDefinitions)
+      .where(ne(schema.metricDefinitions.key, METRIC_KEYS.practice_minutes))
+      .limit(1);
+    assert.ok(
+      practiceType && otherMetric,
+      '3b-life: the practice type and another metric are seeded',
+    );
+
+    let n = 0;
+    const row = async (
+      profileId: number,
+      day: string,
+      minutes: number,
+      extra: Partial<typeof schema.entries.$inferInsert> = {},
+    ) => {
+      n += 1;
+      const publicId = `019826b4-0000-7000-8000-00000003b${String(200 + n).padStart(3, '0')}`;
+      await tx.insert(schema.entries).values({
+        publicId,
+        clientId: newId(),
+        profileId,
+        activityDate: day,
+        unit: PRACTICE_UNIT,
+        valueNum: String(minutes),
+        activityTypeId: practiceType.id,
+        metricKey: METRIC_KEYS.practice_minutes,
+        status: ENTRY_STATUS.done,
+        ...extra,
+      });
+      return publicId;
+    };
+    const minutesOf = async (publicId: string) =>
+      Number(
+        (
+          await tx
+            .select({ v: schema.entries.valueNum })
+            .from(schema.entries)
+            .where(eq(schema.entries.publicId, publicId))
+        )[0]!.v,
+      );
+    const asAthlete = { profilePublicId: AMEND_ATHLETE_PUBLIC_ID, scope: SCOPE };
+    const update = (entryId: string, minutes: number, seenValue: number, as = asAthlete) =>
+      updatePracticeEntryById(exec, { ...as, entryId, minutes, seenValue });
+
+    const live = await row(athlete.id, '2026-10-10', 90);
+    const sibs = await row(sibling.id, '2026-10-10', 60);
+    const otherMetricMin = await row(athlete.id, '2026-10-11', 90, { metricKey: otherMetric.key });
+    const otherUnit = await row(athlete.id, '2026-10-12', 90, { unit: 'sec' });
+
+    // (a) The guarded UPDATE: it changes the owned, live practice it was shown, and nothing else.
+    assert.deepEqual(
+      await update(live, 45, 90),
+      { publicId: live },
+      '3b-life: the amend changes an owned live practice',
+    );
+    assert.equal(await minutesOf(live), 45, '3b-life: the amend writes the minutes');
+    assert.equal(
+      await update(live, 30, 90),
+      null,
+      '3b-life: the amend refuses a stale seenValue (another phone changed it)',
+    );
+    assert.equal(
+      await update(otherMetricMin, 30, 90),
+      null,
+      "3b-life: the amend refuses another metric's entry, even in minutes — the metric is pinned",
+    );
+    assert.equal(
+      await update(otherUnit, 30, 90),
+      null,
+      '3b-life: the amend refuses a practice in any unit but the metric’s own',
+    );
+    assert.equal(
+      await update(sibs, 30, 60),
+      null,
+      "3b-life: the amend refuses a sibling's practice named under this athlete",
+    );
+    assert.equal(
+      await update(live, 30, 45, { profilePublicId: AMEND_ATHLETE_PUBLIC_ID, scope: B_SCOPE }),
+      null,
+      "3b-life: the amend refuses from another household's scope",
+    );
+
+    // (b) The live-only re-read, for the action's three-way branch.
+    assert.deepEqual(
+      await findAmendablePractice(exec, { ...asAthlete, entryId: live }),
+      { minutes: 45 },
+      '3b-life: the re-read returns the live minutes',
+    );
+    for (const [what, entryId] of [
+      ['another metric', otherMetricMin],
+      ['a sibling', sibs],
+    ] as const) {
+      assert.equal(
+        await findAmendablePractice(exec, { ...asAthlete, entryId }),
+        null,
+        `3b-life: the re-read returns null for ${what}`,
+      );
+    }
+
+    // (c) The clear, through 3b-bw's core with the practice metric: refusals, then the clear.
+    const clear = (entryId: string, seenValue: number, as = asAthlete) =>
+      clearPractice(exec, { ...as, entryId, seenValue });
+    assert.deepEqual(
+      await clear(live, 90),
+      { stale: true },
+      '3b-life: a clear with a stale seenValue refuses',
+    );
+    assert.deepEqual(
+      await clear(otherMetricMin, 90),
+      { notFound: true },
+      "3b-life: a clear refuses another metric's entry",
+    );
+    assert.deepEqual(
+      await clear(otherUnit, 90),
+      { stale: true },
+      "3b-life: a clear refuses a practice in another unit (the unit is the metric's, pinned)",
+    );
+    assert.deepEqual(
+      await clear(sibs, 60),
+      { notFound: true },
+      "3b-life: a clear refuses a sibling's practice",
+    );
+    assert.deepEqual(
+      await clear(live, 45),
+      { cleared: true },
+      '3b-life: a clear hides an owned live practice',
+    );
+    assert.deepEqual(
+      await clear(live, 45),
+      { cleared: true },
+      '3b-life: a replayed clear is a replay',
+    );
+    assert.equal(
+      await findAmendablePractice(exec, { ...asAthlete, entryId: live }),
+      null,
+      '3b-life: the re-read returns null for a cleared practice',
+    );
+
+    // (d) The pre-read: the day, live or hidden, and nothing for anyone else's row.
+    assert.deepEqual(
+      await practiceRowForAmend(exec, { ...asAthlete, entryId: live }),
+      { day: '2026-10-10' },
+      "3b-life: the pre-read returns a hidden practice's day",
+    );
+    for (const [what, entryId] of [
+      ['another metric', otherMetricMin],
+      ['a sibling', sibs],
+    ] as const) {
+      assert.equal(
+        await practiceRowForAmend(exec, { ...asAthlete, entryId }),
+        null,
+        `3b-life: the pre-read returns null for ${what}`,
+      );
+    }
+
+    // (e) A replayed clear after the day was re-entered is stale, not a replay: the holder check is
+    //     the practice index's own key.
+    const reentered = await row(athlete.id, '2026-10-10', 75);
+    assert.deepEqual(
+      await clear(live, 45),
+      { stale: true },
+      '3b-life: a replayed practice clear after the day was re-entered is stale',
+    );
+    assert.equal(await minutesOf(reentered), 75, '3b-life: the re-entered practice is untouched');
+
+    console.log(
+      '✓ V1-24 3b-life-a: the practice amend changes only an owned, live practice in minutes (metric, unit, seenValue, profile and household pinned) and re-reads live only; the clear refuses the same and replays; a replayed clear after re-entry is stale; the pre-read returns only a day',
     );
   });
 }

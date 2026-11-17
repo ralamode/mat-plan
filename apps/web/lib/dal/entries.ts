@@ -3,14 +3,18 @@ import 'server-only';
 import {
   bodyweightRowForAmend,
   clearBodyweight,
+  clearPractice,
   type ClearSingleValueResult,
   findAmendableBodyweight,
+  findAmendablePractice,
+  practiceRowForAmend,
   insertBodyweightEntry,
   lastBodyweightBefore,
   isLiveProfile,
   resolveSessionMovements,
   schema,
   updateBodyweightEntryById,
+  updatePracticeEntryById,
   updateStrengthSetById,
   writeCheckinEntries,
   type CheckinWriteResult,
@@ -582,7 +586,7 @@ export async function bodyweightRowDay(args: {
 }
 
 /**
- * Clear ONE logged bodyweight: a blank Save on the day page (V1-24 3b-bw, plan W9). Thin over the
+ * Clear ONE logged bodyweight: a blank ✓ on the day page (V1-24 3b-bw, plan W9). Thin over the
  * single-sourced `clearBodyweight`, which locks the row, compares `seenValue` and hides it through
  * `hideEntries`.
  */
@@ -596,6 +600,51 @@ export async function clearBodyweightEntry(args: {
   if (!scope) return { notFound: true };
 
   return clearBodyweight(db, { ...args, scope });
+}
+
+/**
+ * The practice amend (V1-24 3b-life A6), thin over the single-sourced writers exactly as the bodyweight
+ * wrappers above are: the day pre-read, the clear, the guarded UPDATE and the re-read. The metric and
+ * its unit are pinned in the writers, so nothing here names either.
+ */
+export async function practiceRowDay(args: {
+  profilePublicId: string;
+  entryId: string;
+}): Promise<{ day: string } | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+  return practiceRowForAmend(db, { ...args, scope });
+}
+
+export async function clearPracticeEntry(args: {
+  profilePublicId: string;
+  entryId: string;
+  seenValue: number;
+}): Promise<ClearSingleValueResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) return { notFound: true };
+  return clearPractice(db, { ...args, scope });
+}
+
+export async function editPractice(args: {
+  profilePublicId: string;
+  entryId: string;
+  minutes: number;
+  seenValue: number;
+}): Promise<{ entryId: string } | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+  const updated = await updatePracticeEntryById(db, { ...args, scope });
+  return updated ? { entryId: updated.publicId } : null;
+}
+
+export async function ownedPracticeMinutes(args: {
+  profilePublicId: string;
+  entryId: string;
+}): Promise<{ minutes: number } | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+  return findAmendablePractice(db, { ...args, scope });
 }
 
 /** The latest live weigh-in before a day, as the "Last time" hint shows it. */

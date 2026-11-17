@@ -128,7 +128,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
   });
 
   it('Take off: the row keeps a last day, focus moves to it, and the status line says so', async () => {
-    const takeOff = vi.fn().mockResolvedValue({ ok: true });
+    const takeOff = vi.fn().mockResolvedValue({ ok: true, lastDay: familyProgram.today });
     const { rerender } = render(
       <ProgramScreen program={familyProgram} actions={actions({ takeOff })} />,
     );
@@ -153,8 +153,28 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     expect(screen.getByRole('button', { name: takeOffLabel('Athlete One') })).toBeTruthy();
   });
 
+  it('Take off follows its answer, not the dates: a start dated today with no last day leaves', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: true, lastDay: null });
+    const today = {
+      ...familyProgram,
+      athletes: [{ ...familyProgram.athletes[1]!, since: familyProgram.today }],
+    };
+    const { rerender } = render(<ProgramScreen program={today} actions={actions({ takeOff })} />);
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete Two') }));
+    rerender(<ProgramScreen program={{ ...today, athletes: [] }} actions={actions({ takeOff })} />);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        takenOffText('Athlete Two', familyProgram.name, false),
+      ),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { name: BUILDER_COPY.whosOnIt }),
+    );
+  });
+
   it('Take off someone who has not started: they leave, and focus goes to the heading', async () => {
-    const takeOff = vi.fn().mockResolvedValue({ ok: true });
+    // Take off answers what it did (C15): no last day, so they never start.
+    const takeOff = vi.fn().mockResolvedValue({ ok: true, lastDay: null });
     const later = {
       ...familyProgram,
       athletes: [{ ...familyProgram.athletes[1]!, since: '2026-11-15' }],
@@ -305,7 +325,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
   });
 
   it('a Take off answer that lands while Rename is open leaves focus in the name field', async () => {
-    let answer!: (result: { ok: true }) => void;
+    let answer!: (result: { ok: true; lastDay: string | null }) => void;
     const takeOff = vi.fn(() => new Promise((resolve) => (answer = resolve)));
     render(
       <ProgramScreen
@@ -317,7 +337,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     fireEvent.click(screen.getByRole('button', { name: renameLabel(familyProgram.name) }));
     const field = screen.getByLabelText(BUILDER_COPY.programName);
     expect(document.activeElement).toBe(field);
-    answer({ ok: true });
+    answer({ ok: true, lastDay: familyProgram.today });
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe(
         takenOffText('Athlete Two', familyProgram.name, true),
@@ -327,7 +347,7 @@ describe('ProgramScreen (FAM-1 8a)', () => {
   });
 
   it('a Take off that kept focus on its button moves it to the row (a real tap focuses)', async () => {
-    const takeOff = vi.fn().mockResolvedValue({ ok: true });
+    const takeOff = vi.fn().mockResolvedValue({ ok: true, lastDay: familyProgram.today });
     render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
     const button = screen.getByRole('button', { name: takeOffLabel('Athlete Two') });
     button.focus();

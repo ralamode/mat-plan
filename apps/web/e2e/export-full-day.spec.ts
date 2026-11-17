@@ -99,7 +99,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // here. A test that derives the date itself is asserting its own arithmetic; this asserts the
   // app's. (V1-6c: the page computes the day at render and carries it in every form.)
   // ⚠️ RETRY-SAFE: since V1-24 3b-page the only forms are the empty bodyweight field and the
-  // practice button, and both are gone once a first attempt has logged. A retry then reads the day
+  // practice minutes field, and both are gone once a first attempt has logged. A retry then reads the day
   // the page rendered from its URL instead; the first attempt still reads the field.
   const dayField = page.locator('input[name="day"]').first();
   const day =

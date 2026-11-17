@@ -1,9 +1,10 @@
-import { ENTRY_STATUS, SEED_METRIC_KEYS } from '@mat-plan/shared';
+import { ENTRY_STATUS, METRIC_KEYS, PRACTICE_UNIT, SEED_METRIC_KEYS } from '@mat-plan/shared';
 import { and, eq, isNotNull, isNull, ne, type SQL } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
 import { bodyweightSlot } from './bodyweight';
+import { practiceSlot } from './checkin';
 import type { Executor } from './executor';
 import { hideEntries } from './hide';
 import { isLiveProfile } from './ownership';
@@ -34,9 +35,19 @@ type SingleValueMetric = {
   readonly slot: (profileId: number, day: string) => SQL | undefined;
 };
 
+/**
+ * ⚠️ `bodyweightSlot` is the DEFAULT slot (the index's coalesce to 'morning'). Inert while no writer
+ * sets `context`; when V1-32 writes real slots, the clear's holder check keys on the row's context.
+ */
 const BODYWEIGHT: SingleValueMetric = {
   metricKey: SEED_METRIC_KEYS.bodyweight,
   slot: bodyweightSlot,
+};
+
+/** `practiceSlot` is exactly `PRACTICE_DAY_UNIQUE_INDEX`'s key: practice has no slot column. */
+const PRACTICE: SingleValueMetric = {
+  metricKey: METRIC_KEYS.practice_minutes,
+  slot: practiceSlot,
 };
 
 /** One owned, numeric, `done` entry of `metric`, live OR hidden. Ownership is `isLiveProfile`. */
@@ -67,13 +78,32 @@ function ownedSingleValue(
  */
 export async function bodyweightRowForAmend(
   exec: Executor,
-  args: { profilePublicId: string; scope: HouseholdScope; entryId: string },
+  args: RowForAmendArgs,
+): Promise<{ day: string } | null> {
+  return singleValueRowForAmend(exec, BODYWEIGHT, args);
+}
+
+/** `bodyweightRowForAmend`'s twin for a practice (V1-24 3b-life): its DAY only, live or hidden. */
+export async function practiceRowForAmend(
+  exec: Executor,
+  args: RowForAmendArgs,
+): Promise<{ day: string } | null> {
+  return singleValueRowForAmend(exec, PRACTICE, args);
+}
+
+type RowForAmendArgs = { profilePublicId: string; scope: HouseholdScope; entryId: string };
+
+/** The one pre-read both wrappers share; the metric stays a pinned constant in each wrapper. */
+async function singleValueRowForAmend(
+  exec: Executor,
+  metric: SingleValueMetric,
+  args: RowForAmendArgs,
 ): Promise<{ day: string } | null> {
   const [row] = await exec
     .select({ day: schema.entries.activityDate })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-    .where(ownedSingleValue(BODYWEIGHT, args.profilePublicId, args.scope, args.entryId))
+    .where(ownedSingleValue(metric, args.profilePublicId, args.scope, args.entryId))
     .limit(1);
   return row ? { day: row.day } : null;
 }
@@ -103,6 +133,17 @@ export async function clearBodyweight(
   args: ClearArgs,
 ): Promise<ClearSingleValueResult> {
   return clearSingleValue(exec, BODYWEIGHT, args);
+}
+
+/**
+ * Clear ONE logged practice (V1-24 3b-life), `clearBodyweight`'s twin. The unit is the metric's own,
+ * pinned here and never posted: a row in any other unit answers `stale`.
+ */
+export async function clearPractice(
+  exec: Executor,
+  args: Omit<ClearArgs, 'unit'>,
+): Promise<ClearSingleValueResult> {
+  return clearSingleValue(exec, PRACTICE, { ...args, unit: PRACTICE_UNIT });
 }
 
 async function clearSingleValue(
@@ -139,8 +180,6 @@ async function clearSingleValue(
     if (row.deletedAt !== null) {
       // Already hidden. A replay of this clear, unless the day's slot is held again: then another
       // phone cleared and re-entered, and this form's view of the day is out of date.
-      // ⚠️ `metric.slot` is the DEFAULT slot (bodyweight's coalesce to 'morning'). Inert while no
-      // writer sets `context`; when V1-32 writes real slots, key this on the row's own context.
       const [holder] = await tx
         .select({ id: schema.entries.id })
         .from(schema.entries)

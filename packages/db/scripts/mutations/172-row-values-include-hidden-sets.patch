@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/stored-row-values.ts b/packages/db/src/queries/day/stored-row-values.ts
+index c8ae61bf..8f869cff 100644
+--- a/packages/db/src/queries/day/stored-row-values.ts
++++ b/packages/db/src/queries/day/stored-row-values.ts
+@@ -36,7 +36,7 @@ export async function readRowValues(
+     })
+     .from(schema.entrySets)
+     .where(
+-      and(inArray(schema.entrySets.entryId, [...entryIds]), isNull(schema.entrySets.deletedAt)),
++      inArray(schema.entrySets.entryId, [...entryIds]),
+     )
+     .orderBy(asc(schema.entrySets.id));
+ 

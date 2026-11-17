@@ -5,6 +5,15 @@ import * as Sentry from '@sentry/nextjs';
 import {
   ACTIVITY_TYPE_KEYS,
   editBodyweightSchema,
+  editPracticeSchema,
+  logPracticeSchema,
+  type LogPracticeInput,
+  practiceMinutesProblem,
+  PRACTICE_AMEND_REFUSAL,
+  TRANSPORT_REFUSALS,
+  type EditPracticeInput,
+  type PracticeAmendRefusal,
+  type PracticeAmendResult,
   editStrengthSetSchema,
   logBodyweightSchema,
   logStrengthSessionSchema,
@@ -16,13 +25,14 @@ import {
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-import { getActiveTimeZone } from '@/lib/active-timezone';
 import {
   AMEND_ERROR_COPY,
   BODYWEIGHT_COPY,
   HIDE_COPY,
   NO_PROFILE_LOG,
   NO_PROFILE_SAVE,
+  PRACTICE_COPY,
+  PRACTICE_PROBLEM_COPY,
   athletePath,
   athleteRoutinePath,
 } from '@/lib/constants';
@@ -39,20 +49,21 @@ import {
   logBodyweight,
   logCheckinEntries,
   logStrengthSession,
-  type CheckinItemInput,
   editBodyweight,
   ownedBodyweightValue,
   bodyweightRowDay,
   clearBodyweightEntry,
+  clearPracticeEntry,
+  editPractice,
+  ownedPracticeMinutes,
+  practiceRowDay,
 } from '@/lib/dal/entries';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
-import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
 import { enterMutation } from '@/app/p/mutation-entry';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
-import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 // The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
 // export ONLY async functions — the Server Actions compiler registers every export as an action
@@ -410,17 +421,17 @@ export async function logStrengthSessionAction(
 }
 
 /**
- * Server Action: log a one-tap "life" activity (V1-7). Two shapes, both riding the shared
- * `logCheckinEntries` write path (profile/catalog/unit resolution, always-set `value_num`, per-item
- * `ON CONFLICT` idempotency):
- *   - `wake` — a `timing` event stamped at NOW: `event_at`, `value_num = local minutes-since-midnight`,
- *     and the entry's calendar `day` all derive from the SAME instant (so a stale tab can't file this
- *     morning's wake under yesterday), NEITHER source column (metric_key null → unit resolves to 'timing').
- *   - `wrestling_practice` — the `practice_minutes` metric at `DEFAULT_PRACTICE_MINUTES`, day-grain, so it
- *     uses the declared day (bounded ±1) like the other day-grain writers.
- * The submitted `activityKey` is validated against the TRUSTED `LIFE_ACTIVITY_KEYS` set — never trusted
- * from the body; unit/metric are resolved server-side. Same authZ gap as the other writers (existence-only
- * until `AUTH-1` 1c-4 — Clerk itself landed at Beta 0).
+ * Server Action: log a wrestling practice, in typed minutes (V1-7; typed since V1-24 3b-life-b).
+ *
+ * - **Practice only** (B6): `activityKey` must be wrestling practice (`logPracticeSchema`), so a
+ *   crafted Wake POST is refused. Wake is not loggable: the tap time is not the wake time.
+ * - **The minutes are the shared rule** (`logPracticeSchema`, 10–300 whole): the form checks the same
+ *   rule before the request (`practiceMinutesProblem`), so this refusal is the backstop.
+ * - It rides the shared `logCheckinEntries` write path (per-item `ON CONFLICT`, the practice day index).
+ * - **Every outcome but a write or a replay is a refusal** (B5), never `ok`:
+ *   `day_taken` (another practice holds the day, 3b-0), `conflict` (another row holds the id: a crafted
+ *   reuse) and `own_hidden` (this athlete's cleared practice holds it). The form mints a new id on any
+ *   refusal, so "tap ✓ to try again" is true.
  */
 export async function logLifeActivitiesAction(
   _prev: ActionState,
@@ -430,78 +441,67 @@ export async function logLifeActivitiesAction(
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
     const entry = await enterMutation(NO_PROFILE_LOG);
     if (!entry.ok) return entry;
-    const profileId = uuidSchema.safeParse(formData.get('profileId'));
-    const clientId = uuidSchema.safeParse(formData.get('clientId'));
-    const activityKey = formData.get('activityKey');
-
-    if (!profileId.success || !clientId.success) {
-      return { ok: false, error: 'Please fix the errors below.' };
-    }
-    // Trust boundary: only the life activities are loggable here.
-    if (
-      typeof activityKey !== 'string' ||
-      !(LIFE_ACTIVITY_KEYS as readonly string[]).includes(activityKey)
-    ) {
+    const input: Record<keyof LogPracticeInput, FormDataEntryValue | null> = {
+      activityKey: formData.get('activityKey'),
+      profileId: formData.get('profileId'),
+      clientId: formData.get('clientId'),
+      day: formData.get('day'),
+      minutes: formData.get('minutes'),
+    };
+    // Trust boundary (B6): only practice is loggable here; Wake and anything else are refused.
+    if (input.activityKey !== ACTIVITY_TYPE_KEYS.wrestling_practice) {
       return { ok: false, error: "That isn't a life activity we can log." };
     }
-
-    // Build the entry item + its calendar `day` per activity — the ONLY life-specific logic. The dispatch
-    // is EXHAUSTIVE: a key that's in the trust set but has no arm here fails loudly (never silently written
-    // with wrestling's metric/value).
-    let item: CheckinItemInput;
-    let entryDay: string;
-    if (activityKey === ACTIVITY_TYPE_KEYS.wake) {
-      // Wake is a "now" event: day, clock minutes, and event_at all from the same instant + active tz.
-      const timeZone = await getActiveTimeZone();
-      const eventAt = new Date();
-      entryDay = localDayIso(timeZone, eventAt);
-      item = {
-        activityKey,
-        metricKey: null, // neither-source: unit resolves to the wake activity's 'timing'
-        value: localMinutesSinceMidnight(timeZone, eventAt),
-        clientId: clientId.data,
-        eventAt,
-      };
-    } else if (activityKey === ACTIVITY_TYPE_KEYS.wrestling_practice) {
-      const day = await resolveDeclaredDay(formData.get('day'));
-      if (!day.ok) return { ok: false, error: day.error };
-      entryDay = day.day;
-      item = {
-        activityKey,
-        metricKey: METRIC_KEYS.practice_minutes,
-        value: DEFAULT_PRACTICE_MINUTES,
-        clientId: clientId.data,
-      };
-    } else {
-      return { ok: false, error: "That isn't a life activity we can log." };
+    // A tab still on the one-tap bundle posts no minutes at all: a reload brings the field.
+    if (typeof input.minutes !== 'string') return { ok: false, error: PRACTICE_COPY.reloadToLog };
+    const parsed = logPracticeSchema.safeParse(input);
+    if (!parsed.success) {
+      const problem = practiceMinutesProblem(input.minutes);
+      // The minutes are fine, so the id or the day is malformed: a stale or crafted page. Nothing is
+      // "below" to fix; a reload is the true answer.
+      if (problem === null) return { ok: false, error: PRACTICE_COPY.reloadToLog };
+      const message = PRACTICE_PROBLEM_COPY[problem](input.minutes);
+      return { ok: false, error: message, fieldErrors: { minutes: [message] } };
     }
 
-    const profile = await getProfileByPublicId(profileId.data);
+    const day = await resolveDeclaredDay(parsed.data.day);
+    if (!day.ok) return { ok: false, error: day.error };
+    const profile = await getProfileByPublicId(parsed.data.profileId);
     if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
+    const { minutes } = parsed.data;
     const [result] = await logCheckinEntries({
       profilePublicId: profile.id,
-      day: entryDay,
-      items: [item],
+      day: day.day,
+      items: [
+        {
+          activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice,
+          metricKey: METRIC_KEYS.practice_minutes,
+          value: minutes,
+          clientId: parsed.data.clientId,
+        },
+      ],
     });
     revalidatePath(athletePath(profile.id));
 
-    // 🔴 **The result used to be DISCARDED here, and that is half of the lost write.** A one-tap life
-    // activity is idempotent by its `client_id`, so a double-tap dedupes and the end state is
-    // identical — that IS success. But `own_hidden` is not a replay: the id is held by this
-    // athlete's own DELETED row, nothing was written, and returning `ok` would report a save that
-    // did not happen (criterion 9). The other half is in `life-form.tsx`: each button is keyed
-    // `${day}:${activity}` and mounts only while the day has no row for it, so a logged (or
-    // cleared) row's id is never re-submitted from the same mount.
-    if (result?.outcome === 'own_hidden') {
-      return { ok: false, error: HIDE_COPY.loggedThenDeleted };
+    // Exhaustive by type: a new writer outcome is a compile error here until it has an answer.
+    const outcome = result?.outcome;
+    switch (outcome) {
+      case 'created':
+      case 'replay':
+        return { ok: true, error: null };
+      case 'day_taken':
+        return { ok: false, error: PRACTICE_COPY.dayTaken(minutes), dayTaken: true as const };
+      case 'own_hidden':
+        return { ok: false, error: PRACTICE_COPY.clearedEarlier };
+      case 'conflict': // another row holds this id: a crafted reuse
+      case undefined: // no result for the one item sent: nothing is known to be written
+        return { ok: false, error: PRACTICE_COPY.notSaved };
+      default: {
+        const unhandled: never = outcome;
+        throw new Error(`logLifeActivitiesAction: unhandled outcome ${String(unhandled)}`);
+      }
     }
-    // ⚠️ **`day_taken` is `ok` until 3b-life, on purpose** (plan 3b-0 Z5): another phone's practice
-    // already holds the day, and while the ✓ writes a constant, that row already says what this tap
-    // meant. A refusal here would also be an alert inside `LifeButton`, which unmounts on the
-    // revalidate. 3b-life types the minutes, and then this becomes a refusal with its own copy; a
-    // test pins today's answer so that change is a deliberate one.
-    return { ok: true, error: null };
   });
 }
 
@@ -620,9 +620,9 @@ export async function editBodyweightAction(
     });
     // Not theirs, not a weigh-in, or gone: one message, so a crafted id learns nothing a stale one
     // wouldn't.
-    if (!row) return refuse(AMEND_ERROR_COPY.notFound('weight'));
+    if (!row) return refuse(AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun));
     const day = await resolveDeclaredDay(row.day);
-    if (!day.ok) return refuse(AMEND_ERROR_COPY.dayReadOnly('weight'));
+    if (!day.ok) return refuse(AMEND_ERROR_COPY.dayReadOnly(BODYWEIGHT_COPY.noun));
 
     const { value } = parsed.data;
     if (value === null) {
@@ -646,7 +646,9 @@ export async function editBodyweightAction(
         return { ok: true, error: null };
       }
       return refuse(
-        'stale' in cleared ? AMEND_ERROR_COPY.staleWrite : AMEND_ERROR_COPY.notFound('weight'),
+        'stale' in cleared
+          ? AMEND_ERROR_COPY.staleWrite
+          : AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun),
       );
     }
 
@@ -667,7 +669,7 @@ export async function editBodyweightAction(
       entryId: parsed.data.entryId,
     });
     // (a) The row is gone, was never theirs, or is not an amendable bodyweight.
-    if (!current) return refuse(AMEND_ERROR_COPY.notFound('weight'));
+    if (!current) return refuse(AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun));
     // (b) REPLAY: the row already holds exactly what was asked for. One effect, success.
     if (current.value === value && current.unit === parsed.data.unit) {
       revalidatePath(athletePath(profile.id));
@@ -676,6 +678,84 @@ export async function editBodyweightAction(
     // (c) Someone else got there first. Revalidate so the receipt shows the value that won.
     return refuse(AMEND_ERROR_COPY.staleWrite);
   });
+}
+
+/**
+ * Server Action: change or clear ONE logged wrestling practice (V1-24 3b-life A5).
+ *
+ * 🔴 **The FAM-1 contract, as AGENTS.md requires of a new mutation**: typed input
+ * (`editPracticeSchema`), a typed result (`practiceAmendResultSchema`), refusals returned, never
+ * thrown. FormData stays at the edge: the editor's client wrapper builds this input and maps each
+ * reason to copy. `enterMutation` is C7's entry (#469); the registry row is `actions.registry.ts`.
+ *
+ * The order is `editBodyweightAction`'s (plan W7): validate → profile → the pre-read (the row's DAY,
+ * live or hidden) → bound the write by THAT day → a blank clears, a number updates through the
+ * guarded UPDATE → its three-way branch. The metric and unit are pinned in the writers.
+ */
+export async function editPracticeAction(input: EditPracticeInput): Promise<PracticeAmendResult> {
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
+  return await Sentry.withServerActionInstrumentation(
+    'editPracticeAction',
+    async (): Promise<PracticeAmendResult> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = editPracticeSchema.safeParse(input);
+      if (!parsed.success) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.bad_value };
+
+      const { profilePublicId, entryId, value, seenValue } = parsed.data;
+      const profile = await getProfileByPublicId(profilePublicId);
+      if (!profile) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.not_found };
+      const refuse = (reason: PracticeAmendRefusal): PracticeAmendResult => {
+        revalidatePath(athletePath(profile.id));
+        return { ok: false, reason };
+      };
+
+      const row = await practiceRowDay({ profilePublicId: profile.id, entryId });
+      // Not theirs, not a practice, or gone: one answer, so a crafted id learns nothing a stale one
+      // wouldn't.
+      if (!row) return refuse(PRACTICE_AMEND_REFUSAL.not_found);
+      const day = await resolveDeclaredDay(row.day);
+      if (!day.ok) return refuse(PRACTICE_AMEND_REFUSAL.closed_day);
+
+      if (value === null) {
+        // An archived athlete has no field to re-enter a cleared practice into (plan A3).
+        if (profile.archived) return { ok: false, reason: PRACTICE_AMEND_REFUSAL.archived_blank };
+        const cleared = await clearPracticeEntry({
+          profilePublicId: profile.id,
+          entryId,
+          seenValue,
+        });
+        if ('cleared' in cleared) {
+          revalidatePath(athletePath(profile.id));
+          return { ok: true };
+        }
+        return refuse(
+          'stale' in cleared ? PRACTICE_AMEND_REFUSAL.stale : PRACTICE_AMEND_REFUSAL.not_found,
+        );
+      }
+
+      const updated = await editPractice({
+        profilePublicId: profile.id,
+        entryId,
+        minutes: value,
+        seenValue,
+      });
+      if (updated) {
+        revalidatePath(athletePath(profile.id));
+        return { ok: true };
+      }
+      const current = await ownedPracticeMinutes({ profilePublicId: profile.id, entryId });
+      // (a) Gone, never theirs, or not an amendable practice.
+      if (!current) return refuse(PRACTICE_AMEND_REFUSAL.not_found);
+      // (b) REPLAY: the row already holds what was asked for. One effect, success.
+      if (current.minutes === value) {
+        revalidatePath(athletePath(profile.id));
+        return { ok: true };
+      }
+      // (c) Another phone got there first; the revalidate shows the value that won.
+      return refuse(PRACTICE_AMEND_REFUSAL.stale);
+    },
+  );
 }
 
 /**

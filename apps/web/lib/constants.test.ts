@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   APP_HOME_PATH,
+  PRACTICE_COPY,
   athleteEditPath,
   athletePath,
   blockedSummary,
@@ -182,5 +183,17 @@ describe('the picker copy no longer sends a first-run reader to an unlinked scre
   it('the picker subhead names the gesture and the human noun', () => {
     expect(PICKER_COPY.subhead).toBe('Tap your name to start logging.');
     expect(PICKER_COPY.subhead).not.toContain('profile');
+  });
+});
+
+describe('PRACTICE_COPY.hoursNotMinutes (V1-24 3b-life-b; maintainer, 2026-11-16)', () => {
+  it('does the sum for a whole 1–5, and gives a fixed example in words otherwise', () => {
+    expect(PRACTICE_COPY.hoursNotMinutes('1')).toBe('Minutes, not hours: 1 hour is 60.');
+    expect(PRACTICE_COPY.hoursNotMinutes(' 2 ')).toBe('Minutes, not hours: 2 hours is 120.');
+    for (const typed of ['6', '9', '1.5', '1:30']) {
+      expect(PRACTICE_COPY.hoursNotMinutes(typed)).toBe(
+        'Minutes, not hours: 1 and a half hours is 90.',
+      );
+    }
   });
 });
