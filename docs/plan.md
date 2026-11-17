@@ -1724,7 +1724,9 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   - **3:** screenshots in CI on request.
 
   Planned and approved 2026-11-17 (five lenses). ✅ **1a shipped:** a push runs typecheck plus only the
-  tests the change reaches (`pnpm test:changed`), and AGENTS.md has one rule for when to run locally.
+  tests the change reaches (`pnpm test:changed`), and AGENTS.md has one rule for when to run locally. ✅ **1b (the guard) shipped; the slot follows after #554:** a hook denies
+  `pkill`, `killall`, `fuser -k` and the broad `kill` forms in every directory
+  (`.claude/hooks/guard-process-kill.mjs`).
 
 - **DX-18b — per-pillar test projects.** _(Deferred by DX-18, D9.)_ `pnpm test:pillar <name>`, and CI
   running only the affected pillars' vitest files. **Trigger:** CI's Test step passes 3 minutes (53s

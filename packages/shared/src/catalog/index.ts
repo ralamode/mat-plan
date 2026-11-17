@@ -7,3 +7,5 @@
  */
 export * from './vocabulary';
 export * from './entry';
+export * from './option';
+export * from './families';

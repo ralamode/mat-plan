@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index ab9a69bc..9de13ce7 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -60,7 +60,7 @@ export async function newItem(
+   const hit = existingItem(
+     options.map((option) => ({
+       ...option,
+-      isCatalog: option.owner === 'catalog',
++      isCatalog: false,
+       aliases: option.owner === 'catalog' ? option.aliases : [],
+     })),
+     name,

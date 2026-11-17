@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index ab9a69bc..5d106d54 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -91,7 +91,7 @@ export async function newItem(
+     return {
+       ok: true,
+       itemPublicId: sameSlug.publicId,
+-      name: sameSlug.name,
++      name,
+       trackingType: trackingTypeSchema.parse(sameSlug.trackingType),
+       existed: true,
+     };

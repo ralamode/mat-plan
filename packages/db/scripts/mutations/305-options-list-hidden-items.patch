@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index 6dcb93fd..69febd81 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -86,7 +86,6 @@ export async function movementOptions(
+     .where(
+       and(
+         movementInHousehold(scope),
+-        isNull(schema.movements.deletedAt),
+         notExists(
+           exec
+             .select({ one: sql`1` })
