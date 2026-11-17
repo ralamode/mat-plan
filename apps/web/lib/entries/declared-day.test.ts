@@ -46,12 +46,12 @@ describe('isWritableDay — the UI must mirror the server, never exceed it', () 
   const TODAY = '2026-09-30';
 
   // This is the bound `resolveDeclaredDay` enforces. If the UI were stricter, yesterday would lose
-  // its forms while the endpoint still accepted the write — which is exactly how Ray's 09/29 session,
+  // its forms while the endpoint still accepted the write — which is exactly how the maintainer's 09/29 session,
   // logged from a stale tab on 09/30, succeeded.
-  it('accepts today and ±1 day', () => {
+  it('accepts today and yesterday, never tomorrow', () => {
     expect(isWritableDay(TODAY, TODAY)).toBe(true);
     expect(isWritableDay('2026-09-29', TODAY)).toBe(true);
-    expect(isWritableDay('2026-10-01', TODAY)).toBe(true);
+    expect(isWritableDay('2026-10-01', TODAY)).toBe(false); // tomorrow: never (FAM-1 D32)
   });
 
   it('refuses day −2 and beyond', () => {

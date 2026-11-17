@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { addDays, isoDayDiff, isoDaySchema, WRITABLE_DAY_RADIUS } from '@mat-plan/shared';
+import {
+  addDays,
+  inWritableWindow,
+  isoDayDiff,
+  isoDaySchema,
+  WRITABLE_DAY_RADIUS,
+} from '@mat-plan/shared';
 
 import { getActiveLocalDay } from '@/lib/active-timezone';
 
@@ -11,11 +17,11 @@ export type DeclaredDayResult = { ok: true; day: string } | { ok: false; error: 
 
 /**
  * Validate the `day` a log form declares (the day the page rendered) against the request's
- * active-tz today, bounded to ±1. ONE seam shared by all three writers (check-ins,
+ * active-tz today: today or yesterday, never a later day (FAM-1 D32). ONE seam shared by all three writers (check-ins,
  * bodyweight, strength) so a write always lands on the date the user actually saw — even
  * across a local-midnight session — and the check-in "dance" isn't copy-pasted per form.
  *
- * The ±1 tolerance assumes the supported US zones; a detected zone ≥2 days from the server
+ * The one-day tolerance assumes the supported US zones; a detected zone ≥2 days from the server
  * default during the first-visit-while-traveling window is out of scope (V1-6c risk R7).
  */
 export async function resolveDeclaredDay(
@@ -31,21 +37,20 @@ export async function resolveDeclaredDay(
 }
 
 /**
- * How many days either side of today a write is accepted. The number lives in `@mat-plan/shared`
- * (`day.ts`, FAM-1 contract change C10) so the database package reads the same one; re-exported
- * because the UI gates its forms on it.
+ * How many days before today a write is accepted. The number lives in `@mat-plan/shared` (`day.ts`,
+ * FAM-1 contract change C10) so the database package reads the same one; re-exported because the
+ * UI gates its forms on it.
  */
 export { WRITABLE_DAY_RADIUS };
 
 /**
- * Whether `day` is inside the write window of the forms that predate FAM-1: today, yesterday and
- * **tomorrow**. `resolveDeclaredDay` is this, so the UI and the server cannot differ.
- *
- * ⚠️ FAM-1's rows use the shared `inWritableWindow`, which never accepts a day after today (plan
- * D32). Plan step 12c makes this function that one.
+ * Whether `day` can be written to: **today and yesterday, never a later day** (FAM-1 D32, since step
+ * 12c). It is the shared `inWritableWindow`, the rule every program row is held to, so the older
+ * forms (bodyweight, practice, clear day), their actions and the day's rows share one window.
+ * `resolveDeclaredDay` is this, so the UI and the server cannot differ.
  */
 export function isWritableDay(day: string, today: string): boolean {
-  return Math.abs(isoDayDiff(day, today)) <= WRITABLE_DAY_RADIUS;
+  return inWritableWindow(day, today);
 }
 
 /**
