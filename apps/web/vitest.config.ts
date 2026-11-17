@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +44,18 @@ export default defineConfig({
      * changes little there.
      */
     maxWorkers: '50%',
+    /**
+     * A change to one of these runs every test under `--changed` (DX-18 D4): vitest's defaults (any
+     * `package.json`, a vitest/vite config) plus the files that change what every test resolves or
+     * compiles against. 🔴 `.github/scripts/test-changed.mjs`'s `FORCE_RERUN` mirrors this list, and
+     * `test-changed.test.sh` fails if the two drift.
+     */
+    forceRerunTriggers: [
+      ...configDefaults.forceRerunTriggers,
+      '**/pnpm-lock.yaml',
+      '**/pnpm-workspace.yaml',
+      '**/tsconfig*.json',
+    ],
     // Valid values so modules that import lib/env.ts don't fail boot validation
     // under test. Individual tests override/mock as needed.
     // ⚠️ `ACCESS_GATE_PASSWORD` was here until AUTH-1 1d, for boot validation only — `lib/env.ts` no
