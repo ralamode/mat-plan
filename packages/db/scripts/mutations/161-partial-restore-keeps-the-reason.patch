@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..a63fda84 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -364,7 +364,7 @@ async function dropReasonOfItemsLeftHidden(
+   const leftHidden = results
+     .filter((r) => r.reason === RESTORE_REASON.slot_taken)
+     .map((r) => r.entryPublicId);
+-  if (leftHidden.length === 0) return;
++  if (leftHidden.length >= 0) return;
+   await exec
+     .update(schema.entries)
+     .set({ hideReason: null })
