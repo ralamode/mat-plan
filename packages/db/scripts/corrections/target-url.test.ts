@@ -123,6 +123,11 @@ describe("correctionTargetIsLocal / correctionTargetIsPreview — read from the 
     expect(correctionTargetIsLocal()).toBe(false);
   });
 
+  it('🔴 a percent-encoded preview name is still the preview — the driver decodes it', () => {
+    process.env.DATABASE_URL_UNPOOLED = PREVIEW.replace('preview', '%70review');
+    expect(correctionTargetIsPreview()).toBe(true);
+  });
+
   it('no target at all is neither — unknown is the riskier case for every caller', () => {
     expect(correctionTargetIsLocal()).toBe(false);
     expect(correctionTargetIsPreview()).toBe(false);
