@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { SRC } from '../test-support/source-graph';
 import {
@@ -151,16 +152,45 @@ describe('the record files only grow (V4, the merge-base check)', () => {
     ((await import(/* @vite-ignore */ script)) as { appendOnlyIssues: AppendOnly })
       .appendOnlyIssues;
   /**
-   * 🔴 **Every process these tests start gets an environment with no `GIT_*` variable.** Inside a
-   * git hook (the pre-push hook runs this suite) git exports `GIT_DIR` and its kin, and a child
-   * `git` obeys them over its own directory: a scratch repository's `init` and `commit` would be
-   * run against the real one. It happened once, on this test's first push.
+   * 🔴 **No process these tests start may reach this repository through git's environment.**
+   * Inside a git hook (the pre-push hook runs this suite) git exports `GIT_DIR` and its kin, and a
+   * child `git` obeys them over the directory it is in: a scratch repository's `init` and `commit`
+   * would be run against the real one. It happened once, on this test's first push
+   * (docs/lessons.md → "Git / commits"). So:
+   *
+   * - every child starts from `clean`, the environment with every `GIT_*` variable removed;
+   * - the scratch repository's own commands add an explicit `GIT_DIR` and `GIT_WORK_TREE` (git is
+   *   told where to write, it does not search), an empty global config and no system config;
+   * - `afterAll` asserts this repository's `core.bare`, `HEAD` and index are what they were.
    */
-  const env = Object.fromEntries(
+  const clean = Object.fromEntries(
     Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')),
   );
-  const run = (baseRef: string, cwd = ROOT) =>
+  const run = (baseRef: string, cwd = ROOT, env: NodeJS.ProcessEnv = clean) =>
     spawnSync(process.execPath, [script, baseRef], { cwd, encoding: 'utf8', env });
+
+  /** What a stray git write would change here: the shared config, the branch, the index. */
+  const parentState = () => {
+    const git = (...args: string[]) =>
+      spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', env: clean }).stdout.trim();
+    const gitDir = git('rev-parse', '--absolute-git-dir');
+    return {
+      bare: git('config', '--get', 'core.bare'),
+      isWorkTree: git('rev-parse', '--is-inside-work-tree'),
+      head: git('rev-parse', 'HEAD'),
+      index: createHash('sha256')
+        .update(readFileSync(join(gitDir, 'index')))
+        .digest('hex'),
+    };
+  };
+  let before: ReturnType<typeof parentState>;
+  beforeAll(() => {
+    before = parentState();
+    expect(before.isWorkTree).toBe('true');
+  });
+  afterAll(() => {
+    expect(parentState()).toEqual(before);
+  });
 
   it('lets a batch add slugs, batches and approvals', async () => {
     const issues = await load();
@@ -201,14 +231,34 @@ describe('the record files only grow (V4, the merge-base check)', () => {
 
   it('🔴 sees a removed line from a subdirectory too: it compares at the repository root', () => {
     // A scratch repository with one shipped slug committed, then removed in the working tree.
-    const repo = realpathSync(mkdtempSync(join(tmpdir(), 'catalog-records-')));
+    const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'catalog-records-')));
+    const repo = join(scratch, 'repo');
+    mkdirSync(repo);
+    const emptyConfig = join(scratch, 'gitconfig');
+    writeFileSync(emptyConfig, '');
+    /** For the script's runs: it finds the repository from where it stands, and no higher. */
+    const isolated = {
+      ...clean,
+      GIT_CONFIG_GLOBAL: emptyConfig,
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CEILING_DIRECTORIES: scratch,
+    };
+    const IDENTITY = [
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@example.test',
+      '-c',
+      'commit.gpgsign=false',
+    ];
+    /** For the commands that write: git is told which repository, and can reach no other. */
     const git = (...args: string[]) =>
-      spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.test', ...args], {
+      spawnSync('git', [...IDENTITY, ...args], {
         cwd: repo,
         encoding: 'utf8',
-        env,
+        env: { ...isolated, GIT_DIR: join(repo, '.git'), GIT_WORK_TREE: repo },
       });
-    const at = (cwd: string) => run('HEAD', cwd);
+    const at = (cwd: string) => run('HEAD', cwd, isolated);
     try {
       const shipped = join(repo, 'packages/shared/src/catalog/data/shipped.json');
       mkdirSync(dirname(shipped), { recursive: true });
@@ -218,6 +268,7 @@ describe('the record files only grow (V4, the merge-base check)', () => {
       // Nothing is staged or committed unless git agrees the scratch directory is the repository.
       const gitDir = git('rev-parse', '--absolute-git-dir').stdout.trim();
       if (gitDir !== join(repo, '.git')) throw new Error(`scratch repository is ${gitDir}`);
+      expect(parentState()).toEqual(before);
       git('add', '-A');
       expect(git('commit', '-q', '--no-verify', '-m', 'base').status).toBe(0);
       expect(at(repo).status).toBe(0);
@@ -229,7 +280,7 @@ describe('the record files only grow (V4, the merge-base check)', () => {
         expect(result.stderr, cwd).toContain('"a": removed');
       }
     } finally {
-      rmSync(repo, { recursive: true, force: true });
+      rmSync(scratch, { recursive: true, force: true });
     }
   });
 });
