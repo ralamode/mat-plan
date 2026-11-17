@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -187,5 +188,36 @@ describe('the record files only grow (V4, the merge-base check)', () => {
     const here = run('HEAD');
     expect(here.status, here.stderr).toBe(0);
     expect(here.stdout).toContain('Catalog records OK');
+  });
+
+  it('🔴 sees a removed line from a subdirectory too: it compares at the repository root', () => {
+    // A scratch repository with one shipped slug committed, then removed in the working tree.
+    const repo = mkdtempSync(join(tmpdir(), 'catalog-records-'));
+    const git = (...args: string[]) =>
+      spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.test', ...args], {
+        cwd: repo,
+        encoding: 'utf8',
+      });
+    const at = (cwd: string) =>
+      spawnSync(process.execPath, [script, 'HEAD'], { cwd, encoding: 'utf8' });
+    try {
+      const shipped = join(repo, 'packages/shared/src/catalog/data/shipped.json');
+      mkdirSync(dirname(shipped), { recursive: true });
+      writeFileSync(shipped, '{"a":"reps","b":"reps"}\n');
+      writeFileSync(join(dirname(shipped), 'approved.json'), '{}\n');
+      expect(git('init', '-q').status).toBe(0);
+      git('add', '-A');
+      expect(git('commit', '-q', '--no-verify', '-m', 'base').status).toBe(0);
+      expect(at(repo).status).toBe(0);
+
+      writeFileSync(shipped, '{"b":"reps"}\n');
+      for (const cwd of [repo, join(repo, 'packages'), dirname(shipped)]) {
+        const result = at(cwd);
+        expect(result.status, cwd).toBe(1);
+        expect(result.stderr, cwd).toContain('"a": removed');
+      }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 });

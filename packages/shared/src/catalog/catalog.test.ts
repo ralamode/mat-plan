@@ -222,7 +222,10 @@ describe('the checks a whole list is held to, on samples', () => {
     expect(files).toContain(resolve(DATA, 'index.ts'));
     const outside = files.flatMap((file) =>
       specifiersOf(file)
-        .filter((specifier) => specifier !== '../entry' && !specifier.startsWith('./'))
+        .filter(
+          (specifier) =>
+            specifier !== '../entry' && !(specifier.startsWith('./') && !specifier.includes('..')),
+        )
         .map((specifier) => `${file}: ${specifier}`),
     );
     expect(outside).toEqual([]);

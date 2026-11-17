@@ -71,6 +71,10 @@ function main() {
     fail(2, `✗ The base '${base}' is not a commit in this checkout, so nothing can be compared.`);
   }
 
+  // The files are named from the repository's root, so the check runs there wherever it was
+  // started: from a subdirectory both would read as absent, and the check would pass on nothing.
+  process.chdir(git('rev-parse', '--show-toplevel').trim());
+
   let failed = false;
   for (const file of FILES) {
     // After the base is known to be a commit, an empty listing means one thing: the base does not
