@@ -23,6 +23,7 @@ import {
   takeOffSchema,
   hasSetRows,
   weekDraftSchema,
+  weekRepeatsAWorkout,
   type DayActions,
   type DayItem,
   type DayPlan,
@@ -367,15 +368,6 @@ export type FakePrograms = {
  */
 const sameName = (a: string, b: string) => foldName(a) === foldName(b);
 
-/** A draft that fails `weekDraftSchema` because a day names one workout twice. */
-function repeatsAWorkout(draft: WeekDraft): boolean {
-  return Object.values(draft?.days ?? {}).some(
-    (slots) =>
-      Array.isArray(slots) &&
-      new Set(slots.map((slot) => slot?.workoutPublicId)).size !== slots.length,
-  );
-}
-
 /**
  * `ProgramActions` over the fixtures of one builder screen. The prototype's rules:
  *
@@ -491,7 +483,7 @@ export function createFakeProgramActions(
         const parsed = weekDraftSchema.safeParse(draft);
         if (!parsed.success) {
           return refuse(
-            repeatsAWorkout(draft) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+            weekRepeatsAWorkout(draft) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
           );
         }
         const view = shown(parsed.data.programPublicId);

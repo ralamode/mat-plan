@@ -214,6 +214,32 @@ export const weekDraftSchema = z.object({
 });
 export type WeekDraft = z.infer<typeof weekDraftSchema>;
 
+/**
+ * Whether a week names one workout twice on a day: the question `saveWeek` asks of a draft
+ * `weekDraftSchema` REFUSED, to answer `once_per_day` in place of `invalid` (contract change C25).
+ *
+ * It reads the raw input, because a refused parse hands back no value, so it takes anything and
+ * folds the case itself: two slots are the same workout when their `workoutPublicId`s are uuids
+ * that differ at most in case. A slot with no id, or with one that is not a uuid, is never a
+ * repeat. Any repeat counts, whatever else is wrong with the draft.
+ *
+ * One definition for the fake and for 6b's writer, so the two answer the same refusal.
+ */
+export function weekRepeatsAWorkout(draft: unknown): boolean {
+  const days: unknown = (draft as { days?: unknown } | null | undefined)?.days;
+  if (!days || typeof days !== 'object') return false;
+  return Object.values(days).some((slots) => {
+    if (!Array.isArray(slots)) return false;
+    const ids = slots.flatMap((slot: unknown) => {
+      const id = lowerCaseUuidSchema.safeParse(
+        (slot as { workoutPublicId?: unknown } | null | undefined)?.workoutPublicId,
+      );
+      return id.success ? [id.data] : [];
+    });
+    return !distinct(ids);
+  });
+}
+
 /** A program, by id and name: one entry of a list a person picks from. */
 export const programRefSchema = z.object({
   programPublicId: lowerCaseUuidSchema,

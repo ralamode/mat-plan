@@ -32,6 +32,7 @@ import {
   saveWorkoutSchema,
   takeOffSchema,
   weekDraftSchema,
+  weekRepeatsAWorkout,
   workoutDraftSchema,
 } from './program-shapes';
 
@@ -248,5 +249,77 @@ describe('an id written in two cases is one id (C25)', () => {
     expect(
       programViewSchema.safeParse({ ...page, week: { ...page.week, 0: [stray] } }).success,
     ).toBe(false);
+  });
+});
+
+describe('weekRepeatsAWorkout: why a refused week was refused (C25)', () => {
+  const programPublicId = A_PROGRAM;
+  const slot = (workoutPublicId: unknown, label: string | null = null) => ({
+    workoutPublicId,
+    label,
+  });
+  const withSunday = (...slots: unknown[]) => ({ programPublicId, days: { ...week, 0: slots } });
+  const heavy = lower(A_WORKOUT);
+  const light = lower(fixtureIds.workout('w3'));
+
+  it('finds one workout twice on a day, in one spelling or two', () => {
+    expect(weekRepeatsAWorkout(withSunday(slot(heavy), slot(heavy, 'Evening')))).toBe(true);
+    expect(weekRepeatsAWorkout(withSunday(slot(heavy), slot(upper(A_WORKOUT))))).toBe(true);
+    expect(weekRepeatsAWorkout(withSunday(slot(upper(A_WORKOUT)), slot(light), slot(heavy)))).toBe(
+      true,
+    );
+  });
+
+  it('agrees with the schema: a week it calls a repeat never parses', () => {
+    for (const twice of [
+      withSunday(slot(heavy), slot(heavy)),
+      withSunday(slot(heavy), slot(upper(A_WORKOUT))),
+    ]) {
+      expect(weekRepeatsAWorkout(twice)).toBe(true);
+      expect(weekDraftSchema.safeParse(twice).success).toBe(false);
+    }
+    // And the week a program page holds is no repeat, and parses.
+    const asSaved = { programPublicId, days: week };
+    expect(weekRepeatsAWorkout(asSaved)).toBe(false);
+    expect(weekDraftSchema.safeParse(asSaved).success).toBe(true);
+  });
+
+  it('is not fooled by two different workouts, or one workout on two days', () => {
+    expect(weekRepeatsAWorkout(withSunday(slot(heavy), slot(upper(light))))).toBe(false);
+    expect(
+      weekRepeatsAWorkout({
+        programPublicId,
+        days: { ...week, 0: [slot(heavy)], 2: [slot(heavy)] },
+      }),
+    ).toBe(false);
+  });
+
+  it('counts any repeat, whatever else is wrong with the draft', () => {
+    const tooLong = 'x'.repeat(500);
+    expect(weekRepeatsAWorkout(withSunday(slot(heavy, tooLong), slot(heavy)))).toBe(true);
+    expect(weekRepeatsAWorkout({ days: { 0: [slot(heavy), slot(heavy)] } })).toBe(true);
+  });
+
+  it('never calls a slot with no id, or with an id that is no uuid, a repeat', () => {
+    expect(weekRepeatsAWorkout(withSunday({}, {}))).toBe(false);
+    expect(weekRepeatsAWorkout(withSunday(null, null))).toBe(false);
+    expect(weekRepeatsAWorkout(withSunday(slot('w2'), slot('w2')))).toBe(false);
+    expect(weekRepeatsAWorkout(withSunday(slot(7), slot(7)))).toBe(false);
+  });
+
+  it('takes anything', () => {
+    for (const junk of [
+      undefined,
+      null,
+      7,
+      'week',
+      [],
+      {},
+      { days: null },
+      { days: 'x' },
+      { days: { 0: 'x' } },
+    ]) {
+      expect(weekRepeatsAWorkout(junk)).toBe(false);
+    }
   });
 });
