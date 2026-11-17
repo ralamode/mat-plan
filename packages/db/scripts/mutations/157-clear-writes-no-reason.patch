@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index e2478779..760be495 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -570,7 +570,7 @@ export async function clearDay(
+       const hidden = await hideRows(
+         tx,
+         { ...args, entryPublicIds: live.map((r) => r.publicId) },
+-        HIDE_REASON.clear_day,
++        null,
+       );
+       // Locked and proven owned above, so a refusal is a contract break, not an outcome.
+       if ('notFound' in hidden) {

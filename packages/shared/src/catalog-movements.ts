@@ -6,12 +6,15 @@ import { unitSchema } from './units';
 
 /**
  * Full `movements` catalog (spec.md §4/§4a) — the single source seeded at V1-2 and
- * validated by the coverage test. The kids' Strength-A block plus Ray's REAL Push/Pull/Legs
- * program (source: job-search-context `docs/movement-templates.md` — his actual PPL split,
- * not a placeholder). Between the two, **every one of the 11 MOVEMENT_PATTERNS is covered**
- * (the coverage test asserts ≥1 movement per pattern). Still refinable later — new movements
- * are pure data (spec.md §4b), no deploy. Ray's "Squats" and "Pull-ups/Chin-ups" REUSE the
- * kids' `back_squat` (…052) and `pull-up` (…053) rows — deduped, not re-created.
+ * validated by the coverage test. A youth strength block plus a push / pull / legs split.
+ * Between the two, **every one of the 11 MOVEMENT_PATTERNS is covered** (the coverage test
+ * asserts ≥1 movement per pattern). Still refinable later — new movements are pure data
+ * (spec.md §4b), no deploy. The split's "Squats" and "Pull-ups/Chin-ups" REUSE the strength
+ * block's `back_squat` (…052) and `pull-up` (…053) rows — deduped, not re-created.
+ *
+ * ⚠️ **Being replaced.** `CAT-3` (docs/specs/cat-3-movement-library.md) replaces this const with a
+ * reviewed catalog in `packages/shared/src/catalog/`, keyed by slug with no committed public ids.
+ * Do not add rows here.
  *
  * INVARIANT: `slug === movementSlug(name)` for every row (the coverage test pins it), so
  * the seed's natural key (`slug`) matches what the DAL's find-or-create + V1-1b's backfill
@@ -40,7 +43,7 @@ export const movementSeedRowSchema = z.object({
 export type MovementSeedRow = z.infer<typeof movementSeedRowSchema>;
 
 export const MOVEMENT_SEED_ROWS = [
-  // ── Kids' Strength-A block ──────────────────────────────────────────────────────
+  // ── Strength block A ────────────────────────────────────────────────────────────
   {
     publicId: seedPublicId('050'),
     slug: 'box_jump',
@@ -104,7 +107,7 @@ export const MOVEMENT_SEED_ROWS = [
     isBodyweight: false,
     trackingType: 'reps',
   },
-  // ── Ray's real Push/Pull/Legs program (docs/movement-templates.md) ───────────────
+  // ── A push / pull / legs split ───────────────────────────────────────────────────
   // "Squats" reuses back_squat (…052); "Pull-ups/Chin-ups" reuses pull-up (…053) — not re-listed.
   // Push:
   {
@@ -235,7 +238,7 @@ export const MOVEMENT_SEED_ROWS = [
     isBodyweight: false,
     trackingType: 'weight_reps',
   },
-  // ── V1-10: movements from Ray's Kids S&C Foundation block (docs/plans/v1-10-two-week-program-source.md).
+  // ── V1-10: movements from a youth strength-and-conditioning block (docs/plans/v1-10-two-week-program-source.md).
   //    Pull-Up / Weighted
   //    Chin reuse `pull-up` (…053), DB OHP reuses `overhead_shoulder_press` (…058), Weighted Dips reuse `dips`
   //    (…059) via the load field — only genuinely-distinct movements are added here.
@@ -313,7 +316,7 @@ export const MOVEMENT_SEED_ROWS = [
   },
 
   // ── Youth daily A/B program (2026-09-24) ────────────────────────────────────────
-  // The program the kids actually run, every calendar day. Source:
+  // A program run every calendar day. Source:
   // docs/samples/youth-daily-program/README.md. All bodyweight with an OPTIONAL worn load, except
   // KB swings where the bell weight is required — which is why `isBodyweight` differs on that one.
   {
@@ -363,7 +366,7 @@ export const MOVEMENT_SEED_ROWS = [
     trackingType: 'weight_reps',
   },
   {
-    // Ray (2026-09-24): hip thrusts are a REP MOVEMENT. The paper sheet's three completion
+    // The maintainer (2026-09-24): hip thrusts are a REP MOVEMENT. The paper sheet's three completion
     // checkboxes are a paper affordance, not a data shape.
     publicId: seedPublicId('075'),
     slug: 'single-leg_hip_thrusts',
