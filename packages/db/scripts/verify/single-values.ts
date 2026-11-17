@@ -45,6 +45,7 @@ import {
   type VerifyContext,
   type VerifyTx,
 } from './harness';
+import { programRowFixture, PROGRAM_ROW_FIXTURE_DAY } from './day';
 
 /**
  * `db:verify` proofs for SINGLE VALUES (bodyweight, practice) and Clear this day.
@@ -66,6 +67,7 @@ export async function verifySingleValues(ctx: VerifyContext): Promise<void> {
   await verifyPracticeOnePerDay();
   await verifyPracticeAmend(ctx);
   await verifyClearDay();
+  await verifyClearDayProgramRows();
 }
 
 const HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b000';
@@ -1344,5 +1346,93 @@ async function verifyClearDay(): Promise<void> {
 
   console.log(
     "✓ V1-9b B2-0: entries.hide_reason holds only clear_day and never on a live row; a clear hides the day's live entries as one event with the reason (no cap) and replays its own token; every other hide writes none; Restore all brings back exactly the clear, clears the reason, drops it from items left hidden, and answers notFound once done; both are household-scoped",
+  );
+}
+
+/**
+ * B2-0 on a PROGRAM row (FAM-1 11b's writer), through lane E's exported fixture (`./day`, #507):
+ * proofs 3, 4 and 5's program-row halves. A clear hides a ticked row with the reason; an earlier
+ * un-tick keeps its own token and none; and Clear day, then un-tick (which answers the clear's token),
+ * then re-tick is ok and leaves the row live with no reason (lane E, 2026-11-17).
+ */
+async function verifyClearDayProgramRows(): Promise<void> {
+  await rolledBack(async (tx) => {
+    const f = await programRowFixture(tx);
+    const day = PROGRAM_ROW_FIXTURE_DAY;
+    const okEntry = (r: Awaited<ReturnType<typeof f.tick>>, what: string) => {
+      assert.ok('ok' in r && r.ok, `${what} — got ${JSON.stringify(r)}`);
+      return r;
+    };
+    const stateOf = async (publicId: string) =>
+      (
+        await tx
+          .select({
+            hiddenAt: sql<
+              string | null
+            >`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+            reason: schema.entries.hideReason,
+          })
+          .from(schema.entries)
+          .where(eq(schema.entries.publicId, publicId))
+      )[0]!;
+
+    const ticked = okEntry(
+      await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+      'B2-0 program: a ✓',
+    );
+    const unticked = okEntry(
+      await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
+      'B2-0 program: a second ✓',
+    );
+    okEntry(await f.untick(unticked.entryPublicId), 'B2-0 program: un-tick the second');
+    assert.equal(
+      (await stateOf(unticked.entryPublicId)).reason,
+      null,
+      'B2-0 proof 4: an un-tick writes no reason',
+    );
+    // Back-dated so the clear's token differs from the un-tick's (one transaction, one `now()`).
+    const OLDER = '2026-01-01T00:00:00.000001Z';
+    await tx
+      .update(schema.entries)
+      .set({ deletedAt: sql`${OLDER}::timestamptz` })
+      .where(eq(schema.entries.publicId, unticked.entryPublicId));
+
+    const cleared = await orFail('B2-0 program: clearDay', () =>
+      clearDay(f.exec, { profilePublicId: f.athlete.publicId, scope: f.H_SCOPE, day }),
+    );
+    assert.ok('hiddenAt' in cleared, 'B2-0 program: the clear answered an event');
+    assert.deepEqual(
+      await stateOf(ticked.entryPublicId),
+      { hiddenAt: cleared.hiddenAt, reason: HIDE_REASON.clear_day },
+      'B2-0 proof 3: a clear hides a program row with the reason',
+    );
+    assert.deepEqual(
+      await stateOf(unticked.entryPublicId),
+      { hiddenAt: OLDER, reason: null },
+      'B2-0 proof 3: an earlier un-tick keeps its own token and no reason',
+    );
+
+    const untickAfter = okEntry(
+      await f.untick(ticked.entryPublicId),
+      'B2-0 program: un-tick the cleared row',
+    );
+    assert.equal(
+      (untickAfter as { hiddenAt?: string }).hiddenAt,
+      cleared.hiddenAt,
+      "B2-0 proof 5: un-tick of a cleared row answers the clear's token",
+    );
+    okEntry(
+      await f.retick(ticked.entryPublicId, cleared.hiddenAt),
+      'B2-0 proof 5: Clear day, then re-tick, is ok',
+    );
+    assert.deepEqual(
+      await stateOf(ticked.entryPublicId),
+      { hiddenAt: null, reason: null },
+      'B2-0 proof 5: the re-ticked row is live with no reason',
+    );
+  });
+
+  console.log(
+    '✓ V1-9b B2-0 on a program row: a clear hides a ticked row with the reason; an un-tick writes none; Clear day, then re-tick, is ok and leaves the row live with no reason',
   );
 }
