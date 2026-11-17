@@ -266,6 +266,12 @@ only way a notice about minors' health data is worth anything.
 > and Vercel's function region (`iad1` only) in each console. Two Region cells and the paragraph below
 > the table change; **nothing any processor receives changes.**
 
+> 🔴 **§5 re-read 2026-11-17 for `V1-9b` B1-2** ([plan](../plans/v1-9b-delete-and-restore.md)):
+> no column, processor, reader audience or retention change. Restore all is built
+> (`app/p/[profileId]/clear-day-actions.ts`) with **no caller until B2**; it answers counts only, so no
+> hidden value leaves the server. B2 writes §4's line for a clear's time reaching the browser when the
+> banner renders it (the un-tick's token, `day-shapes.ts`, too). The notice is unchanged until then.
+
 > 🔴 **§1a / §5 re-read 2026-11-17 for `V1-9b` B2-0** ([plan](../plans/v1-9b-delete-and-restore.md)):
 > `entries.hide_reason`, one fixed value on hidden rows only. No new processor, reader audience or
 > export change (the export already omits hidden rows); retention is the hidden row's (§5, §8).
@@ -523,11 +529,11 @@ replacement coexists with it.
 one place in the app tree (a committed data correction)". There are now **three** writers of
 `entries.deleted_at`, and the distinction between them is what matters here:
 
-| Writer                                                            | Reachable by                                                                                                                                                                                                              | Touches production?       |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                 | **yes** — it has been run |
-| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete | **yes, from 3b-bw**       |
-| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                 | no                        |
+| Writer                                                            | Reachable by                                                                                                                                                                                                                                                                                              | Touches production?       |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                                                                                                 | **yes** — it has been run |
+| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete Restore all (`clear-day-actions.ts`, B1-2) is built and has no caller until B2. | **yes, from 3b-bw**       |
+| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                                                                                                 | no                        |
 
 ⚠️ **Updated 2026-11-16 (V1-24 3b-bw).** The app now writes `deleted_at`: clearing a weigh-in on the
 day page (Change, empty the field, Clear) **hides** that one row through `hideEntries`. The app does
