@@ -35,6 +35,7 @@ export * from './text';
 export * from './profiles';
 export * from './bodyweight';
 export * from './practice-shapes';
+export * from './clear-day-shapes';
 export * from './strength';
 export * from './strength-session';
 export * from './routine';
