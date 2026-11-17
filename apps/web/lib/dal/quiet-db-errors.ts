@@ -1,15 +1,15 @@
 import 'server-only';
 
 /**
- * A program write's database failure, without the data it was writing (FAM-1 7a-i; the tech-debt
- * row "A failed query's params reach Vercel's runtime logs", whose gate is the step that makes
- * save-workout reachable from a screen, 7b: it lands here, one step ahead of it).
+ * A DAL write's database failure, without the data it was writing. FAM-1 7a-i built it for the
+ * program builder; 12b moved it here, shared, for the day page's row writes (the tech-debt row "A
+ * failed query's params reach Vercel's runtime logs"). One helper, never a copy per directory.
  *
  * drizzle's `DrizzleQueryError` carries `Failed query: …\nparams: …` in its message, and its
  * `cause` (the driver's error) carries Postgres's `detail` (the rejected row). Sentry's scrubber
  * strips both, but Next prints an error thrown out of a Server Action with `console.error`, and
- * Vercel keeps that for 24 hours — so a failed save would put a prescription's free-text notes,
- * which can hold health detail about a child, in the log.
+ * Vercel keeps that for 24 hours. So a failed write would put a prescription's free-text notes, or
+ * a child's logged numbers, in the log.
  *
  * The rethrown error keeps only what diagnoses without data: which operation failed, the original
  * error's type (`DrizzleQueryError`, `TypeError`, …), the SQLSTATE (`23505`, `57014`, …) and the
@@ -17,14 +17,14 @@ import 'server-only';
  * the original, no `cause`, no `params`, no `detail`: a frame line is a function and a file, never
  * a value.
  */
-export class ProgramWriteError extends Error {
+export class DbWriteError extends Error {
   readonly code: string | null;
   constructor(operation: string, error: unknown) {
     const code = sqlState(error);
     // The class's own name: `DrizzleQueryError` leaves `name` as "Error".
     const kind = error instanceof Error ? error.constructor.name || error.name : typeof error;
     super(`${operation} failed (${kind}${code ? `, SQLSTATE ${code}` : ''})`);
-    this.name = 'ProgramWriteError';
+    this.name = 'DbWriteError';
     this.code = code;
     const frames = error instanceof Error ? framesOf(error) : [];
     if (frames.length) this.stack = [`${this.name}: ${this.message}`, ...frames].join('\n');
@@ -60,11 +60,11 @@ function sqlState(error: unknown): string | null {
   return null;
 }
 
-/** Runs one DAL write; a throw comes back as a `ProgramWriteError` that carries no data. */
+/** Runs one DAL write; a throw comes back as a `DbWriteError` that carries no data. */
 export async function quietDbErrors<T>(operation: string, write: () => Promise<T>): Promise<T> {
   try {
     return await write();
   } catch (error) {
-    throw new ProgramWriteError(operation, error);
+    throw new DbWriteError(operation, error);
   }
 }

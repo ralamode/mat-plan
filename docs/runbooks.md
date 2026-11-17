@@ -1035,12 +1035,12 @@ each kind is its own Sentry issue:
 | ------------------------------------------ | -------------------------------------------------- | -------------- | ---------------------- |
 | `profile scope miss: cross_household`      | an athlete's                                       | `profile`      | `resolve_profile`      |
 | `program scope miss: cross_household`      | a program's (the program builder)                  | `program`      | `resolve_program`      |
-| `workout scope miss: cross_household`      | a workout's (the program builder)                  | `workout`      | `resolve_workout`      |
+| `workout scope miss: cross_household`      | a workout's (the program builder, or a ✓ on a day) | `workout`      | `resolve_workout`      |
 | `prescription scope miss: cross_household` | one item of a workout's (a ✓ or a Change on a day) | `prescription` | `resolve_prescription` |
 
 All four carry the tag `scope_outcome: cross_household`. The program builder's pages and actions and
-the day page's row actions begin calling it in FAM-1 steps 7a and 12b; until those merge, only the
-profile event can fire.
+the day page's row actions call it since FAM-1 steps 7a and 12b; on a day, a ✓ reports a workout or
+a prescription id, at most one event per refused ✓.
 
 For the three new kinds `cross_household` means exactly **"a live row with this id exists in a
 household that is not the caller's"**. The caller's own id that the page does not serve (an older

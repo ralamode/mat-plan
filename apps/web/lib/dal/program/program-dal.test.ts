@@ -18,7 +18,7 @@ import { createProgram, readWorkoutDraft, renameProgram, saveWorkout } from '@ma
 
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
-import { ProgramWriteError } from './quiet-db-errors';
+import { DbWriteError } from '../quiet-db-errors';
 import { getWorkoutDraft } from './reads';
 import { reportProgramMiss } from './report-miss';
 import { createHouseholdProgram, renameHouseholdProgram, saveHouseholdWorkout } from './writes';
@@ -115,7 +115,7 @@ describe('the program DAL (FAM-1 7a-i)', () => {
       Object.assign(new Error('Failed query: insert …\nparams: knee sore'), { code: '57014' }),
     );
     const thrown = await saveHouseholdWorkout(heavyADraft).catch((error: unknown) => error);
-    expect(thrown).toBeInstanceOf(ProgramWriteError);
+    expect(thrown).toBeInstanceOf(DbWriteError);
     expect(String(thrown)).not.toContain('knee sore');
   });
 

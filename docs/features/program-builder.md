@@ -88,7 +88,6 @@ flowchart LR
 | `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                    |
 | `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported.                                                                                                                                                                        |
 | `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                    |
-| `apps/web/lib/dal/program/quiet-db-errors.ts`                           | `quietDbErrors`: a thrown error is rethrown as `ProgramWriteError`, keeping only the operation, the error's type, the SQLSTATE and the stack's frame lines.                                                                                                             |
 
 ## Invariants
 
@@ -109,7 +108,7 @@ flowchart LR
    targets; the layout at 360px.
 6. **The DAL resolves the household scope itself.** Every function under `lib/dal/program/` that
    reaches the database calls `getHouseholdScope()`, or takes the `HouseholdScope` its caller
-   resolved (`reportProgramMiss`); `quiet-db-errors.ts` touches no data. The tenancy scan (`lib/dal/scoped.test.ts`)
+   resolved (`reportProgramMiss`); the shared `lib/dal/quiet-db-errors.ts` (moved there at FAM-1 12b, for the day page's writes too) touches no data. The tenancy scan (`lib/dal/scoped.test.ts`)
    reaches sub-directories, so it holds this directory to that. [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no

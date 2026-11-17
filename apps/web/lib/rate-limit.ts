@@ -70,9 +70,9 @@ export const MUTATION_RATE_LIMIT = { attempts: 120, window: '5 m' } as const;
  * one action would lose the per-row replay. So the row writes get their own budget, five times the
  * default over the same window, and everything else keeps 120.
  *
- * ⚠️ **Nothing uses it yet.** Step 0b adds the policy and the parameter on `enterMutation`; the first
- * caller is FAM-1's row actions (step 12b). Until then no request reaches this limiter and Upstash
- * holds no key under its prefix.
+ * **Its callers are FAM-1's row actions** (`app/p/[profileId]/row-actions.ts`, step 12b): log,
+ * un-tick and re-tick; whether a page serves them yet is that module's docblock. Step 0b added the
+ * policy and the parameter on `enterMutation`.
  *
  * ⚠️ It is still a bound: 600 writes in 5 minutes is two a second, sustained, which no person on a
  * phone does. A runaway client is refused here exactly as it is by the default.
@@ -155,7 +155,7 @@ function buildLimiter(
 const mutationLimiter = buildLimiter(MUTATION_RATE_LIMIT, 'mat-plan:mutate');
 
 /**
- * The row-write limiter (FAM-1 step 0b). **Built, and reached by nothing until step 12b.**
+ * The row-write limiter (FAM-1 step 0b). **Its callers are the row actions (step 12b).**
  *
  * ⚠️ **Its prefix is a SIBLING of `mat-plan:mutate`, never a child of it.** `buildLimiter`'s docblock
  * says why: a prefix that is a parent of another puts two window sizes in one keyspace. So this is
