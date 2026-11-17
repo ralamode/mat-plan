@@ -32,6 +32,7 @@ it is approved, one batch PR at a time.
 | 1     | Mobility and stretching           | 50      |
 | 2     | Core, carries and sleds           | 58      |
 | 3     | Vertical pull and push            | 58      |
+| 4     | Horizontal push and pull          | 57      |
 | 5     | Conditioning machines and running | 54      |
 
 ## How a batch arrives
