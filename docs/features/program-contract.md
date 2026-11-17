@@ -168,7 +168,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    `closed-day-program-since-left` (C17). Each is the prototype's data arranged to reach a rule no
    prototype state reaches.
 3. **A fixture is tested from both sides.** The screen renders it; the data lane seeds the state it
-   describes and asserts its query deep-equals it, through `packages/db/scripts/verify/normalize-fixture.ts`.
+   describes and asserts its query deep-equals it, through `packages/db/scripts/verify/normalize-fixture.ts`
+   or, stricter, with ids compared exactly through a fixture-id to public-id map the proof's seeder
+   returns (12a does this: the normalizer cannot tell a public id from a client id).
 4. 🔴 **Fakes on the preview route, real actions in production, never a mix** (plan §6). Nothing
    in `apps/web` outside `apps/web/app/design/program/` imports the fakes, `picker-options` or the
    fixtures subpath, and nothing outside it names the route: `fakes.test.ts` and

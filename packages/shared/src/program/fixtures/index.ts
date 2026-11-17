@@ -88,7 +88,8 @@ export const FIXTURE_ITEMS = deepFreeze(
  * A data lane's proof seeds `world` (its programs through the real writers, with `workoutDraft`
  * for each workout in the contract's own shape; its entries with the frozen `stamps`), runs its
  * query for `athlete` on `day` with `world.today` as today, and asserts the result deep-equals the
- * fixture of the same name (through step 0c's normalizer).
+ * fixture of the same name: through step 0c's normalizer, or, stricter, with every id compared
+ * exactly through a fixture-id to public-id map the proof's own seeder returns.
  *
  * `before` is the world before a change, for a fixture that describes "logged, then something
  * changed" (a program edited, or the athlete's programs reordered), and `null` otherwise. A proof

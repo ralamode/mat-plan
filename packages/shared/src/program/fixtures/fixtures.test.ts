@@ -7,7 +7,7 @@ import { dayPlanSchema, type DayPlan } from '../day-shapes';
 import { hasSetRows } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import { programListSchema, programViewSchema, workoutDraftSchema } from '../program-shapes';
-import { dayPlan } from './build';
+import { dayPlan, edit, programOf, workoutDraft, workoutOf } from './build';
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
@@ -656,6 +656,44 @@ describe('closed-day-program-since-left: the order of a day’s programs, and a 
     expect(day.programs.map((p) => [p.name, p.order])).toEqual([
       ['Family program', 0],
       ['Adult One’s program', 2],
+    ]);
+  });
+
+  it('🔴 heads a logged-only item with what its first-logged row was logged against', () => {
+    // Plank is edited after the day was logged: the closed day still reads as it was logged.
+    const logged = source.world.entries.find((e) => e.n === 951)!;
+    const asLogged = source.world.stamps[logged.n]!.text;
+    const edited = edit(source.world, (world) => {
+      for (const it of workoutOf(programOf(world, 'p3'), 'w6').items) {
+        if (it.iid === 'plank') it.sets = 2;
+      }
+    });
+    const plank = (p: DayPlan) => item(p, 'Run and core', 'Side plank');
+    expect(plank(dayPlan(edited, 'a1', plan.day)).prescribedText).toBe(asLogged);
+    // And the live text is something else now, so that was not the live text passing by.
+    const live = workoutDraft(edited, 'p3', 'w6').items.find((it) => it.itemName === 'Side plank')!;
+    expect(prescribedText(live)).not.toBe(asLogged);
+
+    // Two rows logged against different texts: the FIRST LOGGED one heads the item, which here is
+    // set 2 (the lower `n`), not the lower set number and not the later row.
+    const earlier = { ...logged, n: 940, set: 2 };
+    const two = dayPlan(
+      {
+        ...edited,
+        entries: [...edited.entries, earlier],
+        stamps: {
+          ...edited.stamps,
+          [earlier.n]: { ...edited.stamps[logged.n]!, text: 'as first logged' },
+        },
+      },
+      'a1',
+      plan.day,
+    );
+    expect(plank(two).rows.map((r) => r.set)).toEqual([1, 2]);
+    expect(plank(two).prescribedText).toBe('as first logged');
+    expect(plank(two).rows.map((r) => r.logged?.prescribedText)).toEqual([
+      asLogged,
+      'as first logged',
     ]);
   });
 
