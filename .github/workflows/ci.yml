@@ -371,8 +371,12 @@ jobs:
             # and three-dot agree; three-dot stays because it is also right for any
             # base that is behind main. The old base.sha was: two-dot then listed
             # pnpm-lock.yaml for a branch that never touched it.
+            #
+            # .github/audit-exceptions.json (SEC-5c) counts as a dependency input:
+            # a PR that edits an exception gets no outage leniency.
             changed="$(git diff --name-only "$BASE_SHA...HEAD" -- \
-              pnpm-lock.yaml pnpm-workspace.yaml '*package.json' .npmrc '**/.npmrc')"
+              pnpm-lock.yaml pnpm-workspace.yaml '*package.json' .npmrc '**/.npmrc' \
+              .github/audit-exceptions.json)"
             [ -z "$changed" ] && deps=
           fi
           set +e; pnpm audit:check; code=$?; set -e

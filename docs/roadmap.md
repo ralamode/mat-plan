@@ -239,8 +239,8 @@ do next.
 - ✅ **`SEC-5` — the production audit is now a CI gate** (`audit:check` in `quality`). Four advisories
   had reached `main` with CI green, every one found by a local run during unrelated work rather than
   by CI (#182, #222, #227, #235). **Still a debt:** nothing audits the **full** tree automatically —
-  that is `SEC-5b` — and there is no suppression mechanism, so an unfixable production `high` reds
-  every PR until `SEC-5c` exists.
+  that is `SEC-5b`. An unfixable production `high` now gets a reasoned, expiring exception (`SEC-5c`,
+  2026-11-17) instead of redding every PR.
 - **The Neon-branch migration apply is still not wired.** Do not cite it as a safety argument. And
   **re-scope it before building it** — it branches production, which with a second family would clone
   their data into a CI-reachable database; it must branch the `mat-plan-preview` project or an
