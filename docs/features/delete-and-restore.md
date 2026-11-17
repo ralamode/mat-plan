@@ -9,6 +9,7 @@ owns:
   - apps/web/app/p/[profileId]/clear-day-actions.test.ts
   - packages/shared/src/clear-day-shapes.ts
   - packages/shared/src/clear-day-shapes.test.ts
+  - packages/shared/src/hide.test.ts
   - apps/web/lib/dal/entries-restore-clear.test.ts
   - packages/shared/src/hide.ts
 ---

@@ -27,21 +27,11 @@ export const clearEventSchema = z.object({
 });
 export type ClearEvent = z.infer<typeof clearEventSchema>;
 
-/** Restore all: bring back one clear of this athlete's day, named by its token. */
-export const restoreClearSchema = rowRetickSchema
-  .omit({ entryPublicId: true })
-  .refine((v) => isRealInstant(v.hiddenAt), { path: ['hiddenAt'] });
-
 /**
- * A token that matches the format but names no real instant (`2026-02-30T…`, `T24:00…`) would pass the
- * pattern and then fail Postgres' `::timestamptz` cast (22008), a crash on a public endpoint. It is
- * refused here as `bad_value`. JS parsing is lenient (Feb 30 becomes Mar 2), so the check is that the
- * parsed instant prints back to the token's own first 23 characters.
+ * Restore all: bring back one clear of this athlete's day, named by its token. `hiddenAtSchema` refuses
+ * a token that names no real instant, so this inherits that through `rowRetickSchema`.
  */
-function isRealInstant(token: string): boolean {
-  const ms = Date.parse(token);
-  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 23) === token.slice(0, 23);
-}
+export const restoreClearSchema = rowRetickSchema.omit({ entryPublicId: true });
 export type RestoreClearInput = z.input<typeof restoreClearSchema>;
 
 /**

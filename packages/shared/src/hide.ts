@@ -61,13 +61,25 @@ export type HideEntriesInput = z.infer<typeof hideEntriesSchema>;
  *
  * So this pattern pins **exactly six** fractional digits. Five or seven is not a token this app
  * produced, and accepting one would mean accepting a value that cannot match a row.
+ *
+ * **And it must name a real instant** (V1-9b B1-2, #547's review): `2026-02-30T…`, month 13, hour 24
+ * or second 60 match the pattern but fail Postgres' `::timestamptz` cast (22008), which would reach
+ * `error.tsx` from a public endpoint instead of answering `bad_value`. JS parsing is lenient (30
+ * February becomes 2 March), so the check is that the parsed instant prints back to the token's own
+ * first 23 characters. The value itself is never replaced: the six digits stay as typed.
  */
 export const hiddenAtSchema = z
   .string()
   .regex(
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/,
     'a hide token is UTC text with exactly six fractional digits',
-  );
+  )
+  .refine(isRealInstant, 'a hide token names a real instant');
+
+function isRealInstant(token: string): boolean {
+  const ms = Date.parse(token);
+  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 23) === token.slice(0, 23);
+}
 
 /**
  * Why a restore did not simply happen, per item.
