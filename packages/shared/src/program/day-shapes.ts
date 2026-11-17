@@ -107,6 +107,11 @@ const dayWorkoutSchema = z.object({
   /** Both ids are `null` once the program or the workout is purged; the frozen `name` remains. */
   programPublicId: uuidSchema.nullable(),
   workoutPublicId: uuidSchema.nullable(),
+  /**
+   * The heading of the workout's slot on the week, or `null` when the slot has none. **`null` for
+   * a workout that left the week**: the label was the slot's, and the slot is gone _(maintainer,
+   * 2026-11-17)_. A scheduled workout on a closed day shows its slot's label as it is now.
+   */
   label: slotLabelSchema,
   /**
    * The workout's live name where the live workout shows (a scheduled workout on a writable or a
@@ -165,7 +170,9 @@ export const dayPlanSchema = z.object({
   today: isoDaySchema,
   /**
    * `writable` is today or yesterday only (`inWritableWindow(day, today)`); a future day never is
-   * (plan D32). **The day resolver sets `writable`, `future` and `canGoForward`** from the `today`
+   * (plan D32). **An archived athlete's day is never writable**: the row writer refuses them, so
+   * their today reads like a closed day, with only what was logged _(maintainer, 2026-11-17)_. So
+   * `writable` is true exactly where the row writer would accept a ✓ for this athlete and day. **The day resolver sets `writable`, `future` and `canGoForward`** from the `today`
    * it is given, so one proof against the fixtures covers all three (contract change C17). The
    * DAL adds only `athletes`.
    */

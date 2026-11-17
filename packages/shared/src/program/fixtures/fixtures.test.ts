@@ -11,6 +11,7 @@ import { dayPlan, edit, programOf, workoutDraft, workoutOf } from './build';
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
+  archivedAthleteToday,
   closedDayProgramSinceLeft,
   DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
@@ -100,6 +101,8 @@ describe('every fixture round-trips through its own schema', () => {
       'closed-day-logged-only',
       // C17, not a prototype state: a program since left, and a workout renamed after logging.
       'closed-day-program-since-left',
+      // C18, not a prototype state: an archived athlete's today.
+      'archived-athlete-today',
       'future-preview',
       'every-type-once',
     ]);
@@ -534,7 +537,8 @@ describe('workout-left-the-week: logged, then taken off the day', () => {
     expect(plan.workouts.map((w) => [w.name, w.label, w.scheduled])).toEqual([
       ['Morning habits', 'Morning', true],
       ['Evening stretch', 'Evening', true],
-      ['Heavy A', 'After school', false],
+      // No label once the slot is gone (maintainer, 2026-11-17); the prototype shows 'After school'.
+      ['Heavy A', null, false],
     ]);
   });
 
@@ -705,6 +709,50 @@ describe('closed-day-program-since-left: the order of a day’s programs, and a 
   });
 });
 
+describe('archived-athlete-today: an archived athlete’s day is never writable (C18)', () => {
+  const plan = archivedAthleteToday;
+
+  it('is today, and reads like a closed day', () => {
+    expect(plan).toMatchObject({ day: FIXTURE_TODAY, today: FIXTURE_TODAY });
+    expect(plan).toMatchObject({ writable: false, future: false, onProgram: 'yes' });
+  });
+
+  it('shows only what was logged: the two morning habits, of the day’s four workouts', () => {
+    expect(todayTwoPrograms.workouts.map((w) => w.name)).toEqual([
+      'Morning habits',
+      'Heavy B',
+      'Conditioning',
+      'Evening stretch',
+    ]);
+    expect(plan.workouts.map((w) => w.name)).toEqual(['Morning habits']);
+    const rows = plan.workouts.flatMap((w) => w.items.flatMap((i) => i.rows));
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.logged !== null && row.previous === null)).toBe(true);
+    // The whole workout is still counted, as on any closed day.
+    expect(plan.workouts[0]?.progress).toEqual(
+      workout(todayTwoPrograms, 'Morning habits').progress,
+    );
+  });
+
+  it('is the same world as today-two-programs, but for the archive', () => {
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
+    expect(before).toBe(DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world);
+    expect(world.athletes.filter((a) => a.archived).map((a) => a.id)).toEqual(['a1']);
+    expect(before?.athletes.some((a) => a.archived)).toBe(false);
+    expect({ ...world, athletes: before?.athletes }).toEqual(before);
+  });
+
+  it('leaves another athlete of the household writable', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
+    expect(dayPlan(world, 'a2', FIXTURE_TODAY).writable).toBe(true);
+  });
+
+  it('still lets them look ahead: a future day is as it is for anyone', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
+    expect(dayPlan(world, 'a1', '2026-11-16')).toEqual(futurePreview);
+  });
+});
+
 describe('where a DayPlan fixture comes from (C17)', () => {
   const names = Object.keys(DAY_PLAN_FIXTURES) as (keyof typeof DAY_PLAN_FIXTURES)[];
 
@@ -724,6 +772,7 @@ describe('where a DayPlan fixture comes from (C17)', () => {
       'yesterday-edited-after-logging',
       'workout-left-the-week',
       'closed-day-program-since-left',
+      'archived-athlete-today',
     ]);
   });
 
