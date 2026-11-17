@@ -11,7 +11,9 @@ import { dayPlan, edit, programOf, workoutDraft, workoutOf } from './build';
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
+  archivedAthleteNothingLogged,
   archivedAthleteToday,
+  closedDayNothingLogged,
   closedDayProgramSinceLeft,
   DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
@@ -103,6 +105,10 @@ describe('every fixture round-trips through its own schema', () => {
       'closed-day-program-since-left',
       // C18, not a prototype state: an archived athlete's today.
       'archived-athlete-today',
+      // C22, not prototype states: a closed day with nothing logged, and an archived athlete with
+      // nothing logged and one other athlete to go to.
+      'closed-day-nothing-logged',
+      'archived-athlete-nothing-logged',
       'future-preview',
       'every-type-once',
     ]);
@@ -769,6 +775,42 @@ describe('archived-athlete-today: an archived athlete’s day is never writable 
   });
 });
 
+describe('closed-day-nothing-logged: a closed day on a program, with nothing logged (C22)', () => {
+  const plan = closedDayNothingLogged;
+
+  it('is a closed Tuesday on the Family program', () => {
+    expect(plan).toMatchObject({ day: '2026-11-10', writable: false, future: false });
+    expect(plan.onProgram).toBe('yes');
+    expect(plan.programs.map((p) => p.name)).toEqual(['Family program']);
+  });
+
+  it('lists no workouts: a closed day shows only what was logged', () => {
+    expect(plan.workouts).toEqual([]);
+    // The week does hold workouts that day; nobody logged them.
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['closed-day-nothing-logged'];
+    expect(world.programs.find((p) => p.id === 'p1')?.week[2].length).toBeGreaterThan(0);
+    expect(world.entries.some((e) => e.ath === 'a1' && e.day === plan.day)).toBe(false);
+  });
+});
+
+describe('archived-athlete-nothing-logged: one other athlete to go to (C22)', () => {
+  const plan = archivedAthleteNothingLogged;
+
+  it('is Athlete Two’s today, read like a closed day, with nothing logged', () => {
+    expect(plan.profilePublicId).toBe(fixtureIds.athlete('a2'));
+    expect(plan).toMatchObject({ day: FIXTURE_TODAY, writable: false, future: false });
+    expect(plan.onProgram).toBe('yes');
+    expect(plan.workouts).toEqual([]);
+  });
+
+  it('has a switcher’s list of one, who is not the athlete on the page', () => {
+    expect(plan.athletes.map((a) => a.profilePublicId)).toEqual([fixtureIds.athlete('a1')]);
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-nothing-logged'];
+    expect(world.athletes.filter((a) => a.archived).map((a) => a.id)).toEqual(['a2', 'a3']);
+    expect(before).toBe(DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world);
+  });
+});
+
 describe('where a DayPlan fixture comes from (C17)', () => {
   const names = Object.keys(DAY_PLAN_FIXTURES) as (keyof typeof DAY_PLAN_FIXTURES)[];
 
@@ -789,6 +831,7 @@ describe('where a DayPlan fixture comes from (C17)', () => {
       'workout-left-the-week',
       'closed-day-program-since-left',
       'archived-athlete-today',
+      'archived-athlete-nothing-logged',
     ]);
   });
 

@@ -645,7 +645,9 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     const edited = {
       ...swapped,
       items: [
-        ...swapped.items.slice(0, 2),
+        // The B pair leaves its group (superset and rest cleared on the update path).
+        { ...swapped.items[0]!, superset: null, restAfter: null },
+        { ...swapped.items[1]!, superset: null, restAfter: null },
         {
           ...swapped.items[2]!,
           sets: 5,
@@ -653,7 +655,9 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
           notes: 'New note',
           quantities: [{ ...swapped.items[2]!.quantities[0]!, value: 35 }],
         },
-        ...swapped.items.slice(3),
+        // The A pair's last item takes a new rest.
+        { ...swapped.items[3]!, restAfter: 'Two minutes after each round' },
+        swapped.items[4]!,
         timed,
       ],
     };
@@ -661,7 +665,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     assert.deepEqual(
       (await readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId }))?.items,
       edited.items,
-      "FAM-1 6a-ii: an edited card's sets, reps, notes and target persist",
+      "FAM-1 6a-ii: an edited card's sets, reps, notes, target, superset and rest persist",
     );
     const beforeClear = await quantityRows(tx, workoutPublicId);
     const cleared = {
@@ -686,6 +690,41 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
 
     // ── refusals are typed results, never thrown, and write nothing ──
     const live = cleared;
+    // An id in upper case is the same id (Postgres compares uuids in any case): the save is the same
+    // save, and adds no row.
+    const upperCase = {
+      ...live,
+      workoutPublicId: workoutPublicId.toUpperCase(),
+      items: live.items.map((item) => ({
+        ...item,
+        prescriptionClientId: item.prescriptionClientId.toUpperCase(),
+        itemPublicId: item.itemPublicId.toUpperCase(),
+      })),
+    };
+    const beforeUpper = await snapshot(tx);
+
+    assert.deepEqual(
+      await saveWorkout(exec, A_SCOPE, upperCase).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true, workoutPublicId },
+      'FAM-1 6a-ii: ids in upper case are the same ids',
+    );
+    assert.deepEqual(
+      (await snapshot(tx)).prescriptions.map((r) => [r.id, r.deletedAt]),
+      beforeUpper.prescriptions.map((r) => [r.id, r.deletedAt]),
+      'FAM-1 6a-ii: an upper-case save hides and adds no row',
+    );
+    // A new workout's replay is found by its client id: in upper case it is still the replay.
+    assert.deepEqual(
+      await saveWorkout(exec, A_SCOPE, {
+        ...draft,
+        workoutClientId: draft.workoutClientId.toUpperCase(),
+        workoutPublicId: null,
+        name: live.name,
+        items: [],
+      }).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true, workoutPublicId },
+      "FAM-1 6a-ii: a new workout's replay with an upper-case client id is the replay",
+    );
     const other = await saveWorkout(exec, A_SCOPE, {
       ...draft,
       workoutClientId: newId(),
@@ -748,6 +787,11 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     const only = (...its: unknown[]) => ({ ...live, items: its });
     const cases: Array<[string, unknown, string]> = [
       ['an empty name', { ...live, name: '' }, PROGRAM_REFUSAL.invalid],
+      [
+        'two cards whose ids differ only in case',
+        only(reps, { ...reps, prescriptionClientId: reps.prescriptionClientId.toUpperCase() }),
+        PROGRAM_REFUSAL.invalid,
+      ],
       ['a set-based item with no sets', only({ ...reps, sets: null }), PROGRAM_REFUSAL.invalid],
       [
         'reps that are not a whole number',
@@ -777,19 +821,19 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       [
         'a split superset (two runs under one key)',
         only(
-          live.items[0]!,
-          live.items[1]!,
+          live.items[2]!,
+          live.items[3]!,
           reps,
-          { ...live.items[2]!, superset: { group: live.items[0]!.superset!.group, order: 1 } },
-          { ...live.items[3]!, superset: { group: live.items[0]!.superset!.group, order: 2 } },
+          { ...live.items[0]!, superset: { group: live.items[2]!.superset!.group, order: 1 } },
+          { ...live.items[1]!, superset: { group: live.items[2]!.superset!.group, order: 2 } },
         ),
         PROGRAM_REFUSAL.invalid,
       ],
       [
         'a misnumbered superset',
         only(
-          { ...live.items[0]!, superset: { ...live.items[0]!.superset!, order: 2 } },
-          { ...live.items[1]!, superset: { ...live.items[1]!.superset!, order: 1 } },
+          { ...live.items[2]!, superset: { ...live.items[2]!.superset!, order: 2 } },
+          { ...live.items[3]!, superset: { ...live.items[3]!.superset!, order: 1 } },
         ),
         PROGRAM_REFUSAL.invalid,
       ],
@@ -816,7 +860,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       ],
       [
         'a rest on a non-last item',
-        only({ ...live.items[0]!, restAfter: 'Rest' }, live.items[1]!),
+        only({ ...live.items[2]!, restAfter: 'Rest' }, live.items[3]!),
         PROGRAM_REFUSAL.invalid,
       ],
       [

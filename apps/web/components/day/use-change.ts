@@ -34,7 +34,7 @@ import { rowName, type useRow } from './use-row';
  * visible "Changed 30 → 35 · Undo" follows a save. Undo returns the numbers from **before the first
  * Change this visit**, so a typo between two changes is never what comes back. Phones have no
  * Escape, so while a number differs from the stored one the row says "Not saved. Was 30 lb." with
- * a Cancel.
+ * a ✕ (cancel) under the ✓.
  *
  * **When a Change is sent: when focus leaves the row from one of its fields** (for anywhere outside
  * both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so a load and reps changed together are one write. Never
@@ -46,7 +46,7 @@ import { rowName, type useRow } from './use-row';
  * - **the ✓** never un-ticks a row whose press began during an edit: the blur has already sent,
  *   reverted or found nothing to send, so the click would read a clean row. A click that began in an
  *   edit saves the change if there is still one, and otherwise does nothing.
- * - **Cancel** stops the blur from sending the number it is about to throw away.
+ * - **the ✕ (cancel)** stops the blur from sending the number it is about to throw away.
  * Only a logged row can be in an edit: an unlogged row's ✓ is a ✓ (`editable` gates both notes).
  *
  * **What is typed** is only the fields touched: the others read the stored numbers at the moment of
@@ -97,7 +97,7 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
   const [line, setLine] = useState<Line | null>(null);
   /** Whether the ✓'s current press began while an edit was open (see the header). */
   const pressBeganInEdit = useRef(false);
-  /** Whether Cancel's press has begun, so the field's blur does not send what it cancels. */
+  /** Whether the ✕'s press has begun, so the field's blur does not send what it cancels. */
   const cancelling = useRef(false);
 
   // A different entry (an un-tick, a new ✓, a reload that changed the row) ends this visit's Change.
@@ -155,7 +155,7 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
 
   function revert() {
     // A Change in flight cannot be called back: Escape then would say "cancelled" over a write
-    // that still lands (Cancel is hidden then, for the same reason).
+    // that still lands (the ✕ is invisible then, for the same reason).
     if (r.pending) return;
     cancelling.current = false;
     const was = dirty;
@@ -253,6 +253,8 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
   }
 
   return {
+    /** The row's name (`Bench press set 1`): the announcer's, and the ✕'s. */
+    name,
     editable,
     text,
     dirty,
@@ -279,11 +281,11 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     noteKey() {
       pressBeganInEdit.current = false;
     },
-    /** A field took focus, or Cancel's press was called off (a scroll): no Cancel is under way. */
+    /** A field took focus, or the ✕'s press was called off (a scroll): no cancel is under way. */
     noteFocus() {
       cancelling.current = false;
     },
-    /** Cancel's pointer-down: the blur that follows in Safari must not send what Cancel discards. */
+    /** The ✕'s pointer-down: the blur that follows in Safari must not send what the ✕ discards. */
     noteCancel() {
       cancelling.current = true;
     },

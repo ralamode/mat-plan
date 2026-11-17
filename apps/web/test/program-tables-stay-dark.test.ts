@@ -161,7 +161,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     [...code(join(REPO, b)).matchAll(/export\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
       m[1]!
         .split(',')
-        .map((n) => n.trim())
+        // `a as b` publishes `b`.
+        .map((n) =>
+          n
+            .trim()
+            .split(/\s+as\s+/)
+            .at(-1)!,
+        )
         .filter(Boolean),
     ),
   );
@@ -172,7 +178,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // The forms that would reach a writer without naming it in braces: nowhere in apps/web, the DAL
   // included, so containment below can be checked by name.
   const WHOLE_PACKAGE =
-    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)/;
+    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)|export\s*\*\s*(?:as\s+\w+\s*)?from\s*['"]@mat-plan\/db['"]/;
 
   // FAM-1 7a-i: lane P's writers and reads are wired, and only the program DAL may import them: an
   // action, a page or a component reaches them through `lib/dal/program/`, which resolves the
@@ -180,6 +186,12 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   const PROGRAM_DAL = 'apps/web/lib/dal/program/';
 
   it("only the program DAL imports lane P's program writers and reads (step 7a-i wires them there)", () => {
+    for (const barrel of LANE_P_BARRELS) {
+      // A barrel that re-exports a whole module publishes names this scan cannot read.
+      expect(code(join(REPO, barrel)), `${barrel} names what it publishes`).not.toMatch(
+        /export\s*\*/,
+      );
+    }
     expect(laneP, 'the barrels name what they publish').toEqual(
       expect.arrayContaining(['createProgram', 'renameProgram', 'saveWorkout', 'readWorkoutDraft']),
     );
@@ -196,6 +208,20 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(named.test('async saveWorkout(draft) {')).toBe(false);
     expect(WHOLE_PACKAGE.test("import * as db from '@mat-plan/db';")).toBe(true);
     expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
+    expect(WHOLE_PACKAGE.test("export * from '@mat-plan/db';")).toBe(true);
+    expect(WHOLE_PACKAGE.test("export * as db from '@mat-plan/db';")).toBe(true);
+    // The alias rule publishes the right-hand name. ⚠️ The parser reads `export { … } from` only: a
+    // barrel's local `export function` or `export { x }` would publish a name it cannot see, so the
+    // barrels keep to the one form.
+    const aliased = [
+      ..."export { readA as readB } from './x';".matchAll(/export\s*\{([^}]*)\}\s*from/g),
+    ];
+    expect(
+      aliased[0]![1]!
+        .trim()
+        .split(/\s+as\s+/)
+        .at(-1),
+    ).toBe('readB');
   });
 
   /**

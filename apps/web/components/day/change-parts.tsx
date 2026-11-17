@@ -3,7 +3,8 @@
 import { type DayItem } from '@mat-plan/shared';
 
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS } from '@/lib/constants';
+import { InlineEditActions } from '@/components/ui/inline-edit-actions';
+import { AMEND_COPY, INPUT_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
@@ -107,10 +108,18 @@ export function ChangeInput({
 
 /**
  * The line under a row: its error (with Reload, as before), or Change's line. While a number is
- * typed over: "Not saved. Was 30 lb." and Cancel, which is a phone's Escape. A failed save adds
- * "Try again". After a save: "Changed 30 → 35" and Undo, which stays beside a failed Undo. Focus goes
- * to the ✓ before a button that is about to go. Each button is described by the line, so a screen
- * reader hears which row's Undo or Cancel it is.
+ * typed over: "Not saved. Was 30 lb." and an icon-only ✕, which is a phone's Escape. A failed save
+ * adds "Try again". After a save: "Changed 30 → 35" and Undo, which stays beside a failed Undo.
+ * Focus goes to the ✓ before a button that is about to go. Each button is described by the line, so
+ * a screen reader hears which row's Undo or ✕ it is.
+ *
+ * **The ✕ sits at the line's right end, directly under the row's ✓** (maintainer, 2026-11-17, from
+ * three captured options): the field's own line has no room for it at 360px, where a 44px column
+ * would leave Previous 40-54px, narrower than its own header. Under the ✓ it reads as the ✓'s
+ * partner, not as "dismiss this message". The caller's `underTickClassName` puts its right edge on
+ * the ✓'s (`UNDER_TICK_CLASS` in the set table; none on a card, whose ✓ ends the line), and on the
+ * "Not saved" line `pt-1` keeps 8px between the two, as `InlineEditActions` spaces a pair. Undo
+ * never shows beside it (`canUndo` needs a row that is not typed over), so Undo stays by its text.
  *
  * Not a live region: the page's one announcer speaks every change (`day.announce`).
  */
@@ -119,11 +128,14 @@ export function RowStatus({
   change,
   lineId,
   tickRef,
+  underTickClassName,
 }: {
   r: ReturnType<typeof useRow>;
   change: RowChange;
   lineId: string;
   tickRef: React.RefObject<HTMLButtonElement | null>;
+  /** Lines the ✕ up under the row's ✓: a table's ✓ is centred in its column, a card's is not. */
+  underTickClassName?: string;
 }) {
   const buttonProps = {
     type: 'button',
@@ -144,22 +156,33 @@ export function RowStatus({
       {DAY_COPY.change.retry}
     </Button>
   ) : null;
-  // No Cancel while the Change is in flight: it could not stop the write.
-  const cancel =
-    change.dirty && !change.pending ? (
-      <Button
-        {...buttonProps}
-        // Safari: the field's blur comes before this click and must not send what Cancel discards.
-        onPointerDown={change.noteCancel}
-        // A touch that becomes a scroll is called off: the next blur must still send.
-        onPointerCancel={change.noteFocus}
-        onClick={() => {
-          tickRef.current?.focus();
-          change.revert();
-        }}
-      >
-        {DAY_COPY.change.cancel}
-      </Button>
+  // Mounted for as long as a number is typed over, the save included: while it is in flight the ✕
+  // is invisible but keeps its 44px, so the line does not move, and it cannot stop the write.
+  // Its name is the row's (`change.name`, the announcer's too), so two rows' ✕s never share one.
+  // `pt-1` only under the ✓: beside Try again or Reload it would sit 2px low.
+  const cancel = (underTick: boolean) =>
+    change.dirty ? (
+      <div className={cn('ml-auto shrink-0', underTick && 'pt-1', underTickClassName)}>
+        <InlineEditActions
+          cancelLabel={AMEND_COPY.cancelLabel(change.name)}
+          onCancel={() => {
+            // The caller's own guard (the ✕ is out of reach then anyway): focus stays put.
+            if (change.pending) return;
+            // The ✕ goes with the edit it cancels, so focus moves first, or it falls to the page.
+            tickRef.current?.focus();
+            change.revert();
+          }}
+          cancelHandlers={{
+            // Safari: the field's blur comes before this click and must not send what ✕ discards.
+            onPointerDown: change.noteCancel,
+            // A touch that becomes a scroll is called off: the next blur must still send.
+            onPointerCancel: change.noteFocus,
+          }}
+          pending={change.pending}
+          describedBy={lineId}
+          focusClassName={ON_TINT_BUTTON_FOCUS_CLASS}
+        />
+      </div>
     ) : null;
   const undo = change.canUndo ? (
     <Button
@@ -179,21 +202,24 @@ export function RowStatus({
       <div className="flex flex-wrap items-center gap-2">
         <RowMessage r={r} errorId={lineId} tickRef={tickRef} />
         {retry}
-        {cancel}
         {undo}
+        {cancel(false)}
       </div>
     );
   }
   const text = change.was ?? change.line?.text ?? null;
   if (text === null) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-2">
-      <p id={lineId} className="text-foreground text-sm">
+    // No wrap: the text is at most ~215px, and the ✕ takes 58px with the gap and `mr-1.5`, inside
+    // a 288px superset card at 360px; longer text wraps inside the `<p>`. No `flex-1` on the text,
+    // so Undo stays beside "Changed 30 → 35" and only the ✕ (`ml-auto`) goes to the right end.
+    <div className="flex items-center gap-x-2">
+      <p id={lineId} className="text-foreground min-w-0 text-sm">
         {text}
         {change.was ? <span className="sr-only"> {DAY_COPY.change.tickSaves}</span> : null}
       </p>
-      {cancel}
       {undo}
+      {cancel(true)}
     </div>
   );
 }
