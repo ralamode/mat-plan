@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/queries/day/prescription-live-in.ts b/packages/db/src/queries/day/prescription-live-in.ts
-index 96909b63..af6e4059 100644
+index 7517e108..29e49c40 100644
 --- a/packages/db/src/queries/day/prescription-live-in.ts
 +++ b/packages/db/src/queries/day/prescription-live-in.ts
-@@ -33,7 +33,6 @@ export async function prescriptionLiveIn(
+@@ -46,7 +46,6 @@ export async function prescriptionLiveIn(
      .where(
        and(
          eq(schema.prescriptions.publicId, prescriptionPublicId),
