@@ -116,9 +116,10 @@ export function ChangeInput({
  * **The ✕ sits at the line's right end, directly under the row's ✓** (maintainer, 2026-11-17, from
  * three captured options): the field's own line has no room for it at 360px, where a 44px column
  * would leave Previous 40-54px, narrower than its own header. Under the ✓ it reads as the ✓'s
- * partner, not as "dismiss this message". `underTickClassName` puts its right edge on the ✓'s
- * (`mr-1.5` in the set table, whose ✓ is centred in a `w-14` column; none on a card, whose ✓ ends
- * the line) and `pt-1` keeps at least 8px between the two, as `InlineEditActions` spaces a pair.
+ * partner, not as "dismiss this message". The caller's `underTickClassName` puts its right edge on
+ * the ✓'s (`UNDER_TICK_CLASS` in the set table; none on a card, whose ✓ ends the line), and on the
+ * "Not saved" line `pt-1` keeps 8px between the two, as `InlineEditActions` spaces a pair. Undo
+ * never shows beside it (`canUndo` needs a row that is not typed over), so Undo stays by its text.
  *
  * Not a live region: the page's one announcer speaks every change (`day.announce`).
  */
@@ -127,15 +128,12 @@ export function RowStatus({
   change,
   lineId,
   tickRef,
-  name,
   underTickClassName,
 }: {
   r: ReturnType<typeof useRow>;
   change: RowChange;
   lineId: string;
   tickRef: React.RefObject<HTMLButtonElement | null>;
-  /** The row's name (`Bench press set 1`), for the ✕'s: two rows' ✕s must not both say "Cancel". */
-  name: string;
   /** Lines the ✕ up under the row's ✓: a table's ✓ is centred in its column, a card's is not. */
   underTickClassName?: string;
 }) {
@@ -160,27 +158,32 @@ export function RowStatus({
   ) : null;
   // Mounted for as long as a number is typed over, the save included: while it is in flight the ✕
   // is invisible but keeps its 44px, so the line does not move, and it cannot stop the write.
-  const cancel = change.dirty ? (
-    <div className={cn('ml-auto shrink-0 pt-1', underTickClassName)}>
-      <InlineEditActions
-        cancelLabel={AMEND_COPY.cancelLabel(name)}
-        onCancel={() => {
-          // The ✕ goes with the edit it cancels, so focus moves first, or it falls to the page.
-          tickRef.current?.focus();
-          change.revert();
-        }}
-        cancelHandlers={{
-          // Safari: the field's blur comes before this click and must not send what ✕ discards.
-          onPointerDown: change.noteCancel,
-          // A touch that becomes a scroll is called off: the next blur must still send.
-          onPointerCancel: change.noteFocus,
-        }}
-        pending={change.pending}
-        describedBy={lineId}
-        focusClassName={ON_TINT_BUTTON_FOCUS_CLASS}
-      />
-    </div>
-  ) : null;
+  // Its name is the row's (`change.name`, the announcer's too), so two rows' ✕s never share one.
+  // `pt-1` only under the ✓: beside Try again or Reload it would sit 2px low.
+  const cancel = (underTick: boolean) =>
+    change.dirty ? (
+      <div className={cn('ml-auto shrink-0', underTick && 'pt-1', underTickClassName)}>
+        <InlineEditActions
+          cancelLabel={AMEND_COPY.cancelLabel(change.name)}
+          onCancel={() => {
+            // The caller's own guard (the ✕ is out of reach then anyway): focus stays put.
+            if (change.pending) return;
+            // The ✕ goes with the edit it cancels, so focus moves first, or it falls to the page.
+            tickRef.current?.focus();
+            change.revert();
+          }}
+          cancelHandlers={{
+            // Safari: the field's blur comes before this click and must not send what ✕ discards.
+            onPointerDown: change.noteCancel,
+            // A touch that becomes a scroll is called off: the next blur must still send.
+            onPointerCancel: change.noteFocus,
+          }}
+          pending={change.pending}
+          describedBy={lineId}
+          focusClassName={ON_TINT_BUTTON_FOCUS_CLASS}
+        />
+      </div>
+    ) : null;
   const undo = change.canUndo ? (
     <Button
       {...buttonProps}
@@ -200,21 +203,23 @@ export function RowStatus({
         <RowMessage r={r} errorId={lineId} tickRef={tickRef} />
         {retry}
         {undo}
-        {cancel}
+        {cancel(false)}
       </div>
     );
   }
   const text = change.was ?? change.line?.text ?? null;
   if (text === null) return null;
   return (
-    // No wrap: the text is at most ~215px and the ✕ 44px, inside a 288px card at 360px.
+    // No wrap: the text is at most ~215px, and the ✕ takes 58px with the gap and `mr-1.5`, inside
+    // a 288px superset card at 360px; longer text wraps inside the `<p>`. No `flex-1` on the text,
+    // so Undo stays beside "Changed 30 → 35" and only the ✕ (`ml-auto`) goes to the right end.
     <div className="flex items-center gap-x-2">
-      <p id={lineId} className="text-foreground min-w-0 flex-1 text-sm">
+      <p id={lineId} className="text-foreground min-w-0 text-sm">
         {text}
         {change.was ? <span className="sr-only"> {DAY_COPY.change.tickSaves}</span> : null}
       </p>
       {undo}
-      {cancel}
+      {cancel(true)}
     </div>
   );
 }

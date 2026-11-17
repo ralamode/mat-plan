@@ -253,6 +253,8 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
   }
 
   return {
+    /** The row's name (`Bench press set 1`): the announcer's, and the ✕'s. */
+    name,
     editable,
     text,
     dirty,

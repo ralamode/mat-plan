@@ -169,9 +169,7 @@ before the first Change this visit (a typo between two changes never comes back)
 number is typed over, the row says "Not saved. Was 30 lb." with a Cancel, since phones have no
 Escape key. **That Cancel is an icon-only ✕** (lane S's `InlineEditActions`, its ✕-alone form),
 at the right end of that line, directly under the row's ✓ _(maintainer, 2026-11-17, from three
-options captured at 360px)_: the field's own line has no room for a 44px ✕ at 360px (Previous
-would drop to 40-54px, under its own header), and under the ✓ it reads as the ✓'s partner rather
-than as "dismiss this message". It stays mounted, invisible, while the Change is in flight. No trace of a Change shows after a reload; an "edited" marker is a contract question for
+options captured at 360px)_; why there: `RowStatus` in `change-parts.tsx`. No trace of a Change shows after a reload; an "edited" marker is a contract question for
 later. Also different from v12: a Change is sent once per row, when focus leaves the row from one of its fields (v12 per field);
 the ✓ during an edit saves it (v12 un-ticked); a number is checked as a ✓'s is (v12 took anything
 `+v` reads, such as `1e3`); and a row logged in another unit stays text.

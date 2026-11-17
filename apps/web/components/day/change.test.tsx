@@ -222,6 +222,21 @@ describe('Change: saving', () => {
     expect(actions.amendRow).toHaveBeenCalledTimes(1);
     expect(within(splits).getByText(DAY_COPY.change.changed('5 min', '6 min'))).toBeTruthy();
   });
+
+  it('a single row’s ✕ is named for it and puts the number back, focus on its ✓', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    const splits = card('Morning habits', 'Splits stretch');
+    const minutes = within(splits).getByRole<HTMLInputElement>('textbox');
+    type(minutes, '6');
+    await press(
+      within(splits).getByRole('button', { name: AMEND_COPY.cancelLabel('Splits stretch') }),
+    );
+    expect(minutes.value).toBe('5');
+    expect(document.activeElement).toBe(
+      within(splits).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') }),
+    );
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
 });
 
 describe('Change: the ✓ in Safari’s order (Safari does not focus a tapped button)', () => {
@@ -713,20 +728,23 @@ describe('Change: second-pass fixes', () => {
     expect(load().value).toBe('30');
   });
 
-  it('while a Change is in flight the ✕ keeps its place, hidden, and cancels nothing', async () => {
+  it('while a Change is in flight the ✕ stays mounted, does nothing, and leaves focus alone', async () => {
     const gate = held();
-    mount(yesterdayHalfDone, {
+    const { actions } = mount(yesterdayHalfDone, {
       change: true,
       wrap: (a) => ({ amendRow: (input) => gate.after(() => a.amendRow(input)) }),
     });
     type(load(), '30');
     await leave(load()); // sent, and held in flight
-    // Still mounted (its 44px kept, so the line does not move), but out of reach.
-    expect(cancelX().classList).toContain('invisible');
+    // Still mounted, so the line does not move (the shared component hides it: its own test).
     await press(cancelX());
+    // A ✕ that did nothing does not move focus to the ✓ either.
+    expect(document.activeElement).not.toBe(benchTick());
     expect(status()).not.toBe(DAY_COPY.announce.cancelled(setLabel(1)));
     await gate.resolve();
-    expect(load().value).toBe('30');
+    // The save landed: one write, and the line says what changed (a cancel would have no line).
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    expect(within(bench()).getByText(DAY_COPY.change.changed('27.5 lb', '30 lb'))).toBeTruthy();
   });
 
   it('a ✓ then a Change before the data caught up still shows another phone’s later number', async () => {

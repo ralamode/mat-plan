@@ -51,7 +51,7 @@ export const DAY_COPY = {
   /**
    * Change (13b-ii): the line under a logged row. Every number is printed with its unit or "reps", so
    * the line says which field it means. The maintainer's guards (2026-11-16): Undo returns the number
-   * from before the first Change this visit, and a Cancel stands in for Escape on a phone.
+   * from before the first Change this visit, and a ✕ (cancel) stands in for Escape on a phone.
    */
   change: {
     changed: (from: string, to: string) => `Changed ${from} → ${to}`,
