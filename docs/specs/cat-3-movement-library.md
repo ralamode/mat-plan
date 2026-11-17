@@ -343,7 +343,7 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   more are not in the filters.
 - **P11.** The option read (`packages/db/src/queries/program/movement-options.ts`, FAM-1 step
   6a-iii-a's file) shall list catalog rows (rule 2) and the caller's own rows only, **every live
-  one that no catalog row shadows, used or not** _(maintainer, 2026-11-17: "Every item made"; so
+  one that no catalog row shadows, used or not** _(maintainer, roadmap thread's chat, 2026-11-17: "Every item made"; so
   "Your custom items" (P9) holds an item from the moment it is made)_; return each
   catalog option's pattern, equipment, primary and secondary muscles and modality from the tables
   and, from the const by slug, its aliases, its supervision and whether it has instructions (the

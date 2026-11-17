@@ -362,8 +362,7 @@ _(Architecture 4.)_ `packages/db/src/queries/movement-options.ts`:
   V1-9b, a mis-typed row with one entry stays listed; the recovery is MOV-1 rename (C4r) or a
   correction. **Rejected: option (b), a correction row** — it treats each typo as an operator task
   forever, where (a) makes the app's own delete the fix.
-  ⚠️ **Condition (ii) is dropped for the program builder's read** _(maintainer, 2026-11-17:
-  "Every item made")_: `queries/program/movement-options.ts` (FAM-1 step 6a-iii-a) lists every
+  ⚠️ **Condition (ii) is dropped for the program builder's read** _(maintainer, roadmap thread's chat, 2026-11-17: "Every item made")_: `queries/program/movement-options.ts` (FAM-1 step 6a-iii-a) lists every
   live item the household has made that no global slug shadows, used or not. An item made with
   "+ New item" is not in a workout until the workout is saved, and the server's duplicate check
   (`existingItem`) must see it, or a re-typed name makes a second one. The accepted cost: an
