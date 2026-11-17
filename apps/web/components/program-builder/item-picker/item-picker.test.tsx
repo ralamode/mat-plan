@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
-import { pickerOptions } from '@/app/design/program/picker-options';
+import { householdPickerOptions, pickerOptions } from '@/app/design/program/picker-options';
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY } from '@/lib/movements/movement-picker-copy';
 
@@ -500,7 +500,8 @@ describe('the item picker (FAM-1 9)', () => {
       const withNew: MovementOptionDTO[] = [
         ...pickerOptions,
         {
-          ...pickerOptions[0]!,
+          // A household item, as one made in the form is: the first option is a library row now.
+          ...householdPickerOptions[0]!,
           publicId: NEW_ID,
           name: 'Bear crawl',
           trackingType: TRACKING_TYPE.reps,
