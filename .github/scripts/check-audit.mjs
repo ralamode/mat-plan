@@ -29,7 +29,8 @@
  * rules catch the class by shape.
  *
  * Usage:
- *   node .github/scripts/check-audit.mjs [--report <file>|-]   # --report is for the self-test only
+ *   node .github/scripts/check-audit.mjs [--report <file>|- [--exceptions <file>] [--today YYYY-MM-DD]]
+ *   (all three flags are for the self-test only; SEC-5c's exception list is .github/audit-exceptions.json)
  * Exit: 0 clean · 1 a high/critical advisory · 2 could not check, retryable · 3 could not check, not
  */
 import { execFileSync } from 'node:child_process';
@@ -49,8 +50,96 @@ const die = (code, msg) => {
   process.exit(code);
 };
 
+/** SEC-5c. The committed exception list; a missing file means none. */
+const EXCEPTIONS_FILE = '.github/audit-exceptions.json';
+const EXCEPTION_KEYS = ['ghsa', 'module', 'severity', 'paths', 'reason', 'added', 'expires'];
+const MAX_EXCEPTION_DAYS = 30;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const NPM_NAME = /^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
+/** pnpm's finding path: package names joined by `>` (workspaces as `apps__web`), no whitespace. */
+const AUDIT_PATH = /^[^\s>]+(>[^\s>]+)*$/;
+const EXPIRY_WARN_DAYS = 7;
+/** A real calendar date: `2026-02-30` round-trips to `2026-03-02`, so it is refused. */
+const isIsoDate = (d) =>
+  typeof d === 'string' &&
+  ISO_DATE.test(d) &&
+  new Date(`${d}T00:00:00Z`).toISOString().startsWith(d);
+const dayDiff = (from, to) =>
+  (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 864e5;
+
+/** Parse and validate the list. Anything malformed is "could not check" (3), never a pass. */
+function loadExceptions(file, today) {
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return [];
+    die(3, `cannot read ${file}: ${e.message}`);
+  }
+  let list;
+  try {
+    list = JSON.parse(text);
+  } catch {
+    die(3, `${file} is not valid JSON`);
+  }
+  if (!Array.isArray(list)) die(3, `${file} must be a JSON array`);
+  const seen = new Set();
+  for (const [i, e] of list.entries()) {
+    const at = `${file}[${i}]`;
+    if (!e || typeof e !== 'object' || Array.isArray(e)) die(3, `${at} is not an object`);
+    const keys = Object.keys(e).sort().join(',');
+    if (keys !== [...EXCEPTION_KEYS].sort().join(',')) {
+      die(3, `${at} must have exactly [${EXCEPTION_KEYS.join(', ')}]; has [${keys}]`);
+    }
+    if (!/^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$/.test(e.ghsa))
+      die(3, `${at}.ghsa is not a GHSA id`);
+    // Both reach `::error::` lines, so they are held to their real shapes: no newline can smuggle a
+    // workflow command (`::stop-commands::`) out of a PR-controlled file.
+    if (typeof e.module !== 'string' || !NPM_NAME.test(e.module)) {
+      die(3, `${at}.module is not a package name`);
+    }
+    if (e.severity !== 'high')
+      die(3, `${at}.severity must be "high"; critical is never exceptable`);
+    if (
+      !Array.isArray(e.paths) ||
+      !e.paths.length ||
+      !e.paths.every((p) => typeof p === 'string' && AUDIT_PATH.test(p))
+    ) {
+      die(3, `${at}.paths must list every reported path`);
+    }
+    if (typeof e.reason !== 'string' || e.reason.trim().length < 40) {
+      die(3, `${at}.reason must explain the exposure (40+ characters)`);
+    }
+    for (const k of ['added', 'expires']) {
+      if (!isIsoDate(e[k])) die(3, `${at}.${k} is not a real ISO date`);
+    }
+    // `added` may not be in the future: with the window below, an entry can never outlive today + 30.
+    if (e.added > today) die(3, `${at}.added (${e.added}) is after today (${today})`);
+    const days = dayDiff(e.added, e.expires);
+    if (days < 0 || days > MAX_EXCEPTION_DAYS) {
+      die(3, `${at} runs ${days} days; an exception lasts 0–${MAX_EXCEPTION_DAYS} days`);
+    }
+    if (seen.has(e.ghsa)) die(3, `${at} repeats ${e.ghsa}`);
+    seen.add(e.ghsa);
+  }
+  return list;
+}
+
 const args = process.argv.slice(2);
 const reportIdx = args.indexOf('--report');
+// `--exceptions` and `--today` are honoured ONLY beside `--report` (the offline self-test): a real
+// run always reads the committed file and the real UTC date, so neither can be turned off from env.
+// Parsed and validated BEFORE pnpm is spawned, so a malformed list exits 3 even in a registry outage
+// (where exit 2 would otherwise be made lenient by ci.yml).
+const flag = (name) => {
+  const i = args.indexOf(name);
+  if (i === -1) return undefined;
+  if (reportIdx === -1) die(3, `${name} is a self-test flag and needs --report`);
+  return args[i + 1] ?? die(3, `${name} needs a value`);
+};
+const today = flag('--today') ?? new Date().toISOString().slice(0, 10);
+if (!isIsoDate(today)) die(3, `--today ${today} is not a real ISO date`);
+const exceptions = loadExceptions(flag('--exceptions') ?? EXCEPTIONS_FILE, today);
 let raw;
 
 if (reportIdx !== -1) {
@@ -145,7 +234,62 @@ const line =
   `${report.metadata.totalDependencies ?? '?'} total) · ` +
   SEVERITIES.map((s) => `${s} ${counts[s]}`).join(' · ');
 
-const blocking = advisories.filter((a) => BLOCKING.has(a.severity));
+// ── SEC-5c: reasoned, expiring exceptions (docs/plans/sec-5c-advisory-exceptions.md) ──────────────
+// The list was validated before pnpm ran; it is APPLIED only after every coherence rule above, so an
+// exception can never make an incoherent report pass. An entry excepts ONE advisory, by id + module +
+// severity, and only while the reported paths are exactly the ones it names. Expired, stale and
+// out-of-date entries fail (1), printed beside any advisory that still blocks.
+
+const idOf = (a) => a.github_advisory_id || String(a.id ?? '');
+const pathsOf = (a) => {
+  if (!Array.isArray(a.findings) || !a.findings.every((f) => Array.isArray(f?.paths))) {
+    die(3, `${a.module_name} (${idOf(a)}) has findings in an unknown shape`);
+  }
+  return a.findings.flatMap((f) => f.paths);
+};
+const excepted = [];
+const used = new Set();
+const blockingAll = advisories.filter((a) => BLOCKING.has(a.severity));
+const blocking = blockingAll.filter((a) => {
+  const e = exceptions.find((x) => x.ghsa === idOf(a));
+  if (!e || today > e.expires) return true;
+  if (a.module_name !== e.module || a.severity !== e.severity) return true;
+  const paths = pathsOf(a);
+  // Every reported path must be named (an advisory with no findings is never excepted).
+  if (paths.length === 0 || !paths.every((p) => e.paths.includes(p))) return true;
+  excepted.push({ a, e, paths });
+  used.add(e);
+  return false;
+});
+const problems = [];
+for (const e of exceptions) {
+  if (today > e.expires)
+    problems.push(`exception for ${e.ghsa} (${e.module}) expired on ${e.expires}`);
+  else if (!used.has(e)) {
+    problems.push(
+      `exception for ${e.ghsa} (${e.module}) is stale: it excepted nothing in this report`,
+    );
+  }
+}
+for (const { a, e, paths } of excepted) {
+  const gone = e.paths.filter((p) => !paths.includes(p));
+  if (gone.length) {
+    problems.push(`exception for ${e.ghsa} lists path(s) no longer reported: ${gone.join(', ')}`);
+  }
+  const left = dayDiff(today, e.expires);
+  console.error(
+    `::warning::check-audit: ${a.severity} ${a.module_name} (${idOf(a)}) is EXCEPTED through ${e.expires} UTC — ${EXCEPTIONS_FILE}` +
+      (left <= EXPIRY_WARN_DAYS
+        ? ` · EXPIRES IN ${left} DAY(S): fix, or renew in a reviewed PR`
+        : ''),
+  );
+}
+if (problems.length) {
+  console.error(`check-audit: ${line}`);
+  for (const p of problems) console.error(`✗ ${p}`);
+  console.error(`::error::check-audit: ${problems.join('; ')} — edit ${EXCEPTIONS_FILE}`);
+}
+
 if (blocking.length) {
   const rows = blocking.map((a) => {
     // Identity by EMPTINESS, not nullishness: deriveGithubAdvisoryId returns "" when the url
@@ -165,5 +309,6 @@ if (blocking.length) {
   );
   process.exit(1);
 }
+if (problems.length) process.exit(1);
 
 console.log(`Production audit OK — ${line}`);
