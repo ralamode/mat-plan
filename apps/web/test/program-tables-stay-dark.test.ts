@@ -152,7 +152,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // the lane's two barrels. Their names are also `ProgramActions` members, which the screens and the
   // preview's fake implement, so the scan matches an import or re-export of one FROM THE PACKAGE, not
   // the bare name. The names are read from the barrels, so a later step's export is covered without
-  // an edit here. Step 7a changes this case.
+  // an edit here.
   const LANE_P_BARRELS = [
     'packages/db/src/writers/program/index.ts',
     'packages/db/src/queries/program/index.ts',
@@ -169,18 +169,27 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     new RegExp(
       `(?:import|export)\\s*(?:type\\s*)?\\{[^}]*\\b(?:${names.join('|')})\\b[^}]*\\}\\s*from\\s*['"]@mat-plan\\/db['"]`,
     );
-  // The forms that would reach a writer without naming it in braces.
+  // The forms that would reach a writer without naming it in braces: nowhere in apps/web, the DAL
+  // included, so containment below can be checked by name.
   const WHOLE_PACKAGE =
     /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)/;
 
-  it("apps/web imports none of lane P's program writers or reads yet (step 7a wires them)", () => {
+  // FAM-1 7a-i: lane P's writers and reads are wired, and only the program DAL may import them: an
+  // action, a page or a component reaches them through `lib/dal/program/`, which resolves the
+  // caller's household first (AGENTS.md → DAL). Its tests mock them, so they may name them too.
+  const PROGRAM_DAL = 'apps/web/lib/dal/program/';
+
+  it("only the program DAL imports lane P's program writers and reads (step 7a-i wires them there)", () => {
     expect(laneP, 'the barrels name what they publish').toEqual(
       expect.arrayContaining(['createProgram', 'renameProgram', 'saveWorkout', 'readWorkoutDraft']),
     );
     const named = fromDb(laneP);
     const web = files.filter((f) => f.startsWith('apps/web/'));
-    expect(web.filter((f) => named.test(code(join(REPO, f))))).toEqual([]);
+    const importing = web.filter((f) => named.test(code(join(REPO, f))));
+    expect(importing.filter((f) => !f.startsWith(PROGRAM_DAL))).toEqual([]);
     expect(web.filter((f) => WHOLE_PACKAGE.test(code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: the DAL does import them, so the scan sees an import where there is one.
+    expect(importing.some((f) => f.startsWith(PROGRAM_DAL))).toBe(true);
     // Non-vacuity: each form is caught, and a ProgramActions member is not.
     expect(named.test("import { db, saveWorkout } from '@mat-plan/db';")).toBe(true);
     expect(named.test("export { readWorkoutDraft } from '@mat-plan/db';")).toBe(true);

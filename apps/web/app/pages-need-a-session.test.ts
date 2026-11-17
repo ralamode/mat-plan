@@ -337,6 +337,7 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(modules.sort()).toEqual([
       'app/p/[profileId]/actions.ts', // the per-athlete day actions
       'app/p/profile-actions.ts', // athlete management (PROF-1)
+      'app/programs/actions.ts', // the program builder (FAM-1 7a-i)
     ]);
   });
 
