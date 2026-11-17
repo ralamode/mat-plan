@@ -13,6 +13,7 @@ import {
   type Unit,
   type WorkoutDraft,
   type WorkoutDraftItem,
+  slotQuantity,
 } from '@mat-plan/shared';
 
 import { cleanName, EDITOR_ERRORS, quantityLabel } from './builder-text';
@@ -37,6 +38,12 @@ export type EditorCard = {
    */
   unit: Unit | null;
   notes: string;
+  /**
+   * A loaded quantity whose unit its type cannot hold (a Duration stored in seconds, a Count in
+   * `bool`): shown on the card as what it was, never put in the field and never converted (plan D27;
+   * the machine never authors a load, AGENTS.md). Cleared on the first edit of the number or the unit.
+   */
+  dropped: { value: number; unit: Unit } | null;
 };
 
 /** A field of a card, or of the workout, that can be refused. */
@@ -46,10 +53,25 @@ export type EditorField =
 /** One refusal: which card (`null` for the workout's own fields), which field, what to say. */
 export type EditorError = { card: string | null; field: EditorField; message: string };
 
-function startingUnit(item: WorkoutDraftItem): Unit | null {
-  const { slot, unit } = TRACKING_TYPE_FIELDS[item.trackingType];
-  if (!slot) return null;
-  return unit ?? item.quantities[0]?.unit ?? null;
+/**
+ * A loaded item's quantity: its type's slot (`slotQuantity`), kept only in a unit the type can hold
+ * (`unitsForTrackingType`). A fixed-unit type always starts in its own unit, since it has no unit
+ * select to fix; any other starts unset when the stored unit is not one it offers, so Save's unit
+ * refusal lands on the select. Either way a number in a unit the card cannot hold is not shown in
+ * the field: it is `dropped`, and the card says what it was.
+ */
+function loadedQuantity(item: WorkoutDraftItem): Pick<EditorCard, 'value' | 'unit' | 'dropped'> {
+  const fields = TRACKING_TYPE_FIELDS[item.trackingType];
+  if (!fields.slot) return { value: '', unit: null, dropped: null };
+  const stored = slotQuantity(item, item.quantities);
+  const holds = !!stored && unitsForTrackingType(item.trackingType).includes(stored.unit);
+  return {
+    value: holds && stored.value != null ? String(stored.value) : '',
+    unit: fields.unit ?? (holds ? stored.unit : null),
+    // Only a number is lost: a unit with no number held nothing a person typed.
+    dropped:
+      stored && !holds && stored.value != null ? { value: stored.value, unit: stored.unit } : null,
+  };
 }
 
 export function toCards(draft: WorkoutDraft): EditorCard[] {
@@ -57,8 +79,7 @@ export function toCards(draft: WorkoutDraft): EditorCard[] {
     item,
     sets: item.sets === null ? '' : String(item.sets),
     reps: item.targetReps ?? '',
-    value: item.quantities[0]?.value == null ? '' : String(item.quantities[0].value),
-    unit: startingUnit(item),
+    ...loadedQuantity(item),
     notes: item.notes ?? '',
   }));
 }
@@ -202,5 +223,6 @@ export function newCard(
     value: '',
     unit: fields.slot ? (fields.unit ?? declared) : null,
     notes: '',
+    dropped: null,
   };
 }

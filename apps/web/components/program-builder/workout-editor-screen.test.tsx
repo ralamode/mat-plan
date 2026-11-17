@@ -6,6 +6,7 @@ import {
   unitsForTrackingType,
   WORKOUT_NAME_MAX,
   type ProgramActions,
+  TRACKING_TYPE_FIELDS,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty, programsList } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -18,6 +19,7 @@ import { SAVING_LABEL } from '@/lib/constants';
 
 import {
   BUILDER_COPY,
+  droppedText,
   EDITOR_COPY,
   EDITOR_ERRORS,
   fieldsToFixText,
@@ -900,5 +902,79 @@ describe('a quantity needs its unit (C16)', () => {
         .getByLabelText(new RegExp(`^${quantityLabel('weight_reps')}`))
         .getAttribute('aria-invalid'),
     ).toBeNull();
+  });
+});
+
+describe('a loaded number the card cannot hold', () => {
+  it('is said on the card, describes the field, and goes on the first edit', () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const odd = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) =>
+        item === bench
+          ? { ...item, quantities: [{ ...item.quantities[0]!, unit: 'bool' as const, value: 5 }] }
+          : item,
+      ),
+    };
+    editor({}, odd);
+    const card = cards().find((li) => li.textContent?.includes(bench.itemName))!;
+    const label = quantityLabel('weight_reps')!;
+    // The words, pinned once: what it was, and what to do.
+    const note = 'This was saved as 5 done / not done. Choose a unit and enter it again.';
+    expect(droppedText({ value: 5, unit: 'bool' }, null)).toBe(note);
+    const said = within(card).getByText(note);
+    const field = within(card).getByLabelText(new RegExp(`^${label}`)) as HTMLInputElement;
+    expect(field.value).toBe('');
+    expect(said.id).toBeTruthy();
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(said.id);
+    expect(
+      document
+        .getElementById(unitFieldId(bench.prescriptionClientId))!
+        .getAttribute('aria-describedby')
+        ?.split(' '),
+    ).toContain(said.id);
+    fireEvent.change(field, { target: { value: '25' } });
+    expect(within(card).queryByText(note)).toBeNull();
+  });
+
+  it('goes when a unit is chosen too; a fixed-unit item’s note says its own unit', () => {
+    expect(droppedText({ value: 30, unit: 'sec' }, 'min')).toBe(
+      'This was saved as 30 seconds, which this item can’t hold. Enter it in minutes.',
+    );
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const odd = {
+      ...heavyADraft,
+      items: heavyADraft.items.map((item) =>
+        item === bench
+          ? { ...item, quantities: [{ ...item.quantities[0]!, unit: 'bool' as const, value: 5 }] }
+          : item,
+      ),
+    };
+    editor({}, odd);
+    const note = droppedText({ value: 5, unit: 'bool' }, null);
+    expect(screen.getByText(note)).toBeTruthy();
+    fireEvent.change(document.getElementById(unitFieldId(bench.prescriptionClientId))!, {
+      target: { value: 'kg' },
+    });
+    expect(screen.queryByText(note)).toBeNull();
+  });
+
+  it('on a fixed-unit card (no unit select), the note names its own unit and describes the number', () => {
+    const bench = heavyADraft.items.find((item) => item.trackingType === 'weight_reps')!;
+    const fields = TRACKING_TYPE_FIELDS.duration;
+    const plank = {
+      ...bench,
+      trackingType: 'duration' as const,
+      sets: fields.sets ? bench.sets : null,
+      targetReps: null,
+      quantities: [{ slot: fields.slot!, unit: 'sec' as const, value: 30 }],
+    };
+    editor({}, { ...heavyADraft, items: [plank] });
+    const note = 'This was saved as 30 seconds, which this item can’t hold. Enter it in minutes.';
+    const said = screen.getByText(note);
+    expect(said.id).toBeTruthy();
+    const field = screen.getByLabelText(new RegExp(`^${quantityLabel('duration')}`));
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(said.id);
+    expect(document.getElementById(unitFieldId(plank.prescriptionClientId))).toBeNull();
   });
 });
