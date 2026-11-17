@@ -10,7 +10,7 @@ import type { CatalogMovement } from '../entry';
  * (`../approvals.test.ts`). A batch PR is merged by the maintainer.
  *
  * ⚠️ **Import this through `@mat-plan/shared/catalog/data`, never the root barrel**: it grows to
- * hundreds of entries and must not reach a client bundle (`../barrel.test.ts`).
+ * hundreds of entries and must not reach a client bundle (`../catalog.test.ts`).
  *
  * Literal exports only (spec D2).
  */

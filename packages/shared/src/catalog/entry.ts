@@ -7,6 +7,7 @@ import {
   movementSlug,
   trackingTypeSchema,
 } from '../movements';
+import { hasCommaOrLineBreak } from '../text';
 import { unitSchema } from '../units';
 import {
   equipmentSchema,
@@ -32,6 +33,8 @@ import {
  *   `movementSlug(name)`; a shipped slug never changes, so a corrected name keeps its slug and the
  *   old name becomes an alias. The lockfile (`./data/shipped.json`) is what stops a shipped slug or
  *   its tracking type changing.
+ * - **The slug has no comma and no line break**, whichever name it came from. The slug is what the
+ *   export prints, and an alias, unlike a name, may hold a comma.
  * - **A `strength` entry has a `pattern` and a primary muscle.** Other modalities may have
  *   neither: a run has no lift pattern and no one muscle.
  * - **The primary muscle is not also a secondary**, and no list repeats a member.
@@ -63,6 +66,13 @@ export const catalogMovementSchema = z
         code: 'custom',
         path: ['slug'],
         message: 'the slug is movementSlug of the name or of an alias',
+      });
+    }
+    if (hasCommaOrLineBreak(entry.slug)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['slug'],
+        message: 'a slug has no comma and no line break: the CSV export prints it',
       });
     }
     if (entry.modality === MODALITY.strength && (!entry.pattern || !entry.primaryMuscle)) {

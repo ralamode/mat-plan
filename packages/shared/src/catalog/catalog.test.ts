@@ -1,20 +1,15 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { globSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { MOVEMENT_SEED_ROWS } from '../catalog-movements';
+import { MOVEMENT_PICKER_ALIASES } from '../movement-picker-catalog';
 import { movementNameKey } from '../movement-search';
-import { MOVEMENT_PATTERNS, movementSlug, TRACKING_TYPES } from '../movements';
-import { code, reachedFrom, SRC } from '../test-support/source-graph';
-import {
-  approvalIssues,
-  entryHash,
-  lockfileIssues,
-  type ApprovedFile,
-  type ShippedFile,
-} from './approvals';
-import { CATALOG_MOVEMENTS, CATALOG_SLUGS } from './data';
+import { MOVEMENT_NAME_MAX, MOVEMENT_PATTERNS, movementSlug, TRACKING_TYPES } from '../movements';
+import { code, reachedFrom, specifiersOf, SRC } from '../test-support/source-graph';
+import { CATALOG_MOVEMENTS } from './data';
 import { catalogMovementSchema, requiresNoEquipment, type CatalogMovement } from './entry';
 import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS } from './fixture';
 import {
@@ -30,14 +25,14 @@ import {
 } from './vocabulary';
 
 /**
- * CAT-3's contract, chunk C0a (docs/specs/cat-3-movement-library.md): criteria V1 to V6, D2 and
- * D3, and what `CATALOG_FIXTURE` promises to cover.
+ * CAT-3's contract, chunk C0a (docs/specs/cat-3-movement-library.md): criteria V1 to V3, V5, V6 and
+ * D2, and what `CATALOG_FIXTURE` promises to cover. V4 and D3 (the lockfile, the approvals and the
+ * merge-base check) are in `approvals.test.ts`.
+ *
+ * ⚠️ `CATALOG_MOVEMENTS` is empty until the first reviewed batch, so every check that walks it
+ * passes on nothing until then. Each such check is therefore also run on samples or on
+ * `CATALOG_FIXTURE`, which is where it is shown to fail.
  */
-
-const readJson = <T>(name: string): T =>
-  JSON.parse(readFileSync(resolve(SRC, 'catalog/data', name), 'utf8')) as T;
-const SHIPPED = readJson<ShippedFile>('shipped.json');
-const APPROVED = readJson<ApprovedFile>('approved.json');
 
 const [first] = CATALOG_FIXTURE;
 if (!first) throw new Error('CATALOG_FIXTURE is empty');
@@ -121,6 +116,23 @@ describe('one entry (V2)', () => {
     expect(accepts({ ...renamed, aliases: [] })).toBe(false);
   });
 
+  it('🔴 refuses a slug the CSV export could not print, whichever name it came from', () => {
+    // An alias may hold a comma; a slug taken from one may not. The export prints the slug.
+    const viaAlias = { ...base, aliases: ['Squat, goblet'], slug: movementSlug('Squat, goblet') };
+    expect(viaAlias.slug).toContain(',');
+    expect(accepts(viaAlias)).toBe(false);
+    expect(accepts({ ...viaAlias, slug: base.slug })).toBe(true);
+    expect(accepts({ ...base, aliases: ['Goblet\nsquat'], slug: 'goblet\nsquat' })).toBe(false);
+  });
+
+  it('holds an alias to the label rules: not empty, not blank, not over-long', () => {
+    expect(accepts({ ...base, aliases: ['Cup squat'] })).toBe(true);
+    expect(accepts({ ...base, aliases: [''] })).toBe(false);
+    expect(accepts({ ...base, aliases: ['   '] })).toBe(false);
+    expect(accepts({ ...base, aliases: ['x'.repeat(MOVEMENT_NAME_MAX)] })).toBe(true);
+    expect(accepts({ ...base, aliases: ['x'.repeat(MOVEMENT_NAME_MAX + 1)] })).toBe(false);
+  });
+
   it('needs a pattern and a primary muscle for strength, and neither for anything else', () => {
     expect(accepts({ ...base, pattern: null })).toBe(false);
     expect(accepts({ ...base, primaryMuscle: null })).toBe(false);
@@ -172,8 +184,12 @@ describe.each([
   ['CATALOG_FIXTURE', CATALOG_FIXTURE],
   ['CATALOG_MOVEMENTS', CATALOG_MOVEMENTS],
 ])('%s as a whole (V3, D2)', (_, entries) => {
-  it('parses, entry by entry', () => {
-    for (const entry of entries) expect(accepts(entry), entry.slug).toBe(true);
+  it('parses, entry by entry, to exactly what is written (D2)', () => {
+    // Equal, not merely accepted: the schema trims, and the approval hash and the seed both read
+    // the entry as written. An untrimmed name must fail here, not be quietly tidied.
+    for (const entry of entries) {
+      expect(catalogMovementSchema.parse(entry), entry.slug).toEqual(entry);
+    }
   });
 
   it('has no slug twice and no name or alias that reads as another entry', () => {
@@ -186,6 +202,30 @@ describe.each([
       entry.aliases.filter((alias) => short.has(movementNameKey(alias))),
     );
     expect(offending).toEqual([]);
+  });
+});
+
+describe('the checks a whole list is held to, on samples', () => {
+  it('an entry written with stray spaces does not equal its parse', () => {
+    for (const untidy of [
+      { ...base, name: `${base.name} `, slug: base.slug },
+      { ...base, aliases: [' Cup squat'] },
+    ]) {
+      expect(accepts(untidy)).toBe(true);
+      expect(catalogMovementSchema.parse(untidy)).not.toEqual(untidy);
+    }
+  });
+
+  it('a data file may import the entry type and its own directory, nothing else (D2)', () => {
+    const DATA = resolve(SRC, 'catalog/data');
+    const files = globSync('**/*.ts', { cwd: DATA }).map((file) => resolve(DATA, file));
+    expect(files).toContain(resolve(DATA, 'index.ts'));
+    const outside = files.flatMap((file) =>
+      specifiersOf(file)
+        .filter((specifier) => specifier !== '../entry' && !specifier.startsWith('./'))
+        .map((specifier) => `${file}: ${specifier}`),
+    );
+    expect(outside).toEqual([]);
   });
 });
 
@@ -241,74 +281,16 @@ describe('CATALOG_FIXTURE covers what it says it covers', () => {
       ),
     ).toEqual([]);
   });
-});
 
-describe('the library starts empty (C0a)', () => {
-  it('holds no entry, no shipped line and no approval until the first reviewed batch', () => {
-    expect(CATALOG_MOVEMENTS).toEqual([]);
-    expect([...CATALOG_SLUGS]).toEqual([]);
-    expect(SHIPPED).toEqual({});
-    expect(APPROVED).toEqual({});
-  });
-});
-
-describe('the lockfile and the approvals (V4, D3)', () => {
-  it('the library agrees with both files', () => {
-    expect(lockfileIssues(CATALOG_MOVEMENTS, SHIPPED)).toEqual([]);
-    expect(approvalIssues(CATALOG_MOVEMENTS, APPROVED)).toEqual([]);
-  });
-
-  const shipped: ShippedFile = { [base.slug]: base.trackingType };
-  const approved: ApprovedFile = { '1': { [base.slug]: entryHash(base) } };
-
-  it('🔴 an entry needs its line in the lockfile, with its own tracking type', () => {
-    expect(lockfileIssues([base], shipped)).toEqual([]);
-    expect(lockfileIssues([base], {})).toHaveLength(1);
-    expect(lockfileIssues([{ ...base, trackingType: 'reps' }], shipped)).toHaveLength(1);
-  });
-
-  it('🔴 a shipped slug with no entry is a removed or renamed entry', () => {
-    expect(lockfileIssues([], shipped)).toHaveLength(1);
+  it('🔴 shares no alias key with the legacy picker either', () => {
+    // A query that alias-hit one movement in each list would have no one answer.
+    const legacy = new Set(MOVEMENT_PICKER_ALIASES.map(({ alias }) => movementNameKey(alias)));
+    expect(legacy.has(movementNameKey('RDL'))).toBe(true);
     expect(
-      lockfileIssues([{ ...base, slug: 'cup_squat', aliases: ['Cup squat'] }], shipped),
-    ).toHaveLength(2);
-  });
-
-  it('🔴 an entry needs an approval for what it holds NOW: an edit needs a new line', () => {
-    expect(approvalIssues([base], approved)).toEqual([]);
-    expect(approvalIssues([base], {})).toHaveLength(1);
-    for (const edited of [
-      { ...base, name: 'Goblet Squat' },
-      { ...base, equipment: [] },
-      { ...base, secondaryMuscles: [] },
-      { ...base, supervision: 'coach' as const },
-      { ...base, aliases: ['Cup squat'] },
-      { ...base, isBodyweight: true },
-    ]) {
-      expect(approvalIssues([edited], approved), JSON.stringify(edited)).toHaveLength(1);
-    }
-    // The edit, approved in a later batch, passes; the first approval stays in the file.
-    const edited = { ...base, equipment: [] };
-    expect(
-      approvalIssues([edited], { ...approved, '2': { [base.slug]: entryHash(edited) } }),
+      CATALOG_FIXTURE.flatMap((e) => [e.name, ...e.aliases]).filter((name) =>
+        legacy.has(movementNameKey(name)),
+      ),
     ).toEqual([]);
-  });
-
-  it('an approval for one slug does not cover another entry with the same content', () => {
-    const twin = { ...base, slug: 'cup_squat', name: 'Cup squat' };
-    expect(approvalIssues([twin], { '1': { [base.slug]: entryHash(twin) } })).toHaveLength(1);
-  });
-
-  it('hashes an entry the same whatever order its keys are written in, and differently per field', () => {
-    const reordered = Object.fromEntries(Object.entries(base).reverse()) as CatalogMovement;
-    expect(Object.keys(reordered)).not.toEqual(Object.keys(base));
-    expect(entryHash(reordered)).toBe(entryHash(base));
-    expect(entryHash(base)).toMatch(/^[0-9a-f]{64}$/);
-    // Array order is content: a reordered list is an edit.
-    const two = { ...base, secondaryMuscles: ['glutes', 'hamstrings'] as const };
-    expect(entryHash({ ...two, secondaryMuscles: [...two.secondaryMuscles] })).not.toBe(
-      entryHash({ ...two, secondaryMuscles: [...two.secondaryMuscles].reverse() }),
-    );
   });
 });
 
@@ -323,17 +305,57 @@ describe('no equipment is computed (V5)', () => {
     expect(empty.length).toBeGreaterThan(0);
   });
 
+  /** `noEquipment` / `no_equipment` as a word of its own, comments aside. */
+  const namesTheAnswer = (file: string) => /\bnoEquipment\b|\bno_equipment\b/.test(code(file));
+  const ROOT = resolve(SRC, '../../..');
+  /**
+   * Everywhere a stored answer could live: every package's source (the schema and the DTOs among
+   * them), the migrations, and the app. This file is left out: it has to spell the two names.
+   */
+  const scanned = () =>
+    [
+      'packages/*/src/**/*.{ts,tsx}',
+      'packages/db/migrations/*.sql',
+      'apps/web/{app,components,lib}/**/*.{ts,tsx}',
+    ]
+      .flatMap((pattern) => globSync(pattern, { cwd: ROOT }))
+      .map((file) => resolve(ROOT, file))
+      .filter((file) => file !== resolve(SRC, 'catalog/catalog.test.ts'));
+
   it('🔴 is stored nowhere: no field or column is named for the answer', () => {
-    const { files } = reachedFrom(resolve(SRC, 'index.ts'));
-    const more = ['catalog/data/index.ts', 'catalog/fixture.ts', 'catalog/approvals.ts'].map((f) =>
-      resolve(SRC, f),
-    );
-    const named = [...files, ...more].filter((file) =>
-      /\bnoEquipment\b|\bno_equipment\b/.test(code(file)),
-    );
-    expect(named).toEqual([]);
-    // The control: the scan does see the function's own name.
-    expect(code(resolve(SRC, 'catalog/entry.ts'))).toMatch(/\brequiresNoEquipment\b/);
+    const files = scanned();
+    expect(files.filter(namesTheAnswer).map((file) => file.slice(ROOT.length + 1))).toEqual([]);
+    // Not a vacuous pass: the scan reads the schema, a migration, the option DTO and the data.
+    for (const reached of [
+      'packages/db/src/schema.ts',
+      'apps/web/lib/movements/movement-option.ts',
+      'packages/shared/src/catalog/data/index.ts',
+      'packages/shared/src/catalog/entry.ts',
+    ]) {
+      expect(files, reached).toContain(resolve(ROOT, reached));
+    }
+    expect(files.some((file) => file.endsWith('.sql'))).toBe(true);
+  });
+
+  it('is scanned by something that does see the name, as a field or as a column', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'catalog-scan-'));
+    try {
+      const plant = (name: string, text: string) => {
+        writeFileSync(join(dir, name), text);
+        return namesTheAnswer(join(dir, name));
+      };
+      expect(plant('dto.ts', 'export type Option = { readonly noEquipment: boolean };\n')).toBe(
+        true,
+      );
+      expect(plant('m.sql', 'ALTER TABLE movements ADD COLUMN no_equipment boolean;\n')).toBe(true);
+      // The function's own name, and a mention in a comment, are not the stored answer.
+      expect(plant('fn.ts', 'export const x = requiresNoEquipment({ equipment: [] });\n')).toBe(
+        false,
+      );
+      expect(plant('doc.ts', '/** not a noEquipment flag */\nexport const y = 1;\n')).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -353,35 +375,5 @@ describe('the library stays out of the browser (V6)', () => {
       resolve(SRC, 'catalog/data/index.ts'),
     );
     expect(reachedFrom(resolve(SRC, 'catalog/approvals.ts')).packages).toContain('node:crypto');
-  });
-});
-
-describe('the record files only grow (V4, the merge-base check)', () => {
-  type AppendOnly = (base: unknown, head: unknown) => string[];
-  // The check is a plain node script that CI runs before anything is installed; its comparison
-  // is tested here, where the rest of the contract's tests are.
-  const script = resolve(SRC, '../../../.github/scripts/check-catalog-append-only.mjs');
-  const load = async () =>
-    ((await import(/* @vite-ignore */ script)) as { appendOnlyIssues: AppendOnly })
-      .appendOnlyIssues;
-
-  it('lets a batch add slugs, batches and approvals', async () => {
-    const issues = await load();
-    expect(issues({}, { goblet_squat: 'weight_reps' })).toEqual([]);
-    expect(issues({ a: 'reps' }, { a: 'reps', b: 'reps' })).toEqual([]);
-    expect(issues({ '1': { a: 'h1' } }, { '1': { a: 'h1', b: 'h2' }, '2': { a: 'h3' } })).toEqual(
-      [],
-    );
-  });
-
-  it('🔴 refuses a retyped slug, a removed slug and a rewritten or removed approval', async () => {
-    const issues = await load();
-    expect(issues({ a: 'reps' }, { a: 'weight_reps' })).toHaveLength(1);
-    expect(issues({ a: 'reps', b: 'reps' }, { b: 'reps' })).toHaveLength(1);
-    expect(issues({ a: 'reps' }, { a_renamed: 'reps' })).toHaveLength(1);
-    expect(issues({ '1': { a: 'h1' } }, { '1': { a: 'h9' } })).toHaveLength(1);
-    expect(issues({ '1': { a: 'h1' } }, { '1': {} })).toHaveLength(1);
-    expect(issues({ '1': { a: 'h1' } }, { '2': { a: 'h1' } })).toHaveLength(1);
-    expect(issues({ '1': { a: 'h1' } }, [])).toHaveLength(1);
   });
 });

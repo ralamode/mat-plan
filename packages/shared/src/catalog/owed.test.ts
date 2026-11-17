@@ -6,6 +6,10 @@ import { describe, it } from 'vitest';
  * criterion no test holds yet. The chunk that writes the proof deletes its line; a lane's own
  * proofs live in the lane's directory, and this list only says they are owed
  * ([program-contract](../../../../docs/features/program-contract.md) invariant 9's pattern).
+ *
+ * Not listed, because no test can hold them: D1 beyond the schema's strictness (nothing names a
+ * source), D4 (no batch names a household or a person), R1, R2 and R5 (the runbook, the dry runs
+ * and the maintainer's go). Those are held by review, and a batch PR is merged by the maintainer.
  */
 
 describe('owed by lane A: the tables (chunk A1)', () => {
@@ -48,4 +52,18 @@ describe('owed by the contract and lane B: filters and browse (chunk C0b-2, then
   it.todo('P11: the option read returns taxonomy from the tables and aliases from the const');
   it.todo('P12: browse by modality and primary muscle; the hand-kept groups are gone');
   it.todo('P13: a supervision label shows as text, the same for every athlete');
+});
+
+describe('owed by lane B: the picker (chunks B1 to B3)', () => {
+  it.todo(
+    'P5: near and someWords each under its own heading, counted apart, never what Enter picks',
+  );
+  it.todo('P14: every row shows its tracking type, in both picker modes');
+  it.todo("P15: the picker's new states pass the accessibility scan at the narrow width");
+});
+
+describe('owed by the fresh start (chunks RC to R2) and the last chunk (F1)', () => {
+  it.todo('R3: the delete of global movements refuses while any row still references one');
+  it.todo('R4: the count-only report after the fresh start shows no seed-namespace id');
+  it.todo('F1: nothing in packages/ or apps/ imports the legacy seed lists (an import scan)');
 });

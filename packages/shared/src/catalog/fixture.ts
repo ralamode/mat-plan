@@ -13,10 +13,13 @@ import type { CatalogMovement } from './entry';
  * equipment set (with and without a primary muscle) and a two-item set; an entry with no primary
  * muscle; aliases; a supervision label; a movement logged two ways as two entries (the rowing
  * machine); and the shapes the search's vectors need (a compact "trapbar" and "medball", a short
- * alias, a "db" short form). `fixture.test.ts` holds each of those.
+ * alias, a "db" short form). `catalog.test.ts` holds each of those.
  *
  * Its slugs and name keys are disjoint from the legacy `MOVEMENT_SEED_ROWS`, which a fixtures
- * database also holds until that list is retired (spec V3, F1).
+ * database also holds until that list is retired (spec V3, F1), **and so are its aliases from the
+ * legacy picker's** (`MOVEMENT_PICKER_ALIASES`): a query must never alias-hit one movement in each
+ * list. That is why the short alias here is `SLRDL` and not the `RDL` the spec's C0a names: the
+ * legacy list still answers to `RDL`. The search's vectors are ported with this alias.
  */
 const lift: Pick<
   CatalogMovement,
@@ -118,7 +121,7 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     ...lift,
     slug: 'overhead_press',
     name: 'Overhead press',
-    aliases: ['OHP'],
+    aliases: ['Strict press'],
     pattern: 'vertical_push',
     trackingType: 'weight_reps',
     unitDefault: 'lb',
