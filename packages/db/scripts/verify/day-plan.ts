@@ -1151,6 +1151,24 @@ async function verifyRules(): Promise<void> {
     });
     console.log('✓ FAM-1 12a hidden block: never, no current programs, no look-ahead');
 
+    // ── R1: an archived athlete's FUTURE day keeps the normal preview (C19 dropped) ─────────────
+    await inSavepoint(tx, async (sp) => {
+      // The rule order: future first (preview, no rows); else writable only inside the window and
+      // not archived; else logged rows only. `future-preview` is built from H's world.
+      const { athlete, day, world } = DAY_PLAN_FIXTURE_SOURCES['future-preview'];
+      await sp
+        .update(schema.profiles)
+        .set({ archivedAt: new Date() })
+        .where(eq(schema.profiles.id, H.profiles.get(athlete)!.id));
+      const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES['future-preview'] as DayPlan;
+      assert.deepStrictEqual(
+        await resolve(sp, H, athlete, day, world.today),
+        asJson(translate(fixture, H.ids, 'future-preview')),
+        'FAM-1 12a R1: an archived athlete’s future day deep-equals future-preview',
+      );
+    });
+    console.log('✓ FAM-1 12a R1: an archived athlete’s future day is the normal preview');
+
     // ── Look-ahead (canGoForward) ───────────────────────────────────────────────────────────────
     await inSavepoint(tx, async (sp) => {
       const athlete = await newAthlete(H, sp, 'ahead');
