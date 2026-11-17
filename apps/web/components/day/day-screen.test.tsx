@@ -232,6 +232,28 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     expect(within(splits).getByText('7 min')).toBeTruthy();
   });
 
+  it('a ✓ after an un-tick answered with a NEW entry id holds that entry, so the next un-tick names it (12c)', async () => {
+    // The fake revives the same entry (D35); the writer may answer with another id, and the row must
+    // follow the answer, not the entry it held before.
+    const NEW_ENTRY = '019826b4-0000-7000-8000-00000000e001';
+    const control = mount(yesterdayHalfDone, {
+      wrap: (a) => ({
+        logRow: async (input) => {
+          const result = await a.logRow(input);
+          return result.ok ? { ...result, entryPublicId: NEW_ENTRY } : result;
+        },
+      }),
+    });
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    fireEvent.change(field(splits), { target: { value: '7' } });
+    await press(tick(splits));
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+    await press(tick(splits));
+    expect(control.actions.untickRow).toHaveBeenCalledTimes(2);
+    expect(control.actions.untickRow.mock.calls[1]![0]).toMatchObject({ entryPublicId: NEW_ENTRY });
+  });
+
   it('after an un-tick, an emptied field is a new ✓ of the prescription, not a re-tick', async () => {
     const control = mount(yesterdayHalfDone);
     const splits = card('Morning habits', 'Splits stretch');

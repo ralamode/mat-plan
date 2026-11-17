@@ -26,12 +26,6 @@ describe('DayPlan: owed by its consumers', () => {
 
 describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers', () => {
   it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
-  it.todo(
-    '12c: a ✓ on today’s bare path pins the day (?d=), so the refresh after a ✓ past midnight stays on the day the rows were logged to',
-  );
-  it.todo(
-    '12c: a ✓ after an un-tick that answers with a NEW entry id shows that entry (the fake revives the same id)',
-  );
   it.todo('12c: a ✓ queued before an athlete switch is logged when the parent comes back (e2e)');
 });
 
