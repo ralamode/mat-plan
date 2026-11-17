@@ -12,6 +12,7 @@ fails=0
 lt="$(printf '<%.0s' 1 2 3 4 5 6 7)"
 eq="$(printf '=%.0s' 1 2 3 4 5 6 7)"
 gt="$(printf '>%.0s' 1 2 3 4 5 6 7)"
+pp="$(printf '|%.0s' 1 2 3 4 5 6 7)"
 bq="$(printf '> %.0s' 1 2 3 4 5 6)>"
 
 # expect <name> <exit> <text-or-empty> <mode: tracked|staged|unstaged> ; file body on stdin
@@ -46,6 +47,7 @@ expect "opening marker fails" 1 "f.md:1" tracked <<<"${lt} HEAD"
 expect "separator fails" 1 "f.md:2" tracked <<<"a
 ${eq}
 b"
+expect "diff3 base marker fails" 1 "f.md:1" tracked <<<"${pp} merged common ancestors"
 expect "closing marker fails" 1 "f.md:1" tracked <<<"${gt} origin/main"
 expect "bare closing marker fails" 1 "" tracked <<<"${gt}"
 expect "Prettier's reflowed blockquote fails" 1 "reflowed" tracked <<<"${bq} origin/main"

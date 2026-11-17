@@ -11,7 +11,7 @@
 // them. A markdown heading underlined with exactly seven `=` also matches: use more, or fewer.
 import { spawnSync } from 'node:child_process';
 
-const PATTERN = '^(<{7}|>{7})( |$)|^={7}$|^ *(> ){6}>';
+const PATTERN = '^(<{7}|[|]{7}|>{7})( |$)|^={7}$|^ *(> ){6}>';
 const staged = process.argv.includes('--staged');
 
 const args = ['grep', '-nIE', PATTERN];
