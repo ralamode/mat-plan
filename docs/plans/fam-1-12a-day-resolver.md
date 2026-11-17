@@ -2,8 +2,8 @@
 
 > Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step
 > 12a. Branch: `feat/fam-1-12a-day-resolver`. Lane E ([day-writers.md](../features/day-writers.md)).
-> **Rev 3**, after a five-lens panel and a re-review (§ Review-response log). The split (§ Split)
-> and the archived-athlete rule (Q1) wait on the maintainer.
+> **Rev 3, approved** by the maintainer (2026-11-17, relayed by the board: "Approve"), with the
+> split (§ Split), the archived athlete's day (R1) and the left-the-week label (R2) decided the same day.
 
 ## Goal
 
@@ -53,8 +53,8 @@ From the contract owner (2026-11-16, C17):
 
 | #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | The resolver takes `today`; the DAL supplies it and adds `athletes`. `writable = inWritableWindow(day, today) && !archived`, in ONE place. That is the interim rule (Q1, with the maintainer), so the page never offers a tick the writer refuses (`log-row.ts:152`). `future` is `day > today`; `canGoForward` is computed here.                                                                                                                                                              |
-| R2  | Where only logged rows show (a closed day, or a workout that left the week), `name` is the frozen `sessions.workout_name`. Otherwise it is the live name. A left-the-week workout's `label` is open with the maintainer: the proof compares `workout-left-the-week` with that one workout's `label` set aside (12a-ii).                                                                                                                                                                        |
+| R1  | The resolver takes `today`; the DAL supplies it and adds `athletes`. **An archived athlete's day is like a closed day** (the maintainer, 2026-11-17): `writable = inWritableWindow(day, today) && !archived`, in ONE place, so it is never writable and shows only what was logged. `future` is `day > today`; `canGoForward` is computed here.                                                                                                                                                |
+| R2  | Where only logged rows show (a closed day, or a workout that left the week), `name` is the frozen `sessions.workout_name`; on a writable or future day, the live name (both confirmed by the maintainer, 2026-11-17). **A workout that left the week has no label** (the maintainer, 2026-11-17): `label` is `null`, so `workout-left-the-week` deep-equals in full once the contract owner sets that fixture's label to `null`.                                                               |
 | R3  | Writable rows: sets 1..N as prescribed, plus each LOGGED set beyond N. A gap is neither a row nor counted.                                                                                                                                                                                                                                                                                                                                                                                     |
 | R4  | A removed item: grouped by `prescription_id` (the movement after a purge, an unproven fallback since no writer purges yet). Its rows are their OWN item even when the workout holds that movement live again. Placed after the live items, in first-logged order. Name, text and unit come from the lowest-numbered set's entry (first logged on a tie); `unit` is null when the type has no slot, else `entries.unit`. No target, notes or superset; `previous` is null. (#504's shape text.) |
 | R5  | PREVIOUS keys on the MOVEMENT and the set number (a recorded limit: two prescriptions of one movement share it).                                                                                                                                                                                                                                                                                                                                                                               |
@@ -109,7 +109,7 @@ export async function resolveDayPlan(
 - `programRowOf` and the slot conjuncts move from `writers/day/log-row.ts` to `queries/day/` (a read
   does not import a writer module). `log-row.ts` re-imports them.
 
-## Split (proposed; the maintainer's call)
+## Split (decided: "Split", the maintainer, 2026-11-17)
 
 - **12a-i:** the resolver and PREVIOUS. It proves the fixtures whose `source.before === null`, chosen
   by that test, not a list; `closed-day-logged-only` is among them. **Gates:** C17. **Gates next:** 12b
@@ -219,7 +219,7 @@ trip.
 - the day read loses E4's `movement_id IS NOT NULL` (the weigh-in proof plants a weigh-in that carries
   a `prescription_set`).
 
-That is 9, with numbers from lane E's next block.
+That is 9, numbered from 230 (lane E's block 230–259).
 
 **Recorded as having no mutation of their own, with the reason:**
 
@@ -245,14 +245,10 @@ grouping must match R4's key: when 14 is built, it reads the grouping helper rat
 
 ## Open questions
 
-- **Q1 (maintainer, through the board):** an archived athlete's day. The interim rule is R1 (`writable`
-  false, so it takes the closed-day shape). The alternative is a separate `archived` flag that keeps
-  today's shape, which is a shape change.
-- **Q4 (maintainer):** the split.
-- **The label of a workout that left the week (maintainer):** R2.
+None. The split, the archived athlete's day (R1) and the left-the-week label (R2) were decided by the
+maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
 
-Q2 and Q3 are answered (#504's shape text; the exact id map) and folded into R4, R6, R7, the field
-table and the Acceptance.
+**Mutation numbers:** lane E holds 120, 187–199 and 230–259 (the board, 2026-11-17).
 
 ## Review-response log
 
