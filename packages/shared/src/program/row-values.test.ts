@@ -333,6 +333,44 @@ describe('loggedRowUnit: the unit an amend is judged in (C28)', () => {
     expect(loggedRowUnit(TRACKING_TYPE.weight_reps, { reps: 5, quantities: [] })).toBeNull();
   });
 
+  it('🔴 reads the type’s own slot, never whichever quantity comes first', () => {
+    // Every type with a quantity names one slot; a row may hold a quantity in another.
+    const slots = Object.values(QUANTITY_SLOT);
+    let checked = 0;
+    for (const type of TRACKING_TYPES) {
+      const { slot } = TRACKING_TYPE_FIELDS[type];
+      const [unit] = unitsForTrackingType(type);
+      const elsewhere = slots.find((other) => other !== slot);
+      if (!slot || !unit || !elsewhere) continue;
+      const other = { slot: elsewhere, unit: 'lb' as const, value: 1 };
+      const own = { slot, unit, value: 2 };
+      expect(loggedRowUnit(type, { quantities: [other] }), type).toBeNull();
+      expect(loggedRowUnit(type, { quantities: [other, own] }), type).toBe(unit);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(3);
+  });
+
+  it('🔴 is null for a unit the type cannot be in, so the fake stores no such row', () => {
+    // A row logged when the item was another type: a Duration holding pounds, seconds in minutes.
+    const lbOnADuration = { quantities: [primary('lb', 30)] };
+    expect(loggedRowUnit(TRACKING_TYPE.duration, lbOnADuration)).toBeNull();
+    expect(loggedRowUnit(TRACKING_TYPE.time_sets, { quantities: [primary('min', 2)] })).toBeNull();
+    const stored = {
+      trackingType: TRACKING_TYPE.duration,
+      unit: loggedRowUnit(TRACKING_TYPE.duration, lbOnADuration),
+    };
+    expect(fillRowValues(stored, { quantities: [primary('lb', 40)] }, null)).toBeNull();
+    expect(fillRowValues(stored, { quantities: [primary('min', 40)] }, null)).toBeNull();
+    // Every unit a type may be in is one it can be changed in.
+    for (const type of TRACKING_TYPES.filter((t) => TRACKING_TYPE_FIELDS[t].slot)) {
+      for (const unit of unitsForTrackingType(type)) {
+        const slot = TRACKING_TYPE_FIELDS[type].slot!;
+        expect(loggedRowUnit(type, { quantities: [{ slot, unit, value: 1 }] }), type).toBe(unit);
+      }
+    }
+  });
+
   it('🔴 a row logged in lb is changed in lb after its item moved to kg, and never in kg', () => {
     const stored = {
       trackingType: TRACKING_TYPE.weight_reps,

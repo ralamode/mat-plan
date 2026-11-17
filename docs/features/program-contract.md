@@ -393,6 +393,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     no target), in the fake as in the writer: the lb row is changed in lb and a kg number answers
     `bad_value`. A new ✓ is not a Change and is still in the item's unit. The day screen is
     stricter and offers no Change at all on a row logged in another unit than the item's.
+    **A row that does not hold what its type now logs has no unit to be changed in**
+    (`loggedRowUnit` is `null`: no quantity in the type's slot, or one in a unit the type cannot
+    be in), so a Change that sends a quantity for it is `bad_value`. No FAM-1 screen changes an
+    item's type (plan D25), so nothing makes such a row today.
 
 ## Traps
 

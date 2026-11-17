@@ -685,13 +685,16 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.values).toEqual(values);
   });
 
-  it('a new ✓ on that item is still in the item’s unit now', async () => {
-    // C28 is about a logged row only: a first ✓ follows the prescription as it reads today.
-    const edited = itemOnly(everyTypeOnce, 'DB bench press');
+  it('a new ✓ on that item is still in the item’s unit now, beside a row logged in lb', async () => {
+    // C28 is about a logged row only: a new ✓ follows the prescription as it reads today, and
+    // the lb row beside it is left as it is.
+    const edited = structuredClone(everyTypeOnce);
     const { item, workout } = itemOf(edited, 'DB bench press');
     item.unit = 'kg';
     item.target = { reps: null, quantities: [] };
-    const { actions } = day(edited);
+    const open = item.rows.find((row) => !row.logged);
+    if (!open) throw new Error('the bench press has a set still to log');
+    const { actions, plan } = day(edited);
     const write = (unit: 'lb' | 'kg') =>
       actions.logRow({
         profilePublicId,
@@ -699,11 +702,14 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
         clientId: newId(),
         workoutPublicId: workout.workoutPublicId!,
         prescriptionPublicId: item.prescriptionPublicId!,
-        set: 1,
+        set: open.set,
         values: { reps: 5, quantities: [{ ...lb(20), unit }] },
       });
     expect(await write('lb')).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
     expect((await write('kg')).ok).toBe(true);
+    const rows = itemOf(plan(), 'DB bench press').item.rows;
+    expect(rows[0]?.logged).toEqual(loggedBench());
+    expect(rows.find((row) => row.set === open.set)?.logged?.values.quantities[0]?.unit).toBe('kg');
   });
 
   it('Change keeps the old number when the new one is blank or not a number', async () => {

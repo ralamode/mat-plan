@@ -488,13 +488,17 @@ export function fillRowValues(
  *
  * A row logged in lb is changed in lb even when its prescription now reads kg. Checked against
  * the item's current unit instead, a Change would take a kg number into a row still labelled lb:
- * a load stored in the wrong unit. A row that holds no quantity in the slot its type has (it was
- * logged before the item's type was what it is) has no unit here, so an amend of it is refused.
+ * a load stored in the wrong unit.
+ *
+ * **`null` whenever the row does not hold what its type now logs**: no quantity in the type's
+ * slot, or one in a unit the type cannot be in (`unitsForTrackingType`: a Duration is minutes, so a
+ * row holding pounds has no unit here). An amend that sends a quantity is then refused. No FAM-1
+ * screen changes an item's type (plan D25), so this is a row nothing can make today; the rule is
+ * here so the fake never writes a row the writer could not.
  */
 export function loggedRowUnit(trackingType: TrackingType, logged: RowValues): Unit | null {
-  const { slot } = TRACKING_TYPE_FIELDS[trackingType];
-  if (!slot) return null;
-  return logged.quantities.find((quantity) => quantity.slot === slot)?.unit ?? null;
+  const unit = slotQuantity({ trackingType }, logged.quantities)?.unit;
+  return unit !== undefined && unitsForTrackingType(trackingType).includes(unit) ? unit : null;
 }
 
 /** What a copy's default name ends with, inside the workout's own program. */
