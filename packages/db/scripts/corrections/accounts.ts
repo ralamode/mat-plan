@@ -33,8 +33,8 @@ export function parseAccountList(raw: string | undefined): string[] {
   if (ids.length === 0) {
     throw new CorrectionRefusal(
       `set ${CREATE_HOUSEHOLD_ACCOUNTS_ENV} for this one command: one or more Clerk user ids, ` +
-        'separated by spaces, read with `read -rs` (never typed inline, never exported). ' +
-        'Nothing written.',
+        'on ONE line separated by spaces, read with `read -rs` (never typed inline, never ' +
+        'exported). Nothing written.',
     );
   }
   const first = new Map<string, number>();

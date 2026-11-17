@@ -7555,18 +7555,35 @@ console.log(
   // not local and not the preview — the (6f) idiom. A run expected to succeed goes through `orFail`;
   // a run expected to refuse goes through `assert.rejects` with a message regex and a message, so
   // either way a thrown error fails a NAMED assertion (the mutations README's rule).
+  //
+  // With a `consoleSink`, `console.log` / `info` / `warn` / `error` push into it instead of printing
+  // for the length of `fn`, and are restored in the same `finally`: a correction that logged an
+  // account itself, rather than returning it, would otherwise reach the terminal unseen by (6k).
+  const CONSOLE_METHODS = ['log', 'info', 'warn', 'error'] as const;
   const withEnv = async <T>(
     vars: Readonly<Record<string, string | undefined>>,
     fn: () => Promise<T>,
+    consoleSink?: string[],
   ): Promise<T> => {
     const before = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+    const consoleBefore = CONSOLE_METHODS.map((m) => console[m]);
     for (const [k, v] of Object.entries(vars)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
+    if (consoleSink) {
+      for (const m of CONSOLE_METHODS) {
+        console[m] = (...args: unknown[]) => {
+          consoleSink.push(args.map(String).join(' '));
+        };
+      }
+    }
     try {
       return await fn();
     } finally {
+      CONSOLE_METHODS.forEach((m, i) => {
+        console[m] = consoleBefore[i]!;
+      });
       for (const [k, v] of Object.entries(before)) {
         if (v === undefined) delete process.env[k];
         else process.env[k] = v;
@@ -7599,7 +7616,9 @@ console.log(
   const RC_A = 'user_rcfixture000a';
   const RC_B = 'user_rcfixture000b';
   const RC_C = 'user_rcfixture000c';
-  /** Everything (6h)–(6j) printed or threw, for (6k). */
+  const RC_D = 'user_rcfixture000d';
+  const RC_MALFORMED = 'someone@example.com';
+  /** Everything (6h)–(6n) returned, logged or threw, for (6k). */
   const rcOutput: string[] = [];
   const captured = (re: RegExp) => (e: unknown) => {
     const err = e as Error;
@@ -7609,99 +7628,190 @@ console.log(
   const householdCount = async () => (await asPg.select().from(schema.households)).length;
   const memberCount = async () => (await asPg.select().from(schema.householdMembers)).length;
 
-  await withEnv({ ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_A} ${RC_B}` }, async () => {
-    // (6h) The dry run writes nothing and says how many it would create and bind; --apply then
-    // creates exactly one household and one OWNER membership per account, none with a seed id.
-    const householdsBefore = await householdCount();
-    const membersBefore = await memberCount();
-    const dry = await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
-      create.run(asCorrectionDb, false),
-    );
-    rcOutput.push(...dry);
-    assert.ok(
-      dry.length === 1 && dry[0]!.startsWith('would create 1 household with 2 account(s)'),
-      'PRIV-3 RC (6h): the dry run prints one line, the household and account counts',
-    );
-    assert.deepEqual(
-      [await householdCount(), await memberCount()],
-      [householdsBefore, membersBefore],
-      'PRIV-3 RC (6h): the create-household dry run writes nothing',
-    );
-
-    const applied = await orFail('PRIV-3 RC (6h): the create-household --apply completes', () =>
-      create.run(asCorrectionDb, true),
-    );
-    rcOutput.push(...applied);
-    const members = await asPg
-      .select({
-        publicId: schema.householdMembers.publicId,
-        householdId: schema.householdMembers.householdId,
-        role: schema.householdMembers.role,
-      })
-      .from(schema.householdMembers)
-      .where(
-        and(
-          inArray(schema.householdMembers.clerkUserId, [RC_A, RC_B]),
-          isNull(schema.householdMembers.deletedAt),
-        ),
+  await withEnv(
+    { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_A} ${RC_B}` },
+    async () => {
+      // (6h) The dry run writes nothing and says how many it would create and bind; --apply then
+      // creates exactly one household and one OWNER membership per account, none with a seed id.
+      const householdsBefore = await householdCount();
+      const membersBefore = await memberCount();
+      const dry = await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
+        create.run(asCorrectionDb, false),
       );
-    const [created] = await asPg
-      .select({ publicId: schema.households.publicId, name: schema.households.name })
-      .from(schema.households)
-      .where(eq(schema.households.id, members[0]?.householdId ?? -1));
-    assert.ok(
-      (await householdCount()) === householdsBefore + 1 &&
-        members.length === 2 &&
-        new Set(members.map((m) => m.householdId)).size === 1 &&
-        members.every((m) => m.role === HOUSEHOLD_ROLE.owner) &&
-        created?.name === HOUSEHOLD_DEFAULT_NAME,
-      'PRIV-3 RC (6h): --apply creates exactly one household and binds both accounts to it as owner',
-    );
-    assert.ok(
-      ![created!.publicId, ...members.map((m) => m.publicId)].some((id) => SEED_PUBLIC_IDS.has(id)),
-      'PRIV-3 RC (6h): no public_id the correction mints is in SEED_PUBLIC_IDS',
-    );
+      rcOutput.push(...dry);
+      assert.ok(
+        dry.length === 1 && dry[0]!.startsWith('would create 1 household with 2 account(s)'),
+        'PRIV-3 RC (6h): the dry run prints one line, the household and account counts',
+      );
+      assert.deepEqual(
+        [await householdCount(), await memberCount()],
+        [householdsBefore, membersBefore],
+        'PRIV-3 RC (6h): the create-household dry run writes nothing',
+      );
 
-    // (6i) A second --apply with the same accounts is a refusal that writes nothing (D4).
-    await assert.rejects(
-      () => create.run(asCorrectionDb, true),
-      captured(/^2 of 2 accounts already have a live membership; nothing written/),
-      'PRIV-3 RC (6i): a second create-household --apply refuses with the live-membership count',
-    );
-    assert.deepEqual(
-      [await householdCount(), await memberCount()],
-      [householdsBefore + 1, membersBefore + 2],
-      'PRIV-3 RC (6i): the refused second run wrote nothing',
-    );
-  });
+      const applied = await orFail('PRIV-3 RC (6h): the create-household --apply completes', () =>
+        create.run(asCorrectionDb, true),
+      );
+      rcOutput.push(...applied);
+      const members = await asPg
+        .select({
+          publicId: schema.householdMembers.publicId,
+          householdId: schema.householdMembers.householdId,
+          role: schema.householdMembers.role,
+        })
+        .from(schema.householdMembers)
+        .where(
+          and(
+            inArray(schema.householdMembers.clerkUserId, [RC_A, RC_B]),
+            isNull(schema.householdMembers.deletedAt),
+          ),
+        );
+      const [created] = await asPg
+        .select({ publicId: schema.households.publicId, name: schema.households.name })
+        .from(schema.households)
+        .where(eq(schema.households.id, members[0]?.householdId ?? -1));
+      assert.ok(
+        (await householdCount()) === householdsBefore + 1 &&
+          members.length === 2 &&
+          new Set(members.map((m) => m.householdId)).size === 1 &&
+          members.every((m) => m.role === HOUSEHOLD_ROLE.owner) &&
+          created?.name === HOUSEHOLD_DEFAULT_NAME,
+        'PRIV-3 RC (6h): --apply creates exactly one household and binds both accounts to it as owner',
+      );
+      assert.ok(
+        ![created!.publicId, ...members.map((m) => m.publicId)].some((id) =>
+          SEED_PUBLIC_IDS.has(id),
+        ),
+        'PRIV-3 RC (6h): no public_id the correction mints is in SEED_PUBLIC_IDS',
+      );
+
+      // (6i) A second --apply with the same accounts is a refusal that writes nothing (D4).
+      await assert.rejects(
+        () => create.run(asCorrectionDb, true),
+        captured(/^2 of 2 accounts already have a live membership; nothing written/),
+        'PRIV-3 RC (6i): a second create-household --apply refuses with the live-membership count',
+      );
+      assert.deepEqual(
+        [await householdCount(), await memberCount()],
+        [householdsBefore + 1, membersBefore + 2],
+        'PRIV-3 RC (6i): the refused second run wrote nothing',
+      );
+    },
+    rcOutput,
+  );
+
+  // (6i) continued — the "this step is done" hint is given ONLY when every account is bound and all
+  // to one household. A partial overlap, or accounts in different households, gets the count alone.
+  await withEnv(
+    { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_A} ${RC_D}` },
+    () =>
+      assert.rejects(
+        () => create.run(asCorrectionDb, true),
+        captured(
+          /^1 of 2 accounts already have a live membership \(in 1 household\(s\)\); nothing written$/,
+        ),
+        'PRIV-3 RC (6i): a partial overlap refuses with its count and no "this step is done" hint',
+      ),
+    rcOutput,
+  );
+  await withEnv(
+    { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_A} ${CLERK_C}` },
+    () =>
+      assert.rejects(
+        () => create.run(asCorrectionDb, true),
+        captured(
+          /^2 of 2 accounts already have a live membership \(in 2 household\(s\)\); nothing written$/,
+        ),
+        'PRIV-3 RC (6i): accounts bound in two households refuse with no "this step is done" hint',
+      ),
+    rcOutput,
+  );
 
   // (6j) A real-shaped account beside the committed fixture principal, on a non-local target: refused
   // at position 2, before any write (D2). --apply on purpose, so "writes nothing" means something.
   await withEnv(
     { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_C} ${E2E_SESSION_BYPASS_USER}` },
     async () => {
-      const householdsBefore = await householdCount();
+      const before = [await householdCount(), await memberCount()];
       await assert.rejects(
         () => create.run(asCorrectionDb, true),
         captured(/^account 2 of 2 is the committed e2e fixture principal/),
         'PRIV-3 RC (6j): create-household refuses the fixture principal on a non-local target, at its position',
       );
-      assert.equal(
-        await householdCount(),
-        householdsBefore,
-        'PRIV-3 RC (6j): the refused run created no household',
+      assert.deepEqual(
+        [await householdCount(), await memberCount()],
+        before,
+        'PRIV-3 RC (6j): the refused run created no household and no membership',
       );
     },
+    rcOutput,
   );
 
-  // (6k) 🔴 No line, message, cause or stack from (6h)–(6j) names an input account.
+  /** A refused --apply of `accounts` under `vars`: it must match `re` and write nothing. */
+  const refusedApply = (
+    label: string,
+    vars: Readonly<Record<string, string | undefined>>,
+    re: RegExp,
+    what: string,
+  ) =>
+    withEnv(
+      vars,
+      async () => {
+        const before = [await householdCount(), await memberCount()];
+        await assert.rejects(
+          () => create.run(asCorrectionDb, true),
+          captured(re),
+          `PRIV-3 RC (${label}): ${what}`,
+        );
+        assert.deepEqual(
+          [await householdCount(), await memberCount()],
+          before,
+          `PRIV-3 RC (${label}): the refused run created no household and no membership`,
+        );
+      },
+      rcOutput,
+    );
+
+  // (6l) The preview database is refused as a target (D5), even with every account well-formed and
+  // free. Only the unpooled string is set: it is what the runner connects with.
+  await refusedApply(
+    '6l',
+    {
+      DATABASE_URL: undefined,
+      DATABASE_URL_UNPOOLED: 'postgres://u@ep-x.invalid/mat_plan_preview',
+      [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_C} ${RC_D}`,
+    },
+    /^the target is the preview database/,
+    'create-household refuses the preview database as its target',
+  );
+
+  // (6m) A malformed account is refused at its position, without echoing it (most likely a pasted
+  // email address).
+  await refusedApply(
+    '6m',
+    { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_C} ${RC_MALFORMED}` },
+    /^account 2 of 2 is not shaped/,
+    'create-household refuses a malformed account, at its position',
+  );
+
+  // (6n) A repeated account is refused by position: binding it once would hide the one that is missing.
+  await refusedApply(
+    '6n',
+    { ...NO_TARGET, [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: `${RC_C} ${RC_C}` },
+    /^account 2 of 2 repeats account 1/,
+    'create-household refuses a repeated account, at its position',
+  );
+
+  // (6k) 🔴 Nothing (6h)–(6n) returned, logged, threw, caused or stacked names an input account.
   assert.ok(
-    rcOutput.length >= 8,
-    'PRIV-3 RC (6k): non-vacuity — the dry run, the apply and both refusals were captured',
+    rcOutput.length >= 23,
+    'PRIV-3 RC (6k): non-vacuity — the dry run, the apply and all seven refusals were captured',
   );
   assert.ok(
     !rcOutput.some((text) =>
-      [RC_A, RC_B, RC_C, E2E_SESSION_BYPASS_USER].some((id) => text.includes(id)),
+      [RC_A, RC_B, RC_C, RC_D, RC_MALFORMED, CLERK_C, E2E_SESSION_BYPASS_USER].some((id) =>
+        text.includes(id),
+      ),
     ),
     'PRIV-3 RC (6k): nothing create-household printed or threw names an input account',
   );
@@ -7709,7 +7819,9 @@ console.log(
   console.log(
     '✓ PRIV-3 RC: the claim refuses a seed household off local and preview (6g); create-household ' +
       'dry-runs, creates one household with two owners and no seed id (6h), refuses a second run ' +
-      '(6i) and the fixture principal (6j), and names no account on any path (6k)',
+      '(6i, with the "done" hint only when it is), the fixture principal (6j), the preview (6l), ' +
+      'a malformed (6m) and a repeated (6n) account, and names no account on any path, console ' +
+      'included (6k)',
   );
 
   console.log(

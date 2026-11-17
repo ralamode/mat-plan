@@ -844,11 +844,15 @@ export const CREATE_HOUSEHOLD_NAME = 'create-household-2026-11-17';
  * is how the household's adult accounts get a household to sign in to. The app cannot create one.
  *
  * ```
- * read -rs ids        # paste the ids from the PRODUCTION instance's Clerk dashboard, then Enter
+ * read -rs ids        # paste EVERY id on ONE line, separated by spaces, then Enter
  * CREATE_HOUSEHOLD_CLERK_USER_IDS="$ids" pnpm --filter @mat-plan/db db:correct create-household-2026-11-17
  * CREATE_HOUSEHOLD_CLERK_USER_IDS="$ids" pnpm --filter @mat-plan/db db:correct create-household-2026-11-17 --apply
  * unset ids
  * ```
+ *
+ * ⚠️ **One line.** `read` takes a single line: ids pasted on separate lines leave all but the first
+ * in the terminal's input, where the shell runs each as a command and saves it to its history. The
+ * ids come from the PRODUCTION instance's Clerk dashboard (a development id is another user pool).
  *
  * 🔴 **Not in production before `OPS-2` PR 1 is deployed** (D10). Until then `seed.ts` throws
  * _"refusing to seed into a household this seed does not own"_ whenever a live household exists, so
@@ -904,11 +908,19 @@ const createHousehold: Correction = {
       });
 
       return await db.transaction(async (tx) => {
-        const bound = new Set((await liveMembershipsOf(tx, ids)).map((m) => m.clerkUserId));
+        const live = await liveMembershipsOf(tx, ids);
+        const bound = new Set(live.map((m) => m.clerkUserId));
         if (bound.size > 0) {
+          // "This step is done" only when it plausibly IS: every account bound, all in ONE household.
+          // A partial overlap, or accounts spread over households, is an operator error, and the
+          // hint would tell them to stop when they should look.
+          const households = new Set(live.map((m) => m.householdId)).size;
           throw new CorrectionRefusal(
-            `${bound.size} of ${n} accounts already have a live membership; nothing written. If an ` +
-              'earlier --apply of this correction succeeded, this step is done.',
+            bound.size === n && households === 1
+              ? `${n} of ${n} accounts already have a live membership; nothing written. If an ` +
+                  'earlier --apply of this correction succeeded, this step is done.'
+              : `${bound.size} of ${n} accounts already have a live membership (in ${households} ` +
+                  'household(s)); nothing written',
           );
         }
         const line = (verb: string) =>
