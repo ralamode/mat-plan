@@ -34,17 +34,8 @@ describe('owed by lane A: the seed (chunk A2, then A3)', () => {
   it.todo('E6: after the fresh start, a changed entry changes its stored row and nothing else');
 });
 
-describe('owed by the contract: search (chunk C0b-1)', () => {
-  it.todo("P1: exact and aliasHit equal matchMovementOptions' whatever the filters are");
-  it.todo(
-    "P2: with no filter and no short form, matches and someWords equal matchMovementOptions'",
-  );
-  it.todo('P3: a short form expands inside the search only');
-  it.todo('P4: near holds fuzzy candidates only when nothing else matches');
-  it.todo('P6: the query is bounded and never leaves the device');
-});
-
 describe('owed by the contract and lane B: filters and browse (chunk C0b-2, then B2 and B3)', () => {
+  it.todo('P1, with filters: exact and aliasHit are the same whatever the filters are');
   it.todo('P7: equipment by uses-any-of, No equipment as its own switch, muscles by primary');
   it.todo('P8: an exact or alias hit is listed first, whatever the filters');
   it.todo("P9: a household's own items are counted and offered while a filter is on");
@@ -55,6 +46,7 @@ describe('owed by the contract and lane B: filters and browse (chunk C0b-2, then
 });
 
 describe('owed by lane B: the picker (chunks B1 to B3)', () => {
+  it.todo('P6: the query never leaves the device: no URL parameter, action or log line carries it');
   it.todo(
     'P5: near and someWords each under its own heading, counted apart, never what Enter picks',
   );

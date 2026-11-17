@@ -263,7 +263,8 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
 - **P3.** `QUERY_SHORT_FORMS` (db, kb, bb, ez, …) shall expand a query word inside
   `searchMovementOptions` only, after the fold and never in `movementNameKey`; rows found only
   through an expansion are added after the other matches and count as matches. "db row" shall find
-  Dumbbell row. The two old aliases that are equipment short forms (`KB`, `DB bench`) are retired;
+  Dumbbell row. When nothing matches, the expanded words are also read for `someWords` and for
+  `near`. A short form never makes `exact` or `aliasHit` true (P1). The two old aliases that are equipment short forms (`KB`, `DB bench`) are retired;
   the other four (`RDL`, `BSS`, `OHP`, `hip thrust`) become their entries' aliases.
 - **P4.** `near` shall hold fuzzy candidates, computed **only when the unfiltered `matches` are
   empty**: a query word of five or more letters within one edit (insert, delete, substitute, or a
@@ -272,12 +273,19 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   squat; "dedlift" shall find a deadlift; "kettelbell swing" shall find Kettlebell swing. "dress"
   shall not find a press (the first letter); "split" shall not find a squat (three edits); "hand"
   shall not find a hang (four letters); a query with any row in the unfiltered `matches` shall
-  have an empty `near`.
+  have an empty `near`. **Every word of the query must be in the option** (part of its name, or a
+  near miss of one of its words), so "kettelbell swing" does not bring every kettlebell movement;
+  a word under five letters must be part of the name as typed. Closest first.
+  _(As built in C0b-1: a word of an **alias** counts for a near miss, and only an exact alias
+  counts for a match. Whether an alias should match as it is typed is put to the prototype, P0.)_
 - **P5.** `near` and `someWords` shall each be shown under its own heading, `near` first, each
   counted separately in the status text, with a row that is in `near` not repeated under
   `someWords`; neither shall be what Enter picks; and while either holds a row the create button
   stays the quiet one.
-- **P6.** The query shall be cut to `MOVEMENT_NAME_MAX` and a fixed word count before matching; no
+- **P6.** The query shall be cut to `MOVEMENT_NAME_MAX` characters before anything reads it, and
+  a query of more than `SEARCH_WORDS_MAX` words shall get the plain match only, with no short form
+  expanded and no near miss (the plain match reads every word, so P1 holds for any name a person
+  can type, and no row is ever found without a word that was typed); no
   `RegExp` shall be built from a query or a catalog string; and the query text shall never leave
   the device (no URL parameter, server action or log line carries it: a source scan).
 
@@ -432,6 +440,13 @@ roadmap thread checks each batch against it and says in the last batch's PR that
 is covered, without naming it. Entries are drafted from general knowledge, in our own words,
 never by copying any one list record by record.
 
+**What the library covers is the data lane's own list, by family of movement** _(maintainer,
+2026-11-17)_. Any outside list is used once, privately, after that list is drafted, to notice a
+well-known movement that is missing; such a movement is then named and described by us, like any
+other. No outside list is mirrored or walked entry by entry, and nothing is copied from one.
+**A bodyweight movement that can be loaded is two entries** (rule 10; maintainer, 2026-11-17):
+"Dip" logged as reps, "Weighted dip" as weight and reps.
+
 ## The fresh start, in order
 
 Preconditions: FAM-1 step 15, P11 and B3 in production (so the picker the household rebuilds with
@@ -476,7 +491,7 @@ step-2 branch; if it ever is, steps 3 to 8 are run again.
 | **B2** filters         | lane B                    | P7 to P10, P13 to P15                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | After C0b-2 and B1                                                  |
 | **P11** option read    | lane P, a seam            | The read returns taxonomy; `apps/web/lib/dal/program/` maps it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | After FAM-1 6a-iii and A2                                           |
 | **B3** browse          | lane B                    | P12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After B2 and P11                                                    |
-| **RC** create          | `PRIV-3`'s owner          | A guarded `create-household` correction built on `registry.ts` → `householdClaim`'s logic, factored out (the account from the environment, its shape check, `fixtureBindIsAllowed`): takes **no household id**, mints ordinary ids, binds one or more accounts to the one new household in one run, checks inside its transaction that none has a live membership, prints counts only. It creates `SEED_PUBLIC_IDS` in `packages/shared/src/seed-ids.ts` (moved here from `PRIV-3` 2b by R0), and `householdClaim` itself gains the refusal of any id in it                                                                                                                                                                                                                  | Before R2                                                           |
+| **RC** create          | `PRIV-3`'s owner          | A guarded `create-household` correction built on `registry.ts` → `householdClaim`'s logic, factored out (the account from the environment, its shape check, `fixtureBindIsAllowed`): takes **no household id**, mints ordinary ids, binds one or more accounts to the one new household in one run, checks inside its transaction that none has a live membership, prints counts only. It creates `SEED_PUBLIC_IDS` in `packages/shared/src/seed-ids.ts` (moved here from `PRIV-3` 2b by R0), and `householdClaim` itself gains the refusal, **in production**, of any id in it (a local or preview database may still claim the seeded household, under the rule `seed.ts` uses for fixtures). **Every account it binds is an owner** _(maintainer, 2026-11-17)_            | Before R2                                                           |
 | **R0** deltas          | the plans' owners         | `PRIV-3`: a dated one-shot correction that takes no target, erases the seeded household through 2a's core, refuses outside production and once the target is gone, has a pure, unit-tested gate, and leaves `erase-household`'s seed-id refusal and its proof unchanged (or `OPS-2` D9's re-key run just before; the owner chooses); `PRIV-3`'s order no longer puts `OPS-3` ahead of 2a for this run, and `SEED_PUBLIC_IDS` moves from its 2b to chunk RC. `OPS-2` Q2, D8, D9 and `SEC-6`'s row say K7 and K15; `SEC-6`'s acceptance is narrowed to households, profiles and movements, and its `rate-limit.ts` clause keeps an owner. The notice's sentences on the seeded athletes and on shared movement names; inventory §1b's paragraph on leftover global rows and §8 | Before R1                                                           |
 | **R1** runbook         | `PRIV-3`'s owner          | R1 to R4; step 5's correction; inventory §5's two new removal paths                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After `PRIV-3` 2a, RC, R0                                           |
 | **R2** the fresh start | the maintainer            | R5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | After R1 and the preconditions. **The maintainer's go at the time** |
@@ -698,6 +713,15 @@ and UX. Every blocking and should-fix finding is listed; "→" is what changed.
   8's known limit.
 - _C0a's review: the spec's fixture alias `RDL` is one the legacy picker still answers to._ →
   `SLRDL`.
+
+**After the spec merged (2026-11-17), in C0b-1's PR**
+
+- _The maintainer: what the library covers; loaded bodyweight movements; the role of each bound
+  account._ → § The review sheet; the RC row.
+- _Lane N on the RC row: a literal "refusal of any id" breaks five callers that claim the seeded
+  household on purpose._ → the refusal is production's.
+- _C0b-1 as built: P6's word cap cannot apply to the plain match without breaking P1; how words
+  combine in a near miss; short forms and the fallbacks._ → P3, P4, P6.
 
 **Rejected, with the reason**
 
