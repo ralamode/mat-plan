@@ -7,9 +7,12 @@ import { dayPlanSchema, type DayPlan } from '../day-shapes';
 import { hasSetRows } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import { programListSchema, programViewSchema, workoutDraftSchema } from '../program-shapes';
+import { dayPlan } from './build';
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
+  closedDayProgramSinceLeft,
+  DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
   everyTypeOnce,
   familyProgram,
@@ -95,6 +98,8 @@ describe('every fixture round-trips through its own schema', () => {
       'yesterday-edited-after-logging',
       'workout-left-the-week',
       'closed-day-logged-only',
+      // C17, not a prototype state: a program since left, and a workout renamed after logging.
+      'closed-day-program-since-left',
       'future-preview',
       'every-type-once',
     ]);
@@ -589,6 +594,148 @@ describe('closed-day-logged-only: Athlete One · Nov 11', () => {
     expect(rows.every((row) => row.previous === null)).toBe(true);
     expect(item(yesterdayHalfDone, 'Morning habits', 'Neck bridge').rows[0]?.previous).toEqual({
       quantities: [sec(30)],
+    });
+  });
+});
+
+describe('closed-day-program-since-left: the order of a day’s programs, and a renamed workout (C17)', () => {
+  const plan = closedDayProgramSinceLeft;
+  const source = DAY_PLAN_FIXTURE_SOURCES['closed-day-program-since-left'];
+
+  it('is a closed Tuesday on which Athlete One was on two programs', () => {
+    expect(plan).toMatchObject({ day: '2026-11-10', writable: false, future: false });
+    expect(plan.onProgram).toBe('yes');
+  });
+
+  it('lists the current program first and the one since left after it, with no order', () => {
+    // The assignment list holds them the other way round, so this is the rule and not the array.
+    expect(source.world.assign.a1?.map((a) => a.prog)).toEqual(['p3', 'p1', 'p2']);
+    expect(plan.programs.map((p) => [p.name, p.order])).toEqual([
+      ['Family program', 0],
+      ['Adult One’s program', null],
+    ]);
+    // Still a current program, though it had not started on this day.
+    expect(plan.currentPrograms.map((p) => p.name)).toEqual(['Family program', 'Stretching']);
+  });
+
+  it('lists the workouts in that same order, whichever was logged first', () => {
+    const [first, second] = source.world.entries.filter(
+      (e) => e.ath === 'a1' && e.day === plan.day,
+    );
+    expect([first?.prog, second?.prog]).toEqual(['p3', 'p1']);
+    expect(plan.workouts.map((w) => w.programPublicId)).toEqual(
+      plan.programs.map((p) => p.programPublicId),
+    );
+  });
+
+  it('shows a workout under the name it had when it was logged', () => {
+    const live = source.world.programs.flatMap((p) => p.workouts).find((w) => w.wid === 'w1');
+    expect(live?.name).toBe('Morning routine');
+    expect(
+      source.before?.programs.flatMap((p) => p.workouts).find((w) => w.wid === 'w1')?.name,
+    ).toBe('Morning habits');
+    expect(plan.workouts.map((w) => w.name)).toEqual(['Morning habits', 'Run and core']);
+  });
+
+  it('shows the live name on a day that is still writable', () => {
+    // The same rename, seen on yesterday: a scheduled workout on a writable day is the live one.
+    const yesterday = dayPlan(source.world, 'a1', '2026-11-13');
+    expect(yesterday.writable).toBe(true);
+    expect(yesterday.workouts[0]?.name).toBe('Morning routine');
+  });
+});
+
+describe('where a DayPlan fixture comes from (C17)', () => {
+  const names = Object.keys(DAY_PLAN_FIXTURES) as (keyof typeof DAY_PLAN_FIXTURES)[];
+
+  it('has a source for every fixture, and no other', () => {
+    expect(Object.keys(DAY_PLAN_FIXTURE_SOURCES)).toEqual(names);
+  });
+
+  it.each(names)('%s is its source, built', (name) => {
+    const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
+    expect(dayPlan(world, athlete, day)).toEqual(DAY_PLAN_FIXTURES[name]);
+    expect(DAY_PLAN_FIXTURES[name]).toMatchObject({ day, today: world.today });
+  });
+
+  it('carries the world before the edit for exactly the fixtures that describe one', () => {
+    expect(names.filter((name) => DAY_PLAN_FIXTURE_SOURCES[name].before !== null)).toEqual([
+      'today-stretching-first',
+      'yesterday-edited-after-logging',
+      'workout-left-the-week',
+      'closed-day-program-since-left',
+    ]);
+  });
+
+  it.each(names)('%s: an edit leaves what was logged alone', (name) => {
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES[name];
+    if (before === null) return;
+    expect(world.entries).toEqual(before.entries);
+    expect(world.stamps).toEqual(before.stamps);
+    expect(world.today).toBe(before.today);
+  });
+
+  it('stamps every logged row a fixture shows, so a seed has its frozen text and values', () => {
+    for (const name of names) {
+      const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
+      for (const entry of world.entries.filter((e) => e.ath === athlete && e.day === day)) {
+        expect(world.stamps[entry.n], `${name}: e${entry.n}`).toBeDefined();
+      }
+    }
+  });
+
+  it('is frozen', () => {
+    expect(Object.isFrozen(DAY_PLAN_FIXTURE_SOURCES)).toBe(true);
+    expect(Object.isFrozen(DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world.entries)).toBe(
+      true,
+    );
+  });
+});
+
+describe('the rows of a set-based item (C17: the shape’s rule, in the builder)', () => {
+  /** Yesterday's world with Athlete One's bench logged at these set numbers only. */
+  const benchLoggedAt = (sets: number[]) => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['yesterday-half-done'];
+    const bench = world.entries.find(
+      (e) => e.ath === 'a1' && e.day === '2026-11-13' && e.iid === 'dbbench' && e.set === 1,
+    )!;
+    const stamp = world.stamps[bench.n]!;
+    const extra = sets.map((set, i) => ({ ...bench, n: 990 + i, set }));
+    return dayPlan(
+      {
+        ...world,
+        entries: [
+          ...world.entries.filter((e) => !(e.day === '2026-11-13' && e.iid === 'dbbench')),
+          ...extra,
+        ],
+        stamps: { ...world.stamps, ...Object.fromEntries(extra.map((e) => [e.n, stamp])) },
+      },
+      'a1',
+      '2026-11-13',
+    );
+  };
+  const bench = (plan: DayPlan) => item(plan, 'Heavy A', 'DB bench press');
+
+  it('lists every prescribed set, and a logged set beyond them', () => {
+    // Four prescribed; a fifth and a sixth logged.
+    expect(bench(benchLoggedAt([1, 5, 6])).rows.map((r) => [r.set, r.logged !== null])).toEqual([
+      [1, true],
+      [2, false],
+      [3, false],
+      [4, false],
+      [5, true],
+      [6, true],
+    ]);
+  });
+
+  it('🔴 does not list a gap below a logged extra set: an added set is a row only while logged', () => {
+    // Set 5 was added and un-ticked; set 6 is logged. Set 5 is not a row, and is not counted.
+    const plan = benchLoggedAt([1, 6]);
+    expect(bench(plan).rows.map((r) => r.set)).toEqual([1, 2, 3, 4, 6]);
+    const before = workout(benchLoggedAt([1]), 'Heavy A').progress;
+    expect(workout(plan, 'Heavy A').progress).toEqual({
+      done: before.done + 1,
+      total: before.total + 1,
     });
   });
 });

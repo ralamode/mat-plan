@@ -38,7 +38,15 @@ import type {
  */
 
 /** What a logged row was logged against, frozen when it was logged (plan D7; the prototype's `stamp`). */
-type Stamp = { text: string; name: string; label: string; unit: Unit | null; values: RowValues };
+export type Stamp = {
+  text: string;
+  name: string;
+  /** The workout's name when the row was logged: what the session freezes (`sessions.workout_name`). */
+  workout: string;
+  label: string;
+  unit: Unit | null;
+  values: RowValues;
+};
 
 /** A world whose entries carry their stamps. An edit to the program afterwards leaves them alone. */
 export type World = ProtoWorld & { stamps: Record<number, Stamp> };
@@ -140,6 +148,7 @@ export function stamped(world: ProtoWorld): World {
     stamps[entry.n] = {
       text: prescribedText(draftItem(world, workout, item)),
       name: world.catalog[item.iid].name,
+      workout: workout.name,
       label: slot?.label ?? '',
       unit: unitOf(world, item),
       values: rowValues(world, item, entry.v),
@@ -223,15 +232,22 @@ function dayWorkout(
   for (const item of workout.items) {
     const draft = draftItem(world, workout, item);
     const mine = logged.filter((e) => e.iid === item.iid);
-    const count = TRACKING_TYPE_FIELDS[draft.trackingType].sets
-      ? Math.max(item.sets ?? 1, ...mine.map((e) => e.set))
-      : 1;
-    progress.total += count;
+    // Every prescribed set, plus each LOGGED set beyond them (`DayItem.rows`): an added set is a row
+    // only while it is logged, so a gap below a logged extra set is not a row and is not counted.
+    const prescribed = TRACKING_TYPE_FIELDS[draft.trackingType].sets ? (item.sets ?? 1) : 1;
+    const sets = [
+      ...Array.from({ length: prescribed }, (_, i) => i + 1),
+      ...mine
+        .map((e) => e.set)
+        .filter((set) => set > prescribed)
+        .sort((a, b) => a - b),
+    ];
+    progress.total += sets.length;
     progress.done += mine.length;
     const rows =
       showing === 'preview'
         ? []
-        : Array.from({ length: count }, (_, i) => i + 1)
+        : sets
             .map((set) => {
               const entry = mine.find((e) => e.set === set);
               return {
@@ -290,11 +306,16 @@ function dayWorkout(
   // carried only for a group that has an item showing: no rest for a superset that is not there.
   const groupSize = (group: string) => workout.items.filter((it) => it.ss === group).length;
   const shownGroups = new Set(items.map((it) => it.superset?.group));
+  // Where only logged rows show, the name is the one the session froze when its first row was
+  // logged (plan D7: the page and the export agree), so a later rename does not rewrite an old day.
+  const [firstLogged] = [...logged].sort((a, b) => a.n - b.n);
+  const frozenName =
+    showing === 'logged' && firstLogged ? stampOf(world, firstLogged).workout : null;
   return {
     programPublicId: fixtureIds.program(program.id),
     workoutPublicId: fixtureIds.workout(workout.wid),
     label: slot.label || null,
-    name: workout.name,
+    name: frozenName ?? workout.name,
     description: workout.desc || null,
     scheduled,
     progress,
@@ -310,8 +331,14 @@ function dayWorkout(
 export function dayPlan(world: World, athlete: string, day: string): DayPlan {
   const writable = isWritable(world, day);
   const future = day > world.today;
-  const on = onPrograms(world, athlete, day);
   const current = currentPrograms(world, athlete);
+  // One order for `programs` and for `workouts`: the programs the athlete is on this day, the
+  // current ones in their own order, then any they have since come off (`DayPlan.programs`).
+  const onThatDay = onPrograms(world, athlete, day);
+  const on = [
+    ...onThatDay.filter((a) => current.includes(a)),
+    ...onThatDay.filter((a) => !current.includes(a)),
+  ];
 
   // The athlete's program order, then each program's own week order. A label never sorts.
   const slots = on.flatMap((a) => {
