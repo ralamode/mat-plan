@@ -6,6 +6,7 @@ import {
   hasSetRows,
   ON_PROGRAM,
   type RowValues,
+  showsOnlyLogged,
   TRACKING_TYPE_FIELDS,
   type TrackingType,
   trackingTypeSchema,
@@ -95,7 +96,13 @@ export async function resolveDayPlan(
   // archived (`rowDayOpen`, the writer's own rule); else logged rows only.
   const writable = rowDayOpen(day, today, profile.archivedAt);
   const future = day > today;
-  const scheduledShowing: Showing = future ? 'preview' : writable ? 'all' : 'logged';
+  // `showsOnlyLogged` (C23) is the one spelling of "this day shows only what was logged", shared with
+  // the fixture builder and the day screen; a future day is checked inside it, so it previews.
+  const scheduledShowing: Showing = showsOnlyLogged({ writable, future })
+    ? 'logged'
+    : future
+      ? 'preview'
+      : 'all';
 
   // ── The live branch: assignments, then the day's week slots ─────────────────────────────────────
   const assignments = await dayAssignments(exec, scope, profile.id, { day, today });
