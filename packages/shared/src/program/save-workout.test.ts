@@ -5,7 +5,13 @@ import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import { heavyADraft, newWorkoutEmpty, WORKOUT_DRAFT_FIXTURES } from './fixtures';
 import { stamped, workoutDraft } from './fixtures/build';
 import { seedWorld } from './fixtures/world';
-import { hasSetRows, SET_TRACKING_TYPES, TRACKING_TYPE_FIELDS } from './pieces';
+import {
+  hasSetRows,
+  itemUnit,
+  SET_TRACKING_TYPES,
+  TRACKING_TYPE_FIELDS,
+  unitsForTrackingType,
+} from './pieces';
 import { saveWorkoutSchema, workoutDraftSchema, type WorkoutDraft } from './program-shapes';
 
 /**
@@ -13,10 +19,35 @@ import { saveWorkoutSchema, workoutDraftSchema, type WorkoutDraft } from './prog
  * its tracking type, and `workoutDraftSchema`, which the editor loads, does not.
  */
 
+/**
+ * What a card of this type carries so that it can be logged: a quantity in the type's slot, in a
+ * unit the type allows, with no target; nothing for a type with no quantity (a Check, Reps).
+ */
+const quantitiesFor = (trackingType: TrackingType): WorkoutDraft['items'][number]['quantities'] => {
+  const { slot } = TRACKING_TYPE_FIELDS[trackingType];
+  return slot === null ? [] : [{ slot, unit: unitsForTrackingType(trackingType)[0], value: null }];
+};
+
 /** Heavy A with one card, of this type and with this set count. */
 const withOne = (trackingType: TrackingType, sets: number | null): WorkoutDraft => ({
   ...heavyADraft,
-  items: [{ ...heavyADraft.items[0], trackingType, sets }],
+  items: [{ ...heavyADraft.items[0], trackingType, sets, quantities: quantitiesFor(trackingType) }],
+});
+
+/** The same card with these quantities, and the set count its type needs. */
+const withQuantities = (
+  trackingType: TrackingType,
+  quantities: WorkoutDraft['items'][number]['quantities'],
+): WorkoutDraft => ({
+  ...heavyADraft,
+  items: [
+    {
+      ...heavyADraft.items[0],
+      trackingType,
+      sets: hasSetRows(trackingType) ? 3 : null,
+      quantities,
+    },
+  ],
 });
 const saves = (draft: unknown) => saveWorkoutSchema.safeParse(draft).success;
 const loads = (draft: unknown) => workoutDraftSchema.safeParse(draft).success;
@@ -109,5 +140,96 @@ describe('the sets rule and the prototype’s data', () => {
     expect(items.length).toBeGreaterThan(20);
     expect(new Set(items.map((item) => item.trackingType)).size).toBe(TRACKING_TYPES.length);
     for (const draft of drafts) expect(saveWorkoutSchema.safeParse(draft).error).toBeUndefined();
+  });
+});
+
+/**
+ * The unit rule on save (FAM-1 contract change C16): an item whose type has a quantity names the
+ * unit it logs in. Without one `fillRowValues` refuses every number, so the item could be saved and
+ * never logged.
+ */
+describe('saveWorkoutSchema: the unit rule', () => {
+  /** The types whose unit comes from the prescription: a quantity slot and no fixed unit. */
+  const UNIT_FROM_PRESCRIPTION = TRACKING_TYPES.filter(
+    (type) => TRACKING_TYPE_FIELDS[type].slot !== null && TRACKING_TYPE_FIELDS[type].unit === null,
+  );
+  /** The types that log in one fixed unit, whatever the prescription holds. */
+  const FIXED_UNIT = TRACKING_TYPES.filter((type) => TRACKING_TYPE_FIELDS[type].unit !== null);
+  /** The types with nothing measured. */
+  const NO_QUANTITY = TRACKING_TYPES.filter((type) => TRACKING_TYPE_FIELDS[type].slot === null);
+
+  it('names the three kinds of type, so a new type has to be placed in one', () => {
+    expect(UNIT_FROM_PRESCRIPTION).toEqual([
+      TRACKING_TYPE.count,
+      TRACKING_TYPE.weight_reps,
+      TRACKING_TYPE.distance,
+    ]);
+    expect(FIXED_UNIT).toEqual([TRACKING_TYPE.duration, TRACKING_TYPE.time_sets]);
+    expect(NO_QUANTITY).toEqual([TRACKING_TYPE.check, TRACKING_TYPE.reps]);
+  });
+
+  it.each(UNIT_FROM_PRESCRIPTION)('%s: refused with no quantity at all', (type) => {
+    const parsed = saveWorkoutSchema.safeParse(withQuantities(type, []));
+    expect(parsed.success).toBe(false);
+    // On the card's quantities, so an editor can point at its unit select.
+    expect(parsed.error?.issues.map((issue) => issue.path)).toEqual([['items', 0, 'quantities']]);
+  });
+
+  it.each(UNIT_FROM_PRESCRIPTION)('%s: saved with a unit and no target', (type) => {
+    // "Log in this unit, no target" (plan D2): the unit is what the rule asks for, not a number.
+    const quantities = quantitiesFor(type);
+    expect(quantities[0]?.value).toBeNull();
+    expect(saves(withQuantities(type, quantities))).toBe(true);
+    expect(saves(withQuantities(type, [{ ...quantities[0], value: 20 }]))).toBe(true);
+  });
+
+  it.each(UNIT_FROM_PRESCRIPTION)('%s: a unit in another slot is not its unit', (type) => {
+    const { slot } = TRACKING_TYPE_FIELDS[type];
+    const other = slot === 'primary' ? 'distance' : 'primary';
+    const elsewhere = [{ slot: other, unit: unitsForTrackingType(type)[0], value: 5 }] as const;
+    expect(itemUnit(type, elsewhere)).toBeNull();
+    expect(saves(withQuantities(type, [...elsewhere]))).toBe(false);
+  });
+
+  it.each(FIXED_UNIT)('%s: saved with no quantity, since its unit is fixed', (type) => {
+    expect(itemUnit(type, [])).toBe(TRACKING_TYPE_FIELDS[type].unit);
+    expect(saves(withQuantities(type, []))).toBe(true);
+  });
+
+  it.each(NO_QUANTITY)('%s: saved with no quantity, since nothing is measured', (type) => {
+    expect(saves(withQuantities(type, []))).toBe(true);
+  });
+
+  it('agrees with itemUnit on every type: saved exactly when the item has a unit or needs none', () => {
+    for (const type of TRACKING_TYPES) {
+      for (const quantities of [[], quantitiesFor(type)]) {
+        const needsUnit = TRACKING_TYPE_FIELDS[type].slot !== null;
+        expect(saves(withQuantities(type, quantities))).toBe(
+          !needsUnit || itemUnit(type, quantities) !== null,
+        );
+      }
+    }
+  });
+
+  it('still loads such a card as a draft: the editor holds it until a unit is chosen', () => {
+    for (const type of UNIT_FROM_PRESCRIPTION) expect(loads(withQuantities(type, []))).toBe(true);
+  });
+
+  it('reports the unit beside a broken set count on the same card', () => {
+    const draft = withQuantities(TRACKING_TYPE.distance, []);
+    const broken = { ...draft, items: [{ ...draft.items[0], sets: null }] };
+    expect(saveWorkoutSchema.safeParse(broken).error?.issues.map((issue) => issue.path)).toEqual([
+      ['items', 0, 'sets'],
+      ['items', 0, 'quantities'],
+    ]);
+  });
+
+  it('every fixture, and every workout in the prototype world, already keeps the rule', () => {
+    for (const draft of Object.values(WORKOUT_DRAFT_FIXTURES)) {
+      for (const item of draft.items) {
+        if (TRACKING_TYPE_FIELDS[item.trackingType].slot === null) continue;
+        expect(itemUnit(item.trackingType, item.quantities), item.name).not.toBeNull();
+      }
+    }
   });
 });

@@ -12,6 +12,8 @@ import { hasControlChar } from '../text';
 import {
   athleteLabelSchema,
   hasSetRows,
+  itemUnit,
+  TRACKING_TYPE_FIELDS,
   nullableNoteSchema,
   prescribedQuantitiesSchema,
   programNameSchema,
@@ -89,7 +91,7 @@ export const workoutDraftSchema = z.object({
 export type WorkoutDraft = z.infer<typeof workoutDraftSchema>;
 
 /**
- * `saveWorkout`'s input: the same draft, held to two rules a loaded draft is not.
+ * `saveWorkout`'s input: the same draft, held to three rules a loaded draft is not.
  *
  * - **A name.** An empty name is refused here.
  * - **The sets rule.** Each item's `sets` is a whole number from 1 to `MAX_SETS_PER_MOVEMENT` when
@@ -97,9 +99,16 @@ export type WorkoutDraft = z.infer<typeof workoutDraftSchema>;
  *   Time per set, Distance), and `null` when it is not (Check, Count, Duration). A set-based item
  *   with no set count, or a set count on an item that has one row, is refused, with the issue on
  *   that item's `sets` (`['items', index, 'sets']`).
+ * - **The unit rule** (contract change C16). An item whose tracking type has a quantity
+ *   (`TRACKING_TYPE_FIELDS[type].slot`) logs in a unit: `itemUnit` must find one. A Duration and a
+ *   Time per set have a fixed unit, so they pass with no quantity. A Count, a Weight × reps and a
+ *   Distance take theirs from the prescription, so each carries a quantity in its type's slot,
+ *   with a target or with `value: null` ("log in this unit, no target", plan D2). One with none is
+ *   refused, with the issue on that item's `quantities` (`['items', index, 'quantities']`): the row
+ *   writer could store no ✓ for it, because `fillRowValues` refuses every number without a unit.
  *
- * `workoutDraftSchema` stays tolerant of both, because the editor loads a draft mid-edit: a card
- * whose type was just chosen has no set count yet. The rule is checked against the `trackingType`
+ * `workoutDraftSchema` stays tolerant of all three, because the editor loads a draft mid-edit: a card
+ * whose type was just chosen has no set count and no unit yet. The rule is checked against the `trackingType`
  * the draft carries, which is display; the writer still re-reads the item's real type and answers
  * `invalid` if the two disagree.
  */
@@ -108,14 +117,29 @@ export const saveWorkoutSchema = workoutDraftSchema
   .superRefine((draft, ctx) => {
     draft.items.forEach((item, index) => {
       const setBased = hasSetRows(item.trackingType);
-      if (setBased === (item.sets !== null)) return;
-      ctx.addIssue({
-        code: 'custom',
-        path: ['items', index, 'sets'],
-        message: setBased
-          ? 'an item logged set by set needs a set count'
-          : 'an item logged as one row has no set count',
-      });
+      if (setBased !== (item.sets !== null)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['items', index, 'sets'],
+          message: setBased
+            ? 'an item logged set by set needs a set count'
+            : 'an item logged as one row has no set count',
+        });
+      }
+      // C16. A type with a quantity logs in a unit: its own fixed one (a Duration is minutes) or the
+      // one its prescription names in that slot, target or no target. `itemUnit` is the lookup the
+      // row writer and the day's read make; with none, `fillRowValues` refuses every number, so
+      // the item could be saved and never logged.
+      if (
+        TRACKING_TYPE_FIELDS[item.trackingType].slot !== null &&
+        itemUnit(item.trackingType, item.quantities) === null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['items', index, 'quantities'],
+          message: 'an item with a quantity names its unit, even with no target',
+        });
+      }
     });
   });
 

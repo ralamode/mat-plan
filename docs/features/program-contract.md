@@ -129,6 +129,22 @@ refuses what the real action will. Every `WorkoutDraft` fixture and every workou
 prototype's world already keeps the rule (`save-workout.test.ts` holds that). The rule reads the
 `trackingType` the draft carries; the writer still checks the item's real type.
 
+### The unit rule on save
+
+`saveWorkoutSchema` also refuses an item that could be saved and never logged (contract change
+C16). `workoutDraftSchema` does not: a card whose type was just chosen has no unit yet.
+
+- A type with a quantity (`TRACKING_TYPE_FIELDS[type].slot`) must have a unit, as `itemUnit` finds
+  it: the type's fixed unit, or the unit of the prescribed quantity in the type's slot.
+- So a **Count**, a **Weight × reps** and a **Distance** item each carry a quantity in their slot.
+  Its `value` may be `null` ("log in this unit, no target"); the unit may not be missing.
+- A **Duration** and a **Time per set** have a fixed unit and pass with no quantity. A **Check** and
+  **Reps** measure nothing and pass with none.
+
+The issue is on the item's quantities (`['items', index, 'quantities']`), beside any `sets` issue on
+the same card. The rule does not check that the unit is one the type allows
+(`unitsForTrackingType`); the writer does that against the item's real type.
+
 ## Invariants
 
 1. 🔴 **A shape change goes through the contract owner, and the lanes reading it wait** (plan §4).
@@ -269,6 +285,12 @@ prototype's world already keeps the rule (`save-workout.test.ts` holds that). Th
     that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
     athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
     to list them as available.
+
+22. **An item that is saved can be logged** (`saveWorkoutSchema`, contract change C16). The save,
+    the row writer and the day's read ask one function, `itemUnit`, for the unit an item logs in.
+    The save refuses an item for which it answers `null` while the type has a quantity, so the row
+    writer never meets a prescription it can store no ✓ for. The workout editor asks for the unit
+    before Save (lane B, #493); the fake and the writer refuse the same draft with `invalid`.
 
 ## Traps
 
