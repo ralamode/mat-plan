@@ -17,6 +17,12 @@ export type ActionState = {
    */
   savedId?: string;
   /**
+   * V1-24 3b-life-b — set only by `logLifeActivitiesAction` when another practice already holds the day.
+   * The form keeps that refusal on screen while the row's Change is open _(maintainer, 2026-11-16)_:
+   * it names the minutes that were not saved, and the editor opens on the OTHER number.
+   */
+  dayTaken?: true;
+  /**
    * PROF-1 a-1d — the add form's duplicate WARNING. Set only by `addAthleteAction`, and only on the
    * `{ ok: false, error: null }` branch: a name that already exists is not an error the parent made,
    * so it carries no `error` string and no `fieldErrors`.

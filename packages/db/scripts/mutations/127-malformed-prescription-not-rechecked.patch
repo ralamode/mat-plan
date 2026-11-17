@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 72067a34..88f0a0ae 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -427,7 +427,6 @@ export async function logRow(
+     if (write.set > 1 && !hasSetRows(trackingType)) refuse(ROW_REFUSAL.bad_value);
+ 
+     // 10 — the values: the prescription fits its type, then the one fill rule.
+-    if (!fitsItsType(trackingType, quantities)) refuse(ROW_REFUSAL.bad_value);
+     const fields = TRACKING_TYPE_FIELDS[trackingType];
+     // The unit the item logs in: `itemUnit`, the one rule 12a's `DayItem.unit` also reads.
+     const unit = itemUnit(trackingType, quantities);

@@ -1209,7 +1209,9 @@ it did pre-V1-14a — that absence path is what CI and local dev exercise.
    - **no `server_action_form_data.*`** entries under Additional Data;
    - **no request body** (Request → Data) and **no local variables** on any stack frame (Sentry 11
      collects both by default; `SENTRY_DATA_COLLECTION` turns them off);
-   - no bodyweight value anywhere in the payload.
+   - no bodyweight value anywhere in the payload;
+   - **no athlete UUID** in the request URL, the transaction name or `contexts.nextjs` (each shows
+     `:id`); only a scope-miss event carries one, under `contexts.scope_miss`.
      If any of those appear, `lib/sentry-scrub.ts` is not running — treat it as a **security incident**,
      revoke the DSN, and rotate `CLERK_SECRET_KEY` (§ "Rotate a secret"). ⚠️ Said "rotate
      `ACCESS_GATE_PASSWORD`" until `AUTH-1` 1d; the credential a leaked payload would expose is now a
@@ -1437,8 +1439,9 @@ child:
 --       PGlite, never on production, so THIS is the check against real rows.)
 -- (f) FAM-1 4a-ii: a SESSION of ANOTHER household naming one of H's workouts. Step 9b would SET NULL
 --       its `workout_id` silently, and its `workout_name` (H's typed text) would stay on another
---       family's child's session, and from step 14 in their export. Step 11b's writer must refuse it
---       (owed, with a boundary test; no writer exists before 11b), so a row here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
+--       family's child's session, and from step 14 in their export. Step 11b's writer refuses it:
+--       `programBlockOfProfile` in the workout lookup, proved by `verify/day.ts` 4d and mutation
+--       111. So a row here is a defect: STOP, and with a correction clear BOTH `workout_id` and `workout_name` on
 --       that session (the pairing CHECK allows both NULL) before this procedure.
 --       SELECT s.id FROM sessions s
 --         JOIN profiles pr ON pr.id = s.profile_id
@@ -1450,6 +1453,8 @@ child:
 --       its superset's `prescription_group` (H's label) would stay. A defect for the same reason:
 --       STOP, and with a correction clear `prescription_id`, `prescribed_snapshot` and the superset's
 --       `prescription_group` on those rows; the decision is to keep none of H's text (A2 §8).
+--       Step 11b's writer refuses it: the prescription must be in the workout it names, and the
+--       workout in the profile's own household (`verify/day.ts` 6c and 4d, mutations 112 and 111).
 --       SELECT e.id FROM entries e
 --         JOIN profiles pr ON pr.id = e.profile_id
 --         JOIN prescriptions x ON x.id = e.prescription_id

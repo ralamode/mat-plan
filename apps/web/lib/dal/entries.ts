@@ -586,7 +586,7 @@ export async function bodyweightRowDay(args: {
 }
 
 /**
- * Clear ONE logged bodyweight: a blank Save on the day page (V1-24 3b-bw, plan W9). Thin over the
+ * Clear ONE logged bodyweight: a blank ✓ on the day page (V1-24 3b-bw, plan W9). Thin over the
  * single-sourced `clearBodyweight`, which locks the row, compares `seenValue` and hides it through
  * `hideEntries`.
  */

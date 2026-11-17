@@ -417,7 +417,7 @@ async function crossHouseholdWorkoutCopies(tx: VerifyTx): Promise<number[]> {
 }
 
 /** A template block in `scope`, through the real writer, read back by its client_id. */
-async function mkTemplateBlock(
+export async function mkTemplateBlock(
   exec: ReturnType<typeof asTx>,
   scope: VerifyContext['A_SCOPE'],
   slug: string,
@@ -1165,7 +1165,7 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
 // ── FAM-1 step 4a-ii ────────────────────────────────────────────────────────────────────────────────
 
 /** Sessions whose workout is in ANOTHER household than the session's profile (A2 §6). Runbook pre-flight (f). */
-async function sessionsOnForeignWorkouts(tx: VerifyTx): Promise<number[]> {
+export async function sessionsOnForeignWorkouts(tx: VerifyTx): Promise<number[]> {
   const res = await tx.execute(sql`
     SELECT s.id FROM sessions s
       JOIN profiles p ON p.id = s.profile_id
@@ -1176,7 +1176,7 @@ async function sessionsOnForeignWorkouts(tx: VerifyTx): Promise<number[]> {
 }
 
 /** Entries whose prescription is in ANOTHER household than the entry's profile (A3). Runbook pre-flight (g). */
-async function entriesOnForeignPrescriptions(tx: VerifyTx): Promise<number[]> {
+export async function entriesOnForeignPrescriptions(tx: VerifyTx): Promise<number[]> {
   const res = await tx.execute(sql`
     SELECT e.id FROM entries e
       JOIN profiles p ON p.id = e.profile_id
@@ -1187,7 +1187,7 @@ async function entriesOnForeignPrescriptions(tx: VerifyTx): Promise<number[]> {
 }
 
 /** Sessions naming a workout whose type is not `workout` (D6). Not a CHECK: A2 §6 does not authorize one. */
-async function workoutSessionsOfAnotherType(tx: VerifyTx): Promise<number[]> {
+export async function workoutSessionsOfAnotherType(tx: VerifyTx): Promise<number[]> {
   const rows = await tx
     .select({ id: schema.sessions.id })
     .from(schema.sessions)
@@ -1198,7 +1198,7 @@ async function workoutSessionsOfAnotherType(tx: VerifyTx): Promise<number[]> {
 }
 
 /** Sessions naming a workout that also carry a `day_role` (A2 §6: it stays NULL on a template session). */
-async function workoutSessionsWithADayRole(tx: VerifyTx): Promise<number[]> {
+export async function workoutSessionsWithADayRole(tx: VerifyTx): Promise<number[]> {
   const rows = await tx
     .select({ id: schema.sessions.id })
     .from(schema.sessions)
@@ -1583,7 +1583,7 @@ async function verifyStep4aii({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
  * the row arbiter cannot see. Hidden rows are NOT excluded: a hidden mismatch is still a defect.
  * Against production the same query is run by hand (read-only).
  */
-async function entriesOnAnotherWorkoutsPrescriptions(tx: VerifyTx): Promise<number[]> {
+export async function entriesOnAnotherWorkoutsPrescriptions(tx: VerifyTx): Promise<number[]> {
   const res = await tx.execute(sql`
     SELECT e.id FROM entries e
       JOIN sessions s ON s.id = e.session_id

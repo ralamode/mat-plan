@@ -1,80 +1,110 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./actions', () => ({ logLifeActivitiesAction: vi.fn() }));
+vi.mock('./actions', () => ({
+  logLifeActivitiesAction: vi.fn(async () => ({ ok: true, error: null })),
+}));
 
-import { ACTIVITY_TYPE_KEYS } from '@mat-plan/shared';
+import { PRACTICE_COPY } from '@/lib/constants';
 
-import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
-
-import { LifeForm } from './life-form';
+import { logLifeActivitiesAction } from './actions';
+import { PracticeForm } from './life-form';
 import { SingleValueLive } from './single-value-live';
 
-/**
- * COMPONENT TIER for the life buttons (`V1-9b` B1-2).
- *
- * 🔴 **The subject is the button's React KEY, which is not a style detail here — it is a lost-write
- * fix.** `LifeButton` holds its `client_id` in `useState`, so a key that does not change across a
- * day leaves the SAME instance — and the same id — mounted when the person navigates to another
- * day. The second tap then replays the first day's row and writes nothing, while the action reports
- * success.
- *
- * ⚠️ React identity is not directly observable from the DOM, so this asserts the consequence RTL can
- * see: re-rendering the same tree with a different `day` must produce a form whose hidden
- * `client_id` input has changed. That is exactly the property the bug violated.
- */
-const ACTIVITY = LIFE_ACTIVITIES.find((a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice)!;
-
-const clientIdOf = () =>
-  document.querySelector('input[name="clientId"]')?.getAttribute('value') ?? null;
-
+// COMPONENT TIER (RTL/jsdom). V1-24 3b-life-b: the typed practice row (plan B1–B5). Every expected
+// string comes from `PRACTICE_COPY`.
 afterEach(cleanup);
+beforeEach(() => vi.clearAllMocks());
 
-describe('LifeForm — the button’s identity', () => {
-  it('mints a DIFFERENT client_id for a different day', () => {
-    const { rerender } = render(
-      <SingleValueLive>
-        <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />
-      </SingleValueLive>,
-    );
-    const first = clientIdOf();
-    expect(first, 'the open button submits a client_id').not.toBeNull();
+const DAY = '2026-11-16';
+const renderForm = () =>
+  render(
+    <SingleValueLive>
+      <PracticeForm profileId="019826b4-0000-7000-8000-000000000001" day={DAY} />
+    </SingleValueLive>,
+  );
+const field = () => screen.getByLabelText(PRACTICE_COPY.fieldLabel) as HTMLInputElement;
+const tick = () => screen.getByRole('button', { name: PRACTICE_COPY.logLabel });
+const submit = async () => {
+  await act(async () => {
+    fireEvent.click(tick());
+  });
+};
+const postedClientId = (call: number) =>
+  (vi.mocked(logLifeActivitiesAction).mock.calls[call]![1] as FormData).get('clientId');
 
-    // The same tree, one day earlier — what pressing ‹ does.
-    rerender(
-      <SingleValueLive>
-        <LifeForm profileId="p1" day="2026-03-09" activities={[ACTIVITY]} />
-      </SingleValueLive>,
-    );
-    expect(
-      clientIdOf(),
-      'a day change must remount the button with a FRESH id — reusing it replays the other ' +
-        "day's row and writes nothing",
-    ).not.toBe(first);
+describe('PracticeForm — the typed row (3b-life-b)', () => {
+  it('a real label names the field (the label text is a tap target), with a numeric keypad', () => {
+    renderForm();
+    expect(field().getAttribute('inputmode')).toBe('numeric');
+    expect(field().value).toBe(''); // no prefill (maintainer, 2026-11-15)
+    expect(screen.getByText(PRACTICE_COPY.label).tagName).toBe('LABEL');
   });
 
-  it('mints a different client_id when a logged activity re-opens', () => {
-    const { rerender } = render(
-      <SingleValueLive>
-        <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />
-      </SingleValueLive>,
+  it.each([
+    ['empty', '', PRACTICE_COPY.blankLog.replace('✓', `✓${PRACTICE_COPY.logLabel}`)],
+    ['an hours-shaped 2', '2', PRACTICE_COPY.hoursNotMinutes('2')],
+    ['a decimal 1.5', '1.5', PRACTICE_COPY.hoursNotMinutes('1.5')],
+    ['above the ceiling', '301', PRACTICE_COPY.outOfRange],
+  ])('refuses %s before any request, with focus on the field', async (_what, typed, message) => {
+    renderForm();
+    fireEvent.change(field(), { target: { value: typed } });
+    await submit();
+    expect(logLifeActivitiesAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe(message);
+    expect(document.activeElement).toBe(field());
+    expect(field().value).toBe(typed); // controlled: the typed value survives
+  });
+
+  it('the ✓ is outline while empty and filled once a value waits to be sent (B3)', () => {
+    renderForm();
+    expect(tick().hasAttribute('data-ready')).toBe(false);
+    fireEvent.change(field(), { target: { value: '45' } });
+    expect(tick().hasAttribute('data-ready')).toBe(true);
+    fireEvent.change(field(), { target: { value: '  ' } });
+    expect(tick().hasAttribute('data-ready')).toBe(false);
+  });
+
+  it('posts the typed minutes, and a refusal mints a fresh client id for the next try (B4)', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.notSaved,
+    });
+    renderForm();
+    fireEvent.change(field(), { target: { value: '45' } });
+    await submit();
+    const sent = vi.mocked(logLifeActivitiesAction).mock.calls[0]![1] as FormData;
+    expect(sent.get('minutes')).toBe('45');
+    expect(screen.getByRole('alert').textContent).toBe(
+      PRACTICE_COPY.notSaved.replace('✓', `✓${PRACTICE_COPY.logLabel}`),
     );
-    const first = clientIdOf();
-    // Logged: `LifeSection` stops passing the activity, so the button unmounts.
-    rerender(
-      <SingleValueLive>
-        <LifeForm profileId="p1" day="2026-03-10" activities={[]} />
-      </SingleValueLive>,
-    );
-    expect(document.querySelector('form')).toBeNull();
-    // Re-opened (after a delete): a new instance, and it must NOT reuse the id the hidden row holds.
-    rerender(
-      <SingleValueLive>
-        <LifeForm profileId="p1" day="2026-03-10" activities={[ACTIVITY]} />
-      </SingleValueLive>,
-    );
-    expect(clientIdOf(), 'the re-opened button submits an id').not.toBeNull();
-    expect(clientIdOf()).not.toBe(first);
+    await submit();
+    expect(postedClientId(1)).not.toBe(postedClientId(0));
+  });
+
+  it('a success keeps the client id (a replay of the same write stays one write)', async () => {
+    vi.mocked(logLifeActivitiesAction)
+      .mockResolvedValueOnce({ ok: true, error: null })
+      .mockResolvedValueOnce({ ok: true, error: null });
+    renderForm();
+    fireEvent.change(field(), { target: { value: '45' } });
+    await submit();
+    await submit();
+    expect(postedClientId(1)).toBe(postedClientId(0));
+  });
+
+  it('a refusal the server puts on the field shows under it and hands focus back to it', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.outOfRange,
+      fieldErrors: { minutes: [PRACTICE_COPY.outOfRange] },
+    });
+    renderForm();
+    fireEvent.change(field(), { target: { value: '45' } });
+    field().blur(); // jsdom does not blur on click; a phone's tap does
+    await submit();
+    expect(screen.getByRole('alert').textContent).toBe(PRACTICE_COPY.outOfRange);
+    expect(document.activeElement).toBe(field());
   });
 });

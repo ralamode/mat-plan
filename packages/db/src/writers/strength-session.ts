@@ -16,7 +16,7 @@ import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
-import { insertEntrySetRows, type EntrySetRowInput } from './session-rows';
+import { insertEntrySetRows } from './session-rows';
 import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership';
 
 /**
@@ -66,6 +66,13 @@ async function reselectLiveByClientId(
   if (!row) throw new Error(`no live row for client_id ${clientId}`);
   return row;
 }
+
+/**
+ * A strength set as this writer takes it: the validated set, with `weight` optional as well as
+ * nullable, because direct callers (`db:verify`'s bare fixtures, a future importer) omit it. Mapped
+ * to `insertEntrySetRows`' quantities in `writeSessionStrengthEntry` (FAM-1 11b).
+ */
+type StrengthSetRow = Omit<StrengthSetInput, 'weight'> & { weight?: number | null };
 
 /**
  * A session movement with its catalog `movementId` already resolved (the caller owns
@@ -177,7 +184,7 @@ async function writeSessionStrengthEntry(
     day: string;
     clientId: string;
     // `weight` is optional here though the schema always emits it — direct callers omit it.
-    sets: readonly EntrySetRowInput[];
+    sets: readonly StrengthSetRow[];
     status?: MovementStatus;
     supersetId?: number | null;
     supersetOrder?: number | null;
@@ -233,7 +240,19 @@ async function writeSessionStrengthEntry(
     };
   }
 
-  await insertEntrySetRows(exec, { entryId: entry.id, unit: args.unit, sets: args.sets });
+  // FAM-1 11b: the set helper takes each set's quantities. A strength set's weight is its one PRIMARY
+  // quantity, in the movement's unit; a set with no weight (bodyweight, a band) has none. `=== null`
+  // alone is not enough: the schema emits `weight: null`, but a direct caller may omit the key.
+  await insertEntrySetRows(exec, {
+    entryId: entry.id,
+    sets: args.sets.map(({ weight, ...set }) => ({
+      ...set,
+      quantities:
+        weight === null || weight === undefined
+          ? []
+          : [{ slot: QUANTITY_SLOT.primary, unit: args.unit, value: weight }],
+    })),
+  });
 
   return { ...entry, created: true };
 }

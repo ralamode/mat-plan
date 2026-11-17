@@ -408,8 +408,11 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
 
   function changeUnit(card: EditorCard, unit: Unit) {
     const typed = card.value.trim();
-    updateCard(card.item.prescriptionClientId, { unit });
-    clearError(card.item.prescriptionClientId, 'value');
+    updateCard(card.item.prescriptionClientId, { unit, dropped: null });
+    // One write: the unit's refusal goes, and the number's too (its ceiling was the old unit's);
+    // Save reads the number again under the new unit.
+    const id = card.item.prescriptionClientId;
+    clearErrors((e) => !(e.card === id && (e.field === 'value' || e.field === 'unit')));
     quiet();
     if (typed && card.unit && card.unit !== unit && Number.isFinite(Number(typed))) {
       report(unitChangedText(card.item.itemName, Number(typed), card.unit, unit));
@@ -576,7 +579,11 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
                       else controls.current.delete(`${id}:${which}`);
                     }}
                     onChange={(field, value) => {
-                      updateCard(id, { [field]: value });
+                      // The first edit of the number ends the note about what it was.
+                      updateCard(
+                        id,
+                        field === 'value' ? { value, dropped: null } : { [field]: value },
+                      );
                       quiet();
                       clearError(id, field);
                     }}

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { ACTIVITY_TYPE_KEYS } from './catalog-activity-types';
 import { METRIC_DEFINITION_SEED_ROWS, METRIC_KEYS } from './catalog-metrics';
 import {
   editPracticeSchema,
   isPracticeMinutesInRange,
   parsePracticeMinutes,
+  practiceMinutesProblem,
+  logPracticeSchema,
   PRACTICE_AMEND_REFUSALS,
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
@@ -52,6 +55,36 @@ describe('practice-shapes — the contract (V1-24 3b-life)', () => {
     for (const shared of ['bad_value', 'closed_day', 'not_found'] as const) {
       expect(ROW_REFUSALS).toContain(shared);
       expect(PRACTICE_AMEND_REFUSALS).toContain(shared);
+    }
+  });
+
+  it('classifies a typed entry the same way for the form and the action (3b-life-b B2)', () => {
+    expect(practiceMinutesProblem('  ')).toBe('blank');
+    for (const t of ['1', '2', '9', '1.5', '1,5', '1:30', '9.5']) {
+      expect(practiceMinutesProblem(t)).toBe('hours');
+    }
+    // A decimal whose whole part is 10 or more is plainly minutes (maintainer, 2026-11-16).
+    for (const t of ['0', '301', 'abc', '-45', '1e2', '90.5', '45,5', '12:30', '10.5']) {
+      expect(practiceMinutesProblem(t)).toBe('range');
+    }
+    for (const t of ['10', ' 90 ', '300']) expect(practiceMinutesProblem(t)).toBeNull();
+  });
+
+  it('the log schema takes whole minutes in range and refuses the rest', () => {
+    const base = {
+      activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice,
+      profileId: ID,
+      clientId: ID,
+      day: '2026-11-16',
+    };
+    // The trust boundary: only practice; Wake is refused by the schema itself.
+    expect(
+      logPracticeSchema.safeParse({ ...base, activityKey: ACTIVITY_TYPE_KEYS.wake, minutes: '45' })
+        .success,
+    ).toBe(false);
+    expect(logPracticeSchema.parse({ ...base, minutes: '45' }).minutes).toBe(45);
+    for (const minutes of ['', '9', '301', undefined, 45]) {
+      expect(logPracticeSchema.safeParse({ ...base, minutes }).success).toBe(false);
     }
   });
 });

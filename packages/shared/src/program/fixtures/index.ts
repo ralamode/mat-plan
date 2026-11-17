@@ -9,6 +9,7 @@ import {
   programOf,
   programView,
   stamped,
+  type World,
   workoutDraft,
   workoutOf,
 } from './build';
@@ -40,6 +41,17 @@ import {
 
 export { FIXTURE_SWITCH_DAY, FIXTURE_TODAY } from './world';
 export { FIXTURE_ITEM_KEYS, fixtureIds, type FixtureItemKey } from './ids';
+// For a data lane's proof that seeds a fixture's world (C17): the world's types and the helpers
+// that read it. `workoutDraft` gives a workout in the contract's own shape, ready for the writer.
+export { programOf, type Stamp, type World, workoutDraft, workoutOf } from './build';
+export type {
+  ProtoEntry,
+  ProtoItem,
+  ProtoProgram,
+  ProtoValues,
+  ProtoWorkout,
+  ProtoWorld,
+} from './world';
 
 function deepFreeze<T>(value: T): T {
   if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
@@ -69,20 +81,75 @@ export const FIXTURE_ITEMS = deepFreeze(
 
 // ── DayPlan ─────────────────────────────────────────────────────────────────────────────────────
 
-/** "Athlete One · today, on two programs": Saturday, three workouts and the evening stretch. */
-export const todayTwoPrograms: DayPlan = deepFreeze(dayPlan(seeded, 'a1', FIXTURE_TODAY));
+/**
+ * What a `DayPlan` fixture was built from (contract change C17): the world, whose day, and for
+ * whom. **The fixtures below are built from these**, so the two cannot differ.
+ *
+ * A data lane's proof seeds `world` (its programs through the real writers, with `workoutDraft`
+ * for each workout in the contract's own shape; its entries with the frozen `stamps`), runs its
+ * query for `athlete` on `day` with `world.today` as today, and asserts the result deep-equals the
+ * fixture of the same name: through step 0c's normalizer, or, stricter, with every id compared
+ * exactly through a fixture-id to public-id map the proof's own seeder returns.
+ *
+ * `before` is the world before a change, for a fixture that describes "logged, then something
+ * changed" (a program edited, the athlete's programs reordered, or the athlete archived), and
+ * `null` otherwise. A proof
+ * seeds `before`, logs its entries, then makes the change with the real writers and so reaches
+ * `world`. `world`'s entries are `before`'s, stamps included.
+ *
+ * ⚠️ `assign[...].to` is the first day OFF the program (the prototype's rule); the database's
+ * `active_to` is the inclusive last day, so `to` minus one.
+ */
+export type DayPlanFixtureSource = {
+  world: World;
+  athlete: string;
+  day: string;
+  before: World | null;
+};
 
-/** "Athlete One · yesterday, half done": Heavy A has two of four sets logged on its first superset. */
-export const yesterdayHalfDone: DayPlan = deepFreeze(dayPlan(seeded, 'a1', YESTERDAY));
+const from = (
+  world: World,
+  athlete: string,
+  day: string,
+  before: World | null = null,
+): DayPlanFixtureSource => ({ world, athlete, day, before });
 
-/** "Sunday": today is Sunday Nov 15. A rest day on the Family program; Stretching only. */
-export const sundayRestStretchOnly: DayPlan = deepFreeze(
-  dayPlan({ ...seeded, today: '2026-11-15' }, 'a1', '2026-11-15'),
-);
+/** The world of `closed-day-program-since-left`, before Morning habits was renamed. */
+function sinceLeftWorld(): World {
+  const world = seedWorld();
+  return stamped({
+    ...world,
+    assign: {
+      ...world.assign,
+      // Listed FIRST, though they have come off it: the order below must not follow this array.
+      a1: [{ prog: 'p3', from: FIXTURE_SWITCH_DAY, to: '2026-11-13' }, ...(world.assign.a1 ?? [])],
+    },
+    entries: [
+      ...world.entries,
+      // Logged before the Family program's row that day, so log order is not the page's order either.
+      {
+        n: 951,
+        ath: 'a1',
+        day: SINCE_LEFT_DAY,
+        prog: 'p3',
+        wid: 'w6',
+        iid: 'plank',
+        set: 1,
+        v: { sec: 30 },
+      },
+      { n: 952, ath: 'a1', day: SINCE_LEFT_DAY, prog: 'p1', wid: 'w1', iid: 'grip', set: 1, v: {} },
+    ],
+  });
+}
+/** A Tuesday four days back: closed, and before Stretching started. */
+const SINCE_LEFT_DAY = '2026-11-10';
+const sinceLeftBefore = sinceLeftWorld();
 
-/** "A new athlete, not on a program yet": a new test family with one athlete and no programs. */
-export const noProgram: DayPlan = deepFreeze(
-  dayPlan(
+export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
+  'today-two-programs': from(seeded, 'a1', FIXTURE_TODAY),
+  'yesterday-half-done': from(seeded, 'a1', YESTERDAY),
+  'sunday-rest-stretch-only': from({ ...seeded, today: '2026-11-15' }, 'a1', '2026-11-15'),
+  'no-program': from(
     stamped({
       today: FIXTURE_TODAY,
       athletes: [{ id: 'a9', name: 'Test Athlete' }],
@@ -94,53 +161,18 @@ export const noProgram: DayPlan = deepFreeze(
     'a9',
     FIXTURE_TODAY,
   ),
-);
-
-/**
- * The same day with Athlete One's programs in the other order: Stretching, then the Family program.
- * The evening stretch comes first, ahead of the workout labelled Morning, because order is the
- * athlete's and a label never sorts (plan D8). The prototype reaches it from "the order of their
- * programs", by moving Stretching up.
- */
-export const todayStretchingFirst: DayPlan = deepFreeze(
-  dayPlan(
+  'not-on-a-program-that-day': from(seeded, 'a1', '2026-11-08'),
+  'today-stretching-first': from(
     edit(seeded, (world) => {
       world.assign.a1?.reverse();
     }),
     'a1',
     FIXTURE_TODAY,
+    seeded,
   ),
-);
-
-/**
- * Tomorrow, the nearest future day: read-only, always (plan D32). It is a Sunday, so only the
- * evening stretch is coming up.
- */
-export const tomorrowReadOnly: DayPlan = deepFreeze(
-  dayPlan(seeded, 'a1', addDays(FIXTURE_TODAY, 1)),
-);
-
-/**
- * "Not on a program on this day": Athlete One on the Sunday before the Family program started.
- * No "Jump to…" entry opens it; paging back from today reaches it.
- */
-export const notOnAProgramThatDay: DayPlan = deepFreeze(dayPlan(seeded, 'a1', '2026-11-08'));
-
-/**
- * Heavy A with nothing logged, so both supersets show every row and their rest: Athlete Two's
- * yesterday (a Friday), on the Family program alone. No "Jump to…" entry opens it; switching to
- * Athlete Two on yesterday does.
- */
-export const heavyASupersets: DayPlan = deepFreeze(dayPlan(seeded, 'a2', YESTERDAY));
-
-/**
- * "Yesterday, after the program was edited": the prototype's `edited` jump. After yesterday was
- * logged, Heavy A's bench went to 3 sets at 30 lb and lost Pull-up, and Morning habits' Push-ups went
- * to 2 sets. A logged row keeps what it was logged against; the third logged Push-ups set still
- * shows; Pull-up shows its logged rows as removed; the bench's unlogged third set shows the edit.
- */
-export const yesterdayEditedAfterLogging: DayPlan = deepFreeze(
-  dayPlan(
+  'tomorrow-read-only': from(seeded, 'a1', addDays(FIXTURE_TODAY, 1)),
+  'heavy-a-supersets': from(seeded, 'a2', YESTERDAY),
+  'yesterday-edited-after-logging': from(
     edit(seeded, (world) => {
       const heavyA = workoutOf(programOf(world, 'p1'), 'w2');
       heavyA.items = heavyA.items.filter((item) => item.iid !== 'pullup');
@@ -154,31 +186,127 @@ export const yesterdayEditedAfterLogging: DayPlan = deepFreeze(
     }),
     'a1',
     YESTERDAY,
+    seeded,
   ),
-);
-
-/**
- * Heavy A was taken off Fridays after yesterday (a Friday) was logged. It still shows on that day,
- * after the scheduled workouts, with its logged rows only and `scheduled: false`. Its second
- * superset has no row logged, so neither its items nor its rest are here. The prototype renders
- * this state but has no "Jump to…" entry for it.
- */
-export const workoutLeftTheWeek: DayPlan = deepFreeze(
-  dayPlan(
+  'workout-left-the-week': from(
     edit(seeded, (world) => {
       const week = programOf(world, 'p1').week;
       week[5] = week[5].filter((slot) => slot.wid !== 'w2');
     }),
     'a1',
     YESTERDAY,
+    seeded,
   ),
-);
+  'closed-day-logged-only': from(seeded, 'a1', '2026-11-11'),
+  'closed-day-program-since-left': from(
+    edit(sinceLeftBefore, (world) => {
+      workoutOf(programOf(world, 'p1'), 'w1').name = 'Morning routine';
+    }),
+    'a1',
+    SINCE_LEFT_DAY,
+    sinceLeftBefore,
+  ),
+  'archived-athlete-today': from(
+    edit(seeded, (world) => {
+      for (const athlete of world.athletes) if (athlete.id === 'a1') athlete.archived = true;
+    }),
+    'a1',
+    FIXTURE_TODAY,
+    seeded,
+  ),
+  'future-preview': from(seeded, 'a1', '2026-11-16'),
+  'every-type-once': from(everyTypeWorld(), 'a1', FIXTURE_TODAY),
+} satisfies Record<string, DayPlanFixtureSource>);
+
+const built = (name: keyof typeof DAY_PLAN_FIXTURE_SOURCES): DayPlan => {
+  const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
+  return deepFreeze(dayPlan(world, athlete, day));
+};
+
+/** "Athlete One · today, on two programs": Saturday, three workouts and the evening stretch. */
+export const todayTwoPrograms: DayPlan = built('today-two-programs');
+
+/** "Athlete One · yesterday, half done": Heavy A has two of four sets logged on its first superset. */
+export const yesterdayHalfDone: DayPlan = built('yesterday-half-done');
+
+/** "Sunday": today is Sunday Nov 15. A rest day on the Family program; Stretching only. */
+export const sundayRestStretchOnly: DayPlan = built('sunday-rest-stretch-only');
+
+/** "A new athlete, not on a program yet": a new test family with one athlete and no programs. */
+export const noProgram: DayPlan = built('no-program');
+
+/**
+ * The same day with Athlete One's programs in the other order: Stretching, then the Family program.
+ * The evening stretch comes first, ahead of the workout labelled Morning, because order is the
+ * athlete's and a label never sorts (plan D8). The prototype reaches it from "the order of their
+ * programs", by moving Stretching up.
+ */
+export const todayStretchingFirst: DayPlan = built('today-stretching-first');
+
+/**
+ * Tomorrow, the nearest future day: read-only, always (plan D32). It is a Sunday, so only the
+ * evening stretch is coming up.
+ */
+export const tomorrowReadOnly: DayPlan = built('tomorrow-read-only');
+
+/**
+ * "Not on a program on this day": Athlete One on the Sunday before the Family program started.
+ * No "Jump to…" entry opens it; paging back from today reaches it.
+ */
+export const notOnAProgramThatDay: DayPlan = built('not-on-a-program-that-day');
+
+/**
+ * Heavy A with nothing logged, so both supersets show every row and their rest: Athlete Two's
+ * yesterday (a Friday), on the Family program alone. No "Jump to…" entry opens it; switching to
+ * Athlete Two on yesterday does.
+ */
+export const heavyASupersets: DayPlan = built('heavy-a-supersets');
+
+/**
+ * "Yesterday, after the program was edited": the prototype's `edited` jump. After yesterday was
+ * logged, Heavy A's bench went to 3 sets at 30 lb and lost Pull-up, and Morning habits' Push-ups went
+ * to 2 sets. A logged row keeps what it was logged against; the third logged Push-ups set still
+ * shows; Pull-up shows its logged rows as removed; the bench's unlogged third set shows the edit.
+ */
+export const yesterdayEditedAfterLogging: DayPlan = built('yesterday-edited-after-logging');
+
+/**
+ * Heavy A was taken off Fridays after yesterday (a Friday) was logged. It still shows on that day,
+ * after the scheduled workouts, with its logged rows only, `scheduled: false`, and **no label**:
+ * the label was its slot's heading and the slot is gone _(maintainer, 2026-11-17: "No label")_.
+ * This is the one place a fixture differs from the prototype's own state, which shows the label
+ * the slot had. Its second
+ * superset has no row logged, so neither its items nor its rest are here. The prototype renders
+ * this state but has no "Jump to…" entry for it.
+ */
+export const workoutLeftTheWeek: DayPlan = built('workout-left-the-week');
 
 /** "Athlete One · Nov 11 (closed day)": read-only, logged rows only. */
-export const closedDayLoggedOnly: DayPlan = deepFreeze(dayPlan(seeded, 'a1', '2026-11-11'));
+export const closedDayLoggedOnly: DayPlan = built('closed-day-logged-only');
+
+/**
+ * A closed Tuesday on which Athlete One was on two programs, one of which they have since come
+ * off, and after which Morning habits was renamed. NOT a prototype state (C17): it is here for two
+ * rules no prototype state reaches.
+ *
+ * - **`programs`, and so `workouts`, list the current programs first** and a program since left
+ *   after them, with `order: null`. The assignment list holds the left program first, and its row
+ *   was logged first, so neither of those orders is the page's.
+ * - **A closed day shows the workout's name as it was when logged** ("Morning habits"), not the
+ *   name it has now ("Morning routine").
+ */
+export const closedDayProgramSinceLeft: DayPlan = built('closed-day-program-since-left');
+
+/**
+ * Athlete One's today after they were archived: the same day as `today-two-programs`, read like a
+ * closed day. NOT a prototype state (C18). The row writer refuses an archived athlete, so their
+ * day is never writable _(maintainer, 2026-11-17: "Like a closed day")_: only what they logged
+ * shows, with no PREVIOUS, and the workouts they did not log are absent.
+ */
+export const archivedAthleteToday: DayPlan = built('archived-athlete-today');
 
 /** "Athlete One · look ahead to Monday": a future day. Items and prescriptions, no rows. */
-export const futurePreview: DayPlan = deepFreeze(dayPlan(seeded, 'a1', '2026-11-16'));
+export const futurePreview: DayPlan = built('future-preview');
 
 /**
  * One item of each tracking type, in `TRACKING_TYPES` order, each with its first row logged as
@@ -186,7 +314,7 @@ export const futurePreview: DayPlan = deepFreeze(dayPlan(seeded, 'a1', '2026-11-
  * prescriptions and instructions are the prototype's, put in one workout of a program with no
  * earlier history, so every type's prescribed text, unit and logged row is in one small fixture.
  */
-export const everyTypeOnce: DayPlan = deepFreeze(dayPlan(everyTypeWorld(), 'a1', FIXTURE_TODAY));
+export const everyTypeOnce: DayPlan = built('every-type-once');
 
 function everyTypeWorld() {
   const family = baseProgram();
@@ -326,9 +454,11 @@ export const DAY_PLAN_FIXTURES = {
   'yesterday-edited-after-logging': yesterdayEditedAfterLogging,
   'workout-left-the-week': workoutLeftTheWeek,
   'closed-day-logged-only': closedDayLoggedOnly,
+  'closed-day-program-since-left': closedDayProgramSinceLeft,
+  'archived-athlete-today': archivedAthleteToday,
   'future-preview': futurePreview,
   'every-type-once': everyTypeOnce,
-} as const satisfies Record<string, DayPlan>;
+} as const satisfies Record<keyof typeof DAY_PLAN_FIXTURE_SOURCES, DayPlan>;
 
 export const WORKOUT_DRAFT_FIXTURES = {
   'heavy-a-draft': heavyADraft,

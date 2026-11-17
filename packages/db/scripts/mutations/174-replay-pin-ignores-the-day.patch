@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 4f96cfb1..be8903d7 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -100,7 +100,6 @@ async function rowTransaction(
+ export function programRowOf(profileId: number, day: string) {
+   return and(
+     eq(schema.entries.profileId, profileId),
+-    eq(schema.entries.activityDate, day),
+     isNotNull(schema.entries.prescriptionSet),
+   );
+ }

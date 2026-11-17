@@ -295,8 +295,9 @@ const SCHEMA_MISSING_CODES = new Set(['42P01', '42703']);
  * mis-classification. A test must therefore be built on a REAL wrapped error, not a fabricated
  * `{ code }`, or it passes while production is down.
  *
- * This is the repo's first pg-error-code check: TEN-2d deleted the only other one, and
- * `isUniqueViolationOn` was never written. Later ones should follow this shape.
+ * This is the repo's first pg-error-code check: TEN-2d deleted the only other one. A unique
+ * violation is matched by `isUniqueViolationOn` (`packages/db/src/writers/unique-violation.ts`, FAM-1
+ * 11b), which reads the code the same way. Later ones should follow this shape.
  */
 function isSchemaMissing(error: unknown): boolean {
   const e = error as { cause?: { code?: unknown }; code?: unknown } | null;
@@ -597,9 +598,9 @@ type ScopeMissEvent = Required<{
  * ## Who consumes it
  *
  * `docs/runbooks.md` → "A cross-household scope miss" carries the alert rule. The ADR justifies the
- * event as what makes rate-limiting id probing possible; `lib/rate-limit.ts` deliberately does not
- * limit the mutating actions yet, so **the limiter is AUTH-1's** (it re-keys from IP to user id) and
- * the alert is the consumer today.
+ * event as what makes rate-limiting id probing possible. Every mutating action is rate-limited per
+ * signed-in user (`enterMutation` in `app/p/mutation-entry.ts` calls `checkMutationLimit`), but **no
+ * limiter reads this event**: the alert is its only consumer today.
  */
 export async function reportScopeMiss(args: ScopeMissArgs): Promise<void> {
   try {
