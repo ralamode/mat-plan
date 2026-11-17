@@ -1,0 +1,30 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index 61e60d91..114b7fa2 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -119,12 +119,6 @@ export async function saveWeek(
+     // Hidden first: a gone slot frees its place (`uq_block_day_workouts_slot`) for a slot added or
+     // moved there in this save. (Its once-a-day key is never reused in the same save: a gone key and
+     // an added one differ by construction.)
+-    if (gone.length > 0) {
+-      await tx
+-        .update(schema.blockDayWorkouts)
+-        .set({ deletedAt: sql`now()` })
+-        .where(inArray(schema.blockDayWorkouts.id, gone));
+-    }
+     if (moved.length > 0) {
+       await shiftIntoBand(
+         tx,
+@@ -149,6 +143,12 @@ export async function saveWeek(
+         .insert(schema.blockDayWorkouts)
+         .values(added.map((slot) => ({ blockId: block.id, ...slot })));
+     }
++    if (gone.length > 0) {
++      await tx
++        .update(schema.blockDayWorkouts)
++        .set({ deletedAt: sql`now()` })
++        .where(inArray(schema.blockDayWorkouts.id, gone));
++    }
+     return { ok: true };
+   });
+ }
