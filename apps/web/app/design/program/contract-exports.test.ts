@@ -30,6 +30,8 @@ import {
   heavyADraft,
   heavyASupersets,
   programsList,
+  programView,
+  DAY_PLAN_FIXTURE_SOURCES,
 } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
@@ -75,6 +77,13 @@ describe('the builder’s named types and constants', () => {
       Record<Weekday, Array<{ wid: string }>>
     >();
     const days: WeekDraft['days'] = emptyWeek();
+    expect(Object.keys(days)).toHaveLength(7);
+  });
+
+  it('gets a program page from a fixture world, with a week saveWeek takes (C27)', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'];
+    expectTypeOf(programView).returns.toEqualTypeOf<ProgramView>();
+    const days: WeekDraft['days'] = programView(world, 'p1').week;
     expect(Object.keys(days)).toHaveLength(7);
   });
 
