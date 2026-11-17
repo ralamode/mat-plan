@@ -66,6 +66,10 @@ export * from './writers/day';
 // FAM-1 12a: the day resolver, for step 12b's DAL. By NAME, never `export *` from `queries/day`
 // (E7): its other modules take internal ids the caller must already have proved owned.
 export { resolveDayPlan, type ResolvedDayPlan } from './queries/day';
+// FAM-1 lane P (6a-ii; the board's seam turn): the program writers behind ProgramActions and the
+// builder's reads, each through the lane's own barrel, so the lane's helpers stay in the package.
+export * from './writers/program';
+export * from './queries/program';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
 // tooling (e.g. the ephemeral screenshot fixture) can target the seeded profile by
 // its stable id instead of re-typing the UUID (constants convention, single source).

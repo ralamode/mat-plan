@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index d5874bce..a0714fc0 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -133,7 +133,6 @@ export async function saveWorkout(
+         deletedAt: schema.workouts.deletedAt,
+       })
+       .from(schema.workouts)
+-      .where(eq(schema.workouts.blockId, block.id))
+       .orderBy(asc(schema.workouts.id))
+       .for('no key update');
+     // A new workout's replay is found by its client id; an existing one by its public id.

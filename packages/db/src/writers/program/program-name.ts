@@ -7,6 +7,7 @@ import { PROGRAM_BLOCK_SLUG_UNIQUE_INDEX } from '../../schema';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { liveTemplateBlockIn, programBlockInHousehold } from '../ownership';
+import { isUniqueViolationOn } from '../unique-violation';
 
 /**
  * The rules `createProgram` and `renameProgram` share (FAM-1 plan D5, D9), written once.
@@ -21,7 +22,8 @@ import { liveTemplateBlockIn, programBlockInHousehold } from '../ownership';
  *   miss the replay lookup, the first inserts) must not be told its own program's name is taken;
  *   it falls through and the re-read returns that program (`createProfile`'s `excludeClientId`,
  *   for the same reason). A plain `!==` is safe: every template block has a `client_id`
- *   (`program_blocks_template_client_id_check`). Not yet staged: the proxy technique in
+ *   (`program_blocks_template_client_id_check`), once `createProgram` lower-cases its client id
+ *   (Postgres returns uuids in lower case), which is unproven for the same reason. Not yet staged: the proxy technique in
  *   `verify/program.ts` would do it, hooked on the name read (a twin under this `clientId`).
  * - **Template blocks only** ({@link liveTemplateBlockIn}): the seeded (legacy) block is not on the
  *   Programs list, so its name is not taken. Its slug still is: {@link freeProgramSlug}.
@@ -127,10 +129,7 @@ export async function lostSlugRace(
     });
     return false;
   } catch (e) {
-    // `hide.ts`'s `isBodyweightSlotConflict` shape: drizzle wraps the driver error in `cause`.
-    const cause = (e as { cause?: unknown })?.cause ?? e;
-    const { code, constraint } = (cause ?? {}) as { code?: string; constraint?: string };
-    if (code === '23505' && constraint === PROGRAM_BLOCK_SLUG_UNIQUE_INDEX) return true;
+    if (isUniqueViolationOn(e, PROGRAM_BLOCK_SLUG_UNIQUE_INDEX)) return true;
     throw e;
   }
 }

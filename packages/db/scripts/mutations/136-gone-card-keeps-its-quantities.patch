@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index d5874bce..0e0a6379 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -219,7 +219,7 @@ export async function saveWorkout(
+     if (gone.length > 0) {
+       await tx
+         .update(schema.prescriptionQuantities)
+-        .set({ deletedAt: sql`now()` })
++        .set({ updatedAt: sql`now()` })
+         .where(
+           and(
+             inArray(schema.prescriptionQuantities.prescriptionId, gone),
