@@ -1,13 +1,16 @@
 diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
-index e2478779..bea889ed 100644
+index 04664711..564c0287 100644
 --- a/packages/db/src/writers/hide.ts
 +++ b/packages/db/src/writers/hide.ts
-@@ -578,7 +578,7 @@ export async function clearDay(
+@@ -586,7 +586,10 @@ export async function clearDay(
        }
        hiddenAt = hidden.hiddenAt;
      } else {
 -      const replayed = await newestToken(tx, clearEvent);
-+      const replayed = await newestToken(tx, eq(schema.entries.hideReason, HIDE_REASON.clear_day));
++      const replayed = await newestToken(
++        tx,
++        and(eq(schema.entries.activityDate, args.day), eq(schema.entries.hideReason, HIDE_REASON.clear_day))!,
++      );
        if (replayed === null) return { notFound: true };
        hiddenAt = replayed;
      }
