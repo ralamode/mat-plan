@@ -1,5 +1,5 @@
 import { addDays, isoDayDiff } from '@mat-plan/shared';
-import { athletePath } from '@/lib/constants';
+import { athletePath, TICK_FOCUS_CLASS } from '@/lib/constants';
 import Link from 'next/link';
 
 import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
@@ -8,8 +8,10 @@ import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
  * The date line, and the controls that move it (V1-15).
  *
  * **This REPLACES the header's `<p>Today · {date}</p>`** — it does not sit beside it. The date has
- * exactly one home, and `formatDayLong` vs `formatDayShort` is chosen by `dayLine`: the long
- * form is ~240px and does not fit beside two 44px arrows inside the 328px available at 360px.
+ * exactly one home, and `formatDayLong` vs `formatDayShort` is chosen by `dayLine`. Off today the
+ * short form ("Yesterday · Mon, Nov 16", ~160px) fits the 224px between the arrows at 360px. Today
+ * keeps the long form (~250px), which wraps to two 20px lines there: inside the 44px row, so
+ * nothing moves, and the full date is worth the second line on the day it is logged.
  *
  * A server component — two `<Link>`s and seven more, no client JS. Paging is a navigation, not a
  * fetch, which is also the cheapest answer to "don't hammer the API": one render per tap, and the
@@ -127,11 +129,15 @@ export function DayNav({
               {reachable ? (
                 <Link
                   href={href(d)}
-                  aria-current={isViewed ? 'date' : undefined}
+                  // `true`, not `date`: "the current date" read on the viewed day contradicted the
+                  // ", today" on today's cell once look-ahead put them apart (12c review).
+                  aria-current={isViewed ? 'true' : undefined}
                   aria-label={d === today ? `${formatDayLong(d)}, today` : formatDayLong(d)}
-                  className={`focus-visible:ring-ring flex min-h-11 items-center justify-center rounded-md border text-sm outline-none focus-visible:ring-2 ${
+                  className={`${TICK_FOCUS_CLASS} flex min-h-11 items-center justify-center rounded-md border text-sm ${
                     isViewed
-                      ? 'bg-secondary text-secondary-foreground border-transparent font-medium'
+                      ? // The athlete switcher's mark for "current", one row up: the viewed day is
+                        // the strongest mark in the strip, today's underline the second.
+                        'bg-primary text-primary-foreground border-primary font-medium'
                       : 'border-input hover:bg-accent'
                   } ${
                     // Today, marked by more than colour: once look-ahead reaches past it, it is no
@@ -188,7 +194,7 @@ function DayArrow({ to, label, glyph }: { to: string | null; label: string; glyp
       href={to}
       prefetch={false}
       aria-label={label}
-      className={`focus-visible:ring-ring hover:bg-accent border-input outline-none focus-visible:ring-2 ${base}`}
+      className={`${TICK_FOCUS_CLASS} hover:bg-accent border-input ${base}`}
     >
       {glyph}
     </Link>

@@ -1,11 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { ON_PROGRAM } from '@mat-plan/shared';
-
 import { AthleteSwitcher } from '@/components/day/athlete-switcher';
 import { PROGRAM_COPY } from '@/components/day/day-copy';
 import { DayScreen } from '@/components/day/day-screen';
+import { dayPageView, lookAheadFallsBack } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
 import { AppShell } from '@/components/layout/app-shell';
@@ -89,7 +88,7 @@ export default async function TodayPage({
   let plan = await getDayPlan({ profilePublicId: profile.id, day, today });
   // Look-ahead goes forward only while the athlete is on a program (plan §9): any other future day
   // renders today, as every future day did before 12c.
-  if (day !== today && plan?.future && plan.onProgram !== ON_PROGRAM.yes) {
+  if (plan && lookAheadFallsBack(plan)) {
     day = today;
     plan = await getDayPlan({ profilePublicId: profile.id, day, today });
   }
@@ -125,6 +124,10 @@ export default async function TodayPage({
   const lifeKeys = buildRoutineBlocks(profile.routine.order).flatMap((block) =>
     block.kind === 'life' ? block.keys : [],
   );
+
+  // What shows around the screen: the one state notice, the sections, the screen itself (tested in
+  // `day-notices.test.ts`).
+  const view = dayPageView(plan, { future, showClosedNotice, archived: profile.archived });
 
   // The day screen's writes (FAM-1 12b's Server Actions). Change (`amendRow`) arrives at 12d and
   // Program order (`reorderPrograms`) at 15c: an action left out hides its control (plan §6).
@@ -197,7 +200,7 @@ export default async function TodayPage({
 
           V1-15, the closed day: an unexplained absence reads as a bug — the finding that explains
           the 2026-09-28 incident. Not for an archived athlete, where it is false. */}
-      {profile.archived ? (
+      {view.notice === 'archived' ? (
         <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
           {SETTINGS_COPY.archivedNotice(profile.name)}{' '}
           <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
@@ -205,11 +208,11 @@ export default async function TodayPage({
           </Link>
           .
         </p>
-      ) : future ? (
+      ) : view.notice === 'comingUp' ? (
         <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
           {PROGRAM_COPY.comingUp(profile.name, day)}
         </p>
-      ) : showClosedNotice ? (
+      ) : view.notice === 'closed' ? (
         <p className={NOTICE_CLASS}>{CLOSED_DAY_NOTICE}</p>
       ) : null}
 
@@ -220,7 +223,7 @@ export default async function TodayPage({
 
       {/* Not on a future day (maintainer, 2026-11-17, v12): nothing has happened there to show, and
           "Nothing logged." under each would read as a missed day. */}
-      {future ? null : (
+      {view.sections ? (
         <div className="flex flex-col gap-6">
           {/* V1-24 PR 1a — the day's state, not an empty form over a record. See the section. */}
           <BodyweightSection
@@ -240,14 +243,12 @@ export default async function TodayPage({
             logged={loggedLifeActivities(entries, lifeKeys)}
           />
         </div>
-      )}
+      ) : null}
 
       {/* FAM-1 12c: the workouts, below Life (D34; the maintainer kept the order, 2026-11-17: "chosen
           by person who programmed the workout / day"). Not mounted for an athlete on no program
           with no rows to show: it would be an empty landmark under a hidden heading, every day. */}
-      {plan.onProgram === ON_PROGRAM.yes || plan.workouts.length > 0 ? (
-        <DayScreen plan={plan} actions={dayActions} />
-      ) : null}
+      {view.screen ? <DayScreen plan={plan} actions={dayActions} /> : null}
 
       {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
 

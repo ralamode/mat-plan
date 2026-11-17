@@ -1,6 +1,6 @@
 'use client';
 
-import { type DayActions, type DayPlan } from '@mat-plan/shared';
+import { isoDayDiff, type DayActions, type DayPlan } from '@mat-plan/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -42,7 +42,7 @@ export type DayScreenProps = { plan: DayPlan; actions: DayActions };
  * (`revalidatePath`), which would compute the NEW today, remount the screen on it and lose every
  * typed number and failure mid-workout. Pinning AFTER the first write is too late: that write's
  * response is the jump. So the pin goes on just before the send, and only when midnight has passed
- * (the device's local day is not `plan.today`); a tab that never crossed midnight keeps its bare
+ * (the device's local day is after `plan.today`); a tab that never crossed midnight keeps its bare
  * URL, so tomorrow morning it opens on tomorrow. `replaceState` is synced into Next's router, so no
  * navigation happens. ⚠️ Unverified until 12c's e2e: that a Server Action's revalidated render
  * reads the replaced URL.
@@ -50,9 +50,13 @@ export type DayScreenProps = { plan: DayPlan; actions: DayActions };
 export function pinDayBeforeWrite(plan: Pick<DayPlan, 'day' | 'today'>): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
-  if (url.searchParams.has('d')) return;
+  // Already names the day shown. Any other `?d=` (a malformed one, or a future day the page
+  // replaced with today) would re-resolve to another day after midnight, so it is replaced too.
+  if (url.searchParams.get('d') === plan.day) return;
+  // Only once midnight has PASSED: a device behind the page's zone (a first visit on the fallback
+  // zone, a trip) would otherwise pin a day that is about to be the past or the future.
   const deviceToday = localDayIso(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  if (deviceToday === plan.today) return;
+  if (isoDayDiff(deviceToday, plan.today) <= 0) return;
   url.searchParams.set('d', plan.day);
   window.history.replaceState(null, '', url);
 }
@@ -100,7 +104,11 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const writing = inFlight.size > 0;
   useEffect(() => {
     if (!writing) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Browsers before Chrome 119 ask only when this is set.
+      event.returnValue = '';
+    };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [writing]);

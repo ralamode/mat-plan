@@ -135,6 +135,33 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     expect(tick(splits).getAttribute('aria-disabled')).toBeNull();
   });
 
+  it('a ✓ after midnight pins the day in the URL BEFORE it is sent, and a closed_day reload pins too (12c)', async () => {
+    // The fixtures' today is in the past, so the device's day is past the page's: midnight has gone.
+    window.history.replaceState(null, '', '/p/x');
+    const seen: string[] = [];
+    const control = mount(todayTwoPrograms, {
+      wrap: (a) => ({
+        logRow: (input) => {
+          seen.push(window.location.search);
+          return a.logRow(input);
+        },
+      }),
+    });
+    await press(tick(card('Morning habits', 'Splits stretch')));
+    expect(seen).toEqual([`?d=${todayTwoPrograms.day}`]);
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    window.history.replaceState(null, '', '/p/x');
+    mount(todayTwoPrograms, {
+      wrap: () => ({ logRow: async () => ({ ok: false, reason: ROW_REFUSAL.closed_day }) }),
+    });
+    await press(tick(card('Morning habits', 'Splits stretch')));
+    expect(refresh).toHaveBeenCalled();
+    expect(window.location.search).toBe(`?d=${todayTwoPrograms.day}`);
+    window.history.replaceState(null, '', '/');
+  });
+
   it('a ✓ still being sent looks pending, says Saving, and warns before the page is left (12c)', async () => {
     const gate = held();
     mount(todayTwoPrograms, {
@@ -149,12 +176,15 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     expect(leave()).toBe(false);
     await press(tick(splits));
     expect(tick(splits).getAttribute('aria-busy')).toBe('true');
-    expect(tick(splits).className).toContain('border-dashed');
-    expect(within(tick(splits)).getByText(SAVING_LABEL)).toBeTruthy();
+    // Read by a screen reader as the ✓'s description, not hidden behind its aria-label.
+    expect(within(splits).getByRole('button', { description: SAVING_LABEL })).toBe(tick(splits));
+    // Visible on the done fill: foreground dashes, not the done colour's own.
+    expect(tick(splits).className).toMatch(/\bborder-foreground\b.*\bborder-dashed\b/);
     expect(leave()).toBe(true);
     await gate.resolve();
     expect(tick(splits).getAttribute('aria-busy')).toBeNull();
-    expect(within(tick(splits)).queryByText(SAVING_LABEL)).toBeNull();
+    expect(within(splits).queryByRole('button', { description: SAVING_LABEL })).toBeNull();
+    expect(tick(splits).className).not.toContain('border-dashed');
     expect(leave()).toBe(false);
   });
 

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { BODYWEIGHT_COPY, CLOSED_DAY_NOTICE } from '../lib/constants';
+import { formatDayLong } from '../lib/date';
 
 import { bodyweightSection, changePrefix, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 
@@ -82,9 +83,15 @@ test('the week strip reaches a day in two taps, and marks the one being viewed',
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
   const nav = page.getByRole('navigation', { name: 'Change day' });
 
-  // aria-current="date" is how a screen reader user knows which day they are on.
-  await expect(nav.locator('[aria-current="date"]')).toHaveCount(1);
+  // aria-current is how a screen reader user knows which day they are on (`true`, since FAM-1 12c:
+  // "date" read as "the current date" beside today's own ", today").
+  await expect(nav.locator('[aria-current="true"]')).toHaveCount(1);
 
-  const yesterday = nav.getByRole('link', { name: /^\w+day, \w+ \d+, \d{4}$/ });
-  await expect(yesterday.first()).toBeVisible();
+  // Today's cell is a link named for its date and ", today" — on a Monday the only link in the
+  // strip, so the name is matched exactly rather than by a pattern that skips it.
+  const todayCell = nav.getByRole('link', {
+    name: `${formatDayLong(isoDaysAgo(0))}, today`,
+    exact: true,
+  });
+  await expect(todayCell).toBeVisible();
 });

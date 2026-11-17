@@ -52,3 +52,42 @@ export function nothingLoggedNotice(plan: DayPlan): string | null {
     ? PROGRAM_COPY.nothingLogged(plan.day, plan.today)
     : null;
 }
+
+/**
+ * What the day page shows around the screen (FAM-1 12c; maintainer, 2026-11-17), as a pure
+ * function so it is tested here rather than only in the async page, which Vitest cannot render.
+ *
+ * - `notice`: the ONE state notice, above the program line: archived, else coming up on a future
+ *   day, else the closed-day sentence. A future day whose programs all rest shows none: the screen's
+ *   rest line ("Rest day. Nothing is scheduled on Sundays.") is the whole story, and "You can log it
+ *   on the day" would be false (12c review).
+ * - `sections`: Bodyweight and Life, not on a future day (nothing has happened there).
+ * - `screen`: `DayScreen`, not for an athlete on no program with no rows (an empty landmark).
+ */
+export function dayPageView(
+  plan: DayPlan,
+  page: { future: boolean; showClosedNotice: boolean; archived: boolean },
+): { notice: 'archived' | 'comingUp' | 'closed' | null; sections: boolean; screen: boolean } {
+  const notice = page.archived
+    ? 'archived'
+    : page.future
+      ? restNotice(plan)?.allRest
+        ? null
+        : 'comingUp'
+      : page.showClosedNotice
+        ? 'closed'
+        : null;
+  return {
+    notice,
+    sections: !page.future,
+    screen: plan.onProgram === ON_PROGRAM.yes || plan.workouts.length > 0,
+  };
+}
+
+/**
+ * Look-ahead goes forward only while the athlete is on a program (plan §9): a future day they are
+ * not on one renders today instead, as every future day did before 12c.
+ */
+export function lookAheadFallsBack(plan: DayPlan): boolean {
+  return plan.future && plan.onProgram !== ON_PROGRAM.yes;
+}

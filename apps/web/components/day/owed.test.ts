@@ -26,6 +26,9 @@ describe('DayPlan: owed by its consumers', () => {
 
 describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers', () => {
   it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
+  it.todo(
+    '12c: past local midnight (page.clock), a ✓ on the bare path keeps the logged day: the URL gains ?d= and the row stays ticked (e2e; proves a revalidated action render reads the replaced URL)',
+  );
   it.todo('12c: a ✓ queued before an athlete switch is logged when the parent comes back (e2e)');
 });
 

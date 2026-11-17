@@ -148,23 +148,34 @@ export function Tick({
         aria-label={DAY_COPY.logLabel(label)}
         aria-disabled={r.pending || undefined}
         aria-busy={r.pending || undefined}
-        aria-describedby={described ? errorId : undefined}
+        // "Saving…" is the ✓'s DESCRIPTION while it is sent: its name stays "Log …", which
+        // `aria-label` sets and content cannot change (12c review).
+        aria-describedby={
+          [described ? errorId : null, r.pending ? `${errorId}-saving` : null]
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         className={cn(
           TICK_FOCUS_CLASS,
           TICK_CLASS,
-          // FAM-1 12c: a ✓ still being sent does not look saved. A dashed border, not a fade (a
-          // faded glyph fails contrast) and not colour alone (forced colours keep a border style).
-          r.pending && 'border-dashed',
           // Ticked: the `done` fill carries the state (at least 3:1 against an un-ticked ✓), and
           // under forced colours, where fills vanish, a heavier border does. Un-ticked: a muted
           // glyph, as v12's is.
           r.logged
             ? 'bg-done text-done-foreground border-done forced-colors:border-4'
             : 'bg-background text-muted-foreground',
+          // FAM-1 12c: a ✓ still being sent does not look saved. Dashes in the foreground colour,
+          // so they show on the done fill as on an empty ✓ (a `done` dash on a `done` fill does
+          // not); not a fade (a faded glyph fails contrast), and a border style forced colours keep.
+          r.pending && 'border-foreground border-2 border-dashed',
         )}
       >
         <span aria-hidden="true">✓</span>
-        {r.pending ? <span className="sr-only">{SAVING_LABEL}</span> : null}
+        {r.pending ? (
+          <span id={`${errorId}-saving`} className="sr-only">
+            {SAVING_LABEL}
+          </span>
+        ) : null}
       </button>
     );
   }
