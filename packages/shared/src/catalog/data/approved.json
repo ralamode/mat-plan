@@ -285,5 +285,11 @@
     "burpee_pull-up": "719c231190c96bd73363eac7b5e0215e9789406b0b378c4f426b31107fcfae07",
     "lateral_bear_crawl": "98ed0d4a5d30396340d3face52eec41aa619a60f73ff1db71aa451d64e237c18",
     "bear_crawl_hold": "d3d92330c7cb2fac086bc46aa0c9f2b8df476c267e82c8fbf4c0357e86294547"
+  },
+  "6": {
+    "back_bridge": "53d526eebba9f0d1bde49f15d5f92b2ec191ac26548392aa6a50fa30b153a6e9",
+    "rope_climb": "1c4f34e5e50c1b89ccfe73b8a45fd5b9f68dec0185d739515d15678a1d7181c0",
+    "legless_rope_climb": "fa0927e122111ba8f65b6fa8618dd4ff2d9b5834f05b19d2689e71edf64ca68b",
+    "handstand_push-up": "b6b790bcc66e0c3e178e5dd8cef2d2ce9a4011ff688a0e1d8c5a635986b2b79e"
   }
 }
