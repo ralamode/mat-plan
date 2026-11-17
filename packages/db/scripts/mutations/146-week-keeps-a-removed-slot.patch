@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index b516d635..d12c8308 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -137,7 +137,7 @@ export async function saveWeek(
+     if (gone.length + moved.length + relabelled.length + added.length === 0) return { ok: true };
+ 
+     // Hidden first: a gone slot frees its place and its once-a-day key for what replaces it.
+-    if (gone.length > 0) {
++    if (false) {
+       await tx
+         .update(schema.blockDayWorkouts)
+         .set({ deletedAt: sql`now()` })

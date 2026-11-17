@@ -9,10 +9,12 @@ import {
   PROGRAM_REFUSAL,
   PROGRAM_SEED,
   QUANTITY_SLOT,
+  SLOT_LABEL_MAX,
   TRACKING_TYPE,
+  WEEKDAYS,
 } from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
-import type { WorkoutDraft } from '@mat-plan/shared';
+import type { WeekDraft, WorkoutDraft } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
@@ -26,7 +28,8 @@ import {
 import { createProgram } from '../../src/writers/program/create-program';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
-import { programIn, readWorkoutDraft, workoutIn } from '../../src/queries/program';
+import { programIn, readWeek, readWorkoutDraft, workoutIn } from '../../src/queries/program';
+import { saveWeek } from '../../src/writers/program/save-week';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
 import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
@@ -63,6 +66,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyRenameProgram(ctx);
   await verifySlugRace(ctx);
   await verifySaveWorkout(ctx);
+  await verifySaveWeek(ctx);
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -1004,5 +1008,271 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
   });
   console.log(
     '✓ FAM-1 6a-ii: saveWorkout (fixture read, replay, reorder, swap, refusals, households)',
+  );
+}
+
+/** A workout with no items in `programPublicId`, which must save; its public id. */
+async function mustSaveWorkout(
+  tx: VerifyTx,
+  scope: HouseholdScope,
+  programPublicId: string,
+  name: string,
+) {
+  const saved = await saveWorkout(asTx(tx), scope, {
+    programPublicId,
+    workoutPublicId: null,
+    workoutClientId: newId(),
+    name,
+    description: null,
+    items: [],
+  });
+  assert.ok(saved.ok, `FAM-1 6b: saving the workout "${name}" succeeds`);
+  return saved.workoutPublicId;
+}
+
+/** Every week slot row, live and hidden, with its place, label and update stamp. */
+async function slotRows(tx: VerifyTx) {
+  return tx
+    .select({
+      id: schema.blockDayWorkouts.id,
+      weekday: schema.blockDayWorkouts.weekday,
+      idx: schema.blockDayWorkouts.idx,
+      workoutId: schema.blockDayWorkouts.workoutId,
+      label: schema.blockDayWorkouts.label,
+      deletedAt: schema.blockDayWorkouts.deletedAt,
+      updatedAt: schema.blockDayWorkouts.updatedAt,
+    })
+    .from(schema.blockDayWorkouts)
+    .orderBy(schema.blockDayWorkouts.id);
+}
+
+/** A week with every day a rest day, then the days given. */
+const weekOf = (days: Partial<WeekDraft['days']> = {}): WeekDraft['days'] =>
+  ({
+    ...Object.fromEntries(WEEKDAYS.map((d) => [d, []])),
+    ...days,
+  }) as WeekDraft['days'];
+
+async function verifySaveWeek({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const programPublicId = await mustCreate(tx, A_SCOPE, 'Week program');
+    const a = await mustSaveWorkout(tx, A_SCOPE, programPublicId, 'Heavy A');
+    const b = await mustSaveWorkout(tx, A_SCOPE, programPublicId, 'Heavy B');
+    const c = await mustSaveWorkout(tx, A_SCOPE, programPublicId, 'Mobility');
+    const save = (days: WeekDraft['days']) =>
+      saveWeek(exec, A_SCOPE, { programPublicId, days }).catch((e: unknown) => ({
+        threw: String(e),
+      }));
+    const readBack = () => readWeek(exec, A_SCOPE, programPublicId);
+    const live = async () => (await slotRows(tx)).filter((r) => r.deletedAt === null);
+
+    // ── a new program's week is seven rest days ──
+    assert.deepEqual(await readBack(), weekOf(), 'FAM-1 6b: a new program reads seven rest days');
+
+    // ── a week saves, and reads back as saved ──
+    const week = weekOf({
+      1: [
+        { workoutPublicId: a, label: 'Morning' },
+        { workoutPublicId: b, label: null },
+      ],
+      3: [{ workoutPublicId: a, label: null }],
+      5: [{ workoutPublicId: c, label: 'After practice' }],
+    });
+    assert.deepEqual(await save(week), { ok: true }, 'FAM-1 6b: saving a week succeeds');
+    assert.deepEqual(await readBack(), week, 'FAM-1 6b: the week reads back as saved');
+
+    // ── a replay writes nothing ──
+    const before = await slotRows(tx);
+    assert.deepEqual(await save(week), { ok: true }, 'FAM-1 6b: a replayed saveWeek succeeds');
+    assert.deepEqual(await slotRows(tx), before, 'FAM-1 6b: a replayed saveWeek writes nothing');
+
+    // ── a swap keeps both rows; only their places change ──
+    const monday = (rows: Awaited<ReturnType<typeof live>>) =>
+      rows.filter((r) => r.weekday === 1).sort((x, y) => x.idx - y.idx);
+    const [wasFirst, wasSecond] = monday(await live());
+    const swapped = weekOf({ ...week, 1: [week[1][1]!, week[1][0]!] });
+    assert.deepEqual(
+      await save(swapped),
+      { ok: true },
+      'FAM-1 6b: a week that swaps two slots saves (through the band)',
+    );
+    assert.deepEqual(
+      monday(await live()).map((r) => [r.id, r.idx]),
+      [
+        [wasSecond!.id, 0],
+        [wasFirst!.id, 1],
+      ],
+      'FAM-1 6b: a moved slot keeps its row',
+    );
+    assert.deepEqual(await readBack(), swapped, 'FAM-1 6b: the swapped week reads back');
+
+    // ── a label change keeps the row ──
+    const relabelled = weekOf({ ...swapped, 5: [{ workoutPublicId: c, label: 'Evening' }] });
+    const friday = (await live()).find((r) => r.weekday === 5)!;
+    assert.deepEqual(await save(relabelled), { ok: true }, 'FAM-1 6b: relabelling a slot saves');
+    const fridayAfter = (await live()).filter((r) => r.weekday === 5);
+    assert.deepEqual(
+      fridayAfter.map((r) => [r.id, r.label]),
+      [[friday.id, 'Evening']],
+      'FAM-1 6b: a relabelled slot keeps its row, with the new label',
+    );
+
+    // ── a removed slot frees its place, and its workout can come back to that day ──
+    const wednesday = (await live()).find((r) => r.weekday === 3)!;
+    const cleared = weekOf({ ...relabelled, 3: [] });
+    assert.deepEqual(await save(cleared), { ok: true }, 'FAM-1 6b: removing a slot saves');
+    const hidden = (await slotRows(tx)).find((r) => r.id === wednesday.id)!;
+    assert.ok(hidden.deletedAt !== null, 'FAM-1 6b: a removed slot is hidden, not deleted');
+    assert.deepEqual(await readBack(), cleared, 'FAM-1 6b: the read leaves out a removed slot');
+    const refilled = weekOf({
+      ...cleared,
+      3: [
+        { workoutPublicId: c, label: null },
+        { workoutPublicId: a, label: null },
+      ],
+    });
+    assert.deepEqual(
+      await save(refilled),
+      { ok: true },
+      'FAM-1 6b: a removed slot frees its place and its once-a-day key',
+    );
+    const wednesdayNow = (await live()).filter((r) => r.weekday === 3);
+    assert.ok(
+      wednesdayNow.every((r) => r.id !== wednesday.id),
+      'FAM-1 6b: a workout put back on a day is a new slot',
+    );
+    assert.deepEqual(await readBack(), refilled, 'FAM-1 6b: the refilled week reads back');
+
+    // ── ids in upper case are the same ids ──
+    const upper = (days: WeekDraft['days']) =>
+      Object.fromEntries(
+        Object.entries(days).map(([d, slots]) => [
+          d,
+          slots.map((s) => ({ ...s, workoutPublicId: s.workoutPublicId.toUpperCase() })),
+        ]),
+      ) as WeekDraft['days'];
+    const stamp = await slotRows(tx);
+    assert.deepEqual(
+      await saveWeek(exec, A_SCOPE, {
+        programPublicId: programPublicId.toUpperCase(),
+        days: upper(refilled),
+      }).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true },
+      'FAM-1 6b: ids in upper case are the same ids',
+    );
+    assert.deepEqual(
+      await slotRows(tx),
+      stamp,
+      'FAM-1 6b: the same week in upper case writes nothing',
+    );
+
+    // ── refusals: typed, and nothing written ──
+    const other = await mustCreate(tx, A_SCOPE, 'Other program');
+    const otherWorkout = await mustSaveWorkout(tx, A_SCOPE, other, 'Their workout');
+    const theirs = await mustCreate(tx, B_SCOPE, 'B program');
+    const theirWorkout = await mustSaveWorkout(tx, B_SCOPE, theirs, 'B workout');
+    const hiddenProgram = await mustCreate(tx, A_SCOPE, 'Hidden program');
+    await hide(tx, hiddenProgram);
+    const legacy = await seededBlock(tx, A_SCOPE);
+    const rest = weekOf();
+    const twice = { workoutPublicId: a, label: null };
+    const cases: Array<[string, unknown, string]> = [
+      [
+        'a workout twice on one day',
+        { programPublicId, days: weekOf({ 2: [twice, { ...twice, label: 'Again' }] }) },
+        PROGRAM_REFUSAL.once_per_day,
+      ],
+      [
+        'a workout twice on one day, the second id in upper case',
+        {
+          programPublicId,
+          days: weekOf({ 2: [twice, { ...twice, workoutPublicId: a.toUpperCase() }] }),
+        },
+        PROGRAM_REFUSAL.once_per_day,
+      ],
+      [
+        "another program's workout",
+        { programPublicId, days: weekOf({ 2: [{ workoutPublicId: otherWorkout, label: null }] }) },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        "another household's workout",
+        { programPublicId, days: weekOf({ 2: [{ workoutPublicId: theirWorkout, label: null }] }) },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a workout that does not exist',
+        { programPublicId, days: weekOf({ 2: [{ workoutPublicId: newId(), label: null }] }) },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        "another household's program",
+        { programPublicId: theirs, days: rest },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a hidden program',
+        { programPublicId: hiddenProgram, days: rest },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'the seeded legacy block',
+        { programPublicId: legacy.publicId, days: rest },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a program that does not exist',
+        { programPublicId: newId(), days: rest },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a week missing a day',
+        { programPublicId, days: Object.fromEntries(WEEKDAYS.slice(1).map((d) => [d, []])) },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a label over SLOT_LABEL_MAX',
+        {
+          programPublicId,
+          days: weekOf({ 2: [{ workoutPublicId: a, label: 'x'.repeat(SLOT_LABEL_MAX + 1) }] }),
+        },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a program id that is not a uuid',
+        { programPublicId: 'nope', days: rest },
+        PROGRAM_REFUSAL.invalid,
+      ],
+    ];
+    const unchanged = await slotRows(tx);
+    for (const [what, input, reason] of cases) {
+      assert.deepEqual(
+        await saveWeek(exec, A_SCOPE, input).catch((e: unknown) => ({ threw: String(e) })),
+        { ok: false, reason },
+        `FAM-1 6b: saving ${what} is ${reason}`,
+      );
+    }
+    assert.deepEqual(await slotRows(tx), unchanged, 'FAM-1 6b: a refused week writes nothing');
+
+    // ── the read is scoped ──
+    assert.equal(
+      await readWeek(exec, B_SCOPE, programPublicId),
+      null,
+      "FAM-1 6b: another household's program reads null",
+    );
+    assert.equal(
+      await readWeek(exec, A_SCOPE, 'nope'),
+      null,
+      'FAM-1 6b: a malformed id reads null',
+    );
+    assert.equal(
+      await readWeek(exec, A_SCOPE, hiddenProgram),
+      null,
+      'FAM-1 6b: a hidden program reads null',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6b: saveWeek and readWeek (read back, replay, swap, relabel, removed slot, refusals)',
   );
 }

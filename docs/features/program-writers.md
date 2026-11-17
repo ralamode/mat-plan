@@ -27,7 +27,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | 6a-i   | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                                                |
 | 6a-ii  | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                                               |
 | 6a-iii | the copy path; `queries/program/movement-options.ts`; `writers/program/new-item.ts` (after contract change C8)                      |
-| 6b     | `writers/program/save-week.ts`; `queries/program/week.ts`                                                                           |
+| 6b     | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                                                        |
 | 6c     | `writers/program/assign.ts` (put on); `queries/program/{program-view,program-list}.ts`; fills in `writers/program/seed-fixtures.ts` |
 | 6d     | take off and reorder, in `assign.ts`                                                                                                |
 
@@ -39,10 +39,12 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/rename-program.ts` | `renameProgram`: `not_found` (any block that is not this household's live template), then `name_taken`, then the name and a new slug.                                                                                                     |
 | `packages/db/src/writers/program/program-name.ts`   | What both share: `programNameTaken` (folded, live templates only), `freeProgramSlug` (`-2`, `-3`… past every live block) and `lostSlugRace`, which recognises the race by `schema.ts`'s `PROGRAM_BLOCK_SLUG_UNIQUE_INDEX` (FAM-1 step 5). |
 | `packages/db/src/writers/program/save-workout.ts`   | `saveWorkout`: the editor's full draft. Matches rows by `prescriptionClientId` (D19), hides gone cards, places through the band.                                                                                                          |
+| `packages/db/src/writers/program/save-week.ts`      | `saveWeek`: the week editor's full week. A slot keeps its row while its workout stays on that day; a gone slot is hidden; places go through the band.                                                                                     |
 | `packages/db/src/writers/program/shift-band.ts`     | `shiftIntoBand`: move a set of placed rows out of the way (`idx + SHIFT_BAND`) so their final places can be written.                                                                                                                      |
 | `packages/db/src/writers/program/index.ts`          | The writers behind `ProgramActions`, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                  |
 | `packages/db/src/queries/program/exists.ts`         | `programIn`, `workoutIn`: scoped existence, for the DAL's scope-miss report after a `not_found` and for 7b's pages.                                                                                                                       |
 | `packages/db/src/queries/program/workout.ts`        | `readWorkoutDraft`: a saved workout as the editor loads it. Deep-equals the contract's `heavy-a-draft`.                                                                                                                                   |
+| `packages/db/src/queries/program/week.ts`           | `readWeek`: a program's week as `WeekDraft['days']`, every weekday present, live slots of live workouts in order.                                                                                                                         |
 | `packages/db/src/writers/program/seed-fixtures.ts`  | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                           |
 | `packages/db/src/writers/program/owed.test.ts`      | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                 |
 | `packages/db/src/queries/program/index.ts`          | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                     |
@@ -134,6 +136,17 @@ flowchart TD
     to be available (`movementIsAvailableTo`) and answers the whole save `not_found`. Nothing hides a
     movement today. The step that first does (RETIRE-1) decides: check availability only for new cards
     and changed items, or drop such cards from the read.
+
+15. 🔴 **A week is saved whole, matched by (weekday, workout)** (6b). A slot keeps its row while its
+    workout stays on that day; only its place and label change. A slot taken off a day is hidden,
+    which frees both partial keys (`uq_block_day_workouts_slot`, `uq_block_day_workouts_once_per_day`),
+    so the workout can go back on that day as a new row (mutations `week-keeps-a-removed-slot`,
+    `week-replaces-every-slot`). A week saved unchanged writes nothing. Moved slots go through the
+    band (`week-skips-the-band`). Refusals, in order: `invalid` (the schema), `once_per_day` (a
+    workout twice on a day, also when the ids differ only in case; the schema's own repeat check is
+    answered `once_per_day` too), `not_found` (the program, or a workout that is not one of its live
+    workouts: `week-takes-any-programs-workout`). It locks the block only: it writes no workout row,
+    and the block lock already serialises it with `saveWorkout`.
 
 ## Changing it
 

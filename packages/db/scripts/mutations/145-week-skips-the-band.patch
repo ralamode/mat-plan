@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index b516d635..b01344d9 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -144,7 +144,7 @@ export async function saveWeek(
+         .where(inArray(schema.blockDayWorkouts.id, gone));
+     }
+     if (moved.length > 0) {
+-      await shiftIntoBand(
++      if (false) await shiftIntoBand(
+         tx,
+         schema.blockDayWorkouts,
+         and(
