@@ -575,10 +575,10 @@ type ScopeMissEvent = Required<{
  * public id is sent under the same rule as a profile's, and each kind has its own message.)_
  *
  * - **Call it only when a scoped read found nothing for the id**, from the one DAL function that
- *   resolves that kind (`lib/dal/program/` for a program or a workout, `lib/dal/day/` for a
- *   prescription), and hand it an id that already parsed as a uuid: a malformed value throws in
- *   Postgres, is swallowed below and reports nothing, as `getProfileByPublicId` intends for a
- *   profile.
+ *   resolves that kind (`lib/dal/program/` for a program or a workout; `lib/dal/day/`
+ *   `report-miss.ts` for the workout or prescription a tick names), and hand it an id that already
+ *   parsed as a uuid: a malformed value throws in Postgres, is swallowed below and reports
+ *   nothing, as `getProfileByPublicId` intends for a profile.
  * - 🔴 **For these three kinds the probe asks "live, in a household that is NOT the caller's", not
  *   "live anywhere".** A profile's scoped read is `public_id ∧ live ∧ household`, so "missed, yet
  *   exists" can only mean another household. A program read is narrower than that: it serves

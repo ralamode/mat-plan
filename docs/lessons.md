@@ -798,6 +798,12 @@ do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prin
   exactly what a real context shift looks like, so the instinct is to regenerate 16 patches. Check for
   a concurrent runner BEFORE regenerating anything. (`PROF-1 a-1w`)
 
+- **One lane's `pkill -f` stops every lane's run of the same script.** → Several sessions run the
+  same gates on one machine, so a pattern matches their processes too (2026-11-17: a `pkill -f`
+  probably killed another lane's `db:mutations` run). → Stop only a process you started, by the pid
+  you captured (`$!`), or let it finish. → **Now denied by `.claude/hooks/guard-process-kill.mjs`**
+  (`pkill`, `killall`, `fuser -k`, `kill $(…)`, `kill 0`/`-1`/negative pids). (`DX-18` 1b)
+
 - **A mutation patch's `.expect` silently stops describing its patch when an assertion is inserted
   ABOVE the one it names — and the gate says so rather than passing.** → `PROF-1 a-1w`'s patch `22`
   (the athlete cap never binds) pinned _"the 26th athlete is refused as FULL, not as refused"_. A

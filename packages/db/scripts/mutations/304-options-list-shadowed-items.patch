@@ -1,0 +1,23 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index 6dcb93fd..865d4432 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -87,18 +87,6 @@ export async function movementOptions(
+       and(
+         movementInHousehold(scope),
+         isNull(schema.movements.deletedAt),
+-        notExists(
+-          exec
+-            .select({ one: sql`1` })
+-            .from(shadow)
+-            .where(
+-              and(
+-                isNull(shadow.householdId),
+-                isNull(shadow.deletedAt),
+-                eq(shadow.slug, schema.movements.slug),
+-              ),
+-            ),
+-        ),
+       ),
+     )
+     .orderBy(asc(schema.movements.id));
