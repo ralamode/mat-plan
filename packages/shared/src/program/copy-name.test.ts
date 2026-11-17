@@ -61,13 +61,35 @@ describe('copyName: a copy’s default name', () => {
     expect(copyName(`${'a'.repeat(20)}   bcdefgh`)).toBe(`${'a'.repeat(20)} (copy)`);
   });
 
-  it('drops a joiner the cut left joining nothing', () => {
-    // A family emoji is people joined by zero-width joiners; a cut can end on the joiner.
-    const family = '👨\u200d👩\u200d👧';
-    const copied = copyName(`${'a'.repeat(18)}${family} day`);
-    expect(copied).toBe(`${'a'.repeat(18)}👨\u200d👩 (copy)`);
-    expect(copied.includes('\u200d (')).toBe(false);
+  it('🔴 drops a joiner the cut left joining nothing', () => {
+    // A family emoji is people joined by zero-width joiners. After 19 letters the room ends
+    // right after the first joiner: 19 + 2 (a person) + 1 (the joiner) is 22, and the next
+    // person needs 2 more than the 23 there are.
+    const family = '👨‍👩‍👧';
+    const name = `${'a'.repeat(19)}${family} day`;
+    expect(name.slice(0, 22).endsWith('‍')).toBe(true);
+    const copied = copyName(name);
+    expect(copied).toBe(`${'a'.repeat(19)}👨 (copy)`);
+    expect(copied.includes('‍')).toBe(false);
     expect(wellFormed(copied)).toBe(true);
+    // A joiner that still joins is kept: here the cut lands after the second person.
+    expect(copyName(`${'a'.repeat(18)}${family} day`)).toBe(`${'a'.repeat(18)}👨‍👩 (copy)`);
+  });
+
+  it('a name with room is kept exactly as it is, whatever it ends with', () => {
+    // The clean-up is for a cut. A short name ending in a joiner passes the schema and is kept.
+    const odd = 'Heavy‍';
+    expect(workoutNameSchema.safeParse(odd).success).toBe(true);
+    expect(copyName(odd)).toBe(`${odd}${COPY_NAME_SUFFIX}`);
+    expect(copyName('x'.repeat(23))).toBe(`${'x'.repeat(23)}${COPY_NAME_SUFFIX}`);
+  });
+
+  it('a cut that would leave nothing keeps the name as cut: a copy still has a name', () => {
+    const name = `‍${' '.repeat(22)}x`;
+    expect(workoutNameSchema.safeParse(name).success).toBe(true);
+    const copied = copyName(name);
+    expect(copied).toBe(`‍${' '.repeat(22)}${COPY_NAME_SUFFIX}`);
+    expect(workoutNameSchema.safeParse(copied)).toMatchObject({ success: true, data: copied });
   });
 
   it('for any name the schema takes: well formed, within the limit, one space before the suffix', () => {
@@ -99,7 +121,12 @@ describe('copyName: a copy’s default name', () => {
       expect(wellFormed(copied), name).toBe(true);
       expect(copied.length, name).toBeLessThanOrEqual(WORKOUT_NAME_MAX);
       expect(copied.endsWith(COPY_NAME_SUFFIX), name).toBe(true);
-      expect(/\s \(copy\)$/.test(copied), name).toBe(false);
+      // Nothing left hanging before the suffix where a cut was made.
+      if (name.length > WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length) {
+        expect(/[\s‍] \(copy\)$/u.test(copied), name).toBe(false);
+      }
+      // The stored name is the prefilled one: the schema's trim changes nothing.
+      expect(workoutNameSchema.safeParse(copied), name).toMatchObject({ data: copied });
       expect(workoutNameSchema.safeParse(copied).success, name).toBe(true);
       // A name with room is kept whole.
       if (name.length <= WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length) {

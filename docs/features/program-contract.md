@@ -425,10 +425,13 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     (`copyName`, contract change C33, from step 6a-iii-b's review: the first writer to store
     one). The schema limits a name's `length`, which counts an emoji as two, so a plain `slice`
     at that length can keep half of one, and a database stores that half as a replacement mark.
-    `copyName` takes the name a character at a time while it fits, then drops what the cut left
-    hanging: a trailing space (or the copy reads "Heavy (copy)") and a joiner that joins
-    nothing. A name with room is kept whole. The dialog's prefill and the writer's default are
-    this one function (invariant 20 is the rule for the copy's name).
+    `copyName` takes the name a character at a time while it fits. Only where it cut, it drops
+    what the cut left hanging: a trailing space (or the copy would read `Heavy  (copy)`, with
+    two spaces) and a joiner that joins nothing. A name with room is kept exactly as it is. The
+    cut is by character, not by what a person sees as one emoji, so the browser's prefill and
+    the server's default are the same string on any engine; a cut inside a flag or a family
+    leaves a plainer emoji, never a broken one. The dialog's prefill and the writer's default
+    are this one function (invariant 20 is the rule for the copy's name).
 
 ## Traps
 
