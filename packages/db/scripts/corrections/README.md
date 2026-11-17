@@ -39,7 +39,12 @@ still needs its own PR. Each correction below names the row that fixes the cause
    idempotent. Rule 4 is meaningless for a delete, and rule 6's **Applied** table must **not** record
    which household was deleted — that would publish a permanent register of who asked to be erased,
    in a public repo. The exception is written here, next to the rules it excuses, for the same reason
-   a `-- squawk-ignore` sits above its statement. ⚠️ `PRIV-3` is the row that builds it, and it is
+   a `-- squawk-ignore` sits above its statement.
+   **`create-household-2026-11-17` departs from two rules too, and not by rule 8's exception:**
+   rule 2, because there is no value it corrects FROM, so the accounts are the guard (any live
+   membership refuses, which is also what a finished run looks like); and rule 3, because it takes
+   no `public_id` at all and mints every one. Reasoning: [the plan](../../../../docs/plans/priv-3-rc-create-household.md),
+   D4 and D1. ⚠️ `PRIV-3` is the row that builds the deletion correction, and it is
    **not** a drop-in entry: `Correction.run` takes no target and the runner ignores positional args,
    so it needs a `--household <public_id>` flag — a runner change, with its own plan.
 9. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
@@ -89,7 +94,8 @@ keeps one channel, and this amendment is made here rather than in `PRIV-3` 2b.
 ledger.** Its input is a list of sign-in accounts from the environment, the same personal data as the
 claim's, and how many accounts a household bound is a fact about a family. It takes no household id
 at all: it mints one. Its output is counts and positions only, on every path, errors included
-(`redact.ts`).
+(`redact.ts`). ⚠️ **Counts-only makes it safe in a terminal, not here:** never paste even its count
+line into this public repo, for the same "fact about a family" reason the table records none.
 
 <sub>⚠️ **The first two `Name`s changed under `OSS-1` (2026-10-08)** — they used to start with a child's
 first name, which this public repo should not carry (AGENTS.md → "No personal names"). Safe to rename:
