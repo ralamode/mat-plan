@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { PROGRAM_REFUSAL } from '@mat-plan/shared';
 import {
+  DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
   PROGRAM_LIST_FIXTURES,
   PROGRAM_VIEW_FIXTURES,
@@ -249,24 +250,24 @@ describe('the preview harness', () => {
 
   it('shows the page’s archived notice on an archived athlete’s day, and on no other', () => {
     // The real page says it from the profile, so the day screen has no line of its own and the
-    // plan no `archived` field. The preview shows the same words from the fixture's world.
-    const plan = DAY_PLAN_FIXTURES['archived-athlete-today'];
-    const name = DAY_PLAN_FIXTURES['today-two-programs'].athletes.find(
-      (a) => a.profilePublicId === plan.profilePublicId,
-    )!.name;
-    const notice = `${SETTINGS_COPY.archivedNotice(name)} ${SETTINGS_COPY.heading}.`;
-    expect(notice).toContain('is archived');
-
-    render(<PreviewHarness screen="day" fixture="archived-athlete-today" failNext={false} />);
-    expect(screen.getByText(notice)).toBeTruthy();
-    cleanup();
-
-    for (const fixture of Object.keys(DAY_PLAN_FIXTURES)) {
-      if (fixture === 'archived-athlete-today') continue;
+    // plan no `archived` field. The preview shows the same words from the fixture's world, so the
+    // world's flag decides, whichever fixtures have one.
+    const archived: string[] = [];
+    for (const fixture of Object.keys(DAY_PLAN_FIXTURES) as (keyof typeof DAY_PLAN_FIXTURES)[]) {
+      const { world, athlete: id } = DAY_PLAN_FIXTURE_SOURCES[fixture];
+      const athlete = world.athletes.find((a) => a.id === id)!;
       render(<PreviewHarness screen="day" fixture={fixture} failNext={false} />);
-      expect(screen.queryByText(/is archived/), fixture).toBeNull();
+      if (athlete.archived) {
+        archived.push(fixture);
+        const notice = `${SETTINGS_COPY.archivedNotice(athlete.name)} ${SETTINGS_COPY.heading}.`;
+        expect(notice).toContain('is archived');
+        expect(screen.getByText(notice), fixture).toBeTruthy();
+      } else {
+        expect(screen.queryByText(/is archived/), fixture).toBeNull();
+      }
       cleanup();
     }
+    expect(archived).toEqual(['archived-athlete-today', 'archived-athlete-nothing-logged']);
   });
 
   it('the day preview supplies the page’s <h1>, which on the real page is not the screen’s', () => {

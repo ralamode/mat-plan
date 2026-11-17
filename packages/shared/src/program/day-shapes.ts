@@ -33,6 +33,8 @@ import { programRefSchema } from './program-shapes';
 /**
  * Whether the athlete is on a program on the viewed day: `yes`; `not-this-day` (they are on one now,
  * but were not on this day: "Not on a program on this day"); `never` ("Not on a program yet").
+ * It reads `DayPlan.programs` and `currentPrograms`, which hold live programs only, so a hidden
+ * program does not count: an athlete whose only program that day is hidden is not on one.
  */
 export const ON_PROGRAM_STATES = ['yes', 'not-this-day', 'never'] as const;
 export type OnProgram = (typeof ON_PROGRAM_STATES)[number];
@@ -104,7 +106,21 @@ const dayItemSchema = z.object({
 });
 
 const dayWorkoutSchema = z.object({
-  /** Both ids are `null` once the program or the workout is purged; the frozen `name` remains. */
+  /**
+   * **An id here is one the household can use now.** `programPublicId` is non-null only for a
+   * live program; `workoutPublicId` only for a live workout of a live program. Once the program or
+   * the workout is hidden or purged its id is `null` and the frozen `name` remains (contract change
+   * C21). A hidden workout under a live program keeps `programPublicId`. For a scheduled workout
+   * the program is always one of `DayPlan.programs`.
+   *
+   * **A logged workout that is no longer live** (its program or the workout itself hidden or
+   * purged) shares two things with one that left the week, `scheduled: false` and `label: null`,
+   * and goes further: `description: null`, every item built as a removed item is
+   * (`prescriptionPublicId: null`, from its entries alone), and `progress` 0 of 0. A workout that
+   * merely left the week is still live: it keeps its description, its live items and its count.
+   * So nothing of a hidden program's own text reappears. Hiding is reversible and the plan is a
+   * read: un-hide the program and the ids are back.
+   */
   programPublicId: uuidSchema.nullable(),
   workoutPublicId: uuidSchema.nullable(),
   /**
@@ -120,14 +136,19 @@ const dayWorkoutSchema = z.object({
    * so a later rename does not rewrite an old day.
    */
   name: workoutNameSchema,
+  /** The live workout's description; `null` when it has none, or when the workout is no longer live. */
   description: nullableNoteSchema,
-  /** `false`: logged on this day, but no longer on the week. It shows its logged rows only. */
+  /**
+   * `false`: logged on this day, but no longer on the week, or no longer live (a hidden workout is
+   * never scheduled, even while its slot is still on the week). It shows its logged rows only.
+   */
   scheduled: z.boolean(),
   /**
    * "6 of 10": `done` is the logged rows, `total` the prescribed rows plus any logged beyond them,
    * over the workout's live items. It counts the whole workout even where `items` shows only what
    * was logged, so a closed day can still say how much of the workout was done. Rows logged against
    * a removed prescription are in neither number.
+   * **A workout that is no longer live has no live items, so it is 0 of 0** (C21).
    */
   progress: z.object({ done: z.number().int().min(0), total: z.number().int().min(0) }),
   /**
@@ -201,6 +222,8 @@ export const dayPlanSchema = z.object({
    */
   currentPrograms: z.array(programRefSchema),
   /**
+   * Live programs only, here and in `currentPrograms`: a hidden program is in neither (C21).
+   *
    * The programs the athlete is on THIS day, in the order the page lists them. `order` is the
    * program's index in `currentPrograms`; `null` for a program they have since come off, which
    * sorts after the current ones. Programs since left keep their own order among themselves
