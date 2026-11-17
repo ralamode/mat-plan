@@ -593,9 +593,10 @@ export const entrySets = pgTable(
  * replay that straddles a soft-delete", which was true of a partial index — such a replay twinned.
  * The index is non-partial now, so it DOES collide across a soft-delete, and this insert carries no
  * `ON CONFLICT` at all. That would be a raw `23505` were it reachable; it is not, because every
- * quantity's `client_id` is server-minted per insert (`newId()`) and a quantity row is inserted only
- * when its parent entry was freshly created; a later amend UPDATEs `value_num` in place and inserts
- * or deletes no row. Nothing addresses a quantity directly — a set's
+ * quantity row gets a fresh `client_id` at its insert (`newId()` in the writers; the one hand-run
+ * correction that added a quantity, `kb-swings-2026-09-28`, used `crypto.randomUUID()`). The app
+ * inserts quantity rows only in `insertEntrySetRows`, alongside the `entry_sets` rows they belong to,
+ * written in the same call; an amend UPDATEs `value_num` in place and inserts or deletes no row. Nothing addresses a quantity directly — a set's
  * `public_id` plus its slot is the address — so there is no `public_id`.
  *
  * ⚠️ `ON DELETE CASCADE` is hard-delete only, and the app only ever SOFT-deletes. Every reader must
@@ -1517,11 +1518,12 @@ export const prescriptionTargets = pgTable(
  *   today, and is no longer open. `queries/program-assignments.ts` → `assignmentOnDay` is the ONE
  *   spelling; due adds a live weekday row for `localWeekday(D)` (`assignmentDueOn`).
  * - **current as of T**: live and (`active_to IS NULL` or `T <= active_to`): on today, or starting later
- *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: `DayPlan.currentPrograms`
- *   and `ProgramOrder` list each program ONCE (the contract's `programOrderSchema` refuses a repeat), placed by its open or
+ *   (`assignmentCurrentAsOf`). ⚠️ **Current is a property of a PROGRAM, not a row**: `ProgramOrder`
+ *   lists each program ONCE (`programOrderSchema` refuses a repeat) and the reader builds
+ *   `DayPlan.currentPrograms` one per program, each placed by its open or
  *   upcoming row's `idx`, or by the closed row's when it has no other; a reorder writes the place onto
  *   that row. Amendment 4's writers leave at most one current row per program (a same-day put-on
- *   reopens), so "once" is defensive: the schema itself allows two (`db:verify` shows the shape). Readers order by `(idx, id)` (A2 §7): on the
+ *   reopens), so "once" is defensive: the table itself allows two (`db:verify` shows the shape). Readers order by `(idx, id)` (A2 §7): on the
  *   take-off day a closed row and another program's open row may share an `idx`, because the order key
  *   covers open rows only.
  *

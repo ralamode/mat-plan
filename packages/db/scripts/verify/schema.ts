@@ -3177,18 +3177,22 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
 
 // ── Lane A tech-debt: four CHECKs added NOT VALID (0029), validated (0031) ────────────────────────
 
-/** The four constraints 0029 added NOT VALID and 0031 validates. */
+/** The four constraints 0029 added NOT VALID and 0031 validates, each with its table. */
 const TECH_DEBT_CHECKS = [
-  'program_blocks_name_length_check',
-  'ramp_targets_target_value_not_nan_check',
-  'entries_value_num_check',
-  'entry_set_quantities_value_num_not_nan_check',
+  ['program_blocks', 'program_blocks_name_length_check'],
+  ['ramp_targets', 'ramp_targets_target_value_not_nan_check'],
+  ['entries', 'entries_value_num_check'],
+  ['entry_set_quantities', 'entry_set_quantities_value_num_not_nan_check'],
 ] as const;
 
-/** Whether `conname` is validated, or `undefined` when no such constraint exists. */
-async function isValidated(conname: string): Promise<boolean | undefined> {
+/**
+ * Whether `conname` on `table` is validated, or `undefined` when there is no such constraint.
+ * Scoped by table: `conname` is unique only per relation.
+ */
+async function isValidated(table: string, conname: string): Promise<boolean | undefined> {
   const [row] = rowsOf<{ convalidated: boolean }>(
-    await db.execute(sql`SELECT convalidated FROM pg_constraint WHERE conname = ${conname}`),
+    await db.execute(sql`SELECT convalidated FROM pg_constraint
+      WHERE conname = ${conname} AND conrelid = ${table}::regclass`),
   );
   return row?.convalidated;
 }
@@ -3199,9 +3203,9 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
   // rolled-back transaction (the TEN-2c lesson, verify.ts: a re-added constraint would make this read
   // measure itself). (c) re-reads it afterwards, so a (c) that commits fails there. One assertion per
   // constraint, so a mutation that drops one VALIDATE is caught by that constraint's own message.
-  for (const conname of TECH_DEBT_CHECKS) {
+  for (const [table, conname] of TECH_DEBT_CHECKS) {
     assert.equal(
-      await isValidated(conname),
+      await isValidated(table, conname),
       true,
       `lane A tech-debt: ${conname} is VALIDATED by 0031`,
     );
@@ -3353,7 +3357,7 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
   });
   // (c) rolled back: the migrated constraint is still the one 0031 validated.
   assert.equal(
-    await isValidated('program_blocks_name_length_check'),
+    await isValidated('program_blocks', 'program_blocks_name_length_check'),
     true,
     'lane A tech-debt: (c) left the migrated name CHECK as it was',
   );
