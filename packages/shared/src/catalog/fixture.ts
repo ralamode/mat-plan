@@ -1,5 +1,6 @@
 import { fixtureIds } from '../program/fixtures/ids';
 import type { CatalogMovement } from './entry';
+import { catalogOptionOf, type CatalogOption } from './option';
 
 /**
  * A small, generic library for tests, the preview route and test databases
@@ -322,4 +323,13 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
  */
 export const CATALOG_FIXTURE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   CATALOG_FIXTURE.map((entry, index) => [entry.slug, fixtureIds.catalogMovement(index + 1)]),
+);
+
+/**
+ * The test library as the picker's options (chunk C0b-2): `catalogOptionOf` over each entry, with
+ * its fixture id. What the preview's picker lists beside the household's fixture items, and what
+ * the option read is compared with (spec P11).
+ */
+export const CATALOG_FIXTURE_OPTIONS: readonly CatalogOption[] = CATALOG_FIXTURE.map(
+  (entry, index) => catalogOptionOf(entry, fixtureIds.catalogMovement(index + 1)),
 );

@@ -34,15 +34,19 @@ describe('owed by lane A: the seed (chunk A2, then A3)', () => {
   it.todo('E6: after the fresh start, a changed entry changes its stored row and nothing else');
 });
 
-describe('owed by the contract and lane B: filters and browse (chunk C0b-2, then B2 and B3)', () => {
-  it.todo('P1, with filters: exact and aliasHit are the same whatever the filters are');
-  it.todo('P7: equipment by uses-any-of, No equipment as its own switch, muscles by primary');
-  it.todo('P8: an exact or alias hit is listed first, whatever the filters');
-  it.todo("P9: a household's own items are counted and offered while a filter is on");
-  it.todo('P10: nothing passes the filters is its own state');
+describe('owed by lane B and lane P: filters and browse (after chunk C0b-2; B2, B3, 6a-iii)', () => {
+  // The contract's half of P1 and P7 to P10 and P12 is held in `filters.test.ts` and
+  // `option.test.ts`: the rule, the result's lists and the browse tree. What is owed is the screen.
+  it.todo('P7: the panel greys a choice that counts zero, and filters stay on within a workout');
+  it.todo('P8: a hit outside the filters is shown first and says "not in your filters"');
+  it.todo(
+    'P9: "Your custom items (not filtered)" after the filtered matches; folded when browsing',
+  );
+  it.todo('P10: "N more are not in your filters" with Clear filters; never the whole list');
   it.todo('P11: the option read returns taxonomy from the tables and aliases from the const');
-  it.todo('P12: browse by modality and primary muscle; the hand-kept groups are gone');
+  it.todo('P12: two folding sections; kinds and families closed until opened; the old groups gone');
   it.todo('P13: a supervision label shows as text, the same for every athlete');
+  it.todo('P16: "How to" opens the steps under the row, read by slug, with the label above them');
 });
 
 describe('owed by lane B: the picker (chunks B1 to B3)', () => {
