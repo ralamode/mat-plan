@@ -124,7 +124,7 @@ export function SetItem({
             <col key={field} className={fieldColumnClass(field, canLog, showPrevious)} />
           ))}
           {/* A wider ✓ column keeps the ✓ clear of the last field: an empty ✓ logs a set (D13). */}
-          <col className="w-14" />
+          <col className={TICK_COLUMN_CLASS} />
         </colgroup>
         <thead>
           <tr className={secondaryText(onTint)}>
@@ -182,6 +182,13 @@ export function SetItem({
     </li>
   );
 }
+
+/**
+ * The ✓ column, and the inset that puts the Change ✕ on the line below exactly under the ✓: the
+ * 44px ✓ is centred in the column, (56 − 44) / 2 = 6px from its right. Change one, change both.
+ */
+const TICK_COLUMN_CLASS = 'w-14';
+const UNDER_TICK_CLASS = 'mr-1.5';
 
 /**
  * A field's column. A load is `w-16` where it is a field: its content box (64px less the cell's and
@@ -319,8 +326,19 @@ function SetRow({
       </tr>
       {status ? (
         <tr {...rowIdProps(rowId)}>
-          <td colSpan={fields.length + (showPrevious ? 3 : 2)} className="pb-1">
-            <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
+          <td
+            colSpan={fields.length + (showPrevious ? 3 : 2)}
+            // Typed over, the ✕ sits under this row's ✓: twice the room below it as above, so a
+            // tap that lands low does not reach the next set's ✓ (which would send this change).
+            className={change.dirty ? 'pb-3' : 'pb-1'}
+          >
+            <RowStatus
+              r={r}
+              change={change}
+              lineId={errorId}
+              tickRef={tickRef}
+              underTickClassName={UNDER_TICK_CLASS}
+            />
           </td>
         </tr>
       ) : null}
