@@ -123,16 +123,20 @@ const dayWorkoutSchema = z.object({
    *
    * **Liveness decides this, never the assignment** (contract change C24). A live workout of a
    * live program that was logged on a day no live assignment covers any more (the athlete's start
-   * was removed after a row was hidden, and the row then came back) is a workout that left the
+   * was removed after a row was hidden, and the row then came back) is shown as one that left the
    * week: both ids non-null, its description, live items and count kept, logged rows only. Its
-   * program is not in `DayPlan.programs` for that day, and the screen names none.
+   * program is not in `DayPlan.programs` for that day, and the screen names none. `onProgram`
+   * still says what the assignments say: if that was the athlete's only program that day, they
+   * are not on a program, and the logged workout shows beneath that line.
    */
   programPublicId: uuidSchema.nullable(),
   workoutPublicId: uuidSchema.nullable(),
   /**
    * The heading of the workout's slot on the week, or `null` when the slot has none. **`null` for
    * a workout that left the week**: the label was the slot's, and the slot is gone _(maintainer,
-   * 2026-11-17)_. A scheduled workout on a closed day shows its slot's label as it is now.
+   * 2026-11-17)_. `null` too for any workout that is not scheduled: one no longer live, and one
+   * on a program the athlete is not on that day (its slot is not theirs). A scheduled workout on
+   * a closed day shows its slot's label as it is now.
    */
   label: slotLabelSchema,
   /**
@@ -146,7 +150,8 @@ const dayWorkoutSchema = z.object({
   description: nullableNoteSchema,
   /**
    * `false`: logged on this day, but no longer on the week, or no longer live (a hidden workout is
-   * never scheduled, even while its slot is still on the week). It shows its logged rows only.
+   * never scheduled, even while its slot is still on the week), or on a program the athlete is
+   * not on that day. It shows its logged rows only.
    */
   scheduled: z.boolean(),
   /**

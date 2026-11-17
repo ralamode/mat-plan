@@ -363,7 +363,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     live and keeps its description, its live items and its count.) **Liveness decides, never the
     assignment** (C24): a live workout logged on a day no live assignment covers any more is
     shown as one that left the week, ids kept, though its program is not in that day's
-    `programs`. No FAM-1 action hides a
+    `programs`; `onProgram` still follows the assignments. No FAM-1 action hides a
     program, and no fixture holds this: the day resolver's own proof does.
 
 ## Traps
