@@ -64,8 +64,10 @@ run at a time, machine-wide; everything heavy on GitHub CI**.
 | 1a  | The slim pre-push and `test:changed` (D, part of I); the when-to-run rule (H); every doc fix (G)                                                                                                       | nothing                                                   |
 | 1b  | The kill guard (F) and the heavy-run slot (E), which shares one lock helper with #554's                                                                                                                | #554 merged                                               |
 | 2   | `db:mutations` in CI: sharded, scoped, and run in full on every push to main (A). Pillar scopes for the heavy CI steps, from one tested script (C). "`pnpm verify` before a PR is optional" lands here | PR 1b, because it changes `mutations.mjs` after #554 does |
-| 3   | Screenshots in CI on request (B)                                                                                                                                                                       | PR 2, because it reads the scope script                   |
+| 3   | Screenshots in CI on request (B)                                                                                                                                                                       | nothing beyond the plan: it runs on request               |
 
+- **1a and #554:** both edit `package.json`'s `guards:test` line and AGENTS.md's guard count, which
+  1a deletes. Whichever merges second merges main and resolves that line.
 - **Why 1a goes first:** it is the immediate relief. Every push currently runs the full suite.
 - **Why C is not its own PR:** measured, it saves 23 seconds of a 3.5-minute job. Its value is the
   mutation scope, which lives in PR 2.
@@ -90,6 +92,12 @@ Bash hook that applies in every directory.
   `kill %<job>`.
 - **The deny reason:** "Stop only a process you started, by the pid you captured (`$!`), or let it
   finish: other lanes run the same scripts on this machine."
+- **Wrappers:** the walk covers the same wrappers its sibling unwraps (`guard-main-checkout.mjs:371-449`):
+  `sudo`, `doas`, `env`, `command`, `exec`, `eval`, `nice`, `nohup`, `stdbuf`, `timeout`,
+  `caffeinate`, `xargs`, `script -c`, `watch`, `find -exec`, `pnpm exec`/`npx`, and a re-lex of
+  `sh -c` / `bash -c`. A case per wrapper goes in `hooks.test.sh`.
+- **The no-op check:** the hook must contain the exact text `!process.env.CI && !process.env.GITHUB_ACTIONS`,
+  because `review-prefetch.sh` greps for that string.
 - **Known gaps block:** `node -e 'process.kill(…)'`, `npx kill-port`, and a `while read p; do kill $p`
   loop. Best-effort, like its sibling, and not a security boundary.
 - **Fails open,** and does nothing under `CI` or `GITHUB_ACTIONS`.
@@ -99,7 +107,8 @@ Bash hook that applies in every directory.
   - `SETTINGS_SHA256` is updated, with the DX-1 threat model re-read and logged in the PR;
   - `review-prefetch.test.sh` gains the cases;
   - SECURITY.md → CI / Actions secrets is updated.
-- **The shared wrapper walk is not built here.** Lifting `guard-main-checkout.mjs`'s walk into one module
+- **The shared wrapper walk is not built here, but it is tracked:** PR 1b adds a `docs/tech-debt.md`
+  entry, "two shell-wrapper walks". Lifting `guard-main-checkout.mjs`'s walk into one module
   for both hooks is a refactor of a 962-line guard with 221 cases. It is recorded as a follow-up, not
   done in this PR.
 
@@ -134,6 +143,11 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
 - **When the slot is busy,** the command exits 2 with: **"heavy-run slot held by `<lane>` (`<command>`,
   since `<time>`). Push and let CI gate it, or wait."**
 - **Bypass:** `MAT_PLAN_HEAVY_SLOT=off`, for a person. It does nothing under CI.
+- **Tests use their own lock.** `MAT_PLAN_HEAVY_SLOT_PATH` overrides the path, and `heavy-slot.test.sh`
+  and `mutations.test.sh` point it at a temp directory. They never take, steal or delete another
+  lane's live lock.
+- **Putting a fresh lock back** after the steal check uses `link`, never `rename`, so it can't
+  overwrite a newer lock.
 
 **D4. The slim pre-push and `test:changed` (D, part of I), in PR 1a.**
 
@@ -194,8 +208,10 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
     caused it. A final job opens or updates one issue, "mutation gate red on main", in a job that
     holds only `issues: write`.
 - **No cron.** A scheduled run tells nobody, and public-repo schedules lapse after 60 days.
-- **Concurrency:** `cancel-in-progress` only for `pull_request`, so a merge never cancels main's
-  full run.
+- **Concurrency:** `cancel-in-progress` only for `pull_request`. On `push`, the group is keyed by
+  `github.sha`. GitHub keeps only one _pending_ run per group even without cancelling (AGENTS.md
+  records this for `migrate.yml`), so a shared group would drop a middle commit's shards on quick
+  merges.
 - **The runner flags,** added to `mutations.mjs` on top of #554's journal:
   - `--shard i/n` and `--only <range|substring>`;
   - `--list-paths`, which prints the union of the paths the patches touch, through #554's
@@ -250,6 +266,11 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
 
   A `screenshots` label (`types: [labeled, opened, synchronize, reopened]`) or a `workflow_dispatch`
   starts a run.
+  A `workflow_dispatch` run never publishes (the publish job requires `event == 'pull_request'`);
+  its images are only an artifact.
+
+- **The entries reach the script through `env:` or a file,** never `${{ }}` inside `run:`, so PR-body
+  text can't inject into the shell.
 
 - **The capture workflow, `screenshots.yml`:**
   - runs on `pull_request`, with `permissions: contents: read`, `persist-credentials: false` and no
@@ -401,3 +422,24 @@ Lenses: C correctness, S scope, A architecture, R reuse, X security.
 | 18  | R          | Move the two older checks onto one changed-files helper                                                                                              | **rejected (deferred)** | Not needed to deliver DX-18; recorded in Out of scope                                                                          |
 | 19  | X          | Allow-listing `kill <digits>` admits `kill 0`, `-1` and negative pids                                                                                | **accepted**            | D2: only a pid of 2 or more; the broad forms denied                                                                            |
 | 20  | S, R       | Slot nesting through an env var; the duplicate lessons entry                                                                                         | **accepted**            | D3: HELD must match the live pid; D2's lessons line extends #554's entry                                                       |
+
+### Re-review (all five; one light pass each)
+
+No blocker survived, and the reshaping added none. These were folded in:
+
+- **C:**
+  - tests set `MAT_PLAN_HEAVY_SLOT_PATH`, so they never touch a live lock;
+  - push runs' concurrency group is keyed by `github.sha`, because GitHub keeps one pending run per
+    group;
+  - a fresh lock is restored with `link`, not `rename`.
+- **S:**
+  - PR 3 no longer waits for PR 2;
+  - PR-body entries reach the script through `env:`, never `${{ }}` inside `run:`.
+- **X:**
+  - the hook contains the exact no-op text `review-prefetch.sh` greps for;
+  - a `workflow_dispatch` run never publishes.
+- **R:**
+  - the kill guard's wrapper list matches its sibling's;
+  - the deferred shared walk gets a tech-debt entry in PR 1b.
+- **A:** 1a and #554 share one line in `package.json` and one in AGENTS.md; whichever merges second
+  merges main.
