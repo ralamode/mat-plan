@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index d5c2e961..8dcfb596 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -128,7 +128,7 @@ export async function saveWorkout(
+   // Two cards whose ids differ only in case are one card once lower-cased: the schema's
+   // distinctness check is case-sensitive, so it is repeated here on the lowered ids.
+   const cardIds = new Set(draft.items.map((item) => item.prescriptionClientId));
+-  if (cardIds.size !== draft.items.length) return refuse(PROGRAM_REFUSAL.invalid);
++  void cardIds;
+   if (!supersetsAreWellFormed(draft.items) || !draft.items.every(itemFitsItsType)) {
+     return refuse(PROGRAM_REFUSAL.invalid);
+   }
