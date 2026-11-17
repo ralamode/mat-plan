@@ -47,6 +47,8 @@ vi.mock('@/components/day/program-line', () => ({ ProgramLine: probe('program-li
 vi.mock('@/components/day/not-on-a-program', () => ({ NotOnAProgram: probe('not-on-a-program') }));
 
 import { pickerOptions } from './picker-options';
+import { SETTINGS_COPY } from '@/lib/constants';
+
 import { PreviewHarness } from './preview-harness';
 import {
   parsePreview,
@@ -243,6 +245,28 @@ describe('the preview harness', () => {
     );
     expect(own?.name).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(own?.name);
+  });
+
+  it('shows the page’s archived notice on an archived athlete’s day, and on no other', () => {
+    // The real page says it from the profile, so the day screen has no line of its own and the
+    // plan no `archived` field. The preview shows the same words from the fixture's world.
+    const plan = DAY_PLAN_FIXTURES['archived-athlete-today'];
+    const name = DAY_PLAN_FIXTURES['today-two-programs'].athletes.find(
+      (a) => a.profilePublicId === plan.profilePublicId,
+    )!.name;
+    const notice = `${SETTINGS_COPY.archivedNotice(name)} ${SETTINGS_COPY.heading}.`;
+    expect(notice).toContain('is archived');
+
+    render(<PreviewHarness screen="day" fixture="archived-athlete-today" failNext={false} />);
+    expect(screen.getByText(notice)).toBeTruthy();
+    cleanup();
+
+    for (const fixture of Object.keys(DAY_PLAN_FIXTURES)) {
+      if (fixture === 'archived-athlete-today') continue;
+      render(<PreviewHarness screen="day" fixture={fixture} failNext={false} />);
+      expect(screen.queryByText(/is archived/), fixture).toBeNull();
+      cleanup();
+    }
   });
 
   it('the day preview supplies the page’s <h1>, which on the real page is not the screen’s', () => {

@@ -73,8 +73,7 @@ writer's sequence diagram is [architecture.md §2i](../architecture.md), the day
 4. **Every refusal is a typed `RowResult`, never a throw**, and the reasons are the contract's
    `ROW_REFUSALS`. The preview route's fake answers the same reasons by the same rules
    (`apps/web/app/design/program/fakes.ts`), so a difference between the two is a bug in one.
-5. **Every proof goes in `verify/day.ts` or `verify/day-plan.ts`**, never in `verify.ts` or another
-   lane's module.
+5. **Every proof goes in `verify/day.ts` or `verify/day-plan.ts`**, never in `verify.ts` or another lane's module. **Another lane** that needs a real program row builds lane E's fixture through the exported `programRowFixture(tx)` (`verify/day.ts`), rather than a copy; its own proofs stay in its own module (lane S's B2-0 is the first).
 6. **Start on open, merge on applied** (plan §6).
 7. **[write-path.md](./write-path.md)'s invariants still apply to these files**, though the guide
    gate no longer sends a PR there: ownership proven by `public_id` inside the transaction (2), the

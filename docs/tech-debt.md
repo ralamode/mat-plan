@@ -26,6 +26,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   name. Scoped `kind = 'template' or …` if a legacy name exceeds it, as 0025 did for `target_reps`.
 - **Owner:** lane A (FAM-1). **Trigger:** after FAM-1 step 5 (`0027`) is applied.
 - **Severity:** low (nothing writes a template block outside the zod-validated writers).
+- **In progress (2026-11-16):** PR 1 of 2 adds `program_blocks_name_length_check` `NOT VALID` on
+  every row (the maintainer chose one pair of PRs for this and the NaN entry below); PR 2 validates it
+  after a second production read. Close this entry in PR 2.
 
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
 
@@ -56,7 +59,11 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   (added `NOT VALID`, then validated, per the migration rules), with a `db:verify` row that tries the
   insert. Look for sibling `>= 0` CHECKs on `numeric` columns in the same pass. **Not in a FAM-1
   step:** nothing in FAM-1 depends on it and the migration queue is taken until step 5 is applied;
-  it is the first migration after that. Owner: the Platform thread.
+  it is the first migration after that. Owner: lane A (the maintainer, 2026-11-16).
+- **In progress (2026-11-16):** PR 1 of 2 adds `<> 'NaN'` siblings beside the two `>= 0` CHECKs
+  (`entry_set_quantities`, `ramp_targets`), keeping the old ones, and a new
+  `entries_value_num_check` (NULL, or `>= 0` and not NaN): `entries.value_num` had no range CHECK
+  at all. All `NOT VALID`; PR 2 validates them after a second production read. Close this in PR 2.
 - **Severity:** low.
 
 ### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel)

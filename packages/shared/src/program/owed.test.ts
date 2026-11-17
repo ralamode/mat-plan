@@ -28,7 +28,7 @@ describe('DayPlan: owed by its consumers', () => {
 
 // The constants' columns are all bounded and proved now: 4a-i's (workouts' and week slots' text
 // CHECKs) and 4b's (the prescription columns, a template row's reps and sets, the superset place),
-// each pinned to its const in `packages/db/scripts/verify/schema.ts`. Two stay unbounded on purpose,
-// because the columns predate FAM-1: `program_blocks.name` (the seeded block's name; a template
-// block's is bounded by PROGRAM_NAME_MAX in zod) and a LEGACY prescription's `target_reps` and
-// `sets` (production's archived block holds 32-character reps; 0025's header says why).
+// each pinned to its const in `packages/db/scripts/verify/schema.ts`. `program_blocks.name` is
+// bounded by PROGRAM_NAME_MAX since lane A's tech-debt migration (NOT VALID, then validated). A
+// LEGACY prescription's `target_reps` and `sets` stay unbounded on purpose (production's archived
+// block holds 32-character reps; 0025's header says why).

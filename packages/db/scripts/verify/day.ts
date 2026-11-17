@@ -113,6 +113,20 @@ function expectRefused(r: Settled, reason: RowRefusal, title: string): void {
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 /**
+ * The row writer's fixture, for ANOTHER lane's proofs that need a real program row: lane S's B2-0
+ * (`verify/single-values.ts`) ticks, un-ticks and re-ticks through `logRow` / `untickRow` / `retickRow`
+ * with it. Build it inside the caller's own `rolledBack` transaction. It is lane E's; the shape may
+ * grow, but the existing members keep their meaning. Lane E's own proofs keep using `fixture`.
+ */
+export type ProgramRowFixture = Fixture;
+export const programRowFixture = (tx: VerifyTx): Promise<ProgramRowFixture> => fixture(tx);
+/**
+ * The day the fixture's rows are built for (a Monday), so a caller ticks on the same day instead of
+ * re-typing the date. Its yesterday is `addDays(PROGRAM_ROW_FIXTURE_DAY, -1)`.
+ */
+export const PROGRAM_ROW_FIXTURE_DAY = DAY;
+
+/**
  * The plan's fixture (§ Test plan), built fresh for every proof. Household H: a template block whose
  * workouts W1 and W2 are both on Monday's week; one prescription of each tracking type in W1; a
  * superset pair; the bad-value prescriptions; a hidden prescription, workout and block. Household F:
