@@ -1225,6 +1225,14 @@ async function verifySaveWeek({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
       [[friday.id, 'Late']],
       'FAM-1 6b: a relabelled slot keeps its row, with the new label',
     );
+    const [fridayStamp] = await tx
+      .select({ updatedAt: schema.blockDayWorkouts.updatedAt })
+      .from(schema.blockDayWorkouts)
+      .where(eq(schema.blockDayWorkouts.id, friday.id));
+    assert.ok(
+      fridayStamp!.updatedAt > old,
+      'FAM-1 6b: a slot only relabelled is stamped with updated_at too',
+    );
 
     // ── one save takes a slot off and fills its place ──
     const [thursdayA, thursdayB] = await liveOn(4);
