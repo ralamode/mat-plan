@@ -4,6 +4,7 @@ import {
   PROGRAM_REFUSAL,
   WEEKDAYS,
   weekDraftSchema,
+  weekRepeatsAWorkout,
   type ProgramResult,
   type Weekday,
 } from '@mat-plan/shared';
@@ -15,25 +16,6 @@ import { liveTemplateBlockIn } from '../ownership';
 import { refuse } from './refuse';
 import { shiftIntoBand } from './shift-band';
 
-/**
- * **Does a day name one workout twice?** Read from the raw input, as the preview fake reads it
- * (`repeatsAWorkout`, `apps/web/app/design/program/fakes.ts`), so a draft with a repeat answers
- * `once_per_day` whatever else is wrong with it, on the preview route and in production alike (lane
- * guide invariant 6). Ids are compared in lower case: Postgres compares a uuid in any case.
- */
-function repeatsOnADay(input: unknown): boolean {
-  const days = (input as { days?: unknown } | null)?.days;
-  if (typeof days !== 'object' || days === null) return false;
-  return Object.values(days).some((slots) => {
-    if (!Array.isArray(slots)) return false;
-    const ids = slots.map((slot: { workoutPublicId?: unknown } | null) => {
-      const id = slot?.workoutPublicId;
-      return typeof id === 'string' ? id.toLowerCase() : id;
-    });
-    return new Set(ids).size !== ids.length;
-  });
-}
-
 /** A live slot's address within its block: a workout appears at most once a day. */
 const slotKey = (weekday: number, workoutId: number) => `${weekday}:${workoutId}`;
 
@@ -42,10 +24,11 @@ const slotKey = (weekday: number, workoutId: number) => `${weekday}:${workoutId}
  * weekday, its workouts in order, each with an optional label. Correct on a bare `db` or inside a
  * transaction: its writes run in one.
  *
- * - **Refusals, before anything is written,** in the preview fake's order: a workout twice on one
- *   day is `once_per_day`, whatever else is wrong (also when the two ids differ only in case); any
- *   other draft the schema refuses is `invalid`; a program that is not this household's live
- *   program, or a workout that is not one of its live workouts, is `not_found`.
+ * - **Refusals, before anything is written,** in the preview fake's order: a draft the schema
+ *   refuses is `once_per_day` when a day names a workout twice (`weekRepeatsAWorkout`: whatever
+ *   else is wrong, and also when the two ids differ only in case), and `invalid` otherwise; a
+ *   program that is not this household's live program, or a workout that is not one of its live
+ *   workouts, is `not_found`.
  * - **A slot keeps its row** while its workout stays on that day: only its place and label change.
  *   A slot that is gone is hidden, which frees its place and its once-a-day key (both unique indexes
  *   are partial on live rows), so the same workout can be put back on that day later. A week saved
@@ -60,18 +43,16 @@ export async function saveWeek(
   scope: HouseholdScope,
   input: unknown,
 ): Promise<ProgramResult> {
-  if (repeatsOnADay(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
   const parsed = weekDraftSchema.safeParse(input);
-  if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
-  // Postgres compares a uuid in any case and answers in lower case; ids compare in JS below.
-  const programPublicId = parsed.data.programPublicId.toLowerCase();
-  const days = WEEKDAYS.map((weekday) => ({
-    weekday,
-    slots: parsed.data.days[weekday].map((slot) => ({
-      workoutPublicId: slot.workoutPublicId.toLowerCase(),
-      label: slot.label,
-    })),
-  }));
+  if (!parsed.success) {
+    // A repeat answers `once_per_day` whatever else is wrong: the preview fake's rule, shared.
+    return refuse(
+      weekRepeatsAWorkout(input) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+    );
+  }
+  // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.
+  const { programPublicId } = parsed.data;
+  const days = WEEKDAYS.map((weekday) => ({ weekday, slots: parsed.data.days[weekday] }));
 
   return exec.transaction(async (tx) => {
     const [block] = await tx

@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
-index 845b811a..262de179 100644
+index 61e60d91..44d9216b 100644
 --- a/packages/db/src/writers/program/save-week.ts
 +++ b/packages/db/src/writers/program/save-week.ts
-@@ -129,7 +129,7 @@ export async function saveWeek(
+@@ -110,7 +110,7 @@ export async function saveWeek(
          continue;
        }
        kept.add(row.id);

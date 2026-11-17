@@ -138,7 +138,16 @@ flowchart TD
     movement today. The step that first does (RETIRE-1) decides: check availability only for new cards
     and changed items, or drop such cards from the read.
 
-15. 🔴 **A week is saved whole, matched by (weekday, workout)** (6b). A slot keeps its row while its
+15. **A writer reads its ids from the parsed draft, and the parse has already lower-cased them**
+    (contract change C25, [program-contract.md](./program-contract.md) invariant 26). Postgres
+    compares a uuid in any case and answers in lower case, while a writer's maps and `===` do not,
+    so one spelling has to hold from the parse on. `saveWorkout` did this itself until C25 and no
+    longer does; do not add a second lower-casing or a second "no two the same" check to a writer,
+    and do not read an id from the raw `input` after parsing it. The two 6a-ii proofs (an upper-case
+    save, and two cards whose ids differ only in case) still run the writer against the database;
+    mutation patches `142` and `143` now break the schema to redden them.
+
+16. 🔴 **A week is saved whole, matched by (weekday, workout)** (6b). A slot keeps its row while its
     workout stays on that day; only its place and label change, together when both do
     (`week-moved-slot-keeps-old-label`). A slot taken off a day is hidden **before** anything is
     placed, so one save can take a slot off and fill its place (`week-keeps-a-removed-slot`,
@@ -148,8 +157,8 @@ flowchart TD
     transaction (`week-rewrites-kept-slots`, `week-replaces-every-slot`). Moved slots, and only
     those, go through the band (`week-skips-the-band`, `week-band-moves-unmoved-slots`).
     **Refusals, in the preview fake's order:** `once_per_day` when a day names a workout twice,
-    whatever else is wrong with the draft and also when the ids differ only in case (read from the
-    raw input as the fake reads it: `week-repeat-loses-to-other-errors`); then `invalid` (the
+    whatever else is wrong with the draft and also when the ids differ only in case (after a refused
+    parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `invalid` (the
     schema); then `not_found` (the program, or a workout that is not one of its live workouts:
     `week-takes-any-programs-workout`, `week-takes-a-hidden-workout`). `readWeek` leaves out a hidden
     workout's slot (`week-read-shows-a-hidden-workout`), and saving the week as read hides it.

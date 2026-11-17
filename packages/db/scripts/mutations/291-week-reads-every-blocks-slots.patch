@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
-index 845b811a..ea9d66c0 100644
+index 61e60d91..92dccda8 100644
 --- a/packages/db/src/writers/program/save-week.ts
 +++ b/packages/db/src/writers/program/save-week.ts
-@@ -111,10 +111,7 @@ export async function saveWeek(
+@@ -92,10 +92,7 @@ export async function saveWeek(
        })
        .from(schema.blockDayWorkouts)
        .where(
