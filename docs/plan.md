@@ -1842,6 +1842,13 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   D10): from that PR the production seed no longer writes the program, existing rows stay, and only
   the test and preview seeds write it, behind `SEED_FIXTURES`. \"Keep `PROGRAM_SEED` reaching prod
   until V1-22\" above no longer holds.
+  **Planned 2026-11-13, refreshed 2026-11-16 onto #432** ([plan](./plans/ops-2-split-the-seed.md)), not
+  yet implemented. Two PRs: 1 moves the seed household and its three fixture profiles under #432's
+  `fixtures` branch and takes the ramp expansion out of production, so production's `db:seed` writes
+  reference data only, and replaces both runbook preconditions that wait on OPS-2 with a check run
+  before each deletion; 2 soft-deletes the fixture athlete `PROF-1 b`'s seed put in production. Decided
+  2026-11-16: SEC-6's production re-key runs before the first seed-id deletion (no tombstones); the
+  fixture athlete is soft-deleted; the ramp expansion is deleted.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
