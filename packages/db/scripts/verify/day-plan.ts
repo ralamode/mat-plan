@@ -14,6 +14,7 @@ import {
   ON_PROGRAM,
   PROFILE_KIND,
   PROGRAM_BLOCK_KIND,
+  type ProgramResult,
   QUANTITY_SLOT,
   ROW_REFUSAL,
   type RowValues,
@@ -22,6 +23,7 @@ import {
   SESSION_TYPE,
   UNIT_DIMENSION_BY_CODE,
   WEEKDAYS,
+  type WorkoutDraftItem,
 } from '@mat-plan/shared';
 import {
   DAY_PLAN_FIXTURE_SOURCES,
@@ -30,11 +32,12 @@ import {
   fixtureIds,
   type FixtureItemKey,
   programOf,
+  programView,
   type World,
   workoutDraft,
   workoutOf as protoWorkoutOf,
 } from '@mat-plan/shared/program/fixtures';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { resolveDayPlan, type ResolvedDayPlan } from '../../src/queries/day/day-plan';
@@ -48,10 +51,16 @@ import {
   insertWorkoutOwnedBy,
   programBlockByClientId,
 } from '../../src/writers/ownership';
+import { saveWeek, saveWorkout } from '../../src/writers/program';
 import { insertEntrySetRows } from '../../src/writers/session-rows';
 import { activityTypeIdOf, expectOk, inSavepoint } from './day';
 import { asDb, asTx, rolledBack, type VerifyTx } from './harness';
-import { ARCHIVE_ONLY_FIXTURES, FIXED_WORLD_FIXTURE_COUNT } from './fixture-groups';
+import {
+  ARCHIVE_ONLY_FIXTURES,
+  FIXED_WORLD_FIXTURE_COUNT,
+  REPLAY_FIXTURE_COUNT,
+  REPLAY_FIXTURES,
+} from './fixture-groups';
 import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './schema';
 
 /**
@@ -89,6 +98,9 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  */
 export async function verifyDayPlan(): Promise<void> {
   await verifyFixtures();
+  // 12a-ii's replays, after 12a-i's fixtures and before its rules (plan § 12a-ii, the harness).
+  await verifyReplays();
+  await verifyReplayRules();
   await verifyRules();
 }
 
@@ -176,9 +188,13 @@ async function seedWorld(tx: VerifyTx, world: World, label: string, activityType
 
     for (const workout of [...program.workouts].reverse()) {
       const draft = workoutDraft(world, program.id, workout.wid);
+      // 12a-ii: the `client_id`s a `workoutDraft` names, so a replay's draft translates (plan § 12a-ii,
+      // step 1). Values are fresh ids, never the fixture's own: those are the map's KEYS.
+      const workoutClientId = newId();
+      ids.set(fixtureIds.workoutClient(workout.wid), workoutClientId);
       const w = (await insertWorkoutOwnedBy(asTx(tx), SEEDED_SCOPE, {
         blockId: block.id,
-        clientId: newId(),
+        clientId: workoutClientId,
         name: draft.name,
         description: draft.description,
       }))!;
@@ -187,13 +203,15 @@ async function seedWorld(tx: VerifyTx, world: World, label: string, activityType
 
       for (const [idx, item] of [...draft.items.entries()].reverse()) {
         const key = workout.items[idx]!.iid;
+        const prescriptionClientId = newId();
+        ids.set(fixtureIds.prescriptionClient(workout.wid, key), prescriptionClientId);
         const [p] = await tx
           .insert(schema.prescriptions)
           .values({
             publicId: newId(),
             blockId: block.id,
             workoutId: w.id,
-            clientId: newId(),
+            clientId: prescriptionClientId,
             movementId: movements.get(key)!,
             idx,
             sets: item.sets,
@@ -1649,4 +1667,451 @@ async function verifyRules(): Promise<void> {
       '✓ FAM-1 12b: prescriptionLiveIn (own, other household, malformed, legacy, hidden, hidden program)',
     );
   });
+}
+
+// ── 12a-ii — the replays: seed `before`, log, make the change with the real writers ─────────────────
+
+/** A program writer's answer must be `ok`; a refusal fails with the writer's own reason. */
+function expectProgramOk(r: ProgramResult<object>, title: string): void {
+  assert.ok(r.ok, `${title} — the writer refused: ${JSON.stringify(r)}`);
+}
+
+/** What changed between a fixture's `before` and its `world`, in the three kinds a replay makes. */
+type Change =
+  | { kind: 'workout'; prog: string; wid: string }
+  | { kind: 'week'; prog: string }
+  | { kind: 'order'; athlete: string };
+
+/**
+ * Plan § 12a-ii, step 4: **classify the change.** Any difference the harness cannot replay with a
+ * writer throws, naming it, so a fixture that grows a new kind of edit fails here and not as a
+ * confusing deep-equal.
+ */
+function classify(before: World, world: World, name: string): Change[] {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const unreplayable = (what: string): never => {
+    throw new Error(`FAM-1 12a-ii ${name}: unreplayable change: ${what}`);
+  };
+  if (before.today !== world.today) unreplayable('today');
+  if (!same(before.athletes, world.athletes)) unreplayable('athletes');
+  if (!same(before.catalog, world.catalog)) unreplayable('catalog');
+  if (!same(before.entries, world.entries) || !same(before.stamps, world.stamps)) {
+    unreplayable('entries'); // C17: `world`'s entries are `before`'s, stamps included
+  }
+  const shell = (w: World) =>
+    w.programs.map((p) => ({ id: p.id, name: p.name, workouts: p.workouts.map((x) => x.wid) }));
+  if (!same(shell(before), shell(world))) unreplayable('programs or their workouts');
+
+  const changes: Change[] = [];
+  for (const program of world.programs) {
+    for (const { wid } of program.workouts) {
+      if (!same(workoutDraft(before, program.id, wid), workoutDraft(world, program.id, wid))) {
+        changes.push({ kind: 'workout', prog: program.id, wid });
+      }
+    }
+    if (!same(programView(before, program.id).week, programView(world, program.id).week)) {
+      changes.push({ kind: 'week', prog: program.id });
+    }
+  }
+  const athletes = new Set([...Object.keys(before.assign), ...Object.keys(world.assign)]);
+  for (const athlete of athletes) {
+    const was = before.assign[athlete] ?? [];
+    const now = world.assign[athlete] ?? [];
+    if (same(was, now)) continue;
+    const sorted = (list: typeof was) => [...list].map((a) => JSON.stringify(a)).sort();
+    if (!same(sorted(was), sorted(now))) unreplayable(`${athlete}'s assignments`);
+    changes.push({ kind: 'order', athlete });
+  }
+  return changes;
+}
+
+/**
+ * Plan § 12a-ii, steps 4 and 5: **replay each change with its writer**, under the seeded scope.
+ * Returns how many writes it made; zero fails the caller's proof.
+ */
+async function replay(
+  tx: VerifyTx,
+  seeded: Seeded,
+  before: World,
+  world: World,
+  name: string,
+): Promise<number> {
+  const changes = classify(before, world, name);
+  for (const change of changes) {
+    if (change.kind === 'workout') {
+      expectProgramOk(
+        await saveWorkout(
+          asTx(tx),
+          seeded.scope,
+          translate(workoutDraft(world, change.prog, change.wid), seeded.ids, name),
+        ),
+        `FAM-1 12a-ii ${name}: saveWorkout replays ${change.wid}`,
+      );
+    } else if (change.kind === 'week') {
+      expectProgramOk(
+        await saveWeek(asTx(tx), seeded.scope, {
+          programPublicId: seeded.ids.get(fixtureIds.program(change.prog))!,
+          days: translate(programView(world, change.prog).week, seeded.ids, name),
+        }),
+        `FAM-1 12a-ii ${name}: saveWeek replays ${change.prog}'s week`,
+      );
+    } else {
+      await reorder(tx, seeded, world, change.athlete, name);
+    }
+  }
+  return changes.length;
+}
+
+/**
+ * The reorder, by a direct `idx` update (the board's Q6, 2026-11-17; 6d's writer is not built). In
+ * two steps through a band, so no two live rows ever share an `idx`; then the board's condition 1:
+ * the athlete's live assignments have dense `idx` values from 0, a state 6d's writer could leave.
+ */
+async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: string, name: string) {
+  const profileId = seeded.profiles.get(athlete)!.id;
+  const rows = await tx
+    .select({
+      id: schema.programAssignments.id,
+      blockId: schema.programAssignments.blockId,
+      activeFrom: schema.programAssignments.activeFrom,
+    })
+    .from(schema.programAssignments)
+    .where(
+      and(
+        eq(schema.programAssignments.profileId, profileId),
+        isNull(schema.programAssignments.deletedAt),
+      ),
+    );
+  const BAND = 1000;
+  for (const row of rows) {
+    await tx
+      .update(schema.programAssignments)
+      .set({ idx: sql`${schema.programAssignments.idx} + ${BAND}` })
+      .where(eq(schema.programAssignments.id, row.id));
+  }
+  for (const [idx, a] of (world.assign[athlete] ?? []).entries()) {
+    const row = rows.find(
+      (r) => r.blockId === seeded.blocks.get(a.prog) && r.activeFrom === a.from,
+    );
+    assert.ok(row, `FAM-1 12a-ii ${name}: ${athlete}'s ${a.prog} assignment is seeded`);
+    await tx
+      .update(schema.programAssignments)
+      .set({ idx })
+      .where(eq(schema.programAssignments.id, row.id));
+  }
+  const after = await tx
+    .select({ idx: schema.programAssignments.idx })
+    .from(schema.programAssignments)
+    .where(
+      and(
+        eq(schema.programAssignments.profileId, profileId),
+        isNull(schema.programAssignments.deletedAt),
+      ),
+    )
+    .orderBy(schema.programAssignments.idx);
+  assert.deepEqual(
+    after.map((r) => r.idx),
+    after.map((_, i) => i),
+    `FAM-1 12a-ii ${name}: the reorder leaves dense idx from 0, as 6d's writer would (Q6)`,
+  );
+}
+
+/**
+ * Plan § 12a-ii, step 2: **calibrate.** Save every workout of `before` through `saveWorkout`,
+ * unchanged, and the resolved day must not move: the seeder's direct inserts and the writer's rows
+ * agree, so a later difference is the edit's.
+ */
+async function calibrate(tx: VerifyTx, seeded: Seeded, before: World, name: string, at: Seat) {
+  const was = await resolve(tx, seeded, at.athlete, at.day, at.today);
+  for (const program of before.programs) {
+    for (const { wid } of program.workouts) {
+      expectProgramOk(
+        await saveWorkout(
+          asTx(tx),
+          seeded.scope,
+          translate(workoutDraft(before, program.id, wid), seeded.ids, name),
+        ),
+        `FAM-1 12a-ii ${name}: calibration saves ${wid} unchanged`,
+      );
+    }
+  }
+  assert.deepStrictEqual(
+    await resolve(tx, seeded, at.athlete, at.day, at.today),
+    was,
+    `FAM-1 12a-ii ${name}: an unchanged save through saveWorkout leaves the day as seeded`,
+  );
+}
+
+/** Who and when a fixture is read for. */
+type Seat = { athlete: string; day: string; today: string };
+
+/**
+ * Seed `name`'s `before`, log its entries (the seeder does), calibrate, then replay its change.
+ * Returns the seeded state, now `world`.
+ */
+async function seedAndReplay(tx: VerifyTx, name: FixtureName, activityTypeId: number) {
+  const { world, before, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
+  assert.ok(before, `FAM-1 12a-ii ${name}: a replay fixture has a before`);
+  const seeded = await seedWorld(tx, before as World, `${name}-ii`, activityTypeId);
+  await calibrate(tx, seeded, before as World, name, { athlete, day, today: world.today });
+  const writes = await replay(tx, seeded, before as World, world as World, name);
+  assert.ok(writes > 0, `FAM-1 12a-ii ${name}: the replay made a change`);
+  return seeded;
+}
+
+/**
+ * C1's round trip on a replayed day. Where a scheduled row is unlogged, 12a-i's `roundTrip`.
+ * Otherwise (every scheduled row logged, as `workout-left-the-week`), a returned scheduled
+ * `entryPublicId` un-ticks, and an entry of a workout that left the week answers `not_scheduled`,
+ * not `not_found`: its returned ids are the writer's own.
+ */
+async function replayRoundTrip(
+  tx: VerifyTx,
+  seeded: Seeded,
+  name: string,
+  plan: ResolvedDayPlan,
+  activityTypeId: number,
+): Promise<void> {
+  const rowsOf = (w: DayWorkout) =>
+    w.items.flatMap((item) => (item.prescriptionPublicId === null ? [] : item.rows));
+  const scheduled = plan.workouts.filter((w) => w.scheduled && w.workoutPublicId !== null);
+  if (scheduled.flatMap(rowsOf).some((row) => row.logged === null)) {
+    await roundTrip(tx, seeded, name, plan, activityTypeId);
+    return;
+  }
+  const untick = (entryPublicId: string) =>
+    untickRow(asDb(tx), {
+      scope: seeded.scope,
+      today: plan.today,
+      input: { profilePublicId: plan.profilePublicId, day: plan.day, entryPublicId },
+    });
+  await inSavepoint(tx, async () => {
+    const logged = scheduled.flatMap(rowsOf).find((row) => row.logged !== null);
+    assert.ok(logged, `FAM-1 12a-ii ${name}: a scheduled row is logged`);
+    expectOk(
+      await untick(logged.logged!.entryPublicId),
+      `FAM-1 12a-ii ${name}: a returned scheduled entryPublicId un-ticks`,
+    );
+  });
+  const left = plan.workouts.filter((w) => !w.scheduled).flatMap(rowsOf);
+  for (const row of left.filter((r) => r.logged !== null)) {
+    assert.deepEqual(
+      await untick(row.logged!.entryPublicId),
+      { ok: false, reason: ROW_REFUSAL.not_scheduled },
+      `FAM-1 12a-ii ${name}: a returned entry of a workout that left the week is not_scheduled`,
+    );
+  }
+}
+
+async function verifyReplays(): Promise<void> {
+  assert.equal(
+    REPLAY_FIXTURES.length,
+    REPLAY_FIXTURE_COUNT,
+    `FAM-1 12a-ii: ${REPLAY_FIXTURE_COUNT} fixtures are replayed`,
+  );
+  for (const name of REPLAY_FIXTURES) {
+    await rolledBack(async (tx) => {
+      const activityTypeId = await workoutItemTypeId(tx);
+      const seeded = await seedAndReplay(tx, name, activityTypeId);
+      const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES[name];
+      const actual = await resolve(tx, seeded, athlete, day, world.today);
+      const { athletes: _athletes, ...fixture } = DAY_PLAN_FIXTURES[name] as DayPlan;
+      assert.deepStrictEqual(
+        actual,
+        asJson(translate(fixture, seeded.ids, name)),
+        `FAM-1 12a-ii: the resolver, on the replayed state, deep-equals ${name}`,
+      );
+      if (actual.writable && actual.workouts.length > 0) {
+        await replayRoundTrip(tx, seeded, name, actual, activityTypeId);
+      }
+    });
+    console.log(`✓ FAM-1 12a-ii: the replayed state deep-equals ${name}, ids mapped exactly`);
+  }
+}
+
+/**
+ * The rules only a replay reaches (plan § 12a-ii, the proofs table), each with its own mutation
+ * (`scripts/mutations/README.md`, 255–259 and 340).
+ */
+async function verifyReplayRules(): Promise<void> {
+  const workoutIn = (plan: ResolvedDayPlan, seeded: Seeded, wid: string) => {
+    const id = seeded.ids.get(fixtureIds.workout(wid));
+    const w = plan.workouts.find((x) => x.workoutPublicId === id);
+    assert.ok(w, `FAM-1 12a-ii: ${wid} is on the day`);
+    return w;
+  };
+  const itemsOf = (w: DayWorkout, seeded: Seeded, key: FixtureItemKey) =>
+    w.items.filter((item) => item.itemPublicId === seeded.ids.get(fixtureIds.item(key)));
+
+  // ── R2, writable half: a writable day shows the live name after a rename ────────────────────────
+  await rolledBack(async (tx) => {
+    const name = 'closed-day-program-since-left';
+    const seeded = await seedAndReplay(tx, name, await workoutItemTypeId(tx));
+    const { world } = DAY_PLAN_FIXTURE_SOURCES[name];
+    const renamed = protoWorkoutOf(programOf(world as World, 'p1'), 'w1').name;
+    // a1 logged Morning on yesterday, which is writable.
+    const plan = await resolve(tx, seeded, 'a1', YESTERDAY, world.today);
+    assert.ok(plan.writable, 'FAM-1 12a-ii R2: yesterday is writable (non-vacuity)');
+    assert.equal(
+      workoutIn(plan, seeded, 'w1').name,
+      renamed,
+      'FAM-1 12a-ii R2: a writable day shows the live name after a rename',
+    );
+  });
+  console.log('✓ FAM-1 12a-ii R2: the live name on a writable day, the frozen one on a closed day');
+
+  // ── the closed-day heading: the first-logged row's snapshot, not the live text ─────────────────
+  await rolledBack(async (tx) => {
+    const name = 'yesterday-edited-after-logging';
+    const seeded = await seedAndReplay(tx, name, await workoutItemTypeId(tx));
+    const closed = await resolve(tx, seeded, 'a1', YESTERDAY, addDays(FIXTURE_TODAY, 1));
+    assert.equal(closed.writable, false, 'FAM-1 12a-ii heading: two days back is closed');
+    const [bench] = itemsOf(workoutIn(closed, seeded, 'w2'), seeded, 'dbbench');
+    assert.ok(bench, 'FAM-1 12a-ii heading: the bench press was logged that day');
+    // The text before the edit is what the seeded day showed for it (`yesterday-half-done`).
+    const textOf = (fixture: FixtureName) => {
+      const plan = DAY_PLAN_FIXTURES[fixture] as DayPlan;
+      const heavyA = plan.workouts.find((w) => w.workoutPublicId === fixtureIds.workout('w2'))!;
+      return heavyA.items.find(
+        (item) => item.itemPublicId === fixtureIds.item('dbbench') && item.prescriptionPublicId,
+      )!.prescribedText;
+    };
+    const logged = textOf('yesterday-half-done');
+    const live = textOf('yesterday-edited-after-logging');
+    assert.notEqual(logged, live, 'FAM-1 12a-ii heading: the edit changed the text (non-vacuity)');
+    assert.equal(
+      bench.prescribedText,
+      logged,
+      'FAM-1 12a-ii heading: where only logged rows show, the heading is what the row was logged against',
+    );
+    assert.deepEqual(
+      bench.rows.map((row) => row.logged?.prescribedText),
+      bench.rows.map(() => logged),
+      'FAM-1 12a-ii heading: each row keeps its own logged text',
+    );
+  });
+  console.log('✓ FAM-1 12a-ii heading: a closed day heads an item with what it was logged against');
+
+  // ── R4: a removed prescription's rows are their OWN item; its key; its text; one movement twice ─
+  await rolledBack(async (tx) => {
+    const name = 'yesterday-edited-after-logging';
+    const activityTypeId = await workoutItemTypeId(tx);
+    const seeded = await seedAndReplay(tx, name, activityTypeId);
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES[name];
+    const heavyA = (w: World) => translate(workoutDraft(w, 'p1', 'w2'), seeded.ids, name);
+    /** A card of `key` as `from` had it, under a NEW client id: a card added back, or a second one. */
+    const newCard = (from: World, key: FixtureItemKey, over: Partial<WorkoutDraftItem> = {}) => {
+      const card = heavyA(from).items.find(
+        (i) => i.itemPublicId === seeded.ids.get(fixtureIds.item(key)),
+      )!;
+      return { ...card, prescriptionClientId: newId(), superset: null, restAfter: null, ...over };
+    };
+    const save = async (items: WorkoutDraftItem[], title: string) =>
+      expectProgramOk(
+        await saveWorkout(asTx(tx), seeded.scope, { ...heavyA(world as World), items }),
+        `FAM-1 12a-ii R4: ${title}`,
+      );
+    const read = () => resolve(tx, seeded, 'a1', YESTERDAY, world.today);
+    const tick = async (prescriptionPublicId: string, set: number) =>
+      expectOk(
+        await logRow(asDb(tx), {
+          scope: seeded.scope,
+          today: world.today,
+          activityTypeId,
+          write: {
+            clientId: newId(),
+            profilePublicId: seeded.profiles.get('a1')!.publicId,
+            day: YESTERDAY,
+            workoutPublicId: seeded.ids.get(fixtureIds.workout('w2'))!,
+            prescriptionPublicId,
+            set,
+            values: { quantities: [] },
+          },
+        }),
+        `FAM-1 12a-ii R4: set ${set} ticks`,
+      );
+    const edited = heavyA(world as World).items;
+
+    await inSavepoint(tx, async () => {
+      // The pull-up, removed by the edit, added back as a new card.
+      const back = newCard(before as World, 'pullup');
+      await save([...edited, back], 'the pull-up is added back');
+      const pulls = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'pullup');
+      const live = pulls.filter((i) => i.prescriptionPublicId !== null);
+      const removed = pulls.filter((i) => i.prescriptionPublicId === null);
+      assert.deepEqual(
+        [
+          live.length,
+          live[0]?.rows.every((r) => r.logged === null),
+          removed.length,
+          removed[0]?.rows.every((r) => r.logged !== null),
+        ],
+        [1, true, 1, true],
+        'FAM-1 12a-ii R4: a removed prescription’s rows stay their own item when its movement is back',
+      );
+
+      // R4's key: a set logged on the new card, then that card removed too: two removed items.
+      await tick(live[0]!.prescriptionPublicId!, 1);
+      await save(edited, 'the added-back card is removed again');
+      const again = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'pullup');
+      assert.equal(
+        again.filter((i) => i.prescriptionPublicId === null).length,
+        2,
+        'FAM-1 12a-ii R4: two removed prescriptions of one movement are two items',
+      );
+    });
+
+    await inSavepoint(tx, async () => {
+      // One movement twice: a second bench card beside the first.
+      const second = newCard(world as World, 'dbbench');
+      await save([...edited, second], 'a second card of one movement');
+      const benches = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'dbbench');
+      assert.equal(benches.length, 2, 'FAM-1 12a-ii twice: both cards are items');
+      const [first, other] = benches;
+      const loggedBefore = first!.rows.filter((r) => r.logged !== null).length;
+      for (const row of other!.rows) {
+        const twin = first!.rows.find((r) => r.set === row.set);
+        if (twin) {
+          assert.deepEqual(
+            row.previous,
+            twin.previous,
+            `FAM-1 12a-ii twice: the two cards share PREVIOUS for set ${row.set} (rule 5)`,
+          );
+        }
+      }
+
+      // R4's text: set 2 logged, the card's load changed in place, set 1 logged, the card removed.
+      const id = other!.prescriptionPublicId!;
+      await tick(id, 2);
+      const heavier = {
+        ...second,
+        quantities: second.quantities.map((q) => ({ ...q, value: 40 })),
+      };
+      await save([...edited, heavier], 'the second card is re-saved at 40');
+      await tick(id, 1);
+      const both = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'dbbench');
+      assert.equal(
+        both
+          .find((i) => i.prescriptionPublicId !== other!.prescriptionPublicId)!
+          .rows.filter((r) => r.logged !== null).length,
+        loggedBefore,
+        'FAM-1 12a-ii twice: each card has its own rows',
+      );
+      await save(edited, 'the second card is removed');
+      const [gone] = itemsOf(workoutIn(await read(), seeded, 'w2'), seeded, 'dbbench').filter(
+        (i) => i.prescriptionPublicId === null,
+      );
+      assert.ok(gone, 'FAM-1 12a-ii R4: the removed card is an item');
+      const textOf = (set: number) => gone.rows.find((r) => r.set === set)!.logged!.prescribedText;
+      assert.notEqual(textOf(1), textOf(2), 'FAM-1 12a-ii R4: the two sets differ (non-vacuity)');
+      assert.equal(
+        gone.prescribedText,
+        textOf(1),
+        'FAM-1 12a-ii R4: a removed item’s text is its lowest set’s, not its first logged',
+      );
+    });
+  });
+  console.log(
+    '✓ FAM-1 12a-ii R4: a removed prescription is its own item, by prescription, headed by its lowest set; one movement twice',
+  );
 }

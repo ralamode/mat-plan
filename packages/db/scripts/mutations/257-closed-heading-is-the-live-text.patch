@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 91e40e87..ea4d407b 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -600,7 +600,7 @@ function dayWorkout(
+       name: movement.name,
+       trackingType: movement.trackingType,
+       // Where only logged rows show, the heading is what the first-logged row was logged against.
+-      prescribedText: showing === 'logged' ? snapshotOf(firstOf(mine)!) : terms.text,
++      prescribedText: terms.text,
+       target: terms.target,
+       notes: prescription.notes,
+       unit: terms.unit,

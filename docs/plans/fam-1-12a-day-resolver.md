@@ -4,7 +4,8 @@
 > 12a. Branch: `feat/fam-1-12a-day-resolver`. Lane E ([day-writers.md](../features/day-writers.md)).
 > **Rev 3, approved** by the maintainer (2026-11-17, relayed by the board: "Approve"), with the
 > split (§ Split), the archived athlete's day (R1) and the left-the-week label (R2) decided the same day.
-> **Rev 4 adds § 12a-ii (a draft, in review)**: the replays of the four `before` fixtures 12a-i left.
+> **Rev 4 adds § 12a-ii**, the replays of the four `before` fixtures 12a-i left: **approved** by the
+> maintainer (2026-11-17, relayed by the board).
 
 ## Goal
 
@@ -232,7 +233,7 @@ That is 9, numbered from 230 (lane E's block 230–259).
 
 Run `pnpm verify`. There is no UI.
 
-## 12a-ii: the replays (rev 4 addendum, draft)
+## 12a-ii: the replays (rev 4 addendum, approved)
 
 12a-i merged as #505 (2026-11-17). This is 12a-ii's plan, reshaped by the panel (§ Review-response
 log, round 4). It changes no resolver code. A difference a replay finds is a 12a-i defect (fixed
@@ -331,7 +332,7 @@ policy: a patch only where no fixture's deep-equal goes red.
 - E `scripts/verify/fixture-groups.ts`: `REPLAY_FIXTURES`, `REPLAY_FIXTURE_COUNT`, and the draft-only
   `AWAITING_WRITER`.
 - E `src/writers/day/owed.test.ts`: reads `REPLAY_FIXTURES`; the progress line goes; Q6's 6d line is added.
-- N mutation patches 253 onward, plus their README rows.
+- N mutation patches 255–259 and 340, plus their README rows.
 - E `docs/features/day-writers.md`: the proof map.
 - E `docs/tech-debt.md`: the direct-insert entry rewritten.
   - The real reason the seeder stays on direct inserts is ids that run opposite to `idx`.
@@ -481,3 +482,17 @@ maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
 - **4C7 was not closed:** both sets were logged against one prescription. Now the card is re-saved
   with a different load between set 2 and set 1, and the text has its own patch.
 - **The order of two removed items cannot fail:** it is listed as unproven, with the reason.
+
+### Built (12a-ii, 2026-11-17)
+
+- **`AWAITING_WRITER` was never added.** #522 (6b) merged before the code, and Q6 removed the 6d
+  wait, so every replay fixture had its writer on day one. `owed.test.ts`'s replay loop is deleted;
+  its one 12a-ii line is Q6's exit (replay the reorder through 6d's writer).
+- **The calibration runs after the entries are logged**, since `seedWorld` logs them. The check is
+  the same: the resolved day must not move.
+- **The round trip on `workout-left-the-week`** un-ticks a scheduled logged row (`ok`). A returned
+  entry of the workout that left the week answers `not_scheduled`, which proves its ids are the
+  writer's own (a wrong id would be `not_found`).
+- **The R4 text proof uses a second bench card**, which also serves as the one-movement-twice
+  proof. The pull-up has no load to change.
+- **No resolver code changed**, and no replay found a difference from its fixture.

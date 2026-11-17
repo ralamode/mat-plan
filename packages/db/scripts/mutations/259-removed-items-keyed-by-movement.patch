@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 91e40e87..14773550 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -615,7 +615,7 @@ function dayWorkout(
+   const removed = new Map<string, LoggedRow[]>();
+   for (const row of draft.rows) {
+     if (claimed.has(row.id)) continue;
+-    const key = row.prescriptionId !== null ? `p:${row.prescriptionId}` : `m:${row.movementId}`;
++    const key = `m:${row.movementId}`;
+     removed.set(key, [...(removed.get(key) ?? []), row]);
+   }
+   for (const rows of removed.values()) {
