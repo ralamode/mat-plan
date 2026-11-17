@@ -1,5 +1,6 @@
 import {
   DEFAULT_TRACKING_TYPE,
+  emptyWeek,
   hasStarted,
   isPlainDecimal,
   MONDAY_FIRST,
@@ -20,6 +21,7 @@ import {
   type RowValues,
   type Superset,
   type TrackingType,
+  type WeekDraft,
   type Weekday,
 } from '@mat-plan/shared';
 import {
@@ -64,6 +66,16 @@ describe('the builder’s named types and constants', () => {
     const program: ProgramListEntry = programsList[0];
     expect(programsList).toContain(program);
     expect(Object.keys(program).sort()).toEqual(['athletes', 'name', 'programPublicId']);
+  });
+
+  it('hands a week editor an empty week as the type a WeekDraft holds', () => {
+    expectTypeOf(emptyWeek()).toEqualTypeOf<WeekDraft['days']>();
+    // And a week of something else, where a caller names its slot.
+    expectTypeOf(emptyWeek<{ wid: string }>()).toEqualTypeOf<
+      Record<Weekday, Array<{ wid: string }>>
+    >();
+    const days: WeekDraft['days'] = emptyWeek();
+    expect(Object.keys(days)).toHaveLength(7);
   });
 
   it('types the default tracking type as a tracking type, not a string', () => {

@@ -1,5 +1,6 @@
-import { addDays, type Weekday } from '../../day';
+import { addDays } from '../../day';
 import type { DayPlan } from '../day-shapes';
+import { emptyWeek } from '../program-shapes';
 import type { ProgramList, ProgramView, WorkoutDraft } from '../program-shapes';
 import {
   dayPlan,
@@ -426,8 +427,6 @@ export const familyProgramAfterTakeOff: ProgramView = deepFreeze(
     'p1',
   ),
 );
-
-const emptyWeek = (): Record<Weekday, []> => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
 
 /**
  * "Build a new program from scratch", right after it was created: nobody on it, no workouts, an
