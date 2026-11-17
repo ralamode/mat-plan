@@ -287,7 +287,9 @@ flowchart LR
 
 19. 🔴 **The actions and the program DAL** (step 7a-i; engineering panel, 2026-11-16):
     - Only `lib/dal/program/` imports lane P's writers and reads; everything else reaches them
-      through it (`apps/web/test/program-tables-stay-dark.test.ts`).
+      through it (`apps/web/test/program-tables-stay-dark.test.ts`). The one exception is
+      `workoutInHousehold`, which the day DAL (`lib/dal/day/`, 12b) may import as well, for its
+      scope-miss report.
     - A miss is reported only after a writer or read has said "not here", never on a success, and
       once per request: the program first, then the workout; an item's miss reports nothing. A
       failed check reports nothing and never changes the answer.
