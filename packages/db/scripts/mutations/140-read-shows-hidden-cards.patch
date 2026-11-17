@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/workout.ts b/packages/db/src/queries/program/workout.ts
+index 3e73056a..3a702ff9 100644
+--- a/packages/db/src/queries/program/workout.ts
++++ b/packages/db/src/queries/program/workout.ts
+@@ -76,7 +76,7 @@ export async function readWorkoutDraft(
+     .from(schema.prescriptions)
+     .innerJoin(schema.movements, eq(schema.movements.id, schema.prescriptions.movementId))
+     .where(
+-      and(eq(schema.prescriptions.workoutId, workout.id), isNull(schema.prescriptions.deletedAt)),
++      eq(schema.prescriptions.workoutId, workout.id),
+     )
+     .orderBy(asc(schema.prescriptions.idx));
+ 
