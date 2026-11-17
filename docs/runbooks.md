@@ -1043,23 +1043,34 @@ server cannot tell them apart — which made the threat model's #1 risk the one 
 signal. On a miss only, `apps/web/lib/dal/household.ts` → `reportScopeMiss` re-resolves without the
 household conjunct and emits one structured event.
 
-**The alert rule** (Sentry → Alerts → new issue alert):
+**The alert** (Sentry → Monitors → Alerts, where Sentry now keeps them; created 2026-11-17):
 
-| Field     | Value                                                                          |
-| --------- | ------------------------------------------------------------------------------ |
-| Filter    | `message` contains `scope miss: cross_household` (all four kinds)              |
-| Threshold | **more than 3 events in 1 hour** — one is a stale bookmark, a burst is a probe |
-| Action    | email the maintainer                                                           |
+| Field    | Value                                                                                |
+| -------- | ------------------------------------------------------------------------------------ |
+| Name     | "Scope miss: cross-household probe (any kind)" (alert `6358619`), project `mat-plan` |
+| Triggers | a new issue is created · an issue escalates · a resolved issue regresses             |
+| Filter   | the event's `message` contains `scope miss: cross_household` (all four kinds)        |
+| Action   | notify the issue's suggested assignees, else the recently active members             |
+| Throttle | none: it notifies on every trigger                                                   |
 
-⚠️ **The filter was `profile scope miss: cross_household` before C11.** A rule still set to that text
-keeps firing for profiles and is **silent for the three new kinds**. Change the rule's filter text in
-Sentry to `scope miss: cross_household`, which every one of the four messages contains.
+🔴 **There was no such alert before 2026-11-17.** This section described one from `TEN-1` on, with
+a threshold of "more than 3 events in 1 hour". Sentry held only its default alert for high-priority
+issues, and a scope miss is a `warning`, so **nothing ever notified anyone**. The alert above was
+created that day by the maintainer's session, not edited from an older one. A `cross_household`
+event raised before then was recorded and not alerted on: to know whether one happened, open the
+issue and read its events; an empty inbox says nothing.
 
-⚠️ **The threshold counts each kind on its own.** An issue alert counts events per issue, and each
-kind's message is its own issue, so three profile events and three program events in an hour send
-nothing. Counting the four together would take a metric alert on the tag
-`scope_outcome:cross_household`, which is not set up. Not verified against this project's Sentry
-settings: read the rule there before relying on either statement.
+⚠️ **It fires per ISSUE, not per event, and has no hourly threshold.** Each kind's message is its
+own issue. The first `cross_household` event of a kind creates the issue and notifies. A later
+event on that issue notifies only if Sentry marks the issue as escalating, or if the issue had been
+resolved and so regresses. Two things follow:
+
+- **Resolve the issue when triage is done.** An issue left unresolved is quiet for the next probe
+  of that kind, unless Sentry calls it an escalation.
+- **The count is yours to read.** Nothing counts "3 in an hour" for you: open the issue and look at
+  its events and their `resource` values (Triage, below). Counting events, or the four kinds
+  together, would take a metric alert on the tag `scope_outcome:cross_household`, which is not set
+  up.
 
 **What the event carries, and what it deliberately does not.** `actor` — **`clerk_session` since
 `AUTH-1` 1c-3b**; it was `gate_session` while the gate was the only door, and it is a **constant
