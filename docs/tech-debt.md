@@ -48,21 +48,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
 - **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
 
-### `program_blocks.name` has no length CHECK (found 2026-11-16, lane P's 6a-i review)
-
-- **What & why it's debt:** `workouts.name` and every other program text carry a length CHECK pinned
-  to its shared const by `db:verify`; `program_blocks.name` (migration `0007`) has none. A template
-  block's name is bounded only by `PROGRAM_NAME_MAX` in zod, so a writer that skips the schema would
-  store any length.
-- **Why not fixed in passing:** the column is populated (the seeded and archived blocks), so the CHECK
-  is `NOT VALID` in one migration and `VALIDATE` in a second PR, after a read of production's longest
-  name. Scoped `kind = 'template' or …` if a legacy name exceeds it, as 0025 did for `target_reps`.
-- **Owner:** lane A (FAM-1). **Trigger:** after FAM-1 step 5 (`0027`) is applied.
-- **Severity:** low (nothing writes a template block outside the zod-validated writers).
-- **In progress (2026-11-16):** PR 1 of 2 adds `program_blocks_name_length_check` `NOT VALID` on
-  every row (the maintainer chose one pair of PRs for this and the NaN entry below); PR 2 validates it
-  after a second production read. Close this entry in PR 2.
-
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
@@ -77,27 +62,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   profiles if the ramp is kept. Either way before the first outside family is invited.
 - **Severity:** low today, high the moment the schedule has a row. Owner: lane A (`seed.ts` is its
   file), with step 12f.
-
-### A logged quantity's CHECK admits `NaN` (found 2026-11-16, FAM-1 step 4b's panel)
-
-- **What & why it's debt:** `entry_set_quantities_value_num_check` is `CHECK (value_num >= 0)`
-  (migration `0011`). In Postgres a `numeric` `NaN` compares greater than every number, so
-  `'NaN' >= 0` is true and the CHECK passes it. FAM-1's new `prescription_quantities` refuses `NaN`
-  in its own CHECKs (step 4b); the older table on the logging side does not.
-- **Impact:** low. No application path can write it: every quantity reaches the writers through a
-  zod number, which refuses `NaN`, and a typed field is parsed as a plain decimal first. What could
-  write it is a hand-run correction script or a future writer that skips the schema. One such row
-  would sort above every real value and break any total it joins.
-- **Fix:** one small migration that swaps the CHECK for `value_num >= 0 AND value_num <> 'NaN'`
-  (added `NOT VALID`, then validated, per the migration rules), with a `db:verify` row that tries the
-  insert. Look for sibling `>= 0` CHECKs on `numeric` columns in the same pass. **Not in a FAM-1
-  step:** nothing in FAM-1 depends on it and the migration queue is taken until step 5 is applied;
-  it is the first migration after that. Owner: lane A (the maintainer, 2026-11-16).
-- **In progress (2026-11-16):** PR 1 of 2 adds `<> 'NaN'` siblings beside the two `>= 0` CHECKs
-  (`entry_set_quantities`, `ramp_targets`), keeping the old ones, and a new
-  `entries_value_num_check` (NULL, or `>= 0` and not NaN): `entries.value_num` had no range CHECK
-  at all. All `NOT VALID`; PR 2 validates them after a second production read. Close this in PR 2.
-- **Severity:** low.
 
 ### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel)
 

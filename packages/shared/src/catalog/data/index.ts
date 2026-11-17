@@ -1,8 +1,11 @@
 import type { CatalogMovement } from '../entry';
 
+import { CATALOG_BATCH_01 } from './batch-01';
+import { CATALOG_BATCH_05 } from './batch-05';
+
 /**
  * The movement library ([spec](../../../../../docs/specs/cat-3-movement-library.md), rule 3): the
- * source of truth for a catalog row's content. **Empty until the first reviewed batch.**
+ * source of truth for a catalog row's content. One `batch-NN.ts` per reviewed batch, concatenated here in batch order.
  *
  * 🔴 **Every entry here was reviewed by the maintainer, in a batch** (decision K9), and the library
  * is authored and reviewed in-house (K16). An entry, and any later edit to one, needs its line in
@@ -14,7 +17,10 @@ import type { CatalogMovement } from '../entry';
  *
  * Literal exports only (spec D2).
  */
-export const CATALOG_MOVEMENTS: readonly CatalogMovement[] = [];
+export const CATALOG_MOVEMENTS: readonly CatalogMovement[] = [
+  ...CATALOG_BATCH_01,
+  ...CATALOG_BATCH_05,
+];
 
 /** The slug of every entry: what a lookup by slug (an alias, a supervision label) reads. */
 export const CATALOG_SLUGS: ReadonlySet<string> = new Set(CATALOG_MOVEMENTS.map((m) => m.slug));

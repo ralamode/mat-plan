@@ -66,3 +66,30 @@ export async function workoutIn(
     .limit(1);
   return row !== undefined;
 }
+
+/**
+ * Whether `workoutPublicId` is a live workout of one of this household's live programs, whichever
+ * program it is in: `workoutIn` without the program id. For a caller that holds only the workout's
+ * id: the copy action's scope-miss report (`CopyDraft` names the workout, not its program; lane B's
+ * 7a-ii) and the day page's (12b). An id that is not a uuid is `false`.
+ */
+export async function workoutInHousehold(
+  exec: Executor,
+  scope: HouseholdScope,
+  workoutPublicId: string,
+): Promise<boolean> {
+  if (!uuidSchema.safeParse(workoutPublicId).success) return false;
+  const [row] = await exec
+    .select({ id: schema.workouts.id })
+    .from(schema.workouts)
+    .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
+    .where(
+      and(
+        eq(schema.workouts.publicId, workoutPublicId),
+        isNull(schema.workouts.deletedAt),
+        liveTemplateBlockIn(scope),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
