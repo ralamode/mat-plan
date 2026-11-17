@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -162,10 +162,6 @@
+   },
+   { table: schema.prescriptions, householdRows: prescriptionRows },
+   {
+-    table: schema.blockDayWorkouts,
+-    householdRows: (s) => sql`${schema.blockDayWorkouts.blockId} IN ${blocksOf(s)}`,
+-  },
+-  {
+     table: schema.workouts,
+     householdRows: (s) => sql`${schema.workouts.blockId} IN ${blocksOf(s)}`,
+   },

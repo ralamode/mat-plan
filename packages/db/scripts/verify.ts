@@ -128,6 +128,7 @@ import {
 // FAM-1 step 0c: the database and the proof helpers this file used to define live in the harness, so
 // the lanes' proof modules beside it can import the same ones. Bodies unchanged; see harness.ts.
 import { verifyDay } from './verify/day';
+import { verifyErasure } from './verify/erasure';
 import {
   asPg,
   assertCheckCoversConst,
@@ -9859,11 +9860,14 @@ console.log(
 // Last on purpose (`verify/harness.ts` → `VerifyContext` has the reasoning): nothing in this file
 // runs after them, so rows a lane writes cannot change what an assertion above counts, and a lane's
 // proof cannot become the FIRST failure under one of `mutations/*.patch`, whose `.expect` names it.
-// A lane adds proofs inside its own module; it does not add a call here.
+// A lane adds proofs inside its own module; it does not add a call here. The fifth module, PRIV-3's
+// erasure graph, runs after the four lanes' (roadmap thread, the harness owner, 2026-11-17): its
+// proofs read only the catalog and its own rolled-back fixture, so it cannot change what they count.
 const verifyContext: VerifyContext = { A_SCOPE, A_MEMBER_SCOPE, B_SCOPE };
 await verifySchema(verifyContext);
 await verifyProgram(verifyContext);
 await verifyDay(verifyContext);
 await verifySingleValues(verifyContext);
+await verifyErasure(verifyContext);
 
 console.log('✓ verify passed');

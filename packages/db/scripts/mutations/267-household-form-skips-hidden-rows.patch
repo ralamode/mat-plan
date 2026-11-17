@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -167,7 +167,8 @@
+   },
+   {
+     table: schema.workouts,
+-    householdRows: (s) => sql`${schema.workouts.blockId} IN ${blocksOf(s)}`,
++    householdRows: (s) =>
++      sql`(${schema.workouts.blockId} IN ${blocksOf(s)} AND ${schema.workouts.deletedAt} IS NULL)`,
+   },
+   {
+     table: schema.programAssignmentWeekdays,
