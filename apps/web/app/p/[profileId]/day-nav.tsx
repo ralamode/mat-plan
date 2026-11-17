@@ -128,11 +128,15 @@ export function DayNav({
                 <Link
                   href={href(d)}
                   aria-current={isViewed ? 'date' : undefined}
-                  aria-label={formatDayLong(d)}
+                  aria-label={d === today ? `${formatDayLong(d)}, today` : formatDayLong(d)}
                   className={`focus-visible:ring-ring flex min-h-11 items-center justify-center rounded-md border text-sm outline-none focus-visible:ring-2 ${
                     isViewed
                       ? 'bg-secondary text-secondary-foreground border-transparent font-medium'
                       : 'border-input hover:bg-accent'
+                  } ${
+                    // Today, marked by more than colour: once look-ahead reaches past it, it is no
+                    // longer simply the last day that can be opened (FAM-1 12c).
+                    d === today ? 'underline decoration-2 underline-offset-4' : ''
                   }`}
                 >
                   {weekday}
@@ -144,7 +148,9 @@ export function DayNav({
                   aria-disabled="true"
                   className="text-muted-foreground/40 border-input/40 flex min-h-11 items-center justify-center rounded-md border text-sm"
                 >
-                  {weekday}
+                  {/* One letter names two days ("T", "S"), so a screen reader hears the date. */}
+                  <span aria-hidden="true">{weekday}</span>
+                  <span className="sr-only">{`${formatDayLong(d)}, not available`}</span>
                 </span>
               )}
             </li>
