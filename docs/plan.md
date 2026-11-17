@@ -1712,6 +1712,24 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   sees the file) and on every tracked file in `format:check`, so in `verify` and CI's `quality`; its
   self-test is in `guards:test`. Single concern, no plan (a guard script and its wiring).
 
+- **DX-18 — heavy runs move to GitHub CI; the machine keeps one slot.** _(maintainer, 2026-11-17, via
+  the FAM-1 board: "move everything heavy off of the local machine unless otherwise stated".)_ Several
+  lanes ran `pnpm verify`, `e2e:local`, `db:mutations` and the pre-push hook on one machine. At a
+  load average over 200, tests timed out and one lane's `pkill -f` probably killed another lane's run.
+  The plan, as four PRs ([plan](./plans/dx-18-heavy-runs-to-ci.md)):
+  - **1a:** a pre-push that runs only the tests a change reaches, plus the rule for when to run
+    locally;
+  - **1b:** a guard that blocks pattern kills, and a one-slot lock for heavy local runs;
+  - **2:** `db:mutations` in CI, sharded and scoped, with run-only pillar scopes;
+  - **3:** screenshots in CI on request.
+
+  Planned 2026-11-17, five lenses; plan only.
+
+- **DX-18b — per-pillar test projects.** _(Deferred by DX-18, D9.)_ `pnpm test:pillar <name>`, and CI
+  running only the affected pillars' vitest files. **Trigger:** CI's Test step passes 3 minutes (53s
+  on 2026-11-17). First, `check-feature-guides.mjs`'s `owns:` parser must become an importable
+  module. Projects are many-to-many plus a catch-all, never "exactly one".
+
 - **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
   2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
   INP < 200 ms · CLS < 0.1) is written in AGENTS.md and ADR 0001 but nothing measures it. **(a)** Land

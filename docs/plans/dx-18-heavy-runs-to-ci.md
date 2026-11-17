@@ -1,113 +1,161 @@
 # DX-18 — heavy runs move to GitHub CI; the machine keeps one slot
 
-> Backlog: [plan.md](../plan.md) → `DX-18` (added by this plan). Branch: `docs/dx-18-heavy-runs-to-ci`
+> Backlog: [plan.md](../plan.md) → `DX-18` (this PR adds the row). Branch: `docs/dx-18-heavy-runs-to-ci`
 > (this plan), then one branch per PR below. Assigned to the Native Scaling lane by the maintainer
 > _(orchestrator's chat, 2026-11-17)_: "move everything heavy off of the local machine unless
-> otherwise stated."
+> otherwise stated".
 
 ## Where this sits
 
-- **Pillar:** Platform (CI, hooks, the agent tooling). **Milestone:** none directly. It unblocks every
-  lane of Beta 0, which today queues for one machine.
-- **This plan:** the whole of DX-18, as four PRs. PR 1 needs nothing. PR 2 waits for lane A's #554,
-  which changes the mutation runner. PRs 3 and 4 need nothing but are ordered after PR 2, because
-  they share `ci.yml`.
-- **Gated on:** the maintainer's approval of this plan.
+- **Pillar:** Platform: CI, hooks and the agent tooling. **Milestone:** none directly. It unblocks every
+  Beta 0 lane, all of which queue today for one machine.
+- **This plan:** the whole of DX-18, as four PRs (D1).
+- **Gated on:** the maintainer's approval of this plan. PR 1b and PR 2 also wait for lane A's #554, which
+  rewrites the mutation runner.
 
-_Roadmap alignment (2026-11-17): advances `DX-18`; touches nothing in `ID-1`, the catalog or the
-household scope; supersedes the parts of DX-5(b) and SEC-5 that call `db:mutations` local-only;
-checked against the private roadmap, nothing else to add._
+_Roadmap alignment (2026-11-17): advances `DX-18`. It touches nothing in `ID-1`, the catalog or the
+household scope. It supersedes DX-5(b)'s "`db:mutations` stays local-only" (`dx-5b-local-gates-in-ci.md`).
+Checked against the private roadmap; nothing else to add._
+
+## The maintainer's scope, as asked
+
+- **A.** `db:mutations` runs in CI, path-filtered.
+- **B.** Screenshots run as a GitHub workflow.
+- **C.** CI runs only the jobs for the pillars a PR touches.
+- **D.** The pre-push hook runs typecheck plus related tests only.
+- **E.** One lock slot for heavy local commands.
+- **F.** A guard that blocks pattern kills.
+- **G.** The docs ride with each PR.
+- **H.** Guidelines for when to run locally, with filtered commands.
+- **I.** Tests can be split by pillar or feature: plan it now, build it later if need be.
 
 ## Why now
 
 Several lanes run `pnpm verify`, `pnpm e2e:local`, `db:mutations` and the pre-push hook on one machine.
 On 2026-11-17 the load average passed 200:
 
-- tests timed out at their limits (`approvals.test.ts`, `harness.test.ts`);
-- one e2e run lost a server action under load;
-- one lane killed another's mutation run with `pkill -f`.
+- tests timed out at their limits;
+- one e2e run lost a server action;
+- one lane's `pkill -f` probably killed another lane's mutation run.
 
-The board ran a hand-allocated "one slot" queue all afternoon. The maintainer's rule is now **one heavy
-local run at a time, machine-wide, and everything heavy on GitHub CI**.
+The board ran a hand-allocated slot queue all afternoon. The maintainer's rule is now **one heavy local
+run at a time, machine-wide; everything heavy on GitHub CI**.
 
-## What is true today (fact sheet, origin/main 2026-11-17)
+## What is true today (origin/main, 2026-11-17; CI run 44169956280)
 
-| Claim                                                                        | Truth                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pre-push runs "typecheck + affected tests" (AGENTS.md)                       | **False.** `.husky/pre-push` is `pnpm typecheck` and `pnpm test`, the whole vitest run of about 2,400 cases in 157 files, `packages/*` included (`apps/web/vitest.config.ts`)                                                                                             |
-| `db:mutations` is local-only                                                 | True. No workflow runs it. There are 240 patches, and **each runs a full `db:verify`**, serially (`packages/db/scripts/mutations.mjs:44-81`). The whole run's time is **unmeasured** (tens of minutes under 2026-11-17's load; PR 2 measures one shard on a runner first) |
-| `pnpm verify` takes "~40s" (AGENTS.md), "~35s" (ship-pr), "~25s" (tech-debt) | **False on all three.** `db:mutations` alone is tens of minutes. The figures predate the mutation count                                                                                                                                                                   |
-| CI has required checks                                                       | **None.** The ruleset holds only `deletion` and `non_fast_forward`. DoD:57 says "required check", and that is wrong                                                                                                                                                       |
-| CI skips work by path                                                        | Only e2e does, at step level, by an `INERT` file list (`ci.yml:463-507`). Every other step runs on every PR                                                                                                                                                               |
-| Screenshots                                                                  | Local only: `screenshot:ephemeral` (embedded Postgres, no secrets), then `screenshots:publish`, which writes the `screenshots` branch and comments through the keyring `gh` token                                                                                         |
-| A kill guard                                                                 | None. The PreToolUse hook (`guard-main-checkout.mjs`) guards only the main checkout                                                                                                                                                                                       |
-| Killed `db:mutations` leaves a patch in source                               | True on main (lessons.md:705, :948). Lane A's **#554** fixes it with a journal, a per-worktree lock and signal-safe restore                                                                                                                                               |
+| Claim                                                                          | Truth                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pre-push runs "typecheck + affected tests" (AGENTS.md)                         | **False.** `.husky/pre-push` is `pnpm typecheck` and `pnpm test`. That is the whole vitest run, about 2,400 cases in 157 files, `packages/*` included (`apps/web/vitest.config.ts`).                                   |
+| `db:mutations` is local-only                                                   | True: no workflow runs it. There are 240 patches. **Each one runs a full `db:verify`**, one after another (`mutations.mjs`). How long a whole run takes is **unmeasured**; PR 2 times one shard first.                 |
+| `pnpm verify` takes "~40s" (AGENTS.md), "~35s" (ship-pr) or "~25s" (tech-debt) | **False, all three.** The mutation gate alone takes tens of minutes. The figures predate it. This plan deletes them rather than updating them.                                                                         |
+| CI's cost                                                                      | Measured: `quality` 3m34s (Test **53s**, Build **23s**), `e2e` 3m16s (in parallel), `gitleaks` 18s.                                                                                                                    |
+| CI has required checks                                                         | **None.** The ruleset holds only `deletion` and `non_fast_forward`. DoD line 57 says "required check", and it is wrong.                                                                                                |
+| CI skips work by path                                                          | Only e2e does, at step level, through an `INERT` list read from `pulls.listFiles` (`ci.yml:463-507`). That reads `filename` only, so a rename out of `apps/web/` into `docs/` skips the smoke. That is inherited debt. |
+| A killed `db:mutations` leaves a patch in source                               | True on main. Lane A's **#554** fixes it with a journal, a lock and signal-safe restore. Its lessons entry already says: never stop a gate by pattern.                                                                 |
+| A kill guard                                                                   | None. `guard-main-checkout.mjs` analyses only `git` and `gh` (`analyzeSegment` returns for anything else, line 548).                                                                                                   |
+| `.claude/settings.json`                                                        | **Hash-pinned.** `review-prefetch.sh` checks `SETTINGS_SHA256` and `PINNED_HOOKS` (SECURITY.md → Supply chain). Any edit fails the review workflow until the pin is re-read.                                           |
 
 ## Decisions
 
-**D1. The four PRs, in order.**
+**D1. Four PRs, in order.**
 
-| PR  | Delivers                                                                                                                               | Waits for                             |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| 1   | The kill guard (F); the heavy-run slot (E); the slim pre-push (D); `test:changed`; the when-to-run guidelines and every doc fix (G, H) | nothing                               |
-| 2   | `db:mutations` in CI, sharded and path-scoped (A), plus the runner's `--shard` / `--only` flags (H's subset command)                   | #554 merged (it owns `mutations.mjs`) |
-| 3   | Pillar-scoped CI (C): one changed-scopes step, which every heavy step reads                                                            | PR 2 (both edit `ci.yml`)             |
-| 4   | Screenshots in CI (B)                                                                                                                  | PR 3 (it reads the scopes)            |
+| PR  | Delivers                                                                                                                                                                                               | Waits for                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| 1a  | The slim pre-push and `test:changed` (D, part of I); the when-to-run rule (H); every doc fix (G)                                                                                                       | nothing                                                   |
+| 1b  | The kill guard (F) and the heavy-run slot (E), which shares one lock helper with #554's                                                                                                                | #554 merged                                               |
+| 2   | `db:mutations` in CI: sharded, scoped, and run in full on every push to main (A). Pillar scopes for the heavy CI steps, from one tested script (C). "`pnpm verify` before a PR is optional" lands here | PR 1b, because it changes `mutations.mjs` after #554 does |
+| 3   | Screenshots in CI on request (B)                                                                                                                                                                       | PR 2, because it reads the scope script                   |
 
-PR 1 comes first because it is the immediate relief. It turns the board's manual queue into a lock
-and halves the cost of every push. The CI PRs then take the remaining load off the machine.
+- **Why 1a goes first:** it is the immediate relief. Every push currently runs the full suite.
+- **Why C is not its own PR:** measured, it saves 23 seconds of a 3.5-minute job. Its value is the
+  mutation scope, which lives in PR 2.
+- **Until PR 2 merges, the mutation proof stays local** (D5). Nothing tells a DB change to skip it
+  before CI runs it.
 
-**D2. The kill guard (F).** A new `.claude/hooks/guard-process-kill.mjs`, registered as a second
-`PreToolUse` Bash hook beside `guard-main-checkout.mjs`. It applies in every directory, not just the
-main checkout. It reuses that hook's lexer (`invocations()`), extracted into
-`.claude/hooks/shell-lex.mjs` so the two hooks share one parser.
+**D2. The kill guard (F), in PR 1b.** It is a new `.claude/hooks/guard-process-kill.mjs`, a second `PreToolUse`
+Bash hook that applies in every directory.
 
-It **denies**:
+- **It does not reuse `invocations()`,** which reports only git and gh. It imports the exported `lex()`
+  (`guard-main-checkout.mjs:112`), using a **dynamic `import()` placed after its own CI exit**. That way
+  no imported code runs in a job that holds a token. It then checks the first word of each segment,
+  after a small wrapper walk of its own: `sudo`, `env`, `command`, `timeout`, `nohup`, `xargs`, and a
+  re-lex of `sh -c` / `bash -c`. A `git commit -m "…pkill…"` or a heredoc that mentions `pkill` is not
+  denied.
+- **It denies:**
+  - `pkill`, `killall` and `fuser -k` in any form;
+  - `kill` whose target is a substitution or comes from a pipe (`$(pgrep …)`, `| xargs kill`);
+  - `kill 0`, `kill -1`, any negative pid, and `kill -- …`. Each of these is broader than
+    `pkill -f`.
+- **It allows** `kill [-SIG] <pid>` with a literal pid of 2 or more, `kill $!`, `kill "$<name>"` and
+  `kill %<job>`.
+- **The deny reason:** "Stop only a process you started, by the pid you captured (`$!`), or let it
+  finish: other lanes run the same scripts on this machine."
+- **Known gaps block:** `node -e 'process.kill(…)'`, `npx kill-port`, and a `while read p; do kill $p`
+  loop. Best-effort, like its sibling, and not a security boundary.
+- **Fails open,** and does nothing under `CI` or `GITHUB_ACTIONS`.
+- **Escape:** `MAT_PLAN_ALLOW_PATTERN_KILL=1`.
+- **The pin, in the same PR:**
+  - both hooks go into `PINNED_HOOKS`;
+  - `SETTINGS_SHA256` is updated, with the DX-1 threat model re-read and logged in the PR;
+  - `review-prefetch.test.sh` gains the cases;
+  - SECURITY.md → CI / Actions secrets is updated.
+- **The shared wrapper walk is not built here.** Lifting `guard-main-checkout.mjs`'s walk into one module
+  for both hooks is a refactor of a 962-line guard with 221 cases. It is recorded as a follow-up, not
+  done in this PR.
 
-- `pkill` and `killall` in any form;
-- `kill` whose argument is a substitution or a pipe (`kill $(pgrep …)`, `pgrep … | xargs kill`).
+**D3. The heavy-run slot (E), in PR 1b.**
 
-It **allows** `kill <digits>`, `kill -<SIG> <digits>` and `kill %<job>`.
+- **One lock helper.** `.github/scripts/pid-lock.mjs` is a single helper, `acquire(path, payload,
+busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves onto it in PR 2, so
+  there is one implementation.
+  - **Creation is atomic with its content:** the payload goes to a temp file, then
+    `linkSync(tmp, lock)`. An empty lock file is never visible.
+  - **Taking over a stale lock** is `renameSync(lock, lock + '.stale.' + process.pid)`, then a re-read
+    confirming that the renamed content is the dead holder's.
+  - **A holder counts as alive** if `process.kill(pid, 0)` succeeds or fails with `EPERM`, **and** its
+    start time (`ps -o lstart= -p <pid>`) matches the one recorded. A reused pid is treated as dead.
+- **The slot** is `~/.cache/mat-plan/heavy-slot.json`. That path is per user, so it covers every clone
+  and copy on the machine. The lock holds:
+  - the pid of the wrapper and of its child's process group;
+  - the lane (the branch name, with control characters stripped, capped at 80 characters);
+  - the command and the start time.
 
-The deny reason says: "stop only a process you started, by the PID you captured (`$!`), or let it
-finish. Other lanes run the same scripts on this machine." Like its sibling, it fails open and is a
-no-op under `CI`. Its cases go in `hooks.test.sh`. `MAT_PLAN_ALLOW_PATTERN_KILL=1` is the escape for a
-person who means it, the same shape as the existing `MAT_PLAN_ALLOW_MAIN_CHECKOUT=1`.
+  A lock stays live while either pid is alive, so a `kill -9` of the wrapper doesn't free the slot
+  while its child still runs.
 
-**D3. The heavy-run slot (E).** A new `scripts/heavy-slot.mjs`, prefixed onto each heavy script in
-`package.json`: `verify`, `e2e:local`, `db:mutations`, `screenshot:ephemeral`, `db:verify` when run
-on its own, and `pnpm test` when run on its own (the pre-push hook no longer calls it).
+- **Where it is taken: inside the runners,** so a `pnpm --filter …` form can't bypass it.
+  - `mutations.mjs`, `apps/web/scripts/e2e-local.ts` and `apps/web/scripts/screenshot-ephemeral.ts`
+    each take it first.
+  - `verify` becomes `node .github/scripts/heavy-slot.mjs -- pnpm verify:run`. The runners inside it
+    see `MAT_PLAN_HEAVY_SLOT_HELD`, which must equal the live lock's pid to count, so a stray `export`
+    does not turn the slot off.
+  - The wrapper spawns its child asynchronously and forwards SIGINT, SIGTERM and SIGHUP. That follows
+    #554's lesson that `spawnSync` blocks every handler.
+- **When the slot is busy,** the command exits 2 with: **"heavy-run slot held by `<lane>` (`<command>`,
+  since `<time>`). Push and let CI gate it, or wait."**
+- **Bypass:** `MAT_PLAN_HEAVY_SLOT=off`, for a person. It does nothing under CI.
 
-- **Where the lock lives:** `$(git rev-parse --git-common-dir)/mat-plan-heavy-slot.json`. That
-  directory is shared by every worktree of the clone, which is what "machine-wide" means here (every
-  lane uses a worktree of this clone).
-- **What it holds:** `{ pid, lane, command, started }`, where `lane` is the branch name.
-- **How it is taken:** created atomically (`open(…, 'wx')`).
-- **How a dead holder is noticed:** a lock whose `pid` no longer exists (`process.kill(pid, 0)`
-  throws `ESRCH`) is stale; it is removed and taken.
-- **When it is busy:** the command exits 2 with **"heavy-run slot held by `<lane>` (`<command>`,
-  since `<time>`). Push and let CI gate it, or wait."** It never queues silently.
-- **Release:** in a `finally` and on SIGINT, SIGTERM and SIGHUP. A `kill -9` leaves a stale lock,
-  which the next taker clears.
-- **Bypass:** none when CI is set (CI runners each have their own machine), and
-  `MAT_PLAN_HEAVY_SLOT=off` for a person.
-- **Nesting:** `verify` takes the slot once. Its inner `db:mutations` sees
-  `MAT_PLAN_HEAVY_SLOT_HELD=<pid>` from its parent and does not wait on itself.
+**D4. The slim pre-push and `test:changed` (D, part of I), in PR 1a.**
 
-**D4. The slim pre-push (D) and `test:changed`.** `.husky/pre-push` becomes `pnpm typecheck` then
-`pnpm test:changed`.
+- **The hook:** `.husky/pre-push` becomes `pnpm typecheck && pnpm test:changed`.
+- **The script:** `.github/scripts/test-changed.mjs` takes its base from `defaultBase()`
+  (`.github/scripts/default-base.mjs`, which handles stacked PRs). Then it runs:
+  - `vitest run --changed <base>`, which resolves the changed files through git itself. Hand-fed
+    repo-relative paths would resolve against `apps/web` and silently match nothing.
+  - **The tests that find their targets by reading the filesystem, always.** These are the scanners,
+    such as `pages-need-a-session`, `tenancy-is-not-cached`, `bypass-is-contained`,
+    `no-bare-unhide` and `notice-content`. The list is derived by grepping test files for
+    `globSync` / `readFileSync`, and the script fails if a scanner is missing from it. Import tracing
+    alone would never select them.
+- **Vitest's force-rerun triggers** gain `pnpm-lock.yaml`, `pnpm-workspace.yaml` and `tsconfig*.json`.
+  A change to any trigger means a full run, which takes the slot (D3). With the slot busy, the script
+  says so and leaves the full run to CI.
+- **When nothing is reached,** the script prints "no tests reached by this change" and exits 0.
+- **This is not a gate.** Pre-push is a local courtesy, and CI's `quality` runs the whole suite on every
+  code PR. The PR cites the maintainer's directive for narrowing it (hold-the-bar's loosened-bar rule).
 
-- **What `test:changed` runs:** `vitest related --run` on the files changed against the upstream
-  merge base (`git merge-base HEAD @{upstream}`, or `origin/main` when there is no upstream).
-  `vitest related` runs every test whose import graph reaches a changed file. That covers a changed
-  test file and every test of a changed module, and it is what AGENTS.md has claimed all along.
-- **When nothing reaches the change** (docs only), it runs nothing and says so.
-- **Pre-push is not a merge gate** (AGENTS.md: CI is), so this narrows a local courtesy, not a gate.
-  CI's `quality` job still runs the whole suite on every PR (and PR 3 keeps it on every code PR).
-- **Not wrapped in the slot:** a related run is small. The full suite stays in CI.
-
-**D5. The when-to-run-locally rule (H), written once.** AGENTS.md's "Local hooks vs CI merge-gates"
-stays the one list; ship-pr, start-task and the DoD point to it.
+**D5. When to run locally (H), written once.** AGENTS.md's "Local hooks vs CI merge-gates" keeps the
+**rule**, and the other docs point to it.
 
 - **Run locally:**
   - writing code (one file, one probe);
@@ -116,174 +164,240 @@ stays the one list; ship-pr, start-task and the DoD point to it.
   - editing CI itself;
   - an Actions outage;
   - `pnpm dev`;
-  - production operations (corrections, never tests against production).
-- **Everything else heavy runs on CI:** push, and let it gate.
-- **`pnpm verify` before a PR becomes optional.** CI is the gate, and the section says so plainly.
-- **Filtered commands** the section carries, copy-paste ready:
-  - one vitest file or name: `pnpm --filter web exec vitest run <path> -t "<name>"`;
-  - one package's tests: `pnpm --filter web exec vitest run ../../packages/shared/src`;
+  - production operations (corrections; never tests against production).
+- **Everything else heavy runs on CI.** Push, and let it gate.
+- **Until PR 2 merges:** a diff touching `packages/db/**`, `packages/shared/**`, the lockfile or a
+  manifest still runs `db:mutations` locally, in the slot. **"`pnpm verify` before a PR is optional"
+  lands in PR 2**, once CI runs the mutation proof.
+- **The filtered commands** go into `debug-ci-failure` and `ship-pr`, linked from AGENTS.md. That keeps
+  AGENTS.md under DX-10's word cap:
+  - one file or test name: `pnpm --filter web exec vitest run <path> -t "<name>"`;
+  - one package: `pnpm --filter web exec vitest run ../../packages/shared/src`;
   - what a change reaches: `pnpm test:changed`;
-  - a subset of mutations (PR 2): `pnpm --filter @mat-plan/db db:mutations --only 271-278` or
-    `--only <name-substring>`;
-  - one Playwright spec or name: `pnpm e2e:local e2e/<spec>.ts -g "<name>"` (args already pass
-    through).
+  - some mutations (PR 2): `pnpm --filter @mat-plan/db db:mutations --only 271-278` or
+    `--only <substring>`;
+  - one Playwright spec: `pnpm e2e:local e2e/<spec>.ts -g "<name>"`.
 
-**D6. `db:mutations` in CI (A).** A new `mutations` job in `ci.yml`, with an 8-way matrix:
-`shard: [1, …, 8]`.
+**D6. `db:mutations` in CI (A), in PR 2.** A new `mutations` job with a matrix of shards.
 
-- **Each shard** runs `db:mutations --shard <i>/8`, which takes the patches whose sorted index modulo
-  8 equals `i − 1`.
-- **Path scope, derived rather than hand-written:** a step computes the PR's changed files against
-  the resolved base. It also computes the union of the paths any `*.patch` touches (`git apply
---numstat`), plus `packages/db/**` and `packages/shared/**`, because `db:verify` imports from both.
-- **If the two sets don't meet,** every later step is skipped at step level and the shard reports
-  success with "no mutated path changed". It is never a job-level `if:`, so the check is always
-  reported (ci.yml's e2e pattern).
-- **Default to run** when the file list cannot be read, or on any `push` to main.
-- **A full nightly run** (`schedule`) covers changes the filter missed, which keeps "nothing goes
-  unrun" true.
-- **Runner flags** (`--shard`, `--only`) are added to `mutations.mjs` after #554 merges, on top of its
-  journal. The flags only choose which patches run; each patch's apply, verify and restore are
-  #554's, unchanged.
-- **The job needs nothing but `github.token`** and the repo: PGlite, no database service, no secret.
+- **Shard count:** set after one shard is timed on a runner (8 to start). Each shard runs
+  `db:mutations --shard ${{ strategy.job-index }}/${{ strategy.job-total }}`. The count is never written
+  twice.
+- **`fail-fast: false`,** and a final `mutations-total` job checks that the shards together ran every
+  patch exactly once.
+- **Its own job, not a step in `quality`:** a matrix needs a job. Leaving `quality` is what keeps the
+  heavy shards off the 3.5-minute gate, and `ci.yml:244`'s comment is updated to say why. No check is
+  required, so this changes no merge rule.
+- **When it runs:**
+  - on a PR, when `run_mutations` (D7) is not `false`;
+  - on **every push to main, all shards, unconditionally.** A red run then sits on the commit that
+    caused it. A final job opens or updates one issue, "mutation gate red on main", in a job that
+    holds only `issues: write`.
+- **No cron.** A scheduled run tells nobody, and public-repo schedules lapse after 60 days.
+- **Concurrency:** `cancel-in-progress` only for `pull_request`, so a merge never cancels main's
+  full run.
+- **The runner flags,** added to `mutations.mjs` on top of #554's journal:
+  - `--shard i/n` and `--only <range|substring>`;
+  - `--list-paths`, which prints the union of the paths the patches touch, through #554's
+    `touchedPaths()`.
 
-**D7. Pillar-scoped CI (C).** One step, `changed-scopes`, runs early in each job. It calls
-`.github/scripts/changed-scopes.mjs`, which reads the changed files and prints booleans: `web`, `db`,
-`docs_only`, `catalog_data_only`, `workflows`.
+  #554's lock moves onto `pid-lock.mjs` (D3).
 
-- The e2e job's `INERT` regexes move into that script, so there is one definition of "inert".
-- **What a scope skips:**
-  - `docs_only` skips `build`, e2e and the mutations job;
-  - `catalog_data_only` (only `packages/shared/src/catalog/data/**`, the changelog and the data
-    guide) skips `build` and e2e, and still runs `test`, `db:verify` and the append-only check;
-  - a PR with no `db` scope skips the mutations job.
-- **What never skips:** `format:check`, `lint`, `typecheck`, `test`, gitleaks, the guards, the audit
-  and the status check. They are fast, and they are the gate.
-- **Fail-safe:**
-  - a script error, or an unreadable file list, means every scope is `true`;
-  - a `push` to main means every scope is `true`;
-  - a change under `.github/` means every scope is `true`, so CI changes test themselves in full.
-- `changed-scopes.test.sh` joins `guards:test`.
+- **Requirements:** the job needs only `github.token`. It uses PGlite, no database service and no
+  secret.
 
-**D8. Screenshots in CI (B).** Two workflows, the standard split for untrusted PRs:
+**D7. Pillar scopes (C), in PR 2: one script, run flags only.**
 
-1. **`screenshots.yml`** (`pull_request`, `permissions: contents: read`, no secrets).
-   - It runs when the `web` scope is true and the change touches `apps/web/app/**` or
-     `apps/web/components/**`, or when the PR has a `screenshots` label.
-   - It builds, runs `screenshot:ephemeral` (embedded Postgres, no credentials: it blanks Clerk,
-     Upstash and Sentry itself), and uploads `.screenshots/` as an artifact with the PR number.
-2. **`screenshots-publish.yml`** (`workflow_run` on the first, `permissions: contents: write,
-pull-requests: write`).
-   - It downloads the artifact and runs `screenshots:publish --pr <n> --comment` with
-     `github.token`.
-   - It **does not check out or run the PR's code.** It runs main's publish script against the
-     artifact's image files only.
-   - It refuses an artifact whose PR number doesn't match the triggering run's PR, and any file that
-     isn't a `.png`.
+- **The script:** `.github/scripts/changed-scopes.mjs` prints `run_mutations`, `run_build` and `run_e2e`.
+  - **Polarity rule:** every output says _run_, and a step skips **only on a literal `'false'`**
+    (`if: steps.scopes.outputs.run_e2e != 'false'`). A missing, empty or mistyped output runs. The
+    script's test asserts that no workflow compares a scope with `== 'true'`.
+- **Inputs:** the changed files come from `resolve-pr-base.sh`'s base and
+  `git diff --name-only --no-renames -z <base> HEAD`, with `fetch-depth: 0` in every job that runs the
+  scopes. `--no-renames` sees a move's source path. `pulls.listFiles` is retired; it reads only
+  `filename` and stops at 3,000 files.
+- **The base's copy decides.** The job runs `git show <base>:.github/scripts/changed-scopes.mjs` from
+  `$RUNNER_TEMP`, so a PR can't reclassify itself. The PR's own copy is exercised by its test, the
+  pattern `review-prefetch.sh` uses for its guards. This catches mistakes, not a hostile author, the
+  same residual SECURITY.md already accepts for the pin checker.
+- **The rules:**
+  - `run_mutations` is false only when no changed file is under `packages/db/**` or
+    `packages/shared/**`, matches the `--list-paths` union, or is `pnpm-lock.yaml`,
+    `pnpm-workspace.yaml`, any `package.json`, any `tsconfig*.json`, or anything under `.github/`.
+  - `run_build` and `run_e2e` are false only when every file is inert. The inert list is e2e's
+    `INERT`, which moves here so there is one definition. Its image rule is narrowed to `docs/**` and
+    `.github/**`: an image under `apps/web/` is app content. The `.github/` templates stay inert.
+    Every other `.github/` change sets every flag to run.
+  - **Fail-safe:** a script error, an unreadable base, or any event other than `pull_request` sets
+    every flag to run.
+- **What never skips:** format, lint, typecheck, `test`, `db:verify`, gitleaks, the guards, the audit and
+  the status check.
+- **Dropped:** a catalog-only scope. Batch files are TypeScript bundled into the app, and the e2e seed is
+  the only PR-time proof that a batch loads. Also dropped: `web` and `workflows` scopes, which nothing
+  needs.
+- **Docs:** AGENTS.md and `ci-e2e-auto-skip.md` link to the script instead of restating the list.
 
-A fork PR's capture runs with no token that can write anything. The publish step runs trusted code on
-untrusted bytes, the documented safe pattern. `publish-screenshots.ts` gains a `GH_TOKEN` path
-alongside its keyring path.
+**D8. Screenshots in CI (B), in PR 3: on request, same-repo PRs only.**
 
-**D9. Splitting tests by pillar (I): what is built now, and what is deferred.**
+- **What to capture is an input.** CI can't infer a route or a tap state from a diff. The PR body carries
+  a block, and `screenshots.yml` reads it:
 
-- **Built now (PR 1):** `test:changed` (D4), the cheap, exact half: it follows imports, not a
-  hand map.
-- **Built now (PR 3):** CI scopes by pillar for the heavy jobs (D7).
-- **Deferred to a new row, `DX-18b`:** `pnpm test:pillar <name>`, and CI running only the affected
-  pillars' vitest files.
-  - **Why deferred:** the roadmap's pillar globs are prose in a table, not machine-readable, and
-    vitest runs as one project. Splitting it means one vitest project per pillar, built from the
-    feature guides' `owns:` frontmatter, which `guides:check` already parses.
-  - **What it costs:** that changes how 157 files are collected, and needs a proof that every test
-    file belongs to exactly one project, so none goes unrun.
-  - **Why it can wait:** `test:changed` already gives a local run its pillar's reach, and CI's full
-    `test` time on a runner is to be read from the `quality` job's step timings (_unverified_; PR 1 records it). The row records the design (projects from `owns:`, a
-    coverage proof, and a full run on main) so the next owner does not start over.
+  ```
+  screenshots:
+  - /p/<fixture>/today
+  - /p/<fixture>/today --state sheet-open
+  ```
+
+  A `screenshots` label (`types: [labeled, opened, synchronize, reopened]`) or a `workflow_dispatch`
+  starts a run.
+
+- **The capture workflow, `screenshots.yml`:**
+  - runs on `pull_request`, with `permissions: contents: read`, `persist-credentials: false` and no
+    secrets;
+  - builds once, runs `screenshot:ephemeral` per entry (embedded Postgres, credentials blanked by the
+    script itself), and uploads `.screenshots/` as an artifact.
+- **The publish workflow, `screenshots-publish.yml`** (`workflow_run`, `contents: write`,
+  `pull-requests: write`), publishes **only when `workflow_run.head_repository.full_name ==
+github.repository`**: a same-repo PR, whose author already has write access. A fork gets the artifact
+  link instead. Safeguards:
+  - it resolves the PR by listing open PRs where `head.sha == workflow_run.head_sha` and the head repo
+    matches, and refuses unless exactly one matches. It never trusts a number in the artifact;
+  - it requires `workflow_run.event == 'pull_request'` and `conclusion == 'success'`;
+  - it downloads to `$RUNNER_TEMP`, never into the checkout, using `actions/download-artifact` pinned
+    at a version with the zip-slip fix (confirmed from its source at the pin);
+  - no `cache`, no `actions/cache`, and no install step with the token in its environment;
+  - `GH_TOKEN` is set only on the one publish step;
+  - it shares `prune-screenshots`' concurrency group.
+- **`publish-screenshots.ts` gains:**
+  - a token path that switches on `GITHUB_ACTIONS` plus an explicit `--ci` flag. Its keyring default
+    stays: the local `GH_TOKEN` is a PAT that can't do this work;
+  - a filename allowlist (`^[a-z0-9-]+\.png$`), a PNG magic-byte check, and caps on count and size,
+    which turn its silent `.png` filter into a refusal;
+  - a fixed `--note` of the head SHA;
+  - round counting from `github-actions[bot]` comments only, so a planted marker can't force a
+    `--note`.
+- **The baseline:** the first CI round is a comment marked as the baseline. AGENTS.md's UI rule
+  ("first set in the description") is amended to say so; see Q3.
+- **A real fork test** is a post-merge obligation. `workflow_run` always runs main's copy, so PR 3
+  can't test its own publish job before merge.
+
+**D9. Splitting tests by pillar (I).**
+
+- **Built now:** `test:changed` (D4), and the CI scopes (D7).
+- **Deferred to `DX-18b`:** per-pillar vitest projects and `test:pillar`. The trigger is CI's Test step
+  passing 3 minutes; it was 53s on 2026-11-17. The row also records two constraints:
+  - `check-feature-guides.mjs`'s `owns:` parser must first move into an importable module (it runs on
+    import today);
+  - a file can belong to several guides, or to none, so the projects are many-to-many plus a catch-all,
+    not "exactly one".
+
+  Q2 asks the maintainer to confirm the deferral.
 
 ## File-by-file
 
-| PR  | Path                                                                        | Change   | What & why                                                                                                                                                                                                                    |
-| --- | --------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `.claude/hooks/shell-lex.mjs`                                               | NEW      | `invocations()` lifted out of `guard-main-checkout.mjs`, unchanged                                                                                                                                                            |
-| 1   | `.claude/hooks/guard-main-checkout.mjs`                                     | EDIT     | Imports the lexer                                                                                                                                                                                                             |
-| 1   | `.claude/hooks/guard-process-kill.mjs`                                      | NEW      | D2                                                                                                                                                                                                                            |
-| 1   | `.claude/settings.json`                                                     | EDIT     | The second `PreToolUse` Bash hook                                                                                                                                                                                             |
-| 1   | `.claude/hooks/hooks.test.sh`                                               | EDIT     | Deny and allow cases for D2. The lexer move is covered by the existing 221 cases                                                                                                                                              |
-| 1   | `scripts/heavy-slot.mjs` + `scripts/heavy-slot.test.sh`                     | NEW      | D3. The test takes the lock, refuses a second taker, clears a dead holder's lock, nests, and is a no-op under CI                                                                                                              |
-| 1   | `package.json`                                                              | EDIT     | The heavy scripts gain the slot prefix; `test:changed`; `guards:test` gains the slot's suite                                                                                                                                  |
-| 1   | `.husky/pre-push`                                                           | EDIT     | `pnpm typecheck && pnpm test:changed` (D4)                                                                                                                                                                                    |
-| 1   | `AGENTS.md`                                                                 | EDIT     | "Local hooks vs CI merge-gates": the when-to-run rule, the filtered commands, the slot, the guard; fixes the stale claims (pre-push "affected tests", the verify time, the guard count, `eval` missing from the list, Squawk) |
-| 1   | `.claude/skills/ship-pr/SKILL.md`, `.claude/skills/start-task/SKILL.md`     | EDIT     | Point to the one list; `pnpm verify` optional before a PR; the "~35s" figure removed                                                                                                                                          |
-| 1   | `docs/definition-of-done.md`                                                | EDIT     | Line 57: no check is required; CI green is the bar                                                                                                                                                                            |
-| 1   | `docs/lessons.md`                                                           | EDIT     | The 2026-11-17 entries: a pattern kill across lanes; load timeouts that look like failures (symptom, cause, fix)                                                                                                              |
-| 1   | `docs/plan.md`, `docs/roadmap.md`, changelog fragment                       | EDIT/NEW | The `DX-18` and `DX-18b` rows; the item moves to In flight                                                                                                                                                                    |
-| 2   | `packages/db/scripts/mutations.mjs` (after #554)                            | EDIT     | `--shard i/n`, `--only <range or substring>`                                                                                                                                                                                  |
-| 2   | `packages/db/scripts/mutations.test.sh` (#554's)                            | EDIT     | Shard partitioning (every patch in exactly one shard), and `--only` selection                                                                                                                                                 |
-| 2   | `.github/workflows/ci.yml`                                                  | EDIT     | The `mutations` matrix job; its path-scope step; the `schedule` trigger for the nightly full run                                                                                                                              |
-| 2   | `AGENTS.md`, `docs/tech-debt.md`, `packages/db/scripts/mutations/README.md` | EDIT     | `db:mutations` is no longer local-only; how to read a red shard                                                                                                                                                               |
-| 3   | `.github/scripts/changed-scopes.mjs` + `.test.sh`                           | NEW      | D7                                                                                                                                                                                                                            |
-| 3   | `.github/workflows/ci.yml`                                                  | EDIT     | Each heavy step reads the scopes; e2e's `INERT` moves into the script                                                                                                                                                         |
-| 3   | `AGENTS.md`, `docs/plans/ci-e2e-auto-skip.md`                               | EDIT     | Which job runs for which change                                                                                                                                                                                               |
-| 4   | `.github/workflows/screenshots.yml`, `screenshots-publish.yml`              | NEW      | D8                                                                                                                                                                                                                            |
-| 4   | `apps/web/scripts/publish-screenshots.ts`                                   | EDIT     | The `GH_TOKEN` path; refuse a mismatched PR number or a non-PNG file                                                                                                                                                          |
-| 4   | `.claude/skills/ui-screenshot/SKILL.md`, `AGENTS.md` (UI PR rules)          | EDIT     | Screenshots come from CI; a local capture is for debugging                                                                                                                                                                    |
+| PR   | Path                                                                                                                                     | Change   | What & why                                                                                                                                                                             |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1a   | `.github/scripts/test-changed.mjs` + `.test.sh`                                                                                          | NEW      | D4. The test covers: a `packages/shared` file reaches its test; a new `page.tsx` selects `pages-need-a-session`; `notice.md` selects `notice-content`; a docs-only change runs nothing |
+| 1a   | `.husky/pre-push`, `package.json` (`test:changed`; `guards:test`), `apps/web/vitest.config.ts` (force-rerun triggers)                    | EDIT     | D4                                                                                                                                                                                     |
+| 1a   | `AGENTS.md`                                                                                                                              | EDIT     | The when-to-run rule (D5). Corrects the pre-push claim and Squawk. **Deletes** the verify timings and the guard count (pointing at `package.json`). Adds `eval` to the list            |
+| 1a   | `.claude/skills/{ship-pr,start-task,db-migration,keep-mergeable,review-pr,debug-ci-failure}/SKILL.md`                                    | EDIT     | Point to the one list. The filtered commands go here. ship-pr's red flag at line 212 ("pushing to fix CI one round at a time") is rewritten, citing 2026-11-17                         |
+| 1a   | `docs/definition-of-done.md`                                                                                                             | EDIT     | Line 57: no check is required; green CI is the bar                                                                                                                                     |
+| 1a   | `docs/lessons.md`                                                                                                                        | EDIT     | One entry: load timeouts that look like failures (symptom → cause → fix). The kill lesson stays #554's                                                                                 |
+| 1b   | `.github/scripts/pid-lock.mjs`, `heavy-slot.mjs` + `.test.sh`                                                                            | NEW      | D3. The test covers: two takers racing; stealing a stale lock; a reused pid; a dead wrapper with a live child; nesting; CI                                                             |
+| 1b   | `apps/web/scripts/e2e-local.ts`, `screenshot-ephemeral.ts`; `package.json` (`verify` → `verify:run` behind the slot)                     | EDIT     | Each takes the slot first                                                                                                                                                              |
+| 1b   | `.claude/hooks/guard-process-kill.mjs`, `.claude/settings.json`, `.claude/hooks/hooks.test.sh`                                           | NEW/EDIT | D2. About 30 cases: each deny form, wrapped forms (`sudo`, `env`, `timeout`, `bash -c`, `xargs`), the allowed pid/`$!`/job forms, and both hooks loading                               |
+| 1b   | `.github/scripts/review-prefetch.sh` + `.test.sh`, `.github/SECURITY.md`                                                                 | EDIT     | `PINNED_HOOKS` and `SETTINGS_SHA256` (D2)                                                                                                                                              |
+| 1b   | `docs/lessons.md`                                                                                                                        | EDIT     | #554's kill entry gains "→ now denied by `guard-process-kill.mjs`"                                                                                                                     |
+| 2    | `packages/db/scripts/mutations.mjs` + `mutations.test.sh` (#554's)                                                                       | EDIT     | `--shard`, `--only`, `--list-paths`; the lock on `pid-lock.mjs`; a partition test (every patch in exactly one shard)                                                                   |
+| 2    | `.github/scripts/changed-scopes.mjs` + `.test.sh`                                                                                        | NEW      | D7. The test covers every rule and fail-safe, #306's lockfile-only change, a rename, and the `== 'true'` scan                                                                          |
+| 2    | `.github/workflows/ci.yml`                                                                                                               | EDIT     | The `mutations` matrix, `mutations-total` and the issue job; scopes in `quality` and `e2e` (`fetch-depth: 0`); the concurrency change; `INERT` moves to the script                     |
+| 2    | `AGENTS.md`, `docs/architecture.md` §5, `docs/tech-debt.md`, `packages/db/scripts/mutations/README.md`, `docs/plans/ci-e2e-auto-skip.md` | EDIT     | `db:mutations` in CI; "`pnpm verify` is optional"; the CI diagram; the rename-skip debt closed                                                                                         |
+| 3    | `.github/workflows/screenshots.yml`, `screenshots-publish.yml`                                                                           | NEW      | D8                                                                                                                                                                                     |
+| 3    | `apps/web/scripts/publish-screenshots.ts`, `docs/runbooks.md`                                                                            | EDIT     | D8's script changes; the runbook's token note                                                                                                                                          |
+| 3    | `.claude/skills/ui-screenshot/SKILL.md`, `AGENTS.md` (UI PR rules), `docs/definition-of-done.md` line 17, `docs/architecture.md` §5      | EDIT     | Screenshots come from CI; a local capture is for debugging                                                                                                                             |
+| this | `docs/plan.md` (DX-18 and DX-18b rows), `docs/roadmap.md` (In flight), changelog fragment                                                | EDIT/NEW | The rows ride with the plan                                                                                                                                                            |
 
-**Size:** PR 1 is about 350 lines, half of it docs; PR 2 about 150; PR 3 about 200; PR 4 about 200.
+**Size:** PR 1a about 250 lines, mostly docs; 1b about 350; PR 2 about 350; PR 3 about 300.
 
 ## Test plan
 
-- **PR 1:**
-  - `hooks.test.sh` gains about 20 kill cases (each deny form, and the PID and job forms allowed);
-  - `heavy-slot.test.sh` covers a second taker refused with the message, a dead holder cleared,
-    nesting, and CI;
-  - the pre-push hook is exercised by the PR's own push;
-  - `test:changed` on a docs-only diff runs nothing, and on a one-file diff runs that file's tests.
-- **PR 2:**
-  - the shard test proves every patch runs in exactly one shard;
-  - a probe PR that touches `packages/db/` shows all 8 shards run;
-  - a docs-only change shows all 8 report "no mutated path changed";
-  - one deliberately broken mutation goes red in its shard.
-- **PR 3:**
-  - `changed-scopes.test.sh` covers every scope, including the fail-safe cases;
-  - three probe PRs (docs only, catalog data only, UI only) show the right steps skipped;
-  - a `.github/` change runs everything.
-- **PR 4:**
-  - a same-repo UI PR gets its screenshot comment;
-  - the publish step refuses a crafted artifact;
-  - a fork is simulated by a PR from a branch with no labels and no secrets referenced.
-- **Every PR** is gated by CI, with no local `pnpm verify`. The new suites are light and run in
+- **Every PR** is gated by CI. No local `pnpm verify` is run, and the new suites are light and run in
   `guards:test`.
+- **PR 2:**
+  - a probe PR touching `packages/db/` runs every shard, and the total job counts 240 patches;
+  - a docs-only change, a lockfile-only change and a rename each set the right flags;
+  - a deliberately broken mutation goes red in its shard;
+  - main's next push runs every shard.
+- **PR 3:**
+  - a same-repo UI PR with a `screenshots:` block gets its comment;
+  - a crafted artifact is refused: a bad filename, non-PNG bytes, and an oversize file.
 
 ## Risks / rollback
 
-- **A scope filter skips something it shouldn't.**
-  - Fail-safe to run everywhere (D7).
-  - A full run on every `push` to main, and nightly for mutations.
-  - A `.github/` change runs everything.
-  - The filter is a tested script, not inline YAML.
-- **The slot blocks a person who needs to run now:** `MAT_PLAN_HEAVY_SLOT=off`, and the busy
-  message says who holds it.
-- **A stale lock after `kill -9`:** cleared by the next taker, via the pid check.
-- **Mutations in CI cost minutes.** There are 8 shards on PRs that touch the DB, and none otherwise.
-  The repo is public, so Actions minutes on standard runners are free; the cost is queue time.
-- **The screenshot publish step runs on a fork's artifact:** it runs only trusted code, takes PNG
-  files only, and checks the PR number.
-- **Rollback:** each PR reverts on its own. The slot and the guard each have a person's bypass.
+- **A scope skips something:**
+  - flags default to run, and only a literal `false` skips;
+  - the base's copy of the script decides;
+  - the trigger set includes the lockfile, manifests, tsconfigs and `.github/`;
+  - `--no-renames` sees a move's source;
+  - main's push runs every shard.
+- **The slot blocks a person:** use `MAT_PLAN_HEAVY_SLOT=off`. The busy message says who holds it.
+- **The screenshot token:** publishing happens only for same-repo PRs. It runs main's code on PNG bytes
+  that pass the checks, and holds no cache.
+- **The kill guard breaks:** it fails open. Its escape is `MAT_PLAN_ALLOW_PATTERN_KILL=1`.
+- **Rollback:** each PR reverts on its own.
 
 ## Out of scope
 
-- Making any check _required_ in branch protection. That is the maintainer's setting, unchanged.
-- The Neon-branch migration rehearsal (tech-debt's "last unwired CI gate").
+- Making any check required in branch protection. That is the maintainer's setting.
+- The Neon-branch migration rehearsal.
 - `next build` in `pnpm verify`.
-- Per-pillar vitest projects (`DX-18b`, D9).
+- Lifting `guard-main-checkout`'s wrapper walk into a shared module (a follow-up).
+- Moving `check-feature-guides` and `check-status-touched` onto one changed-files helper (a follow-up).
+- Per-pillar vitest projects (`DX-18b`).
 
-## Open questions
+## Open questions (the maintainer's)
 
-- **Q1 (the maintainer's):** should a push to main run the mutation shards every time, or only when
-  the DB scope changed, with the nightly full run as the backstop? **Recommended: only when
-  changed,** because main merges are frequent and the nightly run catches what the filter misses.
+- **Q1:** every push to main runs every mutation shard (D6), with no cron. **Recommended,** because a red
+  result sits on the commit that caused it. The alternative is a nightly run that tells no one.
+- **Q2:** I is delivered as `test:changed`, the CI scopes and the filtered commands. Per-pillar vitest
+  projects wait until CI's Test step passes 3 minutes (53s today). **Recommended,** because splitting a
+  53-second step saves nothing yet.
+- **Q3:** CI-made screenshots arrive as PR comments, the first one marked as the baseline, instead of
+  sitting in the PR description. **Recommended,** because editing a PR body from a workflow needs a
+  broader token for no gain.
 
 ## Review-response log (adversarial panel)
 
-_Pending._
+> Panel cost: correctness 109k · 7m27s, scope 75k · 4m09s, architecture 95k · 4m52s, reuse 107k · 5m00s,
+> security 121k · 7m51s. Models: CI and workflows for a public repo · every lens on opus (Fable cap until
+> 2026-11-19 03:00 ET). Every lens was told to run nothing heavy; two ran probes of seconds each.
+
+Lenses: C correctness, S scope, A architecture, R reuse, X security.
+
+| #   | Lens       | Critique (short)                                                                                                                                     | Verdict                 | Resolution                                                                                                                     |
+| --- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| B1  | A          | Between PR 1 and PR 2, nothing would run the mutation proof                                                                                          | **accepted**            | D5: it stays local until PR 2; "verify optional" lands in PR 2                                                                 |
+| B2  | S, R, X    | `invocations()` sees only git and gh, so the lexer can't be lifted "unchanged" for the kill guard                                                    | **accepted**            | D2: import `lex()`, plus the guard's own wrapper walk; the shared walk is a follow-up                                          |
+| B3  | C, X       | A missing or mistyped scope output read as "skip"; "all true" also turned on skip flags                                                              | **accepted**            | D7: run-flags only, skip on a literal `'false'`, and a scan asserts no `== 'true'`                                             |
+| B4  | X          | `settings.json` is hash-pinned; the lexer import would run outside the CI no-op proof                                                                | **accepted**            | D2: a dynamic import after the CI exit; `PINNED_HOOKS` and `SETTINGS_SHA256` in PR 1b                                          |
+| B5  | S, A, X, C | CI can't infer what to screenshot; the publish job's write token sat beside a fork's artifact; the PR-number check has nothing to compare for a fork | **accepted**            | D8: routes from the PR body, same-repo publish only, PR resolved by head SHA, artifact checks                                  |
+| 1   | C, R, X    | The slot lock races (two holders in 1 of 3 probe trials); pid reuse; the stale steal                                                                 | **accepted**            | D3: link-from-temp creation, steal by rename, start-time check, race cases in the test                                         |
+| 2   | A, R       | The slot duplicates #554's lock; PR 1 conflicts with #554 on `package.json` and AGENTS.md                                                            | **accepted**            | D3: one `pid-lock.mjs`; PR 1 split, with 1b after #554                                                                         |
+| 3   | A, C       | The slot is attached at the wrong layer; `--filter` forms bypass it; `verify`'s `&&` chain; a dead wrapper with a live child                         | **accepted**            | D3: taken inside the runners, `verify:run` behind one wrapper, the child's pgid recorded                                       |
+| 4   | C, A, X    | The slot's location is clone-wide, not machine-wide                                                                                                  | **accepted**            | D3: `~/.cache/mat-plan/heavy-slot.json`                                                                                        |
+| 5   | C, X, R    | The mutation scope missed the lockfile, manifests and `.github/`; #306 would have skipped every shard; defined twice                                 | **accepted**            | D7: one definition with the full trigger set; #306 is a test case                                                              |
+| 6   | C          | `vitest related` misses the filesystem scanners and route files; repo-relative paths resolve against `apps/web` and match nothing                    | **accepted**            | D4: `--changed <base>`, scanners always included, extra force triggers                                                         |
+| 7   | A, R       | `@{upstream}` is the last push, not main; `default-base.mjs` already exists                                                                          | **accepted**            | D4: `defaultBase()`                                                                                                            |
+| 8   | C, A, X, S | The nightly cron shared CI's concurrency group, alerted no one, and ran every job; it contradicted Q1                                                | **accepted**            | D6: every push to main runs every shard, an issue on red, no cron; PR-only cancel                                              |
+| 9   | X, C       | `INERT`'s image rule and catalog-only would also skip `build`; a rename hides a source path; `pulls.listFiles` caps at 3,000                         | **accepted**            | D7: the image rule narrowed, catalog scope dropped, `--no-renames`, git diff                                                   |
+| 10  | X          | The PR's own scope script would classify itself                                                                                                      | **accepted**            | D7: the base's copy decides; the residual is stated                                                                            |
+| 11  | X, R, A    | The publish script's token switch, `--note`, the silent `.png` filter, and round counting from any comment                                           | **accepted**            | D8's script changes                                                                                                            |
+| 12  | S          | PR 3 (C) saves 23 seconds; fold it in                                                                                                                | **accepted**            | C is part of PR 2: four PRs become three, plus the 1a/1b split                                                                 |
+| 13  | S          | Split PR 1 by concern                                                                                                                                | **accepted**            | 1a and 1b                                                                                                                      |
+| 14  | S          | Cut DX-18b to a trigger, and ask about the deferral                                                                                                  | **accepted**            | D9 and Q2                                                                                                                      |
+| 15  | S          | This plan PR needs its row, fragment and roadmap move, and A–I quoted                                                                                | **accepted**            | The "this" row; the scope block at the top                                                                                     |
+| 16  | A, R       | Stale skills and `architecture.md` §5 weren't listed; delete counts and timings rather than updating them; one lessons entry, not two                | **accepted**            | The file table                                                                                                                 |
+| 17  | R          | Lift the wrapper walk into a shared `commands()` for both hooks now                                                                                  | **rejected (deferred)** | Refactoring a 962-line guard with 221 cases is its own concern. The kill guard's wrapper list is small and tested; a follow-up |
+| 18  | R          | Move the two older checks onto one changed-files helper                                                                                              | **rejected (deferred)** | Not needed to deliver DX-18; recorded in Out of scope                                                                          |
+| 19  | X          | Allow-listing `kill <digits>` admits `kill 0`, `-1` and negative pids                                                                                | **accepted**            | D2: only a pid of 2 or more; the broad forms denied                                                                            |
+| 20  | S, R       | Slot nesting through an env var; the duplicate lessons entry                                                                                         | **accepted**            | D3: HELD must match the live pid; D2's lessons line extends #554's entry                                                       |
