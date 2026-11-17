@@ -7,7 +7,7 @@ import {
   movementSlug,
   trackingTypeSchema,
 } from '../movements';
-import { hasCommaOrLineBreak, hasControlChar } from '../text';
+import { hasALetter, hasCommaOrLineBreak } from '../text';
 import { unitSchema } from '../units';
 import {
   equipmentSchema,
@@ -22,25 +22,41 @@ import {
 export const CATALOG_INSTRUCTIONS_MAX = 600;
 
 /**
+ * A character a reader cannot see, or one that reorders what they do see: a control character, a
+ * format character (a zero-width space, a bidi override) or a line or paragraph separator.
+ * A literal class with no interpolation.
+ */
+const UNSEEN_PATTERN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+
+/**
  * How to do the movement, **in our own words** (decision K17): one or more lines, each a plain
  * sentence or two. Written here and reviewed with the entry; never taken from a source (K16).
  *
- * Held to its written form, so the approval hash is of what a person will read: no blank line, no
- * space at either end of a line, no control character, no carriage return. It describes the
- * movement. It names no load, no dose and no readiness or medical claim (K13).
+ * Held to its written form, so the approval hash is of what a person will read:
+ *
+ * - lines are split on `\n`; no line is blank, has a space at either end, or lacks a letter;
+ * - **no character a reader cannot see**: no control or format character (a zero-width space, a
+ *   bidi override, a carriage return) and no line or paragraph separator, which would show as a
+ *   break the split never saw;
+ * - **no web address** (`://`, `www.`), for the reasons `media` holds none: a link sends a child's
+ *   device to a third party, can change after review, and is how an entry would name a source.
+ *
+ * It describes the movement. It names no load, no dose and no readiness or medical claim (K13).
  */
 export const catalogInstructionsSchema = z
   .string()
   .min(1)
   .max(CATALOG_INSTRUCTIONS_MAX)
   .refine(
-    (text) => text.split('\n').every((line) => line !== '' && line === line.trim()),
+    (text) =>
+      text.split('\n').every((line) => line !== '' && line === line.trim() && hasALetter(line)),
     'each line has words and no space at either end',
   )
   .refine(
-    (text) => text.split('\n').every((line) => !hasControlChar(line)),
-    'no control character',
-  );
+    (text) => text.split('\n').every((line) => !UNSEEN_PATTERN.test(line)),
+    'no character a reader cannot see',
+  )
+  .refine((text) => !/:\/\/|www\./i.test(text), 'no web address');
 
 /** The most characters a media key may have. */
 export const CATALOG_MEDIA_KEY_MAX = 80;

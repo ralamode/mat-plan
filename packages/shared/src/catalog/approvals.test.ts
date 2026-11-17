@@ -131,6 +131,17 @@ describe('the approvals check', () => {
     expect(entryHash(base)).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('🔴 hashes a nested object the same whatever order ITS keys are written in', () => {
+    const one = { ...base, media: { kind: 'video', key: 'cup-squat' } } as CatalogMovement;
+    const other = { ...base, media: { key: 'cup-squat', kind: 'video' } } as CatalogMovement;
+    expect(Object.keys(one.media ?? {})).not.toEqual(Object.keys(other.media ?? {}));
+    expect(entryHash(other)).toBe(entryHash(one));
+    // And an edit inside it is an edit.
+    const rekeyed = { ...base, media: { kind: 'video', key: 'cup-squat-2' } } as CatalogMovement;
+    const rekinded = { ...base, media: { kind: 'animation', key: 'cup-squat' } } as CatalogMovement;
+    expect(new Set([one, rekeyed, rekinded, base].map(entryHash)).size).toBe(4);
+  });
+
   it('counts array order as content: a reordered list is an edit', () => {
     const two: CatalogMovement = { ...base, secondaryMuscles: ['glutes', 'hamstrings'] };
     const swapped: CatalogMovement = { ...base, secondaryMuscles: ['hamstrings', 'glutes'] };

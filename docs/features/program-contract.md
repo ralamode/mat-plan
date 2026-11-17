@@ -457,7 +457,8 @@ Invariants (the spec's rules, as they bind code here):
    holds literal entries, never code.
 9. **Instructions are our own words, written as they will be read; media is reserved.** An
    entry's optional `instructions` is one or more plain lines (no blank line, no space at a line's
-   end, at most `CATALOG_INSTRUCTIONS_MAX` characters), reviewed and hashed with the entry. Its
+   end, at most `CATALOG_INSTRUCTIONS_MAX` characters, **no character a reader cannot see and no
+   web address**), reviewed and hashed with the entry. Its
    optional `media` is a kind and a key into the app's own store, **never a URL**, and no entry in
    the library or the fixture may set it until a media plan lifts that test. Both stay in the
    const and are read by slug, like aliases: no column holds them.

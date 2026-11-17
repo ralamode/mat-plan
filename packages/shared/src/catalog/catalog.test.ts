@@ -174,9 +174,48 @@ describe('one entry (V2)', () => {
     expect(accepts(lines('Stand\ttall.'))).toBe(false);
     expect(accepts(lines('Stand tall.\r', 'Sit down.'))).toBe(false);
     expect(accepts(lines('Stand tall.\u0000'))).toBe(false);
+    expect(accepts(lines('Stand tall.', '...'))).toBe(false);
     expect(accepts(lines('x'.repeat(CATALOG_INSTRUCTIONS_MAX)))).toBe(true);
     expect(accepts(lines('x'.repeat(CATALOG_INSTRUCTIONS_MAX + 1)))).toBe(false);
     expect(accepts({ ...base, instructions: null })).toBe(false);
+  });
+
+  it('🔴 refuses instructions that hold what a reader cannot see', () => {
+    // What is hashed and approved must be what is read: no break the line split did not see, no
+    // invisible character, nothing that reorders the text on screen.
+    const lines = (...text: string[]) => ({ ...base, instructions: text.join('\n') });
+    const unseen = {
+      'a line separator': '\u2028',
+      'a paragraph separator': '\u2029',
+      'a next-line control': '\u0085',
+      'a zero-width space': '\u200B',
+      'a zero-width joiner': '\u200D',
+      'a left-to-right mark': '\u200E',
+      'a right-to-left override': '\u202E',
+      'a right-to-left isolate': '\u2067',
+      'a byte-order mark': '\uFEFF',
+      'a soft hyphen': '\u00AD',
+    };
+    for (const [what, char] of Object.entries(unseen)) {
+      expect(accepts(lines(`Stand tall.${char}Sit down.`)), what).toBe(false);
+      expect(accepts(lines(`Stand tall.${char}`)), what).toBe(false);
+      expect(accepts(lines('Stand tall.', char, 'Sit down.')), what).toBe(false);
+    }
+    // A non-breaking space at a line's end is a space at a line's end.
+    expect(accepts(lines('Stand tall.\u00A0', 'Sit down.'))).toBe(false);
+    // Accents and plain punctuation are ordinary text.
+    expect(accepts(lines('Keep your heels down; pause 1–2 seconds (don’t bounce).'))).toBe(true);
+  });
+
+  it('🔴 refuses a web address in instructions', () => {
+    const one = (instructions: string) => ({ ...base, instructions });
+    expect(accepts(one('See https://example.test/how for more.'))).toBe(false);
+    expect(accepts(one('See HTTP://example.test.'))).toBe(false);
+    expect(accepts(one('See www.example.test.'))).toBe(false);
+    expect(accepts(one('See WWW.example.test.'))).toBe(false);
+    expect(accepts(one('Watch: ftp://example.test/a'))).toBe(false);
+    // A colon or a slash on its own is ordinary text.
+    expect(accepts(one('Tempo: slow down, fast up. Left/right count as one.'))).toBe(true);
   });
 
   it('🔴 takes a media key into our own store, never an address (K18)', () => {
