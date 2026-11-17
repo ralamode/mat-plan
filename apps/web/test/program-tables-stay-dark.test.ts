@@ -1,4 +1,4 @@
-import { globSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -80,13 +80,15 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     /\b(insertProgramBlockOwnedBy|insertWorkoutOwnedBy|programBlockByClientId|liveTemplateBlockIn)\b/;
 
   const files = [
-    ...globSync('apps/web/**/*.{ts,tsx}', { cwd: REPO }),
+    // Every source Next or Node would load, not only `.ts`: a `.mts` or `.js` file importing the
+    // program tables is as real as a `.ts` one (the same reasoning as `appSources()`).
+    ...globSync('apps/web/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', { cwd: REPO }),
     ...globSync('packages/db/src/**/*.ts', { cwd: REPO }),
   ].filter(
     (f) =>
       !f.includes('node_modules') &&
       !f.includes('/.next/') &&
-      !/\.test\.tsx?$/.test(f) &&
+      !/\.test\.[cm]?[jt]sx?$/.test(f) &&
       !f.endsWith('test/program-tables-stay-dark.test.ts'),
   );
 
@@ -192,7 +194,15 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // The forms that would reach a writer without naming it in braces: nowhere in apps/web, the DAL
   // included, so containment below can be checked by name.
   const WHOLE_PACKAGE =
-    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)|export\s*\*\s*(?:as\s+\w+\s*)?from\s*['"]@mat-plan\/db['"]/;
+    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)|require\(\s*['"]@mat-plan\/db['"]\s*\)|export\s*\*\s*(?:as\s+\w+\s*)?from\s*['"]@mat-plan\/db['"]/;
+  /**
+   * The text the import checks read: the file AS WRITTEN. `code()` strips comments with a regex that
+   * cannot tell a comment from a string, so an import placed between a string holding a comment's
+   * opening pair and one holding its closing pair is stripped with them (the non-vacuity case below).
+   * Reading raw text can only over-match (an import quoted in a comment), the safe direction.
+   */
+  const importScanText = (text: string) => text;
+  const sourceAsWritten = (f: string) => importScanText(readFileSync(join(REPO, f), 'utf8'));
 
   // FAM-1 7a-i: lane P's writers and reads are wired, and only the program DAL may import them: an
   // action, a page or a component reaches them through `lib/dal/program/`, which resolves the
@@ -215,13 +225,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     );
     const named = fromDb(laneP);
     const web = files.filter((f) => f.startsWith('apps/web/'));
-    const importing = web.filter((f) => named.test(code(join(REPO, f))));
+    const importing = web.filter((f) => named.test(sourceAsWritten(f)));
     const notForTheDay = fromDb(laneP.filter((n) => !DAY_DAL_MAY_IMPORT.includes(n)));
     // Which file may import what: the program DAL, any lane P name; the day DAL, workoutInHousehold
     // and nothing else beside it.
     const mayImport = (f: string, src: string) =>
       f.startsWith(PROGRAM_DAL) || (f.startsWith(DAY_DAL) && !notForTheDay.test(src));
-    expect(importing.filter((f) => !mayImport(f, code(join(REPO, f))))).toEqual([]);
+    expect(importing.filter((f) => !mayImport(f, sourceAsWritten(f)))).toEqual([]);
     // Neither DAL hands a lane P name on: a re-export (from the package, or of a local binding)
     // would let any file reach it through the DAL without naming `@mat-plan/db`.
     const reexports = new RegExp(
@@ -233,7 +243,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(
       web.filter((f) => {
         if (!f.startsWith(PROGRAM_DAL) && !f.startsWith(DAY_DAL)) return false;
-        const src = code(join(REPO, f));
+        const src = sourceAsWritten(f);
         return reexports.test(src) || localReexport.test(src);
       }),
     ).toEqual([]);
@@ -258,7 +268,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(
       notForTheDay.test("import { workoutInHousehold, readWorkoutDraft } from '@mat-plan/db';"),
     ).toBe(true);
-    expect(web.filter((f) => WHOLE_PACKAGE.test(code(join(REPO, f))))).toEqual([]);
+    expect(web.filter((f) => WHOLE_PACKAGE.test(sourceAsWritten(f)))).toEqual([]);
     // Non-vacuity: the DAL does import them, so the scan sees an import where there is one.
     expect(importing.some((f) => f.startsWith(PROGRAM_DAL))).toBe(true);
     // Non-vacuity: each form is caught, and a ProgramActions member is not.
@@ -269,6 +279,11 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
     expect(WHOLE_PACKAGE.test("export * from '@mat-plan/db';")).toBe(true);
     expect(WHOLE_PACKAGE.test("export * as db from '@mat-plan/db';")).toBe(true);
+    // Non-vacuity for the forms the scan once missed (#545's second pass):
+    expect(WHOLE_PACKAGE.test("const { saveWorkout } = require('@mat-plan/db');")).toBe(true);
+    const hidden = "const a = '/*'; import { saveWeek } from '@mat-plan/db'; const b = '*/';";
+    expect(named.test(importScanText(hidden))).toBe(true);
+    expect(files.some((f) => /^apps\/web\/.*\.(?:mts|cts|js|jsx|mjs|cjs)$/.test(f))).toBe(true);
     // The scan's own parser: an alias publishes its right-hand name. ⚠️ It reads `export { … } from`
     // only; a barrel's local `export function` or `export { x }` would publish a name it cannot see,
     // so the barrels keep to that one form.
@@ -289,6 +304,41 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'notice.md: a swapped item is hidden, not erased (inventory §8, D19)',
     'data-inventory.md: every "until step 7b" sentence (§1 to §3, §8), rewritten as reachable',
   ];
+  /**
+   * `apps/web` reaches `packages/db` only by its package name, so the checks above, which read
+   * `'@mat-plan/db'`, see every import of it: no relative path into the package's source, and no
+   * deep `@mat-plan/db/…` import (the package's `exports` refuses that one at build time, and this
+   * says so here too).
+   */
+  const DB_PACKAGE = 'packages/db/';
+  const MODULE_SPECIFIER =
+    /(?:\bfrom\s*|\bimport\s+|\bimport\(\s*|\brequire\(\s*)['"]([^'"]+)['"]/g;
+  const reachesDbByPath = (file: string, source: string) =>
+    [...source.matchAll(MODULE_SPECIFIER)].some(([, spec]) => {
+      if (spec!.startsWith('@mat-plan/db/')) return true;
+      if (!spec!.startsWith('.')) return false;
+      return (relative(REPO, resolve(dirname(join(REPO, file)), spec!)) + '/').startsWith(
+        DB_PACKAGE,
+      );
+    });
+
+  it('apps/web reaches packages/db only by its package name', () => {
+    const web = files.filter((f) => f.startsWith('apps/web/'));
+    expect(web.filter((f) => reachesDbByPath(f, sourceAsWritten(f)))).toEqual([]);
+    const day = 'apps/web/lib/dal/day/x.ts';
+    expect(
+      reachesDbByPath(
+        day,
+        "import { readWorkoutDraft } from '../../../../../packages/db/src/queries/program';",
+      ),
+    ).toBe(true);
+    expect(reachesDbByPath(day, "const m = require('../../../../../packages/db/src');")).toBe(true);
+    expect(reachesDbByPath(day, "import { db } from '@mat-plan/db/src/client';")).toBe(true);
+    expect(reachesDbByPath(day, "import { db } from '@mat-plan/db';")).toBe(false);
+    expect(reachesDbByPath(day, "import { x } from './local';")).toBe(false);
+    expect(reachesDbByPath(day, "import { x } from '../../../../../packages/dbx/y';")).toBe(false);
+  });
+
   /** The module itself, as a path from the repo root without its extension. */
   const ACTIONS = 'apps/web/app/programs/actions';
   /**
