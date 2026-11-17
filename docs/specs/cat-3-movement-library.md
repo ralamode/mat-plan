@@ -9,7 +9,7 @@
 # `packages/db/scripts/verify/schema.ts`, `packages/db/scripts/mutations/`,
 # `packages/db/scripts/corrections/registry.ts`, `packages/db/src/queries/movement-ownership.ts`,
 # `packages/db/src/queries/program/movement-options.ts`, `apps/web/lib/dal/program/`,
-# `apps/web/e2e/a11y.spec.ts`, `packages/shared/package.json`,
+# `apps/web/e2e/a11y.spec.ts`, `packages/shared/package.json`, `packages/shared/src/seed-ids.ts`,
 # `packages/shared/src/movement-search.ts`, `packages/shared/src/movement-picker-catalog.ts`,
 # `packages/shared/src/programming.ts`.
 lane-a-catalog-schema:
@@ -26,8 +26,8 @@ lane-b-catalog-picker:
 
 # CAT-3: the movement library, in Beta 0
 
-> **Status: proposed 2026-11-17; panelled twice by eight lenses and rewritten each time
-> (§ Review-response log).** Backlog row: [plan.md → CAT-3](../plan.md). Written against `main` at
+> **Status: proposed 2026-11-17; panelled twice by eight lenses and rewritten each time, then
+> confirmed by the five that still had a blocker (§ Review-response log).** Backlog row: [plan.md → CAT-3](../plan.md). Written against `main` at
 > `a04576d1`.
 >
 > _Roadmap alignment (2026-11-17): advances `CAT-3` and takes in `CAT-2`'s wrestling drills; leaves
@@ -55,7 +55,7 @@ can rebuild.
 | #   | Decision                                                                                                                                                                                                                                                                                         | Settled                                             |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
 | K1  | CAT-3 is in Beta 0: **schema first** (reference tables seeded from `packages/shared`: equipment, muscles, a movement's primary muscle plus secondaries; tracking type reconciled with FAM-1's, not added beside it), **then data**                                                               | maintainer, 2026-11-17 (relayed by the FAM-1 board) |
-| K2  | Any outside source's licence is rechecked against the actual files, at a pinned revision, before anything is taken from it                                                                                                                                                                       | same                                                |
+| K2  | Any outside source's licence is rechecked against the actual files, at a pinned revision, before anything is taken from it. Nothing is taken (K16), so this binds only if K16 is ever reopened                                                                                                   | same                                                |
 | K3  | The movements the maintainer's household trains with must be in the library at launch                                                                                                                                                                                                            | same                                                |
 | K4  | **Nothing is preserved.** The 35 seeded movements and the logs in production need not be kept; no design may depend on an old movement id or an old log. Any production delete still needs the maintainer's explicit go at the time                                                              | same                                                |
 | K5  | Test and preview fixtures stop using the household's own program shape once the library lands                                                                                                                                                                                                    | same                                                |
@@ -68,8 +68,8 @@ can rebuild.
 | K12 | Fuzzy matching runs in shared TypeScript over the option list, never in SQL ([lessons](../lessons.md), "`CREATE EXTENSION` in a migration…")                                                                                                                                                     | lessons; restated                                   |
 | K13 | "The LLM never authors loads" is untouched: an entry holds no load, no dose and no readiness claim                                                                                                                                                                                               | [AGENTS.md](../../AGENTS.md)                        |
 | K14 | **A supervision label only where it applies:** a short label on the few movements the maintainer marks; nothing on the rest                                                                                                                                                                      | maintainer, 2026-11-17, after the panel             |
-| K16 | **The library is authored and reviewed in-house, and it is extensive.** Every entry is written here, in our own words, in reviewed batches; nothing is imported and no source's descriptions, instructions or media are used. No tracked file records where an entry came from or names a source | maintainer, 2026-11-17 (relayed by the FAM-1 board) |
 | K15 | **The fresh start is not a normal deletion:** no waiting period, it does not wait for `OPS-3`'s restore drill, and the household's sign-in accounts are kept. (This spec still cuts a restore branch first and deletes it after 7 days, as AGENTS.md requires)                                   | same                                                |
+| K16 | **The library is authored and reviewed in-house, and it is extensive.** Every entry is written here, in our own words, in reviewed batches; nothing is imported and no source's descriptions, instructions or media are used. No tracked file records where an entry came from or names a source | maintainer, 2026-11-17 (relayed by the FAM-1 board) |
 
 ## Design, in twelve rules
 
@@ -81,16 +81,21 @@ can rebuild.
 2. **A catalog row is a global row with a `modality`.** `modality` is a new column that only the
    catalog seed writes: `NULL` on every household row and on production's 35 old rows. One
    predicate beside `movementIsGlobal()` in `packages/db/src/writers/ownership.ts`,
-   `movementIsCatalog()`, says it everywhere: the seed, the option read, the reports, the proofs.
-   It is true before and after the fresh start and on the preview database, and it is not a slug
-   test (which `packages/db/src/queries/movement-ownership.ts` records as tried and wrong).
+   `movementIsCatalog()` (global **and** `modality IS NOT NULL`), says it everywhere: the seed, the
+   option read, the reports, the proofs. It is true before and after the fresh start and on the
+   preview database, and it is not a slug test (which
+   `packages/db/src/queries/movement-ownership.ts` records as tried and wrong). The "global" half
+   is what will keep a household row out when households later get taxonomy of their own.
 3. **The const is the source of truth for a catalog row's content.** `CATALOG_MOVEMENTS`, in
    `packages/shared/src/catalog/data/`, exported only through the subpath
    `@mat-plan/shared/catalog/data`, so it never enters a client bundle.
 4. **A slug is a stable key, set once.** A new entry's slug is `movementSlug(name)`. After it ships
    the slug never changes: a corrected name keeps its slug and the old name becomes an alias, so
-   the slug is always `movementSlug` of the name or of an alias (the typed-name resolver in
-   `packages/db/src/writers/movement-catalog.ts` still finds the row). A committed lockfile lists
+   the slug is always `movementSlug` of the name or of an alias. A corrected name is then found by
+   name key (`existingItem`, the path `newItem` takes), not by slug: the typed-name resolver in
+   `packages/db/src/writers/movement-catalog.ts` reaches a renamed row only by its original name,
+   which is why A3, the first chunk that lets a rename reach a database, comes after FAM-1 12f has
+   removed the old forms, its last caller that skips `existingItem`. A committed lockfile lists
    every shipped slug with its tracking type and only grows. The CSV export prints the slug, so it
    is on the review sheet.
 5. **A catalog row's `public_id` is minted when it is seeded** (`newId()`), never committed.
@@ -128,10 +133,10 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
 
 ### Vocabulary and the entry (chunk C0a)
 
-- **V1.** `packages/shared/src/catalog/` shall define `EQUIPMENT`, `MUSCLES`, `MODALITIES`,
-  `SUPERVISION` and `QUERY_SHORT_FORMS`, the four vocabularies as const arrays with `keyBySelf`
-  members, a zod enum and labels (`as const satisfies Record<…, string>`). `MOVEMENT_PATTERNS` is
-  unchanged.
+- **V1.** `packages/shared/src/catalog/` shall define four vocabularies, `EQUIPMENT`, `MUSCLES`,
+  `MODALITIES` and `SUPERVISION`, as const arrays with `keyBySelf` members, a zod enum and labels
+  (`as const satisfies Record<…, string>`), and one map, `QUERY_SHORT_FORMS`. `MOVEMENT_PATTERNS`
+  is unchanged.
 - **V2.** `catalogMovementSchema` shall be strict, have no `publicId` key, and accept an entry only
   when: `name` passes `movementNameSchema` (a comma or a line break is refused: the CSV export
   prints the slug); each alias passes `movementLabelSchema`; the primary muscle is not also a
@@ -142,9 +147,13 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   alias (the existing test in `movement-picker-catalog.test.ts`, moved). No alias shall be a
   `QUERY_SHORT_FORMS` key. `CATALOG_FIXTURE`'s slugs and name keys shall be disjoint from
   `MOVEMENT_SEED_ROWS`' while that list exists.
-- **V4.** Every entry's slug and tracking type shall equal its lockfile line, and a CI check
-  against the merge base shall allow the lockfile, and `approved.json`, only added lines: changing
-  a shipped type, renaming a shipped slug or removing a shipped entry fails the PR.
+- **V4.** Every entry's slug and tracking type shall equal its lockfile entry. A CI step with the
+  repository's history shall parse the lockfile and `approved.json` at the merge base and at the
+  head and fail unless every old key is still there with its old value: changing a shipped type,
+  renaming a shipped slug, removing a shipped entry or rewriting an approval fails the PR. The
+  step is a script under `.github/scripts/` run by the quality job, and the per-entry checks are in
+  `packages/shared/src/catalog/approvals.test.ts`; both are contract files, outside lane N's
+  directory.
 - **V5.** `requiresNoEquipment(entry)` shall be true exactly when the equipment set is empty, and
   no column or field named for that answer shall exist (a source scan for `noEquipment` /
   `no_equipment`).
@@ -168,11 +177,14 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   muscle row is held by proof only (a planted row turns it red): no writer makes one (rule 11).
 - **S5.** The `modality` CHECK shall cover `MODALITIES` exactly (`assertCheckCoversConst`).
   `movements_global_row_has_pattern` shall become
-  `household_id IS NOT NULL OR pattern IS NOT NULL OR modality IN ('conditioning', 'mobility', 'skill')`,
+  `household_id IS NOT NULL OR pattern IS NOT NULL OR (modality IS NOT NULL AND modality <> 'strength')`,
   by drop and re-add in one transaction (the one exception to "nothing dropped"; every existing
-  global row has a pattern). `packages/db/scripts/verify.ts` re-adds that constraint by hand in its
-  V1-1b simulation: A1 changes it to the same exported SQL fragment and compares
-  `pg_get_constraintdef` with the migration's.
+  global row has a pattern). The `IS NOT NULL` is load-bearing: without it a global row with no
+  pattern and no modality makes the CHECK evaluate to NULL, which passes. A planted global row with
+  both NULL shall be refused, and a mutation that removes the guard turns that proof red.
+  `packages/db/scripts/verify.ts` re-adds the constraint by hand in its V1-1b simulation: A1
+  changes it to the same exported SQL fragment and compares `pg_get_constraintdef` with the
+  migration's (without the `NOT VALID` the simulation appends).
 - **S6.** No module in `apps/` shall read the new tables or column until P9
   (`apps/web/test/program-tables-stay-dark.test.ts`'s pattern), and A1's migration shall carry a
   deploy-window header: Drizzle names every column on insert ([lessons](../lessons.md), "shipped
@@ -200,7 +212,7 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   households own rows that collide with catalog slugs.
 - **E6 (chunk A3, after the fresh start).** When an entry's name, modality, pattern, equipment,
   muscles, `unitDefault` or `isBodyweight` changes in the const, the seed shall change the stored
-  **catalog** row to match (conflict target on the global slug index with its predicate, updating
+  **catalog** row to match (`onConflictDoUpdate` with `targetWhere` on the global slug index, updating
   only rows where `modality IS NOT NULL`), keep its `id` and `public_id`, write join rows by
   difference, and leave an unchanged row unwritten (`updated_at` unchanged on a second seed). If a
   stored type differs from the lockfile's, then it shall skip that row and count it.
@@ -211,11 +223,11 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   one, and `catalogMovementSchema` has no field for it (V2 is strict).
 - **D2.** `packages/shared/src/catalog/data/` shall hold literal exports only, and every entry
   shall pass `catalogMovementSchema` in its test.
-- **D3.** Every entry's content hash (over its fields with sorted keys, supervision included)
-  shall appear in `approved.json` under a batch number, so a new entry **and an edited one** fail
-  the PR until an approval line exists (V4 keeps the file append-only). That the maintainer gave
-  the approval is a person's act: **a batch PR is merged only by the maintainer, never under a
-  standing permission**, and its description names the batch (K9).
+- **D3.** Every entry's content hash (SHA-256 over its JSON with sorted keys, every field,
+  supervision included) shall appear in `approved.json` under a batch number, so a new entry **and
+  an edited one** fail the PR until an approval line exists (V4 keeps the file append-only). That
+  the maintainer gave the approval is a person's act: **a batch PR is merged only by the
+  maintainer, never under a standing permission**, and its description names the batch (K9).
 - **D4.** No file under `catalog/data/`, and no batch PR, shall name a household, a person, a
   program, a dose, or which entries any household uses.
 
@@ -233,19 +245,21 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   green, the compact-form matches (`trapbar`) included.
 - **P3.** `QUERY_SHORT_FORMS` (db, kb, bb, ez, …) shall expand a query word inside
   `searchMovementOptions` only, after the fold and never in `movementNameKey`; rows found only
-  through an expansion are added after the other matches. "db row" shall find Dumbbell row. The
-  two old aliases that are equipment short forms (`KB`, `DB bench`) are retired; the other four
-  (`RDL`, `BSS`, `OHP`, `hip thrust`) become their entries' aliases.
+  through an expansion are added after the other matches and count as matches. "db row" shall find
+  Dumbbell row. The two old aliases that are equipment short forms (`KB`, `DB bench`) are retired;
+  the other four (`RDL`, `BSS`, `OHP`, `hip thrust`) become their entries' aliases.
 - **P4.** `near` shall hold fuzzy candidates, computed **only when the unfiltered `matches` are
   empty**: a query word of five or more letters within one edit (insert, delete, substitute, or a
   swap of neighbours) of a word of a name or alias that starts with the same letter, or the same
   test on the compact forms; two edits from nine letters. "bulgarain" shall find Bulgarian split
-  squat; "dedlift" shall find a deadlift; "kettelbell swing" shall find Kettlebell swing. "hand"
-  shall not find a hang; "curl" shall not find a carry; a query with any other match shall have an
-  empty `near`.
+  squat; "dedlift" shall find a deadlift; "kettelbell swing" shall find Kettlebell swing. "dress"
+  shall not find a press (the first letter); "split" shall not find a squat (three edits); "hand"
+  shall not find a hang (four letters); a query with any row in the unfiltered `matches` shall
+  have an empty `near`.
 - **P5.** `near` and `someWords` shall each be shown under its own heading, `near` first, each
-  counted separately in the status text; neither shall be what Enter picks; and while either holds
-  a row the create button stays the quiet one.
+  counted separately in the status text, with a row that is in `near` not repeated under
+  `someWords`; neither shall be what Enter picks; and while either holds a row the create button
+  stays the quiet one.
 - **P6.** The query shall be cut to `MOVEMENT_NAME_MAX` and a fixed word count before matching; no
   `RegExp` shall be built from a query or a catalog string; and the query text shall never leave
   the device (no URL parameter, server action or log line carries it: a source scan).
@@ -266,9 +280,9 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   A line directly under the filter control shall say how many of the household's items match the
   query (all of them when there is no query; not counting a row P8 already shows) and offer to
   show them; shown, they are listed under "Your items" until the filters change.
-- **P10.** When the unfiltered matches are not empty and no row passes the filters, the screen
-  shall say that nothing passes the filters and offer to clear them; it shall not fall back to
-  fuzzy matches or to the whole list.
+- **P10.** When the unfiltered `matches`, `near` or `someWords` hold a row and none passes the
+  filters, the screen shall say that nothing (or, beside a row P8 shows, nothing else) passes the
+  filters and offer to clear them; it shall not fall back to the whole list.
 - **P11.** The option read (`packages/db/src/queries/program/movement-options.ts`, FAM-1 step
   6a-iii's file) shall list catalog rows (rule 2) and the caller's own rows only; return each
   catalog option's equipment, primary and secondary muscles and modality from the tables and its
@@ -312,10 +326,12 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   run.
 - **R4.** After the fresh start a count-only report (an entry extending `registry.ts` →
   `movementsOwnershipReport`) shall show: no household or profile whose `public_id` is in
-  `PRIV-3`'s planned `SEED_PUBLIC_IDS`; no `movements.public_id` in the seed namespace; every
-  global movement a catalog row; zero catalog entries skipped by the seed. It is run again at the
-  start of the trial week, and the corrections of steps 3 and 5 are kept until that second run is
-  clean, as its remedy.
+  `SEED_PUBLIC_IDS`; no `movements.public_id` in the seed namespace; every global movement a
+  catalog row; zero catalog entries skipped by the seed. (`SEED_PUBLIC_IDS` is the set `PRIV-3`'s
+  plan adds in its PR 2b; R0 moves it into chunk RC, because the fresh start does not wait for
+  2b.) It is run again at the start of the trial week, and the corrections of steps 3 and 5 are
+  kept until that second run is clean, as its remedy. A hand `UPDATE` that gave an old row a
+  `modality` would show here as a catalog row with a seed-namespace id.
 - **R5.** No step shall run without the maintainer's go given at that time, recorded in the
   correction's Applied entry with its date and role and with K15's departures by name (no waiting
   period, accounts kept, no restore drill). The runbook says so above the first command.
@@ -324,10 +340,10 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
 
 - **F1.** `PROGRAM_SEED`, `MOVEMENT_SEED_ROWS`, `MOVEMENT_SEED_PUBLIC_IDS` and the program fixtures
   shall be replaced by a generic program built from `CATALOG_FIXTURE`, and nothing in `packages/`
-  or `apps/` shall import those three symbols (an import scan). Their remaining readers are ported
-  here: `movement-picker.test.tsx`, `contract.test.ts`, `strength-form-scaffold.test.ts`,
-  `strength-session-schema.test.ts`, `existing-item.test.ts`, `fakes.test.ts`,
-  `screenshot-ephemeral.ts`, the TEN-2 discriminators in `verify.ts` and the seed's shadow report.
+  or `apps/` shall import those three symbols (an import scan, which is what finds the readers:
+  today they include `seed.ts`, `programming.ts`, `verify.ts`, `verify/schema.ts`, `registry.ts`,
+  `movement-search.test.ts`, `movement-picker.test.tsx`, `contract.test.ts` and the two
+  strength-form tests).
 
 ## The data contract
 
@@ -422,27 +438,27 @@ step-2 branch; if it ever is, steps 3 to 8 are run again.
 
 ## Chunks, in order
 
-| Chunk                  | Owner                     | Delivers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Cannot move because                                                 |
-| ---------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **S0** this spec       | roadmap thread            | The spec and the roadmap edits                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | First                                                               |
-| **P0** prototype       | roadmap thread            | The accepted FAM-1 prototype's picker, three UX lenses, the maintainer's sign-off. It shows every state in P15 at 360 px, also with the keyboard up in a short viewport, the collapsed browse with filters off and on, and the longest row. It settles: the filter control (a panel, not a row of chips) and its trigger; the headings; filters kept or reset between opens; the wording of the supervision label, "No equipment" (and whether a partner counts), the hidden-items line, the close-spelling heading and "clear filters"; plain muscle labels; the two-line row in single mode                                                                                                                           | Gates C0b-2 and B2, B3                                              |
-| **C0a**                | roadmap thread            | The contract above                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Gates A1, A2, N2                                                    |
-| **C0b-1**              | roadmap thread            | Search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Gates B1                                                            |
-| **A1** tables          | lane A                    | S1 to S6 in one migration: the two reference tables, the two join tables, `modality`, the CHECK swap, S3's index; the erasure graph entries; `verify.ts`'s hand copy of the CHECK; inventory §1's rows and counts for the new tables and column. In the migration queue                                                                                                                                                                                                                                                                                                                                                                                                                                                 | After C0a (CHECKs mirror its consts)                                |
-| **A2** the seed        | lane A                    | E1 to E5, in one or two PRs: the catalog seed in `seedReference`; `movementIsCatalog()`; the TEN-2 discriminators in `verify.ts`, `movementsOwnershipReport` and the shadow report read "a legacy seed row or a catalog row"; `verify/schema.ts`'s 0022 proofs plant their own rows from the migration's VALUES list instead of relying on the seed                                                                                                                                                                                                                                                                                                                                                                     | After A1 and `OPS-2` PR 1 (`seedReference`)                         |
-| **N2…** batches        | lane N; maintainer merges | Entries and approvals, a batch a PR (D1 to D4), the wrestling drills `CAT-2` owed among them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | After C0a; each reaches production on merge once A2 is in           |
-| **C0b-2**              | roadmap thread            | Filters and the option shape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | After P0                                                            |
-| **B1** search          | lane B                    | P1 to P6 in the picker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | After C0b-1; behind FAM-1 7a-ii, 7b and 15 if they collide          |
-| **B2** filters         | lane B                    | P7 to P10, P13 to P15                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | After C0b-2 and B1                                                  |
-| **P11** option read    | lane P, a seam            | The read returns taxonomy; `apps/web/lib/dal/program/` maps it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After FAM-1 6a-iii and A2                                           |
-| **B3** browse          | lane B                    | P12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | After B2 and P11                                                    |
-| **RC** create          | `PRIV-3`'s owner          | A guarded `create-household` correction built on `registry.ts` → `householdClaim`'s logic, factored out (the account from the environment, its shape check, `fixtureBindIsAllowed`): takes **no household id**, mints ordinary ids, binds one or more accounts to the one new household in one run, checks inside its transaction that none has a live membership, prints counts only. `householdClaim` itself gains the refusal of any id in `SEED_PUBLIC_IDS`                                                                                                                                                                                                                                                         | Before R2                                                           |
-| **R0** deltas          | the plans' owners         | `PRIV-3`: a dated one-shot correction that takes no target, erases the seeded household through 2a's core, refuses outside production and once the target is gone, has a pure, unit-tested gate, and leaves `erase-household`'s seed-id refusal and its proof unchanged (or `OPS-2` D9's re-key run just before; the owner chooses); `PRIV-3`'s order no longer puts `OPS-3` ahead of 2a for this run. `OPS-2` Q2, D8, D9 and `SEC-6`'s row say K7 and K15; `SEC-6`'s acceptance is narrowed to households, profiles and movements, and its `rate-limit.ts` clause keeps an owner. The notice's sentences on the seeded athletes and on shared movement names; inventory §1b's paragraph on leftover global rows and §8 | Before R1                                                           |
-| **R1** runbook         | `PRIV-3`'s owner          | R1 to R4; step 5's correction; inventory §5's two new removal paths                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | After `PRIV-3` 2a, RC, R0                                           |
-| **R2** the fresh start | the maintainer            | R5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | After R1 and the preconditions. **The maintainer's go at the time** |
-| **A3** the upsert      | lane A                    | E6; AGENTS.md's line; the seed's docstrings and `migrate.yml`'s header. Off the trial week's path: nothing waits for it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | After R2 (rule 6)                                                   |
-| **F1** fixtures        | roadmap thread            | F1, with `docs/spec.md` §4 and the architecture diagram brought up to date                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | After B3 and FAM-1's lanes, so no lane is churned mid-step          |
-| FAM-1 step 16          | the maintainer            | The trial week                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After R2                                                            |
+| Chunk                  | Owner                     | Delivers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Cannot move because                                                 |
+| ---------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **S0** this spec       | roadmap thread            | The spec and the roadmap edits                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | First                                                               |
+| **P0** prototype       | roadmap thread            | The accepted FAM-1 prototype's picker, three UX lenses, the maintainer's sign-off. It shows every state in P15 at 360 px, also with the keyboard up in a short viewport, the collapsed browse with filters off and on, and the longest row. It settles: the filter control (a panel, not a row of chips) and its trigger; the headings; filters kept or reset between opens; the wording of the supervision label, "No equipment" (and whether a partner counts), the hidden-items line, the close-spelling heading and "clear filters"; plain muscle labels; the two-line row in single mode; where shown household items sit under a query; the supervision label's contrast in every row state                                                                            | Gates C0b-2 and B2, B3                                              |
+| **C0a**                | roadmap thread            | The contract above                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Gates A1, A2, N2                                                    |
+| **C0b-1**              | roadmap thread            | Search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Gates B1                                                            |
+| **A1** tables          | lane A                    | S1 to S6 in one migration: the two reference tables, the two join tables, `modality`, the CHECK swap, S3's index; the erasure graph entries; `verify.ts`'s hand copy of the CHECK; one lock on `movements` taken first, as migration 0022 does; inventory §1's rows and counts for the new tables and column. In the migration queue                                                                                                                                                                                                                                                                                                                                                                                                                                         | After C0a (CHECKs mirror its consts)                                |
+| **A2** the seed        | lane A                    | E1 to E5, in one or two PRs: the catalog seed in `seedReference`; `movementIsCatalog()`; the TEN-2 discriminators in `verify.ts`, `movementsOwnershipReport` and the shadow report read "a legacy seed row or a catalog row"; `verify/schema.ts`'s 0022 proofs plant their own rows from the migration's VALUES list instead of relying on the seed                                                                                                                                                                                                                                                                                                                                                                                                                          | After A1 and `OPS-2` PR 1 (`seedReference`)                         |
+| **N2…** batches        | lane N; maintainer merges | Entries and approvals, a batch a PR (D1 to D4), the wrestling drills `CAT-2` owed among them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | After C0a; each reaches production on merge once A2 is in           |
+| **C0b-2**              | roadmap thread            | Filters and the option shape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | After P0                                                            |
+| **B1** search          | lane B                    | P1 to P6 in the picker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | After C0b-1; behind FAM-1 7a-ii, 7b and 15 if they collide          |
+| **B2** filters         | lane B                    | P7 to P10, P13 to P15                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | After C0b-2 and B1                                                  |
+| **P11** option read    | lane P, a seam            | The read returns taxonomy; `apps/web/lib/dal/program/` maps it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | After FAM-1 6a-iii and A2                                           |
+| **B3** browse          | lane B                    | P12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After B2 and P11                                                    |
+| **RC** create          | `PRIV-3`'s owner          | A guarded `create-household` correction built on `registry.ts` → `householdClaim`'s logic, factored out (the account from the environment, its shape check, `fixtureBindIsAllowed`): takes **no household id**, mints ordinary ids, binds one or more accounts to the one new household in one run, checks inside its transaction that none has a live membership, prints counts only. It creates `SEED_PUBLIC_IDS` in `packages/shared/src/seed-ids.ts` (moved here from `PRIV-3` 2b by R0), and `householdClaim` itself gains the refusal of any id in it                                                                                                                                                                                                                  | Before R2                                                           |
+| **R0** deltas          | the plans' owners         | `PRIV-3`: a dated one-shot correction that takes no target, erases the seeded household through 2a's core, refuses outside production and once the target is gone, has a pure, unit-tested gate, and leaves `erase-household`'s seed-id refusal and its proof unchanged (or `OPS-2` D9's re-key run just before; the owner chooses); `PRIV-3`'s order no longer puts `OPS-3` ahead of 2a for this run, and `SEED_PUBLIC_IDS` moves from its 2b to chunk RC. `OPS-2` Q2, D8, D9 and `SEC-6`'s row say K7 and K15; `SEC-6`'s acceptance is narrowed to households, profiles and movements, and its `rate-limit.ts` clause keeps an owner. The notice's sentences on the seeded athletes and on shared movement names; inventory §1b's paragraph on leftover global rows and §8 | Before R1                                                           |
+| **R1** runbook         | `PRIV-3`'s owner          | R1 to R4; step 5's correction; inventory §5's two new removal paths                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | After `PRIV-3` 2a, RC, R0                                           |
+| **R2** the fresh start | the maintainer            | R5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | After R1 and the preconditions. **The maintainer's go at the time** |
+| **A3** the upsert      | lane A                    | E6; AGENTS.md's line; the seed's docstrings and `migrate.yml`'s header. Off the trial week's path: nothing waits for it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | After R2 (rule 6) and FAM-1 12f (rule 4)                            |
+| **F1** fixtures        | roadmap thread            | F1, with `docs/spec.md` §4 and the architecture diagram brought up to date                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | After B3 and FAM-1's lanes, so no lane is churned mid-step          |
+| FAM-1 step 16          | the maintainer            | The trial week                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | After R2                                                            |
 
 **Integrate first.** The thin path is C0a → A1 → A2 on a test database: `CATALOG_FIXTURE` seeded
 with taxonomy and read back, before any real entry exists. Every later chunk widens it.
@@ -452,8 +468,8 @@ by then are on `main`. The library is meant to be extensive (K16): the target is
 as many of them by the fresh start as review allows, and batches continue after it.
 
 **Size:** 27 to 34 PRs: this spec, the prototype, three contract chunks, A1, A2 as one or two,
-about 500 entries in batches of about 50 (ten or more PRs), P11, three lane B chunks, RC, R0 as
-one or two, R1, A3, F1 as one or two.
+about 500 entries in batches of about 50 (ten batch PRs, up to fifteen if batches run smaller),
+P11, three lane B chunks, RC, R0 as one or two, R1, A3, F1 as one or two.
 
 Mutation patch numbers: lane A 310 to 329; `PRIV-3`'s owner 260 to 289, then 330 to 339; lane B
 none.
@@ -501,7 +517,8 @@ The seam files are in the frontmatter comment; the board orders them.
 ## Out of scope
 
 - Progressions and "easier / harder" links (`LADDER-1`); "my equipment", presets, substitutions.
-- Taxonomy on a household's own items; a richer new-item form; a household's own aliases.
+- Taxonomy on a household's own items (when it comes, S4's CHECK goes and rule 2's "global" half
+  is what still tells a catalog row apart); a richer new-item form; a household's own aliases.
 - Images, video, cues (`movements.cues` and `video_url` have no reader), translations.
 - A left/right field and rep ranges on a program row (`SIDE-1`, `TGT-1`).
 - Interval timing (`TIMER-1`); computed summaries (`PROGS-2`).
@@ -628,6 +645,22 @@ and UX. Every blocking and should-fix finding is listed; "→" is what changed.
   needs 2a only; R0.
 - _`supervision` and aliases belong in the const by the alias table's own logic (scope)._ → Rule 11. `modality` stays a column: it is rule 2's marker and S5's predicate.
 - _The prototype's brief is short (UX)._ → P0's row.
+
+**Confirming pass (five lenses), accepted**
+
+- _The rewritten global-row CHECK evaluates to NULL, and so passes, for the row it exists to
+  refuse (architecture)._ → S5: null-safe, with a refusal proof and a mutation.
+- _`SEED_PUBLIC_IDS` arrives in `PRIV-3` 2b, which the fresh start no longer waits for (scope,
+  correctness)._ → RC creates it; R0; R4.
+- _"Only added lines" does not fit a JSON object; where the check runs and who owns it (scope,
+  correctness)._ → V4.
+- _Rule 4 claimed the typed-name resolver still finds a renamed row (correctness)._ → Rule 4
+  restated; A3 waits for FAM-1 12f.
+- _The fuzzy rule's negative examples only tested its floor; a short-form row and `near`; one row
+  under two headings (correctness)._ → P3 to P5.
+- _"Nothing passes the filters" missed rows that were only near matches; P4's last clause could
+  be read against P5 (UX)._ → P10; P4.
+- _F1's list of readers named the wrong files (correctness)._ → F1.
 
 **Rejected, with the reason**
 
