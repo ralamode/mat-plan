@@ -6,7 +6,6 @@ import {
   newId,
   PROGRAM_REFUSAL,
   WORKOUT_NAME_MAX,
-  type CatalogHowTo,
   type ProgramActions,
   type ProgramListEntry,
   supersetLabels,
@@ -61,6 +60,7 @@ import {
   type EditorField,
 } from './editor-draft';
 import { ItemCard, type CardControl, type CardLink } from './item-card';
+import type { MovementPickerProps } from '@/components/movements/movement-picker';
 import { ItemPicker } from './item-picker/item-picker';
 import { NameField } from './name-field';
 import { programPath } from './routes';
@@ -99,7 +99,7 @@ export type WorkoutEditorScreenProps = {
    * `null`; a failure rejects. Absent, no row shows "How to". The preview passes a fixture one; the
    * real page passes one once the option read carries the slug (P11).
    */
-  howTo?: (publicId: string) => Promise<CatalogHowTo | null>;
+  howTo?: MovementPickerProps['howTo'];
 };
 
 const HEADING_ID = 'workout-editor-heading';

@@ -9,6 +9,7 @@ import {
   TRACKING_TYPE_LABELS,
   EQUIPMENT_CODE,
   MODALITY,
+  SUPERVISION_KIND,
   type CatalogHowTo,
   type CatalogOptionTaxonomy,
 } from '@mat-plan/shared';
@@ -140,7 +141,7 @@ const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h
 const status = () => document.querySelector('[role="status"]')?.textContent ?? '';
 
 describe('the browse list, with no query', () => {
-  it("orders Recent → Today's program → the groups → Your household", () => {
+  it("orders Recent → Today's program → the groups → Your custom items", () => {
     const recent = catalogOption('Back Squat');
     const prescribed = catalogOption('Front Squat');
     render(
@@ -185,7 +186,7 @@ describe('the browse list, with no query', () => {
     expect(headings()).not.toContain(COPY.recent);
   });
 
-  it('omits Your household when the household owns nothing', () => {
+  it('omits Your custom items when the household owns nothing', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
     expect(headings()).not.toContain(COPY.household);
@@ -1044,18 +1045,20 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     vi.spyOn(window.history, 'back').mockImplementation(() => {});
   });
 
-  const SQUAT = catalogOption('Back Squat', { equipment: ['barbell', 'bench'] });
+  const SQUAT = catalogOption('Back Squat', {
+    equipment: [EQUIPMENT_CODE.barbell, EQUIPMENT_CODE.bench],
+  });
   const PUSH_UPS = catalogOption('Push-Ups', { equipment: [] });
   const ROPE = catalogOption('Pull-Up', {
-    equipment: ['pull_up_bar'],
-    supervision: 'coach',
+    equipment: [EQUIPMENT_CODE.pull_up_bar],
+    supervision: SUPERVISION_KIND.coach,
     hasInstructions: true,
   });
   const MINE = householdOption('Garage Circuit', 'h-1');
   const STEPS: CatalogHowTo = {
     name: 'Pull-Up',
     instructions: 'Hang from the bar.\nPull up until your chin is over it.',
-    supervision: 'coach',
+    supervision: SUPERVISION_KIND.coach,
   };
 
   type Loader = (publicId: string) => Promise<CatalogHowTo | null>;
@@ -1065,12 +1068,14 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     options = [SQUAT, PUSH_UPS, ROPE, MINE],
     recentIds,
     notice,
+    currentId,
   }: {
     howTo?: Loader;
     multi?: boolean;
     options?: readonly MovementOptionDTO[];
     recentIds?: readonly string[];
     notice?: string;
+    currentId?: string;
   }) {
     const [isOpen, setOpen] = useState(false);
     const [selected, setSelected] = useState<string[]>([]);
@@ -1104,7 +1109,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
             }}
           />
         ) : (
-          <MovementPicker {...common} onPick={vi.fn()} />
+          <MovementPicker {...common} onPick={vi.fn()} currentId={currentId} />
         )}
       </main>
     );
@@ -1127,15 +1132,25 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
   });
   const howToButton = (name: string) => screen.queryByRole('button', { name: COPY.howToFor(name) });
 
-  it('says how each row is logged and what it needs; a custom item never says "No equipment" (P14)', () => {
-    render(<RowHarness />);
+  it('says how each row is logged and what it needs, in both modes; a custom item never says "No equipment" (P14)', () => {
+    for (const multi of [false, true]) {
+      render(<RowHarness multi={multi} />);
+      open();
+      expect(row('Back Squat').textContent, `multi=${multi}`).toContain(
+        `${TRACKING_TYPE_LABELS.weight_reps} · Barbell, Bench`,
+      );
+      expect(row('Push-Ups').textContent).toContain(`· ${COPY.emptyEquipment}`);
+      expect(row('Garage Circuit').textContent).toContain(`· ${COPY.customItem}`);
+      expect(row('Garage Circuit').textContent).not.toContain(COPY.emptyEquipment);
+      cleanup();
+    }
+  });
+
+  it('the supervision label is never dropped for a tag: both show (P13)', () => {
+    render(<RowHarness currentId={ROPE.publicId} />);
     open();
-    expect(row('Back Squat').textContent).toContain(
-      `${TRACKING_TYPE_LABELS.weight_reps} · Barbell, Bench`,
-    );
-    expect(row('Push-Ups').textContent).toContain(`· ${COPY.emptyEquipment}`);
-    expect(row('Garage Circuit').textContent).toContain(`· ${COPY.customItem}`);
-    expect(row('Garage Circuit').textContent).not.toContain(COPY.emptyEquipment);
+    expect(row('Pull-Up').textContent).toContain(SUPERVISION_LABELS.coach);
+    expect(row('Pull-Up').querySelector('[data-row-tag]')?.textContent).toBe(COPY.tagCurrent);
   });
 
   it('shows the supervision label as text on its row, in both modes, at full contrast (P13)', () => {
@@ -1190,10 +1205,10 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     });
     expect(howTo).toHaveBeenCalledWith(ROPE.publicId);
     expect(button.getAttribute('aria-expanded')).toBe('true');
-    // The heading, then the supervision label as the first line of the box (K17), then the steps.
+    // The heading, then the supervision label ABOVE the steps (K17), then the steps, then Hide.
     expect(box.querySelector('h4')?.textContent).toBe(COPY.howToFor('Pull-Up'));
-    const paragraphs = [...box.querySelectorAll('p')].map((p) => p.textContent);
-    expect(paragraphs).toEqual([SUPERVISION_LABELS.coach]);
+    expect([...box.children].map((el) => el.tagName)).toEqual(['H4', 'P', 'OL', 'BUTTON']);
+    expect(box.querySelector('p')?.textContent).toBe(SUPERVISION_LABELS.coach);
     // "Hide" puts focus back on "How to" before its own box goes.
     fireEvent.click(within(box).getByRole('button', { name: COPY.howToHide }));
     expect(document.activeElement).toBe(button);
@@ -1249,6 +1264,9 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     expect(howToButton('Pull-Up')!.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Hang from the bar.')).toBeNull();
     type('front');
+    expect(howToButton('Front Squat')!.getAttribute('aria-expanded')).toBe('false');
+    // Back to the list the box was opened in: typing ended it, so it does not come back.
+    type('');
     expect(howToButton('Front Squat')!.getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -1379,5 +1397,36 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     type('leg swing');
     const found = screen.getByRole('button', { name: /^Leg Swing/ });
     expect(found.querySelector('[data-row-tag]')).toBeNull();
+  });
+
+  it('🔴 the same row closed and reopened: the first load failing late does not land over the second', async () => {
+    let rejectFirst: (error: Error) => void = () => {};
+    const howTo = vi
+      .fn<Loader>()
+      .mockImplementationOnce(() => new Promise((_, reject) => (rejectFirst = reject)))
+      .mockImplementationOnce(() => new Promise(() => {}));
+    render(<RowHarness howTo={howTo} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    fireEvent.click(howToButton('Pull-Up')!);
+    fireEvent.click(howToButton('Pull-Up')!);
+    // Both loads have started (the loader is called a microtask later) before the first fails.
+    await waitFor(() => expect(howTo).toHaveBeenCalledTimes(2));
+    await act(async () => rejectFirst(new Error('offline')));
+    expect(screen.getByText(COPY.howToLoading)).toBeTruthy();
+    expect(status()).not.toBe(COPY.statusHowToFailed('Pull-Up'));
+  });
+
+  it('a loader that throws instead of rejecting is a failure, not a box loading forever', async () => {
+    render(
+      <RowHarness
+        howTo={vi.fn<Loader>(() => {
+          throw new Error('offline');
+        })}
+      />,
+    );
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(screen.getByText(COPY.howToFailed)).toBeTruthy());
   });
 });

@@ -4,6 +4,7 @@ import {
   MOVEMENT_NAME_MAX,
   EQUIPMENT_LABELS,
   MOVEMENT_PICKER_GROUPS,
+  requiresNoEquipment,
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
   existingItem,
@@ -214,18 +215,20 @@ type HowToControl = {
   hide: () => void;
 };
 
-/** A row's "How to" button, so "Hide" can put focus back on it before its box goes. */
-const HOW_TO_ATTR = 'data-how-to-for';
-
 /**
  * A row's second line (CAT-3 P14): how it is logged, then what it needs. A household item says
  * "Custom item" there and never "No equipment": it has no equipment to show.
  */
+/** A library row's supervision, or `null`: a household item has none (P13). */
+function supervisionOf(option: MovementOptionDTO) {
+  return option.owner === 'catalog' ? option.supervision : null;
+}
+
 export function rowMeta(option: MovementOptionDTO): string {
   const needs =
     option.owner === 'household'
       ? COPY.customItem
-      : option.equipment.length === 0
+      : requiresNoEquipment(option)
         ? COPY.emptyEquipment
         : COPY.equipmentList(option.equipment.map((item) => EQUIPMENT_LABELS[item]));
   return COPY.rowMeta(TRACKING_TYPE_LABELS[option.trackingType], needs);
@@ -279,15 +282,19 @@ export function MovementPicker({
       setHow((current) =>
         current && current.request === request && current.key === key ? next : current,
       );
-    howTo(option.publicId).then(
-      (steps) =>
-        settle(
-          steps
-            ? { key, option, request, status: 'ready', steps }
-            : { key, option, request, status: 'none' },
-        ),
-      () => settle({ key, option, request, status: 'failed' }),
-    );
+    // Through `Promise.resolve().then`, so a loader that THROWS (not rejects) is a failure too, and
+    // the box never sits "loading" forever.
+    Promise.resolve()
+      .then(() => howTo(option.publicId))
+      .then(
+        (steps) =>
+          settle(
+            steps
+              ? { key, option, request, status: 'ready', steps }
+              : { key, option, request, status: 'none' },
+          ),
+        () => settle({ key, option, request, status: 'failed' }),
+      );
   };
   const howToControl: HowToControl | null = howTo
     ? {
@@ -886,7 +893,7 @@ function OptionRow({
   rowKey: string;
 }) {
   const howButton = useRef<HTMLButtonElement>(null);
-  const supervision = option.owner === 'catalog' ? option.supervision : null;
+  const supervision = supervisionOf(option);
   const hasHowTo = mode.howTo !== null && option.owner === 'catalog' && option.hasInstructions;
   const howState = hasHowTo && mode.howTo?.openKey === rowKey ? mode.howTo.state : null;
   const howId = `how-to-${rowKey}`;
@@ -962,7 +969,6 @@ function OptionRow({
           <button
             ref={howButton}
             type="button"
-            {...{ [HOW_TO_ATTR]: option.publicId }}
             aria-label={COPY.howToFor(option.name)}
             aria-expanded={howState !== null}
             // Only while open: a reference to an element that is not there points at nothing.
@@ -1018,8 +1024,7 @@ function HowToSteps({
   onHide: () => void;
 }) {
   const supervision =
-    (option.owner === 'catalog' ? option.supervision : null) ??
-    (state.status === 'ready' ? state.steps.supervision : null);
+    supervisionOf(option) ?? (state.status === 'ready' ? state.steps.supervision : null);
   const steps =
     state.status === 'ready'
       ? state.steps.instructions

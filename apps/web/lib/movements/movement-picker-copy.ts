@@ -10,13 +10,6 @@ const asTypedHintText = (name: string) =>
 const statusNoMatches = 'No matches.';
 /** Between the parts of a row's second line, and before its tag. */
 const ROW_META_JOIN = ' · ';
-/**
- * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
- * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
- * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
- * forms are named categories rather than a comparison, and a locale with more of them adds keys
- * here instead of needing this sentence rewritten.
- */
 /** A FRAGMENT of `statusNone`'s sentence, not a sentence: it has no terminal period. */
 const statusSomeWords = (n: number) => `${n} with some of your words`;
 /**

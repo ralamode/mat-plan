@@ -219,7 +219,7 @@ path and **creating** the deliberate one.
       `aria-controls` is set only while open.
     - **The failure is said in the sheet's one status region**, derived from the box: it stands
       through a retry (so the region does not fall back to re-reading the search count), goes with
-      the box, and wins over the caller's `notice` until a tick silences it.
+      the box, and wins over the caller's `notice` until a tick silences it. When it ends (Hide, a successful retry), the region falls back to the search count or the notice, which is read again: one re-read on purpose, since the failure no longer stands.
     - ⚠️ **No production caller passes a loader yet.** It is wired when lane P's option read
       carries the slug (P11): the page's loader takes the public id, finds the row in the caller's
       own option read, and calls `catalogHowToOf`. That is a READ, so the page owes a choice the
