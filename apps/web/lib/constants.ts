@@ -365,7 +365,7 @@ export const QUIET_LINK_CLASS =
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
  * notices on the day page, the day page's "Not on a program yet" and rest-day notices). Defined at
- * FAM-1 13d, the third copy; `page.tsx`'s two literals move to it when 12c next edits that file.
+ * FAM-1 13d, the third copy; `page.tsx`'s two literals moved to it at 12c.
  */
 export const NOTICE_CLASS =
   'border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm';
@@ -1382,7 +1382,8 @@ export const SETTINGS_COPY = {
   /** Names what it undoes, so a screen-reader user hears which action this button reverses (A11Y-5). */
   undoLabel: (name: string) => `Undo archiving ${name}`,
   /** The day page's pointer back to the recovery, when the athlete it shows is archived. */
-  archivedNotice: (name: string) => `${name} is archived. Restore them in`,
+  archivedNotice: (name: string) =>
+    `${name} is archived. Nothing new can be logged. Restore them in`,
   /** The edit screen's pointer, since archive is not on that form. */
   archiveElsewhere: 'To archive an athlete, use',
 } as const;

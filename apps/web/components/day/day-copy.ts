@@ -123,6 +123,12 @@ export const PROGRAM_COPY = {
   /** The Programs page's own heading, so the link and the page it opens cannot drift. */
   programs: BUILDER_COPY.programs,
   notThisDay: 'Not on a program on this day.',
+  /**
+   * A future day (look-ahead), placed by the page in place of the read-only notice: v12's words
+   * (`index.html:2605`; maintainer, 2026-11-17). A day that has not happened is not a missed one.
+   */
+  comingUp: (athlete: string, day: string) =>
+    `Coming up. This is what ${athlete} has on ${weekdayName(localWeekday(day))}s. You can log it on the day.`,
   /** Every program the athlete is on rests this day. */
   restAll: (day: string) => `Rest day. Nothing is scheduled on ${weekdayName(localWeekday(day))}s.`,
   /** Some programs rest, on a day with two or more. */

@@ -18,9 +18,10 @@ import { code, WEB_DIR } from '@/test/source-scan';
  *    members the screen and the preview's fake implement. The reads are listed before they exist
  *    (lane P's `workoutInHousehold`, lane E's `prescriptionLiveIn`, #527), so they are pinned the
  *    moment they land.
- * 2. **No page or component imports `row-actions.ts` until 12c.** Next registers a Server Action only
- *    when the module graph reaches it, so until then no request can write a row and no action id is
- *    in the build's manifest (the security lens's owed check, made structural). 12c lifts this pin.
+ * 2. **Only the day page imports `row-actions.ts`** (FAM-1 12c). Next registers a Server Action only
+ *    when the module graph reaches it, so the day page is the one route that serves them; another
+ *    importer would need its own review (the security lens's check, made structural at 12b, with
+ *    "no importer" as its rule until 12c mounted the screen).
  */
 
 const REPO = resolve(WEB_DIR, '../..');
@@ -131,11 +132,11 @@ describe('the day DAL is the only way in (FAM-1 12b)', () => {
     expect(fromDb.test('day.actions.logRow({ clientId })')).toBe(false);
   });
 
-  it('no page or component imports the row actions until 12c', () => {
+  it('only the day page imports the row actions (FAM-1 12c)', () => {
     const reaching = nonTest.filter(
       (f) => !THE_MODULE.has(f) && namesActions(f, code(join(REPO, f))),
     );
-    expect(reaching, '12c lifts this pin when it mounts the day screen').toEqual([]);
+    expect(reaching).toEqual(['apps/web/app/p/[profileId]/page.tsx']);
   });
 
   it('the row-actions pin sees an import by alias and by relative path (non-vacuity)', () => {
