@@ -655,6 +655,57 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.values).toEqual(values);
   });
 
+  it('🔴 Change is judged in the unit the row was LOGGED in, not the item’s unit now (C28)', async () => {
+    // The prescription's unit was edited from lb to kg after the bench press was logged in lb.
+    const edited = structuredClone(everyTypeOnce);
+    const bench = itemOf(edited, 'DB bench press').item;
+    expect(bench.unit).toBe('lb');
+    bench.unit = 'kg';
+    const { actions, plan } = day(edited);
+    const { entryPublicId } = loggedBench();
+    const kg = (value: number) => ({ ...lb(value), unit: 'kg' as const });
+
+    // A kg number would be stored on a row still labelled lb: refused, and nothing changes.
+    expect(
+      await actions.amendRow({
+        profilePublicId,
+        entryPublicId,
+        values: { reps: 5, quantities: [kg(16)] },
+      }),
+    ).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+    expect(plan()).toBe(edited);
+
+    // The same row is still changed in lb.
+    const values = { reps: 5, quantities: [lb(35)] };
+    expect(await actions.amendRow({ profilePublicId, entryPublicId, values })).toEqual({
+      ok: true,
+      entryPublicId,
+      values,
+    });
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.values).toEqual(values);
+  });
+
+  it('a new ✓ on that item is still in the item’s unit now', async () => {
+    // C28 is about a logged row only: a first ✓ follows the prescription as it reads today.
+    const edited = itemOnly(everyTypeOnce, 'DB bench press');
+    const { item, workout } = itemOf(edited, 'DB bench press');
+    item.unit = 'kg';
+    item.target = { reps: null, quantities: [] };
+    const { actions } = day(edited);
+    const write = (unit: 'lb' | 'kg') =>
+      actions.logRow({
+        profilePublicId,
+        day: on,
+        clientId: newId(),
+        workoutPublicId: workout.workoutPublicId!,
+        prescriptionPublicId: item.prescriptionPublicId!,
+        set: 1,
+        values: { reps: 5, quantities: [{ ...lb(20), unit }] },
+      });
+    expect(await write('lb')).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
+    expect((await write('kg')).ok).toBe(true);
+  });
+
   it('Change keeps the old number when the new one is blank or not a number', async () => {
     const { actions, plan } = day(everyTypeOnce);
     const { entryPublicId } = loggedBench();
