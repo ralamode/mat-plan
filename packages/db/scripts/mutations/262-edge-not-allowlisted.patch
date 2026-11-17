@@ -1,7 +1,7 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -205,6 +205,5 @@
+@@ -212,6 +212,5 @@
    { fk: 'entries_prescription_id_prescriptions_id_fk', guard: 'g' },
    { fk: 'entry_set_quantities_entry_set_id_entry_sets_id_fk', guard: 'cascade' },
    { fk: 'entry_sets_entry_id_entries_id_fk', guard: 'cascade' },

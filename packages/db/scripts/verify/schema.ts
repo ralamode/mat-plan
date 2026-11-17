@@ -2913,8 +2913,8 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const otherFamily = await mkTemplateBlock(exec, B_SCOPE, 'fam-1-5-other-family');
     const householdId = await householdOfBlock(tx, sharedBlock);
     const entryBase = await probeEntryBase(tx, sharedBlock, 'FAM-1 5');
-    // A prescription of household A's own: the household graph scopes a target by its athlete AND
-    // its prescription, so a target on another household's prescription would not be the athlete's.
+    // A prescription of household A's own, so every one of the athletes' rows is household A's: the
+    // household graph erases a target with A only when its athlete AND its prescription are A's.
     const [aPrescription] = await tx
       .select({ prescriptionId: schema.prescriptions.id })
       .from(schema.prescriptions)

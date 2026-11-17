@@ -1,7 +1,7 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -169,7 +169,7 @@
+@@ -176,7 +176,7 @@
    },
    // AND: an assignment of H's athlete to another household's block is matched by neither.
    { table: schema.programAssignments, householdRows: assignmentRows },

@@ -128,7 +128,8 @@ async function verifyCatalog(): Promise<void> {
     [],
     'PRIV-3 1: P2 every FK into the graph comes from a graph table deleted before its parent',
   );
-  const nonAborting = intoGraph.filter((f) => f.rule !== 'a');
+  // `a` NO ACTION and `r` RESTRICT both abort a delete that would orphan a row; the rest do not.
+  const nonAborting = intoGraph.filter((f) => !['a', 'r'].includes(f.rule));
   assert.deepEqual(
     sorted(nonAborting.map((f) => f.fk)),
     sorted(NON_ABORTING_EDGES.map((e) => e.fk)),
@@ -314,8 +315,8 @@ async function populateEveryGraphTable(
     .returning({ id: schema.supersets.id });
   plant(schema.supersets, superset.id);
 
-  // A strength entry's reference columns (unit, activity type, kind) from any live strength entry;
-  // every household-owned column is this fixture's own.
+  // A strength entry's reference columns (unit, activity type, kind) from any live strength entry.
+  // Its `movement_name` is another household's text, so it is not copied: the name is this fixture's.
   const [base] = await tx
     .select()
     .from(schema.entries)
@@ -334,7 +335,7 @@ async function populateEveryGraphTable(
       activityDate: '2026-11-10',
       kind: base.kind,
       unit: base.unit,
-      movementName: base.movementName,
+      movementName: `${label} movement`,
       activityTypeId: base.activityTypeId,
       movementId: movement.id,
       sessionId: session.id,
@@ -390,13 +391,18 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
       .insert(schema.prescriptionTargets)
       .values({ publicId: newId(), prescriptionId: bPrescription, profileId: aKid, load: '45' })
       .returning({ id: schema.prescriptionTargets.id });
-    const paStraddle = await mkAssignment(tx, { blockId: bBlock, profileId: aKid, idx: 1 });
+    const paStraddle = await mkAssignment(tx, { blockId: bBlock, profileId: aKid, idx: 1 }, [1]);
+    const [paStraddleWeekday] = await tx
+      .select({ id: schema.programAssignmentWeekdays.id })
+      .from(schema.programAssignmentWeekdays)
+      .where(eq(schema.programAssignmentWeekdays.assignmentId, paStraddle));
     const byName = (name: string) => HOUSEHOLD_GRAPH.find((g) => graphTableName(g.table) === name)!;
 
     // (c) first: a straddle is the narrowest witness of an `AND` widened to `OR`.
     for (const [name, id] of [
       ['prescription_targets', ptStraddle.id],
       ['program_assignments', paStraddle],
+      ['program_assignment_weekdays', paStraddleWeekday.id],
     ] as const) {
       const g = byName(name);
       for (const [side, scope] of [
@@ -421,22 +427,49 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
       );
     }
 
-    // (b) every planted row is matched by B's predicate and not by A's.
+    // (b) every planted row is matched by B's predicate and not by A's: first live, then hidden, so a
+    // `deleted_at` conjunct in any table's predicate goes red here.
+    const assertPlantedMatchedByBAlone = async (phase: string) => {
+      for (const g of HOUSEHOLD_GRAPH) {
+        const name = graphTableName(g.table);
+        for (const id of planted.get(name)!) {
+          assert.deepEqual(
+            await idsMatching(tx, g, both(eq(g.table.id, id), g.householdRows(B_SCOPE))),
+            [id],
+            `PRIV-3 1: P7 household B's planted ${name} row is matched by B (${phase})`,
+          );
+          assert.deepEqual(
+            await idsMatching(tx, g, both(eq(g.table.id, id), g.householdRows(A_SCOPE))),
+            [],
+            `PRIV-3 1: P7 household B's planted ${name} row is not matched by A (${phase})`,
+          );
+        }
+      }
+    };
+    await assertPlantedMatchedByBAlone('live');
+    const withDeletedAt = rowsOf<{ t: string }>(
+      await tx.execute(sql`
+        SELECT table_name AS t FROM information_schema.columns
+         WHERE table_schema = 'public' AND column_name = 'deleted_at'`),
+    ).map((r) => r.t);
+    const hidden: string[] = [];
     for (const g of HOUSEHOLD_GRAPH) {
       const name = graphTableName(g.table);
-      for (const id of planted.get(name)!) {
-        assert.deepEqual(
-          await idsMatching(tx, g, both(eq(g.table.id, id), g.householdRows(B_SCOPE))),
-          [id],
-          `PRIV-3 1: P7 household B's planted ${name} row is matched by B`,
-        );
-        assert.deepEqual(
-          await idsMatching(tx, g, both(eq(g.table.id, id), g.householdRows(A_SCOPE))),
-          [],
-          `PRIV-3 1: P7 household B's planted ${name} row is not matched by A`,
-        );
-      }
+      if (!withDeletedAt.includes(name)) continue;
+      const ids = sql.join(
+        planted.get(name)!.map((id) => sql`${id}`),
+        sql`, `,
+      );
+      await tx.execute(
+        sql`UPDATE ${g.table} SET ${sql.identifier('deleted_at')} = now() WHERE ${g.table.id} IN (${ids})`,
+      );
+      hidden.push(name);
     }
+    assert.ok(
+      hidden.length > 0,
+      'PRIV-3 1: P7 the fixture hides its rows in the soft-delete tables',
+    );
+    await assertPlantedMatchedByBAlone('hidden');
 
     // The two new leaves, named: the household row and the membership.
     const households = byName('households');
@@ -465,7 +498,7 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
       "PRIV-3 1: P7 householdMemberInHousehold(A) does not match B's member",
     );
     console.log(
-      `✓ PRIV-3 1: P7 with B holding a row in all ${GRAPH_NAMES.length} graph tables, no row is matched by both A and B, each planted row by B alone, and both straddles by neither`,
+      `✓ PRIV-3 1: P7 with B holding a row in all ${GRAPH_NAMES.length} graph tables, no row is matched by both A and B, each planted row by B alone, and both straddles by neither; hidden and live alike (${hidden.length} soft-delete tables)`,
     );
 
     // ── P8: at athlete grain, the household form and step 5's scope select the same rows ──────────
@@ -485,6 +518,9 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
     });
     // B's athletes by the raw column, not by the predicate under test, hidden ones included. The
     // straddles belong to A's athlete, so neither enters B's sets on either side.
+    // ⚠️ P8 holds only on data with no straddling row (the per-profile scope takes one, the `AND`
+    // leaves it). A straddling B row that an earlier module COMMITTED would turn this red by design:
+    // that is a row "Erase one athlete"'s pre-flight 2 would refuse.
     const bProfiles = (
       await tx
         .select({ id: schema.profiles.id })

@@ -4,8 +4,8 @@
   `HOUSEHOLD_GRAPH` in `packages/db/src/erasure/graph.ts`, and the athlete erasure's list moved
   beside it. `db:verify` now proves that every table in the database is either in that list or is
   reference data, that every foreign key runs child before parent, that the keys which do not abort
-  a delete are the ones named, that no row is selected for two households, and that a row
-  straddling two households is selected for neither. The runbook's household table now scopes
-  targets and assignments by athlete AND program, and no longer claims a proof of its whole order
-  that did not exist. Nothing deletes through the list yet: the guarded scripts are PRIV-3 PR 2a,
+  a delete are the ones named, that no row is selected for two households, that hidden rows are
+  selected like live ones, and that a row straddling two households is selected for neither. The
+  runbook's household delete and its counts now scope targets and assignments by athlete AND
+  program, and it no longer claims a proof of its whole order that did not exist. Nothing deletes through the list yet: the guarded scripts are PRIV-3 PR 2a,
   2b and 3.

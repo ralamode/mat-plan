@@ -1413,14 +1413,16 @@ UNION ALL SELECT 'prescriptions', count(*) FROM prescriptions WHERE block_id IN 
 -- either: a hidden slot or workout is still a row the delete must remove).
 UNION ALL SELECT 'block_day_workouts', count(*) FROM block_day_workouts WHERE block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'workouts', count(*) FROM workouts WHERE block_id IN (SELECT id FROM b)
--- FAM-1 5: assignments, by EITHER side (pre-flight (h) makes the two sides agree), and their weekdays.
+-- FAM-1 5: assignments whose athlete AND program are H's, and their weekdays; targets the same way.
+-- The same predicates step 4 deletes by. A row straddling two households is counted by neither, and
+-- pre-flights (a) and (h) find it first.
 UNION ALL SELECT 'program_assignments', count(*) FROM program_assignments
-  WHERE profile_id IN (SELECT id FROM p) OR block_id IN (SELECT id FROM b)
+  WHERE profile_id IN (SELECT id FROM p) AND block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'program_assignment_weekdays', count(*) FROM program_assignment_weekdays
   WHERE assignment_id IN (SELECT id FROM program_assignments
-    WHERE profile_id IN (SELECT id FROM p) OR block_id IN (SELECT id FROM b))
+    WHERE profile_id IN (SELECT id FROM p) AND block_id IN (SELECT id FROM b))
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
-  WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
+  WHERE profile_id IN (SELECT id FROM p) AND prescription_id IN
     (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
 -- FAM-1 4b: a template prescription's typed targets, scoped through the prescription (no
 -- deleted_at filter: a hidden quantity still refuses its prescription's delete).
@@ -1446,9 +1448,10 @@ either aborts the transaction half-way or makes this procedure delete a row abou
 child:
 
 ```sql
--- (a) a prescription_target straddling households — BOTH directions:
---       prescription ∈ H but profile ∉ H   → we would delete another family's child's target
---       profile ∈ H but prescription ∉ H   → we would delete another family's prescription target
+-- (a) a prescription_target straddling households — BOTH directions (prescription ∈ H but
+--       profile ∉ H, or profile ∈ H but prescription ∉ H). Step 8 deletes only a target whose
+--       athlete AND prescription are H's, so it leaves this row, and the delete of the parent it
+--       points into (step 9 or 12) aborts 23503. This pre-flight finds it first.
 -- (b) an ENTRY belonging to a profile OUTSIDE H that references one of H's sessions
 --       (entries.session_id is independent of entries.profile_id)
 -- (c) an ENTRY belonging to a profile OUTSIDE H that references one of H's supersets:
@@ -1510,9 +1513,9 @@ child:
 --        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
 --       (`db:verify` proves both joins find a planted row, `verify/schema.ts` → FAM-1 4a-ii.)
 -- (h) FAM-1 5: an ASSIGNMENT whose athlete and program are in DIFFERENT households, either side in H.
---       Steps 9c/9d select by `profile_id ∈ H OR block_id ∈ H`, so they would delete another family's
---       child's assignment to H's block. (H's child on another family's block is deleted by the profile
---       arm, which harms nobody; it is stopped only so the operator finds out how it was written.)
+--       Steps 9c/9d delete only an assignment whose athlete AND block are H's, so they leave this
+--       row, and the delete of the parent it points into (step 10 or 12) aborts 23503. This
+--       pre-flight finds it first.
 --       STOP; with a correction hard-delete the stray assignment and its weekday rows (it is a row about
 --       the other family's child, and no writer can make one: 6c refuses it). No deleted_at filter.
 --       SELECT a.id FROM program_assignments a
@@ -1753,15 +1756,15 @@ remains. Do not restate that list here; one list, one place.
 ### Safety
 
 One explicit transaction, so a partial failure rolls back whole. Targeted by `public_id`. Idempotent
-by nature — a second run finds nothing. Every FK but the two cascades is `NO ACTION`, so a table this
-procedure missed aborts the transaction rather than silently orphaning rows.
+by nature — a second run finds nothing. Every FK into these tables is `NO ACTION` except five, each
+named with its guard in `NON_ABORTING_EDGES` (`packages/db/src/erasure/graph.ts`): two cascades
+(`entry_sets`, `entry_set_quantities`) and three `SET NULL` keys guarded by pre-flights (e), (f) and
+(g). So a table this procedure missed aborts the transaction rather than silently orphaning rows.
 
-**Blast radius is one household, with one exception named honestly.** Step 8 is the only predicate
-that does not chain cleanly to `households.id = H`, and **both** of its arms can reach outside H, in
-opposite directions: the prescription-side arm can select a row whose `profile_id` is another
-household's child, and the profile-side arm can select a row whose prescription belongs to another
-household's program block — i.e. deleting another family's prescription target. That is why step 3(a)
-checks both directions and aborts, rather than letting the transaction discover it.
+**Blast radius is one household.** Steps 8 and 9d are the two predicates that name two parents, and
+each requires both to be H's (`AND`). A row straddling two households is therefore left, the delete
+of its parent aborts `23503`, and the whole transaction rolls back: it fails closed rather than
+deleting another family's row. Pre-flights (a) and (h) find such a row before the transaction does.
 
 ### The deletion ledger
 

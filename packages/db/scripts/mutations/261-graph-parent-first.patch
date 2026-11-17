@@ -1,7 +1,7 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -153,16 +153,16 @@
+@@ -160,16 +160,16 @@
      householdRows: (s) =>
        sql`${schema.prescriptionQuantities.prescriptionId} IN ${prescriptionsOf(s)}`,
    },

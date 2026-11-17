@@ -25,10 +25,14 @@ import {
  * - P1: every table in `public` is in exactly one of `HOUSEHOLD_GRAPH` and `REFERENCE_TABLES`, and
  *   every table with a `household_id` or `profile_id` column is in the graph;
  * - P2: every foreign key into a graph table comes from a graph table at a LOWER index (child before
- *   parent), and the keys whose delete rule is not `NO ACTION` are exactly `NON_ABORTING_EDGES`;
+ *   parent), and the keys whose delete rule is neither `NO ACTION` nor `RESTRICT` are exactly
+ *   `NON_ABORTING_EDGES`;
  * - P7: the predicates partition the households — no row is matched by two of them, and a row that
  *   straddles two households is matched by neither;
  * - P8: at athlete grain, the household form selects the same rows as `ATHLETE_GRAPH`'s scopes.
+ *   ⚠️ Only on data with no straddling row: an athlete's target or assignment on another
+ *   household's program is taken by the per-profile scope and left by the `AND`. "Erase one
+ *   athlete"'s pre-flight 2 refuses such a row before any delete, which is what makes the two agree.
  *
  * **Why two rows use `AND`.** `prescription_targets` and `program_assignments` each point at a
  * profile AND at a program, and the two can belong to different households (no writer makes one, but
@@ -62,6 +66,9 @@ export function graphTableName(t: PgTable): string {
  * profile's rows by its internal id. `db:verify` reads the runbook's step-4 table and step-3 count
  * block and requires both to be exactly this list, in this order, and P2 requires it to be
  * `HOUSEHOLD_GRAPH`'s athlete-grain tables in graph order.
+ *
+ * ⚠️ Verify-only until `PRIV-3` PR 3; a caller outside `scripts/verify` must first resolve `p` from a
+ * `public_id` inside a `HouseholdScope`. The scopes take an internal id and check no household.
  */
 const P_ENTRIES = (p: number) => sql`(SELECT id FROM entries WHERE profile_id = ${p})`;
 const P_SESSIONS = (p: number) => sql`(SELECT id FROM sessions WHERE profile_id = ${p})`;
@@ -190,9 +197,9 @@ export const REFERENCE_TABLES: readonly PgTable[] = [
 ];
 
 /**
- * Every foreign key into a graph table whose delete rule is not `NO ACTION`, with what makes it safe.
- * A `NO ACTION` key aborts a delete that would orphan a row, which is the fail-closed default; these
- * do not, so each needs a reason the erasure cannot silently lose or keep a row through it.
+ * Every foreign key into a graph table whose delete rule is neither `NO ACTION` nor `RESTRICT`, with
+ * what makes it safe. Those two abort a delete that would orphan a row, which is the fail-closed
+ * default; these do not, so each needs a reason the erasure cannot silently lose or keep a row.
  *
  * - `cascade`: the child is in the graph, below its parent, so the cascade removes only rows the walk
  *   removes anyway;

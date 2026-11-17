@@ -1,7 +1,7 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -79,8 +79,12 @@
+@@ -86,8 +86,12 @@
    { table: 'sessions', scope: (p: number) => sql`profile_id = ${p}` },
    { table: 'day_readiness', scope: (p: number) => sql`profile_id = ${p}` },
    { table: 'ramp_targets', scope: (p: number) => sql`profile_id = ${p}` },

@@ -1,7 +1,7 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -114,7 +114,7 @@
+@@ -121,7 +121,7 @@
  const prescriptionsOf = (s: HouseholdScope) =>
    sql`(SELECT ${schema.prescriptions.id} FROM ${schema.prescriptions} WHERE ${prescriptionRows(s)})`;
  const assignmentRows = (s: HouseholdScope) =>

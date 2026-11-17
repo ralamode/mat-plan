@@ -25,7 +25,7 @@ erasure graph".
 | File                                    | What it holds                                                                                                                                                                                                             |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/db/src/erasure/graph.ts`      | `HOUSEHOLD_GRAPH` (19 tables, child before parent, `householdRows(scope)`), `ATHLETE_GRAPH` (step 5's per-profile list), `REFERENCE_TABLES`, `NON_ABORTING_EDGES`, `isAthleteGrain`, `graphTableName`. Not in the barrel. |
-| `packages/db/scripts/verify/erasure.ts` | P1, P2, P7 and P8 (below), run last by `verify.ts`. Mutations `260`–`266` prove each can fail.                                                                                                                            |
+| `packages/db/scripts/verify/erasure.ts` | P1, P2, P7 and P8 (below), run last by `verify.ts`. Mutations `260`–`270` prove each can fail.                                                                                                                            |
 | `packages/db/src/writers/ownership.ts`  | The leaves the predicates are built from, including `householdRowIs` and `householdMemberInHousehold`. Owned by [write-path.md](./write-path.md): it is the one module allowed to unwrap a scope.                         |
 
 ## Invariants that live between the files
@@ -40,8 +40,12 @@ erasure graph".
    household's only when the athlete **and** the program are. A straddling row is matched by
    neither household, so its parent's delete aborts `23503`: fail closed. P7 plants both straddles.
    ⚠️ `OR` deletes another family's row instead.
-4. **Never a `deleted_at` conjunct.** A hidden row is still erased. P8 plants a hidden athlete with
-   a hidden row and requires the household form to select it.
+4. **Never a `deleted_at` conjunct.** A hidden row is still erased. P7 plants a hidden row in every
+   graph table that has a `deleted_at` column and requires B's predicate to match it; P8 plants a
+   hidden athlete with a hidden row and requires the household form to select it. ⚠️ P8's "same
+   rows" holds only on data with no straddling row: a per-profile scope takes an athlete's target or
+   assignment on another household's program, and the `AND` leaves it. "Erase one athlete"'s
+   pre-flight 2 refuses that row before any delete.
 5. **Athlete grain is derived, never stored.** `isAthleteGrain` is membership in `ATHLETE_GRAPH`,
    and P2 requires the graph's athlete-grain tables to be that list in graph order. P8 requires the
    two forms to select the same **rows** for household B. Step 5's proof (`verify/schema.ts`) holds

@@ -45,8 +45,9 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'packages/db/src/queries/day/scheduled.ts',
     // PRIV-3's household graph names every program table as a value (`{ table: schema.workouts }`),
     // which is no query and runs on no request path: nothing re-exports `src/erasure/` from the barrel
-    // and no `apps/web` file imports it (pinned below), so it cannot race migrate.yml.
-    'packages/db/src/erasure/',
+    // and no `apps/web` file imports it (pinned below), so it cannot race migrate.yml. The FILE, not
+    // the directory: a later module there (the delete core) justifies its own entry.
+    'packages/db/src/erasure/graph.ts',
   ];
   const PATTERNS: Record<string, RegExp> = {
     insert: new RegExp(`\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`),
@@ -72,7 +73,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'packages/db/src/writers/ownership.ts',
     'packages/db/src/writers/program/',
     // PRIV-3's household graph: see NEW_TABLES_ALLOWED.
-    'packages/db/src/erasure/',
+    'packages/db/src/erasure/graph.ts',
   ];
   const HELPERS =
     /\b(insertProgramBlockOwnedBy|insertWorkoutOwnedBy|programBlockByClientId|liveTemplateBlockIn)\b/;
@@ -151,7 +152,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
 
   it('no request path reaches the erasure graph (what its allowlist entry rests on)', () => {
     const web = files.filter((f) => f.startsWith('apps/web/'));
-    expect(web.filter((f) => /\berasure\/graph\b/.test(code(join(REPO, f))))).toEqual([]);
+    expect(web.filter((f) => /\berasure\//.test(code(join(REPO, f))))).toEqual([]);
     expect(code(join(REPO, 'packages/db/src/index.ts'))).not.toMatch(/\berasure\b/);
   });
 
