@@ -141,9 +141,14 @@ C16). `workoutDraftSchema` does not: a card whose type was just chosen has no un
 - A **Duration** and a **Time per set** have a fixed unit and pass with no quantity. A **Check** and
   **Reps** measure nothing and pass with none.
 
+- **The quantity in the type's slot is in a unit the type logs in** (`unitsForTrackingType`, what
+  the editor's unit select offers; plan D27). A Count in `bool` could store no ✓, and a Duration
+  prescribed in seconds would refuse an empty ✓, because a Duration logs in minutes.
+
 The issue is on the item's quantities (`['items', index, 'quantities']`), beside any `sets` issue on
-the same card. The rule does not check that the unit is one the type allows
-(`unitsForTrackingType`); the writer does that against the item's real type.
+the same card. The rule reads the `trackingType` the draft carries, as the sets rule does; the
+writer still checks the item's real type. It looks at the type's own slot only: a quantity in
+another slot, or a second one in the same slot, is the writer's to refuse.
 
 ## Invariants
 
@@ -286,11 +291,14 @@ the same card. The rule does not check that the unit is one the type allows
     athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
     to list them as available.
 
-22. **An item that is saved can be logged** (`saveWorkoutSchema`, contract change C16). The save,
-    the row writer and the day's read ask one function, `itemUnit`, for the unit an item logs in.
-    The save refuses an item for which it answers `null` while the type has a quantity, so the row
-    writer never meets a prescription it can store no ✓ for. The workout editor asks for the unit
-    before Save (lane B, #493); the fake and the writer refuse the same draft with `invalid`.
+22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
+    The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
+    logs in. The save refuses an item for which it answers `null` while the type has a quantity,
+    and one whose quantity is in a unit its type does not log in (`unitsForTrackingType`), so the
+    row writer never meets a prescription whose empty ✓ it must refuse for its unit.
+    `save-workout.test.ts` holds that against `fillRowValues` for every type and unit. The workout
+    editor asks for the unit before Save (lane B, #493), and the preview's fake parses with this
+    schema; the program writer (6a-ii) refuses the same draft with `invalid`.
 
 ## Traps
 

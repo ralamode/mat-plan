@@ -17,6 +17,8 @@ import {
   nullableNoteSchema,
   prescribedQuantitiesSchema,
   programNameSchema,
+  slotQuantity,
+  unitsForTrackingType,
   slotLabelSchema,
   supersetSchema,
   targetRepsSchema,
@@ -106,6 +108,9 @@ export type WorkoutDraft = z.infer<typeof workoutDraftSchema>;
  *   with a target or with `value: null` ("log in this unit, no target", plan D2). One with none is
  *   refused, with the issue on that item's `quantities` (`['items', index, 'quantities']`): the row
  *   writer could store no ✓ for it, because `fillRowValues` refuses every number without a unit.
+ *   **And the quantity in the type's slot, when there is one, is in a unit the type logs in**
+ *   (`unitsForTrackingType`, what the editor's unit select offers; plan D27): a Count in `bool`
+ *   stores no ✓, and a Duration prescribed in seconds refuses an empty ✓, since it logs in minutes.
  *
  * `workoutDraftSchema` stays tolerant of all three, because the editor loads a draft mid-edit: a card
  * whose type was just chosen has no set count and no unit yet. The rule is checked against the `trackingType`
@@ -130,14 +135,24 @@ export const saveWorkoutSchema = workoutDraftSchema
       // one its prescription names in that slot, target or no target. `itemUnit` is the lookup the
       // row writer and the day's read make; with none, `fillRowValues` refuses every number, so
       // the item could be saved and never logged.
-      if (
-        TRACKING_TYPE_FIELDS[item.trackingType].slot !== null &&
-        itemUnit(item.trackingType, item.quantities) === null
-      ) {
+      if (TRACKING_TYPE_FIELDS[item.trackingType].slot === null) return;
+      const prescribed = slotQuantity(item, item.quantities);
+      if (itemUnit(item.trackingType, item.quantities) === null) {
         ctx.addIssue({
           code: 'custom',
           path: ['items', index, 'quantities'],
           message: 'an item with a quantity names its unit, even with no target',
+        });
+      } else if (
+        prescribed !== null &&
+        !unitsForTrackingType(item.trackingType).includes(prescribed.unit)
+      ) {
+        // The same end by another road: a Count in `bool` stores no ✓ at all, and a Duration
+        // prescribed in seconds refuses an empty ✓, because the item logs in minutes.
+        ctx.addIssue({
+          code: 'custom',
+          path: ['items', index, 'quantities'],
+          message: "an item's quantity is in a unit its type logs in",
         });
       }
     });

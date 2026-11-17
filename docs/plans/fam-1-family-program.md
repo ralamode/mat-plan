@@ -373,7 +373,9 @@ in the shapes as planned. Both are fixed in the code, with the smaller changes b
     contract change C16; the fake, 7a's action and 6a-ii's writer refuse the same thing). A Count, a
     Weight × reps or a Distance item with no unit could be saved and never logged, because the row
     writer and the day's read take the unit from the prescription (`itemUnit`, C13). The target may
-    be blank; the unit may not. A Duration and a Time per set have a fixed unit. The editor asks for
+    be blank; the unit may not. A Duration and a Time per set have a fixed unit. The quantity in
+    the type's slot must also be in a unit the type logs in (D27's list): the review found a Count
+    in `bool` and a Duration prescribed in seconds, each saved and neither loggable by an empty ✓. The editor asks for
     the unit before Save (#493). Old cards with no unit get no carried default: no program built in
     the app exists in production yet _(maintainer, 2026-11-16, relayed by the board: "Skip it")_.
   - **The editor's Reps are a whole number, 1 to 1000, or blank** _(maintainer, in lane B's chat)_.

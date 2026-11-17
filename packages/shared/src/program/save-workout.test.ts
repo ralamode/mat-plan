@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { TRACKING_TYPE, TRACKING_TYPES, type TrackingType } from '../movements';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
+import { UNIT_CODES } from '../units';
 import { heavyADraft, newWorkoutEmpty, WORKOUT_DRAFT_FIXTURES } from './fixtures';
 import { stamped, workoutDraft } from './fixtures/build';
 import { seedWorld } from './fixtures/world';
 import {
+  fillRowValues,
   hasSetRows,
   itemUnit,
+  prescribedTarget,
   SET_TRACKING_TYPES,
   TRACKING_TYPE_FIELDS,
   unitsForTrackingType,
@@ -224,12 +227,72 @@ describe('saveWorkoutSchema: the unit rule', () => {
     ]);
   });
 
-  it('every fixture, and every workout in the prototype world, already keeps the rule', () => {
+  it('every WorkoutDraft fixture saves under the rule, item by item', () => {
+    // One card at a time through the schema, so a fixture item that broke the rule is named.
+    // (The prototype world's workouts are saved whole by the sets-rule tests above.)
     for (const draft of Object.values(WORKOUT_DRAFT_FIXTURES)) {
       for (const item of draft.items) {
-        if (TRACKING_TYPE_FIELDS[item.trackingType].slot === null) continue;
-        expect(itemUnit(item.trackingType, item.quantities), item.itemName).not.toBeNull();
+        expect(
+          saves({ ...draft, name: draft.name || 'A name', items: [item] }),
+          item.itemName,
+        ).toBe(true);
       }
     }
+  });
+
+  describe('the unit is one the type logs in', () => {
+    const WITH_QUANTITY = TRACKING_TYPES.filter((type) => TRACKING_TYPE_FIELDS[type].slot !== null);
+
+    it.each(WITH_QUANTITY)('%s: saved in exactly the units its type allows', (type) => {
+      const slot = TRACKING_TYPE_FIELDS[type].slot!;
+      const allowed = unitsForTrackingType(type);
+      expect(allowed.length).toBeGreaterThan(0);
+      for (const unit of UNIT_CODES) {
+        expect(
+          saves(withQuantities(type, [{ slot, unit, value: null }])),
+          `${type} in ${unit}`,
+        ).toBe(allowed.includes(unit));
+      }
+    });
+
+    it('refuses the three the review found: each saved, and none could be logged as prescribed', () => {
+      // A Count in `bool`: no number and no empty ✓ can be stored.
+      expect(
+        saves(
+          withQuantities(TRACKING_TYPE.count, [{ slot: 'primary', unit: 'bool', value: null }]),
+        ),
+      ).toBe(false);
+      // A Duration prescribed in seconds: the item logs in minutes, so an empty ✓ is refused.
+      expect(
+        saves(
+          withQuantities(TRACKING_TYPE.duration, [{ slot: 'primary', unit: 'sec', value: 30 }]),
+        ),
+      ).toBe(false);
+      // A Weight × reps in metres: it would log, in the wrong dimension.
+      expect(
+        saves(
+          withQuantities(TRACKING_TYPE.weight_reps, [{ slot: 'primary', unit: 'm', value: 5 }]),
+        ),
+      ).toBe(false);
+    });
+
+    it('🔴 an item that saves with a target can be logged with an empty ✓, for every type and unit', () => {
+      // The rule's purpose, checked against the writer's own function: whatever passes the save
+      // with a prescribed number is stored by an empty ✓ (`fillRowValues` fills it from the target).
+      for (const type of TRACKING_TYPES) {
+        const { slot, reps } = TRACKING_TYPE_FIELDS[type];
+        const units = slot === null ? [null] : UNIT_CODES;
+        for (const unit of units) {
+          const quantities = slot === null || unit === null ? [] : [{ slot, unit, value: 1 }];
+          if (!saves(withQuantities(type, quantities))) continue;
+          const item = { trackingType: type, unit: itemUnit(type, quantities) };
+          const target = prescribedTarget(reps ? '5' : null, quantities);
+          expect(
+            fillRowValues(item, { quantities: [] }, target),
+            `${type} in ${unit}`,
+          ).not.toBeNull();
+        }
+      }
+    });
   });
 });
