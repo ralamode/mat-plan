@@ -15,6 +15,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Two shell-wrapper walks (added 2026-11-17, DX-18 1b)
+
+- **What & why it's debt:** `.claude/hooks/guard-process-kill.mjs` imports `lex()` from
+  `.claude/hooks/guard-main-checkout.mjs` but walks the wrappers (`sudo`, `env`, `timeout`, `xargs`,
+  `bash -c`, `find -exec`, …) with its own copy of the loop in the sibling's `analyzeSegment`. The
+  sibling's walk is fused with git-specific state (the directory, `GIT_*` env, `-C`), so lifting it
+  is a refactor of a 962-line guard with 221 cases; DX-18 D2 chose a second, smaller walk instead.
+- **Impact:** a wrapper added to one walk (a new `pnpm` form, `parallel`) is missed by the other, so
+  one guard sees through it and the other does not.
+- **The fix:** one exported walk in a shared module (`.claude/hooks/shell-walk.mjs`) that yields each
+  segment's command words after unwrapping, with a callback for the per-guard state; both hooks
+  call it, and `hooks.test.sh`'s wrapper cases run against both.
+- **Severity:** low. Both guards are best-effort and say so; each wrapper has a case in
+  `hooks.test.sh`.
+
 ### picomatch GHSA-fc5q-39xc-vjpf is excepted from the production audit until 2026-12-17 (added 2026-11-17, SEC-5c)
 
 - **What & why it's debt:** a `high` ReDoS in picomatch `<= 4.0.7`, reached through `@sentry/nextjs`'s
