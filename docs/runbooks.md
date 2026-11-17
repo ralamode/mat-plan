@@ -1035,12 +1035,12 @@ each kind is its own Sentry issue:
 | ------------------------------------------ | -------------------------------------------------- | -------------- | ---------------------- |
 | `profile scope miss: cross_household`      | an athlete's                                       | `profile`      | `resolve_profile`      |
 | `program scope miss: cross_household`      | a program's (the program builder)                  | `program`      | `resolve_program`      |
-| `workout scope miss: cross_household`      | a workout's (the program builder)                  | `workout`      | `resolve_workout`      |
+| `workout scope miss: cross_household`      | a workout's (the program builder, or a ✓ on a day) | `workout`      | `resolve_workout`      |
 | `prescription scope miss: cross_household` | one item of a workout's (a ✓ or a Change on a day) | `prescription` | `resolve_prescription` |
 
 All four carry the tag `scope_outcome: cross_household`. The program builder's pages and actions and
-the day page's row actions begin calling it in FAM-1 steps 7a and 12b; until those merge, only the
-profile event can fire.
+the day page's row actions call it since FAM-1 steps 7a and 12b; on a day, a ✓ reports a workout or
+a prescription id, at most one event per refused ✓.
 
 For the three new kinds `cross_household` means exactly **"a live row with this id exists in a
 household that is not the caller's"**. The caller's own id that the page does not serve (an older
@@ -1914,7 +1914,32 @@ SELECT b.id, b.public_id FROM program_blocks b
  WHERE b.kind = 'template' AND b.household_id = :H
    AND EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id)
    AND NOT EXISTS (SELECT 1 FROM program_assignments a WHERE a.block_id = b.id AND a.profile_id <> :P);
+
+-- REPORT, part 2 (not a stop): of the programs above, those with a workout COPIED into another program
+-- (the app's copy-a-workout). The copy belongs to the program it was copied into and survives; removing
+-- the source only clears the copy's link back. List these with the programs above and ask, for each:
+-- keep, remove it and keep the copy, or remove both (removing the copy too is a second program).
+-- :R is the list the first part returned.
+SELECT src.block_id AS source_block, c.block_id AS copy_block, c.id AS copy_workout
+  FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
+ WHERE src.block_id = ANY(:R) AND NOT (c.block_id = ANY(:R));
+
+-- REPORT, part 3 (not a stop): this household's OWN items (movements) that nothing would reference once
+-- P is erased and any program removed above is gone. A name a household typed for one child (a drill
+-- or a label about them) otherwise stays listed in that household's picker. List them and ask, for each:
+-- keep, or remove. The app cannot remove an item, so a removal is a correction. :R2 is the list of
+-- programs the household chose to remove (empty if none).
+SELECT m.id, m.public_id FROM movements m
+ WHERE m.household_id = :H
+   AND (EXISTS (SELECT 1 FROM entries e WHERE e.movement_id = m.id AND e.profile_id = :P)
+        OR EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id AND x.block_id = ANY(:R2)))
+   AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.movement_id = m.id AND e.profile_id <> :P)
+   AND NOT EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id
+                    AND NOT (x.block_id = ANY(:R2)));
 ```
+
+Part 3 lists only an item P's own rows (or a removed program) used, never one P never touched, so it
+cannot offer up an item the household simply has not used yet.
 
 (`prescription_targets` is deleted by its `profile_id = P` arm only: its other arm is the household's
 prescriptions, which stay.)
@@ -1948,16 +1973,25 @@ SELECT s.id FROM sessions s JOIN workouts w ON w.id = s.workout_id
 UNION ALL SELECT e.id FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
  WHERE x.block_id = ANY(:B) AND e.profile_id <> :P              -- would be SET NULL silently
 UNION ALL SELECT t.id FROM prescription_targets t JOIN prescriptions x ON x.id = t.prescription_id
- WHERE x.block_id = ANY(:B) AND t.profile_id <> :P              -- would abort 23503
-UNION ALL SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
- WHERE src.block_id = ANY(:B) AND NOT (c.block_id = ANY(:B));   -- a copy elsewhere: SET NULL
+ WHERE x.block_id = ANY(:B) AND t.profile_id <> :P;             -- would abort 23503
+
+-- A copy elsewhere (report part 2). NOT a must-be-0: the household was asked at step 3. Compare this
+-- list with their answer: a copy they did not know about (made during the cooling-off) is a new
+-- question, so ASK again before removing that source; never skip it silently.
+SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
+ WHERE src.block_id = ANY(:B) AND NOT (c.block_id = ANY(:B));   -- removing the source: SET NULL on the copy
 ```
 
-On a non-zero, tell the household and skip that block. Otherwise, after step 11, delete for those
+On a non-zero from the first query, tell the household and skip that block (someone else trained on
+it). On the copy list: remove the source only as the household answered. "Remove it and keep the copy"
+leaves the copy whole, with its link back cleared. "Remove both" adds the copy's own program to `:B`,
+after it passes the same checks. Otherwise, after step 11, delete for those
 blocks: `prescription_targets` (a count that must read 0 by now) → `prescription_quantities` → `prescriptions` →
 `block_day_workouts` → `workouts` → `program_blocks`, counting each first and re-counting to 0.
-`db:verify` → FAM-1 5 proves equivalent queries for the report (this household only) and this
-pre-flight (`othersOnTheseBlocks`); this sub-order is the household delete's own (steps 8–10).
+`db:verify` → FAM-1 5 proves equivalent queries for the report's first part (this household only)
+and for this pre-flight's two queries together (`othersOnTheseBlocks` returns their union; the split
+is which rows are a stop and which are a question). Report parts 2 and 3 are operator queries with no
+proof yet; `PRIV-3` PR 3 scripts them; this sub-order is the household delete's own (steps 8–10).
 
 Then re-run step 3's counts: **every row reads 0**, and the household's other athletes' counts and its
 program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise. `db:verify` → FAM-1 5

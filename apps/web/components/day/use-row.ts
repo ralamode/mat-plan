@@ -290,10 +290,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     return result;
   }
 
-  /** A `closed_day` from any write: the page turns read-only, and the row's message goes. */
+  /**
+   * A `closed_day` from any write: the page turns read-only, the row's message goes, and the page's
+   * data is fetched again. A retried ✓ whose first answer was lost meets the window before the
+   * replay, so after midnight the row may be saved yet shown empty; the fresh data shows what was
+   * stored (UX panel, 12b).
+   */
   function closeDay() {
     setError(null);
     day.closeDay();
+    day.reload();
   }
 
   function fail(reason: RowRefusal, write: RowWriteKind) {
@@ -303,7 +309,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       message: copy.message,
       reload: copy.reload,
       counts: write === 'tick',
-      invalid: copy.focusField,
+      invalid: false,
     });
   }
 

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index ab9a69bc..e8dd141d 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -87,7 +87,7 @@ export async function newItem(
+     // Global first, as the resolver reads: a catalog row wins over the household's own.
+     .orderBy(desc(movementIsGlobal()))
+     .limit(1);
+-  if (sameSlug) {
++  if (false && sameSlug) {
+     return {
+       ok: true,
+       itemPublicId: sameSlug.publicId,

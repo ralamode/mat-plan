@@ -21,6 +21,12 @@ owns:
   - packages/shared/src/catalog/catalog.test.ts
   - packages/shared/src/catalog/owed.test.ts
   - packages/shared/src/catalog/search.test.ts
+  # Chunk C0b-2: the option a library entry becomes, the browse families, the filters.
+  - packages/shared/src/catalog/option.ts
+  - packages/shared/src/catalog/families.ts
+  - packages/shared/src/catalog/option.test.ts
+  - packages/shared/src/catalog/filters.test.ts
+  - packages/shared/src/movement-filters.ts
   - .github/scripts/check-catalog-append-only.mjs
   # The search the picker and `existingItem` share. Moved here from movement-picker.md at CAT-3
   # C0a: the contract's next chunk adds the library's search beside `matchMovementOptions`.
@@ -73,7 +79,7 @@ flowchart LR
 | `packages/shared/src/program/fixtures/`           | The named fixtures (`@mat-plan/shared/program/fixtures`): the prototype's data, transcribed in `world.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `packages/shared/src/program/owed.test.ts`        | The `it.todo` tests still owed by lane A and the contract owner. Each lane with a guide keeps its own list in its own directory (invariant 9). Lane A has no remaining line: 4a-i and 4b proved the constants' columns in `verify/schema.ts` (a legacy prescription's `target_reps` and `sets` stay unbounded on purpose, as the file says; `program_blocks.name` is bounded on every row (0029, validated by 0031)); step 3 wrote its three (in `units.test.ts` and `verify/schema.ts`), and adjusted `shapes.test.ts`' unit pins for `mi` and `(primary, count)`. |
 | `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. The program fake's clock is `ProgramView.today`.                                                                                                                                                                                                                                                                                                                                                                                            |
-| `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture. Here because its shape is the web's `MovementOptionDTO`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture: the test library as library rows (`catalogOptionOf` over `CATALOG_FIXTURE`) and the prototype's items as the household's own, one row a name (a name in both is the library's row under the item's id when the two log alike, else the household's item); and `previewHowTo(publicId)`, the preview's "How to" read. Here because its shape is the web's `MovementOptionDTO`.                                                                                                                                                         |
 | `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -255,9 +261,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 
 15. **`newItem` makes no second item for a name or an alias that already names one in the
     household's list, and it answers with the item's own name.** A typed name that `existingItem` matches selects that item
-    (`existed: true`); it is not a refusal. The picker withholds "add as new" for `exact` and
-    `aliasHit`; `existingItem` also answers, from C30, for `shortFormHit` (`db row` is Dumbbell
-    row), which the pickers read once they call `searchMovementOptions` (CAT-3 chunk B1). So the client's guard and the server's answer
+    (`existed: true`); it is not a refusal. The picker withholds "add as new" for the same
+    three cases (`exact`, `aliasHit`, and since C30 and CAT-3 chunk B1 `shortFormHit`: `db row`
+    is Dumbbell row). So the client's guard and the server's answer
     are one rule: the guard saves a round trip, the server holds when the page is stale or the call
     did not come from the picker. `name` is on every success (the stored name, which is not always
     what was typed), so a card never shows `rdl` for Romanian Deadlift.
@@ -434,18 +440,24 @@ truth; this section is the map. The library's lanes (schema, data, picker) meet 
 FAM-1's lanes meet at the program shapes, and the same rule holds: **no lane edits a file listed
 here; a change goes through the contract owner.**
 
-| File                                            | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT` (53 codes), `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels), `MEDIA_KINDS`, and `QUERY_SHORT_FORMS`. In the root barrel.                                                                                                                                                                                                                                                 |
-| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id), `catalogInstructionsSchema`, `catalogMediaSchema`, their caps, and `requiresNoEquipment`. In the root barrel.                                                                                                                                                                                                                                |
-| `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries) and `CATALOG_FIXTURE_IDS`. The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                                                                                                                                                                                    |
-| `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                                                                                                                                                                                          |
-| `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide.                                                                                                                                                                   |
-| `.github/scripts/check-catalog-append-only.mjs` | The step in CI's quality job that compares the two record files with the PR's base (`pnpm catalog:check` locally).                                                                                                                                                                                                                                                                                                           |
-| `packages/shared/src/catalog/catalog.test.ts`   | Criteria V1 to V3, V5, V6 and D2, and what the fixture covers. `approvals.test.ts` holds V4 and D3 (the lockfile, the approvals, the merge-base comparison). `owed.test.ts` lists only the criteria no test holds yet; lane B's proofs live in its picker's and the item picker's tests (`apps/web/components/movements/`, `apps/web/lib/movements/`, `apps/web/components/program-builder/item-picker/`).                   |
-| `packages/shared/src/movement-search.ts`        | `matchMovementOptions` (the plain match, best match first), `searchMovementOptions` (the library's search: short forms, part of another name, `near`, `shortFormHit`, `foundByAlias`), `editsWithin`, `SEARCH_WORDS_MAX`. Beside `foldMovementQuery` and `movementNameKey`, which [movement-picker.md](./movement-picker.md) describes. `catalog/search.test.ts` holds criteria P1 to P4, P17 and the contract's half of P6. |
+| File                                            | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT` (53 codes), `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels), `MEDIA_KINDS`, and `QUERY_SHORT_FORMS`. In the root barrel.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id), `catalogInstructionsSchema`, `catalogMediaSchema`, their caps, and `requiresNoEquipment`. In the root barrel.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries), `CATALOG_FIXTURE_IDS` and `CATALOG_FIXTURE_OPTIONS` (the entries as picker options). The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                                                                                                                                                                                                                                                                                                                                       |
+| `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `.github/scripts/check-catalog-append-only.mjs` | The step in CI's quality job that compares the two record files with the PR's base (`pnpm catalog:check` locally).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `packages/shared/src/catalog/catalog.test.ts`   | Criteria V1 to V3, V5, V6 and D2, and what the fixture covers. `approvals.test.ts` holds V4 and D3 (the lockfile, the approvals, the merge-base comparison). `owed.test.ts` lists only the criteria no test holds yet; lane B's proofs live in its picker's and the item picker's tests (`apps/web/components/movements/`, `apps/web/lib/movements/`, `apps/web/components/program-builder/item-picker/`).                                                                                                                                                                                                                                 |
+| `packages/shared/src/movement-search.ts`        | `matchMovementOptions` (the plain match, best match first), `searchMovementOptions` (the library's search: short forms, part of another name, `near`, `shortFormHit`, `foundByAlias`, and under filters `hits`, `hitsOutsideFilters`, `custom`, `outsideFilters`, `enterTarget`), `movementFilterCounts`, `equipmentFilterOrder`, `editsWithin`, `SEARCH_WORDS_MAX`. Beside `foldMovementQuery` and `movementNameKey`, which [movement-picker.md](./movement-picker.md) describes. `catalog/search.test.ts` holds criteria P1 to P4, P17 and the contract's half of P6; `catalog/filters.test.ts` the contract's half of P5 and P7 to P10. |
+| `packages/shared/src/movement-filters.ts`       | `MovementFilters` (equipment as one choice of three, the ticked items, the main muscles), `NO_MOVEMENT_FILTERS`, `movementFiltersOn`, `passesMovementFilters`, `filterMovementOptions` (the list with no query), `EQUIPMENT_FILTER_SHOWN_FIRST`. Pure, client-safe, in the root barrel.                                                                                                                                                                                                                                                                                                                                                    |
+| `packages/shared/src/catalog/option.ts`         | `CatalogOptionTaxonomy` (what the picker knows about a library movement beyond its name), `CatalogOption`, `catalogOptionOf(entry, publicId)` (the one mapping from an entry to an option), `catalogHowToOf(entries, slug)` (the steps and the supervision label, read by slug). In the root barrel. `catalog/option.test.ts` holds them and the browse tree.                                                                                                                                                                                                                                                                              |
+| `packages/shared/src/catalog/families.ts`       | How "All movements" opens (spec P12): `BROWSE_KINDS`, `MOVEMENT_FAMILY_LABELS`, `MUSCLE_BODY_AREA`, `movementFamilyOf`, `browseTree`, `BROWSE_OPEN_AT_MOST`. In the root barrel.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
-Invariants (the spec's rules, as they bind code here):
+Invariants (the spec's rules, as they bind code here). **This list has its own numbers.** A bare
+"program-contract invariant N" anywhere else means the family program's list above; this one is
+cited as "the movement library's invariant N" (the data lane's guide says "contract invariant N"
+under its own CAT-3 heading).
 
 1. **A vocabulary is one const array**, and `EQUIPMENT`, `MUSCLES` and `MODALITIES` become stored
    data when the schema lane's tables ship: from then on a new, renamed or removed member is a
@@ -498,7 +510,7 @@ Invariants (the spec's rules, as they bind code here):
     `searchMovementOptions`' `matches` and `someWords` are its own. 🔴 **`existingItem` returns
     the first row** when two items answer to a name, the row Enter picks, so the server and the
     picker never name different items. A household item literally named `RDL` (made before
-    invariant 15's rule) is therefore what `RDL` means in that household; until C30 the
+    the family program's invariant 15, above) is therefore what `RDL` means in that household; until C30 the
     catalog's item won that case.
 12. **A short form is equipment, not a movement.** `QUERY_SHORT_FORMS` expands a whole query word
     inside the search only: never in `movementNameKey`, and never as an entry's alias. A row
@@ -519,7 +531,50 @@ Invariants (the spec's rules, as they bind code here):
     the same test on the whole query and a whole name or alias with the spaces out. The edit
     count is banded (it computes about five cells a row). The search reads `MOVEMENT_NAME_MAX` characters of
     a query; a query of more than `SEARCH_WORDS_MAX` words gets the plain match only; and it
-    builds no `RegExp` from a query or a name.
+    builds no `RegExp` from a query or a name. `someWords` never repeats a row of `near`.
+15. **A filter removes rows and never reorders them, and three things are outside its reach**
+    (spec P7 to P10; chunk C0b-2). The query is read over every option first, so `exact`,
+    `aliasHit`, `shortFormHit`, `foundByAlias` and `hits` do not depend on the filters. Then,
+    with a filter on: (a) **`hits` stay first in `matches`**, and those outside the filters are
+    named in `hitsOutsideFilters` so the row can say "not in your filters" (the picker refuses to
+    make an item of that name, so it must show the item it means); (b) **a household's own item
+    is never judged**: it has no equipment and no muscle, so the custom rows the query found
+    move to `custom`, one section after the filtered matches (a custom item that is a hit stays
+    first in `matches`), and `passesMovementFilters` answering `false` for one is never a reason
+    to hide it; (c) **what the filters removed is counted** in `outsideFilters`, and the screen
+    never falls back to the whole list. With no filter on (`movementFiltersOn` is zero, which
+    includes "chosen" with nothing ticked) the result is the unfiltered one and a custom item
+    sits among `matches`.
+16. **Equipment is one choice of three, and changing it clears nothing.** `any`, `none` (the set
+    is empty) or `chosen`, which keeps a movement that uses **at least one** ticked item. The
+    ticked items stay in `chosenEquipment` whatever the choice and count only under `chosen`.
+    Muscles filter by the primary muscle. 🔴 The option carries the equipment **set**
+    (`CatalogOptionTaxonomy`), never an answer about it: "needs nothing beyond what I have" is a
+    different rule over the same set. (A scan in `catalog.test.ts` refuses a field or a column
+    named `noEquipment` or `no_equipment`; it knows no other spelling, so the rule is this
+    sentence and the scan is its tripwire.) A library row with no `equipment` field at all
+    passes no filter: its taxonomy was not read, which is not the same as needing nothing.
+17. **A choice that would leave nothing on the screen is greyed** _(maintainer, 2026-11-17)_.
+    `movementFilterCounts` gives the number beside every choice: what the list would show if that
+    choice alone of its kind were ticked, with the other kind's filters and the query as they
+    are. With a query that counts the hits and the custom items the query found, which are shown
+    whatever the filters, so while an exact name is typed nothing greys; with no query it counts
+    the library movements that fit. Zero means greyed and not tickable, unless it is already
+    ticked. `equipmentFilterOrder` lists the items most first, the zero ones last.
+18. **Enter picks a hit, or the only match when it was found by its own name or through a short
+    form** (`enterTarget` on the result, spec P5). Never a row found by another name, a near
+    miss or a some-words row, 🔴 and a filter does not change that: a custom item set apart
+    under a filter counts as something to pick only if it MATCHED. One filtered match beside
+    one custom match is two to choose from.
+19. **One mapping from an entry to an option** (`catalogOptionOf`, spec P11). The option read is
+    compared with it, the preview's options are built with it (`CATALOG_FIXTURE_OPTIONS`), and it
+    never carries the instructions: an option says `hasInstructions`, and `catalogHowToOf` reads
+    the steps by slug when "How to" is opened, 🔴 always with the supervision label (K17).
+20. **"All movements" opens to the kind of training, then a family** (`browseTree`, spec P12):
+    for strength the lift pattern under a plain label, for the other kinds the body area of the
+    primary muscle. Kinds in `BROWSE_KINDS`' order; families biggest first, then by label;
+    movements by name; nothing empty is listed. A new muscle code does not compile without a
+    body area, and a new lift pattern not without a label.
 
 ## Changing it
 

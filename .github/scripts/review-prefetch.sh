@@ -23,8 +23,8 @@ SENSITIVE=(.claude .claude.json CLAUDE.md CLAUDE.local.md .mcp.json .gitmodules 
 # point 5, D1). A pin, deliberately: any change to that file (a new hook, a matcher, an allow rule)
 # fails here until someone re-reads the threat model and updates this hash. Recompute with:
 #   git show HEAD:.claude/settings.json | jq -S -c . | shasum -a 256
-SETTINGS_SHA256='aeef8c5b0f2edaa15daed3c8b6307a1d25bbdc9e4476a10405f2be1b2045386e'
-PINNED_HOOKS=(.claude/hooks/guard-main-checkout.mjs .claude/hooks/session-context.mjs)
+SETTINGS_SHA256='182ea88f773c10604dac5fe4f3a4f97258d37fade776c6c67915fb7af21292a5'
+PINNED_HOOKS=(.claude/hooks/guard-main-checkout.mjs .claude/hooks/guard-process-kill.mjs .claude/hooks/session-context.mjs)
 
 SKELETON_MARK='<!-- claude-review:skeleton -->' # also in review-post.sh; review-prefetch.test.sh pins both
 # ::error:: for the log; the step summary too, so the cause is on the run page, not only in a log.

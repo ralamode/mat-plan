@@ -1,5 +1,6 @@
 import { fixtureIds } from '../program/fixtures/ids';
 import type { CatalogMovement } from './entry';
+import { catalogOptionOf, type CatalogOption } from './option';
 
 /**
  * A small, generic library for tests, the preview route and test databases
@@ -194,6 +195,14 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     primaryMuscle: 'glutes',
     secondaryMuscles: ['hamstrings', 'traps'],
     supervision: 'coach',
+    // A supervised movement's steps name the coach (K17), and this is the one entry with both a
+    // label and steps, so a screen can show the label above them.
+    instructions: [
+      'Learn this with your coach beside you, with an empty bar first.',
+      'Start standing, the bar hanging at your thighs, arms straight.',
+      'Dip a little at the hips and knees, then jump the bar up, keeping it close.',
+      'Catch it on your shoulders with your elbows high, and stand tall.',
+    ].join('\n'),
   },
   {
     ...lift,
@@ -322,4 +331,14 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
  */
 export const CATALOG_FIXTURE_IDS: Readonly<Record<string, string>> = Object.fromEntries(
   CATALOG_FIXTURE.map((entry, index) => [entry.slug, fixtureIds.catalogMovement(index + 1)]),
+);
+
+/**
+ * The test library as the picker's options (chunk C0b-2): `catalogOptionOf` over each entry, with
+ * its fixture id. What the option read is compared with (spec P11). The preview's picker builds
+ * its own list from the same entries (`apps/web/app/design/program/picker-options.ts`): there a
+ * movement the prototype's items also name is one row, not two.
+ */
+export const CATALOG_FIXTURE_OPTIONS: readonly CatalogOption[] = CATALOG_FIXTURE.map(
+  (entry, index) => catalogOptionOf(entry, fixtureIds.catalogMovement(index + 1)),
 );

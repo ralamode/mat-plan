@@ -118,10 +118,16 @@ guard_case "base .mcp.json → refuse" .mcp.json '{}' 1
 guard_case "base settings.local.json → refuse" .claude/settings.local.json '{}' 1
 guard_case "base settings.json with permissions → refuse" .claude/settings.json '{"permissions":{"allow":["Bash"]}}' 1
 guard_case "base settings.json with an unknown hook → refuse" .claude/settings.json '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"curl evil"}]}]}}' 1
-guard_case_hooks() { # <name> <hook-body> <want-exit>: the real settings.json, with hook files of the given body
+NOOP='if (isEntryPoint() && !process.env.CI && !process.env.GITHUB_ACTIONS) main();'
+guard_case_hooks() { # <name> <hook-body> <want-exit> [file]: the real settings.json, with hook files
+  # of the given body; with [file], only that hook gets the body and the others stay CI-no-op.
   fresh
   mkdir -p "$tmp/repo/.claude/hooks" && cp "$real/.claude/settings.json" "$tmp/repo/.claude/"
-  for f in guard-main-checkout.mjs session-context.mjs; do printf '%s\n' "$2" >"$tmp/repo/.claude/hooks/$f"; done
+  for f in guard-main-checkout.mjs guard-process-kill.mjs session-context.mjs; do
+    body="$2"
+    [ -n "${4:-}" ] && [ "$f" != "$4" ] && body="$NOOP"
+    printf '%s\n' "$body" >"$tmp/repo/.claude/hooks/$f"
+  done
   (cd "$tmp/repo" && g add -A && g commit -qm hooks)
   : >"$tmp/summary"
   run
@@ -131,7 +137,15 @@ guard_case_hooks() { # <name> <hook-body> <want-exit>: the real settings.json, w
 }
 guard_case "base settings.json whose hook command is an ARRAY → refuse" .claude/settings.json '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":["node a","node b"]}]}]}}' 1
 guard_case "an UNTRACKED local settings.local.json (a person's own) → allow" .claude/settings.local.json '{}' 0 untracked
-guard_case_hooks "only the pinned hooks, both CI-no-op → allow" 'if (isEntryPoint() && !process.env.CI && !process.env.GITHUB_ACTIONS) main();' 0
+guard_case_hooks "only the pinned hooks, all CI-no-op → allow" "$NOOP" 0
 guard_case_hooks "a pinned hook that runs under CI → refuse" 'main();' 1
+guard_case_hooks "the kill guard alone runs under CI → refuse" "import('./guard-main-checkout.mjs'); main();" 1 guard-process-kill.mjs
+grep -qF '.claude/hooks/guard-process-kill.mjs' <<<"$(grep '^PINNED_HOOKS=' "$here/review-prefetch.sh")" && ok "the kill guard is a pinned hook" || bad "the kill guard is not in PINNED_HOOKS"
+# The pin is the committed settings.json: every PreToolUse/SessionStart hook it registers is pinned.
+for f in $(jq -r '.hooks[][].hooks[].command' "$real/.claude/settings.json" | grep -o '\.claude/hooks/[a-z-]*\.mjs'); do
+  grep -qF "$f" <<<"$(grep '^PINNED_HOOKS=' "$here/review-prefetch.sh")" && ok "registered hook $f is pinned" || bad "registered hook $f is not in PINNED_HOOKS"
+done
+want="$(jq -S -c . "$real/.claude/settings.json" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1)"
+grep -qF "SETTINGS_SHA256='$want'" "$here/review-prefetch.sh" && ok "SETTINGS_SHA256 is this tree's settings.json" || bad "SETTINGS_SHA256 is not this tree's settings.json ($want)"
 
 [ "$fails" -eq 0 ] && echo "all review-prefetch self-tests passed" || exit 1

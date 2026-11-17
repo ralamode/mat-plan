@@ -531,6 +531,14 @@ access token`, which reads like a permissions problem with the repo. The cause w
   before calling it a defect**: a real bug fails alone too. The prevention is to stop running heavy
   gates locally at all ([AGENTS.md](../AGENTS.md) → "Local hooks vs CI merge-gates"; DX-18).
 
+- **vitest's `--changed <ref>` also tests the working tree.** → A db-and-docs push ran the editor
+  and sheet suites for about 22 minutes (2026-11-17), though no file in the push reached them.
+  `vitest --changed` adds staged, unstaged and untracked files to the `ref...HEAD` diff, so a mutation
+  patch left applied, or any local edit, widened what the hook ran. → The pre-push
+  (`test-changed.mjs`) now traces the **committed** diff only, with `vitest related` on absolute
+  paths, and reports local changes as untested. A push sends commits, so the hook tests commits. Outside CI a due full run
+  (a trigger file changed) is left to CI: "full suite due: CI runs it".
+
 - **A test that taps twice "straight after" in real time fails on a busy machine.** → A double-tap
   guard compares the taps' `event.timeStamp`s, so "within 500ms" in a test depends on how loaded the
   machine is: with three suites at once, two consecutive `fireEvent.click`s were more than 500ms apart.
@@ -804,6 +812,12 @@ do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prin
   might be. ⚠️ **The failure mode is believable**, which is the danger: "patch does not apply" is
   exactly what a real context shift looks like, so the instinct is to regenerate 16 patches. Check for
   a concurrent runner BEFORE regenerating anything. (`PROF-1 a-1w`)
+
+- **One lane's `pkill -f` stops every lane's run of the same script.** → Several sessions run the
+  same gates on one machine, so a pattern matches their processes too (2026-11-17: a `pkill -f`
+  probably killed another lane's `db:mutations` run). → Stop only a process you started, by the pid
+  you captured (`$!`), or let it finish. → **Now denied by `.claude/hooks/guard-process-kill.mjs`**
+  (`pkill`, `killall`, `fuser -k`, `kill $(…)`, `kill 0`/`-1`/negative pids). (`DX-18` 1b)
 
 - **A mutation patch's `.expect` silently stops describing its patch when an assertion is inserted
   ABOVE the one it names — and the gate says so rather than passing.** → `PROF-1 a-1w`'s patch `22`

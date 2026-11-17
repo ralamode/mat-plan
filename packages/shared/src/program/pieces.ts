@@ -376,7 +376,8 @@ export function hasSetRows(type: TrackingType): boolean {
  *
  * When more than one item qualifies, the answer is the picker's first row, which is the row its
  * Enter picks: an item whose own name it is, before an item it is another name of, before one a
- * short form spells; then a catalog item before a household one, then by name (CAT-3 spec P2).
+ * short form spells; then the shorter spelling (two spellings of one name tie); then a catalog
+ * item before a household one, then by name (CAT-3 spec P2).
  * So a household item literally named `RDL`, made before this rule, is what `RDL` means in that
  * household, and the catalog's Romanian Deadlift is still found by its own name. (Until C30 the
  * catalog's item won that case; the picker now lists a movement's own name first, and the server

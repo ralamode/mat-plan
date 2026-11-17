@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index ab9a69bc..f5688e50 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -65,7 +65,7 @@ export async function newItem(
+     })),
+     name,
+   );
+-  if (hit) {
++  if (false && hit) {
+     return {
+       ok: true,
+       itemPublicId: hit.publicId,
