@@ -50,7 +50,7 @@ Done when:
   many households it would create (1), and how many accounts it would bind.
 - `--apply` creates exactly one `households` row and one `household_members` row per account. Every
   `public_id` is freshly minted and none is in `SEED_PUBLIC_IDS`. Every member's role is `owner`
-  (Q1).
+  (Q1, decided).
 - The run refuses and writes nothing when any account:
   - is malformed;
   - is listed twice;
@@ -333,11 +333,10 @@ preconditions already require it; this repeats it where the operator reads.
 
 ## Open questions
 
-- **Q1 (the maintainer's, through the roadmap thread):** what role does each account get?
-  **Recommended: `owner` for all.** The authority model is "anyone in the household records and
-  corrects; the owner decides who belongs to it" (`ID-1`, item 5's note). The app never branches on
-  role today, and `member` has no defined meaning until `COACH-1`. The alternative, the first account
-  `owner` and the rest `member`, would give `member` a meaning nobody has designed.
+- **Q1, decided _(maintainer, 2026-11-17, through the roadmap thread's chat)_:** every bound
+  account is `owner`. The authority model is "anyone in the household records and corrects; the
+  owner decides who belongs to it" (`ID-1`, item 5's note); the app never branches on role, and
+  `member` has no defined meaning until `COACH-1`.
 - **Q2, answered _(roadmap thread, 2026-11-17)_:** yes, D6 is what the spec means. The refusal
   exists so that production can never again bind an account to a seed-namespace household once the
   fresh start has removed it (R4 reports on exactly that). A local or preview database may still
