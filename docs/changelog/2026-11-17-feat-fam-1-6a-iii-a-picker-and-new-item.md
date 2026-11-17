@@ -10,6 +10,6 @@ app calls them yet; step 7a-ii wires them.
   another way (`push ups` for Push-ups) or a short name (`RDL`) selects the existing item, adds
   nothing, and answers with that item's own name and type. A name the household has not used makes
   one new item of the type picked.
-- Six new `db:mutations` patches (304–309) show the proofs fail when the list offers a covered,
-  hidden or another household's item, or when `newItem` skips either check or answers with the typed
-  name.
+- Nine new `db:mutations` patches (304–309, 380–382) show the proofs fail when the list offers a
+  covered, hidden or another household's item or loses its order, or when `newItem` skips a check,
+  breaks a tie the picker's way, or answers with the typed name.

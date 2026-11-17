@@ -179,10 +179,15 @@ flowchart TD
     must list **every** live household item, used or not (maintainer, 2026-11-17), or an item made
     and not yet used could be added again under a re-spelled name (mutations
     `options-list-shadowed-items`, `options-list-hidden-items`, `options-list-any-households-items`,
-    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`).
-    ⚠️ Latent: the resolver (`findOrCreateTypedMovement`) does not filter `deleted_at`, so once
-    something hides a movement (RETIRE-1), a new item named like a hidden one would return the
-    hidden row. Nothing hides a movement today.
+    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation.
+    ⚠️ Latent, and gated by the constraint on `movements.deleted_at` in `schema.ts` (nothing may
+    set it until the indexes and the resolver change together): once something hides a movement
+    (`MOV-1`'s merge, or C4m), `newItem`'s step 2 misses the hidden row, and the resolver
+    (`findOrCreateTypedMovement`, no `deleted_at` filter) returns it with `existed: false`;
+    `saveWorkout` then refuses its id as `not_found`, and the household slug index (no `deleted_at`
+    predicate) stops the name being made again. The PR that first hides a movement revisits that
+    constraint's list and adds `newItem`'s step 2 and `movementOptions`' catalog and shadow
+    `deleted_at` filters to it.
 
 ## Changing it
 

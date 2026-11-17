@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index 6dcb93fd..bcf2356e 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -126,6 +126,6 @@ export async function movementOptions(
+         aliases: entry.aliases ?? [],
+       };
+     }),
+-    ...[...own].sort(byName).map((row) => ({ ...declared(row), owner: 'household' as const })),
++    ...own.map((row) => ({ ...declared(row), owner: 'household' as const })),
+   ];
+ }

@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
-index 6bdb87dd..e7943ad7 100644
+index 6dcb93fd..0b877c52 100644
 --- a/packages/db/src/queries/program/movement-options.ts
 +++ b/packages/db/src/queries/program/movement-options.ts
-@@ -82,7 +82,7 @@ export async function movementOptions(
+@@ -85,7 +85,7 @@ export async function movementOptions(
      .from(schema.movements)
      .where(
        and(

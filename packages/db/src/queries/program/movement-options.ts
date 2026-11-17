@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import {
+  foldMovementQuery,
   MOVEMENT_PICKER_ENTRIES,
   trackingTypeSchema,
   unitSchema,
@@ -42,7 +43,9 @@ const PICKER_SLUGS = Object.keys(MOVEMENT_PICKER_ENTRIES) as Array<
 /**
  * **Every item this household can pick** (FAM-1 step 6a-iii-a; PICK-1 PR 4's read, homed here): the
  * catalog's curated rows whose slug `MOVEMENT_PICKER_ENTRIES` lists, each with its browse group and
- * aliases, then this household's own items. All live; catalog first, then by name.
+ * aliases, then this household's own items. All live; catalog first, then each part by name, folded
+ * (`foldMovementQuery`, then the name's code points), so the order is the same on every database
+ * whatever its collation.
  *
  * - **A household item a catalog row shadows is left out**: the resolver is global-first
  *   (`findOrCreateTypedMovement`), so a household row with a catalog slug is never the one a name
@@ -74,7 +77,7 @@ export async function movementOptions(
         inArray(schema.movements.slug, PICKER_SLUGS),
       ),
     )
-    .orderBy(asc(schema.movements.name), asc(schema.movements.id));
+    .orderBy(asc(schema.movements.id));
 
   const shadow = alias(schema.movements, 'shadow');
   const own = await exec
@@ -98,7 +101,7 @@ export async function movementOptions(
         ),
       ),
     )
-    .orderBy(asc(schema.movements.name), asc(schema.movements.id));
+    .orderBy(asc(schema.movements.id));
 
   const declared = (row: (typeof catalog)[number]) => ({
     publicId: row.publicId,
@@ -107,8 +110,14 @@ export async function movementOptions(
     isBodyweight: row.isBodyweight,
     trackingType: trackingTypeSchema.parse(row.trackingType),
   });
+  const byName = <R extends { name: string }>(a: R, b: R) => {
+    const fa = foldMovementQuery(a.name);
+    const fb = foldMovementQuery(b.name);
+    if (fa !== fb) return fa < fb ? -1 : 1;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  };
   return [
-    ...catalog.map((row) => {
+    ...[...catalog].sort(byName).map((row) => {
       const entry = MOVEMENT_PICKER_ENTRIES[row.slug as keyof typeof MOVEMENT_PICKER_ENTRIES];
       return {
         ...declared(row),
@@ -117,6 +126,6 @@ export async function movementOptions(
         aliases: entry.aliases ?? [],
       };
     }),
-    ...own.map((row) => ({ ...declared(row), owner: 'household' as const })),
+    ...[...own].sort(byName).map((row) => ({ ...declared(row), owner: 'household' as const })),
   ];
 }

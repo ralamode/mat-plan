@@ -34,13 +34,18 @@ type NewItemResult = ProgramResult<{
  *    Deadlift). That item is the answer, with `existed: true`, **its stored name and its own type**,
  *    whatever type was asked (D25: nothing retypes an item).
  * 2. **Then the resolver's slug**, for an available row the picker does not list (a catalog row
- *    outside `MOVEMENT_PICKER_ENTRIES`): the same answer, so no second row is made beside it.
+ *    outside `MOVEMENT_PICKER_ENTRIES`): the same answer, with its stored name and own type. The
+ *    resolver would reach that row anyway; this step is what makes `existed` truthful for it.
+ *    ⚠️ It matches by slug, not by key: once rows outside the picker map exist in bulk (CAT-3's
+ *    library), a re-spelled name of one would make a household item, unless those rows join
+ *    `movementOptions`. The chunk that seeds them owes that.
  * 3. **Otherwise a new household item** through `findOrCreateTypedMovement`, typed as asked, with
  *    `existed: false`.
  *
- * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`. D25's race is
- * accepted: two adds of one new name at once both reach step 3, the household slug index lets one
- * row in, and both answer it (one of them `existed: false` though the other made it).
+ * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`. D25's races
+ * are accepted: two adds of one new name at once both reach step 3, the household slug index lets
+ * one row in, and both answer it (each `existed: false`); two adds at once of names with one key
+ * and different slugs (`pushups`, `push ups`) both insert, and leave two items.
  */
 export async function newItem(
   exec: Executor,

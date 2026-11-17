@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import {
+  DEFAULT_TRACKING_TYPE,
+  foldMovementQuery,
   MAX_REPS_PER_SET,
   MOVEMENT_PATTERNS,
   MOVEMENT_PICKER_ENTRIES,
@@ -1611,6 +1613,17 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       isBodyweight: false,
     });
 
+    // A household "RDL" made before the alias rule, beside the catalog's Romanian Deadlift (alias
+    // `RDL`): since C30 an item's own name ranks before another item's alias, so `RDL` is the
+    // household's own item in this household.
+    const ourRdl = await own(A_SCOPE, 'RDL');
+    // A household name with the catalog name's key but another slug (so not shadowed), that sorts
+    // first by name: only `isCatalog` puts the catalog's row first, as the picker does.
+    await own(A_SCOPE, 'Romanian Dead-lift');
+    // Two names whose code-point order and folded order differ ('Z' sorts before 'a' in C collation).
+    const zebra = await own(A_SCOPE, 'Zebra Step Drill');
+    const apple = await own(A_SCOPE, 'apple Reach Drill');
+
     // ── the read ──
     const options = await movementOptions(exec, A_SCOPE);
     const ids = options.map((o) => o.publicId);
@@ -1622,6 +1635,8 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     );
     const rdl = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('RDL'));
     assert.ok(rdl, 'FAM-1 6a-iii-a: a catalog row carries its aliases');
+    const ohp = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('OHP'));
+    assert.ok(ohp, 'FAM-1 6a-iii-a: the catalog has the OHP alias the proof uses');
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
     assert.equal(
       options.find((o) => o.publicId === hop)?.trackingType,
@@ -1634,15 +1649,31 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       !ids.includes(shadowed),
       'FAM-1 6a-iii-a: a household item a catalog row shadows is not listed',
     );
+    const folded = (xs: readonly { name: string }[]) =>
+      xs.every(
+        (o, i) => i === 0 || foldMovementQuery(xs[i - 1]!.name) <= foldMovementQuery(o.name),
+      );
+    const household = options.filter((o) => o.owner === 'household');
     assert.ok(
-      catalog.every((o, i) => i === 0 || catalog[i - 1]!.name <= o.name) &&
+      folded(catalog) &&
+        folded(household) &&
         options.findIndex((o) => o.owner === 'household') >= catalog.length,
-      'FAM-1 6a-iii-a: catalog rows come first, each part by name',
+      'FAM-1 6a-iii-a: catalog rows come first, each part by its folded name',
+    );
+    assert.ok(
+      ids.indexOf(apple) < ids.indexOf(zebra),
+      'FAM-1 6a-iii-a: household items are ordered by folded name, whatever the collation',
+    );
+    assert.ok(
+      ids.includes(ourRdl),
+      'FAM-1 6a-iii-a: a household item named like an alias is listed',
     );
 
     // ── newItem selects what the list already names ──
     const selects: Array<[string, string, string, string]> = [
-      ['an alias', 'rdl', rdl.publicId, rdl.name],
+      ['an alias', 'ohp', ohp.publicId, ohp.name],
+      ["the household's own item named like a catalog alias (C30)", 'rdl', ourRdl, 'RDL'],
+      ['a catalog name a household item ties with', 'romanian deadlift', rdl.publicId, rdl.name],
       ['a re-spelled household name', ' garden-hop drill ', hop, 'Garden Hop Drill'],
       [
         'a catalog name in another case',
@@ -1682,12 +1713,17 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     });
     const before = await rows();
     const viaSlug = await newItem(exec, A_SCOPE, {
-      name: 'Unlisted Drill',
+      name: 'unlisted   drill',
       trackingType: TRACKING_TYPE.reps,
     });
     assert.deepEqual(
-      viaSlug.ok && { id: viaSlug.itemPublicId, existed: viaSlug.existed },
-      { id: unlisted, existed: true },
+      viaSlug.ok && {
+        id: viaSlug.itemPublicId,
+        existed: viaSlug.existed,
+        name: viaSlug.name,
+        trackingType: viaSlug.trackingType,
+      },
+      { id: unlisted, existed: true, name: 'Unlisted Drill', trackingType: DEFAULT_TRACKING_TYPE },
       'FAM-1 6a-iii-a: a catalog row the picker does not list answers its own name, and is not duplicated',
     );
     assert.equal(await rows(), before, 'FAM-1 6a-iii-a: …and adds no row');

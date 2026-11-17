@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
-index 6bdb87dd..8085356a 100644
+index 6dcb93fd..69febd81 100644
 --- a/packages/db/src/queries/program/movement-options.ts
 +++ b/packages/db/src/queries/program/movement-options.ts
-@@ -83,7 +83,6 @@ export async function movementOptions(
+@@ -86,7 +86,6 @@ export async function movementOptions(
      .where(
        and(
          movementInHousehold(scope),
