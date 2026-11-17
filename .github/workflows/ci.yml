@@ -287,6 +287,16 @@ jobs:
           BASE_SHA: ${{ steps.base.outputs.sha }}
         run: node .github/scripts/check-feature-guides.mjs "$BASE_SHA"
 
+      # ── The movement library's record files only grow (CAT-3 spec, V4) ───────
+      # A shipped slug keeps its tracking type and an approval is never rewritten. A unit test
+      # compares the head with itself and cannot see a deleted line; this compares with the base.
+      # Plain node + git, so it also runs before the setup steps.
+      - name: Catalog records (append-only)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: node .github/scripts/check-catalog-append-only.mjs "$BASE_SHA"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -361,8 +371,12 @@ jobs:
             # and three-dot agree; three-dot stays because it is also right for any
             # base that is behind main. The old base.sha was: two-dot then listed
             # pnpm-lock.yaml for a branch that never touched it.
+            #
+            # .github/audit-exceptions.json (SEC-5c) counts as a dependency input:
+            # a PR that edits an exception gets no outage leniency.
             changed="$(git diff --name-only "$BASE_SHA...HEAD" -- \
-              pnpm-lock.yaml pnpm-workspace.yaml '*package.json' .npmrc '**/.npmrc')"
+              pnpm-lock.yaml pnpm-workspace.yaml '*package.json' .npmrc '**/.npmrc' \
+              .github/audit-exceptions.json)"
             [ -z "$changed" ] && deps=
           fi
           set +e; pnpm audit:check; code=$?; set -e

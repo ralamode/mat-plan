@@ -20,13 +20,26 @@ export async function programIn(
   scope: HouseholdScope,
   programPublicId: string,
 ): Promise<boolean> {
-  if (!uuidSchema.safeParse(programPublicId).success) return false;
+  return (await liveProgramBlockId(exec, scope, programPublicId)) !== null;
+}
+
+/**
+ * The internal id of this household's live program `programPublicId`, for a read that goes on to
+ * load its rows; `null` for a miss or an id that is not a uuid. Unlocked: the writers lock the block
+ * in their own transaction.
+ */
+export async function liveProgramBlockId(
+  exec: Executor,
+  scope: HouseholdScope,
+  programPublicId: string,
+): Promise<number | null> {
+  if (!uuidSchema.safeParse(programPublicId).success) return null;
   const [row] = await exec
     .select({ id: schema.programBlocks.id })
     .from(schema.programBlocks)
     .where(and(eq(schema.programBlocks.publicId, programPublicId), liveTemplateBlockIn(scope)))
     .limit(1);
-  return row !== undefined;
+  return row?.id ?? null;
 }
 
 /** Whether `workoutPublicId` is a live workout of this household's live program `programPublicId`. */

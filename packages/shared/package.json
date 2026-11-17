@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./csv": "./src/csv/index.ts",
+    "./catalog/data": "./src/catalog/data/index.ts",
+    "./catalog/fixture": "./src/catalog/fixture.ts",
     "./program/fixtures": "./src/program/fixtures/index.ts",
     "./program/prescribed-text": "./src/program/prescribed-text.ts"
   },
