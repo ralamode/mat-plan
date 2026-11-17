@@ -700,6 +700,18 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
+  mutation patch is still applied in your worktree.** `pnpm verify` runs `db:mutations`, which
+  applies each patch in `packages/db/scripts/mutations/`, runs the proofs and reverts it. Run a
+  second `db:verify`, a probe or another `pnpm verify` in the **same worktree** at the same time, and
+  one run's revert or `git checkout` can leave another run's patch in place. Seen in FAM-1 6a-ii
+  (#491): lane S's patch `150` stayed applied to `writers/single-value.ts`; lane E's and lane S's
+  proofs then failed on different runs, and a WIP commit swept the patched file up, so CI's guide
+  check named a file the PR never meant to touch.
+  → **One gate run per worktree at a time.** To check: `for p in packages/db/scripts/mutations/*.patch;
+do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prints any patch
+  that is live. Before calling another lane's proof flaky, run it on a clean checkout of `main`.
+
 - 🔴 **THE RECURRING ONE, named because it keeps coming back in different clothes: a proof whose
   EXPECTATION is derived from the thing it is proving.** Seven instances across `#364`–`PICK-1` PR 3,
   and the code was sound in every one — what was wrong was the proof. Two shapes:

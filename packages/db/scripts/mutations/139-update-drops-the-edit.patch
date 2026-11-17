@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index d5874bce..2b0c00e0 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -273,7 +273,7 @@ export async function saveWorkout(
+       if (row) {
+         await tx
+           .update(schema.prescriptions)
+-          .set({ ...values, updatedAt: sql`now()` })
++          .set({ idx: values.idx, updatedAt: sql`now()` })
+           .where(eq(schema.prescriptions.id, row.id));
+         prescriptionId = row.id;
+       } else {

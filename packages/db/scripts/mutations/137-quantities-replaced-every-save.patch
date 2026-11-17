@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index 3cd00495..6c0e9faa 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -332,8 +332,7 @@ async function saveQuantities(
+ ): Promise<void> {
+   const wanted = new Map(item.quantities.map((q) => [q.slot as string, q]));
+   for (const row of live) {
+-    const q = wanted.get(row.slot);
+-    wanted.delete(row.slot);
++    const q = wanted.get('replaced-every-time');
+     await tx
+       .update(schema.prescriptionQuantities)
+       .set(q ? { ...quantityColumns(q), updatedAt: sql`now()` } : { deletedAt: sql`now()` })

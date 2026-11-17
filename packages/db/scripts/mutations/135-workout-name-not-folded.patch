@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index 82312055..05e92926 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -132,7 +132,7 @@ export async function saveWorkout(
+       return refuse(PROGRAM_REFUSAL.not_found);
+     }
+     const folded = foldName(draft.name);
+-    if (workouts.some((w) => w !== self && !w.deletedAt && foldName(w.name) === folded)) {
++    if (workouts.some((w) => w !== self && !w.deletedAt && w.name === draft.name && folded)) {
+       return refuse(PROGRAM_REFUSAL.name_taken);
+     }
+ 

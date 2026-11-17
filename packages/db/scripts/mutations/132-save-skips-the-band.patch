@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index 82312055..75e5a2e5 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -214,7 +214,7 @@ export async function saveWorkout(
+         .where(inArray(schema.prescriptions.id, gone));
+     }
+ 
+-    await shiftIntoBand(
++    if (false) await shiftIntoBand(
+       tx,
+       schema.prescriptions,
+       and(eq(schema.prescriptions.workoutId, workout.id), isNull(schema.prescriptions.deletedAt)),
