@@ -1,3 +1,5 @@
+import { QUERY_SHORT_FORMS } from './catalog/vocabulary';
+import { MOVEMENT_NAME_MAX } from './movements';
 import { foldName } from './text';
 
 /**
@@ -195,4 +197,200 @@ export function matchMovementOptions<T extends MatchableMovement>(
           .map((p) => p.option);
 
   return { matches, someWords, aliasHit, exact };
+}
+
+/**
+ * The most words a query may have for the short-form and near-miss passes to run at all (CAT-3
+ * spec P6). A name is at most `MOVEMENT_NAME_MAX` characters, and nobody types a twelve-word
+ * movement: the cap bounds the near-miss work per keystroke whatever is pasted into the field.
+ */
+export const SEARCH_WORDS_MAX = 12;
+
+/** A query word shorter than this is never matched by a near miss: `hand` is not `hang`. */
+const NEAR_MIN_LENGTH = 5;
+/** From this length a word may be two edits away, not one. */
+const NEAR_TWO_EDITS_FROM = 9;
+
+/** How many edits a query word of this length may be from the word it means (CAT-3 spec P4). */
+function editsAllowed(word: string): 0 | 1 | 2 {
+  if (word.length >= NEAR_TWO_EDITS_FROM) return 2;
+  return word.length >= NEAR_MIN_LENGTH ? 1 : 0;
+}
+
+/**
+ * The edits between two folded words: an insert, a delete, a substitute, or a swap of two
+ * neighbours, each one edit (the "optimal string alignment" distance). **Bounded:** the answer is
+ * exact up to `max` and `max + 1` for anything further, and it stops as soon as that is certain.
+ *
+ * Plain loops over arrays. Nothing here builds a `RegExp` from a query or a name (spec P6).
+ */
+export function editsWithin(a: string, b: string, max: number): number {
+  const beyond = max + 1;
+  if (Math.abs(a.length - b.length) > max) return beyond;
+  let twoBack: number[] = [];
+  let previous: number[] = Array.from({ length: b.length + 1 }, (_, j) => j);
+  let previousBest = 0;
+  for (let i = 1; i <= a.length; i += 1) {
+    const row: number[] = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const same = a[i - 1] === b[j - 1];
+      let edits = Math.min(
+        (previous[j] ?? beyond) + 1,
+        (row[j - 1] ?? beyond) + 1,
+        (previous[j - 1] ?? beyond) + (same ? 0 : 1),
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        edits = Math.min(edits, (twoBack[j - 2] ?? beyond) + 1);
+      }
+      row.push(edits);
+      if (edits < best) best = edits;
+    }
+    // A cell reads from this row, the last one and (for a swap) the one before: once two rows in a
+    // row are past the limit, nothing below can come back under it.
+    if (best > max && previousBest > max) return beyond;
+    twoBack = previous;
+    previous = row;
+    previousBest = best;
+  }
+  return Math.min(previous[b.length] ?? beyond, beyond);
+}
+
+export type MovementSearchResult<T> = MovementMatchResult<T> & {
+  /**
+   * Near misses: options a misspelt query probably means. **Only populated when `matches` is
+   * empty**, and never what Enter picks (CAT-3 spec P4, P5). Closest first.
+   */
+  readonly near: readonly T[];
+};
+
+/**
+ * The movement library's search (CAT-3 spec, chunk C0b-1): {@link matchMovementOptions}, plus two
+ * things a library of hundreds needs that a list of thirty-five did not.
+ *
+ * 1. **Equipment short forms** (`QUERY_SHORT_FORMS`: `db`, `kb`, `bb`, `ez`, `trx`). A query word
+ *    that is one is also read as the words it stands for: `db row` finds Dumbbell row. Rows found
+ *    only that way come after the others and count as matches.
+ * 2. **Near misses** (`near`): when nothing matches, the options the query is a typo of.
+ *
+ * 🔴 **`exact` and `aliasHit` are `matchMovementOptions`' own, for the query as typed** (P1). They
+ * are what withholds "Use as typed", and the server's `existingItem` reads the same two: neither a
+ * short form nor a near miss may ever make a name "already in the list". `db` is not Dumbbell.
+ *
+ * **With no short form in the query, `matches` and `someWords` are `matchMovementOptions`' too**
+ * (P2): the same rows in the same order.
+ *
+ * **A near miss, for one option** (P4): every query word is either part of its name, or (five
+ * letters or more) within one edit of a word of its name or of an alias that starts with the same
+ * letter; two edits from nine letters. Or the same test on the whole query and the whole name or
+ * alias with the spaces out (`chinnup` for Chin-up). A word under five letters is never a near
+ * miss, so `hand` does not find a hang; the first letter must agree, so `dress` does not find a
+ * press. A query made only of short words has no near miss.
+ *
+ * **Bounded** (P6): the query is cut to `MOVEMENT_NAME_MAX` characters before anything reads it,
+ * and a query of more than `SEARCH_WORDS_MAX` words gets the plain match only: no short form is
+ * expanded and no near miss is looked for. It is pure and runs on the
+ * device: the query goes nowhere.
+ *
+ * `search` is an object because the filters join it in the next chunk (C0b-2).
+ */
+export function searchMovementOptions<T extends MatchableMovement>(
+  options: readonly T[],
+  search: { readonly query: string },
+): MovementSearchResult<T> {
+  const query = search.query.trim().slice(0, MOVEMENT_NAME_MAX);
+  const typed = matchMovementOptions(options, query);
+
+  const words = foldMovementQuery(query).split(' ').filter(Boolean);
+  // 🔴 A query of more words than the cap gets the plain match and nothing added. Reading only its
+  // first words would let a row "match" without a word that was typed.
+  if (words.length > SEARCH_WORDS_MAX) return { ...typed, near: [] };
+  const expanded = words.flatMap((word) => shortFormWords(word) ?? [word]);
+  const hasShortForm = expanded.length !== words.length || expanded.some((w, i) => w !== words[i]);
+  const viaShortForm = hasShortForm ? matchMovementOptions(options, expanded.join(' ')) : null;
+
+  const matches = viaShortForm ? inOrder(typed.matches, viaShortForm.matches) : typed.matches;
+  if (matches.length > 0) {
+    return { matches, someWords: [], near: [], aliasHit: typed.aliasHit, exact: typed.exact };
+  }
+  return {
+    matches,
+    someWords: viaShortForm ? inOrder(typed.someWords, viaShortForm.someWords) : typed.someWords,
+    near: nearMisses(options, expanded),
+    aliasHit: typed.aliasHit,
+    exact: typed.exact,
+  };
+}
+
+/** The folded words a short form stands for, or `undefined` for any other word. */
+function shortFormWords(word: string): readonly string[] | undefined {
+  // `Object.hasOwn`, so a query word like `constructor` is a word and not a property.
+  if (!Object.hasOwn(QUERY_SHORT_FORMS, word)) return undefined;
+  return foldMovementQuery(QUERY_SHORT_FORMS[word as keyof typeof QUERY_SHORT_FORMS]).split(' ');
+}
+
+/** `first`, then whatever of `then` it does not already hold. */
+function inOrder<T>(first: readonly T[], then: readonly T[]): readonly T[] {
+  const seen = new Set(first);
+  return [...first, ...then.filter((option) => !seen.has(option))];
+}
+
+function nearMisses<T extends MatchableMovement>(
+  options: readonly T[],
+  words: readonly string[],
+): readonly T[] {
+  if (!words.some((word) => editsAllowed(word) > 0)) return [];
+  const compact = words.join('');
+  const found: { option: T; folded: string; edits: number }[] = [];
+  for (const option of options) {
+    const folded = foldMovementQuery(option.name);
+    const spellings = [folded, ...(option.aliases ?? []).map(foldMovementQuery)];
+    const edits = Math.min(wordEdits(words, folded, spellings), compactEdits(compact, spellings));
+    if (Number.isFinite(edits)) found.push({ option, folded, edits });
+  }
+  return found
+    .sort(
+      (a, b) =>
+        a.edits - b.edits ||
+        Number(b.option.isCatalog ?? false) - Number(a.option.isCatalog ?? false) ||
+        (a.folded < b.folded ? -1 : a.folded > b.folded ? 1 : 0),
+    )
+    .map((entry) => entry.option);
+}
+
+/**
+ * The edits it takes for EVERY query word to be in this option: none for a word that is part of
+ * its name, else the fewest edits to a word of its name or of an alias that starts with the same
+ * letter. `Infinity` when any word is neither.
+ */
+function wordEdits(words: readonly string[], name: string, spellings: readonly string[]): number {
+  const candidates = spellings.flatMap((spelling) => spelling.split(' '));
+  let total = 0;
+  for (const word of words) {
+    if (name.includes(word)) continue;
+    const allowed = editsAllowed(word);
+    if (allowed === 0) return Infinity;
+    let fewest = allowed + 1;
+    for (const candidate of candidates) {
+      if (candidate[0] !== word[0]) continue;
+      fewest = Math.min(fewest, editsWithin(word, candidate, allowed));
+    }
+    if (fewest > allowed) return Infinity;
+    total += fewest;
+  }
+  return total;
+}
+
+/** The same test on the whole query and a whole name or alias, spaces out. `Infinity` for none. */
+function compactEdits(compact: string, spellings: readonly string[]): number {
+  const allowed = editsAllowed(compact);
+  if (allowed === 0) return Infinity;
+  let fewest = Infinity;
+  for (const spelling of spellings) {
+    const candidate = spelling.replaceAll(' ', '');
+    if (candidate[0] !== compact[0]) continue;
+    const edits = editsWithin(compact, candidate, allowed);
+    if (edits <= allowed) fewest = Math.min(fewest, edits);
+  }
+  return fewest;
 }

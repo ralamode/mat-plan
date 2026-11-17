@@ -914,6 +914,28 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- 🔴 **A test that ran `git init` in a temp directory re-initialised THIS repository and
+  committed to the real branch, because it ran inside the pre-push hook.** → Git exports `GIT_DIR`
+  (and its kin) to a hook, and a child `git` obeys those over the directory it is started in. The
+  pre-push hook runs the test suite, so a scratch repository's `git init`, `git add -A` and
+  `git commit` all acted on the real one: `init` wrote `core.bare = true` into the shared
+  `.git/config`, which made the main checkout refuse every work-tree command for every lane that
+  uses it ("this operation must be run in a work tree"), and the commit put a tree holding only the
+  scratch files on top of the branch. The push was refused by the same failing test, so nothing left
+  the machine (CAT-3 C0a, #531, 2026-11-17). The same test passed when run by hand, where no
+  `GIT_*` is set, which is why it was pushed.
+  - **The rule:** a test or script that starts `git` gives the child an environment with every
+    `GIT_*` variable removed. One that writes (`init`, `add`, `commit`) also sets `GIT_DIR` and
+    `GIT_WORK_TREE` to its own scratch paths, an empty `GIT_CONFIG_GLOBAL` and
+    `GIT_CONFIG_NOSYSTEM=1`, and asserts afterwards that this repository's `core.bare`, `HEAD` and
+    index are unchanged (`packages/shared/src/catalog/approvals.test.ts` is the pattern).
+  - **Check before pushing:** run the test once with `GIT_DIR` set to a throwaway clone's git
+    directory, never this repository's.
+  - **The repair, if it happens:** `git config --file <main checkout>/.git/config core.bare false`,
+    then in the affected worktree `git reflog` to find the last real commit and `git reset <it>`
+    (mixed: the working files were never touched; anything you had staged is unstaged, not lost,
+    and is staged again by hand).
+
 - **Squashing a branch with `git reset --soft origin/main` reverts whatever landed on `main` since
   the branch was cut.** → `--soft` moves HEAD and keeps the tree, so the tree still holds the
   branch's OLD base. If `origin/main` has moved, the next commit undoes those newer changes, and the

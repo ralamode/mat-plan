@@ -1374,6 +1374,17 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
        **So: this row owns it, and the ordering is ADR → age policy module → first write.** Adding
        the field to a-1's add form instead would scatter the policy into a form, which is exactly
        what keep-open item 5 exists to prevent.
+       _2026-11-17 (maintainer):_ **a birthday and a gender are not collected in Beta 0 or in
+       Beta 1; the maintainer revisits both after Beta 1.** When they are revisited, start from the
+       feature that would use the value and from its coarsest form: a birth year or an age group
+       before a date; sex or gender identity chosen by what the feature needs, with "prefer not to
+       say". **A muscle body map, when it is built, is not that feature:** its figure (a female
+       or a male drawing) is a per-athlete display choice on the add and edit athlete form, worded
+       as a choice of figure, and it is explicitly not a sex or gender field. A display preference
+       is still a new per-athlete value, so its plan owes the privacy lens and a check against
+       these six items. The map has no row yet: it needs its own plan, a UX panel, and one shape
+       per muscle of `MUSCLES` (`packages/shared/src/catalog/vocabulary.ts`), which is why that
+       list is held stable.
     6. **Household roles stay a shared const plus a CHECK** (1b's role list), so adding `guardian`
        later is an additive expansion.
 
@@ -2346,6 +2357,11 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   section (`N` = 30 days). ⚠️ **The target is read from the environment through a hidden prompt, not
   the `--household` flag above** _(maintainer, 2026-11-17, Q1)_; PR 2b re-words the paragraph above
   when it lands.
+
+  📐 **This row also hosts the fresh start's household creation** (the
+  [CAT-3 spec](./specs/cat-3-movement-library.md)'s chunk RC, given to `PRIV-3`'s owner): a guarded
+  `create-household` correction that takes no household id, binds the household's accounts and
+  prints counts only ([plan](./plans/priv-3-rc-create-household.md); a seven-lens panel; plan only).
 
   **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
   long as the household is active.** There is no rolling window and no summarize-then-discard step:
