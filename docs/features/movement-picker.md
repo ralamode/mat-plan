@@ -170,14 +170,14 @@ path and **creating** the deliberate one.
       value. Not measured on a phone; the spec's fallback (`near` after a pause) is not needed at
       that figure.
 
-    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. **Open after B1**, each with its
-    owner:
-    - the heading's wording, and what a mid-typo keystroke shows (`bulgara` finds nothing yet): P0;
-    - whether a short form's exact hit (`db row` beside Dumbbell row) withholds "use as typed", and
-      so whether the `KB` and `DB bench` aliases can retire (P3): the contract, with `existingItem`;
-    - a near hit through an alias shows its group tag, not "also called": the contract (the result
-      does not say which alias matched);
-    - "did you mean" on a new item's name: `PICK-2` (spec § Interactions).
+    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. **After B1**, decided at the
+    prototype's sign-off (maintainer, 2026-11-17) and owned by the contract's chunk C30: a short
+    form's exact hit (`db row` beside Dumbbell row) withholds "use as typed" (`existingItem` expands
+    short forms, and the `KB` and `DB bench` aliases retire then); results say which alias matched,
+    so an alias-only near hit can read "also called"; the match order becomes best first. Until C30,
+    the picker's tests pin no order beyond an exact hit first. A near miss on a still-typing last
+    word (`bulgara`) comes as a proposal. "Did you mean" on a new item's name is `PICK-2`'s (spec §
+    Interactions).
 
 ## Traps
 
