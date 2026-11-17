@@ -201,5 +201,17 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
     expect(WHOLE_PACKAGE.test("export * from '@mat-plan/db';")).toBe(true);
     expect(WHOLE_PACKAGE.test("export * as db from '@mat-plan/db';")).toBe(true);
+    // The alias rule publishes the right-hand name. ⚠️ The parser reads `export { … } from` only: a
+    // barrel's local `export function` or `export { x }` would publish a name it cannot see, so the
+    // barrels keep to the one form.
+    const aliased = [
+      ..."export { readA as readB } from './x';".matchAll(/export\s*\{([^}]*)\}\s*from/g),
+    ];
+    expect(
+      aliased[0]![1]!
+        .trim()
+        .split(/\s+as\s+/)
+        .at(-1),
+    ).toBe('readB');
   });
 });

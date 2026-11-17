@@ -702,6 +702,7 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       })),
     };
     const beforeUpper = await snapshot(tx);
+
     assert.deepEqual(
       await saveWorkout(exec, A_SCOPE, upperCase).catch((e: unknown) => ({ threw: String(e) })),
       { ok: true, workoutPublicId },
@@ -711,6 +712,18 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       (await snapshot(tx)).prescriptions.map((r) => [r.id, r.deletedAt]),
       beforeUpper.prescriptions.map((r) => [r.id, r.deletedAt]),
       'FAM-1 6a-ii: an upper-case save hides and adds no row',
+    );
+    // A new workout's replay is found by its client id: in upper case it is still the replay.
+    assert.deepEqual(
+      await saveWorkout(exec, A_SCOPE, {
+        ...draft,
+        workoutClientId: draft.workoutClientId.toUpperCase(),
+        workoutPublicId: null,
+        name: live.name,
+        items: [],
+      }).catch((e: unknown) => ({ threw: String(e) })),
+      { ok: true, workoutPublicId },
+      "FAM-1 6a-ii: a new workout's replay with an upper-case client id is the replay",
     );
     const other = await saveWorkout(exec, A_SCOPE, {
       ...draft,
@@ -774,6 +787,11 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     const only = (...its: unknown[]) => ({ ...live, items: its });
     const cases: Array<[string, unknown, string]> = [
       ['an empty name', { ...live, name: '' }, PROGRAM_REFUSAL.invalid],
+      [
+        'two cards whose ids differ only in case',
+        only(reps, { ...reps, prescriptionClientId: reps.prescriptionClientId.toUpperCase() }),
+        PROGRAM_REFUSAL.invalid,
+      ],
       ['a set-based item with no sets', only({ ...reps, sets: null }), PROGRAM_REFUSAL.invalid],
       [
         'reps that are not a whole number',

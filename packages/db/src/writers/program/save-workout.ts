@@ -125,6 +125,10 @@ export async function saveWorkout(
       itemPublicId: lower(item.itemPublicId),
     })),
   };
+  // Two cards whose ids differ only in case are one card once lower-cased: the schema's
+  // distinctness check is case-sensitive, so it is repeated here on the lowered ids.
+  const cardIds = new Set(draft.items.map((item) => item.prescriptionClientId));
+  if (cardIds.size !== draft.items.length) return refuse(PROGRAM_REFUSAL.invalid);
   if (!supersetsAreWellFormed(draft.items) || !draft.items.every(itemFitsItsType)) {
     return refuse(PROGRAM_REFUSAL.invalid);
   }

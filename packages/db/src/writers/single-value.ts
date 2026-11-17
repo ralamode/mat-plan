@@ -47,7 +47,7 @@ const BODYWEIGHT: SingleValueMetric = {
 /** `practiceSlot` is exactly `PRACTICE_DAY_UNIQUE_INDEX`'s key: practice has no slot column. */
 const PRACTICE: SingleValueMetric = {
   metricKey: METRIC_KEYS.practice_minutes,
-  slot: practiceSlot,
+  slot: bodyweightSlot,
 };
 
 /** One owned, numeric, `done` entry of `metric`, live OR hidden. Ownership is `isLiveProfile`. */
