@@ -1,5 +1,5 @@
 import { globSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { code, WEB_DIR } from './source-scan';
@@ -196,5 +196,48 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(named.test('async saveWorkout(draft) {')).toBe(false);
     expect(WHOLE_PACKAGE.test("import * as db from '@mat-plan/db';")).toBe(true);
     expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
+  });
+
+  /**
+   * FAM-1 7a-i wires the actions, and **no page imports them until 7b**: Next registers a Server
+   * Action only when the module graph reaches it, so until then no request can write a program. The
+   * privacy notice and the data inventory still say so, truthfully. The PR that imports this module
+   * from a page (7b) lifts this pin and owes, in the same PR (privacy lens, 2026-11-16):
+   */
+  const OWED_AT_7B = [
+    'notice.md "Programs you build yourself … (coming; the app cannot save one yet)" made true now',
+    'notice.md "Three text boxes have no filter": recount with a prescription\'s notes',
+    'notice.md "Technical bits": a client id per item card (inventory §2, prescriptions.client_id)',
+    'notice.md export omissions: built programs are not in the export (inventory §6)',
+    'notice.md: a swapped item is hidden, not erased (inventory §8, D19)',
+  ];
+  /** The module itself, as a path from the repo root without its extension. */
+  const ACTIONS = 'apps/web/app/programs/actions';
+  /** Does `file` import the actions module, by the `@/` alias or by a relative path? */
+  const importsActions = (file: string) =>
+    [...code(join(REPO, file)).matchAll(/from\s*['"]([^'"]+)['"]/g)].some(([, spec]) => {
+      if (spec === '@/app/programs/actions') return true;
+      if (!spec!.startsWith('.')) return false;
+      return relative(REPO, resolve(dirname(join(REPO, file)), spec!)) === ACTIONS;
+    });
+
+  it('no page or component imports the program actions until 7b (see OWED_AT_7B)', () => {
+    const web = files.filter(
+      (f) =>
+        f.startsWith('apps/web/') &&
+        !/\.test\.tsx?$/.test(f) &&
+        // The module and its registry are the module, not a page reaching it.
+        !f.startsWith(`${ACTIONS}.`) &&
+        f !== 'apps/web/app/programs/actions.registry.ts',
+    );
+    expect(
+      web.filter(importsActions),
+      `lifting this pin owes, in the same PR:\n- ${OWED_AT_7B.join('\n- ')}`,
+    ).toEqual([]);
+  });
+
+  it('the pin sees an import by alias and by relative path (non-vacuity)', () => {
+    // The test file itself imports it relatively: the resolver must see that.
+    expect(importsActions('apps/web/app/programs/actions.test.ts')).toBe(true);
   });
 });
