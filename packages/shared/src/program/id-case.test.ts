@@ -7,6 +7,7 @@ import { uuidSchema } from '../id';
 import {
   dayPlanSchema,
   rowAmendSchema,
+  rowResultSchema,
   rowRetickSchema,
   rowUntickSchema,
   rowWriteSchema,
@@ -150,6 +151,11 @@ const READS_AN_ID: Array<[string, z.ZodType, unknown]> = [
     'amendRow',
     rowAmendSchema,
     { profilePublicId: A_PROFILE, entryPublicId: AN_ENTRY, values: { quantities: [] } },
+  ],
+  [
+    'a row’s answer',
+    rowResultSchema,
+    { ok: true, entryPublicId: AN_ENTRY, values: { quantities: [] } },
   ],
 ];
 
