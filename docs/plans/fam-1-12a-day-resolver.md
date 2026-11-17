@@ -278,7 +278,7 @@ and before `verifyRules`.
 5. Replay each change with its writer, under the seeded scope:
    - each changed workout: `saveWorkout(translate(workoutDraft(world, prog, wid)))`;
    - each changed week: `saveWeek({ programPublicId, days: translate(programView(world, prog).week) })`
-     (Q4);
+     (Q4, C27);
    - a reorder: the direct `idx` update (Q6), then the density check.
 
    Every call must answer `ok`; a refusal fails with the writer's reason.
@@ -347,11 +347,9 @@ No file of lane P's, lane A's or the contract owner's is touched.
 
 **Questions:**
 
-- **Q4 (contract owner):** export `programView` from `@mat-plan/shared/program/fixtures`? It is
-  already imported in `fixtures/index.ts:11`, so it is one name and no new code. Its `.week` is a
-  `WeekDraft['days']` (`program-shapes.ts:211-215, 319`), which is what the week editor passes to
-  `saveWeek`. Recommended: yes. If not, a local copy whose docblock names `build.ts:452-460` as the
-  rule it copies.
+- **Q4, decided: yes** _(contract owner, 2026-11-17; C27, #529)_. `programView` is exported from
+  `@mat-plan/shared/program/fixtures`; its `.week` is a `WeekDraft['days']`, and a contract test sweeps every
+  world's programs through `weekDraftSchema`. No local copy.
 - **Q6, decided: yes** _(board, 2026-11-17)_. `today-stretching-first` applies its reorder as a
   direct `program_assignments.idx` update. The plan row allows "a recorded decision to make an edit
   with direct SQL"; `logRow` does not read program order; 12a-i applied the archive the same way.
