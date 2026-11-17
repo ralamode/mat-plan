@@ -16,23 +16,29 @@ import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../househol
  * - **Both found** means the miss was something else (an item, a stale workout list): nothing is
  *   reported, since neither id named something outside the household.
  * - The ids have already parsed as uuids (the contract's schemas, or the read's own check).
+ * - **It never throws.** A failed check reports nothing, and the caller still answers `not_found`.
  */
 export async function reportProgramMiss(
   scope: HouseholdScope | null,
   ids: { programPublicId: string; workoutPublicId?: string | null },
 ): Promise<void> {
-  const { programPublicId, workoutPublicId } = ids;
-  if (!scope || !(await programIn(db, scope, programPublicId))) {
-    await reportScopeMiss({
-      action: SCOPE_MISS_ACTION.resolveProgram,
-      resource: { kind: SCOPE_MISS_KIND.program, publicId: programPublicId },
-    });
-    return;
-  }
-  if (workoutPublicId && !(await workoutIn(db, scope, programPublicId, workoutPublicId))) {
-    await reportScopeMiss({
-      action: SCOPE_MISS_ACTION.resolveWorkout,
-      resource: { kind: SCOPE_MISS_KIND.workout, publicId: workoutPublicId },
-    });
+  try {
+    const { programPublicId, workoutPublicId } = ids;
+    if (!scope || !(await programIn(db, scope, programPublicId))) {
+      await reportScopeMiss({
+        action: SCOPE_MISS_ACTION.resolveProgram,
+        resource: { kind: SCOPE_MISS_KIND.program, publicId: programPublicId },
+      });
+      return;
+    }
+    if (workoutPublicId && !(await workoutIn(db, scope, programPublicId, workoutPublicId))) {
+      await reportScopeMiss({
+        action: SCOPE_MISS_ACTION.resolveWorkout,
+        resource: { kind: SCOPE_MISS_KIND.workout, publicId: workoutPublicId },
+      });
+    }
+  } catch {
+    // Telemetry never changes the answer: a failed check leaves the caller's `not_found` as it was,
+    // as `reportScopeMiss` does for its own probe. Nothing of the error is logged.
   }
 }

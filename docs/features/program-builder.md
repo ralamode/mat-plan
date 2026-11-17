@@ -26,15 +26,15 @@ step below adds its files and its invariants here.
 
 ## The map
 
-| Step  | Adds                                                                                                                        |
-| ----- | --------------------------------------------------------------------------------------------------------------------------- |
-| 8a    | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.            |
-| 8     | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                                  |
-| 9     | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                           |
-| 10    | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                           |
-| 7a-i  | `apps/web/app/programs/actions.ts`: create, rename and save a workout, with its registry file; `apps/web/lib/dal/program/`. |
-| 7a-ii | The same module: save the week, copy a workout, a new item; and the picker's options read.                                  |
-| 7b    | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                             |
+| Step  | Adds                                                                                                             |
+| ----- | ---------------------------------------------------------------------------------------------------------------- |
+| 8a    | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts. |
+| 8     | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                       |
+| 9     | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                |
+| 10    | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                |
+| 7a-i  | `apps/web/app/programs/actions.ts`                                                                               | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. No page imports it until 7b. |
+| 7a-ii | The same module: save the week, copy a workout, a new item; and the picker's options read.                       |
+| 7b    | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                  |
 
 ### How a screen is put together (8a)
 
@@ -87,7 +87,7 @@ flowchart LR
 | `apps/web/app/programs/actions.registry.ts`                             | Each action's refusal set and scope, read by the boundary matrices ([write-path.md](./write-path.md) invariant 1).                                                                                                                                                                             |
 | `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                                           |
 | `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported.                                                                                                                                                                                               |
-| `apps/web/lib/dal/program/resolve.ts`                                   | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                                           |
+| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                                           |
 | `apps/web/lib/dal/program/quiet-db-errors.ts`                           | `quietDbErrors`: a thrown database error is rethrown as `ProgramWriteError`, keeping only the operation and the SQLSTATE.                                                                                                                                                                      |
 
 ## Invariants
@@ -107,8 +107,9 @@ flowchart LR
 5. **The rules every screen step carries** are the plan's (§5, end): keyed components and no full
    redraw; a counter outside its label, linked by `aria-describedby`; week days as headings; 44px
    targets; the layout at 360px.
-6. **The DAL resolves the household scope itself.** Every exported function under `lib/dal/program/`
-   calls `getHouseholdScope()` and returns a contract shape; a private helper is handed that scope. The tenancy scan (`lib/dal/scoped.test.ts`)
+6. **The DAL resolves the household scope itself.** Every function under `lib/dal/program/` that
+   reaches the database calls `getHouseholdScope()`, or takes the `HouseholdScope` its caller
+   resolved (`reportProgramMiss`); `quiet-db-errors.ts` touches no data. The tenancy scan (`lib/dal/scoped.test.ts`)
    reaches sub-directories, so it holds this directory to that. [write-path.md](./write-path.md) invariants 1, 2 and 8 still apply to the actions
    and the DAL, though the guide gate no longer sends a PR there.
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
@@ -288,7 +289,8 @@ flowchart LR
     - Only `lib/dal/program/` imports lane P's writers and reads; everything else reaches them
       through it (`apps/web/test/program-tables-stay-dark.test.ts`).
     - A miss is reported only after a writer or read has said "not here", never on a success, and
-      once per request: the program first, then the workout; an item's miss reports nothing.
+      once per request: the program first, then the workout; an item's miss reports nothing. A
+      failed check reports nothing and never changes the answer.
     - No page or component imports `app/programs/actions.ts` until 7b, which owes the notice and
       inventory sentences that test lists (`OWED_AT_7B`).
 

@@ -32,7 +32,7 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
     expect(thrown).toBeInstanceOf(ProgramWriteError);
     const err = thrown as ProgramWriteError;
     expect(err.code).toBe('23505');
-    expect(err.message).toBe('saveWorkout failed (SQLSTATE 23505)');
+    expect(err.message).toBe('saveWorkout failed (DrizzleQueryError, SQLSTATE 23505)');
     expect(err.cause).toBeUndefined();
     // Everything Next or Node could print of it.
     for (const printed of [
@@ -56,7 +56,35 @@ describe('quietDbErrors (FAM-1 7a: a failed query’s params never reach the run
     const thrown = await quietDbErrors('createProgram', async () => {
       throw new Error(`connection lost while writing ${NOTE}`);
     }).catch((error: unknown) => error as ProgramWriteError);
-    expect(thrown.message).toBe('createProgram failed');
+    expect(thrown.message).toBe('createProgram failed (Error)');
     expect(inspect(thrown)).not.toContain(NOTE);
+  });
+
+  it('a bug inside a writer keeps its type and its frames, so it points at the line', async () => {
+    function writerBug(): never {
+      throw new TypeError(`cannot read 'unit' of ${NOTE}`);
+    }
+    const thrown = await quietDbErrors('saveWorkout', async () => writerBug()).catch(
+      (error: unknown) => error as ProgramWriteError,
+    );
+    expect(thrown.message).toBe('saveWorkout failed (TypeError)');
+    expect(thrown.stack).toMatch(/\n\s+at writerBug .*quiet-db-errors\.test\.ts:\d+:\d+/);
+    expect(thrown.stack).not.toContain(NOTE);
+  });
+
+  it('a Node errno is not a SQLSTATE', async () => {
+    const thrown = await quietDbErrors('saveWorkout', async () => {
+      throw Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+    }).catch((error: unknown) => error as ProgramWriteError);
+    expect(thrown.code).toBeNull();
+    expect(thrown.message).toBe('saveWorkout failed (Error)');
+  });
+
+  it('a multi-line message never reaches the stack, even a line that starts with "at"', async () => {
+    const thrown = await quietDbErrors('saveWorkout', async () => {
+      throw new Error(`Failed query: insert\n    at ${NOTE}\nparams: ${NOTE}`);
+    }).catch((error: unknown) => error as ProgramWriteError);
+    expect(thrown.stack).not.toContain(NOTE);
+    expect(thrown.stack).not.toContain('params');
   });
 });

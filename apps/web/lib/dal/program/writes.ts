@@ -4,6 +4,7 @@ import { createProgram, renameProgram, saveWorkout, type HouseholdScope } from '
 import {
   PROGRAM_REFUSAL,
   type CreateProgram,
+  type ProgramActions,
   type ProgramResult,
   type RenameProgram,
   type WorkoutDraft,
@@ -12,7 +13,7 @@ import {
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from './quiet-db-errors';
-import { reportProgramMiss } from './resolve';
+import { reportProgramMiss } from './report-miss';
 
 /**
  * The program builder's writes, each through the caller's household (FAM-1 step 7a-i). The actions
@@ -31,6 +32,11 @@ import { reportProgramMiss } from './resolve';
  *   or workout id missed, once), on that path only. Create carries no id, so nothing is reported.
  */
 
+/** What a member of the contract answers, read from `ProgramActions` rather than typed again. */
+export type ProgramAnswer<K extends keyof ProgramActions> = Awaited<
+  ReturnType<NonNullable<ProgramActions[K]>>
+>;
+
 const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 
 const isNotFound = (result: ProgramResult<object>) =>
@@ -47,13 +53,15 @@ async function missed(
 
 export async function createHouseholdProgram(
   input: CreateProgram,
-): Promise<ProgramResult<{ programPublicId: string }>> {
+): Promise<ProgramAnswer<'createProgram'>> {
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
   return quietDbErrors('createProgram', () => createProgram(db, scope, input));
 }
 
-export async function renameHouseholdProgram(input: RenameProgram): Promise<ProgramResult> {
+export async function renameHouseholdProgram(
+  input: RenameProgram,
+): Promise<ProgramAnswer<'renameProgram'>> {
   const scope = await getHouseholdScope();
   if (!scope) return missed(scope, input);
   const result = await quietDbErrors('renameProgram', () => renameProgram(db, scope, input));
@@ -62,7 +70,7 @@ export async function renameHouseholdProgram(input: RenameProgram): Promise<Prog
 
 export async function saveHouseholdWorkout(
   draft: WorkoutDraft,
-): Promise<ProgramResult<{ workoutPublicId: string }>> {
+): Promise<ProgramAnswer<'saveWorkout'>> {
   const scope = await getHouseholdScope();
   if (!scope) return missed(scope, draft);
   const result = await quietDbErrors('saveWorkout', () => saveWorkout(db, scope, draft));

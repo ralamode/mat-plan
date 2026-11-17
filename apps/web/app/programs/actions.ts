@@ -7,7 +7,6 @@ import {
   renameProgramSchema,
   saveWorkoutSchema,
   TRANSPORT_REFUSALS,
-  type ProgramResult,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 
@@ -17,6 +16,7 @@ import {
   createHouseholdProgram,
   renameHouseholdProgram,
   saveHouseholdWorkout,
+  type ProgramAnswer,
 } from '@/lib/dal/program/writes';
 
 /**
@@ -45,12 +45,10 @@ function refreshPrograms() {
   revalidatePath(PROGRAMS_PATH, 'layout');
 }
 
-export async function createProgramAction(
-  input: unknown,
-): Promise<ProgramResult<{ programPublicId: string }>> {
+export async function createProgramAction(input: unknown): Promise<ProgramAnswer<'createProgram'>> {
   return await Sentry.withServerActionInstrumentation(
     'createProgramAction',
-    async (): Promise<ProgramResult<{ programPublicId: string }>> => {
+    async (): Promise<ProgramAnswer<'createProgram'>> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS);
       if (!entry.ok) return entry;
       const parsed = createProgramSchema.safeParse(input);
@@ -63,10 +61,10 @@ export async function createProgramAction(
   );
 }
 
-export async function renameProgramAction(input: unknown): Promise<ProgramResult> {
+export async function renameProgramAction(input: unknown): Promise<ProgramAnswer<'renameProgram'>> {
   return await Sentry.withServerActionInstrumentation(
     'renameProgramAction',
-    async (): Promise<ProgramResult> => {
+    async (): Promise<ProgramAnswer<'renameProgram'>> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS);
       if (!entry.ok) return entry;
       const parsed = renameProgramSchema.safeParse(input);
@@ -79,12 +77,10 @@ export async function renameProgramAction(input: unknown): Promise<ProgramResult
   );
 }
 
-export async function saveWorkoutAction(
-  draft: unknown,
-): Promise<ProgramResult<{ workoutPublicId: string }>> {
+export async function saveWorkoutAction(draft: unknown): Promise<ProgramAnswer<'saveWorkout'>> {
   return await Sentry.withServerActionInstrumentation(
     'saveWorkoutAction',
-    async (): Promise<ProgramResult<{ workoutPublicId: string }>> => {
+    async (): Promise<ProgramAnswer<'saveWorkout'>> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS);
       if (!entry.ok) return entry;
       const parsed = saveWorkoutSchema.safeParse(draft);

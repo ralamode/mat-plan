@@ -16,7 +16,7 @@ import { programIn, workoutIn } from '@mat-plan/db';
 
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
-import { reportProgramMiss } from './resolve';
+import { reportProgramMiss } from './report-miss';
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
@@ -65,5 +65,13 @@ describe('which program id missed the household (FAM-1 7a-i, C11)', () => {
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMiss]]);
     expect(programIn).not.toHaveBeenCalled();
     expect(workoutIn).not.toHaveBeenCalled();
+  });
+
+  it('a failed check never throws: nothing is reported, and the caller keeps its answer', async () => {
+    vi.mocked(programIn).mockRejectedValueOnce(new Error('canceling statement due to timeout'));
+    await expect(
+      reportProgramMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicId: WORKOUT_ID }),
+    ).resolves.toBeUndefined();
+    expect(reportScopeMiss).not.toHaveBeenCalled();
   });
 });

@@ -214,22 +214,26 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   ];
   /** The module itself, as a path from the repo root without its extension. */
   const ACTIONS = 'apps/web/app/programs/actions';
-  /** Does `file` import the actions module, by the `@/` alias or by a relative path? */
-  const importsActions = (file: string) =>
-    [...code(join(REPO, file)).matchAll(/from\s*['"]([^'"]+)['"]/g)].some(([, spec]) => {
+  /**
+   * Every module specifier a source names: `from '…'` (an import or a re-export), a bare
+   * side-effect `import '…'`, and a dynamic `import('…')` or `require('…')`. Any of them puts the
+   * module in the graph, which is what registers its actions.
+   */
+  const SPECIFIER = /(?:\bfrom\s*|\bimport\s+|\bimport\(\s*|\brequire\(\s*)['"]([^'"]+)['"]/g;
+  /** Does a source at `file` import the actions module, by the `@/` alias or by a relative path? */
+  const namesActions = (file: string, source: string) =>
+    [...source.matchAll(SPECIFIER)].some(([, spec]) => {
       if (spec === '@/app/programs/actions') return true;
       if (!spec!.startsWith('.')) return false;
       return relative(REPO, resolve(dirname(join(REPO, file)), spec!)) === ACTIONS;
     });
+  const importsActions = (file: string) => namesActions(file, code(join(REPO, file)));
+  /** The module and its registry are the module, not a page reaching it; tests are skipped below. */
+  const THE_MODULE = new Set([`${ACTIONS}.ts`, `${ACTIONS}.registry.ts`]);
 
   it('no page or component imports the program actions until 7b (see OWED_AT_7B)', () => {
     const web = files.filter(
-      (f) =>
-        f.startsWith('apps/web/') &&
-        !/\.test\.tsx?$/.test(f) &&
-        // The module and its registry are the module, not a page reaching it.
-        !f.startsWith(`${ACTIONS}.`) &&
-        f !== 'apps/web/app/programs/actions.registry.ts',
+      (f) => f.startsWith('apps/web/') && !/\.test\.tsx?$/.test(f) && !THE_MODULE.has(f),
     );
     expect(
       web.filter(importsActions),
@@ -237,8 +241,20 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     ).toEqual([]);
   });
 
-  it('the pin sees an import by alias and by relative path (non-vacuity)', () => {
+  it('the pin sees every form of import, by alias and by relative path (non-vacuity)', () => {
     // The test file itself imports it relatively: the resolver must see that.
     expect(importsActions('apps/web/app/programs/actions.test.ts')).toBe(true);
+    const page = 'apps/web/app/programs/page.tsx';
+    for (const form of [
+      "import { saveWorkoutAction } from '@/app/programs/actions';",
+      "export { saveWorkoutAction } from './actions';",
+      "import './actions';",
+      "const { saveWorkoutAction } = await import('@/app/programs/actions');",
+      "const m = require('./actions');",
+    ])
+      expect(namesActions(page, form), form).toBe(true);
+    expect(namesActions(page, "import { x } from './actions-copy';")).toBe(false);
+    // A sibling of the module is not the module: it is scanned like any page.
+    expect(THE_MODULE.has(`${ACTIONS}.form.tsx`)).toBe(false);
   });
 });

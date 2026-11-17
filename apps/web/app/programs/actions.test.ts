@@ -61,6 +61,8 @@ const createInput = () => ({ clientId: CLIENT_ID, name: 'Strength' });
 const renameInput = () => ({ programPublicId: PROGRAM_ID, name: 'Strength II' });
 const saveInput = () => structuredClone(heavyADraft);
 
+const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
+
 beforeEach(() => vi.clearAllMocks());
 
 /**
@@ -88,26 +90,17 @@ describeActionMatrices({
     createProgramAction: {
       fn: createProgramAction,
       writers: [createHouseholdProgram],
-      scopeMiss: () =>
-        vi
-          .mocked(createHouseholdProgram)
-          .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.not_found }),
+      scopeMiss: () => vi.mocked(createHouseholdProgram).mockResolvedValueOnce(NOT_FOUND),
     },
     renameProgramAction: {
       fn: renameProgramAction,
       writers: [renameHouseholdProgram],
-      scopeMiss: () =>
-        vi
-          .mocked(renameHouseholdProgram)
-          .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.not_found }),
+      scopeMiss: () => vi.mocked(renameHouseholdProgram).mockResolvedValueOnce(NOT_FOUND),
     },
     saveWorkoutAction: {
       fn: saveWorkoutAction,
       writers: [saveHouseholdWorkout],
-      scopeMiss: () =>
-        vi
-          .mocked(saveHouseholdWorkout)
-          .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.not_found }),
+      scopeMiss: () => vi.mocked(saveHouseholdWorkout).mockResolvedValueOnce(NOT_FOUND),
     },
   },
   validBody: {
@@ -153,22 +146,43 @@ describe('the program actions (FAM-1 7a-i)', () => {
     });
   });
 
-  it('a success revalidates the builder’s pages, once, as a layout', async () => {
-    await saveWorkoutAction(saveInput());
-    expect(vi.mocked(revalidatePath).mock.calls).toEqual([[PROGRAMS_PATH, 'layout']]);
-  });
+  /** Each action, its valid input, its DAL function, and the success the DAL answers. */
+  const SUCCESSES = [
+    {
+      name: 'create',
+      call: () => createProgramAction(createInput()),
+      dal: createHouseholdProgram,
+      answer: { ok: true, programPublicId: PROGRAM_ID },
+    },
+    {
+      name: 'rename',
+      call: () => renameProgramAction(renameInput()),
+      dal: renameHouseholdProgram,
+      answer: { ok: true },
+    },
+    {
+      name: 'save',
+      call: () => saveWorkoutAction(saveInput()),
+      dal: saveHouseholdWorkout,
+      answer: { ok: true, workoutPublicId: WORKOUT_ID },
+    },
+  ] as const;
 
-  it('the answer is built, not passed through: a field the DAL adds does not reach the client', async () => {
-    vi.mocked(createHouseholdProgram).mockResolvedValueOnce({
-      ok: true,
-      programPublicId: PROGRAM_ID,
-      internalId: 42,
-    } as never);
-    expect(await createProgramAction(createInput())).toEqual({
-      ok: true,
-      programPublicId: PROGRAM_ID,
-    });
-  });
+  it.each(SUCCESSES)(
+    '$name: a success revalidates the builder’s pages, once, as a layout',
+    async ({ call }) => {
+      await call();
+      expect(vi.mocked(revalidatePath).mock.calls).toEqual([[PROGRAMS_PATH, 'layout']]);
+    },
+  );
+
+  it.each(SUCCESSES)(
+    '$name: the answer is built, not passed through: a field the DAL adds does not reach the client',
+    async ({ call, dal, answer }) => {
+      vi.mocked(dal).mockResolvedValueOnce({ ...answer, internalId: 42 } as never);
+      expect(await call()).toEqual(answer);
+    },
+  );
 
   it.each([PROGRAM_REFUSAL.name_taken, PROGRAM_REFUSAL.invalid, PROGRAM_REFUSAL.retry])(
     'the writer’s %s passes through, with nothing revalidated',

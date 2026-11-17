@@ -11,8 +11,8 @@ vi.mock('@mat-plan/db', () => ({
   saveWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
   readWorkoutDraft: vi.fn(async () => null),
 }));
-// Which id missed is `resolve.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
-vi.mock('./resolve', () => ({ reportProgramMiss: vi.fn(async () => {}) }));
+// Which id missed is `report-miss.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
+vi.mock('./report-miss', () => ({ reportProgramMiss: vi.fn(async () => {}) }));
 
 import { createProgram, readWorkoutDraft, renameProgram, saveWorkout } from '@mat-plan/db';
 
@@ -20,11 +20,12 @@ import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { ProgramWriteError } from './quiet-db-errors';
 import { getWorkoutDraft } from './reads';
-import { reportProgramMiss } from './resolve';
+import { reportProgramMiss } from './report-miss';
 import { createHouseholdProgram, renameHouseholdProgram, saveHouseholdWorkout } from './writes';
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
+const CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
 const SCOPE = { householdId: 7 } as never;
 
 beforeEach(() => {
@@ -34,7 +35,7 @@ beforeEach(() => {
 
 describe('the program DAL (FAM-1 7a-i)', () => {
   it('each write goes through the caller’s own household scope, with the parsed input', async () => {
-    const input = { clientId: '019826b4-0000-7000-8000-0000000000c1', name: 'Strength' };
+    const input = { clientId: CLIENT_ID, name: 'Strength' };
     await createHouseholdProgram(input);
     expect(vi.mocked(createProgram).mock.calls[0]![0]).toBe(db);
     expect(vi.mocked(createProgram).mock.calls[0]![1]).toBe(SCOPE);
@@ -51,14 +52,23 @@ describe('the program DAL (FAM-1 7a-i)', () => {
       ok: false,
       reason: PROGRAM_REFUSAL.not_found,
     });
-    expect(await createHouseholdProgram({ clientId: WORKOUT_ID, name: 'A' })).toEqual({
+    expect(await createHouseholdProgram({ clientId: CLIENT_ID, name: 'A' })).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.not_found,
+    });
+    const rename = { programPublicId: PROGRAM_ID, name: 'A' };
+    expect(await renameHouseholdProgram(rename)).toEqual({
       ok: false,
       reason: PROGRAM_REFUSAL.not_found,
     });
     expect(saveWorkout).not.toHaveBeenCalled();
     expect(createProgram).not.toHaveBeenCalled();
-    // Save carries ids, so its miss is reported with no scope; create carries none.
-    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([[null, heavyADraft]]);
+    expect(renameProgram).not.toHaveBeenCalled();
+    // Save and rename carry ids, so their misses are reported with no scope; create carries none.
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [null, heavyADraft],
+      [null, rename],
+    ]);
   });
 
   it('a writer’s not_found reports which id missed, once, and is still not_found', async () => {
@@ -85,7 +95,7 @@ describe('the program DAL (FAM-1 7a-i)', () => {
       ok: false,
       reason: PROGRAM_REFUSAL.not_found,
     });
-    await createHouseholdProgram({ clientId: WORKOUT_ID, name: 'A' });
+    await createHouseholdProgram({ clientId: CLIENT_ID, name: 'A' });
     expect(reportProgramMiss).not.toHaveBeenCalled();
   });
 
