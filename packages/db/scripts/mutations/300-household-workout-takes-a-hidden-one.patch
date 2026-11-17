@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program/exists.ts b/packages/db/src/queries/program/exists.ts
+index ecd28f58..e945eeb2 100644
+--- a/packages/db/src/queries/program/exists.ts
++++ b/packages/db/src/queries/program/exists.ts
+@@ -73,7 +73,6 @@ export async function workoutInHousehold(
+     .where(
+       and(
+         eq(schema.workouts.publicId, workoutPublicId),
+-        isNull(schema.workouts.deletedAt),
+         liveTemplateBlockIn(scope),
+       ),
+     )

@@ -198,8 +198,12 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   // action, a page or a component reaches them through `lib/dal/program/`, which resolves the
   // caller's household first (AGENTS.md → DAL). Its tests mock them, so they may name them too.
   const PROGRAM_DAL = 'apps/web/lib/dal/program/';
+  // The day DAL (12b) may import ONE lane P read: whether a workout id is the household's, for its
+  // scope-miss report (lane C's importer pin in `lib/dal/day/importers.test.ts` names the same).
+  const DAY_DAL = 'apps/web/lib/dal/day/';
+  const DAY_DAL_MAY_IMPORT = ['workoutInHousehold'];
 
-  it("only the program DAL imports lane P's program writers and reads (step 7a-i wires them there)", () => {
+  it("only the program DAL imports lane P's program writers and reads (step 7a-i wires them there), and the day DAL only workoutInHousehold", () => {
     for (const barrel of LANE_P_BARRELS) {
       // A barrel that re-exports a whole module publishes names this scan cannot read.
       expect(code(join(REPO, barrel)), `${barrel} names what it publishes`).not.toMatch(
@@ -212,7 +216,22 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     const named = fromDb(laneP);
     const web = files.filter((f) => f.startsWith('apps/web/'));
     const importing = web.filter((f) => named.test(code(join(REPO, f))));
-    expect(importing.filter((f) => !f.startsWith(PROGRAM_DAL))).toEqual([]);
+    const notForTheDay = fromDb(laneP.filter((n) => !DAY_DAL_MAY_IMPORT.includes(n)));
+    expect(
+      importing.filter(
+        (f) =>
+          !f.startsWith(PROGRAM_DAL) &&
+          !(f.startsWith(DAY_DAL) && !notForTheDay.test(code(join(REPO, f)))),
+      ),
+    ).toEqual([]);
+    // The day DAL's allowance is that one name: any other lane P name there, alone or beside it,
+    // still fails.
+    expect(laneP).toEqual(expect.arrayContaining(DAY_DAL_MAY_IMPORT));
+    expect(notForTheDay.test("import { workoutInHousehold } from '@mat-plan/db';")).toBe(false);
+    expect(notForTheDay.test("import { saveWorkout } from '@mat-plan/db';")).toBe(true);
+    expect(
+      notForTheDay.test("import { workoutInHousehold, readWorkoutDraft } from '@mat-plan/db';"),
+    ).toBe(true);
     expect(web.filter((f) => WHOLE_PACKAGE.test(code(join(REPO, f))))).toEqual([]);
     // Non-vacuity: the DAL does import them, so the scan sees an import where there is one.
     expect(importing.some((f) => f.startsWith(PROGRAM_DAL))).toBe(true);

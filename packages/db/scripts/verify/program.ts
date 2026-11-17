@@ -26,7 +26,12 @@ import {
 import { createProgram } from '../../src/writers/program/create-program';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
-import { programIn, readWorkoutDraft, workoutIn } from '../../src/queries/program';
+import {
+  programIn,
+  readWorkoutDraft,
+  workoutIn,
+  workoutInHousehold,
+} from '../../src/queries/program';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
 import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
@@ -63,6 +68,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyRenameProgram(ctx);
   await verifySlugRace(ctx);
   await verifySaveWorkout(ctx);
+  await verifyWorkoutInHousehold(ctx);
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -1005,4 +1011,63 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
   console.log(
     '✓ FAM-1 6a-ii: saveWorkout (fixture read, replay, reorder, swap, refusals, households)',
   );
+}
+
+/**
+ * `workoutInHousehold` (for 7a-ii's copy and 12b's day page): a live workout of any of this
+ * household's live programs is `true`; every miss is the same `false`.
+ */
+async function verifyWorkoutInHousehold({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const workoutOf = async (scope: HouseholdScope, programPublicId: string, name: string) => {
+      const saved = await saveWorkout(exec, scope, {
+        programPublicId,
+        workoutPublicId: null,
+        workoutClientId: newId(),
+        name,
+        description: null,
+        items: [],
+      });
+      assert.ok(saved.ok, `workoutInHousehold: saving the workout "${name}" succeeds`);
+      return saved.workoutPublicId;
+    };
+    const first = await mustCreate(tx, A_SCOPE, 'First program');
+    const second = await mustCreate(tx, A_SCOPE, 'Second program');
+    const mine = await workoutOf(A_SCOPE, first, 'Heavy A');
+    const alsoMine = await workoutOf(A_SCOPE, second, 'Heavy B');
+    const theirs = await workoutOf(
+      B_SCOPE,
+      await mustCreate(tx, B_SCOPE, 'B program'),
+      'B workout',
+    );
+    const hiddenWorkout = await workoutOf(A_SCOPE, first, 'Gone');
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, hiddenWorkout));
+    const hiddenProgram = await mustCreate(tx, A_SCOPE, 'Hidden program');
+    const inHiddenProgram = await workoutOf(A_SCOPE, hiddenProgram, 'Orphan');
+    await hide(tx, hiddenProgram);
+
+    const cases: Array<[string, HouseholdScope, string, boolean]> = [
+      ['its own workout', A_SCOPE, mine, true],
+      ['a workout of another of its programs', A_SCOPE, alsoMine, true],
+      ['its own workout, the id in upper case', A_SCOPE, mine.toUpperCase(), true],
+      ["another household's workout", A_SCOPE, theirs, false],
+      ["A's workout, asked by B", B_SCOPE, mine, false],
+      ['a hidden workout', A_SCOPE, hiddenWorkout, false],
+      ['a workout of a hidden program', A_SCOPE, inHiddenProgram, false],
+      ['an unknown id', A_SCOPE, newId(), false],
+      ['a malformed id', A_SCOPE, 'not-a-uuid', false],
+    ];
+    for (const [what, scope, id, expected] of cases) {
+      assert.equal(
+        await workoutInHousehold(exec, scope, id),
+        expected,
+        `FAM-1 workoutInHousehold: ${what} is ${expected}`,
+      );
+    }
+  });
+  console.log('✓ FAM-1 workoutInHousehold: live workouts of the household only, any program');
 }

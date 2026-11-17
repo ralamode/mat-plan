@@ -3,5 +3,5 @@
  * exports only**, so a later step adds its read here, in the lane's own file, with no further turn on
  * the package's barrel.
  */
-export { programIn, workoutIn } from './exists';
+export { programIn, workoutIn, workoutInHousehold } from './exists';
 export { readWorkoutDraft } from './workout';
