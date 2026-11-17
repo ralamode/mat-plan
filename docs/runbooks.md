@@ -1135,9 +1135,29 @@ in **their own** household, and the server refused because they are not the owne
 alert above covers an id reached from the wrong household. This one is _inside_ the caller's own
 household, so every tenancy predicate matched and `reportScopeMiss` is silent by design.
 
-| Filter | `message` is `athlete authority refused`                              |
-| ------ | --------------------------------------------------------------------- |
-| Tags   | `authority_outcome: owner_only` · `authority_action: archive_profile` |
+**The alert** (Sentry → Monitors → Alerts; created 2026-11-17):
+
+| Field    | Value                                                                              |
+| -------- | ---------------------------------------------------------------------------------- |
+| Name     | "Owner-only athlete action refused (PROF-1)" (alert `6358648`), project `mat-plan` |
+| Triggers | a new issue is created · an issue escalates · a resolved issue regresses           |
+| Filter   | the event's `message` contains `athlete authority refused`                         |
+| Action   | notify the issue's suggested assignees, else the recently active members           |
+| Throttle | none: it notifies on every trigger                                                 |
+
+The event's tags are `authority_outcome: owner_only` and `authority_action: archive_profile`; the
+alert filters on the message, not on them.
+
+🔴 **There was no such alert before 2026-11-17**, for the reason the scope-miss section above
+gives: Sentry held only its default alert for high-priority issues, and this event is a `warning`.
+It was created that day by the maintainer's session. A refusal before then was recorded and not
+alerted on.
+
+⚠️ **It fires per ISSUE, not per event.** Every refusal carries the same message, so they are one
+issue: the first creates it and notifies, and a later one notifies only if Sentry calls the issue
+escalating or the issue had been resolved. **Resolve the issue when triage is done**, or the next
+refusal is quiet. The app also reports this event at most once per account per server instance (a bound held in memory), so
+a "burst from one account" shows as events across deploys or cold starts, not as a flood.
 
 **What makes it interesting rather than noise:** the UI renders **no Archive control for a member**,
 so this path cannot be reached by using the app. Reaching it takes a crafted POST. One event is
