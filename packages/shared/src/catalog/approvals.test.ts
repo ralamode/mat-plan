@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -150,8 +150,17 @@ describe('the record files only grow (V4, the merge-base check)', () => {
   const load = async () =>
     ((await import(/* @vite-ignore */ script)) as { appendOnlyIssues: AppendOnly })
       .appendOnlyIssues;
-  const run = (baseRef: string) =>
-    spawnSync(process.execPath, [script, baseRef], { cwd: ROOT, encoding: 'utf8' });
+  /**
+   * 🔴 **Every process these tests start gets an environment with no `GIT_*` variable.** Inside a
+   * git hook (the pre-push hook runs this suite) git exports `GIT_DIR` and its kin, and a child
+   * `git` obeys them over its own directory: a scratch repository's `init` and `commit` would be
+   * run against the real one. It happened once, on this test's first push.
+   */
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')),
+  );
+  const run = (baseRef: string, cwd = ROOT) =>
+    spawnSync(process.execPath, [script, baseRef], { cwd, encoding: 'utf8', env });
 
   it('lets a batch add slugs, batches and approvals', async () => {
     const issues = await load();
@@ -192,20 +201,23 @@ describe('the record files only grow (V4, the merge-base check)', () => {
 
   it('🔴 sees a removed line from a subdirectory too: it compares at the repository root', () => {
     // A scratch repository with one shipped slug committed, then removed in the working tree.
-    const repo = mkdtempSync(join(tmpdir(), 'catalog-records-'));
+    const repo = realpathSync(mkdtempSync(join(tmpdir(), 'catalog-records-')));
     const git = (...args: string[]) =>
       spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.test', ...args], {
         cwd: repo,
         encoding: 'utf8',
+        env,
       });
-    const at = (cwd: string) =>
-      spawnSync(process.execPath, [script, 'HEAD'], { cwd, encoding: 'utf8' });
+    const at = (cwd: string) => run('HEAD', cwd);
     try {
       const shipped = join(repo, 'packages/shared/src/catalog/data/shipped.json');
       mkdirSync(dirname(shipped), { recursive: true });
       writeFileSync(shipped, '{"a":"reps","b":"reps"}\n');
       writeFileSync(join(dirname(shipped), 'approved.json'), '{}\n');
       expect(git('init', '-q').status).toBe(0);
+      // Nothing is staged or committed unless git agrees the scratch directory is the repository.
+      const gitDir = git('rev-parse', '--absolute-git-dir').stdout.trim();
+      if (gitDir !== join(repo, '.git')) throw new Error(`scratch repository is ${gitDir}`);
       git('add', '-A');
       expect(git('commit', '-q', '--no-verify', '-m', 'base').status).toBe(0);
       expect(at(repo).status).toBe(0);
