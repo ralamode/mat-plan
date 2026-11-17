@@ -210,6 +210,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     'notice.md "Technical bits": a client id per item card (inventory §2, prescriptions.client_id)',
     'notice.md export omissions: built programs are not in the export (inventory §6)',
     'notice.md: a swapped item is hidden, not erased (inventory §8, D19)',
+    'data-inventory.md: every "until step 7b" sentence (§1 to §3, §8), rewritten as reachable',
   ];
   /** The module itself, as a path from the repo root without its extension. */
   const ACTIONS = 'apps/web/app/programs/actions';
