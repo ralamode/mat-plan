@@ -524,7 +524,10 @@ export async function logStrengthSession(
   // PICK-1 PR 2: ids before inserts, in `packages/db` so `db:verify` runs this exact function rather
   // than a lookalike (write-path invariant 3) — which is the only way the cross-household refusal is
   // PROVED. This DAL is now a pass-through: it holds no resolution logic of its own.
-  const movements = await resolveSessionMovements(db, scope, args.movements);
+  // A typed name's find-or-create is a write too (its own INSERT, before the session's transaction).
+  const movements = await quietDbErrors('logStrengthSession', () =>
+    resolveSessionMovements(db, scope, args.movements),
+  );
 
   return quietDbErrors('logStrengthSession', () =>
     writeStrengthSession(db, {

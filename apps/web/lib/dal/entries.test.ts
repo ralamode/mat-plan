@@ -224,8 +224,6 @@ describe('logStrengthSession — ids resolve before any insert (PICK-1 PR 2)', (
     vi.doMock('./db', () => ({ db: rows.db }));
     vi.resetModules();
     const { logStrengthSession: write } = await import('./entries');
-    const { MOVEMENT_NOT_AVAILABLE } = await import('@mat-plan/db');
-
     await expect(
       write({
         profilePublicId: PROFILE,
@@ -247,7 +245,8 @@ describe('logStrengthSession — ids resolve before any insert (PICK-1 PR 2)', (
           },
         ],
       }),
-    ).rejects.toThrow(MOVEMENT_NOT_AVAILABLE);
+      // `MovementNotAvailableError`, rethrown by `quietDbErrors` (V1-9b B1-2) under its class name.
+    ).rejects.toThrow('logStrengthSession failed (MovementNotAvailableError)');
 
     const texts = rows.queries.map((q) => q.text.toLowerCase());
     expect(
