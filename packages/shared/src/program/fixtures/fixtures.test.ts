@@ -742,6 +742,18 @@ describe('archived-athlete-today: an archived athlete’s day is never writable 
     expect({ ...world, athletes: before?.athletes }).toEqual(before);
   });
 
+  it('is not in the switcher’s list, which holds the athletes who are not archived', () => {
+    const mine = fixtureIds.athlete('a1');
+    expect(plan.profilePublicId).toBe(mine);
+    expect(plan.athletes.map((a) => a.profilePublicId)).not.toContain(mine);
+    expect(plan.athletes).toEqual(
+      todayTwoPrograms.athletes.filter((a) => a.profilePublicId !== mine),
+    );
+    expect(
+      plan.athletes.every((a) => Object.keys(a).sort().join() === 'name,profilePublicId'),
+    ).toBe(true);
+  });
+
   it('leaves another athlete of the household writable', () => {
     const { world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
     expect(dayPlan(world, 'a2', FIXTURE_TODAY).writable).toBe(true);
@@ -749,7 +761,11 @@ describe('archived-athlete-today: an archived athlete’s day is never writable 
 
   it('still lets them look ahead: a future day is as it is for anyone', () => {
     const { world } = DAY_PLAN_FIXTURE_SOURCES['archived-athlete-today'];
-    expect(dayPlan(world, 'a1', '2026-11-16')).toEqual(futurePreview);
+    const mine = fixtureIds.athlete('a1');
+    expect(dayPlan(world, 'a1', '2026-11-16')).toEqual({
+      ...futurePreview,
+      athletes: futurePreview.athletes.filter((a) => a.profilePublicId !== mine),
+    });
   });
 });
 

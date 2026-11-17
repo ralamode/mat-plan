@@ -373,10 +373,11 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     today: world.today,
     writable,
     future,
-    athletes: world.athletes.map((a) => ({
-      profilePublicId: fixtureIds.athlete(a.id),
-      name: a.name,
-    })),
+    // The switcher's list, as the picker lists a household: an archived athlete is not in it,
+    // their own day included (`DayPlan.athletes`).
+    athletes: world.athletes
+      .filter((a) => !a.archived)
+      .map((a) => ({ profilePublicId: fixtureIds.athlete(a.id), name: a.name })),
     onProgram: on.length ? 'yes' : current.length ? 'not-this-day' : 'never',
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
     currentPrograms: current.map((a) => programRef(world, a.prog)),
