@@ -1809,8 +1809,8 @@ function classify(before: World, world: World, name: string): Change[] {
 
 /**
  * Plan § 12a-ii, step 5: **replay each change with its writer**, under the seeded scope. A workout's
- * save is read back: its name is the world's, so a save that did nothing visible fails here, not
- * only where a later read happens to show it.
+ * save is read back: its name is the world's, so a rename that did not land fails here, not only where
+ * a later read happens to show it. An edit to its items is caught by the deep-equal.
  */
 async function replay(tx: VerifyTx, seeded: Seeded, world: World, changes: Change[], name: string) {
   for (const change of changes) {
