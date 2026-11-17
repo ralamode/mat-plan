@@ -563,6 +563,13 @@ describe('the item picker (FAM-1 9)', () => {
         unitDefault: null,
         isBodyweight: false,
         trackingType: TRACKING_TYPE.weight_reps,
+        modality: 'strength',
+        pattern: 'hinge',
+        equipment: ['barbell'],
+        primaryMuscle: 'hamstrings',
+        secondaryMuscles: [],
+        supervision: null,
+        hasInstructions: false,
       };
       const all = editor({}, newWorkoutEmpty, [...pickerOptions, rdl]);
       openPicker();

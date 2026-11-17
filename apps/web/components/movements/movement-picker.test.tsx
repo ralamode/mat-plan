@@ -5,11 +5,14 @@ import {
   MOVEMENT_NAME_MESSAGES,
   TRACKING_TYPE,
   type MovementPickerGroup,
+  SUPERVISION_LABELS,
+  TRACKING_TYPE_LABELS,
+  type CatalogHowTo,
 } from '@mat-plan/shared';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readdirSync, readFileSync } from 'node:fs';
 import { useRef, useState } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
@@ -26,7 +29,25 @@ afterEach(cleanup);
 // `trackingType` is `weight_reps` on every option here: it is the default FAM-1 step 3 gives the
 // column, and no seeded row carries its own type until that step types each built-in by slug. From
 // then on `catalogOption` reads the row's.
-const catalogOption = (name: string): MovementOptionDTO => {
+/**
+ * The library fields a catalog option must carry (CAT-3 C0b-2), as a test default: a barbell lift
+ * with no supervision and no instructions. ⚠️ Not `equipment: []`, which MEANS "No equipment". A
+ * test that needs another shape passes `taxonomy`.
+ */
+const TEST_TAXONOMY = {
+  modality: 'strength',
+  pattern: null,
+  equipment: ['barbell'],
+  primaryMuscle: null,
+  secondaryMuscles: [],
+  supervision: null,
+  hasInstructions: false,
+} as const satisfies Partial<MovementOptionDTO>;
+
+const catalogOption = (
+  name: string,
+  taxonomy: Partial<typeof TEST_TAXONOMY> | Record<string, unknown> = {},
+): MovementOptionDTO => {
   const row = MOVEMENT_SEED_ROWS.find((r) => r.name === name);
   if (!row) throw new Error(`fixture: no seeded movement named ${name}`);
   const entry = MOVEMENT_PICKER_ENTRIES[row.slug];
@@ -40,7 +61,9 @@ const catalogOption = (name: string): MovementOptionDTO => {
     unitDefault: row.unitDefault,
     isBodyweight: row.isBodyweight,
     trackingType: TRACKING_TYPE.weight_reps,
-  };
+    ...TEST_TAXONOMY,
+    ...taxonomy,
+  } as MovementOptionDTO;
 };
 
 const householdOption = (name: string, publicId: string): MovementOptionDTO => ({
@@ -229,7 +252,7 @@ describe('one tag per row, by precedence', () => {
   const squat = catalogOption('Front Squat');
   const tagsFor = (name: string) => {
     const row = screen.getAllByRole('button').find((b) => b.textContent?.startsWith(name));
-    return row?.querySelectorAll('span')[1]?.textContent ?? null;
+    return row?.querySelector('[data-row-tag]')?.textContent ?? null;
   };
 
   it('`already in` outranks everything', () => {
@@ -275,13 +298,17 @@ describe('one tag per row, by precedence', () => {
     expect(tagsFor('Front Squat')).toBe(COPY.groupLabel('legs'));
   });
 
-  it('`household` shows everywhere EXCEPT under its own heading', () => {
-    const mine = householdOption('Ray Special', 'h-1');
+  it('a household item carries no tag: its second line says "Custom item" everywhere (P14)', () => {
+    const mine = householdOption('Garage Circuit', 'h-1');
     render(<Harness data={{ options: [...ALL_CATALOG, mine] }} />);
     open();
-    expect(tagsFor('Ray Special')).toBeNull(); // under "Your household"
-    type('ray special');
-    expect(tagsFor('Ray Special')).toBe(COPY.tagHousehold);
+    const row = () => screen.getByRole('button', { name: /^Garage Circuit/ });
+    expect(tagsFor('Garage Circuit')).toBeNull();
+    expect(row().textContent).toContain(COPY.customItem);
+    type('garage circuit');
+    expect(tagsFor('Garage Circuit')).toBeNull();
+    expect(row().textContent).toContain(COPY.customItem);
+    expect(row().textContent).not.toContain(COPY.noEquipment);
   });
 });
 
@@ -542,8 +569,11 @@ describe('the rest of the contract', () => {
     // `listbox`/`option` — this is a list of actions, not a select.
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
-    const items = document.querySelectorAll('section ul > li > button');
+    // A row's pick control is a button in its list item (beside "How to", when the row has it),
+    // and no button sits inside another.
+    const items = document.querySelectorAll('section ul > li > div > button:first-child');
     expect(items.length).toBeGreaterThan(30);
+    expect(document.querySelector('button button')).toBeNull();
     expect(document.querySelector('[role="listbox"], [role="option"]')).toBeNull();
   });
 
@@ -637,7 +667,6 @@ describe('multi-select', () => {
             noMatchHint: 'No item matches.',
             searchLabel: 'Search items',
             searchPlaceholder: 'Search items',
-            describe: () => 'Weight × reps',
             footerAction: <button type="button">Add {selected.length}</button>,
             footerNote: <p>the picks so far</p>,
             notice,
@@ -998,5 +1027,214 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
     const picker = sources.find((s) => s.path.endsWith('movement-picker.tsx'))!.source;
     expect(picker).toMatch(/onQueryChange\?\.\(\)/);
     expect(picker).not.toMatch(/onQueryChange\?\.\([^)]/);
+  });
+});
+
+describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: P13, P14, P16)', () => {
+  // The sheet pops its history entry on close, and in jsdom that popstate lands in a LATER test and
+  // closes its sheet; these tests await, so it arrives. Stubbed as item-picker.test.tsx does.
+  beforeEach(() => {
+    window.history.replaceState(null, '');
+    vi.spyOn(window.history, 'back').mockImplementation(() => {});
+  });
+
+  const SQUAT = catalogOption('Back Squat', { equipment: ['barbell', 'bench'] });
+  const PUSH_UPS = catalogOption('Push-Ups', { equipment: [] });
+  const ROPE = catalogOption('Pull-Up', {
+    equipment: ['pull_up_bar'],
+    supervision: 'coach',
+    hasInstructions: true,
+  });
+  const MINE = householdOption('Garage Circuit', 'h-1');
+  const STEPS: CatalogHowTo = {
+    name: 'Pull-Up',
+    instructions: 'Hang from the bar.\nPull up until your chin is over it.',
+    supervision: 'coach',
+  };
+
+  function RowHarness({
+    howTo,
+    multi = false,
+    options = [SQUAT, PUSH_UPS, ROPE, MINE],
+  }: {
+    howTo?: (option: MovementOptionDTO) => Promise<CatalogHowTo | null>;
+    multi?: boolean;
+    options?: readonly MovementOptionDTO[];
+  }) {
+    const [isOpen, setOpen] = useState(false);
+    const [selected, setSelected] = useState<string[]>([]);
+    const ref = useRef<HTMLButtonElement>(null);
+    const common = {
+      open: isOpen,
+      onOpenChange: setOpen,
+      title: COPY.title,
+      data: { options },
+      returnFocusTo: ref,
+      howTo,
+    };
+    return (
+      <main>
+        <button ref={ref} type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        {multi ? (
+          <MovementPicker
+            {...common}
+            multiple={{
+              selected,
+              onToggle: (option) => setSelected((all) => [...all, option.publicId]),
+              onCreate: vi.fn(),
+              createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+              noMatchHint: 'No item matches.',
+              searchLabel: 'Search items',
+              searchPlaceholder: 'Search items',
+              footerAction: <button type="button">Add</button>,
+            }}
+          />
+        ) : (
+          <MovementPicker {...common} onPick={vi.fn()} />
+        )}
+      </main>
+    );
+  }
+  /** A row's pick control (a button, or a checkbox in multi mode), by the name it starts with. */
+  const row = (name: string) =>
+    [...document.querySelectorAll<HTMLElement>('li > div > button:first-child')].find((b) =>
+      b.textContent?.startsWith(name),
+    )!;
+
+  it("a row's accessible name reads its parts apart: name, label, second line", () => {
+    render(<RowHarness />);
+    open();
+    expect(
+      screen.getByRole('button', {
+        // jsdom's name computation drops the separator's spaces; a browser keeps them.
+        name: `Pull-Up,${SUPERVISION_LABELS.coach},${TRACKING_TYPE_LABELS.weight_reps} · Pull-up bar`,
+      }),
+    ).toBeTruthy();
+  });
+  const howToButton = (name: string) => screen.queryByRole('button', { name: COPY.howToFor(name) });
+
+  it('says how each row is logged and what it needs; a custom item never says "No equipment" (P14)', () => {
+    render(<RowHarness />);
+    open();
+    expect(row('Back Squat').textContent).toContain(
+      `${TRACKING_TYPE_LABELS.weight_reps} · Barbell, Bench`,
+    );
+    expect(row('Push-Ups').textContent).toContain(`· ${COPY.noEquipment}`);
+    expect(row('Garage Circuit').textContent).toContain(`· ${COPY.customItem}`);
+    expect(row('Garage Circuit').textContent).not.toContain(COPY.noEquipment);
+  });
+
+  it('shows the supervision label as text on its row, in both modes, at full contrast (P13)', () => {
+    for (const multi of [false, true]) {
+      render(<RowHarness multi={multi} />);
+      open();
+      const label = [...row('Pull-Up').querySelectorAll('span')].find(
+        (span) => span.textContent === SUPERVISION_LABELS.coach,
+      );
+      expect(label, `multi=${multi}`).toBeTruthy();
+      expect(label!.className).toContain('text-foreground');
+      expect(label!.className).not.toContain('text-muted-foreground');
+      expect(row('Back Squat').textContent).not.toContain(SUPERVISION_LABELS.coach);
+      cleanup();
+    }
+  });
+
+  it('in multi mode the box comes before the name, so ticks line up whatever the row holds', () => {
+    render(<RowHarness multi howTo={vi.fn(async () => STEPS)} />);
+    open();
+    const pick = row('Pull-Up');
+    const box = pick.querySelector('[aria-hidden]');
+    expect(pick.firstElementChild).toBe(box);
+  });
+
+  it('shows no "How to" without a loader, and only on rows that have instructions with one', () => {
+    render(<RowHarness />);
+    open();
+    expect(howToButton('Pull-Up')).toBeNull();
+    cleanup();
+    render(<RowHarness howTo={vi.fn(async () => STEPS)} />);
+    open();
+    expect(howToButton('Pull-Up')).toBeTruthy();
+    expect(howToButton('Back Squat')).toBeNull();
+    expect(howToButton('Garage Circuit')).toBeNull();
+  });
+
+  it('🔴 opens the steps under the row, the supervision label first (K17), and hides them again', async () => {
+    const howTo = vi.fn(async () => STEPS);
+    render(<RowHarness howTo={howTo} />);
+    open();
+    const button = howToButton('Pull-Up')!;
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.getAttribute('aria-controls')).toBeNull();
+    fireEvent.click(button);
+    const box = await waitFor(() => {
+      const id = button.getAttribute('aria-controls');
+      expect(id).toBeTruthy();
+      const el = document.getElementById(id!)!;
+      expect(el.querySelectorAll('ol > li')).toHaveLength(2);
+      return el;
+    });
+    expect(howTo).toHaveBeenCalledWith(ROPE);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const paragraphs = [...box.querySelectorAll('p')].map((p) => p.textContent);
+    expect(paragraphs).toEqual([COPY.howToFor('Pull-Up'), SUPERVISION_LABELS.coach]);
+    // "Hide" puts focus back on "How to" before its own box goes.
+    fireEvent.click(within(box).getByRole('button', { name: COPY.howToHide }));
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('🔴 the label comes from the option, so a loader that leaves it out cannot drop it', async () => {
+    render(<RowHarness howTo={vi.fn(async () => ({ ...STEPS, supervision: null }))} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(document.querySelectorAll('ol > li').length).toBe(2));
+    const box = document.getElementById(howToButton('Pull-Up')!.getAttribute('aria-controls')!)!;
+    expect(box.textContent).toContain(SUPERVISION_LABELS.coach);
+  });
+
+  it('no steps yet, and a failed load with a retry that works, said once in the status', async () => {
+    const howTo = vi
+      .fn<(option: MovementOptionDTO) => Promise<CatalogHowTo | null>>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(STEPS);
+    render(<RowHarness howTo={howTo} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(screen.getByText(COPY.howToFailed)).toBeTruthy());
+    expect(status()).toBe(COPY.statusHowToFailed('Pull-Up'));
+    fireEvent.click(screen.getByRole('button', { name: COPY.howToRetry }));
+    await waitFor(() => expect(document.querySelectorAll('ol > li').length).toBe(2));
+    cleanup();
+    render(<RowHarness howTo={vi.fn(async () => null)} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    await waitFor(() => expect(screen.getByText(COPY.howToNone)).toBeTruthy());
+    expect(document.querySelector('ol')).toBeNull();
+  });
+
+  it('🔴 one row at a time, a late answer for a row no longer open is dropped, and typing closes it', async () => {
+    let resolveFirst: (steps: CatalogHowTo) => void = () => {};
+    const other = catalogOption('Front Squat', { hasInstructions: true });
+    const howTo = vi
+      .fn<(option: MovementOptionDTO) => Promise<CatalogHowTo | null>>()
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce({
+        name: 'Front Squat',
+        instructions: 'Hold the bar in front.',
+        supervision: null,
+      });
+    render(<RowHarness howTo={howTo} options={[ROPE, other]} />);
+    open();
+    fireEvent.click(howToButton('Pull-Up')!);
+    fireEvent.click(howToButton('Front Squat')!);
+    await waitFor(() => expect(screen.getByText('Hold the bar in front.')).toBeTruthy());
+    await act(async () => resolveFirst(STEPS));
+    expect(howToButton('Pull-Up')!.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Hang from the bar.')).toBeNull();
+    type('front');
+    expect(howToButton('Front Squat')!.getAttribute('aria-expanded')).toBe('false');
   });
 });

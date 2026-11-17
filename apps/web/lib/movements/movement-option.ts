@@ -1,4 +1,9 @@
-import type { MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
+import type {
+  CatalogOptionTaxonomy,
+  MovementPickerGroup,
+  TrackingType,
+  Unit,
+} from '@mat-plan/shared';
 
 /**
  * The DTOs the movement picker renders (PICK-1 Decision 5).
@@ -32,6 +37,26 @@ type Declaration = {
 };
 
 /**
+ * What a LIBRARY option carries for the filters, the row's second line, the supervision label and
+ * "How to" (CAT-3 spec P11, P13, P14, P16; chunk C0b-2's `CatalogOptionTaxonomy`). **Required**:
+ * a library row without them passes no filter (`passesMovementFilters`), by design.
+ *
+ * 🔴 **Never fill `equipment` with `[]` as a placeholder.** An empty set MEANS "No equipment": a
+ * barbell lift mapped that way would say so on its row and pass the "No equipment" filter. A read
+ * that has not got the set must not build a library option at all.
+ */
+type CatalogOptionFields = Pick<
+  CatalogOptionTaxonomy,
+  | 'modality'
+  | 'pattern'
+  | 'equipment'
+  | 'primaryMuscle'
+  | 'secondaryMuscles'
+  | 'supervision'
+  | 'hasInstructions'
+>;
+
+/**
  * One option in the picker — a **discriminated union** on `owner` _(reuse N1)_, so the fields that
  * exist only for a curated row cannot be read off a household row without a narrow.
  *
@@ -42,11 +67,11 @@ type Declaration = {
  */
 export type MovementOptionDTO = { readonly publicId: string; readonly name: string } & Declaration &
   (
-    | {
+    | ({
         readonly owner: 'catalog';
         readonly group: MovementPickerGroup;
         readonly aliases: readonly string[];
-      }
+      } & CatalogOptionFields)
     | { readonly owner: 'household' }
   );
 

@@ -421,7 +421,6 @@ export function ItemPicker({
         onCreate: openForm,
         createLabel: newItemLabel,
         noMatchHint: COPY.noMatch,
-        describe: (option) => TRACKING_TYPE_LABELS[option.trackingType],
         notice,
         onQueryChange: () => setNoticeNow(''),
         searchLabel: COPY.searchLabel,

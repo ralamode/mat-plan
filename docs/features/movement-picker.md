@@ -32,6 +32,7 @@ path and **creating** the deliberate one.
 - **PR 4** — mounts it in the log form, adds Decision 5's two reads, and owes a UX panel plus
   three-width screenshots.
 - **CAT-3 B1** — the list reads the library's search (short forms, similar names); invariant 13.
+- **CAT-3 B2-i** — every row's second line, the supervision label and "How to"; invariant 14.
 
 ## The map
 
@@ -127,14 +128,15 @@ path and **creating** the deliberate one.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
     union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
-    - a row is a `button role="checkbox"` with `aria-checked`, in two columns (name and its meta
-      line, then a fixed box), so ticks line up at 360px; no `aria-current`;
+    - a row is a `button role="checkbox"` with `aria-checked`, the box on the LEFT and the text
+      after it (CAT-3 B2, the accepted prototype's), so ticks line up whether or not a row has
+      "How to" beside it, and a thumb aimed at the box never lands on it; no `aria-current`;
     - a tap toggles and the sheet stays open; Enter selects the one unambiguous match (never
       deselects, never creates) and clears the search;
     - "create" is the caller's: the button sits at the TOP of the body (with the keyboard up, the
       footer is about 110 rows down), is withheld when the text already names a movement (invariants 4 and 13),
       and hands the typed text to `onCreate`. The component still never writes (invariant 2);
-    - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts ("2 movements match some of your words") and `movementNameSchema`'s messages;
+    - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts, `movementNameSchema`'s messages and the row's second line (invariant 14), which replaced the caller's `describe`;
     - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
     - `onReturned` passes through to the sheet: the caller's moment for a page-level message after a close;
     - `matchable` is the one place a `MovementOptionDTO` becomes what the matcher reads; `searchPickerOptions` and `listedAs` both read through it, and the caller's "is this already an item" asks `listedAs`, never a copy;
@@ -180,10 +182,36 @@ path and **creating** the deliberate one.
       call on a desktop CPU (M1 Pro, Node 26), on the deferred value; not measured on a phone. C30's
       measure at 500 entries is the contract's.
 
-    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. The picker's tests pin no
+    **The headings are the accepted prototype's**, "Did you mean" and "Has some of your words" (spec P5 as amended, 2026-11-17; B2-i). The picker's tests pin no
     result order beyond an exact hit first; the order is the contract's (C30). A near miss on a
     still-typing last word (`bulgara`) comes as a proposal. "Did you mean" on a new item's name is
     `PICK-2`'s (spec § Interactions).
+
+14. **Every row says how it is logged and what it needs, and may carry "How to"** (CAT-3 B2-i;
+    [spec](../specs/cat-3-movement-library.md) P13, P14, P16). In both modes:
+    - **The second line is `rowMeta`:** the tracking label, then the equipment in words, "No
+      equipment" for an empty set, or "Custom item" for a household's own item, which is never
+      called "No equipment". The row's tag joins that line with " · ", so a row stays short enough
+      that two fit with a phone's keyboard up. A household item carries no tag: its second line
+      already says what it is.
+    - **A library option REQUIRES its taxonomy** (`MovementOptionDTO`'s catalog arm). ⚠️ A read
+      that has not got the equipment set must not build a library option: `equipment: []` MEANS
+      "No equipment" and passes that filter.
+    - **The supervision label** ("Learn with a coach present") is its own line between the name
+      and the second line, at full contrast in every row state, and never replaced by a tag.
+    - **The row's accessible name reads its parts apart** ("Pull-Up, Learn with a coach present,
+      Reps · Pull-up bar"), with hidden separators: stacked spans carry no space between them.
+    - **"How to" is the caller's loader** (`howTo(option)`): the steps are read by slug on the
+      server, and the picker imports no server action (invariant 2). With no loader, no row shows
+      the button. It shows only on a library row whose entry `hasInstructions`. One row is open
+      at a time; typing closes it; a late answer for a row no longer open is dropped. The box shows
+      the name, **the supervision label first, read from the option** (so a loader that leaves it
+      out cannot drop it, K17), then the steps; "No steps for this movement yet." for `null`; and,
+      on failure, "Try again", with the failure said once in the sheet's one status region.
+      "Hide" puts focus back on "How to" before its box goes. `aria-controls` is set only while
+      open. ⚠️ **Until lane P's option read carries the slug (P11-i), no production caller passes
+      a loader**: the server action (public id, then the caller's own option read, then
+      `catalogHowToOf`) is wired then.
 
 ## Traps
 
