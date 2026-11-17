@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * Restore all (V1-9b B1-2): the shared boundary matrices, then what they cannot express. The DAL is
  * mocked, so what Restore all does to rows is proven where the rows are (`db:verify`,
  * `verify/single-values.ts`, B2-0 proofs 5–9 and B1-2 proofs 10–13); and the counting, where it is
- * done (`lib/dal/entries.test.ts`). Here: the order of the checks, the bound, what reaches the DAL,
+ * done (`lib/dal/entries-restore-clear.test.ts`). Here: the order of the checks, the bound, what reaches the DAL,
  * and the answers.
  */
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -91,6 +91,10 @@ describe('restoreClearAction (V1-9b B1-2)', () => {
   it.each([
     ['a token through a Date (milliseconds)', input({ hiddenAt: '2026-11-17T18:04:05.123Z' })],
     ['a malformed day', input({ day: '17/11/2026' })],
+    [
+      'a token naming no real instant (30 February)',
+      input({ hiddenAt: '2026-02-30T00:00:00.000000Z' }),
+    ],
     ['an athlete id that is not a uuid', input({ profilePublicId: 'x' })],
     ['not an object at all', 'a string' as unknown as RestoreClearInput],
   ])('%s is bad_value, before the profile and the DAL', async (_label, body) => {
@@ -138,6 +142,7 @@ describe('restoreClearAction (V1-9b B1-2)', () => {
       reason: RESTORE_CLEAR_REFUSAL.closed_day,
     });
     expect(restoreClearedDay).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   it('yesterday is open', async () => {

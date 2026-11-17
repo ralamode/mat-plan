@@ -2,9 +2,8 @@ import 'server-only';
 
 import {
   bodyweightRowForAmend,
-  clearEventsForDay,
-  restoreClear,
   clearBodyweight,
+  clearEventsForDay,
   clearPractice,
   type ClearSingleValueResult,
   findAmendableBodyweight,
@@ -14,6 +13,7 @@ import {
   lastBodyweightBefore,
   isLiveProfile,
   resolveSessionMovements,
+  restoreClear,
   schema,
   updateBodyweightEntryById,
   updatePracticeEntryById,
@@ -27,6 +27,7 @@ import {
   ENTRY_KIND,
   ENTRY_STATUS,
   RESTORE_REASON,
+  uuidSchema,
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
@@ -701,6 +702,8 @@ export async function editStrengthSet(args: {
  * so it is not wrapped in `quietDbErrors` (the helper wraps writes; its parameters are ids and a day).
  */
 export async function dayClearEvents(profilePublicId: string, day: string): Promise<ClearEvent[]> {
+  // A non-uuid id would make Postgres throw on the uuid comparison; it holds no events either way.
+  if (!uuidSchema.safeParse(profilePublicId).success) return [];
   const scope = await getHouseholdScope();
   if (!scope) return [];
   return clearEventsForDay(db, { profilePublicId, scope, day });

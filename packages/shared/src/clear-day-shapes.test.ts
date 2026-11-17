@@ -33,6 +33,17 @@ describe('restoreClearSchema', () => {
     expect(restoreClearSchema.safeParse({ ...input, day: '17/11/2026' }).success).toBe(false);
   });
 
+  it.each(['2026-02-30T00:00:00.000000Z', '2026-11-17T24:00:00.000000Z'])(
+    'refuses %s: the right format, but no real instant (Postgres would throw on the cast)',
+    (hiddenAt) => {
+      expect(restoreClearSchema.safeParse({ ...input, hiddenAt }).success).toBe(false);
+    },
+  );
+
+  it('keeps a real instant’s six digits as typed (no Date round trip)', () => {
+    expect(restoreClearSchema.parse(input).hiddenAt).toBe(TOKEN);
+  });
+
   it('carries no entry id: the server finds the clear’s entries itself', () => {
     expect(Object.keys(restoreClearSchema.shape).sort()).toEqual([
       'day',

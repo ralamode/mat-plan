@@ -8,7 +8,7 @@ import {
   TRANSPORT_REFUSALS,
   type RestoreClearInput,
   type RestoreClearRefusal,
-  type RestoreClearResult,
+  type RestoreClearActionResult,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 
@@ -24,6 +24,16 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
  * The FAM-1 contract, as AGENTS.md requires of a new mutation: typed input (`restoreClearSchema`), a
  * typed result, refusals returned, never thrown. B2 adds `clearDayAction` here.
  */
+
+/**
+ * **Is this athlete's day open for the clear's two actions?** Today or yesterday (D32), and the athlete
+ * not archived: `rowDayOpen`'s rule (`packages/db/src/queries/day/day-window.ts`), which the day page's ✓
+ * takes. One copy for this module, so B2's `clearDayAction` calls it rather than writing a second.
+ * ⚠️ Not exported: a `'use server'` module's exports are endpoints.
+ */
+async function dayIsOpen(profile: { archived: boolean }, day: string): Promise<boolean> {
+  return !profile.archived && inWritableWindow(day, await getActiveLocalDay());
+}
 
 /**
  * Server Action: Restore all, for one clear of one athlete's day. The server finds the clear's
@@ -43,11 +53,13 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
  *   refusal would tell a child that a restore which worked had failed. An accepted exception to
  *   "stale id → typed error" (plan § B1-2 panel, C3).
  */
-export async function restoreClearAction(input: RestoreClearInput): Promise<RestoreClearResult> {
+export async function restoreClearAction(
+  input: RestoreClearInput,
+): Promise<RestoreClearActionResult> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation(
     'restoreClearAction',
-    async (): Promise<RestoreClearResult> => {
+    async (): Promise<RestoreClearActionResult> => {
       const entry = await enterMutation(TRANSPORT_REFUSALS);
       if (!entry.ok) return entry;
       const parsed = restoreClearSchema.safeParse(input);
@@ -56,14 +68,12 @@ export async function restoreClearAction(input: RestoreClearInput): Promise<Rest
       const { profilePublicId, day, hiddenAt } = parsed.data;
       const profile = await getProfileByPublicId(profilePublicId);
       if (!profile) return { ok: false, reason: RESTORE_CLEAR_REFUSAL.not_found };
-      const refuse = (reason: RestoreClearRefusal): RestoreClearResult => {
+      const refuse = (reason: RestoreClearRefusal): RestoreClearActionResult => {
         revalidatePath(athletePath(profile.id));
         return { ok: false, reason };
       };
 
-      if (profile.archived || !inWritableWindow(day, await getActiveLocalDay())) {
-        return refuse(RESTORE_CLEAR_REFUSAL.closed_day);
-      }
+      if (!(await dayIsOpen(profile, day))) return refuse(RESTORE_CLEAR_REFUSAL.closed_day);
 
       const { restored, keptHidden } = await restoreClearedDay({
         profilePublicId: profile.id,

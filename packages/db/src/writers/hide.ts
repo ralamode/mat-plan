@@ -58,13 +58,6 @@ import { isUniqueViolationOn } from './unique-violation';
 const uuidArray = (ids: readonly string[]) => sql`${sql.param(ids)}::uuid[]`;
 
 /**
- * `deleted_at` as a token's fixed-format UTC text. Its home is `queries/clear-events.ts` since B1-2
- * (a leaf, so the clear's read and this module share it without a cycle); re-exported here, where
- * callers have always found it.
- */
-export { hiddenAtText };
-
-/**
  * 🔴 **The one un-hide (V1-9b B2-0).** Every writer that makes a hidden entry live sets this, so the
  * hide reason goes in the same statement as `deleted_at`: a live row with a reason is refused by
  * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`). `no-bare-unhide.test.ts` fails on any other

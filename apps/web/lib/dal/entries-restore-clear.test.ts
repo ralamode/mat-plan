@@ -93,6 +93,11 @@ describe('dayClearEvents (V1-9b B1-2)', () => {
     });
   });
 
+  it('an id that is not a uuid reads nothing, before the scope or the query', async () => {
+    expect(await dayClearEvents('not-a-uuid', ARGS.day)).toEqual([]);
+    expect(clearEventsForDay).not.toHaveBeenCalled();
+  });
+
   it('with no scope, reads nothing', async () => {
     state.scope = null;
     expect(await dayClearEvents(ARGS.profilePublicId, ARGS.day)).toEqual([]);

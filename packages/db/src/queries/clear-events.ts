@@ -26,7 +26,7 @@ import { isLiveProfile } from '../writers/ownership';
  * `deleted_at`, rendered as the fixed-format UTC text a token is.
  *
  * ⚠️ Used for the SELECT that produces a token and the UPDATE that returns one, so the two can never
- * disagree about the format. `writers/hide.ts` re-exports it, its home before B1-2.
+ * disagree about the format. Its home before B1-2 was `writers/hide.ts`, which imports it from here.
  */
 export const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 

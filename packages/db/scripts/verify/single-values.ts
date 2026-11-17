@@ -24,14 +24,8 @@ import {
   PRACTICE_DAY_UNIQUE_INDEX,
 } from '../../src/schema';
 import { writeCheckinEntries, type CheckinInsertValue } from '../../src/writers/checkin';
-import {
-  clearDay,
-  hiddenAtText,
-  hideEntries,
-  restoreClear,
-  restoreHidden,
-} from '../../src/writers/hide';
-import { clearEventsForDay } from '../../src/queries/clear-events';
+import { clearDay, hideEntries, restoreClear, restoreHidden } from '../../src/writers/hide';
+import { clearEventsForDay, hiddenAtText } from '../../src/queries/clear-events';
 import { hiddenEntriesForDay } from '../../src/queries/hidden-entries';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
 import { insertBodyweightEntry } from '../../src/writers/bodyweight';
@@ -1211,7 +1205,7 @@ async function verifyClearDay(): Promise<void> {
     assert.deepEqual(
       read,
       { [w3]: HIDE_REASON.clear_day, [p3]: HIDE_REASON.clear_day, [earlier]: null },
-      "B2-0 proof 3: the hidden-entries read reports each row's reason (B1-2's banner reads it)",
+      "B2-0 proof 3: the hidden-entries read reports each row's reason",
     );
 
     // 4 · Every other hide carries NO reason: a blank clear of a weigh-in (proof 3's `earlier`) or a
@@ -1413,7 +1407,8 @@ async function verifyClearDay(): Promise<void> {
     await backDate(p11, OLDER);
     const w11b = await weighIn(athlete.id, D11, 83);
     tokenOf(await clear(D11));
-    // Every clear in this transaction shares one now(), so the newer event gets its own token too.
+    // Every clear in this one transaction shares one now() (as on any Postgres), and PGlite's is in
+    // milliseconds, so the newer event gets its own six-digit token too.
     const NEWER = '2026-01-02T00:00:00.000002Z';
     await backDate(w11b, NEWER);
     const two = await events(D11);
@@ -1453,10 +1448,15 @@ async function verifyClearDay(): Promise<void> {
 
     // 13 · Scope, both directions, on a day both owners have cleared (D8): another household reads
     //      no events; the owner reads its own.
-    assert.equal(
-      (await events(D8)).length,
-      1,
-      "B1-2 proof 13: the owner reads its cleared day's event",
+    assert.deepEqual(
+      await events(D8),
+      [{ hiddenAt: mineCleared.hiddenAt, count: 1 }],
+      "B1-2 proof 13: the owner reads its own cleared day's event, and only its own entry",
+    );
+    assert.deepEqual(
+      await events(D8, asOther),
+      [{ hiddenAt: theirsCleared.hiddenAt, count: 1 }],
+      'B1-2 proof 13: the other household reads its own, and only its own entry',
     );
     assert.deepEqual(
       await events(D8, { ...asAthlete, scope: other.scope }),

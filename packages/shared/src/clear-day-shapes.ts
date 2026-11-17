@@ -28,7 +28,20 @@ export const clearEventSchema = z.object({
 export type ClearEvent = z.infer<typeof clearEventSchema>;
 
 /** Restore all: bring back one clear of this athlete's day, named by its token. */
-export const restoreClearSchema = rowRetickSchema.omit({ entryPublicId: true });
+export const restoreClearSchema = rowRetickSchema
+  .omit({ entryPublicId: true })
+  .refine((v) => isRealInstant(v.hiddenAt), { path: ['hiddenAt'] });
+
+/**
+ * A token that matches the format but names no real instant (`2026-02-30T…`, `T24:00…`) would pass the
+ * pattern and then fail Postgres' `::timestamptz` cast (22008), a crash on a public endpoint. It is
+ * refused here as `bad_value`. JS parsing is lenient (Feb 30 becomes Mar 2), so the check is that the
+ * parsed instant prints back to the token's own first 23 characters.
+ */
+function isRealInstant(token: string): boolean {
+  const ms = Date.parse(token);
+  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 23) === token.slice(0, 23);
+}
 export type RestoreClearInput = z.input<typeof restoreClearSchema>;
 
 /**
@@ -72,7 +85,7 @@ export const restoreClearResultSchema = z.discriminatedUnion('ok', [
   }),
   z.object({ ok: z.literal(false), reason: restoreClearRefusalSchema }),
 ]);
-export type RestoreClearResult = z.infer<typeof restoreClearResultSchema>;
+export type RestoreClearActionResult = z.infer<typeof restoreClearResultSchema>;
 
 // The transport's refusals must be reasons this result can carry. Checked at compile time.
 TRANSPORT_REFUSALS satisfies Record<string, RestoreClearRefusal>;
