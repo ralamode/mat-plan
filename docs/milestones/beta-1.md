@@ -494,6 +494,14 @@ median **368** insertions, p25 **174**, p75 **906**. So S ≈ ≤200, M ≈ ~400
 and a week of real use (its first program write waits on 7, and its logging and Today steps on 3–5). It owns
 removing `PROGRAM_SEED` from production, which this table's item 7 (`OPS-2`) leaves open as its Q3.
 
+⚠️ _Added 2026-11-17 (maintainer):_ **14 · [`CAT-3`](../specs/cat-3-movement-library.md), the movement
+library**, moves here from Beta 1: its schema, an extensive catalog authored and reviewed in-house, and the picker's filters and fuzzy search. It runs beside
+`FAM-1`'s lanes and ends with a **fresh start of the live app** (the seeded household is deleted
+through item 8's erasure and the household signs in again), which comes **before** `FAM-1`'s week
+of real use and replaces `SEC-6`'s re-key. By the maintainer's decision that fresh start is not a
+normal deletion: it does not wait for item 6's restore drill (`OPS-3`), which stays an exit
+criterion below. 27 to 34 PRs; its spec has the order.
+
 ### Three dependencies worth seeing before sequencing
 
 1. 🔴 **`OPS-3` and the runbook stub are the same work.** `runbooks.md`'s restore section is
@@ -555,7 +563,7 @@ improves before anyone is invited, and the invited family gets per-athlete days 
    3's verdict.
 5. **Widen to 3–5:** household members by invitation, step-up, self-serve deletion, client-side
    Sentry, the audit log, the support runbooks.
-6. `CAT-3`, `V1-16`, `PROGS-2`.
+6. `V1-16`, `PROGS-2` (`CAT-3` moved into Beta 0 on 2026-11-17).
 
 Each group is planned, prototyped and signed off when Beta 1 is planned, after Beta 0's sign-off.
 
