@@ -29,6 +29,7 @@ import type { HouseholdScope } from '../../src/scope';
 import {
   insertMovementOwnedBy,
   insertProgramBlockOwnedBy,
+  movementInHousehold,
   programBlockInHousehold,
   programBlockIsLegacy,
 } from '../../src/writers/ownership';
@@ -1763,13 +1764,14 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     });
     assert.ok(fresh.ok && !fresh.existed, 'FAM-1 6a-iii-a: a new name makes a new item');
     assert.equal(fresh.trackingType, TRACKING_TYPE.distance, 'FAM-1 6a-iii-a: …typed as asked');
+    // Ownership through the scope's own predicate: only `ownership.ts` unwraps a scope (scope.test.ts).
     const [made] = await tx
-      .select({ householdId: schema.movements.householdId, name: schema.movements.name })
+      .select({ name: schema.movements.name })
       .from(schema.movements)
-      .where(eq(schema.movements.publicId, fresh.itemPublicId));
+      .where(and(eq(schema.movements.publicId, fresh.itemPublicId), movementInHousehold(A_SCOPE)));
     assert.deepEqual(
       made,
-      { householdId: A_SCOPE.householdId, name: 'Hallway Crab Drill' },
+      { name: 'Hallway Crab Drill' },
       "FAM-1 6a-iii-a: the new item is the household's own, under the typed name",
     );
     const count = await rows();
