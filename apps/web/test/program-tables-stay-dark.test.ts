@@ -161,7 +161,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     [...code(join(REPO, b)).matchAll(/export\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
       m[1]!
         .split(',')
-        .map((n) => n.trim())
+        // `a as b` publishes `b`.
+        .map((n) =>
+          n
+            .trim()
+            .split(/\s+as\s+/)
+            .at(-1)!,
+        )
         .filter(Boolean),
     ),
   );
@@ -171,9 +177,15 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     );
   // The forms that would reach a writer without naming it in braces.
   const WHOLE_PACKAGE =
-    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)/;
+    /import\s*\*\s*as\s+\w+\s+from\s*['"]@mat-plan\/db['"]|import\(\s*['"]@mat-plan\/db['"]\s*\)|export\s*\*\s*(?:as\s+\w+\s*)?from\s*['"]@mat-plan\/db['"]/;
 
   it("apps/web imports none of lane P's program writers or reads yet (step 7a wires them)", () => {
+    for (const barrel of LANE_P_BARRELS) {
+      // A barrel that re-exports a whole module publishes names this scan cannot read.
+      expect(code(join(REPO, barrel)), `${barrel} names what it publishes`).not.toMatch(
+        /export\s*\*/,
+      );
+    }
     expect(laneP, 'the barrels name what they publish').toEqual(
       expect.arrayContaining(['createProgram', 'renameProgram', 'saveWorkout', 'readWorkoutDraft']),
     );
@@ -187,5 +199,7 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(named.test('async saveWorkout(draft) {')).toBe(false);
     expect(WHOLE_PACKAGE.test("import * as db from '@mat-plan/db';")).toBe(true);
     expect(WHOLE_PACKAGE.test("const m = await import('@mat-plan/db');")).toBe(true);
+    expect(WHOLE_PACKAGE.test("export * from '@mat-plan/db';")).toBe(true);
+    expect(WHOLE_PACKAGE.test("export * as db from '@mat-plan/db';")).toBe(true);
   });
 });

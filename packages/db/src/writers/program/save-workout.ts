@@ -95,7 +95,9 @@ const quantityColumns = (q: WorkoutDraftItem['quantities'][number]) => ({
  * every save of one program, creates included, while letting a foreign-key check (`FOR KEY SHARE`)
  * through; then the program's workouts `FOR NO KEY UPDATE`, in id order. A second save waits for the
  * first and then sees its rows, so a double tap of a new workout is a replay and two new workouts
- * cannot both take one name.
+ * cannot both take one name. (True under READ COMMITTED, Postgres's default and the app's: each
+ * statement takes a fresh snapshot after the wait. Under REPEATABLE READ the name check could miss
+ * the first save's workout.)
  *
  * The write (D19): rows are matched by `prescriptionClientId`, so a card keeps its row, and the
  * entries logged against it, whatever its place. A card that is gone is hidden with its quantities;
@@ -109,7 +111,20 @@ export async function saveWorkout(
 ): Promise<ProgramResult<{ workoutPublicId: string }>> {
   const parsed = saveWorkoutSchema.safeParse(input);
   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
-  const draft = parsed.data;
+  // Ids compare in JS below (maps, ===), while Postgres compares a uuid in any case and answers in
+  // lower case; zod accepts upper case. One spelling, so an upper-case id cannot slip between them.
+  const lower = (id: string) => id.toLowerCase();
+  const draft = {
+    ...parsed.data,
+    programPublicId: lower(parsed.data.programPublicId),
+    workoutClientId: lower(parsed.data.workoutClientId),
+    workoutPublicId: parsed.data.workoutPublicId && lower(parsed.data.workoutPublicId),
+    items: parsed.data.items.map((item) => ({
+      ...item,
+      prescriptionClientId: lower(item.prescriptionClientId),
+      itemPublicId: lower(item.itemPublicId),
+    })),
+  };
   if (!supersetsAreWellFormed(draft.items) || !draft.items.every(itemFitsItsType)) {
     return refuse(PROGRAM_REFUSAL.invalid);
   }

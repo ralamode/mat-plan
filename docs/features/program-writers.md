@@ -129,6 +129,12 @@ flowchart TD
     a `22P02`. `not_found` from a writer is one answer for a program, workout or item that missed;
     the DAL that wants to say which calls `programIn` / `workoutIn`.
 
+14. ⚠️ **Trap, latent: an item that is hidden later.** `readWorkoutDraft` joins `movements` without
+    `deleted_at`, so a card whose item was hidden still loads, while `saveWorkout` requires every item
+    to be available (`movementIsAvailableTo`) and answers the whole save `not_found`. Nothing hides a
+    movement today. The step that first does (RETIRE-1) decides: check availability only for new cards
+    and changed items, or drop such cards from the read.
+
 ## Changing it
 
 Start from the step's row in the plan (§5) and the decisions it cites (D19 for matching a saved
