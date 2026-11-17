@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index e3ebeb13..380d8441 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -146,7 +146,7 @@ export async function copyWorkout(
+               ),
+             );
+ 
+-    for (const [idx, { id: sourceId, ...item }] of items.entries()) {
++    for (const [idx, { id: sourceId, ...item }] of items.slice(items.length).entries()) {
+       const [copied] = await tx
+         .insert(schema.prescriptions)
+         .values({

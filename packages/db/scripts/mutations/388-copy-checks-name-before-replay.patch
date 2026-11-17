@@ -1,0 +1,32 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index e3ebeb13..a113cd70 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -64,13 +64,6 @@ export async function copyWorkout(
+       })
+       .from(schema.workouts)
+       .where(eq(schema.workouts.blockId, target.id));
+-    const replay = targetWorkouts.find((w) => w.clientId === draft.clientId);
+-    if (replay) {
+-      return replay.deletedAt === null
+-        ? { ok: true as const, workoutPublicId: replay.publicId }
+-        : refuse(PROGRAM_REFUSAL.not_found);
+-    }
+-
+     const [source] = await tx
+       .select({
+         id: schema.workouts.id,
+@@ -96,6 +89,13 @@ export async function copyWorkout(
+       return refuse(PROGRAM_REFUSAL.name_taken);
+     }
+ 
++    const replay = targetWorkouts.find((w) => w.clientId === draft.clientId);
++    if (replay) {
++      return replay.deletedAt === null
++        ? { ok: true as const, workoutPublicId: replay.publicId }
++        : refuse(PROGRAM_REFUSAL.not_found);
++    }
++
+     const made = await insertWorkoutOwnedBy(tx, scope, {
+       blockId: target.id,
+       clientId: draft.clientId,

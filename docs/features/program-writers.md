@@ -27,7 +27,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                                                |
 | 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                                               |
 | 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅                                        |
-| 6a-iii-b | the copy path (`copyWorkout`, C15)                                                                                                  |
+| 6a-iii-b | `writers/program/copy-workout.ts` (`copyWorkout`, C15) ✅                                                                           |
 | 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                                                        |
 | 6c       | `writers/program/assign.ts` (put on); `queries/program/{program-view,program-list}.ts`; fills in `writers/program/seed-fixtures.ts` |
 | 6d       | take off and reorder, in `assign.ts`                                                                                                |
@@ -49,6 +49,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/queries/program/week.ts`             | `readWeek`: a program's week as `WeekDraft['days']`, every weekday present, live slots of live workouts in order.                                                                                                                                                                                                                 |
 | `packages/db/src/queries/program/movement-options.ts` | `movementOptions`: every item the household can pick, catalog rows (with group and aliases) first, then its own live items no catalog slug shadows, used or not.                                                                                                                                                                  |
 | `packages/db/src/writers/program/new-item.ts`         | `newItem`: selects the item a name already names (`existingItem`, then the slug), with its stored name and own type; else makes a household item typed as asked.                                                                                                                                                                  |
+| `packages/db/src/writers/program/copy-workout.ts`     | `copyWorkout`: an independent copy of a workout into one of the household's programs, named by C15, with frozen provenance, optionally onto weekdays.                                                                                                                                                                             |
 | `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                                                                                                                   |
 | `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                         |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                             |
@@ -187,6 +188,17 @@ flowchart TD
     predicate) stops the name being made again. The PR that first hides a movement revisits that
     constraint's list and adds `newItem`'s step 2 and `movementOptions`' catalog and shadow
     `deleted_at` filters to it.
+
+18. 🔴 **A copy is independent of its source, and never a second workout of one name** (6a-iii-b;
+    contract change C15). It writes a new workout, new prescription rows (new client ids) and new
+    quantity rows; only `copied_from_workout_id` and the source program's name, frozen, point back
+    (mutations `copy-leaves-out-the-items`, `copy-leaves-out-the-quantities`). Its name is
+    `CopyDraft.name` when given, else `copyName` in its own program and the workout's own name in
+    another (`copy-name-ignores-the-program`); a name a live workout of the target has, folded, is
+    `name_taken` (`copy-name-not-folded`). A replay is answered before any check
+    (`copy-checks-name-before-replay`). The source must be a live workout of a live program of the
+    household (`copy-takes-a-removed-programs-workout`; `insertWorkoutOwnedBy` refuses another
+    household's source by itself). It goes last on each weekday named (`copy-puts-itself-first`).
 
 ## Changing it
 
