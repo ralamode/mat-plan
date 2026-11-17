@@ -400,13 +400,15 @@ would claim lane N's directory); `movement-search.ts` moves there from
 Starting lists, final in C0a's own review (a code is the lower-case word with underscores):
 
 - **Equipment:** barbell, EZ bar, trap bar, plates, dumbbell, kettlebell, medicine ball, sandbag,
-  weight vest, ankle weights, wrist weights, weight belt, bench, rack, pull-up bar, dip bars,
+  weight vest, ankle weights, wrist weights, weight belt, any weight (a load of the athlete's own
+  choosing, for a movement that is the same whatever the weight is made of), bench, rack, pull-up bar, dip bars,
   rings, parallettes, suspension trainer, band, cable machine, machine (any other selectorised
   machine), landmine, box, step, wall, sled (its tow strap included), battle rope, climbing rope,
   heavy bag, mat, foam roller, exercise ball, ab wheel, jump rope, air bike, rowing machine, ski
   ergometer, treadmill, stationary bike, climbing machine, back-extension bench, glute-ham
   developer, towel, anchor (a fixed point for a band or the feet), hill or stairs, ball (any
-  small ball), cones, hurdles, agility ladder, pool, partner. _(As built in C0a: 52 codes. The
+  small ball), cones, hurdles, agility ladder, pool, partner. _(53 codes: 52 as built in C0a, and
+  `any_weight` from the first batch review, contract change C29. The
   last eight came from lane N's names pass over about 490 names, before any table existed; plain
   `rope` went, because the two ropes are two things to own.)_
 - **Muscles:** neck, traps, shoulders, chest, upper back, lats, lower back, biceps, triceps,
@@ -722,6 +724,12 @@ and UX. Every blocking and should-fix finding is listed; "→" is what changed.
   household on purpose._ → the refusal is production's.
 - _C0b-1 as built: P6's word cap cannot apply to the plain match without breaking P1; how words
   combine in a near miss; short forms and the fallbacks._ → P3, P4, P6.
+
+**From the first batch review (2026-11-17), contract change C29**
+
+- _The maintainer: a weighted plank needs "just weight, they can choose how to add the weight";
+  "Obliques", not "Side abs"._ → the equipment code `any_weight`; the label of `obliques`. Both are
+  still edits: no table exists yet.
 
 **Rejected, with the reason**
 

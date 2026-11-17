@@ -21,7 +21,10 @@ import { keyBySelf } from '../enums';
  * One code per thing a person owns or has access to. `machine` is any selectorised machine that has
  * no code of its own; `anchor` is a fixed point for a band or the feet; `ball` is any small ball.
  * A sled's tow strap comes with `sled`; the two ropes are two things to own, so there is no plain
- * `rope`.
+ * `rope`. `any_weight` is a load of the athlete's own choosing (a plate, a dumbbell, a vest): for a
+ * movement that is the same whatever the weight is made of, such as a weighted plank _(maintainer,
+ * 2026-11-17: "Just weight, they can choose how to add the weight")_. An entry that needs one
+ * particular tool still names that tool.
  *
  * ⚠️ **A required set cannot say "this or that".** A goblet squat names one of dumbbell and
  * kettlebell, and a filter for the other does not show it (spec rule 8, a known limit).
@@ -39,6 +42,7 @@ export const EQUIPMENT = [
   'ankle_weights',
   'wrist_weights',
   'weight_belt',
+  'any_weight',
   'bench',
   'rack',
   'pull_up_bar',
@@ -99,6 +103,7 @@ export const EQUIPMENT_LABELS = {
   ankle_weights: 'Ankle weights',
   wrist_weights: 'Wrist weights',
   weight_belt: 'Weight belt',
+  any_weight: 'Any weight',
   bench: 'Bench',
   rack: 'Rack',
   pull_up_bar: 'Pull-up bar',
@@ -173,7 +178,8 @@ export const MUSCLE = keyBySelf(MUSCLES);
 
 /**
  * What each muscle is called on screen: plain words, since a child may be the one choosing
- * (spec, chunk P0). The anatomical name stays the code.
+ * (spec, chunk P0). The anatomical name stays the code. "Obliques" is the maintainer's choice over
+ * "Side abs" (2026-11-17, from the first batch review).
  */
 export const MUSCLE_LABELS = {
   neck: 'Neck',
@@ -187,7 +193,7 @@ export const MUSCLE_LABELS = {
   triceps: 'Triceps',
   forearms: 'Forearms and grip',
   abdominals: 'Abs',
-  obliques: 'Side abs',
+  obliques: 'Obliques',
   hip_flexors: 'Hip flexors',
   glutes: 'Glutes',
   adductors: 'Inner thigh',
