@@ -320,7 +320,14 @@ function SetRow({
       {status ? (
         <tr {...rowIdProps(rowId)}>
           <td colSpan={fields.length + (showPrevious ? 3 : 2)} className="pb-1">
-            <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
+            <RowStatus
+              r={r}
+              change={change}
+              lineId={errorId}
+              tickRef={tickRef}
+              name={name}
+              underTickClassName="mr-1.5"
+            />
           </td>
         </tr>
       ) : null}

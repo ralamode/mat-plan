@@ -65,7 +65,6 @@ export const DAY_COPY = {
       out_of_range: (kept: string, typed: string) => `Kept ${kept}. ${typed} won’t work.`,
     },
     undo: UNDO_LABEL,
-    cancel: 'Cancel',
     /** A failed save, still typed: send it again. */
     retry: 'Try again',
     /** The ✓'s description while a logged number is being changed: the ✓ saves it. */

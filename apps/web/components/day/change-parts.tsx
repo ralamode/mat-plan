@@ -3,7 +3,8 @@
 import { type DayItem } from '@mat-plan/shared';
 
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS } from '@/lib/constants';
+import { InlineEditActions } from '@/components/ui/inline-edit-actions';
+import { AMEND_COPY, INPUT_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { DAY_COPY } from './day-copy';
@@ -107,10 +108,17 @@ export function ChangeInput({
 
 /**
  * The line under a row: its error (with Reload, as before), or Change's line. While a number is
- * typed over: "Not saved. Was 30 lb." and Cancel, which is a phone's Escape. A failed save adds
- * "Try again". After a save: "Changed 30 → 35" and Undo, which stays beside a failed Undo. Focus goes
- * to the ✓ before a button that is about to go. Each button is described by the line, so a screen
- * reader hears which row's Undo or Cancel it is.
+ * typed over: "Not saved. Was 30 lb." and an icon-only ✕, which is a phone's Escape. A failed save
+ * adds "Try again". After a save: "Changed 30 → 35" and Undo, which stays beside a failed Undo.
+ * Focus goes to the ✓ before a button that is about to go. Each button is described by the line, so
+ * a screen reader hears which row's Undo or ✕ it is.
+ *
+ * **The ✕ sits at the line's right end, directly under the row's ✓** (maintainer, 2026-11-17, from
+ * three captured options): the field's own line has no room for it at 360px, where a 44px column
+ * would leave Previous 40-54px, narrower than its own header. Under the ✓ it reads as the ✓'s
+ * partner, not as "dismiss this message". `underTickClassName` puts its right edge on the ✓'s
+ * (`mr-1.5` in the set table, whose ✓ is centred in a `w-14` column; none on a card, whose ✓ ends
+ * the line) and `pt-1` keeps at least 8px between the two, as `InlineEditActions` spaces a pair.
  *
  * Not a live region: the page's one announcer speaks every change (`day.announce`).
  */
@@ -119,11 +127,17 @@ export function RowStatus({
   change,
   lineId,
   tickRef,
+  name,
+  underTickClassName,
 }: {
   r: ReturnType<typeof useRow>;
   change: RowChange;
   lineId: string;
   tickRef: React.RefObject<HTMLButtonElement | null>;
+  /** The row's name (`Bench press set 1`), for the ✕'s: two rows' ✕s must not both say "Cancel". */
+  name: string;
+  /** Lines the ✕ up under the row's ✓: a table's ✓ is centred in its column, a card's is not. */
+  underTickClassName?: string;
 }) {
   const buttonProps = {
     type: 'button',
@@ -144,23 +158,29 @@ export function RowStatus({
       {DAY_COPY.change.retry}
     </Button>
   ) : null;
-  // No Cancel while the Change is in flight: it could not stop the write.
-  const cancel =
-    change.dirty && !change.pending ? (
-      <Button
-        {...buttonProps}
-        // Safari: the field's blur comes before this click and must not send what Cancel discards.
-        onPointerDown={change.noteCancel}
-        // A touch that becomes a scroll is called off: the next blur must still send.
-        onPointerCancel={change.noteFocus}
-        onClick={() => {
+  // Mounted for as long as a number is typed over, the save included: while it is in flight the ✕
+  // is invisible but keeps its 44px, so the line does not move, and it cannot stop the write.
+  const cancel = change.dirty ? (
+    <div className={cn('ml-auto shrink-0 pt-1', underTickClassName)}>
+      <InlineEditActions
+        cancelLabel={AMEND_COPY.cancelLabel(name)}
+        onCancel={() => {
+          // The ✕ goes with the edit it cancels, so focus moves first, or it falls to the page.
           tickRef.current?.focus();
           change.revert();
         }}
-      >
-        {DAY_COPY.change.cancel}
-      </Button>
-    ) : null;
+        cancelHandlers={{
+          // Safari: the field's blur comes before this click and must not send what ✕ discards.
+          onPointerDown: change.noteCancel,
+          // A touch that becomes a scroll is called off: the next blur must still send.
+          onPointerCancel: change.noteFocus,
+        }}
+        pending={change.pending}
+        describedBy={lineId}
+        focusClassName={ON_TINT_BUTTON_FOCUS_CLASS}
+      />
+    </div>
+  ) : null;
   const undo = change.canUndo ? (
     <Button
       {...buttonProps}
@@ -179,21 +199,22 @@ export function RowStatus({
       <div className="flex flex-wrap items-center gap-2">
         <RowMessage r={r} errorId={lineId} tickRef={tickRef} />
         {retry}
-        {cancel}
         {undo}
+        {cancel}
       </div>
     );
   }
   const text = change.was ?? change.line?.text ?? null;
   if (text === null) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-2">
-      <p id={lineId} className="text-foreground text-sm">
+    // No wrap: the text is at most ~215px and the ✕ 44px, inside a 288px card at 360px.
+    <div className="flex items-center gap-x-2">
+      <p id={lineId} className="text-foreground min-w-0 flex-1 text-sm">
         {text}
         {change.was ? <span className="sr-only"> {DAY_COPY.change.tickSaves}</span> : null}
       </p>
-      {cancel}
       {undo}
+      {cancel}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
+import { AMEND_COPY } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
 import { card, held, makeMount, press, status } from './day-test-utils';
@@ -18,7 +19,7 @@ import { unitSpoken } from './row-values';
 /**
  * Change (FAM-1 step 13b-ii): a logged number edited in place, with the maintainer's guards
  * (2026-11-16) and the UX panel's findings (the ✓ in Safari's event order, a number not saved never
- * looking logged, a phone's Cancel, per-field keeping, Undo's baseline, the override that holds).
+ * looking logged, a phone's ✕, per-field keeping, Undo's baseline, the override that holds).
  */
 
 const { mount } = makeMount(createFakeDayActions);
@@ -48,6 +49,8 @@ const benchTick = (set = 1) =>
 /** Set 1's table row: logged in the fixture. */
 const loggedRow = () => within(bench()).getAllByRole('row')[1]!;
 const button = (name: string) => within(bench()).getByRole('button', { name });
+/** The row's ✕ (cancel), named for its row. */
+const cancelX = (set = 1) => button(AMEND_COPY.cancelLabel(setLabel(set)));
 
 /** Types into a field the way a person does: focus, then the new text. */
 function type(input: HTMLInputElement, text: string) {
@@ -259,14 +262,16 @@ describe('Change: a number that is not saved', () => {
     expect(load().classList).not.toContain('bg-done-surface');
     // The reps still hold the stored number, so they keep the logged look.
     for (const part of LOGGED_FIELD_CLASS.split(' ')) expect(reps().classList).toContain(part);
-    expect(within(bench()).getByText(DAY_COPY.change.notSaved('27.5 lb × 8'))).toBeTruthy();
-    expect(button(DAY_COPY.change.cancel)).toBeTruthy();
+    const line = within(bench()).getByText(DAY_COPY.change.notSaved('27.5 lb × 8'));
+    // The ✕ is on the line under the row, beside what it would throw away.
+    expect(line.parentElement?.contains(cancelX())).toBe(true);
+    expect(cancelX().getAttribute('aria-describedby')).toBe(line.id);
   });
 
-  it('Cancel (a phone’s Escape) puts the stored number back and moves focus to the ✓', async () => {
+  it('the ✕ (a phone’s Escape) puts the stored number back and moves focus to the ✓', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
     type(load(), '35');
-    await press(button(DAY_COPY.change.cancel));
+    await press(cancelX());
     expect(load().value).toBe('27.5');
     expect(document.activeElement).toBe(benchTick());
     expect(actions.amendRow).not.toHaveBeenCalled();
@@ -314,7 +319,7 @@ describe('Change: a number that is not saved', () => {
     expect(load().getAttribute('aria-invalid')).toBeNull();
     expect(within(bench()).getByText(DAY_COPY.change.failed('27.5 lb × 8'))).toBeTruthy();
     expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
-    expect(button(DAY_COPY.change.cancel)).toBeTruthy();
+    expect(cancelX()).toBeTruthy();
     // The ✓ is the retry.
     await press(benchTick());
     expect(actions.amendRow).toHaveBeenCalledTimes(2);
@@ -490,7 +495,7 @@ describe('an un-tick that the page’s data has caught up with (the same id may 
   });
 });
 
-describe('Change: the ✓ and Cancel in a browser’s order', () => {
+describe('Change: the ✓ and ✕ in a browser’s order', () => {
   it('🔴 an unlogged set: a number typed, then the ✓ tapped, logs it on the first tap', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
     const field3 = within(bench()).getByRole<HTMLInputElement>('textbox', {
@@ -501,10 +506,10 @@ describe('Change: the ✓ and Cancel in a browser’s order', () => {
     await press(benchTick(3));
     expect(actions.logRow).toHaveBeenCalledTimes(1);
   });
-  it('🔴 Cancel tapped in Safari’s order sends nothing', async () => {
+  it('🔴 the ✕ tapped in Safari’s order sends nothing', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
     type(load(), '35');
-    await safariTap(load(), button(DAY_COPY.change.cancel));
+    await safariTap(load(), cancelX());
     expect(actions.amendRow).not.toHaveBeenCalled();
     expect(load().value).toBe('27.5');
   });
@@ -660,10 +665,10 @@ describe('Change: review fixes', () => {
     expect(within(bench()).queryAllByRole('textbox')).toHaveLength(0);
   });
 
-  it('Cancel is announced', async () => {
+  it('the ✕ is announced', async () => {
     mount(yesterdayHalfDone, { change: true });
     type(load(), '35');
-    await press(button(DAY_COPY.change.cancel));
+    await press(cancelX());
     expect(status()).toBe(DAY_COPY.announce.cancelled(setLabel(1)));
   });
 });
@@ -703,6 +708,22 @@ describe('Change: second-pass fixes', () => {
     await leave(load()); // sent, and held in flight
     expect(load().readOnly).toBe(true); // the Change is in flight
     fireEvent.keyDown(load(), { key: 'Escape' });
+    expect(status()).not.toBe(DAY_COPY.announce.cancelled(setLabel(1)));
+    await gate.resolve();
+    expect(load().value).toBe('30');
+  });
+
+  it('while a Change is in flight the ✕ keeps its place, hidden, and cancels nothing', async () => {
+    const gate = held();
+    mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (a) => ({ amendRow: (input) => gate.after(() => a.amendRow(input)) }),
+    });
+    type(load(), '30');
+    await leave(load()); // sent, and held in flight
+    // Still mounted (its 44px kept, so the line does not move), but out of reach.
+    expect(cancelX().classList).toContain('invisible');
+    await press(cancelX());
     expect(status()).not.toBe(DAY_COPY.announce.cancelled(setLabel(1)));
     await gate.resolve();
     expect(load().value).toBe('30');
@@ -784,13 +805,13 @@ describe('Change: second-pass fixes', () => {
     expect(tickButton().getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('a Cancel press that turned into a scroll does not stop the next save', async () => {
+  it('a ✕ press that turned into a scroll does not stop the next save', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
     type(load(), '30');
-    // The touch starts on Cancel and becomes a scroll: the browser calls the press off, and the
+    // The touch starts on the ✕ and becomes a scroll: the browser calls the press off, and the
     // field keeps focus throughout.
-    fireEvent.pointerDown(button(DAY_COPY.change.cancel));
-    fireEvent.pointerCancel(button(DAY_COPY.change.cancel));
+    fireEvent.pointerDown(cancelX());
+    fireEvent.pointerCancel(cancelX());
     await leave(load()); // a tap elsewhere: this blur must send
     expect(actions.amendRow).toHaveBeenCalledTimes(1);
   });

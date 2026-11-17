@@ -172,7 +172,7 @@ function SingleItem({
         />
       </div>
       <div className="mt-2 empty:hidden">
-        <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
+        <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} name={item.name} />
       </div>
     </li>
   );
