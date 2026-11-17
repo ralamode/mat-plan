@@ -115,16 +115,23 @@ describe('the picker-options fixture', () => {
     );
   });
 
-  it('🔴 a library row is exactly what `catalogOptionOf` makes of its entry', () => {
+  it('🔴 a library row is exactly what `catalogOptionOf` makes of its entry, plus the old group', () => {
     for (const entry of library) {
       const row = catalogPickerOptions.find((option) => option.name === entry.name);
-      expect(row, entry.slug).toMatchObject(catalogOptionOf(entry, row?.publicId ?? ''));
-      expect(row?.owner, entry.slug).toBe('catalog');
+      if (!row || row.owner !== 'catalog') throw new Error(`no library row for ${entry.slug}`);
+      // `group` is the one field added here, while the picker's type still has it.
+      const { group, ...rest } = row;
+      expect(['push', 'pull', 'legs', 'core', 'wrestling'], entry.slug).toContain(group);
+      // Exactly: a row that also carried the steps, or the slug, would fail here (spec rule 11).
+      expect(rest, entry.slug).toEqual(catalogOptionOf(entry, row.publicId));
+      expect(JSON.stringify(row), entry.slug).not.toContain('instructions"');
     }
-    // Rows a screenshot needs: one with a supervision label, several with instructions.
+    // Rows a screenshot needs: a supervised one with steps, and rows with and without steps.
     const rows = catalogPickerOptions as readonly Record<string, unknown>[];
-    expect(rows.filter((row) => row.supervision === 'coach').length).toBeGreaterThan(0);
-    expect(rows.filter((row) => row.hasInstructions === true).length).toBeGreaterThan(1);
+    expect(
+      rows.filter((row) => row.supervision === 'coach' && row.hasInstructions === true).length,
+    ).toBeGreaterThan(0);
+    expect(rows.filter((row) => row.hasInstructions === true).length).toBeGreaterThan(2);
     expect(rows.filter((row) => row.hasInstructions === false).length).toBeGreaterThan(1);
   });
 
@@ -203,6 +210,24 @@ describe('the picker-options fixture', () => {
     expect(await previewHowTo(noStepsRow?.publicId ?? 'missing')).toBeNull();
     expect(await previewHowTo(householdPickerOptions[0]?.publicId ?? 'missing')).toBeNull();
     expect(await previewHowTo('019826b4-0000-7000-8000-00000000ffff')).toBeNull();
+    // 🔴 A library row that is NOT listed (its name is the household's item here) gives nothing
+    // by its own id, though its entry has steps: the read answers for listed rows only.
+    for (const name of KEPT_AS_ITEM) {
+      const entry = CATALOG_FIXTURE.find((candidate) => candidate.name === name);
+      expect(
+        await previewHowTo(CATALOG_FIXTURE_IDS[entry?.slug ?? ''] ?? 'missing'),
+        name,
+      ).toBeNull();
+    }
+    expect(CATALOG_FIXTURE.find((entry) => entry.name === 'Easy run')?.instructions).toBeTruthy();
+    // The label comes with the steps: the supervised movement, reached by its own library id.
+    const supervised = library.find((entry) => entry.supervision !== undefined);
+    expect(await previewHowTo(CATALOG_FIXTURE_IDS[supervised?.slug ?? ''] ?? 'missing')).toEqual({
+      name: supervised?.name,
+      instructions: supervised?.instructions,
+      supervision: 'coach',
+    });
+    expect(supervised?.instructions).toMatch(/\bcoach\b/i);
     expect(await previewHowTo('')).toBeNull();
   });
 

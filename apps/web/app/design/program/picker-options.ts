@@ -33,7 +33,7 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
  *   names the item by that id. That is what the fixtures chunk (F1) does for all of them; until
  *   then it is done here, by name.
  * - **Two do not** (Jump rope: a count in the test library, a duration in the prototype; Easy run:
- *   a duration there, a distance here): the row stays the household's item, since the fixtures log
+ *   a duration in the test library, a distance in the prototype): the row stays the household's item, since the fixtures log
  *   it that way, and the library's is left out. One entry has one tracking type (spec rule 10),
  *   so a real library would give the two different names; F1 settles it.
  *
@@ -43,10 +43,12 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 const itemByNameKey = new Map(FIXTURE_ITEMS.map((item) => [movementNameKey(item.name), item]));
 
 /**
- * The picker's old browse group for a library row. ⚠️ **Interim, and only for the type**: today's
- * `MovementOptionDTO` requires `group` on a library row, and the picker lane's chunks make it
- * optional and then delete it (CAT-3 spec P12). Nothing in the contract reads it; when the field
- * goes, this function goes.
+ * The picker's old browse group for a library row. ⚠️ **Interim.** Today's picker still reads
+ * `group` (its browse sections and the group tag in search results), so on the preview this
+ * mapping decides which old section a library row sits under: a rowing machine under Legs, a
+ * biceps curl under Pull. That is a stand-in, not a claim about the movement. The picker lane's
+ * chunks make the field optional and then delete it with the old sections (CAT-3 spec P12); the
+ * `satisfies` below stops this file compiling the day it is gone, and this function goes then.
  */
 function interimGroupOf(option: Parameters<typeof movementFamilyOf>[0]): MovementPickerGroup {
   if (option.modality === MODALITY.skill) return 'wrestling';
@@ -78,7 +80,8 @@ const libraryRows = CATALOG_FIXTURE.flatMap((entry) => {
   const publicId = twin?.itemPublicId ?? CATALOG_FIXTURE_IDS[entry.slug];
   if (publicId === undefined) throw new Error(`picker-options: no fixture id for ${entry.slug}`);
   const option = catalogOptionOf(entry, publicId);
-  return [{ slug: entry.slug, option: { ...option, group: interimGroupOf(option) } }];
+  const row = { ...option, group: interimGroupOf(option) } satisfies MovementOptionDTO;
+  return [{ slug: entry.slug, option: row }];
 });
 
 /** The test library's movements, as the picker's library rows. */

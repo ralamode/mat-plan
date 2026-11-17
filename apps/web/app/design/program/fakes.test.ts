@@ -44,8 +44,8 @@ import { catalogPickerOptions, pickerOptions } from './picker-options';
 /**
  * A library row for a test, under another name. 🔴 **Spread from a real one, never written out**:
  * a library row's fields are whatever `catalogOptionOf` gives (its taxonomy among them), and the
- * picker's option type requires them, so a hand-written literal here stops compiling the day that
- * type gains a field. Weight × reps, like the row it stands in for.
+ * picker's option type is about to require them (CAT-3 chunk B2-i), so a hand-written literal here
+ * would stop compiling the day that type gains a field. Weight × reps, like the row it stands in for.
  */
 function libraryRow(over: {
   readonly publicId: string;
@@ -1135,8 +1135,8 @@ describe('the fake ProgramActions: items and athletes', () => {
   });
 
   it('a typed alias selects the item it is another name for, and adds nothing', async () => {
-    // The fixture's items carry no aliases, so this seeds one catalog item that does, as the real
-    // picker data will (`MOVEMENT_PICKER_ENTRIES`).
+    // No listed row answers to "RDL", so this seeds one library row that does, as the real picker
+    // data will.
     const rdl = libraryRow({
       publicId: '019826b4-0000-7000-8000-0000000000d1',
       name: 'Romanian Deadlift',
