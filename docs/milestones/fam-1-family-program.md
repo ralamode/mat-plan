@@ -302,7 +302,7 @@ gantt
   9 picker                     :done, b4, 4, 5
   10 week editor               :done, b5, 5, 6
   10b dialogs                  :done, b6, 6, 7
-  7a-i, 7a-ii actions          :b7, 7, 8
+  7a (7a-i merged)             :active, b7, 7, 8
   7b pages                     :b8, 8, 9
   15 put on, take off          :crit, b9, 10, 11
 
@@ -349,12 +349,12 @@ gantt
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's three takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 30 of the 50). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 31 of the 50). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
   themselves. Since then: all of lane A's chain; lane E's 11a and 11b; lane B's six screen steps
-  (8a to 10b); lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0 and 3b-life.
-  6a-i and 6a-ii are merged and 6a-iii is not, so 6a's bar is part merged; so is the bar that
-  holds 3b-life and B2-0. A bar is marked here when its PRs are on `main`.
+  (8a to 10b) and 7a-i; lane C's four (13, 13b, 13b-ii, 13d); lane S's 3b-page, 3b-bw, 3b-0 and 3b-life.
+  6a-i and 6a-ii are merged and 6a-iii is not, so 6a's bar is part merged; so are 7a's bar
+  (7a-i is merged, 7a-ii is not) and the bar that holds 3b-life and B2-0. A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone

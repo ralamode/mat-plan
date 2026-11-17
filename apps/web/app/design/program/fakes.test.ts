@@ -1394,7 +1394,8 @@ describe('the fakes: rules found in review', () => {
       ).toEqual(refusal('once_per_day'));
 
       // A week whose every id is upper case names the page's own workouts: it saves.
-      const shouted = spell(page.week, 'ABCDEF00');
+      const shouted = spell(familyProgram.week, 'ABCDEF00');
+      expect(shouted).not.toEqual(page.week);
       expect(
         await actions.saveWeek({
           programPublicId: page.programPublicId.toUpperCase(),

@@ -35,7 +35,6 @@ import {
   type ProgramView,
   type RowRefusal,
   type RowResult,
-  type WeekDraft,
 } from '@mat-plan/shared';
 
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
