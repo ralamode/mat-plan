@@ -2,23 +2,26 @@
 
 > Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step
 > 12a. Branch: `feat/fam-1-12a-day-resolver`. Lane E ([day-writers.md](../features/day-writers.md)).
-> **Rev 1, a draft for the panel.** It proposes a split into 12a-i and 12a-ii (§ Split), waiting on
-> the maintainer's answer.
+> **Rev 2**, after a five-lens panel (§ Review-response log). The split (§ Split) waits on the
+> maintainer; four contract answers (Q1–Q4) wait on the contract owner.
 
 ## Goal
 
 Turn an athlete and a day into the `DayPlan` the day page shows (`packages/shared/src/program/day-shapes.ts`):
 
-- the programs the athlete is on that day, and the workouts in them, in order;
+- the programs the athlete is on that day, and their workouts, in order;
 - each workout's items, rows and progress;
-- what each logged row stored, and what was prescribed;
-- PREVIOUS, what this athlete last logged for the same item and set.
+- what each logged row stored, and what it was logged against;
+- PREVIOUS: what the athlete last logged for the same movement and set.
 
 This step is a read only. 12b's DAL wraps it, and 12c puts it on the page.
 
-**Roadmap alignment (2026-11-17):** advances `FAM-1` lane E. Gated by 11b (#470, merged) and
-contract step C17 (the fixture sources, below). It gates 12b (12a-i) and 12c (12a-ii). Checked
-against the private roadmap; nothing to add here.
+**Roadmap alignment (2026-11-16):** advances `FAM-1` lane E. It is gated by 11b (#470, merged) and
+contract step C17 (#504: the fixture sources, plus the `build.ts` fixes for R3 and R6). It gates 12b.
+`ID-1`: no key or cache is keyed on `(household, profile)`, and no branch reads `profiles.kind`.
+`programBlockOfProfile` ties history to the athlete's CURRENT household, so after an `ID-1` move the
+old household's workouts disappear (fail-closed). That is `ID-1`'s "take your history" question,
+recorded here, not decided. Checked against the private roadmap; nothing to add here.
 
 ## Acceptance
 
@@ -29,121 +32,232 @@ From the plan's §5 row 12a, verbatim:
 
 Done when:
 
-- For each fixture in `DAY_PLAN_FIXTURES`, `verify/day.ts` seeds its source world from
-  `DAY_PLAN_FIXTURE_SOURCES` (C17). It runs the resolver, and the result deep-equals the fixture
-  through `normalize-fixture.ts`.
-- Each 12a line in `packages/db/src/writers/day/owed.test.ts` becomes a real proof and leaves the
-  owed list.
-- Each rule below names the mutation that turns its proof red (lane E's numbers: 110–129, then
-  170–199), or is listed as unproven, with the reason.
+- For each fixture in 12a's set (§ Split), `verify/day.ts`:
+  - seeds its source from `DAY_PLAN_FIXTURE_SOURCES` (C17);
+  - resolves it;
+  - compares it to the fixture with **ids mapped exactly**: the seeder returns fixture id → minted
+    public id, and the comparison translates through that map instead of relabelling every UUID. A
+    returned `client_id` therefore fails (B1).
+- **A round trip per fixture family:** the returned `workoutPublicId` and `prescriptionPublicId` tick
+  through `logRow` → `ok`, and the returned `entryPublicId` un-ticks through `untickRow` → `ok`.
+- **Every 12a line in `owed.test.ts` is mapped:** either to the fixture that proves it, or to a new
+  proof (§ Test plan).
+- **Every rule no fixture exercises names a mutation**, or is listed as unproven with the reason.
 
-## Decisions taken in
+## Decisions
 
-These come from the contract owner's answers of 2026-11-17, carried by C17.
+From the contract owner (2026-11-16, C17):
 
-| #   | Decision                                                                                                                                                                                                                                                                                                                                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| R1  | The resolver takes `today`. It computes `writable` (`inWritableWindow`), `future` and `canGoForward`; the DAL supplies `today` and adds `athletes`.                                                                                                                                                                                                                      |
-| R2  | A workout's `name` is the frozen `sessions.workout_name` where only logged rows show (a closed day, or a workout that left the week). Elsewhere it is the live `workouts.name`. **`label` of a workout that left the week is `null`, behind one line** (open with the maintainer); there is no new column.                                                               |
-| R3  | A writable day's rows are sets 1 to N, as prescribed, plus each LOGGED set beyond N. A gap below a logged extra set is not a row and is not counted.                                                                                                                                                                                                                     |
-| R4  | A removed item's rows are grouped by `prescription_id`, or by the movement after a purge. They come after the live items, in first-logged order (`created_at`, then id). Its `name` is `movement_name` and its text is the snapshot. It has no target, notes or superset, and `previous` is `null`. Its `unit` is `null` when the type has no slot, else `entries.unit`. |
-| R5  | PREVIOUS keys on the MOVEMENT and the set number. Two prescriptions of one movement share it, and this is a recorded limit.                                                                                                                                                                                                                                              |
-| R6  | `programs` lists the programs on that day: current ones by their order in `currentPrograms`, then any the athlete has come off, by `(idx, id)`. `workouts` follows the same program order, then `block_day_workouts.idx`, then any workout logged that day that has left the week.                                                                                       |
-| R7  | List each program once (the database can hold two current rows for one program).                                                                                                                                                                                                                                                                                         |
-| R8  | C16 (#499): every saved item has a unit its type logs in and a target an empty ✓ can store. The resolver does not guard against either being missing.                                                                                                                                                                                                                    |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | The resolver takes `today`; the DAL supplies it and adds `athletes`. `writable = inWritableWindow(day, today)` (#504's docblock); `future` is `day > today`; `canGoForward` is computed here. **The archive half is Q1.**                                                                                                                                                                                                    |
+| R2  | Where only logged rows show (a closed day, or a workout that left the week), `name` is the frozen `sessions.workout_name`. Otherwise it is the live name. A left-the-week workout's `label` is `null`, behind one line, and the label is open with the maintainer, so `workout-left-the-week` is **carved out** until it is decided.                                                                                         |
+| R3  | Writable rows: sets 1..N as prescribed, plus each LOGGED set beyond N. A gap is neither a row nor counted.                                                                                                                                                                                                                                                                                                                   |
+| R4  | A removed item: grouped by `prescription_id` (by the movement after a purge, an unproven fallback since no writer purges yet). Placed after live items, in first-logged order. `name` is `movement_name`; the text is the snapshot. No target, notes or superset; `previous` is null. `unit` is null when the type has no slot, else `entries.unit`. Which row supplies these, and the same-movement-live case, are **Q2c**. |
+| R5  | PREVIOUS keys on the MOVEMENT and the set number (a recorded limit: two prescriptions of one movement share it).                                                                                                                                                                                                                                                                                                             |
+| R6  | `programs`: the current ones by their `currentPrograms` order, then the ones the athlete has come off, by `(idx, id)`. `workouts` follows the same program order, then `block_day_workouts.idx`, then left-the-week workouts (**Q2d**: first live entry's `created_at`, then id).                                                                                                                                            |
+| R7  | Each program is listed once, placed by its open or upcoming row's `idx`, else its closed row's (`schema.ts`, `programAssignments`). Each workout is listed once. **Q2b**: a program on day D through a closed row, current through a later one.                                                                                                                                                                              |
+| R8  | C16 (#499): a saved item always has a loggable unit and a target. No guard for either.                                                                                                                                                                                                                                                                                                                                       |
+
+Lane E's own, from the panel:
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1  | **Two anchors.** The live branch is anchored on the assignment, with `liveTemplateBlockIn(scope)` ∧ `programBlockOfProfile`. The logged branch is anchored on the athlete, with `programRowOf(profileId, day)`. It LEFT JOINs workout, block and prescription, with `templateBlockIn(scope)` ∧ `programBlockOfProfile` in the ON clause. A foreign pointer (runbook (f)/(g)) **drops the row**: it never falls to the removed or purged path, which shows frozen text. A purged pointer (NULL) keeps the row with null ids (`day-shapes.ts:97`). Residual: after a purge the resolver cannot tell foreign from purged, so pre-flight (f)/(g) is the only control. |
+| E2  | **The movement is read under `movementIsAvailableTo(scope)`**, so an item is absent exactly where 11b's writer answers `not_found` (11b's fixture `p.foreignMove`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| E3  | **Hidden entries are never logged rows**, and a session counts only through its live entries. A session outlives its entries (`hideEntries` never hides a session). A live entry with no live set throws, with internal ids only (#498).                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| E4  | **Program rows only.** The day's entries go through `programRowOf`, so a weigh-in, a practice or a check-in on that day never enters a DayPlan. Bodyweight is privileged (SECURITY.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| E5  | **The prescription's derived terms** (`quantities`, `target`, `unit`, `text`) come from ONE pure function in `queries/day/prescription-terms.ts`, which 11b's `logRow` also calls. So the live heading and the frozen snapshot cannot diverge.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| E6  | **Superset placement:** a group sits at its first member's `idx`; members are ordered by `(superset_order, idx)`; `superset.order` is the position in the group. A group of one has no rest (D14).                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| E7  | **Exports:** `packages/db` exports `resolveDayPlan` and its type by name only, never `export *` from `queries/day`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ## The rules, field by field
 
-**Signature (proposed):**
+**Signature:**
 
 ```ts
 export async function resolveDayPlan(
   exec: Executor,
   args: { scope: HouseholdScope; profilePublicId: string; day: string; today: string },
-): Promise<Omit<DayPlan, 'athletes'> | null>; // null: profile not live in scope
+): Promise<Omit<DayPlan, 'athletes'> | null>; // null: profile not live in scope (uniform, no oracle)
 ```
 
-| Field                | Rule (source)                                                                                                                                                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `today`, `day`       | As passed.                                                                                                                                                                                                                                                                                             |
-| `writable`           | `inWritableWindow(day, today)`, and not archived (as `dayPageFlags`).                                                                                                                                                                                                                                  |
-| `future`             | `day > today`.                                                                                                                                                                                                                                                                                         |
-| `onProgram`          | `'yes'` if any assignment is `assignmentOnDay(day)`; else `'not-this-day'` if any is `assignmentCurrentAsOf(today)`; else `'never'`. Always ANDed with a live template block in scope and the live profile.                                                                                            |
-| `canGoForward`       | true on a past day. On today or later: true if some assignment is on `day + 1`.                                                                                                                                                                                                                        |
-| `currentPrograms`    | `assignmentCurrentAsOf(today)`, once per program, ordered by `(idx, id)`.                                                                                                                                                                                                                              |
-| `programs`           | R6.                                                                                                                                                                                                                                                                                                    |
-| `workouts`           | R6. `scheduled`: `scheduledOn` (11b's rule) for a live workout of a program on that day.                                                                                                                                                                                                               |
-| `progress`           | `done` counts the live logged rows of live items. `total` is each live item's prescribed rows (its sets, or 1) plus each logged set beyond them. Removed items count in neither.                                                                                                                       |
-| `items`              | Live prescriptions in `idx` order, with a superset's members by `(superset_order, idx)` (L16: two members may share an order). Then removed items (R4). On a closed day, or for a workout that left the week, an item with no logged row is absent.                                                    |
-| `target`             | `prescribedTarget(target_reps, live quantities)` (C10).                                                                                                                                                                                                                                                |
-| `unit`               | `itemUnit(type, quantities)` (C13), or R4 for a removed item.                                                                                                                                                                                                                                          |
-| `prescribedText`     | `prescribedText({ trackingType, sets, targetReps, quantities: target.quantities })`, the same call 11b freezes. On a closed day an item shows its logged rows' snapshot, if the fixture says so (to be confirmed by the deep-equal).                                                                   |
-| `notes`, `restAfter` | `prescriptions.notes`. `rest_after` is on a group's last member, keyed by `superset_label`, only for groups with a shown item.                                                                                                                                                                         |
-| `rows`               | A writable day uses R3. A closed day, or a workout that left the week, lists logged rows only. A future day lists none. `logged.values` come from `readRowValues` (11b's reader); `logged.prescribedText` from `prescribed_snapshot`. Un-ticked (hidden) entries are not logged rows.                  |
-| `previous`           | `previous.ts`: the same profile, the same movement and the same `prescription_set`. Program rows only (`prescription_set IS NOT NULL`), live, `activity_date < day`; the latest such day; the first logged on it (`created_at`, then id). `null` on a day that is not writable, and on a removed item. |
+| Field                              | Rule                                                                                                                                                                                                                                                                       | Proved by                                                             |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `writable`, `future`               | R1 (and Q1)                                                                                                                                                                                                                                                                | fixtures; archive proof (Q1)                                          |
+| `onProgram`                        | `'yes'`: an assignment `assignmentOnDay(day)`; `'not-this-day'`: one `assignmentCurrentAsOf(today)`; else `'never'`. All through E1's live anchor.                                                                                                                         | fixtures; hidden-block proof                                          |
+| `canGoForward`                     | true on a past day; else true iff an assignment is on `day + 1` (E1's live anchor)                                                                                                                                                                                         | new proofs (`active_to = today`; a past day before a gap)             |
+| `currentPrograms`                  | `assignmentCurrentAsOf(today)`, R7                                                                                                                                                                                                                                         | fixtures; two-rows proof                                              |
+| `programs`, `workouts`             | R6, R7                                                                                                                                                                                                                                                                     | fixtures (C17's come-off fixture); reverse-insert seeding             |
+| `scheduled`                        | `scheduledOn`                                                                                                                                                                                                                                                              | fixtures                                                              |
+| `progress`                         | `done` counts live logged rows of live items; `total` is the prescribed rows (sets, or 1) plus logged sets beyond them. Removed items count in neither.                                                                                                                    | fixtures; un-tick proof                                               |
+| `items`                            | E6, then R4. On a closed day, or for a left-the-week workout, an item with no live logged row is absent.                                                                                                                                                                   | fixtures; shared-order proof                                          |
+| `target`, `unit`, `prescribedText` | E5 (live). A closed day's heading follows **Q2a** (proposed: the first logged snapshot that differs from the live text, else the live text).                                                                                                                               | fixtures; edited-then-closed proof (12a-ii)                           |
+| `notes`, `restAfter`               | `prescriptions.notes`; `rest_after` on a group's last member, for a shown group of two or more                                                                                                                                                                             | fixtures                                                              |
+| `rows`                             | R3 (writable); logged rows only (closed, or left the week); none (future). `logged.values` from `readRowValues`, `logged.prescribedText` from `prescribed_snapshot`. E3.                                                                                                   | fixtures; un-tick proofs                                              |
+| `previous`                         | `previous.ts`: the same `profile_id`, movement and `prescription_set`; `programRowOf`'s conjunct before `day`; live; the latest day; then `created_at`, then id. Null on a day that is not writable, and on a removed item. Takes ids the caller has already proved owned. | fixtures; sibling and foreign-athlete proof; equal-`created_at` proof |
 
 **Reads:**
 
-- `program_assignments`: through `queries/program-assignments.ts`. Its predicates are lane A's, and
-  the stay-dark allowlist names `queries/day/day-plan.ts` only if the resolver names the table itself.
-- `program_blocks`, `workouts`, `block_day_workouts`, `prescriptions`, `prescription_quantities`,
-  `movements`, `sessions`, `entries`, plus `readRowValues`.
-- Every select names its columns, as the stay-dark guard's patterns require.
+- The assignment reads are in `queries/day/scheduled.ts`, which is lane E's and already on the
+  stay-dark allowlist. That keeps "12a and 11b move to `assignmentDueOn` together" in one file
+  (`onProgramOn(profileId, day)`, composed by `isOnProgramThatDay` and the resolver).
+- The other tables, through `day-plan.ts` and `previous.ts`. Every select names its columns.
+- `programRowOf` and the slot conjuncts move from `writers/day/log-row.ts` to `queries/day/` (a read
+  does not import a writer module). `log-row.ts` re-imports them.
 
 ## Split (proposed; the maintainer's call)
 
-- **12a-i:** the resolver, without PREVIOUS (`previous` is `null` everywhere), with proofs for the
-  writable-day, future-day and no-program fixtures.
-  - **Gates:** C17. **Gates next:** 12b.
-- **12a-ii:** `previous.ts`; the closed-day, workout-left-the-week, removed-item and come-off-program
-  fixtures; renamed workouts; the duplicate-movement and shared-`superset_order` proofs.
-  - **Gates:** 12a-i. **Gates next:** 12c.
+- **12a-i:** the resolver and PREVIOUS. It proves the fixtures whose `source.before === null`, chosen
+  by that test, not a list; `closed-day-logged-only` is among them. **Gates:** C17. **Gates next:** 12b
+  (and 12c's e2e).
+- **12a-ii:** the before → log → edit replay; R2's frozen name; R4's removed items; R6's come-off tail;
+  Q2a's closed-day text; their fixtures (`today-stretching-first`, `yesterday-edited-after-logging`,
+  `closed-day-program-since-left`, and `workout-left-the-week` once its label is decided). **Gates:**
+  12a-i, and the lane P writers each edit replays (6a-ii, 6b, 6c, 6d), or a recorded decision to apply
+  the edits with direct SQL. **Gates next:** 15.
 
-## File by file
+## File by file (12a-i)
 
-| Path                                                   | Change          | What                                                                                                                                                                                                          |
-| ------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/queries/day/day-plan.ts`              | NEW             | `resolveDayPlan`.                                                                                                                                                                                             |
-| `packages/db/src/queries/day/previous.ts`              | NEW (12a-ii)    | `previousRows(exec, profileId, day, keys)`: one query for every row of the day.                                                                                                                               |
-| `packages/db/src/queries/day/index.ts`, `src/index.ts` | EDIT            | Exports for 12b.                                                                                                                                                                                              |
-| `packages/db/scripts/verify/day.ts`                    | EDIT            | A fixture seeder (world → rows through the real writers: lane P's program writers where they exist, else the ownership helpers; 11b's `logRow` for entries), the deep-equal per fixture, and the owed proofs. |
-| `packages/db/src/writers/day/owed.test.ts`             | EDIT            | The 12a lines go.                                                                                                                                                                                             |
-| `packages/db/scripts/mutations/NN-…` + `README.md`     | NEW/EDIT        | One patch per rule.                                                                                                                                                                                           |
-| `docs/features/day-writers.md`                         | EDIT            | File map; invariants (the order rule; PREVIOUS's key; R3; which fields the DAL sets).                                                                                                                         |
-| `apps/web/test/program-tables-stay-dark.test.ts`       | EDIT, if needed | Allowlist `day-plan.ts` with its reason.                                                                                                                                                                      |
-| `docs/changelog/<date>-feat-fam-1-12a-….md`            | NEW             | The fragment.                                                                                                                                                                                                 |
+| Path                                                   | Change   | What                                                                                                              |
+| ------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/queries/day/day-plan.ts`              | NEW      | `resolveDayPlan`.                                                                                                 |
+| `packages/db/src/queries/day/previous.ts`              | NEW      | `previousRows(exec, profileId, day, keys)`: one query for the day's rows.                                         |
+| `packages/db/src/queries/day/prescription-terms.ts`    | NEW      | E5's pure function.                                                                                               |
+| `packages/db/src/queries/day/program-rows.ts`          | NEW      | `programRowOf` and the slot conjuncts, moved from `log-row.ts`.                                                   |
+| `packages/db/src/queries/day/scheduled.ts`             | EDIT     | `onProgramOn`; the assignment reads.                                                                              |
+| `packages/db/src/writers/day/log-row.ts`               | EDIT     | Imports E5 and the moved conjuncts. No behaviour change: 11b's proofs and mutations stay green and red as before. |
+| `packages/db/src/queries/day/index.ts`, `src/index.ts` | EDIT     | Named exports (E7).                                                                                               |
+| `packages/db/scripts/verify/day-plan.ts`               | NEW      | The fixture seeder and proofs (`verify/day.ts` is 1,455 lines). Lane E owns it through a new `owns:` line.        |
+| `packages/db/scripts/verify/day.ts`                    | EDIT     | Calls `verifyDayPlan`.                                                                                            |
+| `packages/db/src/writers/day/owed.test.ts`             | EDIT     | The 12a-i lines go.                                                                                               |
+| `packages/db/scripts/mutations/NN-…`, `README.md`      | NEW/EDIT | About 8, from the new block (§ Test plan).                                                                        |
+| `docs/features/day-writers.md`                         | EDIT     | `owns:`, file map, invariants (E1–E7), `day-writers.md:44`'s export decision, a read-path diagram.                |
+| `docs/architecture.md`                                 | EDIT     | The day read path (§2d still describes the legacy read).                                                          |
+| `docs/tech-debt.md`                                    | EDIT     | The seeder's direct inserts fold into lane P's `seedProgramFixtures` at 6c.                                       |
+| `docs/changelog/<date>-feat-fam-1-12a-….md`            | NEW      | The fragment.                                                                                                     |
+
+The FAM-1 plan rows, the milestone chart and the roadmap entry for the split are the contract
+owner's (the #500 precedent).
 
 ## Test plan
 
-- **Per fixture** (13+, after C17): seed `world`. If there is a `before`, seed that first, log its
-  entries through `logRow`, then apply the edit through the real writers. Resolve with the fixture's
-  `day` and `today`, and deep-equal through `normalize-fixture.ts`. Timestamps are hand-written on
-  entries, so the tie-breaks are set by the proof rather than by `now()`.
-- **Owed, beyond the fixtures:**
-  - workouts in program order then week order; labels never sort;
-  - PREVIOUS counts program rows only, its tie-break, and its null on a day that is not writable;
-  - a closed day omits unlogged items and workouts;
-  - progress (R3's gap; a removed item's rows);
-  - look-ahead only while on a program;
-  - prescribedText equals the renderer's output;
-  - the duplicate-movement case (R5) and a shared `superset_order`.
-- **Mutations:** one per rule above. For example: drop `assignmentOnDay` (onProgram); order workouts
-  by assignment array (R6); list a gap row (R3); key PREVIOUS by prescription (R5); include hidden
-  entries; order a superset by `idx` alone; take a closed day's name live (R2).
-- Run `pnpm verify`. There is no UI, so no screenshots.
+**The seeder** (`verify/day-plan.ts`, test-only, owned by lane E):
+
+- Programs, workouts, the week, prescriptions, quantities and assignments are written with direct
+  inserts, **in reverse order**, so ids never match `idx`.
+- ⚠️ A world's `assign.to` is the first day OFF, so `active_to = to − 1`.
+- Entries go through `logRow`, with `today` set to each entry's own day, so the window lets the
+  fixture's older entries through. Then `created_at` is UPDATEd to the world's stamps, ordered
+  opposite to id, so a `created_at` tie-break is decided by `created_at`.
+- It returns fixture id → public id.
+
+**Fixtures:** 12a-i's set (`before === null`), deep-equalled with ids mapped exactly, plus the round
+trip.
+
+**Owed lines, mapped:**
+
+| Owed line                                         | Proved by                                                                                       |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| deep-equals each fixture                          | the fixture loop                                                                                |
+| program order, then week order; labels never sort | `today-two-programs` (and `today-stretching-first`, 12a-ii)                                     |
+| PREVIOUS counts only program rows                 | **new**: a weigh-in and a strength entry on the same movement the day before                    |
+| PREVIOUS takes the first logged                   | **new**: equal `created_at`, decided by id; `today-two-programs` (splits)                       |
+| PREVIOUS is null on a day that is not writable    | `closed-day-logged-only`                                                                        |
+| a closed day omits unlogged items and workouts    | `closed-day-logged-only`                                                                        |
+| progress                                          | `yesterday-half-done`; **new**: an un-tick lowers `done`, and an un-ticked extra set's row goes |
+| look-ahead                                        | **new**: `active_to = today` (false today, true yesterday); a past day before a gap (true)      |
+
+**Other new proofs** (12a-i):
+
+- **Ownership:**
+  - a profile of another household under H's scope → `null`, identical to a missing one;
+  - a planted (f) session, (g) entry and (h) assignment each leave no H id or string in F's DayPlan
+    (E1);
+  - `p.foreignMove` is absent (E2);
+  - a sibling and an F athlete logging the same movement and set earlier do not reach PREVIOUS.
+- **Hidden:** an un-ticked row is not logged; a left-the-week workout whose rows are all un-ticked is
+  absent; PREVIOUS skips a hidden row.
+- **Order:** `superset_order` opposite to `idx` (E6); two current rows for one program (R7); a hidden
+  block (onProgram `never`, gone from `currentPrograms`, `canGoForward` false).
+- **No foreign rows:** a weigh-in, a practice and a check-in on the day are absent (E4).
+
+**Mutations** (only for rules no fixture exercises; the deep-equal guards the rest):
+
+- PREVIOUS loses its program-row conjunct;
+- PREVIOUS loses its profile;
+- hidden entries are counted;
+- a superset is ordered by `idx` alone;
+- `assignmentOnDay` becomes `assignmentCurrentAsOf`;
+- the logged branch's ON loses `programBlockOfProfile`, so an (f) row leaks;
+- the movement read loses `movementIsAvailableTo`;
+- `canGoForward` tests `day` instead of `day + 1`.
+
+That is 8, with numbers from lane E's next block.
+
+Run `pnpm verify`. There is no UI.
 
 ## Risks
 
-- **A fixture that the database cannot express** (the frozen label, R2): built as `null`, and the
-  fixture follows C17.
-- **N+1 reads:** the resolver reads per day, not per row. PREVIOUS is one query for the day's rows.
-- **Ownership:** every read goes through `isLiveProfile(scope)` and `templateBlockIn(scope)` /
-  `programBlockOfProfile`, as 11b's are.
+- **A fixture the database cannot express:** R2's label; the fixture is carved out.
+- **N+1 reads:** one query per kind per day; PREVIOUS is one query.
+- **Ownership:** E1, E2 and E4, each with a planted-row proof and a mutation.
 
 ## Out of scope
 
-`athletes` and the page (12b, 12c); Change (11c); the revive (D35, 11c); the export (14).
+`athletes` and the page (12b, 12c); Change (11c); the revive (D35, 11c); the export (14). 14's
+grouping must match R4's key: when 14 is built, it reads the grouping helper rather than restating it.
+
+## Open questions
+
+- **Q1 (contract owner):** an archived athlete's day. Is it `writable = false` with the closed-day
+  shape, or a separate flag? (The writer refuses them either way.)
+- **Q2 (contract owner):** `build.ts` rules not in the shape's text: (a) a closed day's heading; (b)
+  `order` for a program on day D through a closed row; (c) which row supplies a removed item's name
+  and unit, and whether a removed prescription's rows attach to a live item of the same movement; (d)
+  the order of several left-the-week workouts.
+- **Q3 (contract owner):** id mapping in `normalize-fixture.ts`, or lane E's own map (proposed: lane
+  E's).
+- **Q4 (maintainer):** the split.
 
 ## Review-response log
 
-_(The panel has not run.)_
+### Engineering panel, round 1 (rev 1; Opus 5.5)
+
+> Panel cost: correctness 171k · 8m59s, scope 102k · 6m17s, architecture 155k · 7m35s, reuse 119k ·
+> 3m33s, security 121k · 4m07s.
+
+| #   | Lens                             | Critique (short)                                                | Verdict              | Resolution                                                                                                                                                              |
+| --- | -------------------------------- | --------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | correctness                      | The deep-equal can't tell a public id from a client id          | **accepted**         | Ids mapped exactly; a round trip through `logRow` and `untickRow`                                                                                                       |
+| C2  | correctness, scope, architecture | 12a-i without PREVIOUS fails most writable fixtures             | **accepted**         | PREVIOUS in 12a-i; split on `before`                                                                                                                                    |
+| C3  | correctness, architecture        | The closed-day `prescribedText` rule was left "to be confirmed" | **accepted**         | Q2a, proposed from `build.ts`; a proof in 12a-ii                                                                                                                        |
+| C4  | correctness, architecture, reuse | The archive fold changes the day's shape and contradicts #504   | **accepted**         | Q1 to the contract owner; not folded until it is answered                                                                                                               |
+| C5  | correctness                      | Hidden entries unproven; a session outlives its entries         | **accepted**         | E3 and three hidden proofs                                                                                                                                              |
+| C6  | correctness                      | Order mutations survive: insert order equals `idx`              | **accepted**         | Reverse-insert seeding; an opposite-order superset proof                                                                                                                |
+| C7  | correctness                      | `canGoForward` branches and the live-block rule unproven        | **accepted**         | Two look-ahead proofs and a hidden-block proof                                                                                                                          |
+| C8  | correctness                      | R6 and R7 leave placement and the left-the-week order undefined | **accepted**         | R7 placement; Q2b and Q2d                                                                                                                                               |
+| S1  | security                         | Rows reached through a FK (f)/(g) leak another household's text | **accepted**         | E1, two anchors; planted-row proofs; a mutation                                                                                                                         |
+| S2  | security                         | The movement read is unscoped                                   | **accepted**         | E2                                                                                                                                                                      |
+| S3  | security                         | Assignment reads lack the both-parents rule                     | **accepted**         | E1's live anchor on every assignment read                                                                                                                               |
+| S4  | security                         | No ownership proofs                                             | **accepted**         | The ownership proofs                                                                                                                                                    |
+| S5  | security                         | PREVIOUS's profile conjunct is unproven                         | **accepted**         | Sibling and F-athlete proof; a mutation                                                                                                                                 |
+| S6  | security                         | Bodyweight kept out only by an unnamed predicate                | **accepted**         | E4 and a proof                                                                                                                                                          |
+| A1  | architecture, scope              | "The real writers" don't exist yet; a second seeder             | **accepted**         | Direct inserts, test-only, a tech-debt entry for 6c; 12a-ii gated on lane P's writers                                                                                   |
+| A2  | architecture                     | The stay-dark edit is certain; the read's home                  | **accepted**         | The assignment reads in `scheduled.ts`                                                                                                                                  |
+| A3  | architecture                     | Logged rows through a purged workout would be dropped           | **accepted**         | E1's logged anchor, LEFT JOIN                                                                                                                                           |
+| A4  | architecture, reuse              | Rules 11c and 14 need would be private                          | **accepted**         | `program-rows.ts`, `prescription-terms.ts`; R4's key read by 14                                                                                                         |
+| A5  | architecture                     | `export *` would leak internal-id helpers                       | **accepted**         | E7                                                                                                                                                                      |
+| A6  | architecture                     | `workout-left-the-week` would be red                            | **accepted**         | Carved out until the label decision                                                                                                                                     |
+| A7  | architecture                     | No diagram owner; `architecture.md` §2d is stale                | **accepted**         | Both in 12a-i's file table                                                                                                                                              |
+| SC1 | scope                            | One mutation per rule is over-built, and the numbers don't fit  | **accepted**         | About 8, for rules no fixture exercises; a new block requested                                                                                                          |
+| SC2 | scope                            | Most owed lines are already proved by fixtures                  | **accepted**         | The owed-line map                                                                                                                                                       |
+| SC3 | scope                            | The split isn't written into the plan or the milestone chart    | **accepted**         | The contract owner's, after the maintainer answers                                                                                                                      |
+| SC4 | scope                            | 12c needn't wait for 12a-ii                                     | **accepted**         | 12a-ii gates 15                                                                                                                                                         |
+| R1  | reuse                            | The prescription's derived terms would be re-spelled            | **accepted**         | E5                                                                                                                                                                      |
+| R2  | reuse                            | The rows and progress rule is in three places                   | **accepted, partly** | The resolver follows the shape's text, and #504 fixes `build.ts`. A shared pure function would mean editing the contract owner's `build.ts`, so it's offered, not taken |
+| R3  | reuse                            | Superset `order` and `restAfter` differ from `build.ts`         | **accepted**         | E6                                                                                                                                                                      |
+| R5  | reuse                            | The on-program conjunct would be copied                         | **accepted**         | `onProgramOn` in `scheduled.ts`                                                                                                                                         |
+| R6  | reuse                            | `currentPrograms` has a second consumer (6c)                    | **accepted**         | Exported from `queries/day/` for 6c                                                                                                                                     |
+| —   | scope                            | Hide PREVIOUS from the comparison instead                       | **rejected**         | It weakens the acceptance without saying so                                                                                                                             |
+| —   | reuse                            | Put the assignment read in `queries/program-assignments.ts`     | **rejected**         | That is lane A's step-5 file, not a seam in §6                                                                                                                          |
