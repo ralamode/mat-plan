@@ -1637,6 +1637,21 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     assert.ok(rdl, 'FAM-1 6a-iii-a: a catalog row carries its aliases');
     const ohp = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('OHP'));
     assert.ok(ohp, 'FAM-1 6a-iii-a: the catalog has the OHP alias the proof uses');
+    const boxJump = MOVEMENT_SEED_ROWS.find((r) => r.slug === 'box_jump')!;
+    const { publicId: _boxId, ...boxOption } = catalog.find((o) => o.name === boxJump.name)!;
+    assert.deepEqual(
+      boxOption,
+      {
+        name: boxJump.name,
+        unitDefault: boxJump.unitDefault,
+        isBodyweight: boxJump.isBodyweight,
+        trackingType: boxJump.trackingType,
+        owner: 'catalog',
+        group: MOVEMENT_PICKER_ENTRIES.box_jump.group,
+        aliases: MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? [],
+      },
+      "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases",
+    );
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
     assert.equal(
       options.find((o) => o.publicId === hop)?.trackingType,
@@ -1687,9 +1702,19 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       const answer = await newItem(exec, A_SCOPE, { name, trackingType: TRACKING_TYPE.check });
       assert.ok(answer.ok, `FAM-1 6a-iii-a: newItem with ${what} succeeds`);
       assert.deepEqual(
-        { id: answer.itemPublicId, name: answer.name, existed: answer.existed },
-        { id: publicId, name: stored, existed: true },
-        `FAM-1 6a-iii-a: newItem with ${what} selects the item and returns its stored name`,
+        {
+          id: answer.itemPublicId,
+          name: answer.name,
+          existed: answer.existed,
+          trackingType: answer.trackingType,
+        },
+        {
+          id: publicId,
+          name: stored,
+          existed: true,
+          trackingType: options.find((o) => o.publicId === publicId)!.trackingType,
+        },
+        `FAM-1 6a-iii-a: newItem with ${what} selects the item and returns its stored name and own type`,
       );
       assert.equal(await rows(), before, `FAM-1 6a-iii-a: newItem with ${what} adds no row`);
     }
@@ -1703,6 +1728,9 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     );
 
     // ── a catalog row the picker does not list is still the item its slug names ──
+    // A household row under the same slug, made before the catalog row existed: the slug step reads
+    // global first, as the resolver does, so the catalog row is the answer.
+    await own(A_SCOPE, 'Unlisted Drill');
     const unlisted = newId();
     await tx.insert(schema.movements).values({
       publicId: unlisted,

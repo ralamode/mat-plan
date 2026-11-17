@@ -29,5 +29,8 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 
 describe('CopyDraft: owed by its consumers', () => {
   it.todo('6a: a replayed copy with the same clientId adds nothing');
+});
+
+describe('MovementOption: owed by its consumer', () => {
   it.todo('7a-ii: MovementOption (packages/db) is assignable to MovementOptionDTO (apps/web)');
 });

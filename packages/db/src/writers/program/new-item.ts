@@ -30,8 +30,8 @@ type NewItemResult = ProgramResult<{
  * and type, **or select the item the name already names**.
  *
  * 1. **The picker's rule first** (`existingItem` over `movementOptions`): the same key as an item's
- *    name (`push ups` is Push-ups) or as one of a catalog item's aliases (`RDL` is Romanian
- *    Deadlift). That item is the answer, with `existed: true`, **its stored name and its own type**,
+ *    name (`push ups` is Push-ups), as one of a catalog item's aliases (`RDL` is Romanian
+ *    Deadlift), or an abbreviation that spells the item (`db row` is Dumbbell row; C30). That item is the answer, with `existed: true`, **its stored name and its own type**,
  *    whatever type was asked (D25: nothing retypes an item).
  * 2. **Then the resolver's slug**, for an available row the picker does not list (a catalog row
  *    outside `MOVEMENT_PICKER_ENTRIES`): the same answer, with its stored name and own type. The

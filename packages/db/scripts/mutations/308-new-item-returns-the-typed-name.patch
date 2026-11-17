@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index f1062218..ae941d1d 100644
+index ab9a69bc..9c1d4e75 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
 @@ -69,7 +69,7 @@ export async function newItem(

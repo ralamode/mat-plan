@@ -172,14 +172,13 @@ flowchart TD
     wait on program saves.
 
 17. 🔴 **`newItem` never makes a second item for a name the household already has** (6a-iii-a;
-    contract change C8). It asks the picker's own rule first (`existingItem` over
-    `movementOptions`: the same name key, or a catalog alias), then the resolver's slug (an available
+    contract change C8). It asks the picker's own rule first (`existingItem` over `movementOptions`: the same name key, a catalog alias, or an abbreviation that spells the item, `db row` for Dumbbell row, C30), then the resolver's slug (an available
     catalog row the picker does not list), and only then makes a household item. A selected item
     answers with **its stored name and its own type** (D25: nothing retypes an item). So the read
     must list **every** live household item, used or not (maintainer, 2026-11-17), or an item made
     and not yet used could be added again under a re-spelled name (mutations
     `options-list-shadowed-items`, `options-list-hidden-items`, `options-list-any-households-items`,
-    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation.
+    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`, `new-item-answers-the-asked-type`, `new-item-slug-reads-household-first`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation.
     ⚠️ Latent, and gated by the constraint on `movements.deleted_at` in `schema.ts` (nothing may
     set it until the indexes and the resolver change together): once something hides a movement
     (`MOV-1`'s merge, or C4m), `newItem`'s step 2 misses the hidden row, and the resolver

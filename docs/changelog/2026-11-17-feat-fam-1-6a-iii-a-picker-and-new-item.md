@@ -8,8 +8,8 @@ app calls them yet; step 7a-ii wires them.
   catalog item already covers. Each says how it is logged.
 - `newItem` adds an item by name and type, unless the household already has it: a name spelled
   another way (`push ups` for Push-ups) or a short name (`RDL`) selects the existing item, adds
-  nothing, and answers with that item's own name and type. A name the household has not used makes
-  one new item of the type picked.
-- Nine new `db:mutations` patches (304–309, 380–382) show the proofs fail when the list offers a
+  nothing, and answers with that item's own name and type. A name no item has yet makes one new
+  item of the type picked.
+- Eleven new `db:mutations` patches (304–309, 380–384) show the proofs fail when the list offers a
   covered, hidden or another household's item or loses its order, or when `newItem` skips a check,
-  breaks a tie the picker's way, or answers with the typed name.
+  breaks a tie differently from the picker, or answers with the typed name or the asked type.
