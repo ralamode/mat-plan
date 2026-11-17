@@ -82,8 +82,12 @@ function weekdayOf(day: string): Weekday {
  * their day reads like a closed one (`DayPlan.writable`; maintainer, 2026-11-17).
  */
 function isWritable(world: ProtoWorld, athlete: string, day: string): boolean {
-  const archived = world.athletes.find((a) => a.id === athlete)?.archived === true;
-  return inWritableWindow(day, world.today) && !archived;
+  return inWritableWindow(day, world.today) && !isArchived(world, athlete);
+}
+
+/** One lookup for `DayPlan.archived` and for `writable`, as the resolver reads one profile row. */
+function isArchived(world: ProtoWorld, athlete: string): boolean {
+  return world.athletes.find((a) => a.id === athlete)?.archived === true;
 }
 
 /** The unit an item logs in: fixed by its type, or the one its prescription names. */
@@ -373,7 +377,7 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     today: world.today,
     writable,
     future,
-    archived: world.athletes.find((a) => a.id === athlete)?.archived === true,
+    archived: isArchived(world, athlete),
     // The switcher's list, as the picker lists a household: an archived athlete is not in it,
     // their own day included (`DayPlan.athletes`).
     athletes: world.athletes
