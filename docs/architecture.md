@@ -477,51 +477,56 @@ sequenceDiagram
 changed answers as the first call did. A refusal is thrown as `RowRefused` and caught at the
 transaction's edge, so a session the call created is never left behind. Un-tick and re-tick are the
 same profile and window steps, then `hideEntries` / `restoreHidden` (§2h) on a program row of that
-athlete and day only. Step 5's "on the program that day" check is owed
-([day-writers.md](./features/day-writers.md)).
+athlete and day only. Step 8, "on the program that day", is `isOnProgramThatDay`, on the same
+`onProgramOn` conjunct the day resolver reads (§2d), so the page and the ✓ agree.
 
-## 2d. Program read path — today's weekday → the kid's prescribed movements (V1-10)
+## 2d. Program read path — the day resolver, `resolveDayPlan` (FAM-1 12a)
 
-> ⚠️ **Not on the day page since V1-24 3b-page (2026-11-15, #418).** The page no longer calls
-> `resolveDayRole` or `getProgramDay`, and the program card and strength form are unmounted; the
-> export and the snapshot writer still read the program. FAM-1 12c brings a program surface back, and
-> 12f deletes the old code. The flow below is kept as the record until then.
-
-The programming tables (§4) surface on Today as a **read-only** card. The calendar date comes from the
-active-tz local day (V1-6c) and maps through a hardcoded app-config schedule — a documented stopgap,
-see [tech-debt.md](./tech-debt.md) — to a `day_role`, and one single-sourced query resolves that day's
-prescriptions **plus this kid's own suggested loads**.
-
-⚠️ **The schedule is epoch-day PARITY, not a weekday map.** `resolveDayRole` alternates
-`strength_a`/`strength_b` on every calendar day with no rest day
-(`apps/web/lib/programming/day-role-schedule.ts:41-43`); the `DAY_ROLE_BY_WEEKDAY` Mon/Wed/Fri map this
-section described was **deleted in #151**. Where it goes next is
-[ADR 0007](./decisions/0007-scheduling-model.md).
-
-Two properties are load-bearing. **Ownership**: the household is resolved INSIDE the query
-(`profiles.public_id → household_id → program_blocks`), so no caller can name a household and read
-another one's program. **Read-only**: the card never writes and never pre-fills the log form — the
-suggested load is Ray-authored text ("BW", "~75-85") that must be **typed** by a human to become a
-logged, performed value. A prescription and a log entry stay strictly separate records.
+An athlete and a day → the `DayPlan` the day page shows (`packages/shared/src/program/day-shapes.ts`),
+every field but `athletes`, which 12b's DAL adds. A read only, in `packages/db/src/queries/day/`; the
+invariants are in [day-writers.md](./features/day-writers.md) (E1–E7) and the decisions in
+[the plan](./plans/fam-1-12a-day-resolver.md).
 
 ```mermaid
-flowchart LR
-  RSC["/p/[profileId] RSC<br/>day = localDayIso(activeTz)"]
-  SCHED["resolveDayRole(day)<br/>epoch-day parity, every day<br/>(even → strength_b, odd → strength_a)"]
-  DAL["DAL getProgramDay(publicId, dayRole)<br/>server-only · uuid guard · → DTO"]
-  Q["packages/db programDayRows<br/>(single-sourced, db:verify-proven)"]
-  DB[("program_blocks → prescriptions<br/>⟕ prescription_targets (this profile)")]
-  CARD["&lt;ProgramReference&gt; RSC<br/>read-only, zero client JS"]
-  FORM["&lt;StrengthForm&gt;<br/>UNCHANGED — empty + required"]
+flowchart TB
+  DAL["12b DAL<br/>scope, profile public id, day, today"]
+  P["profile: isLiveProfile(scope)<br/>missing or foreign → null"]
+  W["writable = inWritableWindow(day, today) ∧ ¬archived (R1)<br/>future = day > today"]
+  subgraph LIVE["Live branch — anchored on the assignment (E1)"]
+    A["dayAssignments: liveTemplateBlockIn(scope) ∧ programBlockOfProfile<br/>flags: onProgramOn(day) · assignmentCurrentAsOf(today) · onProgramOn(day + 1)"]
+    S["weekSlotsOn(blocks on the day): weekSlotOn(day), live workouts"]
+    PR["live prescriptions + live quantities<br/>prescriptionTerms → target, unit, text (E5)"]
+  end
+  subgraph LOGGED["Logged branch — anchored on the athlete (E1)"]
+    E["entries: programRowOf(profile, day) ∧ movement_id IS NOT NULL (E4) ∧ live (E3)"]
+    J["⟕ scoped workout, ⟕ scoped prescription<br/>(each ⋈ its own block: templateBlockIn ∧ programBlockOfProfile)<br/>WHERE a set FK resolved in scope, else the row is dropped"]
+    V["readRowValues: one live set per row, else throw"]
+  end
+  M["movements: movementIsAvailableTo(scope) (E2)"]
+  PV["previousRows: same profile, movement, set; before the day;<br/>latest day, then created_at, then id (writable days only)"]
+  OUT["Omit&lt;DayPlan, 'athletes'&gt;<br/>programs (R6, R7) · workouts: program order, week order,<br/>then left the week · items (E6, then R4) · rows (R3) · progress"]
 
-  RSC --> SCHED
-  SCHED -->|"null → no card, no query"| FORM
-  SCHED -->|"day_role"| DAL
-  DAL --> Q
-  Q -->|"profile → household → newest block<br/>(ownership resolved internally)"| DB
-  DB -->|"movements in idx order<br/>+ THIS kid's load/reps, verbatim"| CARD
-  CARD -.->|"coach reads it,<br/>TYPES what was performed"| FORM
+  DAL --> P --> W
+  W --> A --> S --> PR
+  W --> E --> J --> V
+  PR --> M
+  J --> M
+  M --> PV --> OUT
+  V --> OUT
 ```
+
+🔴 **Two anchors, one scope.** What is on the day comes from the athlete's assignments on live template
+blocks of the scope and of the athlete's own household; what was logged comes from the athlete's own
+program rows, whose workout and prescription pointers are resolved through scoped subqueries. A
+pointer that is set but does not resolve in scope (runbook pre-flight (f), (g)) drops the row; a NULL
+one (a purge) keeps it with null ids. A weigh-in, a practice or a check-in never enters a `DayPlan`
+(E4). Every rule has a `db:verify` proof in `scripts/verify/day-plan.ts`, against the contract's
+fixtures with ids mapped exactly.
+
+> **The V1-10 program card before it** (`resolveDayRole` → `getProgramDay` → `programDayRows`) is
+> unmounted from the day page since V1-24 3b-page (#418). `programDayRows` still feeds the export and
+> the legacy snapshot writer (§2f) until FAM-1 12f deletes it; its history is in
+> [ADR 0007](./decisions/0007-scheduling-model.md).
 
 ## 3. Offline outbox → sync
 
