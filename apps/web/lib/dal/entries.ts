@@ -2,6 +2,8 @@ import 'server-only';
 
 import {
   bodyweightRowForAmend,
+  clearEventsForDay,
+  restoreClear,
   clearBodyweight,
   clearPractice,
   type ClearSingleValueResult,
@@ -21,8 +23,10 @@ import {
   writeStrengthSession,
 } from '@mat-plan/db';
 import {
+  type ClearEvent,
   ENTRY_KIND,
   ENTRY_STATUS,
+  RESTORE_REASON,
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
@@ -685,4 +689,55 @@ export async function editStrengthSet(args: {
 
   const updated = await updateStrengthSetById(db, { ...args, scope });
   return updated ? { setId: updated.publicId } : null;
+}
+
+// ── Clear this day: the banner's read and Restore all (V1-9b B1-2) ─────────────────────────────────
+
+/**
+ * Every clear of one athlete's day, newest first, each with how many entries it still holds hidden.
+ * The banner (B2) draws from it; no caller until then.
+ *
+ * ⚠️ `hiddenAt` is an opaque key the banner echoes back to Restore all. It is never rendered. A read,
+ * so it is not wrapped in `quietDbErrors` (the helper wraps writes; its parameters are ids and a day).
+ */
+export async function dayClearEvents(profilePublicId: string, day: string): Promise<ClearEvent[]> {
+  const scope = await getHouseholdScope();
+  if (!scope) return [];
+  return clearEventsForDay(db, { profilePublicId, scope, day });
+}
+
+/** What Restore all did, as counts: the DTO the action maps, with no entry's value in it. */
+export type RestoreClearedDayResult = { restored: number; keptHidden: number };
+
+/**
+ * Restore all for one clear (`restoreClear`, which finds the clear's entries itself).
+ *
+ * 🔴 **Counted here, so nothing but two numbers leaves the DAL.** A `slot_taken` item carries
+ * `heldBy.value`, the live weigh-in that took its place; that never reaches the action.
+ *
+ * - `restored`: items answered `ok`.
+ * - `keptHidden`: items answered `slot_taken` (a newer entry holds their place).
+ * - `changed` and `not_found` come only from another phone acting on the same row mid-restore, so they
+ *   count in neither; the revalidated page shows what is true.
+ * - `restoreClear`'s `notFound` is 0 and 0, "nothing left to restore" (the action's docblock says why).
+ *
+ * A null scope THROWS, as `logBodyweight` does: the action resolved the profile in this scope first,
+ * so reaching here without one is a caller bug, never a quiet "nothing to restore".
+ */
+export async function restoreClearedDay(args: {
+  profilePublicId: string;
+  day: string;
+  hiddenAt: string;
+}): Promise<RestoreClearedDayResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) throw new Error('Profile not found');
+  const result = await restoreClear(db, { ...args, scope });
+  if ('notFound' in result) return { restored: 0, keptHidden: 0 };
+  let restored = 0;
+  let keptHidden = 0;
+  for (const item of result.items) {
+    if (item.reason === RESTORE_REASON.ok) restored += 1;
+    else if (item.reason === RESTORE_REASON.slot_taken) keptHidden += 1;
+  }
+  return { restored, keptHidden };
 }
