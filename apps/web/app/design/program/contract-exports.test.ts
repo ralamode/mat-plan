@@ -1,5 +1,6 @@
 import {
   DEFAULT_TRACKING_TYPE,
+  emptyWeek,
   hasStarted,
   isPlainDecimal,
   MONDAY_FIRST,
@@ -20,6 +21,7 @@ import {
   type RowValues,
   type Superset,
   type TrackingType,
+  type WeekDraft,
   type Weekday,
 } from '@mat-plan/shared';
 import {
@@ -28,6 +30,8 @@ import {
   heavyADraft,
   heavyASupersets,
   programsList,
+  programView,
+  DAY_PLAN_FIXTURE_SOURCES,
 } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
@@ -64,6 +68,23 @@ describe('the builder’s named types and constants', () => {
     const program: ProgramListEntry = programsList[0];
     expect(programsList).toContain(program);
     expect(Object.keys(program).sort()).toEqual(['athletes', 'name', 'programPublicId']);
+  });
+
+  it('hands a week editor an empty week as the type a WeekDraft holds', () => {
+    expectTypeOf(emptyWeek()).toEqualTypeOf<WeekDraft['days']>();
+    // And a week of something else, where a caller names its slot.
+    expectTypeOf(emptyWeek<{ wid: string }>()).toEqualTypeOf<
+      Record<Weekday, Array<{ wid: string }>>
+    >();
+    const days: WeekDraft['days'] = emptyWeek();
+    expect(Object.keys(days)).toHaveLength(7);
+  });
+
+  it('gets a program page from a fixture world, with a week saveWeek takes (C27)', () => {
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'];
+    expectTypeOf(programView).returns.toEqualTypeOf<ProgramView>();
+    const days: WeekDraft['days'] = programView(world, 'p1').week;
+    expect(Object.keys(days)).toHaveLength(7);
   });
 
   it('types the default tracking type as a tracking type, not a string', () => {

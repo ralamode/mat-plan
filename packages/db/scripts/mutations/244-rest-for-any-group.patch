@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 405e530b..9242c039 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -636,7 +636,7 @@ function dayWorkout(
+   const restAfter: Record<string, string> = {};
+   for (const [group, list] of members) {
+     const rest = list[list.length - 1]!.restAfter;
+-    if (list.length > 1 && shown.has(group) && rest !== null) restAfter[group] = rest;
++    if (rest !== null) restAfter[group] = rest;
+   }
+ 
+   // R2: where only logged rows show, the session's frozen name; else the live one.

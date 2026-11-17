@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/scheduled.ts b/packages/db/src/queries/day/scheduled.ts
+index a0baf5cf..490961ff 100644
+--- a/packages/db/src/queries/day/scheduled.ts
++++ b/packages/db/src/queries/day/scheduled.ts
+@@ -152,7 +152,7 @@ export async function dayAssignments(
+       activeTo: a.activeTo,
+       onDay: flag(onProgramOn(profileId, dates.day)),
+       current: flag(assignmentCurrentAsOf(dates.today)),
+-      onNextDay: flag(onProgramOn(profileId, addDays(dates.day, 1))),
++      onNextDay: flag(onProgramOn(profileId, dates.day)),
+     })
+     .from(a)
+     .innerJoin(b, eq(b.id, a.blockId))

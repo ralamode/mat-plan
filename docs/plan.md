@@ -1679,6 +1679,13 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
        d2, with Beta 0's release-level pass once every Beta 0 row is planned. **Measured:** shape changes
        after the freeze, and where each flaw was caught. Needs a small plan (a skill change plus a check).
 
+- **DX-17 — a commit or PR that still holds merge-conflict markers fails.** _(board, 2026-11-17.)_
+  Twice (#437, #522) a merge committed its markers and every gate stayed green, because Prettier
+  reflows a marker in a markdown table into rows and a blockquote, which `prettier --check` accepts.
+  ✅ `.github/scripts/check-conflict-markers.mjs` runs on the index in pre-commit (before Prettier
+  sees the file) and on every tracked file in `format:check`, so in `verify` and CI's `quality`; its
+  self-test is in `guards:test`. Single concern, no plan (a guard script and its wiring).
+
 - **PERF-1 — measure Web Vitals from real use, and budget the client bundle.** _(maintainer,
   2026-11-13; [principles](./principles.md) → Fast is a feature.)_ The budget (p75 mobile: LCP < 2.5 s ·
   INP < 200 ms · CLS < 0.1) is written in AGENTS.md and ADR 0001 but nothing measures it. **(a)** Land

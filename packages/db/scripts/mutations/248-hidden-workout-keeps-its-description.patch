@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 209410ce..9ab8629e 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -177,7 +177,7 @@ export async function resolveDayPlan(
+           label: null,
+           liveName: null,
+           // C21: a hidden program's or workout's has none; one that only left the week keeps it.
+-          description: first.workoutLive ? first.workoutDescription : null,
++          description: first.workoutDescription,
+           scheduled: false,
+           showing: 'logged' as const,
+           prescriptions:

@@ -112,23 +112,10 @@ export async function saveWorkout(
   const parsed = saveWorkoutSchema.safeParse(input);
   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
   // Ids compare in JS below (maps, ===), while Postgres compares a uuid in any case and answers in
-  // lower case; zod accepts upper case. One spelling, so an upper-case id cannot slip between them.
-  const lower = (id: string) => id.toLowerCase();
-  const draft = {
-    ...parsed.data,
-    programPublicId: lower(parsed.data.programPublicId),
-    workoutClientId: lower(parsed.data.workoutClientId),
-    workoutPublicId: parsed.data.workoutPublicId && lower(parsed.data.workoutPublicId),
-    items: parsed.data.items.map((item) => ({
-      ...item,
-      prescriptionClientId: lower(item.prescriptionClientId),
-      itemPublicId: lower(item.itemPublicId),
-    })),
-  };
-  // Two cards whose ids differ only in case are one card once lower-cased: the schema's
-  // distinctness check is case-sensitive, so it is repeated here on the lowered ids.
-  const cardIds = new Set(draft.items.map((item) => item.prescriptionClientId));
-  if (cardIds.size !== draft.items.length) return refuse(PROGRAM_REFUSAL.invalid);
+  // lower case. The schema hands every id back in lower case (`lowerCaseUuidSchema`, contract
+  // change C25), so `draft` holds one spelling, and two cards whose ids differ only in case were
+  // refused above as two cards under one id. Read ids from `draft`, never from `input`.
+  const draft = parsed.data;
   if (!supersetsAreWellFormed(draft.items) || !draft.items.every(itemFitsItsType)) {
     return refuse(PROGRAM_REFUSAL.invalid);
   }

@@ -1270,6 +1270,142 @@ describe('the fake ProgramActions: items and athletes', () => {
 });
 
 describe('the fakes: rules found in review', () => {
+  describe('an id is one id in either case (C25)', () => {
+    // The fixtures' ids are all digits, so the ids here are the ones a client mints. Postgres reads
+    // the two spellings as one uuid; the schemas hand the fakes one spelling, so they do too.
+    // Each replay is sent both ways round, and every action gets a client id of its own: a fake
+    // that read the raw id would pass one order by luck.
+    const lettered = (n: number) =>
+      `0193a2b4-7c5d-7e8f-9a0b-1c2d3e4f5a${String(n).padStart(2, '0')}`;
+    const ORDERS: Array<[string, (id: string) => string, (id: string) => string]> = [
+      ['lower case, then upper', (id) => id, (id) => id.toUpperCase()],
+      ['upper case, then lower', (id) => id.toUpperCase(), (id) => id],
+    ];
+
+    it('the two spellings differ', () => {
+      expect(lettered(1).toUpperCase()).not.toBe(lettered(1));
+      expect(lettered(1)).not.toBe(lettered(2));
+    });
+
+    it.each(ORDERS)(
+      'createProgram replays under the other spelling: %s',
+      async (_, first, then) => {
+        const { actions, state } = builder();
+        const clientId = lettered(1);
+        const created = await actions.createProgram({
+          clientId: first(clientId),
+          name: 'Off season',
+        });
+        expect(created.ok).toBe(true);
+        // The second call is the first one again, not a second program of that name (`name_taken`).
+        expect(
+          await actions.createProgram({ clientId: then(clientId), name: 'Off season' }),
+        ).toEqual(created);
+        expect(state().programs.filter((p) => p.name === 'Off season')).toHaveLength(1);
+      },
+    );
+
+    it.each(ORDERS)('saveWorkout replays a new workout: %s', async (_, first, then) => {
+      const { actions, view } = builder();
+      const workoutClientId = lettered(2);
+      const draft = { ...newWorkoutEmpty, name: 'Mobility' };
+      const saved = await actions.saveWorkout({
+        ...draft,
+        workoutClientId: first(workoutClientId),
+      });
+      expect(saved.ok).toBe(true);
+      // A replay, not a second workout of that name (`name_taken`).
+      expect(
+        await actions.saveWorkout({ ...draft, workoutClientId: then(workoutClientId) }),
+      ).toEqual(saved);
+      expect(view().workouts.filter((w) => w.name === 'Mobility')).toHaveLength(1);
+    });
+
+    it.each(ORDERS)('copyWorkout replays a copy: %s', async (_, first, then) => {
+      const { actions, view } = builder();
+      const clientId = lettered(3);
+      const copy = {
+        workoutPublicId: heavyA.workoutPublicId,
+        toProgramPublicId: familyProgram.programPublicId,
+        weekdays: [],
+        label: null,
+      };
+      const copied = await actions.copyWorkout({ ...copy, clientId: first(clientId) });
+      expect(copied.ok).toBe(true);
+      // A replay, not a second copy under the default name (`name_taken`).
+      expect(await actions.copyWorkout({ ...copy, clientId: then(clientId) })).toEqual(copied);
+      expect(view().workouts).toHaveLength(familyProgram.workouts.length + 1);
+    });
+
+    it.each(ORDERS)('logRow replays a ✓: %s', async (_, first, then) => {
+      const { actions, plan } = day(heavyASupersets);
+      const write = tick(heavyASupersets, 'DB bench press');
+      const clientId = lettered(4);
+      const logged = succeeded(await actions.logRow({ ...write, clientId: first(clientId) }));
+      // The first answer again, not a second ✓ on a set that is taken (`slot_taken`).
+      expect(await actions.logRow({ ...write, clientId: then(clientId) })).toEqual(logged);
+      expect(itemOf(plan(), 'DB bench press').item.rows.filter((r) => r.logged)).toHaveLength(1);
+    });
+
+    it('saveWorkout refuses two cards under one id spelled two ways', async () => {
+      const { actions } = builder();
+      const [first, second] = heavyADraft.items;
+      if (!first || !second) throw new Error('heavy-a-draft needs two cards');
+      const cards = (a: string, b: string) => ({
+        ...heavyADraft,
+        items: [
+          { ...first, prescriptionClientId: a },
+          { ...second, prescriptionClientId: b },
+        ],
+      });
+      expect(await actions.saveWorkout(cards(lettered(5), lettered(5).toUpperCase()))).toEqual(
+        refusal('invalid'),
+      );
+      expect((await actions.saveWorkout(cards(lettered(5), lettered(6).toUpperCase()))).ok).toBe(
+        true,
+      );
+    });
+
+    it('saveWeek answers once_per_day for one workout spelled two ways, and saves an upper-case week', async () => {
+      // The fake's view holds the fixture's ids, which are all digits; give them letters first.
+      const spell = <T>(value: T, letters: string): T =>
+        JSON.parse(
+          JSON.stringify(value).replaceAll(
+            '"00000000-0000-7000-8000-',
+            `"${letters}-0000-7000-8000-`,
+          ),
+        ) as T;
+      const page = spell(familyProgram, 'abcdef00');
+      expect(page.programPublicId).not.toBe(page.programPublicId.toUpperCase());
+      const { actions, view } = builder({
+        programs: spell([...programsList], 'abcdef00'),
+        program: page,
+      });
+      const workoutPublicId = page.workouts[0]?.workoutPublicId;
+      if (!workoutPublicId) throw new Error('the family program has no workout');
+
+      const twice = structuredClone(page.week);
+      twice[0] = [
+        { workoutPublicId, label: null },
+        { workoutPublicId: workoutPublicId.toUpperCase(), label: 'Evening' },
+      ];
+      expect(
+        await actions.saveWeek({ programPublicId: page.programPublicId, days: twice }),
+      ).toEqual(refusal('once_per_day'));
+
+      // A week whose every id is upper case names the page's own workouts: it saves.
+      const shouted = spell(familyProgram.week, 'ABCDEF00');
+      expect(shouted).not.toEqual(page.week);
+      expect(
+        await actions.saveWeek({
+          programPublicId: page.programPublicId.toUpperCase(),
+          days: shouted,
+        }),
+      ).toEqual({ ok: true });
+      expect(view().week).toEqual(page.week);
+    });
+  });
+
   it('a name is taken whatever its case or spacing: "heavy a" beside "Heavy A"', async () => {
     const { actions } = builder();
     const { programPublicId } = familyProgram;

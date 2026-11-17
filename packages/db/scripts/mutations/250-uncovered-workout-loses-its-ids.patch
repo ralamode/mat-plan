@@ -1,0 +1,18 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 91e40e87..ff382855 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -177,8 +177,11 @@ export async function resolveDayPlan(
+         // assignments, so a live workout logged on a day no assignment covers any more keeps both
+         // (its program is then not in `programs`).
+         return {
+-          programPublicId: first.blockLive ? first.programPublicId : null,
+-          workoutPublicId: first.workoutLive ? first.workoutPublicId : null,
++          programPublicId: programOfBlock.get(first.workoutBlockId!) ?? null,
++          workoutPublicId:
++            programOfBlock.has(first.workoutBlockId!) && first.workoutLive
++              ? first.workoutPublicId
++              : null,
+           // R2: a workout that left the week has no label.
+           label: null,
+           liveName: null,

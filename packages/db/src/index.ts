@@ -63,6 +63,9 @@ export * from './writers/ownership';
 export * from './writers/strength-session';
 // FAM-1 11b: the row writer, its un-tick and its re-tick, for step 12b's Server Actions.
 export * from './writers/day';
+// FAM-1 12a: the day resolver, for step 12b's DAL. By NAME, never `export *` from `queries/day`
+// (E7): its other modules take internal ids the caller must already have proved owned.
+export { resolveDayPlan, type ResolvedDayPlan } from './queries/day';
 // FAM-1 lane P (6a-ii; the board's seam turn): the program writers behind ProgramActions and the
 // builder's reads, each through the lane's own barrel, so the lane's helpers stay in the package.
 export * from './writers/program';

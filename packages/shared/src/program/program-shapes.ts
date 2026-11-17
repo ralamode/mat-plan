@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 import { isoDaySchema } from '../date';
-import { WEEKDAYS, weekdaySchema } from '../day';
-import { uuidSchema } from '../id';
+import { WEEKDAYS, weekdaySchema, type Weekday } from '../day';
 import { movementNameKey } from '../movement-search';
 import { movementLabelSchema, movementNameSchema, trackingTypeSchema } from '../movements';
 import { MAX_HOUSEHOLD_ATHLETES } from '../profiles';
@@ -14,6 +13,7 @@ import {
   fillRowValues,
   hasSetRows,
   itemUnit,
+  lowerCaseUuidSchema,
   TRACKING_TYPE_FIELDS,
   nullableNoteSchema,
   prescribedQuantitiesSchema,
@@ -35,7 +35,12 @@ import {
  * same things.
  */
 
-/** No two the same. Used where the plan says "once" or "the full order". */
+/**
+ * No two the same. Used where the plan says "once" or "the full order".
+ *
+ * On a list of ids it compares what `lowerCaseUuidSchema` handed back, so two ids that differ only
+ * in case are the same id here, as they are to Postgres (contract change C25).
+ */
 const distinct = <T>(values: readonly T[]) => new Set(values).size === values.length;
 
 /**
@@ -54,8 +59,8 @@ export const workoutDraftItemSchema = z.object({
    * swapped. The writer matches rows by it, and refuses (`invalid`) an id it already knows under a
    * different item.
    */
-  prescriptionClientId: uuidSchema,
-  itemPublicId: uuidSchema,
+  prescriptionClientId: lowerCaseUuidSchema,
+  itemPublicId: lowerCaseUuidSchema,
   itemName: movementLabelSchema,
   trackingType: trackingTypeSchema,
   sets: z.number().int().min(1).max(MAX_SETS_PER_MOVEMENT).nullable(),
@@ -77,11 +82,11 @@ export type WorkoutDraftItem = z.infer<typeof workoutDraftItemSchema>;
  * (`workoutPublicId: null`, the `new-workout-empty` fixture). What it SAVES is `saveWorkoutSchema`.
  */
 export const workoutDraftSchema = z.object({
-  programPublicId: uuidSchema,
+  programPublicId: lowerCaseUuidSchema,
   /** Minted by the editor when the workout is new; one save attempt replays under it. */
-  workoutClientId: uuidSchema,
+  workoutClientId: lowerCaseUuidSchema,
   /** `null`: a new workout. */
-  workoutPublicId: uuidSchema.nullable(),
+  workoutPublicId: lowerCaseUuidSchema.nullable(),
   name: workoutNameSchema.or(z.literal('')),
   description: nullableNoteSchema,
   /** In order. */
@@ -184,7 +189,7 @@ export const saveWorkoutSchema = workoutDraftSchema
 
 /** One slot of a weekday: a workout and its optional label. */
 const weekSlotSchema = z.object({
-  workoutPublicId: uuidSchema,
+  workoutPublicId: lowerCaseUuidSchema,
   label: slotLabelSchema,
 });
 
@@ -204,14 +209,53 @@ export const weekDaysSchema = z.record(
 
 /** The week editor → `saveWeek`. The full state, in order. */
 export const weekDraftSchema = z.object({
-  programPublicId: uuidSchema,
+  programPublicId: lowerCaseUuidSchema,
   days: weekDaysSchema,
 });
 export type WeekDraft = z.infer<typeof weekDraftSchema>;
 
+/**
+ * A week with nothing on any day: every weekday present, each `[]` (contract change C26).
+ *
+ * With no type argument it is a `WeekDraft['days']`, the starting point for a week read or a week
+ * editor to fill. **A new object and new arrays on every call**, so a caller may push into it.
+ * The type argument is for a week of something other than `WeekDraft`'s slots (the fixtures'
+ * prototype world has one).
+ */
+export function emptyWeek<Slot = WeekDraft['days'][Weekday][number]>(): Record<Weekday, Slot[]> {
+  // Written out, so the compiler holds it to every weekday; `shapes.test.ts` holds it to `WEEKDAYS`.
+  return { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+}
+
+/**
+ * Whether a week names one workout twice on a day: the question `saveWeek` asks of a draft
+ * `weekDraftSchema` REFUSED, to answer `once_per_day` in place of `invalid` (contract change C25).
+ *
+ * It reads the raw input, because a refused parse hands back no value, so it takes anything and
+ * folds the case itself: two slots are the same workout when their `workoutPublicId`s are uuids
+ * that differ at most in case. A slot with no id, or with one that is not a uuid, is never a
+ * repeat. Any repeat counts, whatever else is wrong with the draft.
+ *
+ * One definition for the fake and for 6b's writer, so the two answer the same refusal.
+ */
+export function weekRepeatsAWorkout(draft: unknown): boolean {
+  const days: unknown = (draft as { days?: unknown } | null | undefined)?.days;
+  if (!days || typeof days !== 'object') return false;
+  return Object.values(days).some((slots) => {
+    if (!Array.isArray(slots)) return false;
+    const ids = slots.flatMap((slot: unknown) => {
+      const id = lowerCaseUuidSchema.safeParse(
+        (slot as { workoutPublicId?: unknown } | null | undefined)?.workoutPublicId,
+      );
+      return id.success ? [id.data] : [];
+    });
+    return !distinct(ids);
+  });
+}
+
 /** A program, by id and name: one entry of a list a person picks from. */
 export const programRefSchema = z.object({
-  programPublicId: uuidSchema,
+  programPublicId: lowerCaseUuidSchema,
   name: programNameSchema,
 });
 
@@ -228,7 +272,7 @@ export type ProgramListEntry = ProgramList[number];
 /** The program page, and the data its two dialogs (Put someone on, Copy to…) open with. */
 export const programViewSchema = z
   .object({
-    programPublicId: uuidSchema,
+    programPublicId: lowerCaseUuidSchema,
     name: programNameSchema,
     /**
      * The household's today, set by the DAL, as `DayPlan.today` is. The page reads it to say
@@ -242,7 +286,7 @@ export const programViewSchema = z
      */
     athletes: z.array(
       z.object({
-        profilePublicId: uuidSchema,
+        profilePublicId: lowerCaseUuidSchema,
         name: athleteLabelSchema,
         since: isoDaySchema,
         lastDay: isoDaySchema.nullable(),
@@ -255,7 +299,7 @@ export const programViewSchema = z
      */
     candidates: z.array(
       z.object({
-        profilePublicId: uuidSchema,
+        profilePublicId: lowerCaseUuidSchema,
         name: athleteLabelSchema,
         on: z.boolean(),
         keeps: z.array(programNameSchema),
@@ -263,7 +307,7 @@ export const programViewSchema = z
     ),
     workouts: z.array(
       z.object({
-        workoutPublicId: uuidSchema,
+        workoutPublicId: lowerCaseUuidSchema,
         name: workoutNameSchema,
         itemCount: z.number().int().min(0).max(MAX_WORKOUT_ITEMS),
         /** The weekdays whose slots name this workout, **Monday first** (1, 2, … 6, 0), each once. */
@@ -307,12 +351,15 @@ export function hasStarted(athlete: { since: string }, today: string): boolean {
  * `createProgram`'s input. **A program is created by naming it**: there is no unnamed program on the
  * server. `clientId` is one create attempt; a retry reuses it.
  */
-export const createProgramSchema = z.object({ clientId: uuidSchema, name: programNameSchema });
+export const createProgramSchema = z.object({
+  clientId: lowerCaseUuidSchema,
+  name: programNameSchema,
+});
 export type CreateProgram = z.infer<typeof createProgramSchema>;
 
 /** `renameProgram`'s input. */
 export const renameProgramSchema = z.object({
-  programPublicId: uuidSchema,
+  programPublicId: lowerCaseUuidSchema,
   name: programNameSchema,
 });
 export type RenameProgram = z.infer<typeof renameProgramSchema>;
@@ -361,8 +408,12 @@ export type NewItem = z.infer<typeof newItemSchema>;
  * `candidates` (where they are still `on`) with `athletes` (where `lastDay` is set).
  */
 export const assignDraftSchema = z.object({
-  programPublicId: uuidSchema,
-  profilePublicIds: z.array(uuidSchema).min(1).max(MAX_HOUSEHOLD_ATHLETES).refine(distinct),
+  programPublicId: lowerCaseUuidSchema,
+  profilePublicIds: z
+    .array(lowerCaseUuidSchema)
+    .min(1)
+    .max(MAX_HOUSEHOLD_ATHLETES)
+    .refine(distinct),
   from: isoDaySchema,
 });
 export type AssignDraft = z.infer<typeof assignDraftSchema>;
@@ -380,8 +431,8 @@ export type AssignDraft = z.infer<typeof assignDraftSchema>;
  * The answer says which: `lastDay` is today, or `null` when the start was removed.
  */
 export const takeOffSchema = z.object({
-  programPublicId: uuidSchema,
-  profilePublicId: uuidSchema,
+  programPublicId: lowerCaseUuidSchema,
+  profilePublicId: lowerCaseUuidSchema,
 });
 export type TakeOff = z.infer<typeof takeOffSchema>;
 
@@ -393,8 +444,8 @@ export type TakeOff = z.infer<typeof takeOffSchema>;
  * (`invalid`) a list that leaves one out or names one the athlete is not on.
  */
 export const programOrderSchema = z.object({
-  profilePublicId: uuidSchema,
-  programPublicIds: z.array(uuidSchema).min(1).refine(distinct, {
+  profilePublicId: lowerCaseUuidSchema,
+  programPublicIds: z.array(lowerCaseUuidSchema).min(1).refine(distinct, {
     message: 'each program once',
   }),
 });
@@ -415,9 +466,9 @@ export type ProgramOrder = z.infer<typeof programOrderSchema>;
  * person copies again; it needs no list of the other program's workouts to do that.
  */
 export const copyDraftSchema = z.object({
-  clientId: uuidSchema,
-  workoutPublicId: uuidSchema,
-  toProgramPublicId: uuidSchema,
+  clientId: lowerCaseUuidSchema,
+  workoutPublicId: lowerCaseUuidSchema,
+  toProgramPublicId: lowerCaseUuidSchema,
   name: workoutNameSchema.optional(),
   weekdays: z.array(weekdaySchema).max(WEEKDAYS.length).refine(distinct),
   label: slotLabelSchema,

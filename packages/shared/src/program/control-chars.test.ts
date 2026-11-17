@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { WEEKDAYS } from '../day';
 import { TRACKING_TYPE } from '../movements';
 import { heavyADraft } from './fixtures';
 import {
   copyDraftSchema,
   createProgramSchema,
+  emptyWeek,
   newItemSchema,
   renameProgramSchema,
   saveWorkoutSchema,
@@ -27,7 +27,6 @@ if (!item) throw new Error('heavy-a-draft has no items');
 const programPublicId = heavyADraft.programPublicId;
 /** Any valid id: these cases are about the text beside it. */
 const anyId = programPublicId;
-const emptyWeek = Object.fromEntries(WEEKDAYS.map((d) => [d, []]));
 
 const typed: Array<[string, (text: string) => boolean]> = [
   [
@@ -77,7 +76,7 @@ const typed: Array<[string, (text: string) => boolean]> = [
     (t) =>
       weekDraftSchema.safeParse({
         programPublicId,
-        days: { ...emptyWeek, 1: [{ workoutPublicId: anyId, label: t }] },
+        days: { ...emptyWeek(), 1: [{ workoutPublicId: anyId, label: t }] },
       }).success,
   ],
   [
