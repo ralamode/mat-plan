@@ -101,6 +101,19 @@ const search = (text: string) =>
   fireEvent.change(within(sheet()).getByRole('searchbox'), { target: { value: text } });
 
 describe('the item picker (FAM-1 9)', () => {
+  it('searching sends nothing: no action runs until a person taps Create (CAT-3 P6)', () => {
+    const all = editor();
+    openPicker();
+    for (const text of ['bulgarain', 'bb curl', 'push', 'zzzzz', 'a long typed name']) search(text);
+    // The new-item form opens with the typed name, and still nothing is sent.
+    fireEvent.click(
+      within(sheet()).getByRole('button', { name: newItemLabel('a long typed name') }),
+    );
+    for (const action of Object.values(all)) expect(action).not.toHaveBeenCalled();
+    // …and no URL carries it: the router is never asked to navigate.
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('renders picker-options: a checkbox row per item, saying what it tracks', () => {
     editor();
     openPicker();
