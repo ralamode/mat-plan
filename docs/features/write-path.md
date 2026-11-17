@@ -210,8 +210,8 @@ The shapes those lanes agree on, the fakes and the preview route are
    `checkMutationLimit(user.userId, policy)`. `lib/rate-limit.ts` holds two: `MUTATION_RATE_LIMIT`
    (120 per 5 minutes, the default) and `ROW_WRITE_RATE_LIMIT` (600 per 5 minutes), for the day
    page's row writes, where a ✓ is one write and a parent logging two athletes' days passes 120
-   ([plan](../plans/fam-1-family-program.md) D23). **No action passes the second one yet**; the
-   first is FAM-1 step 12b.
+   ([plan](../plans/fam-1-family-program.md) D23). **The row actions pass the second one**
+   (`app/p/[profileId]/row-actions.ts`, FAM-1 step 12b); no page serves them until 12c.
    - **A policy is one of the named consts, not a pair of numbers** (`MutationLimitPolicy`), and the
      limiter is chosen by identity with the default as the fallback. So an action cannot write
      itself a budget, and a look-alike object is counted against the tighter limit.
@@ -242,7 +242,8 @@ The shapes those lanes agree on, the fakes and the preview route are
    with each step and must stay a single named helper, never an alternation.
 
    📌 **`lib/rate-limit.ts` holds TWO limiters since FAM-1 step 0b** (the policy note above); the
-   second, for row writes, is built and reached by nothing until step 12b, and its docblock says so.
+   second, for row writes, has the row actions as its callers since FAM-1 step 12b, and no page
+   serves them until 12c; its docblock says so.
    **Its MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
    V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since

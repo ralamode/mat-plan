@@ -135,8 +135,12 @@ export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
   missing: 'Enter a number, then ✓.',
 };
 
-/** A refusal as the row shows it. `reload`: the page is out of date, so offer a reload. */
-export type RefusalCopy = { message: string; reload: boolean; focusField: boolean };
+/**
+ * A refusal as the row shows it. `reload`: the page is out of date, so offer a reload. No refusal
+ * marks the field: the screen checks every number by the writer's own rule before sending it, so
+ * a refused write is never the typed number's fault (UX panel, 12b).
+ */
+export type RefusalCopy = { message: string; reload: boolean };
 
 const UNTICK_FAILED = 'Still logged. Couldn’t un-check; try again.';
 /** A write that can be tried again, by kind; a Change's own line says what is still stored. */
@@ -154,23 +158,23 @@ export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCop
   switch (reason) {
     case ROW_REFUSAL.retry:
     case ROW_REFUSAL.own_hidden:
-      return { message: RETRY_COPY[write], reload: false, focusField: false };
+      return { message: RETRY_COPY[write], reload: false };
     case ROW_REFUSAL.bad_value:
-      // A Change is checked before it is sent, so a refused one means the item changed under the
-      // page (its unit, say): a reload, not the number.
-      if (write === 'amend') return { message: STALE, reload: true, focusField: false };
-      return { message: TYPED_PROBLEM_COPY.out_of_range, reload: false, focusField: true };
+      // A ✓ and a Change are both checked before they are sent, by the writer's own rule
+      // (`fillRowValues`, C10), so a refused one means the item changed under the page (its unit,
+      // its type): a reload, not the number. Asking for a new number would fail every time, and a
+      // Check row has no field to fix (UX panel, 12b).
+      return { message: STALE, reload: true };
     case ROW_REFUSAL.closed_day:
-      return { message: DAY_COPY.closed, reload: false, focusField: false };
+      return { message: DAY_COPY.closed, reload: false };
     case ROW_REFUSAL.not_scheduled:
       return {
-        message: 'This workout isn’t scheduled today any more.',
+        message: 'This workout isn’t scheduled on this day any more.',
         reload: true,
-        focusField: false,
       };
     case ROW_REFUSAL.program_changed:
     case ROW_REFUSAL.not_found:
     case ROW_REFUSAL.slot_taken:
-      return { message: STALE, reload: true, focusField: false };
+      return { message: STALE, reload: true };
   }
 }

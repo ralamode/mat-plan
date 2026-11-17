@@ -167,11 +167,16 @@ describe('the actions that enter with the row-write rate limit are pinned (FAM-1
   });
 
   /**
-   * ⚠️ EMPTY today: no action is a row write until FAM-1 step 12b. One entry per line, sorted, with
-   * a trailing comment naming the module and why the action is a row write.
+   * The day page's row writes, from FAM-1 step 12b: a ✓ is one write, and a parent logging two
+   * athletes' days passes the default (D23). One entry per line, sorted, with a trailing comment
+   * naming the module and why the action is a row write.
    */
   it('exactly these actions name a policy other than the default', () => {
-    expect(namingAPolicy.map((a) => a.name).sort()).toEqual([]);
+    expect(namingAPolicy.map((a) => a.name).sort()).toEqual([
+      'logRowAction', // FAM-1 12b, `row-actions.ts`: a ✓
+      'retickRowAction', // FAM-1 12b, `row-actions.ts`: a ✓ put back after an un-tick
+      'untickRowAction', // FAM-1 12b, `row-actions.ts`: an un-tick
+    ]);
   });
 
   it('no Server Action module mentions the row policy except through a pinned action', () => {

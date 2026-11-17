@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { ON_PROGRAM, ROW_REFUSAL, type DayPlan, type RowResult } from '@mat-plan/shared';
+import {
+  ON_PROGRAM,
+  ROW_REFUSAL,
+  ROW_REFUSALS,
+  type DayPlan,
+  type RowResult,
+} from '@mat-plan/shared';
 import {
   archivedAthleteNothingLogged,
   closedDayLoggedOnly,
@@ -406,15 +412,26 @@ describe('inline refusals', () => {
     },
   );
 
-  it('a number the server refuses (bad_value) marks the field, which takes focus', async () => {
+  it('a ✓ the server refuses as bad_value offers Reload, not a new number (UX panel, 12b)', async () => {
+    // The screen checks a ✓ by the writer's own rule before sending it, so a refusal means the item
+    // changed under the page (its unit, its type): retyping would fail every time.
     const bad: RowResult = { ok: false, reason: ROW_REFUSAL.bad_value };
     mount(todayTwoPrograms, { wrap: () => ({ logRow: async () => bad }) });
     const vest = card('Morning habits', 'Vest weight');
     fireEvent.change(field(vest), { target: { value: '12' } });
     await press(tick(vest));
     expect(within(vest).getByText(refusalCopy(ROW_REFUSAL.bad_value, 'tick').message));
-    expect(field(vest).getAttribute('aria-invalid')).toBe('true');
-    expect(document.activeElement).toBe(field(vest));
+    expect(within(vest).getByRole('button', { name: DAY_COPY.reload })).toBeTruthy();
+    expect(field(vest).getAttribute('aria-invalid')).not.toBe('true');
+    expect(document.activeElement).not.toBe(field(vest));
+  });
+
+  it('every refusal of a ✓ but a retry has copy, and a stale one offers Reload', () => {
+    for (const reason of ROW_REFUSALS) {
+      const copy = refusalCopy(reason, 'tick');
+      expect(copy.message, reason).not.toBe('');
+      if (reason === ROW_REFUSAL.bad_value) expect(copy.reload).toBe(true);
+    }
   });
 
   it('a stale page offers Reload, which refreshes and keeps focus on the ✓', async () => {
@@ -458,6 +475,9 @@ describe('inline refusals', () => {
     expect(document.activeElement).toBe(notice);
     // No "last time" on a day nothing can be logged on (D33).
     expect(screen.queryByText(new RegExp(`^${DAY_COPY.lastTime}`))).toBeNull();
+    // The data is fetched again: a retried ✓ refused at the window may have been saved the first
+    // time, and the fresh data shows it (UX panel, 12b).
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('after closed_day, an earlier failure no longer counts or shows: nothing is left to retry', async () => {
