@@ -20,6 +20,7 @@ owns:
   - packages/shared/src/catalog/approvals.test.ts
   - packages/shared/src/catalog/catalog.test.ts
   - packages/shared/src/catalog/owed.test.ts
+  - packages/shared/src/catalog/search.test.ts
   - .github/scripts/check-catalog-append-only.mjs
   # The search the picker and `existingItem` share. Moved here from movement-picker.md at CAT-3
   # C0a: the contract's next chunk adds the library's search beside `matchMovementOptions`.
@@ -432,15 +433,16 @@ truth; this section is the map. The library's lanes (schema, data, picker) meet 
 FAM-1's lanes meet at the program shapes, and the same rule holds: **no lane edits a file listed
 here; a change goes through the contract owner.**
 
-| File                                            | What it holds                                                                                                                                                                                                                                              |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT` (52 codes), `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels), `MEDIA_KINDS`, and `QUERY_SHORT_FORMS`. In the root barrel.                                                                               |
-| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id), `catalogInstructionsSchema`, `catalogMediaSchema`, their caps, and `requiresNoEquipment`. In the root barrel.                                                              |
-| `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries) and `CATALOG_FIXTURE_IDS`. The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                  |
-| `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                        |
-| `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide. |
-| `.github/scripts/check-catalog-append-only.mjs` | The step in CI's quality job that compares the two record files with the PR's base (`pnpm catalog:check` locally).                                                                                                                                         |
-| `packages/shared/src/catalog/catalog.test.ts`   | Criteria V1 to V3, V5, V6 and D2, and what the fixture covers. `approvals.test.ts` holds V4 and D3 (the lockfile, the approvals, the merge-base comparison). `owed.test.ts` lists the criteria no test holds yet.                                          |
+| File                                            | What it holds                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/catalog/vocabulary.ts`     | `EQUIPMENT` (52 codes), `MUSCLES`, `MODALITIES`, `SUPERVISION` (each with a zod enum, named members and labels), `MEDIA_KINDS`, and `QUERY_SHORT_FORMS`. In the root barrel.                                                                                                                                                                                                             |
+| `packages/shared/src/catalog/entry.ts`          | `catalogMovementSchema` / `CatalogMovement` (one library entry: strict, no id), `catalogInstructionsSchema`, `catalogMediaSchema`, their caps, and `requiresNoEquipment`. In the root barrel.                                                                                                                                                                                            |
+| `packages/shared/src/catalog/fixture.ts`        | `CATALOG_FIXTURE` (24 generic entries) and `CATALOG_FIXTURE_IDS`. The subpath `@mat-plan/shared/catalog/fixture`. What a test, CI or preview database holds in place of the real library.                                                                                                                                                                                                |
+| `packages/shared/src/catalog/approvals.ts`      | `entryHash`, `lockfileIssues`, `approvalIssues`: the checks behind `data/shipped.json` and `data/approved.json`. `node:crypto`, so server and test code only; not exported from the module's index.                                                                                                                                                                                      |
+| `packages/shared/src/catalog/data/`             | **The data lane's directory.** `CATALOG_MOVEMENTS` (empty until the first reviewed batch), `CATALOG_SLUGS`, `shipped.json`, `approved.json`. The subpath `@mat-plan/shared/catalog/data`. C0a created the files; the lane fills them and writes its guide.                                                                                                                               |
+| `.github/scripts/check-catalog-append-only.mjs` | The step in CI's quality job that compares the two record files with the PR's base (`pnpm catalog:check` locally).                                                                                                                                                                                                                                                                       |
+| `packages/shared/src/catalog/catalog.test.ts`   | Criteria V1 to V3, V5, V6 and D2, and what the fixture covers. `approvals.test.ts` holds V4 and D3 (the lockfile, the approvals, the merge-base comparison). `owed.test.ts` lists the criteria no test holds yet.                                                                                                                                                                        |
+| `packages/shared/src/movement-search.ts`        | `searchMovementOptions` (the library's search: `matchMovementOptions`, plus equipment short forms and `near`, the near misses), `editsWithin`, `SEARCH_WORDS_MAX`. Beside `matchMovementOptions`, `foldMovementQuery` and `movementNameKey`, which [movement-picker.md](./movement-picker.md) describes. `catalog/search.test.ts` holds criteria P1 to P4 and the contract's half of P6. |
 
 Invariants (the spec's rules, as they bind code here):
 
@@ -476,6 +478,21 @@ Invariants (the spec's rules, as they bind code here):
    optional `media` is a kind and a key into the app's own store, **never a URL**, and no entry in
    the library or the fixture may set it until a media plan lifts that test. Both stay in the
    const and are read by slug, like aliases: no column holds them.
+10. 🔴 **`exact` and `aliasHit` are always `matchMovementOptions`' own, for the query as typed.**
+    They are what withholds "Use as typed", and the server's `existingItem` reads the same two.
+    `searchMovementOptions` adds rows (through a short form, as near misses) and never changes
+    those answers: `db row` finds Dumbbell row and a household may still make an item called
+    "db row". With no short form in the query its `matches` and `someWords` are
+    `matchMovementOptions`' too, in the same order.
+11. **A short form is equipment, not a movement.** `QUERY_SHORT_FORMS` expands a whole query word
+    inside the search only: never in `movementNameKey`, and never as an entry's alias. Rows found
+    only that way come after the others and count as matches.
+12. **A near miss is offered only when nothing matches, and never picked by Enter.** Every query
+    word must be in the option: part of its name, or (five letters or more, same first letter)
+    within one edit of a word of its name or of an alias; two edits from nine letters. Or the
+    same test on the whole query and a whole name or alias with the spaces out. The search
+    reads `MOVEMENT_NAME_MAX` characters of a query; a query of more than `SEARCH_WORDS_MAX` words
+    gets the plain match only; and it builds no `RegExp` from a query or a name.
 
 ## Changing it
 
