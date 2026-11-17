@@ -1,0 +1,18 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index d60703f7..a93db0b9 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -904,13 +904,6 @@ const createHousehold: Correction = {
+       });
+ 
+       return await db.transaction(async (tx) => {
+-        const bound = new Set((await liveMembershipsOf(tx, ids)).map((m) => m.clerkUserId));
+-        if (bound.size > 0) {
+-          throw new CorrectionRefusal(
+-            `${bound.size} of ${n} accounts already have a live membership; nothing written. If an ` +
+-              'earlier --apply of this correction succeeded, this step is done.',
+-          );
+-        }
+         const line = (verb: string) =>
+           `${verb} 1 household with ${n} account(s), each as ${HOUSEHOLD_ROLE.owner}`;
+         if (!apply) return [line('would create')];
