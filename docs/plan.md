@@ -1842,6 +1842,13 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   D10): from that PR the production seed no longer writes the program, existing rows stay, and only
   the test and preview seeds write it, behind `SEED_FIXTURES`. \"Keep `PROGRAM_SEED` reaching prod
   until V1-22\" above no longer holds.
+  **Planned 2026-11-13, refreshed 2026-11-16 onto #432** ([plan](./plans/ops-2-split-the-seed.md)), not
+  yet implemented. Two PRs: 1 moves the seed household and its three fixture profiles under #432's
+  `fixtures` branch and takes the ramp expansion out of production, so production's `db:seed` writes
+  reference data only, and replaces both runbook preconditions that wait on OPS-2 with a check run
+  before each deletion; 2 soft-deletes the fixture athlete `PROF-1 b`'s seed put in production. Decided
+  2026-11-16: SEC-6's production re-key runs before the first seed-id deletion (no tombstones); the
+  fixture athlete is soft-deleted; the ramp expansion is deleted.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
@@ -2317,10 +2324,20 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   runbook's hand-maintained delete order, and the panel found exactly that class of defect by
   reading. _(Beta 0.)_
 
+  📐 **Planned 2026-11-13, refreshed 2026-11-17** ([plan](./plans/priv-3-guarded-deletion.md); a
+  six-lens panel; plan only): one proved list of per-household tables, a delete core, and dry-run-first
+  `erase-household` and `erase-athlete` corrections over it, with the purge window `N` a deferred
+  section (`N` = 30 days). ⚠️ **The target is read from the environment through a hidden prompt, not
+  the `--household` flag above** _(maintainer, 2026-11-17, Q1)_; PR 2b re-words the paragraph above
+  when it lands.
+
   **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
   long as the household is active.** There is no rolling window and no summarize-then-discard step:
-  - Summaries would break the byte-faithful CSV export, the v2 engine's per-set history, and
-    [CLONE-1](#clone-1)'s "who ran which version" record.
+  - Summaries would break the export's completeness, the v2 engine's per-set history, and
+    [CLONE-1](#clone-1)'s "who ran which version" record. _(Re-stated 2026-11-13. It read "the
+    byte-faithful CSV export", which [ADR 0009](./decisions/0009-retire-the-byte-faithful-csv-contract.md)
+    retired. The conclusion does not change: 0009 decision 3(a) still requires the export to stay
+    complete for what the notice says it contains.)_
   - A summary of a child's bodyweight is still a child's health data, so summarizing does not reduce
     the privacy exposure.
   - The volume is trivial (about 51 rows in prod after several weeks).

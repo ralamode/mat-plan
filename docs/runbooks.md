@@ -1413,14 +1413,16 @@ UNION ALL SELECT 'prescriptions', count(*) FROM prescriptions WHERE block_id IN 
 -- either: a hidden slot or workout is still a row the delete must remove).
 UNION ALL SELECT 'block_day_workouts', count(*) FROM block_day_workouts WHERE block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'workouts', count(*) FROM workouts WHERE block_id IN (SELECT id FROM b)
--- FAM-1 5: assignments, by EITHER side (pre-flight (h) makes the two sides agree), and their weekdays.
+-- FAM-1 5: assignments whose athlete AND program are H's, and their weekdays; targets the same way.
+-- The same predicates step 4 deletes by. A row straddling two households is counted by neither, and
+-- pre-flights (a) and (h) find it first.
 UNION ALL SELECT 'program_assignments', count(*) FROM program_assignments
-  WHERE profile_id IN (SELECT id FROM p) OR block_id IN (SELECT id FROM b)
+  WHERE profile_id IN (SELECT id FROM p) AND block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'program_assignment_weekdays', count(*) FROM program_assignment_weekdays
   WHERE assignment_id IN (SELECT id FROM program_assignments
-    WHERE profile_id IN (SELECT id FROM p) OR block_id IN (SELECT id FROM b))
+    WHERE profile_id IN (SELECT id FROM p) AND block_id IN (SELECT id FROM b))
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
-  WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
+  WHERE profile_id IN (SELECT id FROM p) AND prescription_id IN
     (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
 -- FAM-1 4b: a template prescription's typed targets, scoped through the prescription (no
 -- deleted_at filter: a hidden quantity still refuses its prescription's delete).
@@ -1446,9 +1448,10 @@ either aborts the transaction half-way or makes this procedure delete a row abou
 child:
 
 ```sql
--- (a) a prescription_target straddling households — BOTH directions:
---       prescription ∈ H but profile ∉ H   → we would delete another family's child's target
---       profile ∈ H but prescription ∉ H   → we would delete another family's prescription target
+-- (a) a prescription_target straddling households — BOTH directions (prescription ∈ H but
+--       profile ∉ H, or profile ∈ H but prescription ∉ H). Step 8 deletes only a target whose
+--       athlete AND prescription are H's, so it leaves this row, and the delete of the parent it
+--       points into (step 9 or 12) aborts 23503. This pre-flight finds it first.
 -- (b) an ENTRY belonging to a profile OUTSIDE H that references one of H's sessions
 --       (entries.session_id is independent of entries.profile_id)
 -- (c) an ENTRY belonging to a profile OUTSIDE H that references one of H's supersets:
@@ -1510,9 +1513,9 @@ child:
 --        WHERE b.household_id = (SELECT id FROM h) AND pr.household_id <> b.household_id
 --       (`db:verify` proves both joins find a planted row, `verify/schema.ts` → FAM-1 4a-ii.)
 -- (h) FAM-1 5: an ASSIGNMENT whose athlete and program are in DIFFERENT households, either side in H.
---       Steps 9c/9d select by `profile_id ∈ H OR block_id ∈ H`, so they would delete another family's
---       child's assignment to H's block. (H's child on another family's block is deleted by the profile
---       arm, which harms nobody; it is stopped only so the operator finds out how it was written.)
+--       Steps 9c/9d delete only an assignment whose athlete AND block are H's, so they leave this
+--       row, and the delete of the parent it points into (step 10 or 12) aborts 23503. This
+--       pre-flight finds it first.
 --       STOP; with a correction hard-delete the stray assignment and its weekday rows (it is a row about
 --       the other family's child, and no writer can make one: 6c refuses it). No deleted_at filter.
 --       SELECT a.id FROM program_assignments a
@@ -1617,29 +1620,31 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 
 **The order is child-before-parent and is not arbitrary.** `entries` carries FKs to **both**
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
-`packages/db/src/schema.ts` by two independent reviews:
+`packages/db/src/schema.ts` by two independent reviews. The same list is code in
+[`packages/db/src/erasure/graph.ts`](../packages/db/src/erasure/graph.ts) (`HOUSEHOLD_GRAPH`, rows
+1-19 in this order), which `db:verify` holds against the catalog:
 
-| #   | Table                         | Scoped by                                                                                |
-| --- | ----------------------------- | ---------------------------------------------------------------------------------------- |
-| 1   | `entry_set_quantities`        | `entry_set_id` ∈ entry_sets of entries of H                                              |
-| 2   | `entry_sets`                  | `entry_id` ∈ entries of H                                                                |
-| 3   | **`entries`**                 | `profile_id` ∈ H — **before 4 and 5**                                                    |
-| 4   | `supersets`                   | `session_id` ∈ sessions of H                                                             |
-| 5   | `sessions`                    | `profile_id` ∈ H                                                                         |
-| 6   | `day_readiness`               | `profile_id` ∈ H                                                                         |
-| 7   | `ramp_targets`                | `profile_id` ∈ H                                                                         |
-| 8   | `prescription_targets`        | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H                           |
-| 8a  | `prescription_quantities`     | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9**                          |
-| 9   | `prescriptions`               | `block_id` ∈ program_blocks of H                                                         |
-| 9a  | `block_day_workouts`          | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**                             |
-| 9b  | `workouts`                    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**                             |
-| 9c  | `program_assignment_weekdays` | `assignment_id` ∈ 9d's set — **FAM-1 5; before 9d**                                      |
-| 9d  | `program_assignments`         | `profile_id` ∈ H **OR** `block_id` ∈ program_blocks of H — **FAM-1 5; before 10 and 12** |
-| 10  | `program_blocks`              | `household_id` = H                                                                       |
-| 11  | **`movements`**               | `household_id` = H — **TEN-2a; see below**                                               |
-| 12  | `profiles`                    | `household_id` = H                                                                       |
-| 13  | **`household_members`**       | `household_id` = H — **AUTH-1 1b; see below**                                            |
-| 14  | `households`                  | `id` = H                                                                                 |
+| #   | Table                         | Scoped by                                                                                 |
+| --- | ----------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | `entry_set_quantities`        | `entry_set_id` ∈ entry_sets of entries of H                                               |
+| 2   | `entry_sets`                  | `entry_id` ∈ entries of H                                                                 |
+| 3   | **`entries`**                 | `profile_id` ∈ H — **before 4 and 5**                                                     |
+| 4   | `supersets`                   | `session_id` ∈ sessions of H                                                              |
+| 5   | `sessions`                    | `profile_id` ∈ H                                                                          |
+| 6   | `day_readiness`               | `profile_id` ∈ H                                                                          |
+| 7   | `ramp_targets`                | `profile_id` ∈ H                                                                          |
+| 8   | `prescription_targets`        | `profile_id` ∈ H **AND** `prescription_id` ∈ prescriptions of H                           |
+| 8a  | `prescription_quantities`     | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9**                           |
+| 9   | `prescriptions`               | `block_id` ∈ program_blocks of H                                                          |
+| 9a  | `block_day_workouts`          | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**                              |
+| 9b  | `workouts`                    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**                              |
+| 9c  | `program_assignment_weekdays` | `assignment_id` ∈ 9d's set — **FAM-1 5; before 9d**                                       |
+| 9d  | `program_assignments`         | `profile_id` ∈ H **AND** `block_id` ∈ program_blocks of H — **FAM-1 5; before 10 and 12** |
+| 10  | `program_blocks`              | `household_id` = H                                                                        |
+| 11  | **`movements`**               | `household_id` = H — **TEN-2a; see below**                                                |
+| 12  | `profiles`                    | `household_id` = H                                                                        |
+| 13  | **`household_members`**       | `household_id` = H — **AUTH-1 1b; see below**                                             |
+| 14  | `households`                  | `id` = H                                                                                  |
 
 **Steps 8a, 9a–9d are lettered, not numbered**, so every "step 11" and "step 14" cited across the
 repo still names the same table. A week slot references its workout through a composite FK, and a
@@ -1668,8 +1673,13 @@ the same way.** The FK `household_members.household_id → households.id` is `ON
 `household_members` **is** that 19th table.
 
 ⚠️ **`NO ACTION` rather than `ON DELETE CASCADE` is deliberate**, for the reason steps 1-2 already
-give: a cascade reports nothing, and **the counts are the proof**. `db:verify` asserts that after this
-order the transaction **commits** and zero rows remain for H.
+give: a cascade reports nothing, and **the counts are the proof**. `db:verify` asserts that steps 13
+then 14 **commit** and leave zero rows for H; it does not run this whole table. What it proves is the
+graph in `packages/db/src/erasure/graph.ts` (`PRIV-3` P1 and P2): every per-household table is in it,
+child before parent, and every foreign key that does not abort is accounted for. Rows 8 and 9d are
+`AND` so that a row straddling two households is left and its parent's delete aborts `23503`, instead
+of another family's row being deleted (pre-flights (a) and (h) refuse it first). This hand table is
+replaced by the guarded script in `PRIV-3` PR 2b.
 
 🔴 **Step 11 (`movements`) is new at `TEN-2a`, and without it this whole procedure aborts.** Migration
 `0015` added `movements.household_id` with `ON DELETE NO ACTION`, so from the first non-NULL value the
@@ -1757,15 +1767,15 @@ remains. Do not restate that list here; one list, one place.
 ### Safety
 
 One explicit transaction, so a partial failure rolls back whole. Targeted by `public_id`. Idempotent
-by nature — a second run finds nothing. Every FK but the two cascades is `NO ACTION`, so a table this
-procedure missed aborts the transaction rather than silently orphaning rows.
+by nature — a second run finds nothing. Every FK into these tables is `NO ACTION` except five, each
+named with its guard in `NON_ABORTING_EDGES` (`packages/db/src/erasure/graph.ts`): two cascades
+(`entry_sets`, `entry_set_quantities`) and three `SET NULL` keys guarded by pre-flights (e), (f) and
+(g). So a table this procedure missed aborts the transaction rather than silently orphaning rows.
 
-**Blast radius is one household, with one exception named honestly.** Step 8 is the only predicate
-that does not chain cleanly to `households.id = H`, and **both** of its arms can reach outside H, in
-opposite directions: the prescription-side arm can select a row whose `profile_id` is another
-household's child, and the profile-side arm can select a row whose prescription belongs to another
-household's program block — i.e. deleting another family's prescription target. That is why step 3(a)
-checks both directions and aborts, rather than letting the transaction discover it.
+**Blast radius is one household.** Steps 8 and 9d are the two predicates that name two parents, and
+each requires both to be H's (`AND`). A row straddling two households is therefore left, the delete
+of its parent aborts `23503`, and the whole transaction rolls back: it fails closed rather than
+deleting another family's row. Pre-flights (a) and (h) find such a row before the transaction does.
 
 ### The deletion ledger
 
