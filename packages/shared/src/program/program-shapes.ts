@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { isoDaySchema } from '../date';
-import { WEEKDAYS, weekdaySchema } from '../day';
+import { WEEKDAYS, weekdaySchema, type Weekday } from '../day';
 import { movementNameKey } from '../movement-search';
 import { movementLabelSchema, movementNameSchema, trackingTypeSchema } from '../movements';
 import { MAX_HOUSEHOLD_ATHLETES } from '../profiles';
@@ -213,6 +213,19 @@ export const weekDraftSchema = z.object({
   days: weekDaysSchema,
 });
 export type WeekDraft = z.infer<typeof weekDraftSchema>;
+
+/**
+ * A week with nothing on any day: every weekday present, each `[]` (contract change C26).
+ *
+ * With no type argument it is a `WeekDraft['days']`, the starting point for a week read or a week
+ * editor to fill. **A new object and new arrays on every call**, so a caller may push into it.
+ * The type argument is for a week of something other than `WeekDraft`'s slots (the fixtures'
+ * prototype world has one).
+ */
+export function emptyWeek<Slot = WeekDraft['days'][Weekday][number]>(): Record<Weekday, Slot[]> {
+  // Written out, so the compiler holds it to every weekday; `shapes.test.ts` holds it to `WEEKDAYS`.
+  return { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+}
 
 /**
  * Whether a week names one workout twice on a day: the question `saveWeek` asks of a draft
