@@ -728,9 +728,11 @@ same rule _(maintainer's decision, 2026-11-16)_. It never carries a name, a logg
 household's id, the requester's account id or an internal id, and it is sent only on a miss, so an
 id reaches Sentry only when a request for it was refused. **That includes an id of the household's
 own that the page does not serve**: a stale link to a program since removed, or an item asked for
-an athlete who is not on its program, sends that id at `info` with the outcome `unknown_resource`. Since FAM-1 7a-i, `apps/web/lib/dal/program/report-miss.ts` is the one caller for a program or a
+an athlete who is not on its program, sends that id at `info` with the outcome `unknown_resource`. Since FAM-1 7a-i, `apps/web/lib/dal/program/report-miss.ts` sends a program or a
 workout id: after a rename, a save or the workout editor's read finds nothing, it checks the program
-and then the workout against the household and sends at most one event. Retention is Sentry's, in
+and then the workout against the household and sends at most one event. Since 12b,
+`apps/web/lib/dal/day/report-miss.ts` sends a workout or a prescription id: only when a ✓ is refused
+`not_found`, it checks the workout and then the prescription and sends at most one event. Retention is Sentry's, in
 §8. The alert
 that reads it is in [runbooks.md](../runbooks.md) → "A cross-household scope miss".
 
