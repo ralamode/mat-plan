@@ -576,7 +576,7 @@ type ScopeMissEvent = Required<{
  *
  * - **Call it only when a scoped read found nothing for the id**, from the one DAL function that
  *   resolves that kind (`lib/dal/program/` for a program or a workout, `lib/dal/day/` for a
- *   prescription), and hand it an id that already parsed as a uuid: a malformed value throws in
+ *   workout or a prescription, a ✓), and hand it an id that already parsed as a uuid: a malformed value throws in
  *   Postgres, is swallowed below and reports nothing, as `getProfileByPublicId` intends for a
  *   profile.
  * - 🔴 **For these three kinds the probe asks "live, in a household that is NOT the caller's", not
