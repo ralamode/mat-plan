@@ -17,6 +17,7 @@ const KIND = {
   prescriptionClient: 6,
   workoutClient: 7,
   entry: 8,
+  catalogMovement: 9,
 } as const;
 
 function fixtureId(kind: number, n: number): string {
@@ -78,4 +79,6 @@ export const fixtureIds = {
     fixtureId(KIND.prescriptionClient, ordinal(workoutProtoId) * 100 + itemNumber(key)),
   /** The prototype numbers its seeded entries `e1`, `e2`, … in the order `seed()` logs them. */
   entry: (n: number) => fixtureId(KIND.entry, n),
+  /** A movement of `CATALOG_FIXTURE` (CAT-3), by its place in that list, from 1. */
+  catalogMovement: (n: number) => fixtureId(KIND.catalogMovement, n),
 };
