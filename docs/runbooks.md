@@ -405,7 +405,7 @@ and `db:seed` runs in the **same job** immediately after `db:migrate`. So a fail
    `DO $$` pre-check raising, a constraint rejecting existing rows) means the data must be corrected
    first — use the `db:correct` entry above. A **`lock_timeout` / `statement_timeout`** failure
    (`canceling statement due to lock timeout`, SQLSTATE `55P03`) means nothing is wrong with the data:
-   the DDL waited out its 5 s behind someone else's transaction.
+   the DDL waited out its `lock_timeout` (the migration's header gives it) behind someone else's transaction.
 2. **Freeze merges to `main` until the wedge clears.** Any later PR that needs a migration or a seed
    row is broken in prod until then. The **one exception** is a correction PR: a correction must be on
    `main` before it can `--apply`, so it merges while migrate is wedged, and that merge's own
@@ -429,7 +429,7 @@ insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll
 previous deployment (its code works on either schema), then re-run as below. 0025: no request-path
 statement (the only insert into `prescriptions` is the fixtures seed, and nothing reads or writes
 `prescription_quantities`), so the app keeps serving; re-run as below. 0030 (V1-9b B2-0): as 0024,
-EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run.
+EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run. 0031 (lane A's VALIDATE): no request-path statement (it only scans), so the app keeps serving; a `23514` names the constraint and table, never the row (the read in [its plan](./plans/tdebt-validate-name-and-nan-checks.md) finds it), and its correction must repair the value, since a soft delete of that row is refused too; then re-run as below.
 ⚠️ **Once B2 has shipped, never roll Vercel back past B2-0's deploy:** older code un-hides without
 clearing `hide_reason`, which the CHECK refuses (`23514`) on any row Clear this day hid. ⚠️ Once the migration is
 observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
