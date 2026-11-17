@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TRACKING_TYPE, TRACKING_TYPES, type TrackingType } from '../movements';
 import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
-import { UNIT_CODES } from '../units';
+import { quantityCeiling, UNIT_CODES } from '../units';
 import { heavyADraft, newWorkoutEmpty, WORKOUT_DRAFT_FIXTURES } from './fixtures';
 import { stamped, workoutDraft } from './fixtures/build';
 import { seedWorld } from './fixtures/world';
@@ -276,23 +276,48 @@ describe('saveWorkoutSchema: the unit rule', () => {
       ).toBe(false);
     });
 
-    it('🔴 an item that saves with a target can be logged with an empty ✓, for every type and unit', () => {
+    it.each(WITH_QUANTITY)(
+      '%s: a target at its unit ceiling saves, one over it does not',
+      (type) => {
+        const slot = TRACKING_TYPE_FIELDS[type].slot!;
+        for (const unit of unitsForTrackingType(type)) {
+          const ceiling = quantityCeiling(unit);
+          expect(ceiling, `${unit} has a ceiling`).toBeDefined();
+          const at = (value: number) => saves(withQuantities(type, [{ slot, unit, value }]));
+          expect(at(ceiling!), `${type} at ${ceiling} ${unit}`).toBe(true);
+          expect(at(ceiling! + 1), `${type} at ${ceiling! + 1} ${unit}`).toBe(false);
+          // No target is no number to judge: "log in this unit" always saves.
+          expect(saves(withQuantities(type, [{ slot, unit, value: null }]))).toBe(true);
+        }
+      },
+    );
+
+    it('🔴 an item that saves with a target can be logged with an empty ✓, for every type, unit and value', () => {
       // The rule's purpose, checked against the writer's own function: whatever passes the save
       // with a prescribed number is stored by an empty ✓ (`fillRowValues` fills it from the target).
+      // Every unit code, and for each a small value, a fraction, its ceiling and one past it.
+      let saved = 0;
       for (const type of TRACKING_TYPES) {
         const { slot, reps } = TRACKING_TYPE_FIELDS[type];
-        const units = slot === null ? [null] : UNIT_CODES;
-        for (const unit of units) {
-          const quantities = slot === null || unit === null ? [] : [{ slot, unit, value: 1 }];
-          if (!saves(withQuantities(type, quantities))) continue;
-          const item = { trackingType: type, unit: itemUnit(type, quantities) };
-          const target = prescribedTarget(reps ? '5' : null, quantities);
-          expect(
-            fillRowValues(item, { quantities: [] }, target),
-            `${type} in ${unit}`,
-          ).not.toBeNull();
+        for (const unit of slot === null ? [null] : UNIT_CODES) {
+          const ceiling = unit === null ? undefined : quantityCeiling(unit);
+          const values = ceiling === undefined ? [0, 1, 2.5] : [0, 1, 2.5, ceiling, ceiling + 1];
+          for (const value of slot === null ? [null] : values) {
+            const quantities =
+              slot === null || unit === null || value === null ? [] : [{ slot, unit, value }];
+            if (!saves(withQuantities(type, quantities))) continue;
+            saved += 1;
+            const item = { trackingType: type, unit: itemUnit(type, quantities) };
+            const target = prescribedTarget(reps ? '5' : null, quantities);
+            expect(
+              fillRowValues(item, { quantities: [] }, target),
+              `${type}: ${value} ${unit}`,
+            ).not.toBeNull();
+          }
         }
       }
+      // Not vacuous: plenty of combinations do save.
+      expect(saved).toBeGreaterThan(40);
     });
   });
 });

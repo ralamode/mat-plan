@@ -11,11 +11,13 @@ import { MAX_SETS_PER_MOVEMENT } from '../strength-session';
 import { hasControlChar } from '../text';
 import {
   athleteLabelSchema,
+  fillRowValues,
   hasSetRows,
   itemUnit,
   TRACKING_TYPE_FIELDS,
   nullableNoteSchema,
   prescribedQuantitiesSchema,
+  prescribedTarget,
   programNameSchema,
   slotQuantity,
   unitsForTrackingType,
@@ -111,6 +113,8 @@ export type WorkoutDraft = z.infer<typeof workoutDraftSchema>;
  *   **And the quantity in the type's slot, when there is one, is in a unit the type logs in**
  *   (`unitsForTrackingType`, what the editor's unit select offers; plan D27): a Count in `bool`
  *   stores no ✓, and a Duration prescribed in seconds refuses an empty ✓, since it logs in minutes.
+ *   **And a target, when there is one, is a number an empty ✓ can store**: the rule asks
+ *   `fillRowValues` itself, which refuses a value over its unit's ceiling (`quantityCeiling`).
  *
  * `workoutDraftSchema` stays tolerant of all three, because the editor loads a draft mid-edit: a card
  * whose type was just chosen has no set count and no unit yet. The rule is checked against the `trackingType`
@@ -135,9 +139,11 @@ export const saveWorkoutSchema = workoutDraftSchema
       // one its prescription names in that slot, target or no target. `itemUnit` is the lookup the
       // row writer and the day's read make; with none, `fillRowValues` refuses every number, so
       // the item could be saved and never logged.
-      if (TRACKING_TYPE_FIELDS[item.trackingType].slot === null) return;
+      const fields = TRACKING_TYPE_FIELDS[item.trackingType];
+      if (fields.slot === null) return;
       const prescribed = slotQuantity(item, item.quantities);
-      if (itemUnit(item.trackingType, item.quantities) === null) {
+      const unit = itemUnit(item.trackingType, item.quantities);
+      if (unit === null) {
         ctx.addIssue({
           code: 'custom',
           path: ['items', index, 'quantities'],
@@ -153,6 +159,24 @@ export const saveWorkoutSchema = workoutDraftSchema
           code: 'custom',
           path: ['items', index, 'quantities'],
           message: "an item's quantity is in a unit its type logs in",
+        });
+      } else if (
+        prescribed !== null &&
+        prescribed.value !== null &&
+        // The writer's own function, asked the writer's own question: would an empty ✓ on this
+        // target be stored? Reps are supplied where the type has them, so only the quantity is
+        // judged (a target over its unit's ceiling, today); reps text that is not a whole number
+        // is legal, and the row then asks for the reps.
+        fillRowValues(
+          { trackingType: item.trackingType, unit },
+          fields.reps ? { reps: 1, quantities: [] } : { quantities: [] },
+          prescribedTarget(null, [prescribed]),
+        ) === null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['items', index, 'quantities'],
+          message: "an item's target is a number an empty ✓ can store",
         });
       }
     });

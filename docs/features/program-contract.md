@@ -144,6 +144,10 @@ C16). `workoutDraftSchema` does not: a card whose type was just chosen has no un
 - **The quantity in the type's slot is in a unit the type logs in** (`unitsForTrackingType`, what
   the editor's unit select offers; plan D27). A Count in `bool` could store no ✓, and a Duration
   prescribed in seconds would refuse an empty ✓, because a Duration logs in minutes.
+- **A target is a number an empty ✓ can store.** Where the quantity has a `value`, the rule asks
+  `fillRowValues` itself whether an empty ✓ on that target is stored. Today that refuses a value
+  over its unit's ceiling (`quantityCeiling`: 1,001 of a count, 1,441 minutes). A blank target is
+  not judged: the row asks for the number.
 
 The issue is on the item's quantities (`['items', index, 'quantities']`), beside any `sets` issue on
 the same card. The rule reads the `trackingType` the draft carries, as the sets rule does; the
@@ -294,9 +298,12 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
     The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
     logs in. The save refuses an item for which it answers `null` while the type has a quantity,
-    and one whose quantity is in a unit its type does not log in (`unitsForTrackingType`), so the
-    row writer never meets a prescription whose empty ✓ it must refuse for its unit.
-    `save-workout.test.ts` holds that against `fillRowValues` for every type and unit. The workout
+    one whose quantity is in a unit its type does not log in (`unitsForTrackingType`), and one
+    whose target `fillRowValues` would not store (over its unit's ceiling), so the row writer never
+    meets a prescription whose empty ✓ it must refuse for its unit or its number.
+    `save-workout.test.ts` holds that against `fillRowValues` for every type and unit, at a small
+    value, a fraction, the unit's ceiling and one past it. Reps are outside the rule: reps text
+    that is not a whole number is legal, and the row then asks for them. The workout
     editor asks for the unit before Save (lane B, #493), and the preview's fake parses with this
     schema; the program writer (6a-ii) refuses the same draft with `invalid`.
 
