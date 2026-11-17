@@ -157,7 +157,8 @@ thrown refusal as a refusal, so it never shows "✓ applied 1 change(s)".
 
 **D5. The target is checked as well as printed.** The runner already prints `target: <host>`. The
 correction also refuses on two targets: the preview database (`correctionTargetIsPreview()`), since
-that estate is seed-only and must hold no real account id, and the fixture principal on any
+that estate is seed-only and must never hold a **production** account (a preview is signed in to with
+development-instance accounts, which D6's claim binds there on purpose), and the fixture principal on any
 non-local target (D2). The production database is named `mat_plan` like a local one, so it cannot
 be recognised positively. The operator reading the host line is the remaining check, and R1's
 runbook step says so.
@@ -201,8 +202,10 @@ personal data is typed in.
 **D9. Proofs of the wiring, and five mutations.** These are `db:verify` cases beside the AUTH-1 1b
 block in `verify.ts`, where the claim correction's composition proofs (6a–6f) already live. Each
 pins the environment in a `try`/`finally`, through a local `withEnv(vars, fn)` (its third use in
-that file). Each `run` goes through the harness's `orFail`, so a thrown error fails a named
-assertion:
+that file). A run expected to succeed, (6h), goes through the harness's `orFail`. A run expected
+to refuse, (6g), (6i) and (6j), goes through `assert.rejects` with a message regex and a message
+argument. Either way a thrown error fails a named assertion, and the `.expect` files for 271 to 273
+quote those messages:
 
 - (6g) `householdClaim` on `SEED_HOUSEHOLD_PUBLIC_ID`, with both database URLs removed, refuses with
   D6's message.
@@ -390,3 +393,19 @@ Lenses: C correctness, S scope, A architecture, R reuse, X security, P privacy, 
 | 23  | S             | No size estimate                                                                                                                                                  | **accepted**           | About 370 lines                                                                                                                                                                                 |
 | 24  | X             | `correct.ts`'s "no correction binds one" comment is false                                                                                                         | **accepted**           | One-line comment fix                                                                                                                                                                            |
 | N   | various       | Fixture literals visibly synthetic (P); "out of scope" should cite the invite row (A); link the milestone (A); PGlite proves the index serially, not the race (D) | **accepted**           | Test plan; Out of scope; Where this sits; D3                                                                                                                                                    |
+
+### Re-review (C, A, X, D; one light pass each)
+
+No blocker survived. Four follow-ups: three taken, one rejected.
+
+- **D, `orFail`:** it fits a run expected to succeed. A refusal case under `orFail` would turn the
+  baseline red, so D9 now names `assert.rejects` for (6g), (6i) and (6j).
+- **C, the preview:** D5 said the preview "must hold no real account id", while D6 binds
+  development-instance accounts there. D5 now says no **production** account.
+- **X, a `?database=` override:** probed on the pinned `pg-connection-string` 2.14.1.
+  `parse('postgres://u@h/mat_plan_preview?database=mat_plan').database` returns
+  `mat_plan_preview`: the path wins, so `databaseNameOf` and the connection agree. Nothing to
+  change.
+- **A, a note:** `liveMembershipsOf` is a read and could sit in `packages/db/src/queries/`.
+  **Rejected:** its only callers are the two corrections, and keeping it in `scripts/` keeps it out
+  of the app's reach. It moves at a third caller.

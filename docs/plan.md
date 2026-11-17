@@ -2347,6 +2347,11 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   the `--household` flag above** _(maintainer, 2026-11-17, Q1)_; PR 2b re-words the paragraph above
   when it lands.
 
+  📐 **This row also hosts the fresh start's household creation** (the
+  [CAT-3 spec](./specs/cat-3-movement-library.md)'s chunk RC, given to `PRIV-3`'s owner): a guarded
+  `create-household` correction that takes no household id, binds the household's accounts and
+  prints counts only ([plan](./plans/priv-3-rc-create-household.md); a seven-lens panel; plan only).
+
   **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
   long as the household is active.** There is no rolling window and no summarize-then-discard step:
   - Summaries would break the export's completeness, the v2 engine's per-set history, and
