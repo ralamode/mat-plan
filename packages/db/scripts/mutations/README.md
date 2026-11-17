@@ -19,7 +19,7 @@ rules, and `../mutations.test.sh` proves each, in `guards:test`):
   journal and prints how to finish by hand.
 - **A second run in the same worktree** refuses while the first is alive.
 - **A patch left applied by something else** (a probe, a hand edit): the run stops and names it
-  (`still applied: …`) before applying anything.
+  (`still applied: <patch>`, and whether `HEAD` carries it) before applying anything.
 
 ## Why this exists
 

@@ -34,11 +34,10 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  closeSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -77,33 +76,75 @@ const alive = (pid) => {
 
 // ── The lock: one run per worktree ──────────────────────────────────────────────────────────────
 let lockHeld = false;
+/** The lock's holder, if it is a live `mutations.mjs` (a reused pid naming something else is not). */
+function liveHolder(content) {
+  let pid = null;
+  try {
+    pid = JSON.parse(content).pid;
+  } catch {
+    return null;
+  }
+  if (!pid || !alive(pid)) return null;
+  try {
+    const command = execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' });
+    return command.includes('mutations.mjs') ? pid : null;
+  } catch {
+    return null;
+  }
+}
 function acquireLock() {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const fd = openSync(LOCK, 'wx');
-      writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-      closeSync(fd);
-      lockHeld = true;
-      return;
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      let holder = null;
+  // Created WITH its content: the pid is written to a private file, then hard-linked onto the lock
+  // path (link fails if the path exists), so no reader ever sees an empty lock.
+  const mine = `${LOCK}.${process.pid}`;
+  writeFileSync(mine, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        holder = JSON.parse(readFileSync(LOCK, 'utf8')).pid;
-      } catch {
-        /* an unreadable lock is a stale one: its writer died mid-write */
+        linkSync(mine, LOCK);
+        lockHeld = true;
+        return;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
       }
-      if (holder && alive(holder)) {
+      let content = '';
+      try {
+        content = readFileSync(LOCK, 'utf8');
+      } catch {
+        continue; // released between our link and our read: try again
+      }
+      const holder = liveHolder(content);
+      if (holder) {
         console.error(
           `✗ mutation gate: another db:mutations run is in flight in this worktree (pid ${holder}).\n` +
-            `  Two runs in one worktree apply patches under each other's gate. Wait for it to finish.`,
+            `  Two runs in one worktree apply patches under each other's gate. Wait for it to finish\n` +
+            `  (its lock: ${LOCK}).`,
         );
         process.exit(1);
       }
-      unlinkSync(LOCK); // stale: its pid is gone
+      // Stale. Break it by renaming it away and re-reading what was moved: only a lock that still
+      // holds the same dead content is discarded, so two runs breaking one lock cannot remove a
+      // fresh lock the other has just taken.
+      const moved = `${LOCK}.stale.${process.pid}`;
+      try {
+        renameSync(LOCK, moved);
+      } catch {
+        continue; // someone else moved it first
+      }
+      const movedContent = readFileSync(moved, 'utf8');
+      if (movedContent !== content && liveHolder(movedContent))
+        renameSync(moved, LOCK); // not ours to break
+      else unlinkSync(moved);
+    }
+    throw new Error(
+      `mutation gate: could not take the lock at ${LOCK}; delete it if no run is live`,
+    );
+  } finally {
+    try {
+      unlinkSync(mine);
+    } catch {
+      /* the private file is only the lock's source; the link holds the content */
     }
   }
-  throw new Error(`mutation gate: could not take the lock at ${LOCK}`);
 }
 function releaseLock() {
   if (!lockHeld) return;
@@ -127,8 +168,13 @@ function readJournal() {
 
 /**
  * Restore every file in `journal` by the three-state rule. Synchronous, so it is safe from a signal
- * handler and from `exit`. Returns true when every file is back to its snapshot (and deletes the
- * journal); false, leaving the journal in place, when any file holds content that is neither.
+ * handler and from `exit`. Returns true when every file is back to its snapshot; false when any file
+ * holds content that is neither (it is left as it is). The CALLER deletes the journal, after ending
+ * the gate, so a kill in between still leaves the gate's group recorded.
+ *
+ * A MISSING file counts as the patched state: `git apply` replaces a file by removing it and writing
+ * a new one, so a kill in that instant leaves no file at all, and no patch here deletes a file (one
+ * that would is refused before it runs).
  */
 function restore(journal) {
   const unsafe = [];
@@ -136,7 +182,7 @@ function restore(journal) {
     const abs = join(REPO, f.path);
     const current = existsSync(abs) ? sha(readFileSync(abs)) : null;
     if (current === f.snapshotSha) continue;
-    if (current === f.patchedSha) {
+    if (current === null || current === f.patchedSha) {
       writeFileSync(abs, Buffer.from(f.snapshot, 'base64'));
       if (shaOf(f.path) !== f.snapshotSha) unsafe.push(`${f.path} (the write-back did not verify)`);
     } else {
@@ -147,14 +193,21 @@ function restore(journal) {
     console.error(
       `✗ mutation gate: could not safely restore after ${journal.patch}:\n` +
         unsafe.map((u) => `    ${u}`).join('\n') +
-        `\n  The journal is kept at ${JOURNAL}. Compare each file with \`git diff\`, remove the` +
-        `\n  patch's change by hand (\`git apply -R ${join(DIR, journal.patch)}\` if it still applies),` +
-        `\n  then delete the journal.`,
+        `\n  The journal is kept at ${JOURNAL}: it holds each file's PRE-PATCH bytes` +
+        `\n  (files[].snapshot, base64), which may be the only copy of uncommitted work. Do not delete it` +
+        `\n  unread. Compare each file with \`git diff\`, remove the patch's change by hand` +
+        `\n  (\`git apply -R ${join(DIR, journal.patch)}\` if it still applies), then delete the journal.`,
     );
     return false;
   }
-  unlinkSync(JOURNAL);
   return true;
+}
+function clearJournal() {
+  try {
+    unlinkSync(JOURNAL);
+  } catch {
+    /* already gone */
+  }
 }
 /**
  * The hash each file WILL have once `patch` is applied, computed before the tree is touched: the
@@ -191,16 +244,30 @@ function endGroup(pgid) {
   for (let waited = 0; waited < 2000 && signal(0); waited += 100) sleepSync(100);
   signal('SIGKILL');
 }
-/** End an orphaned gate from a SIGKILLed run, only if its pid still names a pnpm (pid reuse). */
+/**
+ * End an orphaned gate from a SIGKILLed run. Probes the GROUP, not its leader (the pnpm leader may be
+ * gone while tsx or node live on), and ends it only if a member's command still names `db:verify` or
+ * the gate's tooling, so a reused pgid belonging to something else is left alone.
+ */
 function endOrphan(pgid) {
   if (!pgid) return;
-  let command = '';
   try {
-    command = execFileSync('ps', ['-o', 'command=', '-p', String(pgid)], { encoding: 'utf8' });
+    process.kill(-pgid, 0);
   } catch {
-    return; // no such process
+    return; // the group is gone
   }
-  if (command.includes('pnpm')) endGroup(pgid);
+  let table = '';
+  try {
+    table = execFileSync('ps', ['-A', '-o', 'pgid=,command='], { encoding: 'utf8' });
+  } catch {
+    return;
+  }
+  const members = table
+    .split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(.*)$/))
+    .filter((m) => m && Number(m[1]) === pgid)
+    .map((m) => m[2]);
+  if (members.some((c) => /db:verify|pnpm|tsx|verify\.ts/.test(c))) endGroup(pgid);
 }
 
 // ── Recovery: an interrupted run's journal ──────────────────────────────────────────────────────
@@ -212,6 +279,7 @@ function recover() {
   );
   endOrphan(journal.pgid);
   if (!restore(journal)) return false;
+  clearJournal();
   console.log(`✓ recovered: restored ${journal.files.map((f) => f.path).join(', ')}`);
   return true;
 }
@@ -225,8 +293,9 @@ function stop(reason) {
   const journal = inFlight;
   inFlight = null;
   if (journal) {
-    restore(journal); // restore FIRST: nothing below may throw before it
+    const restored = restore(journal); // restore FIRST: nothing below may throw before it
     endGroup(journal.pgid);
+    if (restored) clearJournal(); // only now: until the group is ended, the journal names it
   }
   releaseLock();
   if (typeof reason === 'string') {
@@ -243,7 +312,7 @@ for (const event of ['uncaughtException', 'unhandledRejection']) {
   });
 }
 process.on('exit', () => {
-  if (!stopping && inFlight) restore(inFlight);
+  if (!stopping && inFlight && restore(inFlight)) clearJournal();
   releaseLock();
 });
 
@@ -257,6 +326,10 @@ function runGate(onSpawn) {
     });
     let stdout = '';
     let stderr = '';
+    // Decoded as streams, so a multi-byte character split across two chunks is not mangled (40 of
+    // the .expect lines hold non-ASCII).
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     child.stdout.on('data', (d) => (stdout += d));
     child.stderr.on('data', (d) => (stderr += d));
     child.on('error', reject); // ENOENT: the gate never ran
@@ -303,9 +376,23 @@ async function main() {
     }
   });
   if (stillApplied.length > 0) {
+    const lines = stillApplied.map((p) => {
+      const paths = touchedPaths(join(DIR, p));
+      let committed = false;
+      try {
+        git('diff', '--quiet', 'HEAD', '--', ...paths);
+        committed = true; // no difference from HEAD: the commit itself carries the mutation
+      } catch {
+        /* differs from HEAD: the mutation is uncommitted */
+      }
+      return committed
+        ? `    still applied: ${p} — and COMMITTED (HEAD carries it): revert it in a new commit`
+        : `    still applied: ${p} — restore with: git apply -R ${join(DIR, p)}`;
+    });
     console.error(
-      `✗ mutation gate: still applied in the working tree, by an earlier run that left no journal:\n` +
-        stillApplied.map((p) => `    ${p} — restore with: git apply -R ${join(DIR, p)}`).join('\n'),
+      `✗ mutation gate: a patch is already in the tree (a probe, a hand edit, or a run that left no\n` +
+        `  journal); nothing was applied on top of it:\n` +
+        lines.join('\n'),
     );
     process.exit(1);
   }
@@ -367,10 +454,12 @@ async function main() {
       failed += 1;
       inFlight = null;
       if (!restore(journal)) process.exit(1);
+      clearJournal();
       break; // a gate that cannot start will not start for the next patch either
     }
     inFlight = null;
     if (!restore(journal)) process.exit(1);
+    clearJournal();
 
     if (run.status === 0) {
       console.error(
