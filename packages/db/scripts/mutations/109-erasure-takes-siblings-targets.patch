@@ -1,16 +1,17 @@
-diff --git a/packages/db/scripts/verify/schema.ts b/packages/db/scripts/verify/schema.ts
---- a/packages/db/scripts/verify/schema.ts
-+++ b/packages/db/scripts/verify/schema.ts
-@@ -2227,7 +2227,11 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -79,8 +79,12 @@
    { table: 'sessions', scope: (p: number) => sql`profile_id = ${p}` },
    { table: 'day_readiness', scope: (p: number) => sql`profile_id = ${p}` },
    { table: 'ramp_targets', scope: (p: number) => sql`profile_id = ${p}` },
 -  { table: 'prescription_targets', scope: (p: number) => sql`profile_id = ${p}` },
-+  {
+   {
 +    table: 'prescription_targets',
 +    scope: (p: number) =>
 +      sql`prescription_id IN (SELECT prescription_id FROM prescription_targets WHERE profile_id = ${p})`,
 +  },
-   {
++  {
      table: 'program_assignment_weekdays',
      scope: (p: number) => sql`assignment_id IN ${P_ASSIGNMENTS(p)}`,
+   },

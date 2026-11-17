@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -136,7 +136,8 @@
+   { table: schema.sessions, householdRows: sessionRows },
+   {
+     table: schema.dayReadiness,
+-    householdRows: (s) => sql`${schema.dayReadiness.profileId} IN ${profilesOf(s)}`,
++    householdRows: (s) =>
++      sql`(${schema.dayReadiness.profileId} IN ${profilesOf(s)} AND ${schema.dayReadiness.deletedAt} IS NULL)`,
+   },
+   {
+     table: schema.rampTargets,

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -146,7 +146,7 @@
+     // AND: a target of H's athlete on another household's prescription is matched by neither.
+     table: schema.prescriptionTargets,
+     householdRows: (s) =>
+-      sql`(${schema.prescriptionTargets.profileId} IN ${profilesOf(s)} AND ${schema.prescriptionTargets.prescriptionId} IN ${prescriptionsOf(s)})`,
++      sql`(${schema.prescriptionTargets.profileId} IN ${profilesOf(s)} OR ${schema.prescriptionTargets.prescriptionId} IN ${prescriptionsOf(s)})`,
+   },
+   {
+     table: schema.prescriptionQuantities,

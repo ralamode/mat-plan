@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -169,7 +169,7 @@
+   },
+   // AND: an assignment of H's athlete to another household's block is matched by neither.
+   { table: schema.programAssignments, householdRows: assignmentRows },
+-  { table: schema.programBlocks, householdRows: (s) => programBlockInHousehold(s) },
++  { table: schema.programBlocks, householdRows: () => sql`true` },
+   { table: schema.movements, householdRows: (s) => movementInHousehold(s) },
+   { table: schema.profiles, householdRows: (s) => inHousehold(s) },
+   { table: schema.householdMembers, householdRows: (s) => householdMemberInHousehold(s) },

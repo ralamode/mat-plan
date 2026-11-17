@@ -1606,29 +1606,31 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 
 **The order is child-before-parent and is not arbitrary.** `entries` carries FKs to **both**
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
-`packages/db/src/schema.ts` by two independent reviews:
+`packages/db/src/schema.ts` by two independent reviews. The same list is code in
+[`packages/db/src/erasure/graph.ts`](../packages/db/src/erasure/graph.ts) (`HOUSEHOLD_GRAPH`, rows
+1-19 in this order), which `db:verify` holds against the catalog:
 
-| #   | Table                         | Scoped by                                                                                |
-| --- | ----------------------------- | ---------------------------------------------------------------------------------------- |
-| 1   | `entry_set_quantities`        | `entry_set_id` ∈ entry_sets of entries of H                                              |
-| 2   | `entry_sets`                  | `entry_id` ∈ entries of H                                                                |
-| 3   | **`entries`**                 | `profile_id` ∈ H — **before 4 and 5**                                                    |
-| 4   | `supersets`                   | `session_id` ∈ sessions of H                                                             |
-| 5   | `sessions`                    | `profile_id` ∈ H                                                                         |
-| 6   | `day_readiness`               | `profile_id` ∈ H                                                                         |
-| 7   | `ramp_targets`                | `profile_id` ∈ H                                                                         |
-| 8   | `prescription_targets`        | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H                           |
-| 8a  | `prescription_quantities`     | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9**                          |
-| 9   | `prescriptions`               | `block_id` ∈ program_blocks of H                                                         |
-| 9a  | `block_day_workouts`          | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**                             |
-| 9b  | `workouts`                    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**                             |
-| 9c  | `program_assignment_weekdays` | `assignment_id` ∈ 9d's set — **FAM-1 5; before 9d**                                      |
-| 9d  | `program_assignments`         | `profile_id` ∈ H **OR** `block_id` ∈ program_blocks of H — **FAM-1 5; before 10 and 12** |
-| 10  | `program_blocks`              | `household_id` = H                                                                       |
-| 11  | **`movements`**               | `household_id` = H — **TEN-2a; see below**                                               |
-| 12  | `profiles`                    | `household_id` = H                                                                       |
-| 13  | **`household_members`**       | `household_id` = H — **AUTH-1 1b; see below**                                            |
-| 14  | `households`                  | `id` = H                                                                                 |
+| #   | Table                         | Scoped by                                                                                 |
+| --- | ----------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | `entry_set_quantities`        | `entry_set_id` ∈ entry_sets of entries of H                                               |
+| 2   | `entry_sets`                  | `entry_id` ∈ entries of H                                                                 |
+| 3   | **`entries`**                 | `profile_id` ∈ H — **before 4 and 5**                                                     |
+| 4   | `supersets`                   | `session_id` ∈ sessions of H                                                              |
+| 5   | `sessions`                    | `profile_id` ∈ H                                                                          |
+| 6   | `day_readiness`               | `profile_id` ∈ H                                                                          |
+| 7   | `ramp_targets`                | `profile_id` ∈ H                                                                          |
+| 8   | `prescription_targets`        | `profile_id` ∈ H **AND** `prescription_id` ∈ prescriptions of H                           |
+| 8a  | `prescription_quantities`     | `prescription_id` ∈ prescriptions of H — **FAM-1 4b; before 9**                           |
+| 9   | `prescriptions`               | `block_id` ∈ program_blocks of H                                                          |
+| 9a  | `block_day_workouts`          | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 9b**                              |
+| 9b  | `workouts`                    | `block_id` ∈ program_blocks of H — **FAM-1 4a-i; before 10**                              |
+| 9c  | `program_assignment_weekdays` | `assignment_id` ∈ 9d's set — **FAM-1 5; before 9d**                                       |
+| 9d  | `program_assignments`         | `profile_id` ∈ H **AND** `block_id` ∈ program_blocks of H — **FAM-1 5; before 10 and 12** |
+| 10  | `program_blocks`              | `household_id` = H                                                                        |
+| 11  | **`movements`**               | `household_id` = H — **TEN-2a; see below**                                                |
+| 12  | `profiles`                    | `household_id` = H                                                                        |
+| 13  | **`household_members`**       | `household_id` = H — **AUTH-1 1b; see below**                                             |
+| 14  | `households`                  | `id` = H                                                                                  |
 
 **Steps 8a, 9a–9d are lettered, not numbered**, so every "step 11" and "step 14" cited across the
 repo still names the same table. A week slot references its workout through a composite FK, and a
@@ -1657,8 +1659,13 @@ the same way.** The FK `household_members.household_id → households.id` is `ON
 `household_members` **is** that 19th table.
 
 ⚠️ **`NO ACTION` rather than `ON DELETE CASCADE` is deliberate**, for the reason steps 1-2 already
-give: a cascade reports nothing, and **the counts are the proof**. `db:verify` asserts that after this
-order the transaction **commits** and zero rows remain for H.
+give: a cascade reports nothing, and **the counts are the proof**. `db:verify` asserts that steps 13
+then 14 **commit** and leave zero rows for H; it does not run this whole table. What it proves is the
+graph in `packages/db/src/erasure/graph.ts` (`PRIV-3` P1 and P2): every per-household table is in it,
+child before parent, and every foreign key that does not abort is accounted for. Rows 8 and 9d are
+`AND` so that a row straddling two households is left and its parent's delete aborts `23503`, instead
+of another family's row being deleted (pre-flights (a) and (h) refuse it first). This hand table is
+replaced by the guarded script in `PRIV-3` PR 2b.
 
 🔴 **Step 11 (`movements`) is new at `TEN-2a`, and without it this whole procedure aborts.** Migration
 `0015` added `movements.household_id` with `ON DELETE NO ACTION`, so from the first non-NULL value the
