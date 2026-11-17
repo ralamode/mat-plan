@@ -1,1 +1,2 @@
+node .github/scripts/check-conflict-markers.mjs --staged
 pnpm lint-staged
