@@ -3175,9 +3175,9 @@ async function verifyStep5({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   );
 }
 
-// ── Lane A tech-debt: four CHECKs added NOT VALID (migration 0029; validated by PR 2) ──────────────
+// ── Lane A tech-debt: four CHECKs added NOT VALID (0029), validated (0031) ────────────────────────
 
-/** The four constraints 0029 adds NOT VALID; the validating migration flips each to valid. */
+/** The four constraints 0029 added NOT VALID and 0031 validates. */
 const TECH_DEBT_CHECKS = [
   'program_blocks_name_length_check',
   'ramp_targets_target_value_not_nan_check',
@@ -3185,28 +3185,30 @@ const TECH_DEBT_CHECKS = [
   'entry_set_quantities_value_num_not_nan_check',
 ] as const;
 
+/** Whether `conname` is validated, or `undefined` when no such constraint exists. */
+async function isValidated(conname: string): Promise<boolean | undefined> {
+  const [row] = rowsOf<{ convalidated: boolean }>(
+    await db.execute(sql`SELECT convalidated FROM pg_constraint WHERE conname = ${conname}`),
+  );
+  return row?.convalidated;
+}
+
 async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
-  // ── (a) each exists, NOT VALID until the validating migration, and the name bound is its const ─────
+  // ── (a) each exists and is VALIDATED by 0031, and the name bound is its const ──────────────────────
   // ⚠️ Read straight off the migrations, BEFORE (c) below drops and re-adds the name CHECK inside a
   // rolled-back transaction (the TEN-2c lesson, verify.ts: a re-added constraint would make this read
-  // measure itself). (c) re-reads it afterwards, so a (c) that commits fails here.
-  const rows = rowsOf<{ conname: string; convalidated: boolean }>(
-    await db.execute(sql`
-      SELECT conname, convalidated FROM pg_constraint
-       WHERE conname IN (${sql.join(
-         TECH_DEBT_CHECKS.map((c) => sql`${c}`),
-         sql`, `,
-       )})
-       ORDER BY conname`),
-  );
-  assert.deepEqual(
-    rows.map((r) => [r.conname, r.convalidated]),
-    [...TECH_DEBT_CHECKS].sort().map((c) => [c, false]),
-    'lane A tech-debt: the four CHECKs exist and are NOT VALID until the validating migration',
-  );
+  // measure itself). (c) re-reads it afterwards, so a (c) that commits fails there. One assertion per
+  // constraint, so a mutation that drops one VALIDATE is caught by that constraint's own message.
+  for (const conname of TECH_DEBT_CHECKS) {
+    assert.equal(
+      await isValidated(conname),
+      true,
+      `lane A tech-debt: ${conname} is VALIDATED by 0031`,
+    );
+  }
   await assertUpperBoundIs('program_blocks_name_length_check', PROGRAM_NAME_MAX);
   console.log(
-    '✓ lane A tech-debt: the program-name, NaN and entries-value CHECKs exist, NOT VALID; the name bound is PROGRAM_NAME_MAX',
+    '✓ lane A tech-debt: the program-name, NaN and entries-value CHECKs exist and are validated; the name bound is PROGRAM_NAME_MAX',
   );
 
   // ── (b) each refuses what it names, by name, and accepts the bounds ────────────────────────────────
@@ -3293,10 +3295,14 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
     );
   });
 
-  // ── (c) why the production read gates the merge: NOT VALID still refuses an UPDATE of a bad row ───
-  // A demonstration of Postgres's NOT VALID behaviour on THIS constraint: it drops the migrated CHECK,
-  // plants a violator, re-adds the CHECK NOT VALID, and shows the violator's soft delete is refused. The
-  // re-added definition is asserted equal to the migrated one, so the copy below cannot drift from 0029.
+  // ── (c) why the production read gates each merge, and what a failed 0031 needs ──────────────────
+  // A demonstration of Postgres's behaviour on THIS constraint, not a guard on 0031 (no mutation makes
+  // it red): it drops the migrated CHECK, plants a violator, re-adds the CHECK NOT VALID (as 0029 did),
+  // and shows (1) the violator's soft delete is refused, so a failed 0031 is repaired by fixing the
+  // value, never by hiding the row (0031's header), and (2) VALIDATE refuses the violator by name, so
+  // one bad row aborts 0031. `pg_get_constraintdef` appends ` NOT VALID` to an unvalidated constraint,
+  // so the re-added definition is asserted equal to the validated one plus that suffix: the copy below
+  // cannot drift from 0029.
   const migratedDef = await constraintDef('program_blocks_name_length_check');
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
@@ -3324,8 +3330,8 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
     );
     assert.equal(
       readded,
-      migratedDef,
-      'lane A tech-debt: the re-added CHECK is exactly the migrated one',
+      `${migratedDef} NOT VALID`,
+      'lane A tech-debt: the re-added CHECK is exactly the migrated one, NOT VALID',
     );
     await expectRejectedBy(
       'program_blocks_name_length_check',
@@ -3336,14 +3342,22 @@ async function verifyTechDebtChecks({ A_SCOPE }: VerifyContext): Promise<void> {
           .where(eq(schema.programBlocks.id, bad.id)),
       tx,
     );
+    await expectRejectedBy(
+      'program_blocks_name_length_check',
+      () =>
+        tx.execute(
+          sql`ALTER TABLE program_blocks VALIDATE CONSTRAINT program_blocks_name_length_check`,
+        ),
+      tx,
+    );
   });
-  // (c) rolled back: the migrated constraint is still the NOT VALID one 0029 added.
-  const [{ convalidated }] = rowsOf<{ convalidated: boolean }>(
-    await db.execute(sql`SELECT convalidated FROM pg_constraint
-      WHERE conname = 'program_blocks_name_length_check'`),
+  // (c) rolled back: the migrated constraint is still the one 0031 validated.
+  assert.equal(
+    await isValidated('program_blocks_name_length_check'),
+    true,
+    'lane A tech-debt: (c) left the migrated name CHECK as it was',
   );
-  assert.equal(convalidated, false, 'lane A tech-debt: (c) left the migrated name CHECK as it was');
   console.log(
-    '✓ lane A tech-debt: a long or blank block name, a negative or NaN reading, a NaN quantity and a NaN ramp target are each refused by name; the bounds are accepted; and NOT VALID still refuses a soft delete of an existing bad row, which is why the production read gates the merge',
+    '✓ lane A tech-debt: a long or blank block name, a negative or NaN reading, a NaN quantity and a NaN ramp target are each refused by name; the bounds are accepted; and on an existing bad row a NOT VALID CHECK refuses its soft delete and VALIDATE refuses the row, which is why the production read gates each merge',
   );
 }
