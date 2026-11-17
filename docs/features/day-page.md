@@ -166,8 +166,8 @@ border).
 
 **Decided for 13b-ii (maintainer, 2026-11-16, after the UX panel):** Undo returns the numbers from
 before the first Change this visit (a typo between two changes never comes back). While a logged
-number is typed over, the row says "Not saved. Was 30 lb." with a Cancel, since phones have no
-Escape key. **That Cancel is an icon-only ✕** (lane S's `InlineEditActions`, its ✕-alone form),
+number is typed over, the row says "Not saved. Was 30 lb." with a cancel, since phones have no
+Escape key. **It is an icon-only ✕** (lane S's `InlineEditActions`, its ✕-alone form),
 at the right end of that line, directly under the row's ✓ _(maintainer, 2026-11-17, from three
 options captured at 360px)_; why there: `RowStatus` in `change-parts.tsx`. No trace of a Change shows after a reload; an "edited" marker is a contract question for
 later. Also different from v12: a Change is sent once per row, when focus leaves the row from one of its fields (v12 per field);
