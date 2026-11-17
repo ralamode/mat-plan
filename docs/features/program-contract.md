@@ -338,6 +338,12 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - An archived athlete's day is never writable: today and yesterday read like a closed day,
       with only what was logged and no PREVIOUS. `archived-athlete-today` holds it. So a page
       never offers a ✓ the writer refuses with `closed_day`.
+    - **The plan carries no `archived` field.** The page has the fact from the profile and says
+      it once, in its own notice (maintainer, 2026-11-17: "One merged notice"; a field was
+      proposed as C19 and dropped, #509). The preview harness shows that notice from the
+      fixture's world, in the page's words (C20), with "Household settings" as plain text: a
+      link there would leave the preview route (invariant 7). A future day is the same for an archived
+      athlete as for anyone: `fixtures.test.ts` holds that.
     - `DayPlan.athletes` is the switcher's list: the household's athletes who are not archived,
       as the picker lists them. An archived athlete is not in it on their own day either, so a
       page takes the heading's name from the profile, never from this list (the preview harness
