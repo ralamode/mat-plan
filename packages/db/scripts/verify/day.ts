@@ -116,6 +116,11 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
  */
 export type ProgramRowFixture = Fixture;
 export const programRowFixture = (tx: VerifyTx): Promise<ProgramRowFixture> => fixture(tx);
+/**
+ * The day the fixture's rows are built for (a Monday), so a caller ticks on the same day instead of
+ * re-typing the date. Its yesterday is `addDays(PROGRAM_ROW_FIXTURE_DAY, -1)`.
+ */
+export const PROGRAM_ROW_FIXTURE_DAY = DAY;
 
 /**
  * The plan's fixture (§ Test plan), built fresh for every proof. Household H: a template block whose
