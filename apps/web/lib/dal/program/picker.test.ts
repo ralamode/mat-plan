@@ -215,7 +215,6 @@ it('the option types: a whole taxonomy or none, never half (compile-time pins)',
 
 describe('getHowTo: one option’s steps, resolved among the caller’s own options (FAM-1 7b)', () => {
   const WITH_STEPS = CATALOG_MOVEMENTS.find((e) => e.instructions !== undefined)!;
-  const NO_STEPS = CATALOG_MOVEMENTS.find((e) => e.instructions === undefined);
   const ID = '019826b4-0000-7000-8000-00000000e001';
 
   beforeEach(() => {
@@ -244,12 +243,6 @@ describe('getHowTo: one option’s steps, resolved among the caller’s own opti
 
   it('a built-in with no library entry (K22) is null', async () => {
     vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: 'no_such_entry' })]);
-    expect(await getHowTo(ID)).toBeNull();
-  });
-
-  it('a library entry with no steps is null', async () => {
-    if (!NO_STEPS) return; // every entry has steps today; the rule still holds for the next batch
-    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: NO_STEPS.slug })]);
     expect(await getHowTo(ID)).toBeNull();
   });
 

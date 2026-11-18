@@ -22,13 +22,21 @@ describe('howToLoader: a failure is a rejection (movement-picker invariant 14)',
     expect(await howToLoader('o')).toBeNull();
   });
 
-  it.each([500, 401, 302])('🔴 a %i rejects, so the picker offers Try again', async (status) => {
+  it.each([500, 401, 503])('🔴 a %i rejects, so the picker offers Try again', async (status) => {
     vi.stubGlobal('fetch', reply(status, {}));
     await expect(howToLoader('o')).rejects.toThrow();
   });
 
   it('a 200 whose body is not the strict shape rejects', async () => {
     vi.stubGlobal('fetch', reply(200, { ...HOW_TO, slug: 'x' }));
+    await expect(howToLoader('o')).rejects.toThrow();
+  });
+
+  it('a 200 whose body is HTML (a sign-in page, a proxy) rejects', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string) => new Response('<html></html>', { status: 200 })),
+    );
     await expect(howToLoader('o')).rejects.toThrow();
   });
 

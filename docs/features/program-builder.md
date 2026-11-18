@@ -330,6 +330,9 @@ flowchart LR
       one read of the program's live workout ids, lane P's `programWorkoutIds`, 6c-ii); a copy's
       TARGET program, then its source workout by id alone
       (`workoutInHousehold`).
+    - **"How to"** (`getHowTo`, `lib/dal/program/picker.ts`, 7b): one option's steps, resolved
+      among the caller's own options (one cached `householdMovementRows` read, shared with the
+      picker's data), or `null`; served by `app/programs/how-to/[optionId]/route.ts`.
     - **The item picker's data** (`lib/dal/program/picker.ts`, CAT-3 P11-i): the household's own
       items and, ⏳ **until the catalog's fresh start (CAT-3 chunk R), every old built-in**
       (maintainer, 2026-11-17: "Show all 35 until reset", which suspends "only ones with library
