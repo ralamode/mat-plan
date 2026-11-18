@@ -279,7 +279,7 @@ flowchart TD
     counting. Take off never hides the weekday rows (invariant 19) and never moves the athlete's
     other programs. ⚠️ **An accepted limit:** "nothing logged" is read without a lock against the row
     writers, so a ✓ racing it (no race needed: a re-tick, Restore all or `restoreHidden`, which has no app caller yet, of a row hidden before it), leaves a logged row under a removed start: contract change C24's state, which the day page shows as
-    a workout that left the week (mutations 521–534, `take-off-*`).
+    a workout that left the week (mutations 521–537, `take-off-*`; 537 is the shared program lock's household conjunct).
 
 ```mermaid
 flowchart TD
