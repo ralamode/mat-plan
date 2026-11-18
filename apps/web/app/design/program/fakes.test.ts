@@ -1475,6 +1475,11 @@ describe('the fake ProgramActions: items and athletes', () => {
       }),
     ).toEqual(refusal('not_found'));
     expect(view()).toBe(before);
+    // Take off answers the same for them: they are not on the page, though their assignment exists.
+    expect(await actions.takeOff({ programPublicId, profilePublicId: archived })).toEqual(
+      refusal('not_found'),
+    );
+    expect(view()).toBe(before);
     // Without the archived athlete the same draft is taken.
     expect(
       (await actions.putOn({ programPublicId, profilePublicIds: [other.profilePublicId], from }))
