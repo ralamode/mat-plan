@@ -31,7 +31,8 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                    |
 | 6c-i     | `writers/program/assign.ts` (put on, C15's reopen); fills in `writers/program/seed-fixtures.ts` |
 | 6c-ii    | `queries/program/{program-view,program-list,athletes}.ts`; `programWorkoutIds` in `exists.ts`   |
-| 6d       | take off and reorder, in `assign.ts`                                                            |
+| 6d-i     | `writers/program/take-off.ts` (Take off); `lockProgram`, `lockAthletes` shared in `assign.ts`   |
+| 6d-ii    | `reorderPrograms` (an athlete's program order), after #601                                      |
 
 ## Files
 
@@ -56,6 +57,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/copy-workout.ts`     | `copyWorkout`: an independent copy of a workout into one of the household's programs, named by C15, with frozen provenance, optionally onto weekdays.                                                                                                                                                                                                                                                                                                                  |
 | `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: the test seed's fixture programs (`SEED_FIXTURES=1` only), built with the real writers, and the seed's athletes on them. A program the household already has, by its fixed `client_id`, is left as it is.                                                                                                                                                                                                                                       |
 | `packages/db/src/writers/program/assign.ts`           | `putOn`: athletes onto a template program from today or tomorrow, one row last in their order and all seven weekday rows; already on is skipped; a last day of today is reopened on the same row.                                                                                                                                                                                                                                                                      |
+| `packages/db/src/writers/program/take-off.ts`         | `takeOff`: removes a start not begun, or begun today with nothing logged under it (`lastDay: null`); otherwise ends the stretch today (`lastDay: today`). A replay answers the same (decided 2026-11-18).                                                                                                                                                                                                                                                              |
 | `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                                                              |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `packages/db/scripts/verify/program.ts`               | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                                                                                                                                                          |
@@ -113,7 +115,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
     `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
     unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use the same helper. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
 12. **Every refusal comes before the first write**, and the whole save is one transaction (a
-    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. `putOn` takes the block, then the athletes' `profiles` rows `FOR NO KEY UPDATE` in id order, so two put-ons of one athlete number their order one after the other (6d's take off and reorder must take the same two). The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
+    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. `putOn` takes the block, then the athletes' `profiles` rows `FOR NO KEY UPDATE` in id order, so two put-ons of one athlete number their order one after the other (6d-i's take off takes the same two, through the shared `lockProgram` and `lockAthletes`; 6d-ii's reorder takes the profile alone, since it writes no program's rows; reviewed, not proven: PGlite has one connection). The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
     `save-takes-any-households-item`) and of the type the draft says; a type's fields are
     `TRACKING_TYPE_FIELDS`' (Reps a whole number 1 to 1000; at most one quantity, in the type's slot
     and units); supersets are neighbours, numbered 1..n, at least two, with the rest on the last.
@@ -268,6 +270,32 @@ flowchart TD
     `copy-cap-before-the-source`, `copy-weekday-cap-after-the-name`, `new-item-takes-no-lock`,
     `new-item-counts-shadowed-items`, `new-item-counts-without-its-household`, `copy-counts-removed-workouts-slots`). A household whose row is gone
     takes no lock, so `newItem` answers `not_found` before it counts.
+
+22. 🔴 **Take off decides by where the start stands, and never ends an archived athlete's
+    assignment** (6d-i; ADR 0007 Amendment 4, C15, the 2026-11-18 replay decision, contract invariant 31).
+
+    "Logged" is `programRowOf(profileId, today)` on a live session whose workout is one of this
+    program's, live or removed; an un-ticked row does not count, and a purged workout's rows stop
+    counting. Take off never hides the weekday rows (invariant 19) and never moves the athlete's
+    other programs. ⚠️ **An accepted limit:** "nothing logged" is read without a lock against the row
+    writers, so a ✓ racing it (no race needed: a re-tick, Restore all or `restoreHidden`, which has no app caller yet, of a row hidden before it), leaves a logged row under a removed start: contract change C24's state, which the day page shows as
+    a workout that left the week (mutations 521–537, `take-off-*`; 537 is the shared program lock's household conjunct).
+
+```mermaid
+flowchart TD
+  P[parse takeOffSchema] -->|fails| I[invalid]
+  P --> B["lockProgram, then lockAthletes (live, not archived)"]
+  B -->|a miss| N[not_found]
+  B --> C{"a current row of this program?"}
+  C -->|none, but a hidden one starting today or later| RN["ok, lastDay: null (a replay)"]
+  C -->|none| N
+  C -->|last day already today| RT["ok, lastDay: today (a replay)"]
+  C -->|not started| DEL["remove the start, lastDay: null"]
+  C -->|started today| L{"a live program row of this athlete today in a workout of this program?"}
+  L -->|no| DEL
+  L -->|yes| END["active_to = today, lastDay: today"]
+  C -->|started before today| END
+```
 
 ## Changing it
 

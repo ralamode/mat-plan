@@ -220,6 +220,11 @@ they are how to schedule any milestone, not facts about this one.
   point-in-time restore rolls back every other family's writes and un-deletes deleted ones, so the
   runbook restores **per household** (branch → extract → copy) and re-applies a deletion ledger. One
   drill; delete the drill branch after, since it holds everyone's data.
+  **Since 2026-11-18 (maintainer: "Yes move it.") this is not on the path to the family's trial
+  week.** It is built and rehearsed before the first outside family is invited, and the two exit
+  boxes below stay as gates on that invite. While one family uses the app, the whole-database
+  restore rewinds nobody else; the rule that no outside family's data is deleted before the drill
+  stands.
 - **Speed Insights** (ADR 0001 deferred it to prod cutover; it needs the CSP nonce plumbing).
 
 ### 2 · TEN-1 — one household cannot see another ✅ DONE
@@ -448,7 +453,8 @@ Their deliverables are unchanged and still written below; only when they start h
       verified by a scan over every ref.
 - [ ] No open P0. DX-5(a) merge gates are enforced.
 - [ ] Previews hold no production data and no production credential; fork protection is on (OPS-1).
-- [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2).
+- [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2; PR 1 in review).
+- [ ] The live app holds no test athletes (OPS-2 PR 2, or `CAT-3`'s fresh start, whichever runs first).
 - [ ] A single household has been restored from backup without touching any other (OPS-3).
 - [ ] `db:verify` proves that a second household cannot read, write, correct or export the first's data —
       every entry point, including the movement catalog (TEN-1).
@@ -498,20 +504,20 @@ Ticked but not crossed off above, verified 2026-11-13: `TEN-1` ✅ · `AUTH-1` �
 Sizes are **PRs**, calibrated against this repo's own measured distribution over the last 60 merges:
 median **368** insertions, p25 **174**, p75 **906**. So S ≈ ≤200, M ≈ ~400, L ≈ ~900+.
 
-| #   | Work                                                                  | Why it gates Beta 0                                                                                 | PRs               | Size     | Waits on                                                     |
-| --- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------- | -------- | ------------------------------------------------------------ |
-| 1   | **`V1-9b` B1-1** — the hide/restore writer, `packages/` only          | The run-through requires "delete a mis-logged entry"                                                | 1                 | M        | ✅ B0 (shipped 2026-11-12)                                   |
-| 2   | **`V1-9b` B1-2** — the entry actions and DAL                          | same                                                                                                | 1                 | M        | 1                                                            |
-| 3   | **`V1-24` 3b** — the removed-entries list                             | B1-3's screen sits on it; **no plan file yet**                                                      | 1–2               | M        | —                                                            |
-| 4   | **`V1-9b` B1-3** — the hide UI                                        | The run-through's "delete" step is this screen                                                      | 1                 | M        | 2, 3                                                         |
-| 5   | **`V1-9b` B2** — clear a day                                          | Completes the row; not strictly in the gate                                                         | 1                 | S–M      | 4                                                            |
-| 6   | **`OPS-3`** — per-household restore, rehearsed, + the deletion ledger | _"Until it exists, a mistaken deletion is not recoverable without rolling back every other family"_ | 1 + a drill       | M        | —                                                            |
-| 7   | **`OPS-2`** — split the seed into reference vs fixtures               | The prod seed must not re-create a deleted household                                                | 1                 | M        | —                                                            |
-| 8   | **`PRIV-3`** — household and athlete deletion as guarded scripts      | `PRIV-1`'s "deletion run once end to end" box                                                       | 4–5               | M ×3 + S | 6, 7, the `OPS-3` drill; on the seed household, also `SEC-6` |
-| 9   | **`DX-5(a)`** — required status checks                                | "merge gates are enforced"                                                                          | repo-admin, no PR | —        | —                                                            |
-| 10  | **The PII scan over every ref**                                       | Branches **and** PR refs, not just `HEAD`                                                           | 1                 | S        | —                                                            |
-| 11  | **The phone run-through**                                             | iOS Safari + Android Chrome, unaided                                                                | manual            | —        | 4                                                            |
-| 12  | **`PRIV-1` sign-off**                                                 | A dated decision by the accountable role                                                            | —                 | —        | 11                                                           |
+| #   | Work                                                                                                                                         | Why it gates Beta 0                                                                                 | PRs               | Size     | Waits on                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------- | -------- | ------------------------------------------------------------ |
+| 1   | **`V1-9b` B1-1** — the hide/restore writer, `packages/` only                                                                                 | The run-through requires "delete a mis-logged entry"                                                | 1                 | M        | ✅ B0 (shipped 2026-11-12)                                   |
+| 2   | **`V1-9b` B1-2** — the entry actions and DAL                                                                                                 | same                                                                                                | 1                 | M        | 1                                                            |
+| 3   | **`V1-24` 3b** — the removed-entries list                                                                                                    | B1-3's screen sits on it; **no plan file yet**                                                      | 1–2               | M        | —                                                            |
+| 4   | **`V1-9b` B1-3** — the hide UI                                                                                                               | The run-through's "delete" step is this screen                                                      | 1                 | M        | 2, 3                                                         |
+| 5   | **`V1-9b` B2** — clear a day                                                                                                                 | Completes the row; not strictly in the gate                                                         | 1                 | S–M      | 4                                                            |
+| 6   | **`OPS-3`** — per-household restore, rehearsed, + the deletion ledger (before the first invite, no longer before the trial week: 2026-11-18) | _"Until it exists, a mistaken deletion is not recoverable without rolling back every other family"_ | 1 + a drill       | M        | —                                                            |
+| 7   | **`OPS-2`** — split the seed into reference vs fixtures                                                                                      | The prod seed must not re-create a deleted household                                                | 1                 | M        | —                                                            |
+| 8   | **`PRIV-3`** — household and athlete deletion as guarded scripts                                                                             | `PRIV-1`'s "deletion run once end to end" box                                                       | 4–5               | M ×3 + S | 6, 7, the `OPS-3` drill; on the seed household, also `SEC-6` |
+| 9   | **`DX-5(a)`** — required status checks                                                                                                       | "merge gates are enforced"                                                                          | repo-admin, no PR | —        | —                                                            |
+| 10  | **The PII scan over every ref**                                                                                                              | Branches **and** PR refs, not just `HEAD`                                                           | 1                 | S        | —                                                            |
+| 11  | **The phone run-through**                                                                                                                    | iOS Safari + Android Chrome, unaided                                                                | manual            | —        | 4                                                            |
+| 12  | **`PRIV-1` sign-off**                                                                                                                        | A dated decision by the accountable role                                                            | —                 | —        | 11                                                           |
 
 **≈ 10–11 PRs plus two manual steps**, of which **5–6 are the `V1-9b` arc** and four are ops/privacy.
 

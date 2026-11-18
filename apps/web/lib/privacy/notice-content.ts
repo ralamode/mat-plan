@@ -1663,7 +1663,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
+        "text": " (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete\nor household, and asking for one program, workout or typed item to be removed. "
       },
       {
         "k": "strong",
@@ -1794,13 +1794,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "no way to permanently remove one single item on demand"
+            "text": "no way to permanently remove one single logged item on demand"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the finest grain for a\npermanent removal is an athlete. Ask, and that is done."
+        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.)"
       }
     ]
   },
@@ -1844,7 +1844,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it."
+        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it. One change is made on the way out: a value that starts with\n=, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it\nas a formula."
       }
     ]
   },
@@ -2021,7 +2021,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the three athletes the app\nstarted with cannot yet, because setup would put them back."
+        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the athletes the app started with\ncannot be erased one at a time yet, because an older copy of the setup could put them back; they are\nremoved together, with the rest of the starting data, when the app is started fresh."
       }
     ]
   },
@@ -2043,7 +2043,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not hidden. Your\nsign-in accounts are deleted too."
+        "text": ", not hidden. Your\nsign-in accounts are deleted too. The household the app started with is the one exception for now: it\nis removed with the rest of the starting data when the app is started fresh, not on its own."
       }
     ]
   },

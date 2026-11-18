@@ -53,6 +53,7 @@ const bodyOf = (r: StrengthLogRow) => buildStrengthLog([r]).split('\n')[1];
 describe('the contract’s own example rows, byte for byte', () => {
   // Every string below is lifted from docs/csv-export-contract.md § "strength-log — the hard one".
   // FAM-1 14a: each ends with the empty `workout_name` cell, since none of them is a program row.
+  // Since #621 a note holding `;` is quoted (a `;`-locale spreadsheet would split it).
   it('a per-set ramp with a uniform-looking tail', () => {
     expect(
       bodyOf(
@@ -64,7 +65,7 @@ describe('the contract’s own example rows, byte for byte', () => {
         }),
       ),
     ).toBe(
-      '2020-07-20,strength-a,front-squat,5,5,70/75/75/75/80,5x5 @ ~70 target,ramped; top 80x5 clean,',
+      '2020-07-20,strength-a,front-squat,5,5,70/75/75/75/80,5x5 @ ~70 target,"ramped; top 80x5 clean",',
     );
   });
 
@@ -156,7 +157,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           ),
         }),
       ),
-    ).toBe('2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Athlete B; heavy,');
+    ).toBe('2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,"shared with Athlete B; heavy",');
   });
 
   it('a timed movement — duration in LOAD, reps is 1', () => {
@@ -406,6 +407,28 @@ describe('the joiner — no CSV library, RFC 4180 quoting (FAM-1 14a)', () => {
   // 8 of 21 seeded prescriptions contain a comma — ~38%, the common case.
   it('quotes prescribed, which the seed fills with commas', () => {
     expect(csvRow(['5, last set to failure'], ['prescribed'])).toBe('"5, last set to failure"\n');
+  });
+
+  // The maintainer, 2026-11-18: a cell a spreadsheet would run as a formula opens as text.
+  it.each([
+    ['=HYPERLINK("x")', `"'=HYPERLINK(""x"")"`],
+    ['+1 day', "'+1 day"],
+    ['-3 sets', "'-3 sets"],
+    ['@home', "'@home"],
+    ['\tindent', `"'\tindent"`],
+    ['=a,b', `"'=a,b"`],
+    [' =1+1', "' =1+1"],
+    ['＝1+1', "'＝1+1"],
+  ])('opens %j as text in any column', (value, written) => {
+    expect(csvRow([value, value], ['notes', 'workout_name'])).toBe(`${written},${written}\n`);
+  });
+
+  it('quotes a semicolon, so a semicolon-locale spreadsheet keeps one text cell', () => {
+    expect(csvRow(['ok;=1+1'], ['notes'])).toBe('"ok;=1+1"\n');
+  });
+
+  it('leaves a value that only contains those characters alone', () => {
+    expect(csvRow(['3x5 - easy', 'a=b'], ['notes', 'workout_name'])).toBe('3x5 - easy,a=b\n');
   });
 
   it('quotes a comma in any column, which used to be refused outside notes and prescribed', () => {

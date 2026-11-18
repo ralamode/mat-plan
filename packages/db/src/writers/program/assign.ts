@@ -18,6 +18,49 @@ import { refuse } from './refuse';
 import { shiftIntoBand } from './shift-band';
 
 /**
+ * The program an assignment writer works on, locked first (lane guide invariant 12): this
+ * household's live TEMPLATE block, `FOR NO KEY UPDATE`. `null` for any other id.
+ */
+export async function lockProgram(
+  tx: Executor,
+  scope: HouseholdScope,
+  programPublicId: string,
+): Promise<{ id: number } | null> {
+  const [block] = await tx
+    .select({ id: schema.programBlocks.id })
+    .from(schema.programBlocks)
+    .where(and(eq(schema.programBlocks.publicId, programPublicId), liveTemplateBlockIn(scope)))
+    .for('no key update');
+  return block ?? null;
+}
+
+/**
+ * The athletes an assignment writer works on, locked after the program, in id order so two writers
+ * naming the same athletes never wait on each other in turn: live, **not archived** (invariant 31),
+ * of this household, `FOR NO KEY UPDATE`. `null` unless every id named is one.
+ */
+export async function lockAthletes(
+  tx: Executor,
+  scope: HouseholdScope,
+  profilePublicIds: readonly string[],
+): Promise<Array<{ id: number }> | null> {
+  const athletes = await tx
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(
+      and(
+        inArray(schema.profiles.publicId, [...profilePublicIds]),
+        isNull(schema.profiles.deletedAt),
+        isNull(schema.profiles.archivedAt),
+        inHousehold(scope),
+      ),
+    )
+    .orderBy(asc(schema.profiles.id))
+    .for('no key update');
+  return athletes.length === profilePublicIds.length ? athletes : null;
+}
+
+/**
  * `ProgramActions.putOn`'s writer (FAM-1 step 6c-i). Puts each named athlete on one program, from
  * `from`. `today` is the household's today, which the caller resolves (writers take the day as an
  * argument; only an action reads the clock and the time zone).
@@ -61,31 +104,10 @@ export async function putOn(
   }
 
   return exec.transaction(async (tx) => {
-    const [block] = await tx
-      .select({ id: schema.programBlocks.id })
-      .from(schema.programBlocks)
-      .where(
-        and(eq(schema.programBlocks.publicId, draft.programPublicId), liveTemplateBlockIn(scope)),
-      )
-      .for('no key update');
+    const block = await lockProgram(tx, scope, draft.programPublicId);
     if (!block) return refuse(PROGRAM_REFUSAL.not_found);
-
-    const athletes = await tx
-      .select({ id: schema.profiles.id })
-      .from(schema.profiles)
-      .where(
-        and(
-          inArray(schema.profiles.publicId, draft.profilePublicIds),
-          isNull(schema.profiles.deletedAt),
-          isNull(schema.profiles.archivedAt),
-          inHousehold(scope),
-        ),
-      )
-      .orderBy(asc(schema.profiles.id))
-      .for('no key update');
-    if (athletes.length !== draft.profilePublicIds.length) {
-      return refuse(PROGRAM_REFUSAL.not_found);
-    }
+    const athletes = await lockAthletes(tx, scope, draft.profilePublicIds);
+    if (!athletes) return refuse(PROGRAM_REFUSAL.not_found);
 
     const a = schema.programAssignments;
     for (const athlete of athletes) {

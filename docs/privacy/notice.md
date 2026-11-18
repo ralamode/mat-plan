@@ -214,8 +214,8 @@ weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the 
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
 does not record who did. A cleared one is not removed from the database, and it is **not in the
-export** (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete
-or household. **Nothing automatically removes a hidden row.** You should know that before you log
+export** (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete
+or household, and asking for one program, workout or typed item to be removed. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
 **What is being built, so you know what to expect.** A **Clear this day** control, which hides
@@ -234,8 +234,9 @@ field, as above. Two things are worth saying plainly about every clear:
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
   until a removal that runs a set number of days later is built.
 
-There is still **no way to permanently remove one single item on demand** — the finest grain for a
-permanent removal is an athlete. Ask, and that is done.
+There is still **no way to permanently remove one single logged item on demand**: the finest grain for
+removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
+on request.)
 
 ## Getting your data out
 
@@ -245,7 +246,9 @@ athlete logs from a program has one row per exercise in the strength log, with t
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
 typed, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a
-name typed into any of them goes with it.
+name typed into any of them goes with it. One change is made on the way out: a value that starts with
+=, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it
+as a formula.
 
 **What the export does not yet include**, so you are not surprised: check-ins and other logged life
 activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
@@ -287,12 +290,14 @@ program it was copied into removed too; and a movement your household typed that
 log, or a program you chose to remove, used. A program another athlete has trained on is not
 removed, and we will tell you. For an athlete,
 the record of the deletion holds the athlete's internal identifier and no login ids unless their
-account went too. An athlete added through the app can be erased today; the three athletes the app
-started with cannot yet, because setup would put them back.
+account went too. An athlete added through the app can be erased today; the athletes the app started with
+cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
+removed together, with the rest of the starting data, when the app is started fresh.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
-sign-in accounts are deleted too.
+sign-in accounts are deleted too. The household the app started with is the one exception for now: it
+is removed with the rest of the starting data when the app is started fresh, not on its own.
 
 Because this cannot be undone, both of the steps below stay in place:
 

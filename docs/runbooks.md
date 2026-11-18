@@ -64,7 +64,7 @@ is the next step. After 1d lands, un-deleting a row would violate its index.
 **Before chunk 2 of V1-22 (the snapshot writer) merges, `0013` must be live in prod.** Same shape as
 1e below, and the same "check both": `gh run list --workflow migrate.yml --branch main -L 3` shows
 **success on chunk 1's merge SHA** — the run being green is not enough on its own, because the migrate
-step `exit 0`s with a warning when `DATABASE_URL_UNPOOLED` is absent — **and** in prod
+step `exit 0`ed with a warning when its secret was absent (before `OPS-2` PR 1) — **and** in prod
 
 ```sql
 SELECT pg_get_constraintdef(oid) FROM pg_constraint
@@ -84,7 +84,7 @@ green CI run**.
 ### 1. `0019` is live in prod — three checks, not one
 
 Same shape and the same "check all three" as `0013` above. ⚠️ `gh run list` being green is **not**
-sufficient on its own: the migrate step `exit 0`s with a warning when `DATABASE_URL_UNPOOLED` is
+sufficient on its own: the migrate step `exit 0`ed with a warning (before `OPS-2` PR 1) when its secret was
 absent, so a green run can mean **nothing was applied**.
 
 1. `gh run list --workflow migrate.yml --branch main -L 3` shows **success on 1b's merge SHA**.
@@ -413,8 +413,8 @@ and `db:seed` runs in the **same job** immediately after `db:migrate`. So a fail
 3. Fix the cause — `--apply` the correction, or simply wait out the lock.
 4. **Re-run `migrate.yml` via `workflow_dispatch`** (see "Manually re-seed / re-apply prod" below) and
    confirm it is green on the current `main` SHA: `gh run list --workflow migrate.yml --branch main -L 3`.
-   ⚠️ A green run is not sufficient on its own — the migrate step `exit 0`s with a warning when
-   `DATABASE_URL_UNPOOLED` is absent. Confirm in prod that the thing the migration adds is actually
+   ⚠️ A green run is not sufficient on its own: before `OPS-2` PR 1 the migrate step `exit 0`ed with a
+   warning when its secret was absent (since then it fails). Confirm in prod that the thing the migration adds is actually
    there (`information_schema.columns`, `pg_indexes`, `pg_constraint`).
 
 **Safety.** Nothing here is destructive. The app keeps serving: a pending migration means prod simply
@@ -506,6 +506,9 @@ missing, and option 1 or 2 above was the fix. ✅ `.github/workflows/migrate.yml
 **no longer** describes this refusal as current — `TEN-2d` corrected it (2026-10-13).
 
 ## Rename / correct a seeded profile in prod
+
+⚠️ **Since `OPS-2` PR 1 production's seed writes no profile at all**, so this is only for a profile an
+older seed wrote. The seeded household and its athletes are removed by `CAT-3`'s fresh start.
 
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
 The seed is `ON CONFLICT (public_id) DO NOTHING`, so it **won't overwrite** an existing row — a
@@ -707,8 +710,9 @@ scope.** Create a separate record per scope, even where the value is the same.
 Repo → **Settings → Secrets and variables → Actions → New repository secret**:
 `PREVIEW_DATABASE_URL_UNPOOLED` = the preview **direct/unpooled** string.
 
-Eyeball the list: it should hold `DATABASE_URL_UNPOOLED` and `PREVIEW_DATABASE_URL_UNPOOLED` and
-nothing else database-related. `migrate-preview.yml` runs only on push to `main` and
+Eyeball the list: it should hold `PREVIEW_DATABASE_URL_UNPOOLED` and the production string, which is
+`PROD_DATABASE_URL_UNPOOLED` since `OPS-2` PR 1 (before it, `DATABASE_URL_UNPOOLED`), and nothing else
+database-related. `migrate-preview.yml` runs only on push to `main` and
 `workflow_dispatch`, so a fork never sees either secret.
 
 _Optional hardening:_ move both into a GitHub **Environment** with a `main`-only deployment-branch
@@ -755,7 +759,8 @@ When the runbook was executed (2026-10-09), Vercel held **440** preview deployme
    it to a visitor. Rotate when any of these holds: a **fork PR** ever built with the Preview scope
    (its build runs attacker-controlled code), the string appeared in a **log**, a **client bundle** or
    a commit, or a non-maintainer ever had Vercel access. To rotate, reset the role in Neon and update
-   **both** copies (`DATABASE_URL` in Vercel Production, the `DATABASE_URL_UNPOOLED` Actions secret),
+   **both** copies (`DATABASE_URL` in Vercel Production, the `PROD_DATABASE_URL_UNPOOLED` Actions secret;
+   `DATABASE_URL_UNPOOLED` before `OPS-2` PR 1, and never re-created after it),
    redeploy production, and re-run "Migrate + seed (production)". _2026-10-09: skipped by decision —
    the repo has never had a fork PR, and only the maintainer has used the app or held Vercel access._
 
@@ -872,7 +877,7 @@ deployment** (rotation is not retroactive).
 ## Manually re-seed / re-apply prod (`workflow_dispatch`)
 
 **When:** you need the prod migrate+seed to run out-of-band (e.g. a catch-up before the change merges,
-or after wiring the `DATABASE_URL_UNPOOLED` secret). Since `migrate.yml` now runs on **every** push to
+or after creating the `PROD_DATABASE_URL_UNPOOLED` secret). Since `migrate.yml` now runs on **every** push to
 `main`, this is rarely needed — merging is usually enough.
 
 **Steps:** GitHub → **Actions** → **"Migrate + seed (production)"** → **Run workflow** → branch `main`
@@ -880,20 +885,82 @@ or after wiring the `DATABASE_URL_UNPOOLED` secret). Since `migrate.yml` now run
 any other branch is a no-op rather than applying that branch's unmerged migrations to production —
 the instruction to pick `main` is now enforced, not just written down. To refresh the **preview**
 database from a branch, run `db:migrate` locally against the preview string (OPS-1 step 3), or
-dispatch **"Migrate + seed (preview database)"**, which holds no production credential. Check the "Apply migrations + idempotent seed" step didn't print the `DATABASE_URL_UNPOOLED …
-skipping` warning.
+dispatch **"Migrate + seed (preview database)"**, which holds no production credential. Check the "Apply migrations + idempotent seed" step is green (since `OPS-2` PR 1 a missing
+`PROD_DATABASE_URL_UNPOOLED` fails it rather than skipping) and printed `✓ seed complete (reference
+data only)`. ⚠️ **Never "Re-run jobs" on an old run**, and hand-run a seed only from a freshly fetched
+`origin/main`: older seed code wrote households and athletes.
 
-**Safety:** `db:migrate` is a no-op when nothing is pending. ⚠️ **`db:seed` is idempotent against an
-empty or seed-owned database — not against an arbitrary one, since `AUTH-1` 1c-4.** If a live
-household exists and none carries the seed's `public_id`, it **refuses** with
-_"refusing to seed into a household this seed does not own"_ and the job goes **red** rather than
-creating a second household (`packages/db/src/seed.ts`). That is the intended outcome; the recovery is
-Precondition 2 below.
+**A seed that timed out** (`canceling statement due to lock timeout`, or `statement timeout`, in the
+"Apply migrations + idempotent seed" step, since `OPS-2` PR 1 set both): the migration step before it
+had already committed, so the migrations **are** applied; only the seed must run again. Dispatch the
+workflow from `main` once nothing is holding the lock. Its statements are idempotent, so a partly
+written reference table is completed, not duplicated.
+
+**Safety:** `db:migrate` is a no-op when nothing is pending, and production's `db:seed` writes
+reference data only (`OPS-2` PR 1), idempotently, so it never refuses on a household. The fixture
+seed (`SEED_FIXTURES=1`, local and preview only) still refuses to seed into a household it does not
+own (`AUTH-1` 1c-4).
 
 ---
 
 <!-- Placeholder runbooks — fill in when first needed. Keep titles even before the body exists so we
      have a known home for each procedure. -->
+
+## A household or athlete with a seed id (`OPS-2`)
+
+**Since `OPS-2` PR 1 production's `db:seed` writes reference data only:** no household, no athlete, no
+program (`packages/db/src/seed.ts` → `seedReference`; the rest is `seedFixtures`, written only with
+`SEED_FIXTURES`, which `migrate.yml` never sets). So the current seed can neither re-create a deleted
+household nor refuse on one. **Older seed code still can**, through "Re-run jobs" on an old
+`migrate.yml` run or a hand-run from a stale checkout, so one rule still holds:
+
+🔴 **A household or athlete whose `public_id` is in `SEED_PUBLIC_IDS`** (`packages/shared/src/seed-ids.ts`)
+**is never removed by "Delete a household" or "Erase one athlete".** The seeded household is removed,
+with everything in it, by `CAT-3`'s fresh start (`docs/specs/cat-3-movement-library.md` → "The fresh
+start, in order", step 3). A seed-id row it does not reach is removed only after `SEC-6`'s re-key gives
+it an ordinary id. A household or athlete created in the app is unaffected.
+
+**The check: run it immediately before the fresh start's step 3, before `PRIV-3` RC's production
+`--apply`, and before deleting a re-keyed seed row**, with merges frozen until that step commits. It is
+also what "`OPS-2` PR 1 is deployed" means:
+
+```bash
+git fetch origin
+MAIN=$(git rev-parse origin/main)
+# 1. Production's seed ran the current main, successfully, and nothing is queued or running —
+#    including a re-run of an OLD run, which keeps its old creation time.
+gh run list --workflow migrate.yml --branch main -L 5 --json databaseId,headSha,status,conclusion,updatedAt
+#    → the newest row: headSha == $MAIN, status completed, conclusion success.
+# A finished re-run of an OLD run sorts by its old creation time, so scan the whole re-run window
+# (GitHub allows re-runs for 30 days), not the newest rows:
+gh run list --workflow migrate.yml --created ">=$(date -u -v-31d +%F 2>/dev/null || date -u -d '31 days ago' +%F)" \
+  -L 1000 --json databaseId,attempt,updatedAt -q '[.[] | select(.attempt > 1)]'
+#    → no entry whose updatedAt is later than the newest green run's.
+# 0. The control itself: the old secret is gone (needs the maintainer's token).
+gh secret list --app actions --json name -q '.[].name' | grep -x DATABASE_URL_UNPOOLED   # → no output
+for st in in_progress queued waiting pending requested; do
+  gh run list --workflow migrate.yml --status "$st" --json databaseId,headSha   # → [] each time
+done
+gh run view <databaseId> --log | grep -F '✓ seed complete (reference data only)'
+# 2. db:verify (which carries OPS-2's proofs) passed on that same commit.
+gh run list --workflow ci.yml --commit "$MAIN" --json conclusion,status
+```
+
+**The rules that go with it:**
+
+- **Never "Re-run jobs" on an old `migrate.yml` run.** Since `OPS-2` PR 1 the production string is the
+  `PROD_DATABASE_URL_UNPOOLED` secret, and once the old `DATABASE_URL_UNPOOLED` is deleted an old run
+  finds it empty and exits 0 with a warning, writing nothing ("Rotate or rename the production
+  database secret", below). Until it is deleted, the rule is only written down. The cut-off is two
+  commits: `OPS-2` PR 1 (no household or athlete) and `CAT-3` A2 (no legacy movements).
+  `workflow_dispatch` is safe: it runs `main`.
+- **Hand-run a seed only from a freshly fetched `origin/main`** ("Manually re-seed", above).
+- Production's `migrate.yml` runs are **never deleted**: they are the record of which DDL reached
+  production and when.
+- **From the fresh start's step 3 on, `OPS-2` PR 1 is fixed forward only**: a revert would re-create
+  the seeded household on the next push.
+
+---
 
 ## "Sign-in is broken in dev or preview" — tell the four causes apart
 
@@ -987,8 +1054,41 @@ rotation that has actually been performed rather than one written from imaginati
    produces `unexpected-error`, replace it rather than inspecting it further.
 
 **The Neon role password + Actions secret — OPS-1 step 7**, propagating to the Vercel Production scope
-and the `DATABASE_URL_UNPOOLED` Actions secret: see
+and the `PROD_DATABASE_URL_UNPOOLED` Actions secret (never re-create the old `DATABASE_URL_UNPOOLED`: see
+"Rotate or rename the production database secret" below): see
 [OPS-1 step 7](#7-purge-the-historical-previews-and-rotate-what-they-hold-️) above.
+
+### Rotate or rename the production database secret (`OPS-2` PR 1)
+
+`migrate.yml` reads production's direct string from **`PROD_DATABASE_URL_UNPOOLED`** since `OPS-2` PR 1
+(the maintainer's decision, 2026-11-18). The old name, `DATABASE_URL_UNPOOLED`, is deleted once the new
+one is proved, so a re-run of an old `migrate.yml` run finds it empty and writes nothing. The steps,
+in order:
+
+1. **Before the PR merges:** Neon → the **mat-plan** production project → **Connection details** → the
+   **direct** (not `-pooler`) string for the production database, `sslmode=require`. GitHub → repo →
+   **Settings → Environments → Production → Add environment secret** (done 2026-11-18): name
+   `PROD_DATABASE_URL_UNPOOLED`, value that string. `migrate.yml` declares `environment: Production`.
+   🔴 **The environment's deployment-branch policy must be "Selected branches: `main`"** (Settings →
+   Environments → Production → Deployment branches) **before the merge**: without it, any branch's
+   workflow that declares the environment could read the secret. (GitHub cannot show the old secret's value, so copy
+   it from Neon, not from GitHub.) **Check the host before saving:** it must be Vercel Production's
+   `DATABASE_URL` host with `-pooler` removed (the same endpoint id), not a restore branch's and not the
+   pooled one. Leave `DATABASE_URL_UNPOOLED` in place for now.
+2. **Merge the PR.** Watch its `migrate.yml` run (`gh run list --workflow migrate.yml --branch main -L
+1`): green, `✓ migrations applied`, and `✓ seed complete (reference data only)` in the log. If it is
+   red with `PROD_DATABASE_URL_UNPOOLED is not set`, step 1 was missed: add the secret, then dispatch
+   the workflow from `main`.
+3. **Then delete `DATABASE_URL_UNPOOLED`** (Settings → Secrets → Actions → the secret → Remove). Nothing
+   else reads it (`git grep 'secrets.DATABASE_URL_UNPOOLED'` finds nothing).
+4. **Verify:** the secret list holds `PROD_DATABASE_URL_UNPOOLED` and `PREVIEW_DATABASE_URL_UNPOOLED` and
+   no other database secret. Dispatch "Migrate + seed (production)" from `main` once: green, the same
+   two log lines. ⚠️ Do not test the old-run guard by re-running an old run.
+
+To **rotate** the password later, change it in Neon and update `PROD_DATABASE_URL_UNPOOLED` (and Vercel's
+Production scope, OPS-1 step 7); the name stays. 🔴 **Never create a secret named `DATABASE_URL_UNPOOLED`
+again**: with it present, every old `migrate.yml` run can be re-run against production with seed code
+that wrote households.
 
 Generalise from these when the next rotation comes up, and carry the one durable lesson with you:
 **rotation is not retroactive.** A credential that was ever injected into a Vercel build stays in that
@@ -1339,29 +1439,17 @@ Then:
 > it is `OPS-3`, whose runbook section is still a `_TODO_` stub below. **So until `OPS-3` exists and
 > has been rehearsed once, a mistaken or fraudulent deletion is not practically recoverable.** That is
 > a reason to be slow and careful at step 0 — not a reason to relax there. **`OPS-3`'s rehearsal is a
-> precondition of the first real deletion.**
+> precondition of the first real deletion of an outside family's data** (the maintainer's own family's does
+> not wait for the drill, _maintainer, 2026-11-18_, Q7; its pause, re-confirmation and restore branch
+> still apply).
 
-### ⛔ Precondition 2 — a household in the seed cannot be deleted yet
+### ⛔ Precondition 2 — a household with a seed id is not deleted here
 
-`migrate.yml` runs `db:seed` against production **on every push to `main`**, and the seed upserts the
-household and its profiles by fixed `public_id` with `ON CONFLICT DO NOTHING`. 🔴 **Since `AUTH-1`
-1c-4 the consequence of deleting a seeded household depends on whether another live household
-exists**, and the two branches fail in opposite directions:
-
-- **No other live household** (today's single-household deployment) — unchanged: after a hard delete
-  there is no conflict and no live household, **so the seed inserts**, and the next merged PR
-  re-creates the household and its named child profiles.
-- **Another live household exists** (the intended end state once a family is invited) — the seed's
-  insert is now conditional on no live household existing, so it **skips**, finds nothing under the
-  seed's `public_id`, and **throws**. `migrate.yml` is then **red on every merge to `main`** until a
-  row under `SEED_HOUSEHOLD_PUBLIC_ID` exists again — and a dead step in that job means no new
-  reference data reaches production either. Recovery: re-insert a household row under that
-  `public_id`, or land `OPS-2`'s seed split first.
-
-So: **do not delete a seeded household until `OPS-2` splits the seed** (reference data for prod,
-fixtures for dev/CI). This applies to the maintainer's own household specifically — the one most
-likely to be deleted when the beta ends. A household created through the app is not in the seed and is
-unaffected.
+Refuse if the household's `public_id` is in `SEED_PUBLIC_IDS`: the seeded household is removed by
+`CAT-3`'s fresh start, not by this procedure. See ["A household or athlete with a seed id
+(`OPS-2`)"](#a-household-or-athlete-with-a-seed-id-ops-2) for why (older seed code can re-create it)
+and the check that goes with it. A household created through the app is not in the seed and is
+unaffected; since `OPS-2` PR 1 production's seed writes no household at all.
 
 ### Steps
 
@@ -1631,6 +1719,9 @@ SET LOCAL statement_timeout = '60s';
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 ```
 
+A `40P01` (a deadlock with an app write on the same athlete) has rolled the whole transaction back;
+re-run it from `BEGIN`. `PRIV-3` 2a removes the cause by taking the writers' lock first.
+
 **The order is child-before-parent and is not arbitrary.** `entries` carries FKs to **both**
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
 `packages/db/src/schema.ts` by two independent reviews. The same list is code in
@@ -1859,12 +1950,15 @@ transaction shape and its ledger, and says only what differs.
 
    Either way: the notice of a date and a way to cancel, the 7-day wait, the re-confirmation, and a
    Neon restore branch held 7 days, as the household delete. `OPS-3`'s rehearsal is a precondition of
-   the first real erasure, as it is of the first deletion.
+   the first real erasure of an outside family's athlete, as it is of the first such deletion; the
+   maintainer's own family's does not wait for the drill (Q7, 2026-11-18); its 7-day pause,
+   re-confirmation and restore branch still apply.
 
-2. **A seeded athlete cannot be erased yet.** The seed inserts its profiles by fixed `public_id` on every
-   push to `main` (`packages/db/src/seed.ts`), so a hard-deleted seed profile comes back, as an empty
-   athlete, on the next merge. Refuse if the profile's `public_id` is one of the `SEED_PROFILE*_PUBLIC_ID`
-   values until `OPS-2` takes the seed out of production. An athlete added in the app is unaffected.
+2. **A seeded athlete is not erased here.** Refuse if the profile's `public_id` is in `SEED_PUBLIC_IDS`:
+   it is removed with the seeded household by `CAT-3`'s fresh start. Production's seed no longer writes
+   profiles (`OPS-2` PR 1), but older seed code could put one back; see ["A household or athlete with
+   a seed id (`OPS-2`)"](#a-household-or-athlete-with-a-seed-id-ops-2). An athlete added in the app is
+   unaffected.
 
 ### Steps
 
@@ -1982,7 +2076,7 @@ made step 3's numbers stale), then the eleven DELETEs in this order, child befor
 
 **4b. Only if the household chose to remove a program only P was on**, and only for blocks with
 `household_id = :H`. **Before step 10** (after it the report cannot be computed), re-run the report
-inside the transaction and keep only blocks it still lists. Then this must read 0, because nobody else
+inside the transaction and keep only blocks it still lists (a copy's program added by "Remove both", below, is exempt: it is checked by its own query). Lock them, and their workouts and prescriptions, first: `SELECT id FROM program_blocks WHERE id = ANY(:B) AND household_id = :H FOR UPDATE`, then the same `FOR UPDATE` on `workouts` and on `prescriptions` with `block_id = ANY(:B)`. An assignment's insert waits on the first, and a logged session's or entry's on the other two (their FK checks take `FOR KEY SHARE`, which `FOR UPDATE` blocks; the row writer locks no program row), so nothing the app writes can land between this check and the deletes. Then this must read 0, because nobody else
 may have logged against those blocks without an assignment (doing someone else's workout creates none):
 
 ```sql
@@ -2004,16 +2098,32 @@ SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_
 On a non-zero from the first query, tell the household and skip that block (someone else trained on
 it). On the copy list: remove the source only as the household answered. "Remove it and keep the copy"
 leaves the copy whole, with its link back cleared. "Remove both" adds the copy's own program to `:B`,
-after it passes the same checks. Otherwise, after step 11, delete for those
-blocks: `prescription_targets` (a count that must read 0 by now) → `prescription_quantities` → `prescriptions` →
-`block_day_workouts` → `workouts` → `program_blocks`, counting each first and re-counting to 0.
+after it passes the same checks **and this one**, which the first query cannot do (it looks for logs,
+not assignments):
+
+```sql
+-- Other athletes assigned to a block in :B (open, closed or hidden). A STOP for that block: skip it, as
+-- for one someone trained on. Which programs an athlete was on is THEIR record (notice.md, "What gets
+-- logged"), so one athlete's erasure never removes it. Tell the household the copy's program stays, and
+-- that the owner can ask for it separately (Remove one program, below).
+SELECT a.id, a.profile_id, a.block_id FROM program_assignments a
+ WHERE a.block_id = ANY(:B) AND a.profile_id <> :P;
+```
+
+So every block left in `:B` has assignment rows of P's only, and step 10 has removed them. Then, after
+step 11, delete for those blocks: `prescription_targets` (a count that must read 0 by now) →
+`prescription_quantities` → `prescriptions` → `block_day_workouts` → `workouts` → `program_blocks`,
+counting each first and re-counting to 0. Before this check, an athlete assigned to the copy's program
+who had never trained on it made `program_blocks`' delete abort `23503` (`program_assignments.block_id`
+is `NO ACTION`), and the whole erasure rolled back.
 `db:verify` → FAM-1 5 proves equivalent queries for the report's first part (this household only)
-and for this pre-flight's two queries together (`othersOnTheseBlocks` returns their union; the split
-is which rows are a stop and which are a question). Report parts 2 and 3 are operator queries with no
-proof yet; `PRIV-3` PR 3 scripts them; this sub-order is the household delete's own (steps 8–10).
+and for this pre-flight's first two queries together (`othersOnTheseBlocks` returns their union; the
+split is which rows are a stop and which are a question). The assignment check above and report parts
+2 and 3 are operator queries with no proof yet; `PRIV-3` PR 3 scripts them; this sub-order is the household delete's own (steps 8–10).
 
 Then re-run step 3's counts: **every row reads 0**, and the household's other athletes' counts and its
-program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise. `db:verify` → FAM-1 5
+program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise; on a `40P01` (a deadlock with an app write), re-run the
+transaction from the top. `db:verify` → FAM-1 5
 runs step 4's order (`verify/schema.ts` → `eraseAthlete`, generated from the same list this section is
 checked against) on an athlete with a row in every table, hidden rows included, beside a sibling whose
 rows must come through unchanged, and fails when any table reachable from `profiles` by FK is not in
@@ -2029,6 +2139,310 @@ One ledger with the household delete. An athlete entry records: the request date
 `public_id`** (the target; `OPS-3`'s replay re-applies the erasure after a restore), the verifying
 channel, the apply date, and the restore-branch-deleted date. **No Clerk ids**, unless the adult athlete
 also asked for their account to go (step 0); no names. Retention as for a household entry.
+
+---
+
+## Remove one program, workout or typed item on request
+
+**When:** the household asks for one program it built, one workout in such a program, or one item it
+typed (a movement of its own) to be removed, and nothing else. The app can rename a program or a
+workout but delete neither, and it can neither rename nor delete a typed item, so FAM-1 7b-i's notice
+sentence tells the household to ask. **Manual until `PRIV-3` scripts it** (PR 3b scripts the program
+removal). Read ["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1) first: this
+section reuses its transaction shape, its pre-flights and its delete order, restricted to one program,
+workout or item, and says only what differs.
+
+### ⛔ Preconditions
+
+The maintainer decided this section's policy on 2026-11-18 (Q7–Q10, relayed by the FAM-1 board), with a
+principle that also binds any later in-app removal:
+
+> _"we should not have one members change like this affect the others data in the long run - perhaps we
+> could warn the adult/owner deleting that this may affect data and propose archiving or renaming it
+> unless they are ok with changing the data and tell them who it affects. In the end, I would not want
+> this to hurt eventual reporting"_ _(maintainer, 2026-11-18)_
+
+1. **Who may ask:** the household owner, confirmed on the invitation channel, and re-confirmed once
+   they have been told who is affected (step 0). **No pause** (Q8): the removal runs right after that
+   confirmation. A Neon restore branch is cut immediately before it and **held 3 days**, then deleted.
+   An adult athlete asking about a program written for them asks the owner, or asks for their own
+   erasure ([Erase one athlete](#erase-one-athlete-fam-1-step-5)). `OPS-3`'s drill does not gate a
+   removal from the maintainer's own family; it gates an outside family's (Q7).
+2. **Only what the household built.** A program must be `kind = 'template'` with `household_id = H`; a
+   `legacy` program belongs to the seeded household, which the fresh start erases whole (CAT-3 R0), so
+   it is refused here. An item must have `household_id = H`; a row with `household_id IS NULL` is the
+   shared catalog and is never removed this way.
+3. **No `deleted_at` filter anywhere**, as in the household delete. A workout item taken out in the app,
+   and a week slot taken off a day, are hidden, not gone, and their hidden rows are exactly what this
+   removes. (No app path hides a program, a workout or an item.)
+4. **Logged history survives.** A removal never deletes a log row and never leaves one
+   without the name it shows: every session, entry and superset keeps the text frozen onto it when it
+   was logged (`workout_name`, `movement_name`, `prescribed_snapshot`, `prescription_group`) and its set
+   numbers; only the link back to the removed program, workout or prescription is cleared, so those logs no
+   longer count toward the program in a per-program report (step 3 tells the requester). **A removal
+   that would delete or orphan another athlete's log rows is refused**: that is why a typed item a log
+   still names cannot be removed (STOP 2, Q10).
+
+### Steps
+
+**0. Record the request** in the ledger (below).
+
+**1. The export is offered at step 3**, once its list says who trained on it: the in-app export
+(`/p/<profileId>/export`) for each of them, and the full copy on request. The in-app export holds no
+program, no targets and no record of who was on which program, which is what a removal deletes.
+
+**2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**
+household, never from the target row, and the target must carry it:
+
+```sql
+SELECT current_database(), inet_server_addr();
+SELECT id FROM households WHERE public_id = :household_public_id;                          -- :H
+SELECT id FROM program_blocks
+ WHERE public_id = :block_public_id AND household_id = :H AND kind = 'template';          -- :B
+SELECT w.id, w.block_id FROM workouts w JOIN program_blocks b ON b.id = w.block_id
+ WHERE w.public_id = :workout_public_id AND b.household_id = :H AND b.kind = 'template';  -- :W, :B
+SELECT id FROM movements WHERE public_id = :movement_public_id AND household_id = :H;     -- :M
+```
+
+No row is a refusal: the target is not this household's, or it is the seed's or the shared catalog's.
+
+**3. Dry run: the stops, then say who is affected, and offer the alternative first.** Run the case's
+stops first, and **tell the requester nothing until every stop reads 0**: a stray row of another
+household would otherwise put another family's athlete in the list. Then run the report (below; its
+queries are scoped to `:H`) and tell the requester, on the verified channel, **every athlete with an
+assignment to it, a log naming it, or a target on it** (reports (1) and (2); for an item, STOP 2 and the
+targets apply step 1 deletes), and what changes for them:
+
+- their logs stay, with the names frozen onto them, but **no longer count toward the program in a
+  per-program report**: a session's link to its workout, and an entry's to its prescription, is cleared;
+- their record of being on the program, and their targets on it, are deleted.
+
+Offer the export (step 1) to each athlete listed.
+
+Then offer, as the default, the change that touches nobody's data:
+
+| Target    | The alternative, offered first                                                                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A program | Rename it, or take every athlete off it (the app's take off): it stays, and so does who was on it                                                                         |
+| A workout | Rename it, or take it off the week: it stays in the program, and its logs keep their link                                                                                 |
+| An item   | Rename it. No correction does this yet; one is written when first asked for. A rename, like a refused removal, leaves the name as logged on every log and in every export |
+
+**Remove only if the requester, told who, explicitly accepts changing those athletes' data.** If they
+pick the alternative, a stop refuses, or they withdraw, nothing is removed, and **the ledger entry is
+deleted then**. An **adult** athlete
+among those affected is told first, on their own channel, and cannot cancel it (Q9). **Before the apply
+they are sent their own full copy**: their assignment rows and their targets on it, which the in-app
+export does not hold. There is no in-app archive for a program, a workout or an item yet; when one is
+built it is offered first, the same way.
+
+**4. Apply** in one transaction; its **first statement after the `SET LOCAL`s locks the target** (below), so the app's
+writers, which take `FOR NO KEY UPDATE` on a program before changing it, wait until `COMMIT`. Then
+re-run the stops and the report (anything new since step 3, such as an athlete put on it, is a new answer
+to get, never a row to delete silently), then count, delete and re-count to 0, `ROLLBACK` on any surprise. A `40P01` (a deadlock with an app
+write) has rolled everything back: re-run the transaction from the top.
+
+#### A program (`:B`)
+
+```sql
+-- STOP 1 (must be 0): rows of ANOTHER household on this program, the household delete's (a), (e),
+-- (f), (g) and (h): a target or an assignment for a profile outside H, an entry of theirs logged
+-- against its prescription, a copy of its workout in their program, or their session naming its
+-- workout. No writer makes one. STOP, and clear the stray row with a correction first ((g)'s
+-- correction clears the entry's prescription_id, prescribed_snapshot and its superset's
+-- prescription_group, which are H's text).
+SELECT 'target' k, t.id FROM prescription_targets t
+  JOIN prescriptions x ON x.id = t.prescription_id JOIN profiles p ON p.id = t.profile_id
+ WHERE x.block_id = :B AND p.household_id <> :H
+UNION ALL SELECT 'assignment', a.id FROM program_assignments a JOIN profiles p ON p.id = a.profile_id
+ WHERE a.block_id = :B AND p.household_id <> :H
+UNION ALL SELECT 'entry', e.id FROM entries e
+  JOIN prescriptions x ON x.id = e.prescription_id JOIN profiles p ON p.id = e.profile_id
+ WHERE x.block_id = :B AND p.household_id <> :H
+UNION ALL SELECT 'copy', c.id FROM workouts c
+  JOIN workouts src ON src.id = c.copied_from_workout_id JOIN program_blocks cb ON cb.id = c.block_id
+ WHERE src.block_id = :B AND cb.household_id <> :H
+UNION ALL SELECT 'session', s.id FROM sessions s
+  JOIN workouts w ON w.id = s.workout_id JOIN profiles p ON p.id = s.profile_id
+ WHERE w.block_id = :B AND p.household_id <> :H;
+
+-- REPORT (not a stop). Told to the requester at step 0, and removed only if the requester accepts
+-- changing these athletes' data with it known.
+-- (1) Who is on it, or was: every assignment row, open, closed or hidden. Removing the program takes
+--     each athlete off it and removes the record of when they were on it (NO ACTION, so these rows are
+--     deleted, never left). An ADULT athlete in this list is told on their own channel before the
+--     removal, because that record is theirs (notice.md, "What gets logged"); they cannot cancel it.
+SELECT a.profile_id, p.kind, a.active_from, a.active_to, a.deleted_at
+  FROM program_assignments a JOIN profiles p ON p.id = a.profile_id
+ WHERE a.block_id = :B AND p.household_id = :H;
+-- (2) Who trained on it. Their logs STAY, and so does what was frozen onto them when they were logged:
+--     the session's workout_name, each entry's movement_name and prescribed_snapshot (the targets as
+--     prescribed, a child's load included), and the superset's prescription_group label. Only the link
+--     back is cleared (SET NULL on sessions.workout_id and entries.prescription_id). Say so plainly:
+--     removing that text from the logs is not this procedure; erasing the athlete is.
+SELECT 'sessions' k, s.profile_id, count(*) FROM sessions s JOIN workouts w ON w.id = s.workout_id
+  JOIN profiles p ON p.id = s.profile_id
+ WHERE w.block_id = :B AND p.household_id = :H GROUP BY s.profile_id
+UNION ALL
+SELECT 'entries', e.profile_id, count(*) FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+  JOIN profiles p ON p.id = e.profile_id
+ WHERE x.block_id = :B AND p.household_id = :H GROUP BY e.profile_id;
+-- (3) Its workouts copied into the household's OTHER programs. A copy is its program's, and stays
+--     whole; its link back is cleared and it keeps the name of the program it came from
+--     (copied_from_program_name). Ask, for each: keep it as is, clear that name, or remove the copy's
+--     program too (a second removal, with its own stops and report).
+SELECT c.id, c.block_id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
+ WHERE src.block_id = :B AND c.block_id <> :B;
+-- (4) The household's own items only this program used: no other program and no log names them.
+--     Ask, for each: keep, or remove (the typed-item case below, once the program is gone).
+SELECT m.id, m.public_id FROM movements m
+ WHERE m.household_id = :H
+   AND EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id AND x.block_id = :B)
+   AND NOT EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id AND x.block_id <> :B)
+   AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.movement_id = m.id);
+```
+
+**Apply.** Lock first: `SELECT id FROM program_blocks WHERE id = :B AND household_id = :H AND kind =
+'template' FOR UPDATE;` (one row, or `ROLLBACK`), then `SELECT id FROM workouts WHERE block_id = :B FOR UPDATE;` and `SELECT id FROM prescriptions WHERE block_id = :B FOR UPDATE;`. The first stops an assignment or a program edit; the other two stop a session or entry being logged against it (the row writer locks no program row, but each insert's FK check waits on these). A write that waited fails `23503` once this commits. Then, in the household delete's order (rows 8–10),
+restricted to `:B`. Steps a and g keep the household delete's `AND` (rows 8 and 9d), so a row of another
+household that landed after STOP 1 aborts `23503` instead of being deleted:
+
+| Step | Table                         | Scoped by                                                                      |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------ |
+| a    | `prescription_targets`        | `prescription_id` ∈ prescriptions of `:B` AND `profile_id` ∈ H                 |
+| b    | `prescription_quantities`     | `prescription_id` ∈ prescriptions of `:B`                                      |
+| c    | `prescriptions`               | `block_id` = `:B`                                                              |
+| d    | `block_day_workouts`          | `block_id` = `:B`                                                              |
+| e    | `workouts`                    | `block_id` = `:B`                                                              |
+| f    | `program_assignment_weekdays` | `assignment_id` ∈ step g's assignments                                         |
+| g    | `program_assignments`         | `block_id` = `:B` AND `profile_id` ∈ H                                         |
+| h    | `program_blocks`              | `id` = `:B` AND `household_id` = `:H` AND `kind` = `'template'`: exactly 1 row |
+
+Every FK in that list is `NO ACTION`, so an out-of-order step raises `23503` and the transaction rolls
+back; the three `SET NULL` keys (report (2) and (3)) are the only rows outside the list that change. If
+the household chose to clear a copy's name, with `:C` the report (3) `c.id` values they named: `UPDATE
+workouts SET copied_from_program_name = NULL WHERE id = ANY(:C) AND copied_from_workout_id IS NULL`
+after step e (the pairing CHECK allows a name with no link, not the reverse).
+
+#### One workout (`:W` in `:B`)
+
+The athletes on `:B` lose this workout from their week; tell the household who they are (report (1)
+of the program case, read as "who is on the program it leaves").
+
+```sql
+-- STOP 1 (must be 0), narrowed to the workout. There is no assignment arm: an assignment is to the
+-- program.
+SELECT 'target' k, t.id FROM prescription_targets t
+  JOIN prescriptions x ON x.id = t.prescription_id JOIN profiles p ON p.id = t.profile_id
+ WHERE x.workout_id = :W AND p.household_id <> :H
+UNION ALL SELECT 'entry', e.id FROM entries e
+  JOIN prescriptions x ON x.id = e.prescription_id JOIN profiles p ON p.id = e.profile_id
+ WHERE x.workout_id = :W AND p.household_id <> :H
+UNION ALL SELECT 'copy', c.id FROM workouts c JOIN program_blocks cb ON cb.id = c.block_id
+ WHERE c.copied_from_workout_id = :W AND cb.household_id <> :H
+UNION ALL SELECT 'session', s.id FROM sessions s JOIN profiles p ON p.id = s.profile_id
+ WHERE s.workout_id = :W AND p.household_id <> :H;
+
+-- REPORT (2): who trained on it, and what stays on their logs (as the program case's (2)).
+SELECT 'sessions' k, s.profile_id, count(*) FROM sessions s JOIN profiles p ON p.id = s.profile_id
+ WHERE s.workout_id = :W AND p.household_id = :H GROUP BY s.profile_id
+UNION ALL
+SELECT 'entries', e.profile_id, count(*) FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+  JOIN profiles p ON p.id = e.profile_id
+ WHERE x.workout_id = :W AND p.household_id = :H GROUP BY e.profile_id;
+-- REPORT (3): every copy of it, in this program or another (as the program case's (3)).
+SELECT c.id, c.block_id FROM workouts c WHERE c.copied_from_workout_id = :W;
+-- REPORT (4): the household's own items only this workout used. A legacy prescription's workout_id
+-- is NULL, hence IS DISTINCT FROM rather than <>.
+SELECT m.id, m.public_id FROM movements m
+ WHERE m.household_id = :H
+   AND EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id AND x.workout_id = :W)
+   AND NOT EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id
+                    AND x.workout_id IS DISTINCT FROM :W)
+   AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.movement_id = m.id);
+```
+
+**Apply.** Lock the program first, as above (the app's writers lock the program, not the workout),
+then `SELECT id FROM workouts WHERE id = :W FOR UPDATE;` and `SELECT id FROM prescriptions WHERE
+workout_id = :W FOR UPDATE;`, which stop a log against it, then:
+
+| Step | Table                     | Scoped by                                                      |
+| ---- | ------------------------- | -------------------------------------------------------------- |
+| a    | `prescription_targets`    | `prescription_id` ∈ prescriptions of `:W` AND `profile_id` ∈ H |
+| b    | `prescription_quantities` | `prescription_id` ∈ prescriptions of `:W`                      |
+| c    | `prescriptions`           | `workout_id` = `:W` AND `block_id` = `:B`                      |
+| d    | `block_day_workouts`      | `workout_id` = `:W` AND `block_id` = `:B`                      |
+| e    | `workouts`                | `id` = `:W` AND `block_id` = `:B`: exactly 1 row               |
+
+Removing its week slots leaves a gap in that weekday's `idx`, which is harmless: the reader orders by
+`(weekday, idx)` (`queries/program/week.ts`) and the next `saveWeek` renumbers every slot from its
+position. A program left with no workouts is still a program; removing it is the program case. A
+device that later saves the removed workout gets the writer's `not_found` refusal
+(`writers/program/save-workout.ts`), not a new row.
+
+#### One typed item (`:M`, `household_id = :H`)
+
+```sql
+-- STOP 2 (must be 0): a LOG of this household names it. The item is the name those rows show, so it
+-- cannot go while they stay. Live and hidden are counted apart: a row hidden by "Clear this day" is
+-- kept hidden, not erased, and still names it. Tell the household which athletes, and that the item
+-- stays; the routes that remove those rows are erasing the athlete or deleting the household. Never
+-- delete or repoint the logs to make this pass.
+SELECT e.profile_id, (e.deleted_at IS NOT NULL) AS hidden, count(*) FROM entries e
+  JOIN profiles p ON p.id = e.profile_id
+ WHERE e.movement_id = :M AND p.household_id = :H GROUP BY 1, 2;
+-- STOP 3 (must be 0): a LIVE workout item of this household names it. Ask the household to take it
+-- out of those workouts in the app (which hides the row), or to have the workout removed; then re-run.
+SELECT x.id, x.workout_id FROM prescriptions x JOIN program_blocks b ON b.id = x.block_id
+ WHERE x.movement_id = :M AND b.household_id = :H AND x.deleted_at IS NULL;
+-- STOP 4 (must be 0): ANOTHER household's rows on it, the household delete's (d) and (a)/(g) shapes:
+-- their entry or prescription naming :M ((d): repoint it to a clone, as (d) says, never delete it),
+-- or their target or entry on one of this household's hidden prescriptions of :M. No writer makes one.
+SELECT 'entry' k, e.id FROM entries e JOIN profiles p ON p.id = e.profile_id
+ WHERE e.movement_id = :M AND p.household_id <> :H
+UNION ALL SELECT 'prescription', x.id FROM prescriptions x JOIN program_blocks b ON b.id = x.block_id
+ WHERE x.movement_id = :M AND b.household_id <> :H
+UNION ALL SELECT 'target', t.id FROM prescription_targets t
+  JOIN prescriptions x ON x.id = t.prescription_id JOIN profiles p ON p.id = t.profile_id
+ WHERE x.movement_id = :M AND p.household_id <> :H
+UNION ALL SELECT 'logged-against', e.id FROM entries e
+  JOIN prescriptions x ON x.id = e.prescription_id JOIN profiles p ON p.id = e.profile_id
+ WHERE x.movement_id = :M AND p.household_id <> :H;
+```
+
+**Apply.** Lock first: `SELECT id FROM movements WHERE id = :M AND household_id = :H FOR UPDATE;`
+(one row, or `ROLLBACK`). Re-run STOPs 2–4. Then count, delete and re-count to 0, each step scoped to
+this household's rows:
+
+1. `prescription_targets` for the hidden prescriptions of `:M` on H's programs, AND `profile_id` ∈ H;
+2. `prescription_quantities`, then `prescriptions`, for those prescriptions (`movement_id = :M AND
+block_id` ∈ H's programs). An entry logged against one keeps its set number and its frozen text,
+   with its link cleared by `SET NULL`;
+3. `movement_equipment`, then `movement_muscles`, with `movement_id` ∈ (`SELECT id FROM movements
+WHERE id = :M AND household_id = :H`), never `:M` alone, so a mistyped id cannot touch the shared
+   catalog's rows;
+4. `movements` with `id = :M AND household_id = :H`: **exactly 1 row**, or `ROLLBACK`.
+
+Never answer an abort here by setting `household_id` to NULL: that would publish the household's text
+into the shared catalog (the household delete's step 11 says why).
+
+**5. Close out.** Ledger, the restore branch (deleted after 3 days), and tell the household it is done.
+
+### The ledger, at item grain
+
+One ledger with the household delete. An entry records the request date, **the `public_id`** of the
+program, workout or item (`OPS-3`'s replay re-applies the removal after a restore), the verifying
+channel, the household's keep-or-remove answer to report lines (3) and (4) **by the copy's or the
+item's `public_id`**, `alternative offered: yes/no`, `accepted: yes/no`, `adult athletes told: a count and the date`, the apply date and the restore-branch-deleted date. **Never who was on the program
+or trained on it** (reports (1) and (2) are told, not answered): that is the record the removal deletes.
+No names, no `profile_id`, no Clerk ids.
+
+### What is proven, and what is not
+
+The order is the household delete's (rows 8–10, 10a, 10b and 11), which `db:verify` proves at
+household grain through `HOUSEHOLD_GRAPH` (`packages/db/src/erasure/graph.ts`). Nothing proves it at
+one program, one workout or one item yet, and none of the queries above runs in `db:verify`: `PRIV-3`
+scripts them and adds that proof. A replayed create of a removed program would make a new, empty one
+when offline sync arrives (v1.5); the client id is not kept, so that is for v1.5's plan.
 
 ---
 

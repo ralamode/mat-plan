@@ -38,6 +38,29 @@ way; moving those out of production is `OPS-2`'s."_
 | Q5: three PRs or two                                                         | **Answered**: two.                                                                                  |
 | —                                                                            | **New:** D11 (the production log line), Q6 (the ramp expansion).                                    |
 
+## Refresh 2 (2026-11-17), before PR 1's code
+
+**Approved** _(maintainer, orchestrator's chat, 2026-11-18)_: "Approve (Recommended)". Two decisions
+made with it, both folded into PR 1:
+
+- **D-S2, rename the secret `migrate.yml` reads: "Yes, rename it (Recommended)".** The workflow change is in PR 1; the maintainer sets the new secret in GitHub, and the PR body carries the guided steps and the order relative to the merge.
+- **The seed's `units` lock (found outside the plan): "Fix it (Recommended)".** The upsert skips a row whose values are unchanged, so an unchanged unit is never row-locked, and the seed sets a `lock_timeout` and a `statement_timeout`.
+
+Re-read against `main` at `cb588b71` by the PR's implementer (lane A), after `CAT-3` A1 (#577) and
+`PRIV-3` RC (#546) merged, and with lane P's `6c-i` described by lane P. **The decisions stand except
+where this table says otherwise**; ids are unchanged. The line cites in § "What the code does today"
+are `db56b978`'s; the current ones are here.
+
+| What moved                                                                                                                                                                                                                                                                                                                                                                                                           | What PR 1 does about it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **#577** added `equipment` and `muscles` inserts at `seed.ts:228-240`, between the categories and the 1c-4 guard, saying they move to `seedReference`.                                                                                                                                                                                                                                                               | They go in `seedReference` (D1). Proof A's reference tables include both.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **The reference rows are not contiguous.** `activity_types`, `metric_definitions`, the shadow detection and the movements insert run **after** the household and profiles (`seed.ts:343-405`).                                                                                                                                                                                                                       | D1 moves them all ahead of the household block. Safe: `movements.household_id` does reference `households`, but every row the seed writes there is global (NULL); no other reference table has an FK into either; the shadow detection reads only `movements` and still runs before its insert. One behaviour changes: with `fixtures: true` and a foreign live household, `activity_types`, `metric_definitions` and `movements` are written before the refusal throws (today the throw comes first); the 1c-4 proof counts only households, so it is unaffected. |
+| **#546** added `HOUSEHOLD_DEFAULT_NAME` (`enums.ts`), whose docblock hands the seed's `'Home'` literal (`seed.ts:268`) to this PR; `data-inventory.md` already says the seed writes the constant. PRIV-3 RC's D10: `create-household` must not be applied in production before PR 1 is deployed.                                                                                                                     | `seedFixtures`' insert adopts the constant, which makes the inventory's sentence true; `enums.ts` drops its ⚠️ line. § Where this sits gains RC's gate.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **`CAT-3`'s spec**: the catalog is written by `seedReference` (A2, gated on this PR); rule 7, the production seed never throws on catalog data and logs counts only; E1, the catalog seed takes its list as an argument. **K7 / K15**: the fresh start deletes the seeded household; R0 gives this plan's owner the rewrite of Q2, D8 and D9.                                                                        | PR 1's `seedReference(db)` takes **no** list: A2 adds the catalog seed and its argument inside it. Q2, D8 and D9 are restated below for the seeded household (the re-key is replaced by the fresh start). PR 2 is unnecessary if the fresh start's erase runs first (spec § Interactions).                                                                                                                                                                                                                                                                         |
+| **Lane P's 6c-i** (not yet merged): `seed.ts` unchanged; `seedProgramFixtures` writes programs, workouts, a week and assignments (`putOn`) plus about 17 household items through `newItem`, all inside `if (fixtures)`, and needs the seed household's scope and `SEED_PROFILE` / `SEED_PROFILE_2` to exist first. Both top-level seed runs in `verify.ts` become named assertions.                                  | D1 keeps that order: `seedFixtures` (household, profiles) before `seedProgramFixtures`. **PR 1's code is cut after 6c-i is on `main`** (the board's order), and the shadow report keeps reading the detection taken before any household item exists.                                                                                                                                                                                                                                                                                                              |
+| Mutations whose context D1 breaks: **`10`** (also on adopting the constant), **`45`**, **`321`** (its trailing context is the guard's banner).                                                                                                                                                                                                                                                                       | Regenerated in PR 1, same intent, each still RED on its unchanged `.expect`. PR 1's four new mutations are `326`–`329` (lane A's block).                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Current cites: `seed()` `seed.ts:196-472`; guard and refusal `:242-300`; profiles `:302-337`; ramp `:407-444`; branch `:446-454`; callers `verify.ts:233, :234, :334, :440, :457, :7104, :7141`, `verify/schema.ts:982, :989`; the 1c-4 rename block `verify.ts:294-371`; the empty-schedule assertion `verify.ts:1154-1161`; runbook preconditions `runbooks.md:1344` and `:1864-1867`; notice `notice.md:272-276`. | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+
 ## Goal
 
 `migrate.yml` runs `db:migrate` then `db:seed` against **production** on every push to `main`. Today
@@ -110,12 +133,22 @@ for itself and OPS-3; this plan takes its slot in it:
 
 PR 1 writes this order into `roadmap.md` → "In flight".
 
+**Refresh 2 (2026-11-17): three more things wait on PR 1 being deployed.** `CAT-3` A2 (the catalog
+seed goes inside `seedReference`); `PRIV-3` RC's `create-household` correction, which must not be
+applied in production before it (RC's D10, or the seed throws on every `migrate.yml` run); and the
+`CAT-3` fresh start (spec § "The fresh start, in order", its first precondition). PR 1 itself waits
+on lane P's `6c-i`, which edits `seed-fixtures.ts` behind the same branch.
+
+**K15 changes the order above for the seeded household's run:** the fresh start needs no OPS-3 drill
+ahead of `PRIV-3` 2a (spec R0), so PR 1's `roadmap.md` edit writes the order with that exception.
+
 **Against FAM-1** (in build in six lanes): `seed.ts` and `verify/schema.ts` are under `write-path.md`,
 and FAM-1's seam table makes that guide one queue. Lane A, which owned `seed.ts`, has merged its whole
 chain (step 5, #487), so the collision is the guide's queue, not a lane's file. PR 1 enters it as a
 **guest**, like `SCALE-3`, adds its row to FAM-1's seam table, and the board orders it. Proofs go in a
 new `verify/seed.ts` module (FAM-1 0c's sharding). `db:mutations` numbers come from the board.
 
+_Roadmap alignment (2026-11-17, refresh 2): advances `OPS-2` (Beta 0 row 7); gates `CAT-3` A2, `PRIV-3` RC's production apply and the fresh start (`CAT-3` chunk R); checked against the private roadmap, nothing to add here._
 _Roadmap alignment (2026-11-16): advances `OPS-2` (Beta 0 row 7); gates `PRIV-3` PR 2b and re-gates
 `SEC-6`; checked against `ID-1`'s six keep-open items (no profile-to-login link, no role or age logic,
 nothing bypasses `getHouseholdScope`) and against the private roadmap; nothing to add here._
@@ -148,11 +181,11 @@ nothing bypasses `getHouseholdScope`) and against the private roadmap; nothing t
 
 ```ts
 export async function seed(db, { fixtures }: SeedOptions): Promise<void> {
-  // units … movements: statements and order unchanged, including today's shadow detection
-  // before the catalog insert
+  // units, quantity slots, categories, equipment, muscles, activity types, metrics, the shadow
+  // detection, movements: every reference insert, now all ahead of the household block (refresh 2)
   const shadowed = await seedReference(db);
   if (fixtures) {
-    const household = await seedFixtures(db); // the 1c-4 guard, the refusal, three profiles, verbatim
+    const household = await seedFixtures(db); // the 1c-4 guard (name: HOUSEHOLD_DEFAULT_NAME), the refusal, three profiles
     await seedProgram(db, PROGRAM_SEED);
     await seedProgramFixtures(db, householdScopeForScript(household.id));
   }
@@ -164,6 +197,13 @@ export async function seed(db, { fixtures }: SeedOptions): Promise<void> {
 The shadow **detection** stays where it is today, inside `seedReference` before the catalog insert, so
 the report's meaning does not move once lane P writes household-owned movements. Moving the profile
 insert after the movement insert is safe: neither table has an FK into the other.
+
+**`MOVEMENT_SEED_ROWS` stays in `seedReference` in PR 1, temporarily** (refresh 2, round 3). The 35
+legacy movements are global reference rows today, and every live entry points at them. **Proposed to the spec, not yet in it** (round 3 re-review, D-B1): `CAT-3` A2 stops writing them without
+the flag, before the fresh start deletes them, and is the second cut-off in the never-re-run rule. The
+spec's E4 does not say so today, so three sentences go to its owner (the roadmap thread): E4 or A2's row,
+"without the flag the seed no longer writes `MOVEMENT_SEED_ROWS`"; the never-re-run paragraph, A2 as the
+second cut-off; and "A2 deployed" as a fresh-start precondition.
 
 **Why `seed` keeps its name.** The first draft deleted it so that a function named `seed` could not
 write fixtures from a production path. #432 made `fixtures` a required field with no default and pinned
@@ -218,9 +258,9 @@ shape (scrub `name` and `routine_config`) also kept `birthdate`, `avatar`, `pin_
 timestamps and `archived_at`. So Q2 has three options:
 
 - **(a) SEC-6's production re-key runs before the first seed-id deletion — decided** _(maintainer, 2026-11-16)_. The family's
-  rows then carry ordinary UUIDv7s and are hard-deleted like anyone's. Old code can at worst re-create
-  **role-named fixture rows** under the seed ids (no live household) or throw (another live household):
-  junk, not personal data, removable with D10's correction shape. No tombstone, no notice change, and
+  rows then carry ordinary UUIDv7s and are hard-deleted like anyone's. Old code may re-create the seed
+  rows under the seed ids, with whatever names that version carried (no live household), or throw
+  (another live household); removable with D10's correction shape, and detected by the same check. No tombstone, no notice change, and
   SEC-6's exposure closes too. Cost: SEC-6 joins the deletion's critical path, and it must answer
   `ID-1`'s "the `public_id` stays the athlete's identity for life" (D9).
 - **(b) A fully constant tombstone**: every column a fixed value (nullable columns NULL, timestamps a
@@ -232,13 +272,25 @@ timestamps and `archived_at`. So Q2 has three options:
 
 The lift check works with (a) or (b). PR 1 implements neither: (a) is SEC-6's, (b) is PRIV-3's writer.
 
+**Refresh 2 (2026-11-17): for the seeded household, (a) is replaced by `CAT-3`'s fresh start** (spec
+K7 and K15, decided by the maintainer with the spec): the seeded household is erased in production,
+the family signs in again under ordinary ids. Old seed code may re-create the seed household and profiles
+with whatever names that version carried, and, before A2, the legacy movements; the fresh start's R4
+second run detects both, and its remedy is the step-3 correction, kept. The re-key is no longer on the deletion's path for that household. The
+argument above is kept, because it is why the fresh start is enough.
+
 ### D9 · The fixed public UUIDs (SEC-6, not OPS-2)
+
+**Refresh 2 (2026-11-17):** for the seeded household, `CAT-3`'s fresh start (K7) replaces the
+production re-key below: after it, no live production row carries a committed seed constant, which
+is SEC-6's acceptance. SEC-6's row is restated accordingly by the fresh-start chunk (R0), not by PR 1.
 
 In production the seed ids are the `public_id`s of a real household and two real minors' profiles, so
 the "UUIDv7 public ids are non-enumerable" layer is void for exactly those rows; the session plus
 household scope still holds. **That is SEC-6.** OPS-2 stops the seed writing them and re-creating
-them. It cannot stop **migration 0001** writing `…010` into every new deployment. PR 1 restates SEC-6's
-row, not only its gate:
+them. It cannot stop **migration 0001** writing `…010` into every new deployment. SEC-6's row is restated by
+the fresh-start chunk (R0), not by PR 1 (refresh 2); the fix below is what it would be for a seed-id row
+the fresh start does not reach:
 
 - **Fix:** re-key the **production rows only**, by a guarded correction. The committed constants stay
   as the fixture namespace in dev, CI and preview; after OPS-2 nothing addresses production rows by
@@ -250,6 +302,9 @@ row, not only its gate:
 
 ### D10 · The test athlete: a guarded soft-delete correction (Q4)
 
+**Refresh 2 (2026-11-17):** PR 2 is unnecessary once `CAT-3`'s fresh start has erased the seeded
+household (spec § Interactions, `OPS-2`). It stays planned until then, in case the fresh start slips.
+
 PR 2 adds `fixture-athlete-in-production-2026-11-<dd>` to `corrections/registry.ts`. Its `run`, in one
 transaction with `set local lock_timeout` and `statement_timeout` (the `registry.ts` pattern):
 
@@ -258,7 +313,7 @@ transaction with `set local lock_timeout` and `statement_timeout` (the `registry
    `inHousehold(scope)` ∧ `name = SEED_PROFILE_3_NAME`. A renamed row may be a repurposed real athlete,
    so it **refuses**;
 3. **after** the lock, counts the profile's rows in every table of `ATHLETE_GRAPH`, which PRIV-3 PR 1
-   exports from `packages/db/src/household-graph.ts` (the household graph filtered to the per-athlete
+   exports from `packages/db/src/erasure/graph.ts` (the household graph filtered to the per-athlete
    tables, at athlete grain) and which lands before PR 2, so the correction counts over the list the
    athlete erasure deletes and `db:verify` proves complete. PR 2 imports it and moves nothing
    _(reconciled with PRIV-3's refresh, 2026-11-17)_. The count **skips the target's own `profiles` row**, which `ATHLETE_GRAPH` lists and the lock already holds: it counts only the rows that hang off it (PRIV-3 #513). **No `deleted_at` filter.** It **refuses** if any count is non-zero. The
@@ -273,7 +328,7 @@ the lock's contention cannot be proved there; the proof covers the refusals and 
 ### D11 · The production log line
 
 `scripts/seed.ts` prints `✓ seed complete (reference data only)` without the flag and
-`✓ seed complete (fixtures)` with it, replacing #432's two lines. Fixed text, no ids: it lands in
+`✓ seed complete (fixtures)` with it, replacing #432's two lines (`(no program fixtures)` / `(with program fixtures)`). Fixed text, no ids: it lands in
 world-readable Actions logs. The literals stay in `scripts/seed.ts` (one use each) and are pinned in
 `seed.test.ts`'s existing source-pin block, so the runbook's grep cannot drift silently.
 
@@ -281,12 +336,12 @@ world-readable Actions logs. The literals stay in `scripts/seed.ts` (one use eac
 
 `migrate.yml` runs PR 1's seed unattended on its merge commit. Against today's production:
 
-| Step                  | Prod state (F1)            | Behaviour                                                             |
-| --------------------- | -------------------------- | --------------------------------------------------------------------- |
-| `seedReference`       | catalogs present           | identical statements and arbiters (`units` rewrites identical values) |
-| households / profiles | `…010`, `…001`–`…003` live | **no statement issued**                                               |
-| ramp, program         | —                          | not run (ramp deleted, program under the flag)                        |
-| shadow report         | as today                   | unchanged                                                             |
+| Step                  | Prod state (F1)            | Behaviour                                                                                                     |
+| --------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `seedReference`       | catalogs present           | identical statements and arbiters (`units` now writes only the rows that differ; it rewrote identical values) |
+| households / profiles | `…010`, `…001`–`…003` live | **no statement issued**                                                                                       |
+| ramp, program         | —                          | not run (ramp deleted, program under the flag)                                                                |
+| shadow report         | as today                   | unchanged                                                                                                     |
 
 Nothing is deleted or re-parented: removing inserts cannot orphan a row. PR 1 carries no migration, and
 its production path loses the 1c-4 throw site. If it threw anyway, later pushes would still migrate,
@@ -295,16 +350,32 @@ each run would be red, and a revert is safe at that point (§ Rollback).
 ## What lifts the preconditions: the check, run **before each deletion**
 
 PR 1 replaces **both** OPS-2 preconditions (`runbooks.md` household delete, Precondition 2; athlete
-erasure, precondition 2) with one section. The operator runs it **immediately before every deletion of
-a household or athlete whose `public_id` is a seed constant**, with merges frozen until that deletion
+erasure, precondition 2) with one section.
+
+🔴 **A household or athlete whose `public_id` is in `SEED_PUBLIC_IDS` is still never removed by the
+ordinary runbook deletion** (refresh 2, round 3 B1). It is removed only by `CAT-3`'s fresh start
+(step 3, chunk R0's one-shot correction, which erases the seeded household with everything in it), or,
+for a seed-id row the fresh start does not reach, after `SEC-6`'s re-key gives it an ordinary id. Old
+seed code can re-create a seed-id row (D8), so an ordinary deletion of one would leave the notice's
+"permanently removed" false. **The check below is a precondition of those two paths**, not a licence.
+
+It also defines **"OPS-2 PR 1 is deployed"**, which `PRIV-3` RC's production `--apply` and the fresh
+start's step 3 both wait on: run it immediately before each, with merges frozen until that step
 commits. It checks behaviour, not strings:
 
 ```bash
 git fetch origin
 MAIN=$(git rev-parse origin/main)
-# 1. Production's seed ran the current main, successfully, and nothing newer is queued or running.
-gh run list --workflow migrate.yml --branch main -L 5 --json databaseId,headSha,status,conclusion
-#    → the newest row: headSha == $MAIN, status completed, conclusion success; none queued/in_progress.
+# 1. Production's seed ran the current main, successfully, and nothing is queued or running —
+#    including a re-run of an OLD run, which keeps its old creation time and so never shows as "newest".
+gh run list --workflow migrate.yml --branch main -L 20 --json databaseId,headSha,status,conclusion,attempt,updatedAt
+#    → the newest row: headSha == $MAIN, status completed, conclusion success; and NO row with
+#      attempt > 1 whose updatedAt is later than that run's (a finished re-run of old code).
+gh run list --workflow migrate.yml --status in_progress --json databaseId,headSha   # → []
+gh run list --workflow migrate.yml --status queued --json databaseId,headSha        # → []
+gh run list --workflow migrate.yml --status waiting --json databaseId,headSha       # → []
+gh run list --workflow migrate.yml --status pending --json databaseId,headSha       # → [] (held by the concurrency group)
+gh run list --workflow migrate.yml --status requested --json databaseId,headSha     # → []
 gh run view <databaseId> --log | grep -F '✓ seed complete (reference data only)'
 # 2. db:verify (which carries OPS-2's proofs) passed on that same commit.
 gh run list --workflow ci.yml --commit "$MAIN" --json conclusion,status
@@ -312,41 +383,47 @@ gh run list --workflow ci.yml --commit "$MAIN" --json conclusion,status
 
 Plus the rules the section states:
 
-- **Old code is made harmless by D8's answer, not by the clock.** Under Q2 (a), the rows being deleted
-  are no longer seed ids. Under (b), they become tombstones. The 30-day re-run window is information.
-  Production's `migrate.yml` runs are **never deleted**: they are the record of which DDL reached
-  production and when.
-- **Never "Re-run jobs" on a `migrate.yml` run from before PR 1.** `workflow_dispatch` is safe, being
-  pinned to `refs/heads/main`.
+- **Old code is made harmless by the fresh start and SEC-6, not by the clock.** The 30-day re-run
+  window is information. Production's `migrate.yml` runs are **never deleted**: they are the record of
+  which DDL reached production and when.
+- **Never "Re-run jobs" on an old `migrate.yml` run.** The cut-off is **two** commits: PR 1 (from it on,
+  no household or profile is written) and **`CAT-3` A2** (from it on, the 35 legacy movements,
+  `MOVEMENT_SEED_ROWS`, are written only with fixtures, spec E4). A re-run of anything before A2 would
+  put legacy movements back after the fresh start's step 5 deletes them. `workflow_dispatch` is safe,
+  being pinned to `refs/heads/main`.
 - **Hand-run seeds only from a freshly fetched `origin/main`** (the "Manually re-seed" section).
+- **From the fresh start's step 3 on, PR 1 is fixed forward only**: the seeded household is gone, and a
+  reverted PR 1 would re-create it.
 
 ## File-by-file changes
 
 ### PR 1 · `db/ops-2-1-production-seed-reference-only` (~180 code, ~110 docs)
 
-| Path                                                          | Change   | What & why                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/seed.ts`                                     | EDIT     | D1: extract `seedReference`, `seedFixtures`; `seed()` composes them; the 1c-4 comments move with their code. D4: delete the ramp block. `SEED_FIXTURES_ENV`'s and `seedFixturesRequested`'s docblocks and `FIXTURES_TARGET_REFUSED` stop saying "program fixtures": the flag now gates every fixture.                 |
-| `packages/shared/src/ramp-schedule.ts`                        | EDIT     | D4: `CALISTHENICS_RAMP_SCHEDULE` goes (no consumer).                                                                                                                                                                                                                                                                  |
-| `packages/db/scripts/seed.ts`, `packages/db/src/seed.test.ts` | EDIT     | D11's lines; the source pin gains both literals. The pinned call site is unchanged.                                                                                                                                                                                                                                   |
-| `packages/db/scripts/verify/seed.ts`                          | NEW      | Proofs A and B (§ Test plan), called from `verify.ts`.                                                                                                                                                                                                                                                                |
-| `packages/db/scripts/verify.ts`                               | EDIT     | Call the new module; drop the empty-schedule assertion (D4); proof C's one line in the 1c-4 rename block.                                                                                                                                                                                                             |
-| `packages/db/scripts/mutations/<n>-*.patch` + `.expect` ×4    | NEW      | (a) `seedFixtures` outside the branch → reddens A; (c) the refusal above the branch → reddens C; (e) the guard and insert outside the branch → reddens B2; (f) the shadow report inside the branch → reddens B4. Numbers from the board. Patches `10` and `45` will not apply after D1: regenerate both, same intent. |
-| `.github/workflows/migrate.yml`                               | EDIT     | Header comment: production's seed writes reference data only; "a profile in seed.ts" no longer reaches prod.                                                                                                                                                                                                          |
-| `packages/shared/src/seed-ids.ts`                             | EDIT     | One docblock line: _"may equal live production `public_id`s until SEC-6; never authorization"_.                                                                                                                                                                                                                       |
-| `docs/runbooks.md`                                            | EDIT     | Both preconditions → § "What lifts the preconditions"; "Manually re-seed": fresh `origin/main` only, never re-run old runs; "Rename / correct a seeded profile": the production seed writes no profile.                                                                                                               |
-| `docs/privacy/notice.md`                                      | EDIT     | The "three athletes the app started with cannot yet" sentence: setup no longer puts them back; erasure still waits on the check and on Q2's answer. Accurate, not lifted early.                                                                                                                                       |
-| `docs/privacy/data-inventory.md`                              | EDIT     | §1a's `profiles` note and §9's residual describe a production seed that writes profiles: restated.                                                                                                                                                                                                                    |
-| `docs/features/write-path.md`                                 | EDIT     | A one-line trap: a household-scoped seed write goes inside the `fixtures` branch.                                                                                                                                                                                                                                     |
-| `docs/features/programming.md`                                | EDIT     | Only the personal name at `:32` and `:129` (pre-existing, found by round 2): the role instead.                                                                                                                                                                                                                        |
-| `docs/architecture.md`                                        | EDIT     | The prod-seed edge reads "reference seed"; the 1c-4 creator note sits under the fixtures branch; the deletion diagram's "household is not in the seed … `OPS-2`" precondition points at the check. **A new flowchart here** (flag → branch → tables written, per estate), reused in the PR description.               |
-| `docs/service-setup.md`                                       | EDIT     | The preview holds role-named fixtures plus whatever previews wrote.                                                                                                                                                                                                                                                   |
-| `docs/deploy.md`, `README.md`, `apps/web/.env.example`        | EDIT     | A new deployment gets `…010` from 0001, reference data from `db:seed`, and **no athletes and no member**. A local `db:seed` needs `SEED_FIXTURES=1` for the fixture athletes.                                                                                                                                         |
-| `docs/plans/fam-1-family-program.md`                          | EDIT     | OPS-2 PR 1's guest row in the seam table (`write-path.md`).                                                                                                                                                                                                                                                           |
-| `docs/plan.md`                                                | EDIT     | OPS-2 row: the personal name, the `PROGRAM_SEED` clause, PR states. SEC-6 row: D9's fix, acceptance, gate and the `ID-1` item it owes.                                                                                                                                                                                |
-| `docs/milestones/beta-1.md`                                   | EDIT     | The "no test athletes" box; row 7 → two PRs; the OPS-2 description (personal name, `PROGRAM_SEED`) and the table note on the first program write; the step chart.                                                                                                                                                     |
-| `docs/tech-debt.md`                                           | EDIT     | Close "The seed's ramp-target expansion reads every household's kid profiles" (D4, Q6).                                                                                                                                                                                                                               |
-| `docs/status.md`, `docs/roadmap.md`, changelog                | EDIT/NEW | "Status rides with the work"; the order in § Where this sits.                                                                                                                                                                                                                                                         |
+| Path                                                                     | Change     | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/seed.ts`                                                | EDIT       | D1: extract `seedReference`, `seedFixtures`; `seed()` composes them; the 1c-4 comments move with their code. D4: delete the ramp block. `SEED_FIXTURES_ENV`'s and `seedFixturesRequested`'s docblocks and `FIXTURES_TARGET_REFUSED` stop saying "program fixtures": the flag now gates every fixture.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `packages/shared/src/enums.ts`                                           | EDIT       | Refresh 2: `HOUSEHOLD_DEFAULT_NAME`'s "⚠️ `seed.ts` still types the literal" line goes; the seed now writes the constant.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `packages/shared/src/ramp-schedule.ts`                                   | EDIT       | D4: `CALISTHENICS_RAMP_SCHEDULE` goes (no consumer).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `packages/db/scripts/seed.ts`, `packages/db/src/seed.test.ts`            | EDIT       | D11's lines; the source pin gains both literals. The pinned call site is unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `packages/db/scripts/verify/seed.ts`                                     | NEW        | Proofs A and B (§ Test plan), called from `verify.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `packages/db/scripts/verify.ts`                                          | EDIT       | Call the new module; drop the empty-schedule assertion (D4); proof C's one line in the 1c-4 rename block.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `packages/db/scripts/verify/harness.ts`                                  | EDIT       | "What a proof module can rely on": Proof A is the second exception to "last", after A1's `verifyCatalogMigrationFacts` (round 3 re-review).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `packages/db/scripts/mutations/326`–`329` + `.expect`; `10`, `45`, `321` | NEW / EDIT | `326` (a) `seedFixtures` outside the branch → A's first failure; `327` (c) the refusal above the branch → C; `328` (e) the guard and insert outside the branch → B2; `329` (f) the shadow report inside the branch → B4. **Regenerated:** `10` (also for `HOUSEHOLD_DEFAULT_NAME`) and `321`, each RED on its unchanged `.expect`; **`45`'s `.expect` moves to Proof A's wrapped-seed message** (round 3 C-B1): its hoisted `seedProgram` now runs, and fails, inside A, on a database with no profiles.                                                                                                                                                                                                               |
+| `.github/workflows/migrate.yml`                                          | EDIT       | Header comment: production's seed writes reference data only; "a profile in seed.ts" no longer reaches prod.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `packages/shared/src/seed-ids.ts`                                        | EDIT       | One docblock line: _"may equal live production `public_id`s until the fresh start (`CAT-3` K7) or SEC-6; never authorization"_.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `docs/runbooks.md`                                                       | EDIT       | Both preconditions → § "What lifts the preconditions", **keeping the seed-id refusal** (only the fresh start or SEC-6 removes such a row); a `0032`-style line is not needed (no migration); "Manually re-seed": fresh `origin/main` only, never re-run old runs; "Rename / correct a seeded profile": the production seed writes no profile.                                                                                                                                                                                                                                                                                                                                                                          |
+| `docs/privacy/notice.md`, `apps/web/lib/privacy/notice-content.ts`       | EDIT       | The sentence becomes, exactly: _"…the athletes the app started with cannot be erased one at a time yet, because an older copy of the setup could put them back; they are removed together, with the rest of the starting data, when the app is started fresh."_ True before and after PR 1; R0 replaces it. After the household-delete sentence (_"Ask, and your household is deleted …"_) it adds, exactly: _"The household the app started with is the one exception for now: it is removed with the rest of the starting data when the app is started fresh, not on its own."_ `pnpm privacy:generate` regenerates `notice-content.ts` (its byte-exact test fails on drift), and the "Last updated" date is bumped. |
+| `docs/privacy/data-inventory.md`                                         | EDIT       | §1a's `profiles` note and §9's residual: restated for a production seed that writes no profile. **§5 gains:** a household or athlete whose `public_id` is in `SEED_PUBLIC_IDS` is removed by neither path; the fresh start (`CAT-3` K7) removes it (`runbooks.md` § What lifts the preconditions). The staleness command (§ header) gains `packages/db/src/seed.ts` and `packages/db/scripts/corrections/`, which §1a's `households` row names as writers.                                                                                                                                                                                                                                                             |
+| `docs/features/write-path.md`                                            | EDIT       | A one-line trap: a household-scoped seed write goes inside the `fixtures` branch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/features/programming.md`                                           | EDIT       | Only the personal name at `:32` and `:129` (pre-existing, found by round 2): the role instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `docs/architecture.md`                                                   | EDIT       | The prod-seed edge reads "reference seed"; the 1c-4 creator note sits under the fixtures branch; the deletion diagram's "household is not in the seed … `OPS-2`" precondition points at the check. **A new flowchart here** (flag → branch → tables written, per estate), reused in the PR description.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `docs/service-setup.md`                                                  | EDIT       | The preview holds role-named fixtures plus whatever previews wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `docs/deploy.md`, `README.md`, `apps/web/.env.example`                   | EDIT       | A new deployment gets `…010` from 0001, reference data from `db:seed`, and **no athletes and no member**. A local `db:seed` needs `SEED_FIXTURES=1` for the fixture athletes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `docs/plans/fam-1-family-program.md`                                     | EDIT       | OPS-2 PR 1's guest row in the seam table (`write-path.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `docs/plan.md`                                                           | EDIT       | OPS-2 row only: the personal name, the `PROGRAM_SEED` clause, PR states. SEC-6's row is R0's (refresh 2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `docs/milestones/beta-1.md`                                              | EDIT       | The "no test athletes" box; row 7 → two PRs; the OPS-2 description (personal name, `PROGRAM_SEED`) and the table note on the first program write; the step chart.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/tech-debt.md`                                                      | EDIT       | Close "The seed's ramp-target expansion reads every household's kid profiles" (D4, Q6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `docs/status.md`, `docs/roadmap.md`, changelog                           | EDIT/NEW   | "Status rides with the work"; the order in § Where this sits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### PR 2 · `fix/ops-2-2-fixture-athlete` (~120 lines; after PR 1 and PRIV-3 PR 1)
 
@@ -356,37 +433,59 @@ Plus the rules the section states:
 | `packages/db/scripts/verify/seed.ts`                                     | EDIT     | In a rolled-back sandbox: dry run reports; `--apply` soft-deletes; a second `--apply` is a no-op; a renamed fixture refuses; a fixture with a **soft-deleted** entry refuses; afterwards `seed()` in both modes leaves it deleted. |
 | `packages/db/scripts/corrections/README.md`                              | EDIT     | Applied row, `pending`. The target is a public fixture const.                                                                                                                                                                      |
 | `docs/runbooks.md`                                                       | EDIT     | A soft-deleted fixture profile is **not** re-created (the existing claim is false: the unique is non-partial).                                                                                                                     |
-| `docs/privacy/notice.md`                                                 | EDIT     | "Three athletes the app started with" → two.                                                                                                                                                                                       |
+| `docs/privacy/notice.md`                                                 | EDIT     | No edit: PR 1\'s sentence already gives no count, and a soft-deleted test athlete is still "removed together … when the app is started fresh".                                                                                     |
 | `docs/milestones/beta-1.md`                                              | EDIT     | Tick "no test athletes" in the follow-up commit that dates the Applied row.                                                                                                                                                        |
 | `docs/changelog/<date>-fix-ops-2-2-fixture-athlete.md`, `docs/status.md` | NEW/EDIT | Fragment and status line.                                                                                                                                                                                                          |
 
 ## Test plan
 
-All in `verify/seed.ts` unless noted. "Household-scoped tables" is **derived**, not listed: every table
-in the schema outside `seedReference`'s set (OPS-3's draft asks the same of the reference set, A-S7), so
-a table FAM-1 adds is covered without an edit.
+All in `verify/seed.ts` unless noted. **Every "does not throw" is `assert.doesNotReject(fn, '<named
+message>')`**, never a bare `await`: a thrown `Error` is not an `AssertionError`, so the mutation gate
+would report it as the wrong assertion (round 3 C-S2). Those messages are the `.expect`s.
 
-**Proof A, on the main PGlite, before the first fixture seed:** `seed({ fixtures: false })` twice.
-Reference tables equal their consts (`assertRefTableMatches`); every household-scoped table is **0**;
-`households` is exactly the migration's `…010`. This is a fork's first run. Mutation (a).
+**What "household-scoped" means here is `HOUSEHOLD_GRAPH`**, not "every table outside the reference
+set" (round 3 D-S4, C-S4): `movements` and the two join tables hold both global and household rows, and
+the graph scopes each per household (`src/erasure/graph.ts`; P2 holds it against `pg_constraint`). A
+table FAM-1 adds is covered by P1's rule that every table is in the graph or `REFERENCE_TABLES`.
 
-**Proof B, a rolled-back sandbox** on the fixture world:
+**Proof A, on the main PGlite, after A1's `verifyCatalogMigrationFacts()` and before the first fixture seed**
+(so the TEN-2c block and A1's early entry point stay first; `harness.ts`'s exceptions docblock names this
+as the second exception to "last"): `seed({ fixtures: false })` twice, each
+wrapped. `REFERENCE_TABLES` equal their consts (`assertRefTableMatches`, `equipment` and `muscles`
+included) and the global movements equal `MOVEMENT_SEED_ROWS`; for every `HOUSEHOLD_GRAPH` entry,
+`householdRows(…010's scope)` counts **0**, except `households`, which holds exactly the migration's
+`…010`. On the fresh database `…010` is the only household, so this covers every household row. This is
+a fork's first run. Mutations `326` and `45`.
 
-1. Add one more household with a kid. `seed({ fixtures: false })` → no count changes anywhere.
-2. **Hard-delete `…010` and its children, with no live household left** (soft-delete every other live
-   household in the sandbox and assert the live count is 0 first: the main PGlite holds several) →
-   `seed({ fixtures: false })` does not throw and **creates no household or profile**. Mutation (e).
-3. **Hard-delete `…010` with another household live** → does not throw; nothing created.
+**Proof B, late (called beside the module calls at the end of `verify.ts`), each case in a rolled-back
+sandbox on the fixture world, every `seed` call on the transaction's handle (`seed(asDb(tx), …)`): a
+`seed(asPg, …)` inside `rolledBack` waits forever on PGlite's single connection.** "Removing `…010`" uses the 1c-4 block's construction: rename its
+`public_id` and soft-delete households as each case says, which is what the seed sees after a hard
+delete (`seedReference` never reads `households`; the guard filters on `deleted_at`; the insert's
+conflict target is `public_id`) and cannot abort on another household's references (round 3 C-S5).
+
+1. Add one more household with a kid. `seed({ fixtures: false })` → no `HOUSEHOLD_GRAPH` count changes
+   for any household.
+2. **`…010` removed, no live household left** (every other household soft-deleted, the live count
+   asserted 0 first) → does not throw and **creates no household or profile**. Mutation `328`.
+3. **`…010` removed, another household live** → does not throw; nothing created. (`327` reddens C
+   first; B3 is kept for the state, not for a mutation of its own.)
 4. In a shadowed-catalog state, `captureWarnings(seed({ fixtures: false }))` → the TEN-2c warning
-   appears. Mutation (f).
+   appears. Mutation `329`.
+5. **`…010` and its profiles soft-deleted, every other household too** → does not throw; no count
+   changes. It has no mutation (under `326` it stays green: the tombstoned `…010` makes every insert conflict,
+   D8's row 3); it is kept to pin the tombstone state, as B3 is (round 3 C-S6, D-N6, re-review).
 
-**Proof C, in the existing 1c-4 rename block** (`verify.ts:283-330`, where the resolve finds nothing):
-one added line, `seed(asPg, { fixtures: false })` resolves. Mutation (c).
+**Proof C, in the existing 1c-4 rename block** (`verify.ts:294-371`, where the resolve finds nothing):
+one added, wrapped `seed(asPg, { fixtures: false })`. Mutation `327`.
 
-The old-code proof (a replay of old statements against tombstones) is **not here**: it proves PRIV-3's
-tombstone writer, if Q2 picks (b), and belongs beside it.
+`verify/schema.ts`'s step-1 `fixtures: false` half (lane P's) stays as a second check; Proof A is now
+the first failure for `45`.
 
-**Unit (Vitest):** D11's literals in the source pin. **CI:** `db:verify`; e2e, every spec, the
+The old-code proof (a replay of old statements against tombstones) is **not here**: Q2 chose no
+tombstones.
+
+**Unit (Vitest):** D11's whole expression in the source pin (`options.fixtures ? '✓ seed complete (fixtures)' : '✓ seed complete (reference data only)'`), so a swapped ternary fails. **CI:** `db:verify`; e2e, every spec, the
 screenshot harness and `global.setup.ts` passing **unedited**. **Local:** `pnpm verify`, `pnpm
 db:mutations` (pasted in PR 1), `pnpm e2e:local`.
 
@@ -421,25 +520,25 @@ rehearsal.
 
 **Rollback.** PR 1: a revert restores today's code, which (D8's table) is harmless against live,
 soft-deleted or tombstoned seed rows. **It is unsafe only after a seed-id row was hard-deleted without
-a tombstone** (Q2 (a) or (c)): then today's code re-creates fixture rows or wedges. So after such a
+a tombstone** (Q2 (a) or (c)): then today's code re-creates seed rows (with whatever names that version carried) or wedges. So after such a
 deletion PR 1 is fix-forward only, and the runbook says so beside the check. PR 2 is undone with one
 guarded `UPDATE … SET deleted_at = NULL, updated_at = now()` by `public_id`.
 
 ## Downstream: what the sibling drafts must reconcile
 
-| Draft  | Cites                                                                       | Becomes                                                                                                                                           |
-| ------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PRIV-3 | waits on "OPS-2 PR 1b"                                                      | OPS-2 PR 1                                                                                                                                        |
-| PRIV-3 | takes `SEED_HOUSEHOLD_WRITE_LOCK` (`OPS-2` D6)                              | withdrawn (D6); a lock against OPS-3's restore, if wanted, is PRIV-3's and OPS-3's to define                                                      |
-| PRIV-3 | the lift check as "M4"                                                      | M3, § "What lifts the preconditions"                                                                                                              |
-| PRIV-3 | D6 tombstones "agree with OPS-2 D8"; old code "throws with nothing written" | Q2 chose (a): no tombstones. PRIV-3's D6 and its tombstone writer go; seed-id rows are re-keyed by SEC-6 first                                    |
-| PRIV-3 | proof P8 calls `seedProductionDatabase` and asserts "OPS-2's skip line"     | `seed({ fixtures: false })`; there is no skip line (D11's production line instead)                                                                |
-| PRIV-3 | the seed-household row: "no refusal; a tombstone instead"                   | **a refusal, "re-key first (SEC-6)"** (Q2 (a)): no tombstone, no `isSeedTombstone`, no lock. Reconciled in PRIV-3's refresh, 2026-11-17           |
-| PRIV-3 | `ERASE_ATHLETE` moved by OPS-2 PR 2 (D10)                                   | PRIV-3 PR 1 exports `ATHLETE_GRAPH` from `src/household-graph.ts`, before OPS-2 PR 2, which imports it and moves nothing (2026-11-17)             |
-| PRIV-3 | runbook precondition 2 (athlete erasure)                                    | OPS-2 PR 1 rewrites it first (§ "What lifts the preconditions"); PRIV-3 PR 2b then edits OPS-2's text, not the old one (2026-11-17)               |
-| OPS-3  | takes the lock (D6); relies on D8 tombstones                                | as for PRIV-3. Production's seed writes nothing household-scoped, so a restored household is never topped up by a push                            |
-| OPS-3  | A-S7: assert the reference table set                                        | taken up: proof A's derived set                                                                                                                   |
-| SEC-6  | gated on `PROGRAM_SEED` leaving prod                                        | gated on OPS-2 PR 1, with the restated fix and acceptance (D9); **on the deletion path** (Q2 (a)), and must respect `ID-1`'s lifetime `public_id` |
+| Draft  | Cites                                                                       | Becomes                                                                                                                                                                                                                    |
+| ------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PRIV-3 | waits on "OPS-2 PR 1b"                                                      | OPS-2 PR 1                                                                                                                                                                                                                 |
+| PRIV-3 | takes `SEED_HOUSEHOLD_WRITE_LOCK` (`OPS-2` D6)                              | withdrawn (D6); a lock against OPS-3's restore, if wanted, is PRIV-3's and OPS-3's to define                                                                                                                               |
+| PRIV-3 | the lift check as "M4"                                                      | M3, § "What lifts the preconditions"                                                                                                                                                                                       |
+| PRIV-3 | D6 tombstones "agree with OPS-2 D8"; old code "throws with nothing written" | Q2 chose (a): no tombstones. PRIV-3's D6 and its tombstone writer go; the seeded household is removed by `CAT-3`'s fresh start (K7), other seed-id rows after SEC-6's re-key                                               |
+| PRIV-3 | proof P8 calls `seedProductionDatabase` and asserts "OPS-2's skip line"     | `seed({ fixtures: false })`; there is no skip line (D11's production line instead)                                                                                                                                         |
+| PRIV-3 | the seed-household row: "no refusal; a tombstone instead"                   | **a refusal**: the seeded household is removed by `CAT-3`'s fresh start (K7), any other seed-id row after SEC-6's re-key (Q2 (a)); no tombstone, no `isSeedTombstone`, no lock. Reconciled in PRIV-3's refresh, 2026-11-17 |
+| PRIV-3 | `ERASE_ATHLETE` moved by OPS-2 PR 2 (D10)                                   | PRIV-3 PR 1 exports `ATHLETE_GRAPH` from `src/erasure/graph.ts`, before OPS-2 PR 2, which imports it and moves nothing (2026-11-17)                                                                                        |
+| PRIV-3 | runbook precondition 2 (athlete erasure)                                    | OPS-2 PR 1 rewrites it first (§ "What lifts the preconditions"); PRIV-3 PR 2b then edits OPS-2's text, not the old one (2026-11-17)                                                                                        |
+| OPS-3  | takes the lock (D6); relies on D8 tombstones                                | as for PRIV-3. Production's seed writes nothing household-scoped, so a restored household is never topped up by a push                                                                                                     |
+| OPS-3  | A-S7: assert the reference table set                                        | taken up: proof A's derived set                                                                                                                                                                                            |
+| SEC-6  | gated on `PROGRAM_SEED` leaving prod                                        | for the seeded household, replaced by the fresh start (K7, R0 restates the row); otherwise gated on OPS-2 PR 1 (D9), and must respect `ID-1`'s lifetime `public_id`                                                        |
 
 ## Alternatives considered
 
@@ -464,7 +563,7 @@ guarded `UPDATE … SET deleted_at = NULL, updated_at = now()` by `public_id`.
 All answered; none is open.
 
 - **Q1 (D7) — answered by #432:** preview gets fixtures.
-- **Q2 (D8) — (a), re-key first** _(maintainer, 2026-11-16)_. SEC-6's production-only re-key runs
+- **Q2 (D8) — for the seeded household, superseded by `CAT-3`'s fresh start** _(K7, maintainer, 2026-11-17)_; **(a), re-key first, remains the path for any other seed-id row** _(maintainer, 2026-11-16)_. SEC-6's production-only re-key runs
   before the first seed-id deletion; the family's rows get ordinary ids and are hard-deleted like
   anyone's. **No tombstones.** SEC-6 joins the deletion path and must respect `ID-1`: a `public_id` is
   the athlete's for life. How a one-time re-key squares with that is SEC-6's to answer in its plan.
@@ -475,6 +574,38 @@ All answered; none is open.
   ramp-target expansion reads every household's kid profiles", which PR 1 removes.
 
 ## Review-response log (adversarial panel)
+
+### Round 3 (2026-11-17, refresh 2)
+
+> Panel: correctness 159k · 8m, db-safety 135k · 7m, privacy 116k · 4.5m. Models: high-stakes production seed · every lens: opus (the Fable cap runs until 2026-11-19).
+
+| #                      | Lens                   | Critique (short)                                                                                                                                  | Verdict                    | Resolution                                                                                                                                  |
+| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| P-B1                   | Privacy                | **BLOCKING.** PR 1 replaced the runbook's refusals with a check that licenses a seed-id deletion, while old code can re-create the row            | **accepted**               | § What lifts: the refusal stays; only the fresh start or SEC-6 removes a seed-id row; the check is their precondition                       |
+| D-B1                   | DB-safety              | **BLOCKING.** `MOVEMENT_SEED_ROWS` keeps reaching production; the fresh start deletes them and any seed puts them back. Nobody owns removing them | **accepted**               | D1: temporary in PR 1; A2 moves them under `fixtures` (spec E4); A2 is the second never-re-run cut-off; fix-forward from fresh-start step 3 |
+| C-B1                   | Correctness            | **BLOCKING.** Mutation `45` cannot fail on its old `.expect`: Proof A runs the hoisted `seedProgram` first, on a database with no profiles        | **accepted**               | `45`'s `.expect` moves to Proof A's message                                                                                                 |
+| P-S1                   | Privacy                | Q2, D9, § Downstream, the `plan.md` row and the order still said "re-key first"; K15 missing                                                      | **accepted**               | Each restated; SEC-6's row is R0's; the K15 exception in the order                                                                          |
+| P-S2                   | Privacy                | "Old code can at worst re-create role-named rows" is false for the oldest generation                                                              | **accepted**               | Restated without naming history; R4's second run is the control                                                                             |
+| P-S3                   | Privacy                | The notice edit was not true in the window, and missed `notice-content.ts` and the date                                                           | **accepted**               | The exact sentence is in the file table                                                                                                     |
+| P-S4                   | Privacy                | Inventory §5 had no row behind "cannot yet"; the staleness command missed the seed                                                                | **accepted**               | §5 line and both paths added                                                                                                                |
+| D-S3                   | DB-safety              | Check 1 could not see a re-run of an old run                                                                                                      | **accepted**               | `--status in_progress / queued / waiting`, unlimited                                                                                        |
+| D-S4, C-S4             | Both                   | Proof A's derived set misclassified `movements` and the join tables; the FK claim was wrong                                                       | **accepted**               | Proof A is built on `HOUSEHOLD_GRAPH`; the claim corrected                                                                                  |
+| D-S5                   | DB-safety              | "PR 1 deployed" had no check                                                                                                                      | **accepted**               | § What lifts defines it, run before RC's apply and fresh-start step 3                                                                       |
+| C-S2                   | Correctness            | Bare `await`s report as the wrong assertion                                                                                                       | **accepted**               | `assert.doesNotReject` with named messages                                                                                                  |
+| C-S3, C-S5, C-S6, D-N6 | Correctness, DB-safety | B's placement, construction and the missing soft-deleted case                                                                                     | **accepted**               | B is late; the 1c-4 construction; B5 added, its mutation said honestly                                                                      |
+| D-S2                   | DB-safety              | Enforce "never re-run" by renaming the database secret `migrate.yml` reads, so an old run's empty-secret guard makes it a green no-op             | **open: the maintainer's** | A change to production's GitHub secrets and an operator step, so it is the maintainer's decision, not this plan's. Recommended              |
+| N                      | Several                | D1's behaviour change stated; D11's whole expression pinned; stale cites; `household-graph.ts`; seed-ids docblock; `RampWeek` loses its consumer  | **accepted**               | In the text; `RampWeek` goes with `CALISTHENICS_RAMP_SCHEDULE`                                                                              |
+
+**Re-review (round 3):**
+
+- **Privacy:** P-B1 resolved. Four leftovers fixed: the PRIV-3 row of § Downstream; D8 (a) and Rollback's "role-named" claim; PR 2's notice row; the household clause, now word for word.
+- **DB-safety:** D-B1 is half resolved. The spec's owner must add A2's duty (routed through the board), and the plan says "proposed". Check 1 gains `attempt`/`updatedAt` and `pending`/`requested`.
+
+- **Correctness:** no blocking finding. Every mutation reaches its own proof first. Fixed: Proof A's place, after A1's early function (`harness.ts` row added); B5 has no mutation; Proof B seeds on the transaction's handle.
+
+**Found outside the plan (DB-safety), for the board's P2 list:** the `units` upsert sets `dimension`,
+part of a key composite FKs reference, so it takes a full row lock on every push, with no
+`lock_timeout` on the seed (from #137). Low impact; not this PR's.
 
 ### Round 2 (2026-11-16, the refresh)
 

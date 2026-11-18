@@ -1,0 +1,1 @@
+OPS-2 B2: with no live household, seed({ fixtures: false }) creates no household or profile
