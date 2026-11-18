@@ -336,12 +336,12 @@ world-readable Actions logs. The literals stay in `scripts/seed.ts` (one use eac
 
 `migrate.yml` runs PR 1's seed unattended on its merge commit. Against today's production:
 
-| Step                  | Prod state (F1)            | Behaviour                                                             |
-| --------------------- | -------------------------- | --------------------------------------------------------------------- |
-| `seedReference`       | catalogs present           | identical statements and arbiters (`units` rewrites identical values) |
-| households / profiles | `…010`, `…001`–`…003` live | **no statement issued**                                               |
-| ramp, program         | —                          | not run (ramp deleted, program under the flag)                        |
-| shadow report         | as today                   | unchanged                                                             |
+| Step                  | Prod state (F1)            | Behaviour                                                                                                     |
+| --------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `seedReference`       | catalogs present           | identical statements and arbiters (`units` now writes only the rows that differ; it rewrote identical values) |
+| households / profiles | `…010`, `…001`–`…003` live | **no statement issued**                                                                                       |
+| ramp, program         | —                          | not run (ramp deleted, program under the flag)                                                                |
+| shadow report         | as today                   | unchanged                                                                                                     |
 
 Nothing is deleted or re-parented: removing inserts cannot orphan a row. PR 1 carries no migration, and
 its production path loses the 1c-4 throw site. If it threw anyway, later pushes would still migrate,

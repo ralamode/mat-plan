@@ -4,8 +4,8 @@ import { type CalisthenicsMetricKey, CALISTHENICS_METRIC_KEYS } from './activity
  * The calisthenics ramp schedule (V1-6b) — per-week TARGET values the kids ramp toward,
  * keyed by calisthenics metric. This is per-profile CONFIG data (a coach-authored weekly
  * calendar), NOT reference/catalog data — hence `ramp-schedule.ts`, not `catalog-ramp.ts`.
- * The seed expands it into `ramp_targets` rows (schedule × kid profiles × metric keys); the
- * V1-6b-2 read DAL joins actual weekly `entries` performance against those rows to compute
+ * The seed used to expand it into `ramp_targets` rows; since `OPS-2` PR 1 nothing writes them in
+ * production (the expansion and the schedule are deleted). The V1-6b-2 read DAL joins actual weekly `entries` performance against those rows to compute
  * adherence in SQL (see ADR 0002 for why `ramp_target`, not `goal`/`prescription_target`).
  *
  * The metric domain is DERIVED from `CALISTHENICS_METRIC_KEYS` (the single source in
@@ -16,7 +16,7 @@ import { type CalisthenicsMetricKey, CALISTHENICS_METRIC_KEYS } from './activity
 /** The metric keys a ramp week targets — exactly the calisthenics metric set. */
 export type CalisthenicsRampMetricKey = CalisthenicsMetricKey;
 
-/** Re-exported for the DB seed's row fan-out (schedule × profiles × THESE keys). */
+/** Re-exported for the ramp's readers (the weekly adherence SQL and its proof). */
 export { CALISTHENICS_METRIC_KEYS };
 
 /**

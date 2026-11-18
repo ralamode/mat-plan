@@ -24,6 +24,7 @@ import { insertMovementOwnedBy } from '../../src/writers/ownership';
 import {
   asDb,
   asPg,
+  assertRefTableMatches,
   asTx,
   captureWarnings,
   db,
@@ -53,16 +54,49 @@ import {
  * wrong assertion.
  */
 
-/** What each reference table must hold after a seed, from its shared source. */
-const REFERENCE_SOURCE = new Map<PgTable, number>([
-  [schema.units, UNITS.length],
-  [schema.equipment, EQUIPMENT.length],
-  [schema.muscles, MUSCLES.length],
-  [schema.quantitySlots, QUANTITY_SLOT_ROWS.length],
-  [schema.activityTypeCategories, ACTIVITY_CATEGORY_ROWS.length],
-  [schema.activityTypes, ACTIVITY_TYPE_SEED_ROWS.length],
-  [schema.metricDefinitions, METRIC_DEFINITION_SEED_ROWS.length],
+/**
+ * What each reference table must hold after a seed: its natural key, and that key's values in the
+ * shared source. Compared both ways (`assertRefTableMatches`), so a wrong code fails, not only a
+ * wrong count.
+ */
+const REFERENCE_SOURCE = new Map<
+  PgTable,
+  { key: ReturnType<typeof sql>; values: readonly string[] }
+>([
+  [schema.units, { key: sql`code`, values: UNITS.map((u) => u.code) }],
+  [schema.equipment, { key: sql`code`, values: EQUIPMENT }],
+  [schema.muscles, { key: sql`code`, values: MUSCLES }],
+  [
+    schema.quantitySlots,
+    {
+      key: sql`code || ':' || dimension`,
+      values: QUANTITY_SLOT_ROWS.map((r) => `${r.code}:${r.dimension}`),
+    },
+  ],
+  [
+    schema.activityTypeCategories,
+    { key: sql`code`, values: ACTIVITY_CATEGORY_ROWS.map((r) => r.code) },
+  ],
+  [schema.activityTypes, { key: sql`key`, values: ACTIVITY_TYPE_SEED_ROWS.map((r) => r.key) }],
+  [
+    schema.metricDefinitions,
+    { key: sql`key`, values: METRIC_DEFINITION_SEED_ROWS.map((r) => r.key) },
+  ],
 ]);
+
+async function keysOf(
+  exec: Exec,
+  table: PgTable,
+  key: ReturnType<typeof sql>,
+  where?: ReturnType<typeof sql>,
+) {
+  const res = await exec.execute(
+    where
+      ? sql`SELECT ${key} AS k FROM ${table} WHERE ${where}`
+      : sql`SELECT ${key} AS k FROM ${table}`,
+  );
+  return rowsOf<{ k: string }>(res).map((r) => ({ k: r.k }));
+}
 
 type Exec = { execute: (query: ReturnType<typeof sql>) => Promise<unknown> };
 
@@ -75,11 +109,20 @@ async function countOf(exec: Exec, table: PgTable, where?: ReturnType<typeof sql
   return rowsOf<{ n: number }>(res)[0].n;
 }
 
-/** Every household table's row count, by name: what a seed must leave unchanged. */
-async function householdTableCounts(exec: Exec): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const g of HOUSEHOLD_GRAPH) counts[graphTableName(g.table)] = await countOf(exec, g.table);
-  return counts;
+/**
+ * Every household table's row count and a digest of its rows, by name: what a seed must leave
+ * unchanged. The digest is what catches an UPDATE, which a count cannot see.
+ */
+async function householdTableCounts(exec: Exec): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const g of HOUSEHOLD_GRAPH) {
+    const res = await exec.execute(
+      sql`SELECT count(*)::int AS n, md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS d FROM ${g.table} AS t`,
+    );
+    const [r] = rowsOf<{ n: number; d: string }>(res);
+    out[graphTableName(g.table)] = `${r.n}:${r.d}`;
+  }
+  return out;
 }
 
 /** Production's seed, on the transaction, failing on `what` if it throws. */
@@ -95,23 +138,19 @@ export async function verifySeedOnAFreshDatabase(): Promise<void> {
     );
   }
 
-  // Every reference table is in the source map, so a new one cannot go unproved.
-  assert.deepEqual(
-    REFERENCE_TABLES.map(graphTableName).sort(),
-    [...REFERENCE_SOURCE.keys()].map(graphTableName).sort(),
-    'OPS-2 A: every reference table has a shared source this proof counts against',
-  );
-  for (const [table, expected] of REFERENCE_SOURCE) {
-    assert.equal(
-      await countOf(db, table),
-      expected,
-      `OPS-2 A: seed({ fixtures: false }) writes ${graphTableName(table)} from its shared const`,
+  // Each reference table equals its shared source; that every reference table HAS one is checked
+  // late (verifySeedLeavesHouseholdsAlone), after erasure's P1 has classified every table.
+  for (const [table, { key, values }] of REFERENCE_SOURCE) {
+    assertRefTableMatches(
+      graphTableName(table),
+      await keysOf(db, table, key),
+      values.map((k) => ({ k })),
     );
   }
-  assert.equal(
-    await countOf(db, schema.movements, sql`${schema.movements.householdId} IS NULL`),
-    MOVEMENT_SEED_ROWS.length,
-    'OPS-2 A: seed({ fixtures: false }) writes the legacy global movements (until CAT-3 A2)',
+  assertRefTableMatches(
+    'global movements (the legacy catalog, until CAT-3 A2)',
+    await keysOf(db, schema.movements, sql`slug`, sql`${schema.movements.householdId} IS NULL`),
+    MOVEMENT_SEED_ROWS.map((m) => ({ k: m.slug })),
   );
 
   // Migration 0001's household is the only one, so its scope reaches every household row there is.
@@ -152,6 +191,46 @@ async function liveHouseholds(tx: VerifyTx): Promise<number> {
 }
 
 export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promise<void> {
+  // Every reference table has a shared source Proof A compares it with. Here, not in A: erasure's P1,
+  // which runs before this, is what classifies a table; a reclassification fails there first.
+  assert.deepEqual(
+    REFERENCE_TABLES.map(graphTableName).sort(),
+    [...REFERENCE_SOURCE.keys()].map(graphTableName).sort(),
+    'OPS-2 A: every reference table has a shared source Proof A compares it with',
+  );
+
+  // Units (the maintainer's "fix it", 2026-11-18): a unit that differs from UNITS is rewritten to
+  // match (`501`), and an unchanged one is never written, so never row-locked (`500`). PGlite cannot
+  // show a lock, but a rewritten row gets a new xmin.
+  await rolledBack(async (tx) => {
+    const [first] = UNITS;
+    await tx
+      .update(schema.units)
+      .set({ label: 'OPS-2 stale' })
+      .where(eq(schema.units.code, first.code));
+    const versions = async () =>
+      rowsOf<{ code: string; x: string }>(
+        await tx.execute(
+          sql`SELECT code, xmin::text AS x FROM ${schema.units} WHERE code <> ${first.code} ORDER BY code`,
+        ),
+      );
+    const before = await versions();
+    await productionSeedResolves(
+      tx,
+      'OPS-2 units: seed({ fixtures: false }) resolves on a drifted unit',
+    );
+    const [row] = await tx
+      .select({ label: schema.units.label })
+      .from(schema.units)
+      .where(eq(schema.units.code, first.code));
+    assert.equal(
+      row.label,
+      first.label,
+      'OPS-2 units: a unit that differs from UNITS is rewritten to match',
+    );
+    assert.deepEqual(await versions(), before, 'OPS-2 units: an unchanged unit is never rewritten');
+  });
+
   // B1: one more household with a kid; production's seed changes no household table.
   await rolledBack(async (tx) => {
     const [h] = await tx

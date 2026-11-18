@@ -107,9 +107,10 @@ describe('scripts/seed.ts decides through resolveSeedOptions', () => {
 
   it('resolves its options from the environment and the URL it connects with', () => {
     expect(script).toContain('const options = resolveSeedOptions(process.env, url);');
-    // OPS-2 PR 1: the seed's connections carry a lock and a statement timeout.
+    expect(script).toContain('createDbPool(url)');
+    // OPS-2 PR 1: every connection the seed opens bounds its waits.
     expect(script).toContain(
-      'createDbPool(url, { lockTimeoutMs: 5_000, statementTimeoutMs: 60_000 })',
+      `client.query("SET lock_timeout = '5s'; SET statement_timeout = '60s'")`,
     );
   });
 

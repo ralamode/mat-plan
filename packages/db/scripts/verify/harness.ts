@@ -263,9 +263,12 @@ export async function assertCheckCoversConst(
  *   hand. A `convalidated` read of either belongs beside the TEN-2c block at the top of `verify.ts`,
  *   which exists for that reason. Every other catalog object is the migrations' own.
  *
- * **The one exception to "last":** `catalog.ts` → `verifyCatalogMigrationFacts` (`CAT-3` A1) runs
- * right after `migrate()`, before `seed()`, because it proves the global-row CHECK the V1-1b
- * simulation later replaces. It takes no `VerifyContext` (none exists yet) and reads no seeded row.
+ * **Two exceptions to "last", both right after `migrate()`:** `catalog.ts` →
+ * `verifyCatalogMigrationFacts` (`CAT-3` A1), which proves the global-row CHECK the V1-1b simulation
+ * later replaces and reads no seeded row; then `seed.ts` → `verifySeedOnAFreshDatabase` (`OPS-2` PR 1),
+ * which runs production's seed on a fork's first run, the only point where that state exists. Neither
+ * takes a `VerifyContext` (none exists yet). Proof A seeds, so it is the first failure for a mutation
+ * that breaks production's seed (`45`, `321`, `326`): that is by design, and their `.expect`s say so.
  *
  * Why last: nothing in `verify.ts` runs after the modules, so rows a lane writes cannot change what
  * an existing whole-table assertion counts, and a lane's proof cannot become the FIRST failure under

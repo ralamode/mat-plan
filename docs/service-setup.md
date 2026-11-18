@@ -159,10 +159,10 @@ historical previews** and the credential **rotation** they force— is
 
 ### GitHub — Settings → Secrets and variables → Actions
 
-| Secret                                            | Why                                                   |
-| ------------------------------------------------- | ----------------------------------------------------- |
-| `DATABASE_URL_UNPOOLED` (Neon **direct**)         | `migrate.yml` — GitHub Actions is the single migrator |
-| `PREVIEW_DATABASE_URL_UNPOOLED` (preview project) | `migrate-preview.yml` — the preview estate's migrator |
+| Secret                                                                                                        | Why                                                   |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `PROD_DATABASE_URL_UNPOOLED` (Neon **direct**; `DATABASE_URL_UNPOOLED` before `OPS-2` PR 1, never re-created) | `migrate.yml` — GitHub Actions is the single migrator |
+| `PREVIEW_DATABASE_URL_UNPOOLED` (preview project)                                                             | `migrate-preview.yml` — the preview estate's migrator |
 
 **Those two, and nothing else.** CI deliberately has no Upstash or Sentry credentials, so that no
 external service outage can redden a build. If a CI failure ever mentions either, something was added

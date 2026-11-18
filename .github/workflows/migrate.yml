@@ -10,8 +10,9 @@ name: Migrate + seed (production)
 # catalog row in seed.ts or @mat-plan/shared — reach prod even when the PR has no
 # migration. OPS-2 PR 1: production's seed writes REFERENCE DATA ONLY (no household,
 # no athlete, no program); those are fixtures, written only behind the fixtures flag,
-# which this workflow never sets (apps/web/test/seed-fixtures-is-contained.test.ts). This is drift-proof: `db:migrate` is a no-op when nothing is
-# pending, and `db:seed` is idempotent (ON CONFLICT DO NOTHING). A brittle per-file
+# which this workflow never sets (apps/web/test/seed-fixtures-is-contained.test.ts).
+# This is drift-proof: `db:migrate` is a no-op when nothing is pending, and `db:seed` is
+# idempotent (ON CONFLICT DO NOTHING; `units` is upserted only where it differs). A brittle per-file
 # `paths` allowlist would silently miss seed-only PRs (which is exactly how prod
 # drifted after V1-2/V1-3 shipped no migration).
 #
@@ -70,9 +71,9 @@ jobs:
         env:
           # 🔴 OPS-2 PR 1 (D-S2, the maintainer's decision, 2026-11-18): the production string is read
           # from a RENAMED secret, `PROD_DATABASE_URL_UNPOOLED`, and the old `DATABASE_URL_UNPOOLED` is
-          # deleted once this file's first run is green. An OLD run, re-run from the Actions tab, reads
-          # the old name, finds it empty and exits 0 with a warning (every older version of this step
-          # did), so it can no longer re-seed production with code that wrote households. The env var
+          # deleted once this file's first run is green. From then on, an OLD run re-run from the Actions
+          # tab reads the old name, finds it empty and exits 0 with a warning (every older version of
+          # this step did), so it cannot re-seed production with code that wrote households. The env var
           # keeps its old name: the scripts read DATABASE_URL_UNPOOLED. Steps: docs/runbooks.md ->
           # "Rotate or rename the production database secret".
           DATABASE_URL_UNPOOLED: ${{ secrets.PROD_DATABASE_URL_UNPOOLED }}

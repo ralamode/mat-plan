@@ -44,19 +44,12 @@ export function withVerifiedTls(connectionString: string): string {
   return connectionString;
 }
 
-export function createDbPool(
-  connectionString: string,
-  // OPS-2 PR 1: a script may bound its own waits (the seed does). Sent by node-postgres as startup
-  // parameters, so they hold on every connection the pool opens. The app passes none.
-  timeouts: { lockTimeoutMs?: number; statementTimeoutMs?: number } = {},
-): Pool {
+export function createDbPool(connectionString: string): Pool {
   // Bound the connect wait so an unreachable DB fails fast into the error
   // boundary (V0-10) instead of hanging the request.
   return new Pool({
     connectionString: withVerifiedTls(connectionString),
     connectionTimeoutMillis: 10_000,
-    ...(timeouts.lockTimeoutMs ? { lock_timeout: timeouts.lockTimeoutMs } : {}),
-    ...(timeouts.statementTimeoutMs ? { statement_timeout: timeouts.statementTimeoutMs } : {}),
   });
 }
 

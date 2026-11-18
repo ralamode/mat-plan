@@ -12,7 +12,8 @@ const REPO = resolve(WEB_DIR, '../..');
 /**
  * 🔴 **The program-fixtures flag is contained — FAM-1 step 1 (plan D10).**
  *
- * `SEED_FIXTURES=1` makes `db:seed` write the authored program and lane P's fixture programs.
+ * `SEED_FIXTURES=1` makes `db:seed` write the seed household and its athletes (`OPS-2`), the authored
+ * program and lane P's fixture programs.
  * `migrate.yml` seeds **production**, so the flag must never reach it. The seed refuses the flag
  * against a URL that is neither local nor the preview database (`packages/db/src/seed.ts` →
  * `assertFixturesTargetAllowed`); this is the other half: no workflow but the two test ones names it.
@@ -43,6 +44,20 @@ describe('the program-fixtures flag is contained (FAM-1 D10)', () => {
     for (const f of production) {
       expect(readFileSync(join(REPO, f), 'utf8'), f).not.toContain(FLAG);
     }
+  });
+
+  // OPS-2 PR 1 (D-S2): production's string is `PROD_DATABASE_URL_UNPOOLED`. Once the old secret is
+  // deleted, an old run re-run from the Actions tab finds it empty and writes nothing; a workflow that
+  // read the old name again would undo that.
+  it('no workflow reads the old production secret name', () => {
+    for (const f of workflows) {
+      expect(readFileSync(join(REPO, f), 'utf8'), f).not.toMatch(
+        /secrets\.DATABASE_URL_UNPOOLED\b/,
+      );
+    }
+    expect(readFileSync(join(REPO, '.github/workflows/migrate.yml'), 'utf8')).toContain(
+      'secrets.PROD_DATABASE_URL_UNPOOLED',
+    );
   });
 
   it('the local harness sets it after the environment spread, where a caller cannot unset it', () => {

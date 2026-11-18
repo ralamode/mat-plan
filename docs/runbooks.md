@@ -64,7 +64,7 @@ is the next step. After 1d lands, un-deleting a row would violate its index.
 **Before chunk 2 of V1-22 (the snapshot writer) merges, `0013` must be live in prod.** Same shape as
 1e below, and the same "check both": `gh run list --workflow migrate.yml --branch main -L 3` shows
 **success on chunk 1's merge SHA** — the run being green is not enough on its own, because the migrate
-step `exit 0`s with a warning when `DATABASE_URL_UNPOOLED` is absent — **and** in prod
+step `exit 0`ed with a warning when its secret was absent (before `OPS-2` PR 1) — **and** in prod
 
 ```sql
 SELECT pg_get_constraintdef(oid) FROM pg_constraint
@@ -84,7 +84,7 @@ green CI run**.
 ### 1. `0019` is live in prod — three checks, not one
 
 Same shape and the same "check all three" as `0013` above. ⚠️ `gh run list` being green is **not**
-sufficient on its own: the migrate step `exit 0`s with a warning when `DATABASE_URL_UNPOOLED` is
+sufficient on its own: the migrate step `exit 0`ed with a warning (before `OPS-2` PR 1) when its secret was
 absent, so a green run can mean **nothing was applied**.
 
 1. `gh run list --workflow migrate.yml --branch main -L 3` shows **success on 1b's merge SHA**.
@@ -413,8 +413,8 @@ and `db:seed` runs in the **same job** immediately after `db:migrate`. So a fail
 3. Fix the cause — `--apply` the correction, or simply wait out the lock.
 4. **Re-run `migrate.yml` via `workflow_dispatch`** (see "Manually re-seed / re-apply prod" below) and
    confirm it is green on the current `main` SHA: `gh run list --workflow migrate.yml --branch main -L 3`.
-   ⚠️ A green run is not sufficient on its own — the migrate step `exit 0`s with a warning when
-   `DATABASE_URL_UNPOOLED` is absent. Confirm in prod that the thing the migration adds is actually
+   ⚠️ A green run is not sufficient on its own: before `OPS-2` PR 1 the migrate step `exit 0`ed with a
+   warning when its secret was absent (since then it fails). Confirm in prod that the thing the migration adds is actually
    there (`information_schema.columns`, `pg_indexes`, `pg_constraint`).
 
 **Safety.** Nothing here is destructive. The app keeps serving: a pending migration means prod simply
@@ -759,7 +759,8 @@ When the runbook was executed (2026-10-09), Vercel held **440** preview deployme
    it to a visitor. Rotate when any of these holds: a **fork PR** ever built with the Preview scope
    (its build runs attacker-controlled code), the string appeared in a **log**, a **client bundle** or
    a commit, or a non-maintainer ever had Vercel access. To rotate, reset the role in Neon and update
-   **both** copies (`DATABASE_URL` in Vercel Production, the `DATABASE_URL_UNPOOLED` Actions secret),
+   **both** copies (`DATABASE_URL` in Vercel Production, the `PROD_DATABASE_URL_UNPOOLED` Actions secret;
+   `DATABASE_URL_UNPOOLED` before `OPS-2` PR 1, and never re-created after it),
    redeploy production, and re-run "Migrate + seed (production)". _2026-10-09: skipped by decision —
    the repo has never had a fork PR, and only the maintainer has used the app or held Vercel access._
 
@@ -889,6 +890,12 @@ dispatch **"Migrate + seed (preview database)"**, which holds no production cred
 data only)`. ⚠️ **Never "Re-run jobs" on an old run**, and hand-run a seed only from a freshly fetched
 `origin/main`: older seed code wrote households and athletes.
 
+**A seed that timed out** (`canceling statement due to lock timeout`, or `statement timeout`, in the
+"Apply migrations + idempotent seed" step, since `OPS-2` PR 1 set both): the migration step before it
+had already committed, so the migrations **are** applied; only the seed must run again. Dispatch the
+workflow from `main` once nothing is holding the lock. Its statements are idempotent, so a partly
+written reference table is completed, not duplicated.
+
 **Safety:** `db:migrate` is a no-op when nothing is pending, and production's `db:seed` writes
 reference data only (`OPS-2` PR 1), idempotently, so it never refuses on a household. The fixture
 seed (`SEED_FIXTURES=1`, local and preview only) still refuses to seed into a household it does not
@@ -922,9 +929,15 @@ git fetch origin
 MAIN=$(git rev-parse origin/main)
 # 1. Production's seed ran the current main, successfully, and nothing is queued or running —
 #    including a re-run of an OLD run, which keeps its old creation time.
-gh run list --workflow migrate.yml --branch main -L 20 --json databaseId,headSha,status,conclusion,attempt,updatedAt
-#    → the newest row: headSha == $MAIN, status completed, conclusion success; and NO row with
-#      attempt > 1 whose updatedAt is later than that run's.
+gh run list --workflow migrate.yml --branch main -L 5 --json databaseId,headSha,status,conclusion,updatedAt
+#    → the newest row: headSha == $MAIN, status completed, conclusion success.
+# A finished re-run of an OLD run sorts by its old creation time, so scan the whole re-run window
+# (GitHub allows re-runs for 30 days), not the newest rows:
+gh run list --workflow migrate.yml --created ">=$(date -u -v-31d +%F 2>/dev/null || date -u -d '31 days ago' +%F)" \
+  -L 1000 --json databaseId,attempt,updatedAt -q '[.[] | select(.attempt > 1)]'
+#    → no entry whose updatedAt is later than the newest green run's.
+# 0. The control itself: the old secret is gone (needs the maintainer's token).
+gh secret list --app actions --json name -q '.[].name' | grep -x DATABASE_URL_UNPOOLED   # → no output
 for st in in_progress queued waiting pending requested; do
   gh run list --workflow migrate.yml --status "$st" --json databaseId,headSha   # → [] each time
 done
@@ -1041,7 +1054,8 @@ rotation that has actually been performed rather than one written from imaginati
    produces `unexpected-error`, replace it rather than inspecting it further.
 
 **The Neon role password + Actions secret — OPS-1 step 7**, propagating to the Vercel Production scope
-and the `DATABASE_URL_UNPOOLED` Actions secret: see
+and the `PROD_DATABASE_URL_UNPOOLED` Actions secret (never re-create the old `DATABASE_URL_UNPOOLED`: see
+"Rotate or rename the production database secret" below): see
 [OPS-1 step 7](#7-purge-the-historical-previews-and-rotate-what-they-hold-️) above.
 
 ### Rotate or rename the production database secret (`OPS-2` PR 1)
@@ -1055,7 +1069,9 @@ in order:
    **direct** (not `-pooler`) string for the production database, `sslmode=require`. GitHub → repo →
    **Settings → Secrets and variables → Actions → New repository secret**: name
    `PROD_DATABASE_URL_UNPOOLED`, value that string. (GitHub cannot show the old secret's value, so copy
-   it from Neon, not from GitHub.) Leave `DATABASE_URL_UNPOOLED` in place for now.
+   it from Neon, not from GitHub.) **Check the host before saving:** it must be Vercel Production's
+   `DATABASE_URL` host with `-pooler` removed (the same endpoint id), not a restore branch's and not the
+   pooled one. Leave `DATABASE_URL_UNPOOLED` in place for now.
 2. **Merge the PR.** Watch its `migrate.yml` run (`gh run list --workflow migrate.yml --branch main -L
 1`): green, `✓ migrations applied`, and `✓ seed complete (reference data only)` in the log. If it is
    red with `PROD_DATABASE_URL_UNPOOLED is not set`, step 1 was missed: add the secret, then dispatch
@@ -1067,7 +1083,9 @@ in order:
    two log lines. ⚠️ Do not test the old-run guard by re-running an old run.
 
 To **rotate** the password later, change it in Neon and update `PROD_DATABASE_URL_UNPOOLED` (and Vercel's
-Production scope, OPS-1 step 7); the name stays.
+Production scope, OPS-1 step 7); the name stays. 🔴 **Never create a secret named `DATABASE_URL_UNPOOLED`
+again**: with it present, every old `migrate.yml` run can be re-run against production with seed code
+that wrote households.
 
 Generalise from these when the next rotation comes up, and carry the one durable lesson with you:
 **rotation is not retroactive.** A credential that was ever injected into a Vercel build stays in that

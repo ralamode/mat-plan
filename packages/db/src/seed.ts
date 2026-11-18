@@ -129,14 +129,12 @@ export {
 } from '@mat-plan/shared';
 
 /**
- * 🔴 **The environment flag that turns the PROGRAM fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10).
+ * 🔴 **The environment flag that turns the fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10, `OPS-2`).
  *
- * With it, the seed also writes `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c).
- * Without it, which is how `migrate.yml` seeds **production**, it writes neither, and program rows a
- * database already holds stay as they are. Only the exact value `1` turns it on.
- *
- * ⚠️ **It gates the PROGRAM fixtures only.** The seed household (`Home`) and its three fixture
- * profiles are still written either way; moving those out of production is `OPS-2`'s.
+ * With it, the seed also writes `seedFixtures` (the seed household and its three role-named athletes),
+ * `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c). Without it, which is how
+ * `migrate.yml` seeds **production**, it writes reference data only (`seedReference`), and household
+ * rows a database already holds stay as they are. Only the exact value `1` turns it on.
  *
  * The runners that set it: CI's e2e job (`ci.yml`), the preview migration (`migrate-preview.yml`) and
  * the local harnesses (`apps/web/scripts/embedded-pg.ts` → `migrateAndSeed`). A test pins that no
@@ -144,19 +142,19 @@ export {
  */
 export const SEED_FIXTURES_ENV = 'SEED_FIXTURES';
 
-/** Whether the flag's raw value turns the program fixtures on. Fail closed: only `'1'` does. */
+/** Whether the flag's raw value turns the fixtures on. Fail closed: only `'1'` does. */
 export function seedFixturesRequested(raw: string | undefined): boolean {
   return raw === '1';
 }
 
 /** The refusal `assertFixturesTargetAllowed` throws. Fixed text: it names nothing from the URL. */
 export const FIXTURES_TARGET_REFUSED =
-  'db:seed: refusing to seed program fixtures — SEED_FIXTURES=1 is allowed only against a local ' +
+  'db:seed: refusing to seed fixtures — SEED_FIXTURES=1 is allowed only against a local ' +
   'database or the preview database, and this connection string names neither (FAM-1 plan D10; ' +
   'docs/features/programming.md, invariant 3)';
 
 /**
- * 🔴 **Program fixtures go only to a database that is provably not production**: one on this machine,
+ * 🔴 **Fixtures go only to a database that is provably not production**: one on this machine,
  * or one whose name marks it as the preview database. An ALLOWLIST on the connection string itself,
  * not a check of `EXPECTED_DB_ENV`, which is a declaration and is simply absent from a seed run by
  * hand (the security lens's finding on the step-1 plan). Run after `assertMigrationTarget`, on the

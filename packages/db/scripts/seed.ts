@@ -15,9 +15,14 @@ assertMigrationTarget(process.env.EXPECTED_DB_ENV, url, 'db:seed');
 // where the URL proves it is not production.
 const options = resolveSeedOptions(process.env, url);
 
+const pool = createDbPool(url);
 // OPS-2 PR 1: bounded waits. The seed's statements are short; a lock held by a long write fails the
-// run (and is retried on the next push) rather than queueing every writer behind it.
-const pool = createDbPool(url, { lockTimeoutMs: 5_000, statementTimeoutMs: 60_000 });
+// run rather than queueing every writer behind it (the recovery: docs/runbooks.md -> "Manually
+// re-seed"). Set by `SET` on each new connection, node-postgres's documented hook for session
+// state, not as startup parameters, which a connection pooler may refuse.
+pool.on('connect', (client) => {
+  void client.query("SET lock_timeout = '5s'; SET statement_timeout = '60s'");
+});
 await seed(createDb(pool), options);
 await pool.end();
 // Fixed text only: this lands in world-readable Actions logs. OPS-2 D11: the runbook's check greps
