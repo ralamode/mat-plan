@@ -149,6 +149,16 @@ describe('the program DAL (FAM-1 7a-i)', () => {
     expect(String(thrown)).not.toContain('knee sore');
   });
 
+  it('🔴 the editor’s read that throws is rethrown without its data (the runtime log, plan row 7a-i)', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValueOnce(SCOPE);
+    vi.mocked(readWorkoutDraft).mockRejectedValueOnce(
+      Object.assign(new Error('Failed query: select …\nparams: knee sore'), { code: '57014' }),
+    );
+    const thrown = await getWorkoutDraft(PROGRAM_ID, WORKOUT_ID).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(DbWriteError);
+    expect(String(thrown)).not.toContain('knee sore');
+  });
+
   it('the editor’s read: a non-uuid id is null with no query; else through the scope', async () => {
     expect(await getWorkoutDraft('not-a-uuid', WORKOUT_ID)).toBeNull();
     expect(await getWorkoutDraft(PROGRAM_ID, '7')).toBeNull();
