@@ -10,8 +10,10 @@ import type { StrengthMonthRow } from './export-month';
  * found that out: `||` in place of `??` is harmless at the writer, and catastrophic here, and
  * nothing could tell the two apart until this function existed.
  *
- * Moved from `apps/web/lib/csv/` beside `foldStrengthMonth` (FAM-1 14a's review, P2): pure, so the
- * `db:verify` proof of the export runs the DAL's last step through the same function.
+ * Moved from `apps/web/lib/csv/` beside `foldStrengthMonth` (FAM-1 14a's review, P2), so the export's
+ * `db:verify` proof fills `prescribed` through this function rather than a copy. ⚠️ That proof's rows
+ * are all snapshotted, so it cannot tell `??` from `||`: `./export-prescribed.test.ts` is what pins it.
+ */
 
 /**
  * What the resolution reads off a folded export row — DERIVED from the query, so the nullability

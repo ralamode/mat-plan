@@ -662,8 +662,9 @@ async function verifyExport(): Promise<void> {
         scope: f.H_SCOPE,
       });
       const file = buildStrengthLog(
-        // `prescribed` through the DAL's own resolution; every program row carries its snapshot, so no
-        // live program is read (the fallback map is the DAL's, for never-snapshotted legacy rows).
+        // `prescribed` through the DAL's own resolution. Every program row carries its snapshot, so the
+        // live fallback is never reached here, and this cannot tell `??` from `||` (the resolver's
+        // unit test pins that); it keeps the proof on the same function the DAL calls.
         foldStrengthMonth(rows).map((r) => ({ ...r, prescribed: resolvePrescribed(r, null) })),
       );
       assert.equal(
