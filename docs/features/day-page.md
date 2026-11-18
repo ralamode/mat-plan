@@ -168,6 +168,9 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     `plan.today`. Pinning after
     the first write is too late (that write's response is the jump), and pinning always would open
     a stale tab on yesterday the next morning. The date line says "Yesterday ·" there (v12's label).
+    ⚠️ `replaceState`'s first argument stays `null`: Next syncs its router only for a call without
+    its own `__NA` state, so passing `window.history.state` would leave the revalidated render on the
+    old URL. `e2e/day-page.spec.ts`'s PROBE test pins this, and fails if it breaks.
 20. 🔴 **The page shows one state notice, never a stack** (12c; maintainer, 2026-11-17): the
     archived notice ("… Nothing new can be logged. Restore them in Household settings."), else
     "Coming up" on a future day, else the closed-day sentence, above the program line (D36). The screen

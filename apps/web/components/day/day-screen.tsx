@@ -44,8 +44,10 @@ export type DayScreenProps = { plan: DayPlan; actions: DayActions };
  * response is the jump. So the pin goes on just before the send, and only when midnight has passed
  * (the device's local day is after `plan.today`); a tab that never crossed midnight keeps its bare
  * URL, so tomorrow morning it opens on tomorrow. `replaceState` is synced into Next's router, so no
- * navigation happens. ⚠️ Unverified until 12c's e2e: that a Server Action's revalidated render
- * reads the replaced URL.
+ * navigation happens, and a Server Action's revalidated render reads the replaced URL
+ * (`e2e/day-page.spec.ts`, the PROBE test). ⚠️ The first argument must stay `null`: Next syncs its
+ * router only for a call that does not carry its own `__NA` state
+ * (`next/dist/client/components/app-router.js`), so passing `window.history.state` would skip the sync.
  */
 export function pinDayBeforeWrite(plan: Pick<DayPlan, 'day' | 'today'>): void {
   if (typeof window === 'undefined') return;

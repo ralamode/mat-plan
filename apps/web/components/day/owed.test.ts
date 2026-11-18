@@ -20,6 +20,12 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
   it.todo('15c: two programs on one day, reordered (e2e)');
 });
 
+describe('DayPlan: owed by its consumers', () => {
+  it.todo(
+    '12c: a day before yesterday is read-only (e2e; needs a profile created before yesterday)',
+  );
+});
+
 describe('RowAmend: owed by its consumers', () => {
   it.todo('12d: amendRow passes the inherited action matrix');
   it.todo('12d: a weight × reps set and a superset on real data; change a number (e2e)');

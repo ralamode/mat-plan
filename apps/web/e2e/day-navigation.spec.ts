@@ -6,6 +6,8 @@ import {
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   CLOSED_DAY_NOTICE,
+  SETTINGS_COPY,
+  SETTINGS_PATH,
 } from '../lib/constants';
 import { formatDayLong } from '../lib/date';
 
@@ -98,6 +100,12 @@ test('on no program, forward stops at today, the future renders today, and a mal
     await page.goto(`${route}${bad}`, { waitUntil: 'networkidle' });
     await expect(page.getByText(/^Today ·/), bad).toBeVisible();
   }
+
+  // Archived again, so later specs' pickers, rail and switcher do not list it.
+  await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+  const archive = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
+  await archive.click();
+  await expect(archive).toHaveCount(0);
 });
 
 test('the week strip reaches a day in two taps, and marks the one being viewed', async ({
@@ -110,8 +118,8 @@ test('the week strip reaches a day in two taps, and marks the one being viewed',
   // "date" read as "the current date" beside today's own ", today").
   await expect(nav.locator('[aria-current="true"]')).toHaveCount(1);
 
-  // Today's cell is a link named for its date and ", today" — on a Monday the only link in the
-  // strip, so the name is matched exactly rather than by a pattern that skips it.
+  // Today's cell is a link named for its date and ", today". Other cells can be links too (the days
+  // before it, and tomorrow while the athlete is on a program), so the name is matched exactly.
   const todayCell = nav.getByRole('link', {
     name: `${formatDayLong(isoDaysAgo(0))}, today`,
     exact: true,
