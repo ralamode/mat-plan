@@ -65,12 +65,20 @@ Recording these because each would have shipped a broken export:
 - One real row has an **unescaped comma** in `notes`, splitting it into 9 fields instead of 8
   (`...,3x10,warmup — shyperextension`, present in both athletes' `2020-06.csv`).
 
-→ **Join fields with `,` and write raw.** Going forward, quote a `notes` value containing a comma;
-leave the two legacy rows untouched.
+→ ~~Join fields with `,` and write raw.~~ **Superseded by FAM-1 14a (2026-11-17): every file is
+quoted the RFC 4180 way.** A field holding a `,` or a `"` is wrapped in `"…"`, with each inner `"`
+doubled; anything else is written as it is. So the inch marks above are now written
+`"Athlete A at 30"" box (Athlete B did 36"")"`, and a comma in any column is quoted rather than
+refused. ADR 0009 retired the byte-faithful contract and calls RFC 4180 "preferred"; the maintainer
+chose it for the whole file (2026-11-17). The rule lives in `packages/shared/src/csv/row.ts`. The
+evidence above stays, because it is why the legacy files themselves are not valid CSV.
 
 `notes` is free text, **single-line**. No newlines occur — do not allow them.
 
 ## strength-log — the hard one
+
+Since FAM-1 14a every row ends with a ninth column, **`workout_name`** (see "Program rows" below), empty
+for these legacy rows; the examples are kept as the legacy files wrote them.
 
 ```
 date,session_type,movement,sets,reps,load,prescribed,notes
@@ -87,6 +95,41 @@ date,session_type,movement,sets,reps,load,prescribed,notes
 `sets` is the count. `reps` and `load` are **either a scalar (when uniform) or a slash-list with exactly
 `sets` elements**. The app stores one row per `entry_set`, so it must **aggregate before export** — and
 **collapse a uniform list to a scalar**, or `5/5/5` will diff against `5`.
+
+### Program rows (FAM-1 14a)
+
+A ✓ on the day page writes **one entry per set** (FAM-1 11b), so the export folds a program row's
+entries into **one row per program item in a session** (`foldStrengthMonth`,
+`packages/db/src/queries/export-month.ts`):
+
+- **The key** is the date, the entry's own session and the item (`programItemKey`: the prescription,
+  or its movement once a purge has cleared the prescription). Two purged prescriptions of the SAME
+  movement in one session share a key and fold into one row, as on the day page.
+- **Sets** go in set order, whichever was ticked first; `prescribed`, `notes` and `status` come from
+  the lowest set. The day page heads a live item with its earliest-logged row instead; the two differ
+  only when a later set was ticked first and the prescription was edited in between.
+- **`workout_name`** is the session's frozen name (`sessions.workout_name`), never an id and never the
+  live name: a workout renamed after the ✓ exports the old one. It is empty for a row logged outside
+  a program, and for a row whose session is not the athlete's.
+- **`session_type`** is `workout` for every program row.
+- **A Count logged in `count` writes its number in `reps`**, and `load` stays empty
+  (`…,plank-taps,1,25,,…`; the maintainer, 2026-11-17). A bare number in `load` is still only ever
+  pounds: `count` has no `load` spelling, and a set with both reps and a count is refused.
+
+Each tracking type, in each unit it takes, writes one pinned row
+(`packages/shared/src/csv/strength-log-types.test.ts`). For one set of 20 (and 8 reps where the type
+has reps), after `date,session_type,movement`:
+
+| Type                  | `sets,reps,load,…`                           |
+| --------------------- | -------------------------------------------- |
+| Check                 | `1,,,…`                                      |
+| Count in `count`      | `1,20,,…`                                    |
+| Count in another unit | `1,,20,…` (lb) · `1,,20kg,…` · `1,,20s,…` …  |
+| Reps                  | `1,8,,…`                                     |
+| Weight × reps         | `1,8,20,…` (lb) · `1,8,20kg,…`               |
+| Duration              | `1,,20min,…`                                 |
+| Time per set          | `1,,20s,…` (`reps` empty, not `1`)           |
+| Distance              | `1,,(20yd),…` (the length-only `load` shape) |
 
 ### `load` shapes (the complete observed set)
 
@@ -232,8 +275,13 @@ A few lines of the source arrived truncated. The reading assumed here, to be con
 ## Contract changes
 
 Dated, additive changes to what the export can write. Every row that exported before a change keeps
-its bytes. The reader is an external workflow, so each entry names what that workflow must learn.
+its bytes, except FAM-1 14a's, which ADR 0009 §4 allows. The reader is an external workflow, so each entry names what that workflow must learn.
 
+- **2026-11-17 — FAM-1 14a:** a ninth column, `workout_name`, is added last; program rows fold to
+  one row per item (above); a Count in `count` is written in `reps`; and every field is quoted the
+  RFC 4180 way, so a field with a `,` or a `"` is quoted (legacy inch marks included) instead of being
+  written raw or refused. **Workflow:** read the file with a CSV reader, not a split on `,`; the first
+  eight columns keep their meaning. ADR 0009 retired the byte contract, so no external reader is known.
 - **2026-10-01 — V1-30:** `load` can now carry `kg`, `cm`, `m` (metres), `yd` and `min` (minutes),
   as above, and a `kg` worn mass is suffixed (`BW+8kg (vest)`). Before this, a set in any of those
   units made the export throw. **Workflow:** the external `strength-log/README.md` `load` bullet must

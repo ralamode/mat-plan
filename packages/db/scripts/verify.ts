@@ -4878,7 +4878,7 @@ assert.equal(
 
 console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');
 
-// --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
+// --- a comma survives the column (the CSV quotes it: csv/row.ts quotes any field, FAM-1 14a) -----
 await insertSnapshot('movement', SNAP_COMMA);
 console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
 

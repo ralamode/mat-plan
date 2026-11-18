@@ -54,16 +54,17 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
-  _(The tables and columns exist so the app can be built against them. Nothing writes to them today; this line is
-  here because the schema is public and you would otherwise find them.)_
+  _(Nothing in the live app logs a workout yet: the day page that does is being built. This line is
+  here because the schema is public and you would otherwise find these tables.)_
 
 **Three text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
 and, since the rename and add screens, an **athlete's name**. Whatever goes in is stored exactly as
 typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
 is the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal
 name, and does not ask for a birthdate.
-Worth knowing, because of who is usually typing. The first two also appear in your export; a name
-does not — the export is filed under an id, not a name.
+Worth knowing, because of who is usually typing. A typed movement appears in your export, and so
+does a workout's name once an athlete logs that workout; "How it felt" does not, and neither does the
+athlete's name field — the export is filed under an id, not a name.
 
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
 browser, and an identifier each device generates per logged item — and now per athlete added — so the
@@ -232,12 +233,16 @@ permanent removal is an athlete. Ask, and that is done.
 ## Getting your data out
 
 Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the
-strength log and the bodyweight log. **Your athletes' names are not in the files** — the folders are
-named by an internal identifier, not by a person.
+strength log and the bodyweight log. When an athlete logs a workout from a program, the strength log
+has one row per exercise and carries the **workout's name as it was that day**. **The athlete's name
+field is never written into the files**, and the folders are named by an internal identifier, not
+by a person. Anything typed into a workout name, a movement name or a note goes out exactly as typed,
+so a name typed there goes too.
 
 **What the export does not yet include**, so you are not surprised: check-ins and other logged life
-activities, the daily readiness colour, the "how it felt" notes, and the per-athlete prescribed
-targets. The export covers your logged training; it is not yet a complete copy.
+activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
+targets, the programs you build and who is on which program (only a workout's name, on a row an
+athlete logged, goes out). The export covers your logged training; it is not yet a complete copy.
 
 **An archived athlete still exports.** Archiving hides an athlete from the picker; it does not hide
 or delete anything they logged. Their export is on the **Household settings** screen, beside their

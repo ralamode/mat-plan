@@ -144,12 +144,11 @@ export const movementLabelSchema = z
  *
  * A third typed-name rule added here therefore reaches both. Returns `[]` for an acceptable name.
  *
- * ⚠️ **The comma rule guards the SLUG, and the consequence is a failed export, not a shifted row.**
+ * ⚠️ **The comma rule guards the SLUG, an input rule rather than an export guard since FAM-1 14a.**
  * `movementSlug(name)` keeps commas (it only collapses whitespace and lower-cases), and the slug is
  * what the CSV's `movement` column prints (`packages/db/src/queries/export-month.ts` →
- * `csvMovement`). `movement` is not in `csvRow`'s quotable set, so `quoteIfNeeded`
- * (`packages/shared/src/csv/row.ts`) **throws** on a comma there — one bad name would fail the whole
- * month's export for that household. ⚠️ `entries.movement_name` is **not exported at all**, which an
+ * `csvMovement`). Until 14a `csvRow` threw on a comma there; it now quotes any field the RFC 4180
+ * way (`packages/shared/src/csv/row.ts`), so a comma no longer fails the export. ⚠️ `entries.movement_name` is **not exported at all**, which an
  * earlier version of this note and of `sessionMovementSchema`'s claimed; the export query selects
  * only the slug. `"` stays legal — `30" Box Jump` is real data.
  *

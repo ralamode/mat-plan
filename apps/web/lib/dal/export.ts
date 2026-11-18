@@ -119,8 +119,8 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
     entries.push(
       { path: strengthLogPath(profilePublicId, month), content: buildStrengthLog(strengthRows) },
       { path: bodyweightPath(profilePublicId, month), content: buildBodyweight(bodyweightRows) },
-      // Header-only, always: the real files have never carried a row, and a MISSING file and an
-      // EMPTY file are different inputs to the workflow.
+      // Header-only until FAM-1 14b writes the check-ins (plan `fam-1-14-export.md`). The file is
+      // still written, so every month's zip holds the same three files.
       { path: checkinsPath(profilePublicId, month), content: buildCheckins([]) },
     );
   }

@@ -244,6 +244,12 @@ only way a notice about minors' health data is worth anything.
 > `supersets.prescription_group`, `entries.prescription_id`/`prescription_set`. No new table; no writer
 > until step 11b; nothing exported until step 14 (the frozen workout name only).
 >
+> 🔴 **§3 / §6 re-read 2026-11-17 for FAM-1 step 14a** ([plan](../plans/fam-1-14-export.md)): the
+> strength log gains a ninth column, `workout_name`, the frozen `sessions.workout_name` of a logged
+> program row (household free text, exported as typed). Program rows fold to one row per item. No new
+> table, column, processor or retention. Decided: the export names a program only through that frozen
+> name on a logged row (§6). Also corrected: `sessions.feel` is not exported (§3 said it was).
+>
 > 🔴 **§1 / §1a / §3 / §5 / §6 / §8 re-read 2026-11-16 for FAM-1 step 4b**: one table
 > (`prescription_quantities`, prescribed targets) and six `prescriptions` columns (`workout_id`,
 > `client_id`, `notes`, `rest_after`, `superset_label`, `superset_order`). No writer until step 6a;
@@ -445,7 +451,8 @@ separately. **Three reach the UI today** (two until `PROF-1` a-r):
 
 The first two validate through `freeTextNoteSchema` (`packages/shared/src/text.ts`), capped at
 `FREE_TEXT_NOTE_MAX`; the third through `athleteNameSchema`. There is no content filter — whatever is
-typed is stored, and `feel` is exported. Every other free-text column in §1a is seed- or
+typed is stored. `feel` is **not** exported (no export query selects it; §6), and was wrongly listed
+here as exported until FAM-1 14a corrected it. Every other free-text column in §1a is seed- or
 correction-written only.
 
 **The child is usually the one typing.** `docs/spec.md` — _"Real tool — hand it to them to log
@@ -455,7 +462,8 @@ everything they do in a day on a phone/iPad"_; `AGENTS.md` — _"the kids log on
 `description` and `copied_from_program_name`, `block_day_workouts.label`, and since 4b each item's
 `prescriptions.notes` (`FREE_TEXT_NOTE_MAX`), `rest_after` and `superset_label` (`SLOT_LABEL_MAX`) and
 a template row's `target_reps` (`TARGET_REPS_MAX`); and their copies on the log side,
-`sessions.workout_name` and `supersets.prescription_group`. Since FAM-1 6a-i and 6a-ii, lane P's
+`sessions.workout_name` and `supersets.prescription_group`. **Since FAM-1 14a, `sessions.workout_name`
+is exported free text**: the strength log's `workout_name` column, once an athlete logs the workout. Since FAM-1 6a-i and 6a-ii, lane P's
 writers store `program_blocks.name` (and its `slug`, derived from it and re-derived on a rename),
 `workouts.name` and `description`, and each item's `notes`, `rest_after`, `superset_label` and `target_reps` (only ever a whole number, since 6a-ii's writer stores what `wholeReps` reads), and since 6b each week slot's `label` (`SLOT_LABEL_MAX`), but no screen reaches them until step 7b (the label, 7a-ii's action, then 7b). Lane E's row writer (11b) copies the
 workout's name and superset label to the log side; 12b gives it Server Actions, which a page first serves at step 12c. Since 6a-iii-b, `copyWorkout` copies a
@@ -627,7 +635,8 @@ every row that points at it; the household's programs stay).
 are here.
 
 **What it contains:** the strength log (date, session type, movement, sets, reps, load, prescribed,
-notes) and bodyweight (date, weight, context, notes).
+notes, and since FAM-1 14a `workout_name`, the frozen name of a logged program row's workout) and
+bodyweight (date, weight, context, notes).
 
 **What it does not contain — the notice must say this:**
 
@@ -637,18 +646,20 @@ notes) and bodyweight (date, weight, context, notes).
 - `day_readiness.gate_color` · `ramp_targets.target_value` · `sessions.feel` ·
   `profiles.routine_config` · `prescription_targets` (folded only into a derived `prescribed` string).
 - **The program a household builds (FAM-1):** `workouts.name`, `description` and
-  `copied_from_program_name`, `block_day_workouts.label`. No export reads them, and FAM-1's step 14
-  adds only the workout name frozen on a logged session (`sessions.workout_name`, step 4a-ii).
+  `copied_from_program_name`, `block_day_workouts.label`. No export reads them; FAM-1 14a exports only
+  the workout name frozen on a logged session (`sessions.workout_name`, step 4a-ii).
 - **A built program's items (FAM-1 4b):** `prescriptions.notes`, `rest_after`, `superset_label`,
   `superset_order`, and all of `prescription_quantities`. The one indirect path: from step 11b a
   target reaches the export only as rendered into `entries.prescribed_snapshot`, for rows actually
   logged; the instructions never do (plan D7). An unlogged program leaves only through the on-request
-  full copy. The notice's export-omission sentence does not yet name programs a household builds;
-  step 14 owns that sentence (or whichever PR first makes the save reachable, if earlier).
+  full copy. **Decided (FAM-1 14a):** the export names a program only through
+  `sessions.workout_name` on a logged row; `program_assignments`, `workouts.description`, item notes
+  and targets are not exported. The notice's "does not yet include" list names the programs a
+  household builds.
 - **A household's own item that no logged entry uses (FAM-1 6a-iii-a):** the export names a movement only through a logged entry, so an item made with "+ New item" and used only in a program, or not at all, reaches no file; the full copy on request has it.
 - **Program membership (FAM-1 5):** `program_assignments` and `program_assignment_weekdays`. No export
-  reads them; step 14 decides whether the export names an athlete's programs, and owns the notice's
-  sentence if it does.
+  reads them. **Decided (FAM-1 14a):** the export does not name an athlete's programs; the notice's
+  "does not yet include" list says so.
 - **Soft-deleted ("hidden") rows.** Every export query filters `deleted_at IS NULL`, so a hidden entry
   is absent from the zip while still held in the database. **User-facing since V1-24 3b-bw:** a
   cleared weigh-in (and from 3b-life-a a cleared practice) leaves the export, and the app offers no restore for it, so the full copy on request

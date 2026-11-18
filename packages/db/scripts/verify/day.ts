@@ -24,10 +24,12 @@ import {
   type Unit,
   UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
+import { buildStrengthLog } from '@mat-plan/shared/csv';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
-import { and, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
+import { foldStrengthMonth, strengthMonthRows } from '../../src/queries/export-month';
 import { readRowValues } from '../../src/queries/day/stored-row-values';
 import { amendRow } from '../../src/writers/day/amend-row';
 import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/log-row';
@@ -86,6 +88,9 @@ export async function verifyDay(_ctx: VerifyContext): Promise<void> {
   // 11c-i's proofs run after 11b's: the steps they share live in `row-steps.ts`, so an 11b patch
   // there must still fail on its own 11b assertion first (plan 11c, § Test plan, Order).
   await verifyAmend();
+  // 14a's export proof runs before 12a's: mutation 366 changes the item key the resolver shares, and
+  // must fail on the export's own assertion first.
+  await verifyExport();
   // 12a-i's proofs run after 11b's, so an 11b patch still fails on its own assertion first.
   await verifyDayPlan();
 }
@@ -578,6 +583,119 @@ async function fixture(tx: VerifyTx) {
     plantHiddenSet,
     weighIn,
   };
+}
+
+// ── FAM-1 14a — the export carries the program ──────────────────────────────────────────────────
+
+/**
+ * FAM-1 14a (plan `fam-1-14-export.md`): rows `logRow` wrote, read by the export's own query, folded by
+ * its own fold and built into the file's bytes. One proof, so each of mutations 364–366 fails on it.
+ */
+async function verifyExport(): Promise<void> {
+  await proof(
+    '14a: the strength log carries the program',
+    async (f, tx) => {
+      const tick = async (p: { publicId: string }, set = 1, values?: RowValues) =>
+        expectOk(
+          await f.tick({ prescriptionPublicId: p.publicId, set, ...(values ? { values } : {}) }),
+          `FAM-1 14a: the ✓ on set ${set}`,
+        );
+      // Every tracking type. The weighted item's set 2 is ticked BEFORE set 1, so the file's set
+      // order and its `prescribed` come from the set number, not from when it was ticked.
+      await tick(f.p.check);
+      await tick(f.p.count);
+      await tick(f.p.reps, 1);
+      await tick(f.p.reps, 2);
+      await tick(f.p.weightReps, 2, {
+        reps: 8,
+        quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 30 }],
+      });
+      const bench1 = await tick(f.p.weightReps, 1);
+      await tick(f.p.duration);
+      await tick(f.p.timeSets);
+      await tick(f.p.distance);
+      // Two sets of one item, moved into the SIBLING's session, one of them dated the day before:
+      // the export keeps the athlete's rows but takes nothing from that session, and the date in the
+      // fold key keeps the two apart (the (i) plant, undone before the sweep).
+      const sib = await (async () =>
+        expectOk(
+          await f.tick({
+            prescriptionPublicId: f.p.check.publicId,
+            profilePublicId: f.sibling.publicId,
+          }),
+          'FAM-1 14a: the sibling’s session',
+        ))();
+      const sibSession = (await f.entryRow(sib.entryPublicId)).sessionId!;
+      // `repsText`'s target is a range, so its reps are typed.
+      const typed = { reps: 9, quantities: [] };
+      const moved = [await tick(f.p.repsText, 1, typed), await tick(f.p.repsText, 2, typed)];
+      const ownSession = (await f.entryRow(moved[0].entryPublicId)).sessionId!;
+      await tx
+        .update(schema.entries)
+        .set({ sessionId: sibSession })
+        .where(eq(schema.entries.publicId, moved[0].entryPublicId));
+      await tx
+        .update(schema.entries)
+        .set({ sessionId: sibSession, activityDate: YESTERDAY })
+        .where(eq(schema.entries.publicId, moved[1].entryPublicId));
+      // A hidden set with a live 99 lb quantity under a logged row: it never reaches the file.
+      await f.plantHiddenSet(bench1.entryPublicId);
+      // The workout is renamed after the ✓s: the file keeps the name each row was logged under.
+      await tx
+        .update(schema.workouts)
+        .set({ name: 'Renamed day' })
+        .where(eq(schema.workouts.id, f.w1.id));
+      // Two prescriptions of DIFFERENT movements purged: their rows are left as an ADR 0008 purge's
+      // `ON DELETE SET NULL` leaves them, the set kept and the id cleared. Each stays its own row,
+      // under its own movement.
+      await tx
+        .update(schema.entries)
+        .set({ prescriptionId: null })
+        .where(inArray(schema.entries.prescriptionId, [f.p.duration.id, f.p.distance.id]));
+
+      const rows = await strengthMonthRows(asDb(tx), {
+        profilePublicId: f.athlete.publicId,
+        month: DAY.slice(0, 7),
+        scope: f.H_SCOPE,
+      });
+      const file = buildStrengthLog(
+        // The live `prescribed` fallback is the DAL's (`resolvePrescribed`); every program row carries
+        // its snapshot, so the file is written from it.
+        foldStrengthMonth(rows).map((r) => ({ ...r, prescribed: r.prescribedSnapshot ?? '' })),
+      );
+      assert.equal(
+        file,
+        [
+          'date,session_type,movement,sets,reps,load,prescribed,notes,workout_name',
+          // The day before: the moved set 2, kept apart from set 1 by the date in the key, and with
+          // nothing from the sibling's session.
+          `${YESTERDAY},,verify-11b-reps,1,9,,3 × 8-12,,`,
+          `${DAY},workout,verify-11b-check,1,,,,,Push day`,
+          // A Count in `count`: its number in `reps`, `load` empty.
+          `${DAY},workout,verify-11b-count,1,20,,20,,Push day`,
+          `${DAY},workout,verify-11b-reps,2,10,,3 × 10,,Push day`,
+          // Sets in set order (set 2 was ticked first), and no hidden 99 lb set.
+          `${DAY},workout,verify-11b-weight-reps,2,8,25/30,3 × 8 @ 25 lb,,Push day`,
+          // Purged: each its own row, under its own movement.
+          `${DAY},workout,verify-11b-duration,1,,5min,5 min,,Push day`,
+          `${DAY},workout,verify-11b-time-sets,1,,30s,3 × 30 s,,Push day`,
+          `${DAY},workout,verify-11b-distance,1,,(40yd),6 × 40 yd,,Push day`,
+          `${DAY},,verify-11b-reps,1,9,,3 × 8-12,,`,
+          '',
+        ].join('\n'),
+        'FAM-1 14a: the strength log carries the program, one row per item, with its frozen name',
+      );
+
+      // The (i) plant goes before the sweep.
+      for (const m of moved) {
+        await tx
+          .update(schema.entries)
+          .set({ sessionId: ownSession, activityDate: DAY })
+          .where(eq(schema.entries.publicId, m.entryPublicId));
+      }
+    },
+    '14a',
+  );
 }
 
 /**

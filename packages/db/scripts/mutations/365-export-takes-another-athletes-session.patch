@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
+index 32e51039..a5293cf4 100644
+--- a/packages/db/src/queries/export-month.ts
++++ b/packages/db/src/queries/export-month.ts
+@@ -113,10 +113,7 @@ export function strengthMonthRows(
+       // export must keep the athlete's own entry, with that session's columns NULL.
+       .leftJoin(
+         schema.sessions,
+-        and(
+-          eq(schema.sessions.id, schema.entries.sessionId),
+-          eq(schema.sessions.profileId, schema.entries.profileId),
+-        ),
++        and(eq(schema.sessions.id, schema.entries.sessionId)),
+       )
+       // LEFT, not inner: a SKIPPED movement carries ZERO set rows and still needs its `0,0,SKIPPED` row.
+       .leftJoin(

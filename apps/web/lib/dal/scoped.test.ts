@@ -64,7 +64,7 @@ import { code } from '@/test/source-scan';
  * Comments are **stripped** (the `pages-need-a-session.test.ts` idiom), so a `// TODO: getHouseholdScope()`
  * cannot satisfy the guard and a docblock that *describes* the hazard — this one included — cannot
  * trip it. The unit is a **top-level declaration, exported or not**: a private helper that reaches
- * `db` unscoped is the same leak as a public one, and `export.ts` → `prescribedFor` is exactly that
+ * `db` unscoped is the same leak as a public one, and `export.ts` → `liveMatchesFor` is exactly that
  * shape (it takes a `HouseholdScope` and is never exported).
  */
 
