@@ -3407,7 +3407,7 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       'FAM-1 6c-ii: the program-view read deep-equals family-program',
     );
 
-    // ── After Take off on Athlete Two, today (`active_to = today` stands in for 6d's writer) ──
+    // ── After Take off on Athlete Two, today ──
     const p1 = await tx
       .select({ id: schema.programBlocks.id })
       .from(schema.programBlocks)
@@ -3886,6 +3886,18 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
       { ok: true, lastDay: null },
       'FAM-1 6d-i: a start still to come is removed',
     );
+    assert.deepEqual(await live(n4), [], 'FAM-1 6d-i: …and the start to come is hidden');
+    const afterFuture = await assignmentRows(tx);
+    assert.deepEqual(
+      await off(n4),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a replay of a removed start to come answers lastDay null',
+    );
+    assert.deepEqual(
+      await assignmentRows(tx),
+      afterFuture,
+      'FAM-1 6d-i: …a replay of a removed start to come writes nothing',
+    );
 
     // ── "Logged" is this athlete's, today's, and this program's ──
     const n5 = await athlete('Take-off Sibling');
@@ -4009,8 +4021,8 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
     await hide(tx, gone);
     const bAthlete = await mustAddAthlete(tx, B_SCOPE, 'Take-off B Athlete');
     const bProgram = await mustCreate(tx, B_SCOPE, 'Take-off B Program');
-    // Stray cross-household rows (a writer bug's shape), so a lock that lost its household conjunct
-    // would find a row to end, and the refusal could fail.
+    // Stray rows (a writer bug's shape) on each program the refusals name, for the athlete each names,
+    // so a lock that lost its conjunct would find a row to end, and the refusal could fail.
     const profileIdOf = async (publicId: string) =>
       (
         await tx
@@ -4025,9 +4037,17 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
           .from(schema.programBlocks)
           .where(eq(schema.programBlocks.publicId, publicId))
       )[0]!.id;
+    const n15 = await athlete('Take-off Stray Removed');
+    const n16 = await athlete('Take-off Removed Athlete');
+    await on(n16, p1, addDays(T, -3));
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, n16));
     for (const [profile, block] of [
       [bAthlete, p1],
       [n10, bProgram],
+      [n15, gone],
     ] as const) {
       await tx.insert(schema.programAssignments).values({
         publicId: newId(),
@@ -4079,22 +4099,22 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
       ],
       [
         'another household’s program',
-        { programPublicId: bProgram, profilePublicId: n2 },
+        { programPublicId: bProgram, profilePublicId: n10 },
         PROGRAM_REFUSAL.not_found,
       ],
       [
         'a removed program',
-        { programPublicId: gone, profilePublicId: n2 },
+        { programPublicId: gone, profilePublicId: n15 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a removed athlete',
+        { programPublicId: p1, profilePublicId: n16 },
         PROGRAM_REFUSAL.not_found,
       ],
       [
         'an unknown program',
         { programPublicId: newId(), profilePublicId: n2 },
-        PROGRAM_REFUSAL.not_found,
-      ],
-      [
-        'a legacy block',
-        { programPublicId: legacy, profilePublicId: n2 },
         PROGRAM_REFUSAL.not_found,
       ],
       [
@@ -4118,6 +4138,30 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
       (await live(n11)).map((r) => r.activeTo),
       [null],
       'FAM-1 6d-i: …an archived athlete’s assignment is not ended (invariant 31)',
+    );
+    // A legacy block, in ITS household (A's), for an A athlete with a stray row on it.
+    const aAthlete = await mustAddAthlete(tx, A_SCOPE, 'Take-off Legacy Athlete');
+    await tx.insert(schema.programAssignments).values({
+      publicId: newId(),
+      profileId: await profileIdOf(aAthlete),
+      blockId: await blockIdOf(legacy),
+      idx: 7,
+      activeFrom: addDays(T, -3),
+    });
+    assert.deepEqual(
+      await takeOff(exec, A_SCOPE, { programPublicId: legacy, profilePublicId: aAthlete }, T),
+      { ok: false, reason: PROGRAM_REFUSAL.not_found },
+      'FAM-1 6d-i: take off refuses a legacy block',
+    );
+    const badToday = await takeOff(
+      exec,
+      scope,
+      { programPublicId: p1, profilePublicId: n2 },
+      'today',
+    ).catch((e: unknown) => ({ threw: String(e) }));
+    assert.ok(
+      'threw' in badToday && badToday.threw.includes('takeOff needs today'),
+      'FAM-1 6d-i: take off throws on a today that is not an ISO day',
     );
 
     // ── A row logged under a removed workout of this program still keeps the start ──
