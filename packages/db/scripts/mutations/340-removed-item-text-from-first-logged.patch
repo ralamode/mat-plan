@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 91e40e87..a974afb0 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -619,7 +619,7 @@ function dayWorkout(
+     removed.set(key, [...(removed.get(key) ?? []), row]);
+   }
+   for (const rows of removed.values()) {
+-    const first = firstOf(rows, true)!;
++    const first = firstOf(rows)!;
+     const movement = ctx.movements.get(first.movementId!)!;
+     items.push({
+       prescriptionPublicId: null,
