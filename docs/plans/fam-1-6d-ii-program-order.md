@@ -1,7 +1,7 @@
 # FAM-1 6d-ii: an athlete's program order
 
 Lane P's step **6d-ii**, the second half of row 6d ([fam-1-family-program.md](./fam-1-family-program.md)
-§5, Lane P; split under the overnight delegation, D16, 2026-11-18). One writer,
+§5, Lane P; split under the overnight delegation, 2026-11-18, as recorded in [6d-i's plan](./fam-1-6d-i-take-off.md)). One writer,
 `reorderPrograms`, in `packages/db/src/writers/program/reorder-programs.ts`, behind
 `DayActions.reorderPrograms`. Step 15c (lane C) wires it.
 
@@ -28,24 +28,52 @@ and so does the writer:
    day page's own rule). The list must be exactly a permutation of them: one left out, one added, or
    another athlete's program is `invalid`.
 4. **Write through ONE band helper** (ADR 0007 A2 §7, "one shifted-band writer"):
-   `placeAssignments(tx, profileId, ordered)` in `assign.ts`, which `putOn`'s compaction and reopen
-   also call.
-   - **Every** open, live row of the athlete moves into the band, not only the listed ones (`putOn`'s
-     set). `dayAssignments` drops a hidden program's rows, so an open row on a hidden block could
-     otherwise still hold a place and collide on the order index.
-   - The listed programs' open or upcoming rows get `idx` 0..n-1 in their relative order in the
-     list. Any unlisted open row (a hidden program's) follows, in `(idx, id)` order.
-   - **A row closing today is left untouched** (same `ctid`), per Amendment 5: its row no longer
-     moves, and #601's rank shows it after the ones that stay, wherever the list put it.
-5. **Unchanged writes nothing:** when every placed row's `idx` already equals its position, nothing
-   is written, proved by `ctid`.
+   `placeAssignments(tx, profileId, first: blockId[])` in `assign.ts`, in the caller's one
+   transaction (`shift-band.ts` requires it).
+   - **It reads the athlete's open set itself**, after the profile lock, with exactly the order
+     index's predicate (`profile_id = $1 AND active_to IS NULL AND deleted_at IS NULL`, no block
+     join). `dayAssignments` drops a hidden program's rows, so a set read there would let an open row
+     on a hidden block collide.
+   - **Final places are computed over that whole set**: the rows of `first`'s programs take 0..k-1 in
+     that order, then every other open row in `(idx, id)` order. **Only rows whose `idx` changes go
+     into the band and are written** (putOn's rule today), so a row already in place keeps its `ctid`
+     and "unchanged writes nothing" needs no special case.
+   - It returns the open count, which `putOn` uses: **a reopen clears `active_to` and sets `idx` to
+     that count in ONE update, after the helper runs** (as `assign.ts` does now; mutation
+     `put-on-reopens-before-closing-the-gap`), and an insert takes the same next free place. The
+     new-assignment placement PR (the maintainer's call on A2 §7) is its next caller and needs only
+     `first`.
+   - **The rows a reorder places** are each listed program's placing row whose rank is 0 (open or
+     upcoming), by `currentPrograms`' own rank, exported from `queries/day/day-plan.ts` rather than
+     re-typed. A row with a last day keeps its row untouched (same `ctid`), per Amendment 5.
+5. **Unchanged writes nothing**, proved by `ctid`: a second identical call is the replay proof.
+
+## For step 15c (lane C)
+
+- **The route:** the day DAL may import one lane P name (`program-tables-stay-dark.test.ts`,
+  `DAY_DAL_MAY_IMPORT`; `lib/dal/day/importers.test.ts`), so 15c calls it either through a program
+  DAL function (`lib/dal/program/`) or after a board seam turn adding `reorderPrograms` to both pins.
+- **The signature:** `(exec, scope, input: unknown, today): Promise<ProgramResult>`, one
+  transaction, throwing on a `today` that is not an ISO day, as its siblings.
+- **The words** are `ProgramResult`'s, not `RowResult`'s. **`invalid` also means "the list is
+  stale"** (a put on or take off elsewhere, or midnight passing): the dialog should reload, not mark
+  a field.
+- **Revalidate** the day page, the program page and Home: `athletesOnPrograms` and
+  `readProgramsByAthlete` read the same order.
 
 ## Files
 
 - N `packages/db/src/writers/program/reorder-programs.ts`: `reorderPrograms`.
-- E `packages/db/src/writers/program/assign.ts`: `placeAssignments`, taken out of `putOn`.
-- E `packages/db/src/writers/program/index.ts`, `packages/db/src/index.ts`'s comment, and guide
-  invariant 6: "the writers behind `ProgramActions` and `DayActions.reorderPrograms`".
+- E `packages/db/src/writers/program/assign.ts`: `placeAssignments`, taken out of `putOn` (its
+  compaction, reopen and insert); the files row lists `lockProgram`, `lockAthletes` and it.
+- E `packages/db/src/queries/day/day-plan.ts`'s rank exported (a seam turn on lane E's file, asked
+  of the board).
+- E mutation patches whose context moves with the extraction: 402–409, 412–414, 417, re-cut after
+  rebasing on #617, each still red on its own proof; 407 and 412 then break `placeAssignments`.
+- E `shift-band.ts`'s and `lockAthletes`' docblocks (the program order is now; the reorder locks the
+  profile alone), and invariant 11 (`putOn` and `reorderPrograms` share `placeAssignments`).
+- E `packages/db/src/writers/program/index.ts`'s docblock and guide invariant 6 (not
+  `packages/db/src/index.ts`, which is outside lane P's paths; its `export *` already publishes it): "the writers behind `ProgramActions` and `DayActions.reorderPrograms`".
 - E `packages/db/scripts/verify/program.ts`: `verifyReorderPrograms`.
 - E `packages/db/src/writers/program/owed.test.ts`: the last 6d line closes by pointing at
   `verify/schema.ts`'s FAM-1 5 proof ("two open assignments at one place are refused"), which
@@ -57,21 +85,37 @@ and so does the writer:
 
 ## Tests (`db:verify`, in households of the proof's own)
 
-- A reorder of two open programs is stored, and `currentPrograms` answers it. The swap reverses two
-  open rows, so a writer without the band hits `uq_program_assignments_profile_idx`.
-- `[C (closing today), A, B]`: A and B are stored 0 and 1, C's row keeps its `ctid`, and the read
-  still ends with C.
-- An open row on a hidden program does not collide, and keeps a place after the listed ones.
-- `invalid`: a non-uuid; a repeat (the schema); one left out; one added; another athlete's program.
-- `not_found`: an archived, removed, unknown or other-household athlete. Each writes nothing
-  (`ctid`).
-- An unchanged order writes nothing (`ctid`).
-- `putOn` still compacts and reopens through `placeAssignments` (6c-i's proofs, unchanged).
+- **The swap:** A=0, B=1, C=2 reordered to `[B, A, C]`: B=0, A=1, and C keeps its `ctid`. Without
+  the band, A's write to 1 hits `uq_program_assignments_profile_idx`.
+- **A program with a last day** (take off leaves the order uncompacted): C closed at 0, A=1, B=2;
+  `[C, B, A]` stores B=0, A=1; C's `ctid` is unchanged; the read is `[B, A, C]`.
+- **A hidden program's open row in the middle:** put on A, then H, then B, hide H (A=0, H=1, B=2);
+  `[B, A]` stores B=0, A=1, H=2. Without the full open set, A's write to 1 collides.
+- **An upcoming program** (starts tomorrow) is accepted and placed.
+- **`invalid`:** a non-uuid; a repeat (the schema); one left out; one added; another athlete's
+  program; another household's program; a hidden program they still have an open row on; a program
+  left before today; an athlete with no current programs.
+- **`not_found`:** an archived, removed, unknown or other-household athlete. Each writes nothing
+  (`assignmentRows`' `ctid`).
+- **Upper-case ids** are accepted (the parsed draft's ids are read).
+- **The replay:** a second identical call answers `ok` and writes nothing (`ctid`).
+- **`putOn`** still compacts, reopens and inserts through `placeAssignments` (6c-i's proofs, with the
+  re-cut patches red).
 
-Mutation patches from lane P's 520–539 block (532 onward): one per refusal, the band, the closing-row
+Mutation patches from lane P's 520–539 block (535 onward): one per refusal, the band, the closing-row
 rule, the hidden-row rule and the unchanged rule.
 
 ## Known gaps, not this PR's
+
+- **The day fake keeps a program with a last day where the list put it** (`fakes.ts`
+  `reorderPrograms` sets `plan.currentPrograms = ordered`), while the writer and #601's read put it
+  last: `[C, A, B]` reads back C, A, B from the fake and A, B, C from the database. It goes to the
+  contract owner with C37 (the fake sorts a program ending today last).
+- **`schema.ts`'s `programAssignments` docblock** says "a reorder writes the place onto that row"
+  (the closed row's); under Amendment 5 it does not. That is lane A's file, so a rewording is asked of
+  lane A.
+- **Lane E's 12a-ii stand-in** replays its `order` change by a direct `idx` update
+  (`verify/day-plan.ts`); once this lands, lane E swaps it for `reorderPrograms`.
 
 - **The day fake's `reorderPrograms` accepts an archived athlete** (`fakes.ts`: `mine` checks the id
   only), while the writer answers `not_found`. `DayPlan` carries no archived field (invariant 24), so
@@ -81,4 +125,21 @@ rule, the hidden-row rule and the unchanged rule.
 
 ## Review-response log
 
-The panel runs on this plan before any implementation is committed.
+The panel (correctness, db-safety, architecture/scope; opus) on 9da111ff.
+
+| Lens                            | Finding                                                           | Verdict    | What changed                                                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| db-safety P1, architecture P1   | who reads the band's rows; a caller-side read collides            | **agreed** | the helper reads the open set itself, with the index's predicate                                                                                                |
+| architecture P1, correctness P1 | the reopen and insert against the helper                          | **agreed** | reopen and insert after the helper, one update; the new-placement PR named                                                                                      |
+| architecture P1, correctness P1 | the putOn patches whose context moves                             | **agreed** | listed, re-cut after #617, each still red                                                                                                                       |
+| architecture P1                 | 15c cannot import the writer from the day DAL                     | **agreed** | "For step 15c": the program DAL or a seam turn                                                                                                                  |
+| correctness P1                  | the hidden-row test could pass without the rule                   | **agreed** | the hidden row in the middle                                                                                                                                    |
+| db-safety P2, correctness P2    | banding every open row rewrites rows in place                     | **agreed** | only changed rows move; a `ctid` check on an unmoved row                                                                                                        |
+| correctness P2                  | which rows move, spelled apart from the read's rank               | **agreed** | `currentPrograms`' rank exported and used                                                                                                                       |
+| correctness P2                  | the `[C, A, B]` test could be a no-op                             | **agreed** | C closed at 0, A=1, B=2                                                                                                                                         |
+| correctness P2                  | missing boundary tests                                            | **agreed** | the seven added                                                                                                                                                 |
+| db-safety P2, correctness P2    | the fake disagrees on a program ending today                      | **gap**    | Known gaps, to the contract owner with C37                                                                                                                      |
+| db-safety P2                    | the lock rule should be stated, not argued case by case           | **agreed** | invariant 12: every writer of `program_assignments` takes the athlete's `profiles` lock (after the block, if any) before it reads or writes that athlete's rows |
+| architecture P2                 | `schema.ts`'s reorder sentence; lane E's stand-in; doc rewordings | **agreed** | Known gaps and Files                                                                                                                                            |
+| architecture P2                 | the "D16" citation                                                | **fixed**  | cites 6d-i's plan                                                                                                                                               |
+| architecture P2                 | `packages/db/src/index.ts` is outside the lane                    | **fixed**  | dropped                                                                                                                                                         |
