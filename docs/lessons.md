@@ -531,6 +531,14 @@ access token`, which reads like a permissions problem with the repo. The cause w
   before calling it a defect**: a real bug fails alone too. The prevention is to stop running heavy
   gates locally at all ([AGENTS.md](../AGENTS.md) → "Local hooks vs CI merge-gates"; DX-18).
 
+- **vitest's `--changed <ref>` also tests the working tree.** → A db-and-docs push ran the editor
+  and sheet suites for about 22 minutes (2026-11-17), though no file in the push reached them.
+  `vitest --changed` adds staged, unstaged and untracked files to the `ref...HEAD` diff, so a mutation
+  patch left applied, or any local edit, widened what the hook ran. → The pre-push
+  (`test-changed.mjs`) now traces the **committed** diff only, with `vitest related` on absolute
+  paths, and reports local changes as untested. A push sends commits, so the hook tests commits. Outside CI a due full run
+  (a trigger file changed) is left to CI: "full suite due: CI runs it".
+
 - **A test that taps twice "straight after" in real time fails on a busy machine.** → A double-tap
   guard compares the taps' `event.timeStamp`s, so "within 500ms" in a test depends on how loaded the
   machine is: with three suites at once, two consecutive `fireEvent.click`s were more than 500ms apart.
@@ -725,6 +733,13 @@ do git apply -R --check "$p" 2>/dev/null && echo "still applied: $p"; done` prin
   (FAM-1 6b, #522: stopping a background `pnpm verify` left `261` in `erasure/graph.ts`, and its
   `sh -c` chain kept running). After stopping one, end the chain's processes, then run the check
   above and `git apply -R` what it prints.
+  → **Fixed in the runner (2026-11-17):** a patch was left applied because the runner had no signal
+  handling and ran `db:verify` with `spawnSync`, which blocks the event loop, so even a handler could
+  not have run while the gate did (where every kill lands). It now restores on SIGINT/SIGTERM/SIGHUP,
+  ends the gate's process group, recovers a `kill -9`'d run from a journal, and refuses a second run
+  in one worktree (`packages/db/scripts/mutations/README.md` → "Stopping a run"). Seen first when a
+  `pkill -f mutations.mjs` stopped every worktree's run at once. **Never stop a gate by pattern
+  (`pkill -f`):** it reaches other sessions' runs; stop your own by its pid.
 
 - 🔴 **A merge commit carried conflict markers, and Prettier hid them.** FAM-1 6b (#522): a merge's
   output was cut short (`| tail -3`), only one of two conflicts was read, and `git add -A` committed
