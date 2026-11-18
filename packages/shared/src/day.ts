@@ -46,6 +46,29 @@ export function inWritableWindow(day: string, today: string): boolean {
   return diff <= 0 && diff >= -WRITABLE_DAY_RADIUS;
 }
 
+/**
+ * **Is this day open for this athlete?** Inside the writable window (`inWritableWindow`: today and
+ * yesterday, never a day after today) AND the athlete is not archived. This is the whole of "the
+ * day is open": what `DayPlan.writable` means, what the row writer accepts a ✓ on (`closed_day`
+ * otherwise), and what a day's Restore all is held to (FAM-1 plan D32; the maintainer, 2026-11-17:
+ * an archived athlete's day is never writable; contract change C34).
+ *
+ * ⚠️ **As of C34 only the contract's fixture world calls this.** The day resolver and the row
+ * writer call lane E's `rowDayOpen`, and Restore all calls lane S's `dayIsOpen`
+ * (`clear-day-actions.ts`): the same rule, written twice more. Each switches in its own lane's PR.
+ *
+ * One function, so the page and every writer answer alike: a second copy that forgot the archived
+ * half would offer a ✓ the writer then refuses. Call this wherever the athlete is known;
+ * `inWritableWindow` alone is for a caller that has only the two days.
+ *
+ * Pure: the caller supplies `today` (the request's active-timezone day) and whether the athlete is
+ * archived (the database's `archived_at !== null`, or the DAL profile's `archived`), read inside
+ * its own scope.
+ */
+export function dayOpenFor(athlete: { archived: boolean }, day: string, today: string): boolean {
+  return !athlete.archived && inWritableWindow(day, today);
+}
+
 /** The calendar date `n` whole days after `day` (`YYYY-MM-DD`; a negative `n` goes back). */
 export function addDays(day: string, n: number): string {
   // The `…T00:00:00Z` anchor is the V1-6c idiom, not a stylistic choice: `new Date("2026-07-30")`
