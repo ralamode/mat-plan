@@ -26,16 +26,24 @@ import {
   weekDaysSchema,
 } from '@mat-plan/shared';
 import {
+  adultProgramWithCopy,
   DAY_PLAN_FIXTURE_SOURCES,
+  familyProgram,
+  familyProgramAfterTakeOff,
   fixtureIds,
   heavyADraft,
+  newProgramEmpty,
+  programOf,
+  programsList,
   programView,
   workoutDraft,
+  type World,
 } from '@mat-plan/shared/program/fixtures';
 import type { TrackingType, WeekDraft, WorkoutDraft } from '@mat-plan/shared';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
+import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import type { HouseholdScope } from '../../src/scope';
 import {
   insertMovementOwnedBy,
@@ -63,6 +71,9 @@ import { renameProgram } from '../../src/writers/program/rename-program';
 import {
   movementOptions,
   programIn,
+  programWorkoutIds,
+  readProgramList,
+  readProgramView,
   readWeek,
   readWorkoutDraft,
   workoutIn,
@@ -111,6 +122,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyCopyWorkout(ctx);
   await verifyPutOn(ctx);
   await verifySeedFixtures(ctx);
+  await verifyProgramReads(ctx);
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -2882,5 +2894,312 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
   });
   console.log(
     '✓ FAM-1 6c-i: the seeded fixture programs equal the contract’s workouts and weeks, the seed’s athletes are on them in order, and a re-run writes nothing',
+  );
+}
+
+// ── FAM-1 6c-ii: the Programs list and the program page ─────────────────────────────────────────────
+
+/** The proofs' household time zone: a copy's day is its `created_at` in this zone. */
+const VIEW_TZ = 'America/New_York';
+
+/**
+ * Seed a fixture world into a NEW household of its own (the plan's 6c-ii row: never the seed
+ * household), with the real writers, every athlete included, and answer the fixture-id → public-id
+ * map that lets a fixture be compared exactly. Each athlete is put on from the fixture's start day,
+ * passed to `putOn` as its `today`.
+ */
+async function seedViewWorld(tx: VerifyTx, world: World) {
+  const exec = asTx(tx);
+  const [household] = await tx
+    .insert(schema.households)
+    .values({ publicId: newId(), name: 'Verify 6c-ii' })
+    .returning({ id: schema.households.id });
+  const scope = householdScopeForScript(household!.id);
+  const ids = new Map<string, string>();
+
+  for (const athlete of world.athletes) {
+    const clientId = newId();
+    const kind = athlete.name.startsWith('Adult') ? PROFILE_KIND.adult : PROFILE_KIND.kid;
+    await insertProfileOwnedBy(exec, scope, { name: athlete.name, kind, clientId });
+    const row = await profileByClientId(exec, scope, clientId);
+    assert.ok(row, `FAM-1 6c-ii: the proof adds ${athlete.id}`);
+    ids.set(fixtureIds.athlete(athlete.id), row.publicId);
+  }
+
+  for (const program of world.programs) {
+    const programPublicId = await mustCreate(tx, scope, program.name);
+    ids.set(fixtureIds.program(program.id), programPublicId);
+    for (const workout of program.workouts) {
+      const draft = workoutDraft(world, program.id, workout.wid);
+      const items = [];
+      for (const item of draft.items) {
+        const made = await newItem(exec, scope, {
+          name: item.itemName,
+          trackingType: item.trackingType,
+        });
+        assert.ok(made.ok, `FAM-1 6c-ii: the proof makes or finds ${item.itemName}`);
+        items.push({
+          ...item,
+          prescriptionClientId: newId(),
+          itemPublicId: made.itemPublicId,
+          itemName: made.name,
+        });
+      }
+      const saved = await saveWorkout(exec, scope, {
+        ...draft,
+        programPublicId,
+        workoutClientId: newId(),
+        workoutPublicId: null,
+        items,
+      });
+      assert.ok(saved.ok, `FAM-1 6c-ii: the proof saves ${workout.wid}`);
+      ids.set(fixtureIds.workout(workout.wid), saved.workoutPublicId);
+    }
+    const days = emptyWeek();
+    for (const weekday of WEEKDAYS) {
+      days[weekday] = program.week[weekday].map((slot) => ({
+        workoutPublicId: ids.get(fixtureIds.workout(slot.wid))!,
+        label: slot.label || null,
+      }));
+    }
+    assert.deepEqual(
+      await saveWeek(exec, scope, { programPublicId, days }),
+      { ok: true },
+      `FAM-1 6c-ii: the proof saves ${program.id}'s week`,
+    );
+  }
+
+  for (const [athlete, stretches] of Object.entries(world.assign)) {
+    for (const stretch of stretches) {
+      assert.equal(stretch.to, undefined, 'FAM-1 6c-ii: the proof seeds open stretches only');
+      assert.deepEqual(
+        await putOn(
+          exec,
+          scope,
+          {
+            programPublicId: ids.get(fixtureIds.program(stretch.prog))!,
+            profilePublicIds: [ids.get(fixtureIds.athlete(athlete))!],
+            from: stretch.from,
+          },
+          stretch.from,
+        ),
+        { ok: true },
+        `FAM-1 6c-ii: the proof puts ${athlete} on ${stretch.prog}`,
+      );
+    }
+  }
+  return { scope, ids };
+}
+
+/** A fixture with every fixture id replaced by the public id the proof's database gave it. */
+function translated<T>(fixture: T, ids: ReadonlyMap<string, string>): T {
+  return JSON.parse(
+    JSON.stringify(fixture).replace(
+      /00000000-0000-7000-8000-\d{12}/g,
+      (id) => ids.get(id) ?? `unmapped ${id}`,
+    ),
+  ) as T;
+}
+
+async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+  const today = world.today;
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { scope, ids } = await seedViewWorld(tx, world);
+    const view = (programId: string, when = today) =>
+      readProgramView(exec, scope, ids.get(fixtureIds.program(programId))!, {
+        today: when,
+        tz: VIEW_TZ,
+      });
+
+    // ── The two named fixtures, deep-equal, ids exact ──
+    assert.deepEqual(
+      await readProgramList(exec, scope, today),
+      translated(programsList, ids),
+      'FAM-1 6c-ii: the program-list read deep-equals programs-list',
+    );
+    assert.deepEqual(
+      await view('p1'),
+      translated(familyProgram, ids),
+      'FAM-1 6c-ii: the program-view read deep-equals family-program',
+    );
+
+    // ── After Take off on Athlete Two, today (`active_to = today` stands in for 6d's writer) ──
+    const p1 = await tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.publicId, ids.get(fixtureIds.program('p1'))!));
+    const [a2] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, ids.get(fixtureIds.athlete('a2'))!));
+    const a2OnP1 = and(
+      eq(schema.programAssignments.profileId, a2!.id),
+      eq(schema.programAssignments.blockId, p1[0]!.id),
+    );
+    await tx.update(schema.programAssignments).set({ activeTo: today }).where(a2OnP1);
+    assert.deepEqual(
+      await view('p1'),
+      translated(familyProgramAfterTakeOff, ids),
+      'FAM-1 6c-ii: the program-view read deep-equals family-program-after-take-off',
+    );
+    assert.deepEqual(
+      (await view('p1', addDays(today, 1)))?.athletes.map((a) => a.name),
+      ['Athlete One'],
+      'FAM-1 6c-ii: …and from the next day the athlete is no longer listed',
+    );
+    await tx.update(schema.programAssignments).set({ activeTo: null }).where(a2OnP1);
+
+    // ── A copied workout, showing where it came from ──
+    const copied = await copyWorkout(exec, scope, {
+      clientId: newId(),
+      workoutPublicId: ids.get(fixtureIds.workout('w4'))!,
+      toProgramPublicId: ids.get(fixtureIds.program('p3'))!,
+      weekdays: [1],
+      label: 'Evening',
+    });
+    assert.ok(copied.ok, 'FAM-1 6c-ii: the proof copies Conditioning into Adult One’s program');
+    ids.set(fixtureIds.workout('w1001'), copied.workoutPublicId);
+    // Hand-written: the copy was made on the fixture's today, in the household's afternoon.
+    await tx
+      .update(schema.workouts)
+      .set({ createdAt: new Date(`${today}T17:00:00Z`) })
+      .where(eq(schema.workouts.publicId, copied.workoutPublicId));
+    assert.deepEqual(
+      await view('p3'),
+      translated(adultProgramWithCopy, ids),
+      'FAM-1 6c-ii: the program-view read deep-equals adult-program-with-copy',
+    );
+    // The same instant is the next day in a zone east of it: the day is the household's.
+    assert.equal(
+      (
+        await readProgramView(exec, scope, ids.get(fixtureIds.program('p3'))!, {
+          today,
+          tz: 'Pacific/Kiritimati',
+        })
+      )?.workouts.find((w) => w.workoutPublicId === copied.workoutPublicId)?.copiedFrom?.on,
+      addDays(today, 1),
+      'FAM-1 6c-ii: a copy’s day is its creation in the household’s time zone',
+    );
+
+    // ── A new program, right after it was made ──
+    const fresh = await mustCreate(tx, scope, 'New program');
+    ids.set(fixtureIds.program('p1001'), fresh);
+    assert.deepEqual(
+      await readProgramView(exec, scope, fresh, { today, tz: VIEW_TZ }),
+      translated(newProgramEmpty, ids),
+      'FAM-1 6c-ii: the program-view read deep-equals new-program-empty',
+    );
+
+    // ── What is not counted, and what is not listed ──
+    const w1 = ids.get(fixtureIds.workout('w1'))!;
+    const [card] = await tx
+      .select({ id: schema.prescriptions.id })
+      .from(schema.prescriptions)
+      .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+      .where(and(eq(schema.workouts.publicId, w1), isNull(schema.prescriptions.deletedAt)))
+      .limit(1);
+    await tx
+      .update(schema.prescriptions)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.prescriptions.id, card!.id));
+    const before = familyProgram.workouts.find(
+      (w) => w.workoutPublicId === fixtureIds.workout('w1'),
+    )!;
+    assert.equal(
+      (await view('p1'))?.workouts.find((w) => w.workoutPublicId === w1)?.itemCount,
+      before.itemCount - 1,
+      'FAM-1 6c-ii: a removed card is not counted',
+    );
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, ids.get(fixtureIds.athlete('a2'))!));
+    const archived = await view('p1');
+    assert.deepEqual(
+      [archived?.athletes.map((a) => a.name), archived?.candidates.map((c) => c.name)],
+      [['Athlete One'], ['Athlete One', 'Adult One']],
+      'FAM-1 6c-ii: an archived athlete is neither on it nor a candidate',
+    );
+    assert.deepEqual(
+      (await readProgramList(exec, scope, today)).find((p) => p.name === 'Family program')
+        ?.athletes,
+      ['Athlete One'],
+      'FAM-1 6c-ii: …nor listed in the Programs list',
+    );
+    const gone = ids.get(fixtureIds.program('p2'))!;
+    await hide(tx, gone);
+    assert.deepEqual(
+      [
+        await readProgramView(exec, scope, gone, { today, tz: VIEW_TZ }),
+        (await readProgramList(exec, scope, today)).some((p) => p.programPublicId === gone),
+        (await view('p1'))?.athletes.find((a) => a.name === 'Athlete One')?.alsoOn,
+      ],
+      [null, false, []],
+      'FAM-1 6c-ii: a removed program has no page, is not listed, and is no one’s other program',
+    );
+
+    // ── A program's live workout ids, for the week's scope-miss report ──
+    const p1Workouts = programOf(world, 'p1').workouts.map((w) =>
+      ids.get(fixtureIds.workout(w.wid))!,
+    );
+    assert.deepEqual(
+      await programWorkoutIds(exec, scope, ids.get(fixtureIds.program('p1'))!),
+      new Set(p1Workouts),
+      'FAM-1 6c-ii: programWorkoutIds answers the program’s live workouts, and no other program’s',
+    );
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, p1Workouts[0]!));
+    assert.deepEqual(
+      await programWorkoutIds(exec, scope, ids.get(fixtureIds.program('p1'))!),
+      new Set(p1Workouts.slice(1)),
+      'FAM-1 6c-ii: …without a removed workout',
+    );
+    for (const [what, scopeOf, id] of [
+      ['another household’s program', B_SCOPE, ids.get(fixtureIds.program('p1'))!],
+      ['a removed program', scope, gone],
+      ['an id that is not a uuid', scope, 'p1'],
+    ] as const) {
+      assert.equal(
+        await programWorkoutIds(exec, scopeOf, id),
+        null,
+        `FAM-1 6c-ii: programWorkoutIds answers null for ${what}`,
+      );
+    }
+
+    // ── Another household, and ids that are not one ──
+    const p1Id = ids.get(fixtureIds.program('p1'))!;
+    for (const [what, scopeOf, id] of [
+      ['another household’s program', B_SCOPE, p1Id],
+      ['another household’s program, from A', A_SCOPE, p1Id],
+      ['an unknown id', scope, newId()],
+      ['an id that is not a uuid', scope, 'p1'],
+      ['a legacy block', A_SCOPE, (await seededBlock(tx, A_SCOPE)).publicId],
+    ] as const) {
+      assert.equal(
+        await readProgramView(exec, scopeOf, id, { today, tz: VIEW_TZ }),
+        null,
+        `FAM-1 6c-ii: the program-view read answers null for ${what}`,
+      );
+    }
+    assert.ok(
+      (await readProgramList(exec, B_SCOPE, today)).every(
+        (p) => !(ids.get(fixtureIds.program('p1')) === p.programPublicId),
+      ),
+      'FAM-1 6c-ii: the program-list read lists no other household’s program',
+    );
+    assert.equal(
+      (await readProgramList(exec, A_SCOPE, today)).some(
+        (p) => p.name === 'Stretching' && p.athletes.includes('Adult One'),
+      ),
+      false,
+      'FAM-1 6c-ii: …and no other household’s athlete',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6c-ii: the program-list and program-view reads deep-equal programs-list, family-program, family-program-after-take-off, adult-program-with-copy and new-program-empty, ids exact',
   );
 }

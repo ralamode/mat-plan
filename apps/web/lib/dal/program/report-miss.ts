@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { programIn, workoutIn, workoutInHousehold, type HouseholdScope } from '@mat-plan/db';
+import {
+  programIn,
+  programWorkoutIds,
+  workoutIn,
+  workoutInHousehold,
+  type HouseholdScope,
+} from '@mat-plan/db';
 
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
@@ -24,23 +30,15 @@ type ScopeMiss = Parameters<typeof reportScopeMiss>[0];
 /** One id to check: whether the household has it, and what to report when it does not. */
 type Probe = { readonly found: () => Promise<boolean>; readonly miss: ScopeMiss };
 
-/**
- * A week names its workouts by id, and the schema puts no cap on how many. The report checks this
- * many distinct ids at most, one query each, on the `not_found` path and under the limiter.
- * ⚠️ **A known gap:** ids the program does have still use up the cap, so a foreign id after 50 of
- * the program's own is answered `not_found` and NOT reported. The answer is right either way; only
- * the telemetry misses it. The fix is one scoped query for the program's live workout ids (a lane P
- * read in `packages/db`), which needs no cap; raised with the FAM-1 board on #586.
- */
-export const WEEK_PROBE_LIMIT = 50;
+const programMiss = (programPublicId: string): ScopeMiss => ({
+  action: SCOPE_MISS_ACTION.resolveProgram,
+  resource: { kind: SCOPE_MISS_KIND.program, publicId: programPublicId },
+});
 
 /** Each probe takes the caller's scope; with none, `reportFirstMiss` never calls `found`. */
 const programProbe = (scope: HouseholdScope | null, programPublicId: string): Probe => ({
   found: async () => !!scope && (await programIn(db, scope, programPublicId)),
-  miss: {
-    action: SCOPE_MISS_ACTION.resolveProgram,
-    resource: { kind: SCOPE_MISS_KIND.program, publicId: programPublicId },
-  },
+  miss: programMiss(programPublicId),
 });
 
 const workoutMiss = (workoutPublicId: string): ScopeMiss => ({
@@ -91,16 +89,27 @@ export async function reportProgramMiss(
 /**
  * A week (FAM-1 7a-ii): its program, then each workout it names, distinct, in the draft's order,
  * until the first that is not one of the program's (`saveWeek` answers `not_found` for both).
+ *
+ * **One query, however many ids the week names** (FAM-1 6c-ii, a board-granted edit by lane P):
+ * `programWorkoutIds` answers the program's live workout ids, or `null` when the program is not the
+ * household's, and each id is looked up in that set. So no id goes unchecked, and a long week costs
+ * no more than a short one.
  */
 export async function reportWeekMiss(
   scope: HouseholdScope | null,
   week: { programPublicId: string; workoutPublicIds: readonly string[] },
 ): Promise<void> {
   const { programPublicId } = week;
-  const ids = [...new Set(week.workoutPublicIds)].slice(0, WEEK_PROBE_LIMIT);
+  let known: Promise<ReadonlySet<string> | null> | undefined;
+  // Read once, on the first probe that needs it; with no scope, `found` is never called.
+  const workoutsOfProgram = () =>
+    (known ??= scope ? programWorkoutIds(db, scope, programPublicId) : Promise.resolve(null));
   await reportFirstMiss(scope, [
-    programProbe(scope, programPublicId),
-    ...ids.map((id) => workoutProbe(scope, programPublicId, id)),
+    { found: async () => (await workoutsOfProgram()) !== null, miss: programMiss(programPublicId) },
+    ...[...new Set(week.workoutPublicIds)].map((id): Probe => ({
+      found: async () => (await workoutsOfProgram())?.has(id) ?? false,
+      miss: workoutMiss(id),
+    })),
   ]);
 }
 

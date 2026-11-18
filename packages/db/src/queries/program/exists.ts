@@ -93,3 +93,23 @@ export async function workoutInHousehold(
     .limit(1);
   return row !== undefined;
 }
+
+/**
+ * The public ids of every live workout of this household's live program `programPublicId`, in one
+ * query; `null` when the program is not one (a miss, or an id that is not a uuid). For the week's
+ * scope-miss report (lane B's `reportWeekMiss`), which can then test each id a week names against
+ * the set, with no cap on how many it checks (FAM-1 6c-ii; a P2 on #586).
+ */
+export async function programWorkoutIds(
+  exec: Executor,
+  scope: HouseholdScope,
+  programPublicId: string,
+): Promise<ReadonlySet<string> | null> {
+  const blockId = await liveProgramBlockId(exec, scope, programPublicId);
+  if (blockId === null) return null;
+  const rows = await exec
+    .select({ publicId: schema.workouts.publicId })
+    .from(schema.workouts)
+    .where(and(eq(schema.workouts.blockId, blockId), isNull(schema.workouts.deletedAt)));
+  return new Set(rows.map((row) => row.publicId));
+}
