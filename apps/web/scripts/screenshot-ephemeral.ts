@@ -474,6 +474,7 @@ const STATES = {
   'focus-button': null,
   'focus-nav-row': null,
   'focus-rail-row': null,
+  'focus-group-row': null,
   'sheet-open': null,
   'sheet-dialog-open': null,
   // CAT-3 B2-ii — the movement picker's filters, on the preview's workout editor. Interaction-only:
@@ -718,6 +719,13 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   // A row INSIDE the nav rail's scrolling list, the case `NAV_ROW_CLASS`'s `ring-inset` exists for
   // (an outer ring would be clipped there). The rail renders from the tablet width up.
+  // A row of the builder's grouped list (`group-list.tsx`), whose ring now comes inset from
+  // `NAV_ROW_CLASS` alone. Route: the programs-list preview.
+  'focus-group-row': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('main ul a').first().focus();
+    await settleAnimations(page);
+  },
   'focus-rail-row': async (page) => {
     await page.keyboard.press('Shift');
     const row = page.locator(`nav[aria-label="${NAV_RAIL_COPY.label}"] ul a`).first();
