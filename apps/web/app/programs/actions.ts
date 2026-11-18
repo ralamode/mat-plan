@@ -2,25 +2,34 @@
 
 import * as Sentry from '@sentry/nextjs';
 import {
+  copyDraftSchema,
   createProgramSchema,
+  newItemSchema,
   PROGRAM_REFUSAL,
   renameProgramSchema,
   saveWorkoutSchema,
   TRANSPORT_REFUSALS,
+  weekDraftSchema,
+  weekRepeatsAWorkout,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 
 import { enterMutation } from '@/app/p/mutation-entry';
 import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import {
+  copyHouseholdWorkout,
   createHouseholdProgram,
+  newHouseholdItem,
   renameHouseholdProgram,
+  saveHouseholdWeek,
   saveHouseholdWorkout,
   type ProgramAnswer,
 } from '@/lib/dal/program/writes';
 
 /**
- * The program builder's Server Actions (FAM-1 step 7a-i): three of `ProgramActions`' members. Each
+ * The program builder's Server Actions (FAM-1 steps 7a-i and 7a-ii): the six required members of
+ * `ProgramActions`, assembled in `actions.contract.ts` (a `'use server'` module exports only async
+ * functions). Each
  * is a PUBLIC endpoint, so each re-checks the boundary itself (AGENTS.md → Server conventions):
  *
  * 1. Sentry's wrapper, with NO options: headers and form data never reach a captured event (pinned
@@ -33,12 +42,16 @@ import {
  *    never the writer's object as it stands, so a field a writer adds later does not reach the
  *    client by accident.
  *
- * Nothing assembles a `ProgramActions` object until all six members exist (7a-ii): a route passes
- * the real actions it has, never a mix (`packages/shared/src/program/actions.ts`). Until 7b, no page
- * imports this module, so no action id is served.
+ * Until 7b, no page imports this module or the object, so no action id is served.
  */
 
 const INVALID = { ok: false, reason: PROGRAM_REFUSAL.invalid } as const;
+/**
+ * A week that names a workout twice on one day fails the schema, and is `once_per_day`, not
+ * `invalid`, whatever else is wrong: the preview's fake and lane P's writer answer the same (C25),
+ * and the builder reads it as "this page is stale" (`isStaleWeek`).
+ */
+const ONCE_PER_DAY = { ok: false, reason: PROGRAM_REFUSAL.once_per_day } as const;
 
 /** The builder's pages: the list, each program and each workout editor live under it. */
 function refreshPrograms() {
@@ -89,6 +102,64 @@ export async function saveWorkoutAction(draft: unknown): Promise<ProgramAnswer<'
       if (!result.ok) return { ok: false, reason: result.reason };
       refreshPrograms();
       return { ok: true, workoutPublicId: result.workoutPublicId };
+    },
+  );
+}
+
+export async function saveWeekAction(draft: unknown): Promise<ProgramAnswer<'saveWeek'>> {
+  return await Sentry.withServerActionInstrumentation(
+    'saveWeekAction',
+    async (): Promise<ProgramAnswer<'saveWeek'>> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = weekDraftSchema.safeParse(draft);
+      if (!parsed.success) return weekRepeatsAWorkout(draft) ? ONCE_PER_DAY : INVALID;
+      const result = await saveHouseholdWeek(parsed.data);
+      if (!result.ok) return { ok: false, reason: result.reason };
+      refreshPrograms();
+      return { ok: true };
+    },
+  );
+}
+
+export async function copyWorkoutAction(draft: unknown): Promise<ProgramAnswer<'copyWorkout'>> {
+  return await Sentry.withServerActionInstrumentation(
+    'copyWorkoutAction',
+    async (): Promise<ProgramAnswer<'copyWorkout'>> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = copyDraftSchema.safeParse(draft);
+      if (!parsed.success) return INVALID;
+      const result = await copyHouseholdWorkout(parsed.data);
+      if (!result.ok) return { ok: false, reason: result.reason };
+      refreshPrograms();
+      return { ok: true, workoutPublicId: result.workoutPublicId };
+    },
+  );
+}
+
+/**
+ * A name that already names an item answers that item (`existed: true`), never a refusal. The
+ * picker's pages are revalidated either way: a new item is a new row in every builder page's list.
+ */
+export async function newItemAction(input: unknown): Promise<ProgramAnswer<'newItem'>> {
+  return await Sentry.withServerActionInstrumentation(
+    'newItemAction',
+    async (): Promise<ProgramAnswer<'newItem'>> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = newItemSchema.safeParse(input);
+      if (!parsed.success) return INVALID;
+      const result = await newHouseholdItem(parsed.data);
+      if (!result.ok) return { ok: false, reason: result.reason };
+      refreshPrograms();
+      return {
+        ok: true,
+        itemPublicId: result.itemPublicId,
+        name: result.name,
+        trackingType: result.trackingType,
+        existed: result.existed,
+      };
     },
   );
 }

@@ -1,16 +1,23 @@
-import { E2E_SESSION_BYPASS_USER, PROGRAM_REFUSAL, type ProgramActions } from '@mat-plan/shared';
+import {
+  E2E_SESSION_BYPASS_USER,
+  emptyWeek,
+  PROGRAM_REFUSAL,
+  TRACKING_TYPE,
+} from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The program builder's actions (FAM-1 step 7a-i): the shared boundary matrices, then what they
+ * The program builder's actions (FAM-1 steps 7a-i and 7a-ii): the shared boundary matrices, then what they
  * cannot express — what zod refuses before the DAL, what a success returns and revalidates, and that
  * a refusal passes through with nothing revalidated.
  *
  * ⚠️ **What this layer can prove, and what it cannot.** The DAL is mocked, so "one effect on replay"
  * and "no write for another household's id" are proven where the writes are: lane P's `db:verify`
  * (`packages/db/scripts/verify/program.ts`: create's replay, save's replay, rename and save against
- * two households). Here: the action hands the DAL exactly the client's ids and answers with the
+ * two households; 7a-ii's writers: a week naming another household's workout is `not_found`, a copy
+ * of another household's workout is `not_found`, and a copy's replay by `clientId` answers the first
+ * copy). Here: the action hands the DAL exactly the client's ids and answers with the
  * DAL's result, so a replay reaches the writer as one and is answered as one.
  */
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -36,19 +43,33 @@ vi.mock('@/lib/dal/program/writes', () => ({
   createHouseholdProgram: vi.fn(async () => ({ ok: true, programPublicId: PROGRAM_ID })),
   renameHouseholdProgram: vi.fn(async () => ({ ok: true })),
   saveHouseholdWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
+  saveHouseholdWeek: vi.fn(async () => ({ ok: true })),
+  copyHouseholdWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: COPY_ID })),
+  newHouseholdItem: vi.fn(async () => ({ ok: true, ...ITEM })),
 }));
 
 import { revalidatePath } from 'next/cache';
 
 import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import {
+  copyHouseholdWorkout,
   createHouseholdProgram,
+  newHouseholdItem,
   renameHouseholdProgram,
+  saveHouseholdWeek,
   saveHouseholdWorkout,
 } from '@/lib/dal/program/writes';
 import { describeActionMatrices } from '@/test/action-matrix';
 
-import { createProgramAction, renameProgramAction, saveWorkoutAction } from './actions';
+import {
+  copyWorkoutAction,
+  createProgramAction,
+  newItemAction,
+  renameProgramAction,
+  saveWeekAction,
+  saveWorkoutAction,
+} from './actions';
+import { PROGRAM_ACTIONS } from './actions.contract';
 import { ACTION_REGISTRY } from './actions.registry';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
@@ -56,24 +77,49 @@ const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
 const CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
+const COPY_ID = '019826b4-0000-7000-8000-0000000000b9';
+const ITEM = {
+  itemPublicId: '019826b4-0000-7000-8000-0000000000d1',
+  name: 'Bear crawl',
+  trackingType: TRACKING_TYPE.time_sets,
+  existed: false,
+};
 
 const createInput = () => ({ clientId: CLIENT_ID, name: 'Strength' });
 const renameInput = () => ({ programPublicId: PROGRAM_ID, name: 'Strength II' });
 const saveInput = () => structuredClone(heavyADraft);
+const weekInput = () => ({
+  programPublicId: PROGRAM_ID,
+  days: { ...emptyWeek(), 1: [{ workoutPublicId: WORKOUT_ID, label: null }] },
+});
+const copyInput = () => ({
+  clientId: CLIENT_ID,
+  workoutPublicId: WORKOUT_ID,
+  toProgramPublicId: PROGRAM_ID,
+  weekdays: [1, 3],
+  label: null,
+});
+const newItemInput = () => ({ name: 'Bear crawl', trackingType: TRACKING_TYPE.time_sets });
 
 const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 
 beforeEach(() => vi.clearAllMocks());
 
 /**
- * The three actions are the contract's members: a parameter of `unknown` accepts the member's input,
- * and the answers match. (No `ProgramActions` object is assembled until all six exist, 7a-ii.)
+ * The six actions are the contract's members: a parameter of `unknown` accepts the member's input,
+ * and the answers match. `actions.contract.ts` assembles them (its own `satisfies` is the compile
+ * check); this pins that it holds exactly these, with `putOn` and `takeOff` left out (step 15).
  */
-({
-  createProgram: createProgramAction,
-  renameProgram: renameProgramAction,
-  saveWorkout: saveWorkoutAction,
-}) satisfies Pick<ProgramActions, 'createProgram' | 'renameProgram' | 'saveWorkout'>;
+it('the real ProgramActions holds the six actions, and no putOn or takeOff yet', () => {
+  expect(PROGRAM_ACTIONS).toEqual({
+    createProgram: createProgramAction,
+    renameProgram: renameProgramAction,
+    saveWorkout: saveWorkoutAction,
+    saveWeek: saveWeekAction,
+    copyWorkout: copyWorkoutAction,
+    newItem: newItemAction,
+  });
+});
 
 /**
  * 🔴 **The boundary matrices** (AGENTS.md → Backend / API PR rules): unauthenticated, rate-limited,
@@ -102,15 +148,33 @@ describeActionMatrices({
       writers: [saveHouseholdWorkout],
       scopeMiss: () => vi.mocked(saveHouseholdWorkout).mockResolvedValueOnce(NOT_FOUND),
     },
+    saveWeekAction: {
+      fn: saveWeekAction,
+      writers: [saveHouseholdWeek],
+      scopeMiss: () => vi.mocked(saveHouseholdWeek).mockResolvedValueOnce(NOT_FOUND),
+    },
+    copyWorkoutAction: {
+      fn: copyWorkoutAction,
+      writers: [copyHouseholdWorkout],
+      scopeMiss: () => vi.mocked(copyHouseholdWorkout).mockResolvedValueOnce(NOT_FOUND),
+    },
+    newItemAction: {
+      fn: newItemAction,
+      writers: [newHouseholdItem],
+      scopeMiss: () => vi.mocked(newHouseholdItem).mockResolvedValueOnce(NOT_FOUND),
+    },
   },
   validBody: {
     createProgramAction: createInput,
     renameProgramAction: renameInput,
     saveWorkoutAction: saveInput,
+    saveWeekAction: weekInput,
+    copyWorkoutAction: copyInput,
+    newItemAction: newItemInput,
   },
 });
 
-describe('the program actions (FAM-1 7a-i)', () => {
+describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
   it.each([
     ['create, with no name', () => createProgramAction({ clientId: CLIENT_ID, name: '' })],
     ['create, with no client id', () => createProgramAction({ name: 'Strength' })],
@@ -120,12 +184,75 @@ describe('the program actions (FAM-1 7a-i)', () => {
     ],
     ['save, a workout with no name', () => saveWorkoutAction({ ...saveInput(), name: ' ' })],
     ['save, not a draft at all', () => saveWorkoutAction('a string')],
+    [
+      'week, a program id that is not a uuid',
+      () => saveWeekAction({ ...weekInput(), programPublicId: 'x' }),
+    ],
+    [
+      'week, a weekday missing',
+      () => {
+        const days: Record<string, unknown> = emptyWeek();
+        delete days['3'];
+        return saveWeekAction({ programPublicId: PROGRAM_ID, days });
+      },
+    ],
+    [
+      'copy, a blank name (never the default)',
+      () => copyWorkoutAction({ ...copyInput(), name: ' ' }),
+    ],
+    [
+      'copy, a target that is not a uuid',
+      () => copyWorkoutAction({ ...copyInput(), toProgramPublicId: 'x' }),
+    ],
+    ['copy, a weekday twice', () => copyWorkoutAction({ ...copyInput(), weekdays: [1, 1] })],
+    ['new item, a blank name', () => newItemAction({ ...newItemInput(), name: ' ' })],
+    [
+      'new item, an unknown tracking type',
+      () => newItemAction({ ...newItemInput(), trackingType: 'vibes' }),
+    ],
   ])('%s is invalid, and the DAL is never called', async (_label, call) => {
     expect(await call()).toEqual({ ok: false, reason: PROGRAM_REFUSAL.invalid });
-    expect(createHouseholdProgram).not.toHaveBeenCalled();
-    expect(renameHouseholdProgram).not.toHaveBeenCalled();
-    expect(saveHouseholdWorkout).not.toHaveBeenCalled();
+    for (const dal of [
+      createHouseholdProgram,
+      renameHouseholdProgram,
+      saveHouseholdWorkout,
+      saveHouseholdWeek,
+      copyHouseholdWorkout,
+      newHouseholdItem,
+    ]) {
+      expect(dal).not.toHaveBeenCalled();
+    }
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('🔴 a week naming a workout twice on a day is once_per_day, as the fake and the writer say (C25)', async () => {
+    const twice = weekInput();
+    twice.days[1] = [...twice.days[1]!, { workoutPublicId: WORKOUT_ID, label: null }];
+    expect(await saveWeekAction(twice)).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.once_per_day,
+    });
+    expect(saveHouseholdWeek).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('a week hands the DAL the PARSED draft: the ids its scope-miss report walks are lowercased', async () => {
+    const upper = weekInput();
+    upper.programPublicId = PROGRAM_ID.toUpperCase();
+    upper.days[1] = [{ workoutPublicId: WORKOUT_ID.toUpperCase(), label: null }];
+    await saveWeekAction(upper);
+    expect(vi.mocked(saveHouseholdWeek).mock.calls[0]![0]).toEqual(weekInput());
+  });
+
+  it('copy and new item hand the DAL the client’s ids and text verbatim', async () => {
+    await copyWorkoutAction(copyInput());
+    expect(vi.mocked(copyHouseholdWorkout).mock.calls[0]![0]).toMatchObject({
+      clientId: CLIENT_ID,
+      workoutPublicId: WORKOUT_ID,
+      toProgramPublicId: PROGRAM_ID,
+    });
+    await newItemAction(newItemInput());
+    expect(vi.mocked(newHouseholdItem).mock.calls[0]![0]).toEqual(newItemInput());
   });
 
   it('a success hands the DAL the parsed input, ids verbatim, and answers field by field', async () => {
@@ -166,6 +293,31 @@ describe('the program actions (FAM-1 7a-i)', () => {
       dal: saveHouseholdWorkout,
       answer: { ok: true, workoutPublicId: WORKOUT_ID },
     },
+    {
+      name: 'week',
+      call: () => saveWeekAction(weekInput()),
+      dal: saveHouseholdWeek,
+      answer: { ok: true },
+    },
+    {
+      name: 'copy',
+      call: () => copyWorkoutAction(copyInput()),
+      dal: copyHouseholdWorkout,
+      answer: { ok: true, workoutPublicId: COPY_ID },
+    },
+    {
+      name: 'new item',
+      call: () => newItemAction(newItemInput()),
+      dal: newHouseholdItem,
+      answer: { ok: true, ...ITEM },
+    },
+    {
+      // `existed: true` too, so an action that wrote `existed: false` itself would fail here.
+      name: 'new item that existed',
+      call: () => newItemAction(newItemInput()),
+      dal: newHouseholdItem,
+      answer: { ok: true, ...ITEM, existed: true },
+    },
   ] as const;
 
   it.each(SUCCESSES)(
@@ -189,6 +341,24 @@ describe('the program actions (FAM-1 7a-i)', () => {
     async (reason) => {
       vi.mocked(renameHouseholdProgram).mockResolvedValueOnce({ ok: false, reason });
       expect(await renameProgramAction(renameInput())).toEqual({ ok: false, reason });
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['week', PROGRAM_REFUSAL.once_per_day, saveHouseholdWeek, () => saveWeekAction(weekInput())],
+    [
+      'copy',
+      PROGRAM_REFUSAL.name_taken,
+      copyHouseholdWorkout,
+      () => copyWorkoutAction(copyInput()),
+    ],
+    ['new item', PROGRAM_REFUSAL.retry, newHouseholdItem, () => newItemAction(newItemInput())],
+  ] as const)(
+    '%s: the writer’s %s passes through, with nothing revalidated (7a-ii)',
+    async (_name, reason, dal, call) => {
+      vi.mocked(dal).mockResolvedValueOnce({ ok: false, reason } as never);
+      expect(await call()).toEqual({ ok: false, reason });
       expect(revalidatePath).not.toHaveBeenCalled();
     },
   );

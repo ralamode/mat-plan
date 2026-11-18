@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { NAME_WRAP_CLASS, NAV_ROW_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import { BuilderLink } from './route-link';
 
 /**
  * The prototype's grouped list (`.menu`): one bordered box with dividers, a link per row (FAM-1
@@ -30,7 +30,7 @@ export function GroupRowLink({
   children: ReactNode;
 }) {
   return (
-    <Link
+    <BuilderLink
       href={href}
       className={cn(NAV_ROW_CLASS, 'rounded-none border-0 focus-visible:ring-inset', className)}
     >
@@ -43,6 +43,6 @@ export function GroupRowLink({
           ›
         </span>
       </span>
-    </Link>
+    </BuilderLink>
   );
 }
