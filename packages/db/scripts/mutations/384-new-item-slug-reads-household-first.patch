@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index ab9a69bc..c8f5520d 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -1,4 +1,4 @@
+-import { and, desc, eq } from 'drizzle-orm';
++import { and, asc, desc, eq } from 'drizzle-orm';
+ 
+ import {
+   existingItem,
+@@ -85,7 +85,7 @@ export async function newItem(
+     .from(schema.movements)
+     .where(and(eq(schema.movements.slug, movementSlug(name)), movementIsAvailableTo(scope)))
+     // Global first, as the resolver reads: a catalog row wins over the household's own.
+-    .orderBy(desc(movementIsGlobal()))
++    .orderBy(asc(movementIsGlobal()))
+     .limit(1);
+   if (sameSlug) {
+     return {

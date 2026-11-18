@@ -1,0 +1,107 @@
+import type { MovementPattern, TrackingType } from '../movements';
+import type { Unit } from '../units';
+import type { CatalogMovement } from './entry';
+import type { Equipment, Modality, Muscle, Supervision } from './vocabulary';
+
+/**
+ * What the picker knows about a library movement beyond its name (CAT-3 spec, chunk C0b-2; P11):
+ * the fields a filter, a browse heading and a row's second line read.
+ *
+ * 🔴 **It carries the equipment SET, not an answer about it.** "Uses any of these" (today's
+ * filter, P7) and "needs nothing beyond these" (a later "my equipment" filter) are two rules over
+ * the same set; a boolean here would have fixed one of them into the shape.
+ *
+ * **`hasInstructions`, never the text.** The steps are read by slug when a row's "How to" is
+ * opened (`catalogHowToOf`, spec rule 11 and P16), so the option list does not grow by a few
+ * hundred characters for each of several hundred movements.
+ *
+ * A household's own item has none of this in Beta 0 (rule 11): the picker's option type takes
+ * these fields on its `catalog` arm only.
+ */
+export type CatalogOptionTaxonomy = {
+  readonly modality: Modality;
+  /** The lift pattern: set on every strength movement, `null` on most others. */
+  readonly pattern: MovementPattern | null;
+  /** Everything it needs. Empty means no equipment. In the entry's authored order. */
+  readonly equipment: readonly Equipment[];
+  readonly primaryMuscle: Muscle | null;
+  readonly secondaryMuscles: readonly Muscle[];
+  /** `null` on all but the few movements the maintainer marks (K14). Shown as text, never a gate. */
+  readonly supervision: Supervision | null;
+  readonly hasInstructions: boolean;
+};
+
+/**
+ * One library movement as the picker's option read returns it (P11): the option's own fields and
+ * its taxonomy. `owner: 'catalog'` is the discriminant the picker's option type already uses.
+ */
+export type CatalogOption = {
+  readonly publicId: string;
+  readonly owner: 'catalog';
+  readonly name: string;
+  readonly aliases: readonly string[];
+  readonly trackingType: TrackingType;
+  readonly unitDefault: Unit | null;
+  readonly isBodyweight: boolean;
+} & CatalogOptionTaxonomy;
+
+/**
+ * The option one library entry becomes, given the row's public id.
+ *
+ * **The one mapping from an entry to an option.** The option read (`packages/db`, P11) is compared
+ * with this, the preview builds its options with it, and a fixture option is this over a fixture
+ * entry: so the three cannot disagree about which field of the entry feeds which field of the
+ * option. Pure, and it copies the arrays, so an option never aliases the library const.
+ */
+export function catalogOptionOf(entry: CatalogMovement, publicId: string): CatalogOption {
+  return {
+    publicId,
+    owner: 'catalog',
+    name: entry.name,
+    aliases: [...entry.aliases],
+    trackingType: entry.trackingType,
+    unitDefault: entry.unitDefault,
+    isBodyweight: entry.isBodyweight,
+    modality: entry.modality,
+    pattern: entry.pattern,
+    equipment: [...entry.equipment],
+    primaryMuscle: entry.primaryMuscle,
+    secondaryMuscles: [...entry.secondaryMuscles],
+    supervision: entry.supervision ?? null,
+    hasInstructions: entry.instructions !== undefined,
+  };
+}
+
+/** What "How to" shows for one movement (P16, K17): the steps, with the label that goes above them. */
+export type CatalogHowTo = {
+  readonly name: string;
+  /** One step a line, as authored. */
+  readonly instructions: string;
+  readonly supervision: Supervision | null;
+};
+
+/**
+ * One entry's "How to", by slug, or `null` when there is no such entry or it has no instructions.
+ *
+ * It takes the entries as an argument because the library const is server-only
+ * (`@mat-plan/shared/catalog/data`, spec rule 3): the server passes `CATALOG_MOVEMENTS`, the
+ * preview passes the test library. 🔴 **The supervision label comes back with the text, always**
+ * (K17: wherever instructions are shown, the label is shown with them), so a caller cannot show
+ * one without having the other in hand.
+ *
+ * **By slug, and an option carries none** (a slug is the library's key, never a row's public
+ * id): the server action behind "How to" takes the option's `publicId`, finds that row's slug
+ * under the caller's scope, and calls this.
+ */
+export function catalogHowToOf(
+  entries: readonly CatalogMovement[],
+  slug: string,
+): CatalogHowTo | null {
+  const entry = entries.find((candidate) => candidate.slug === slug);
+  if (!entry || entry.instructions === undefined) return null;
+  return {
+    name: entry.name,
+    instructions: entry.instructions,
+    supervision: entry.supervision ?? null,
+  };
+}

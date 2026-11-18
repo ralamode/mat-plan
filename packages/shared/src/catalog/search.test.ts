@@ -158,7 +158,12 @@ describe('with no short form, the matches are matchMovementOptions’ (P2)', () 
       ).toEqual(typed.matches);
       // Anything else was found through an alias, and says which.
       for (const option of extra) expect(found.foundByAlias.has(option), query).toBe(true);
-      if (extra.length === 0) expect(found.someWords, query).toEqual(typed.someWords);
+      // The some-words rows are the plain match's, less any row offered as a close spelling (P5).
+      if (extra.length === 0) {
+        expect(found.someWords, query).toEqual(
+          typed.someWords.filter((option) => !found.near.includes(option)),
+        );
+      }
       added += extra.length;
       compared += 1;
     }
@@ -405,7 +410,7 @@ describe('an abbreviation that spells a movement is that movement (P1)', () => {
   });
 
   it('🔴 a short-form row of a better quality comes before a typed row of a worse one (P3)', () => {
-    // "db" is only in the middle of "Deadbug"; the dumbbell movements start with the word it means.
+    // "db" is only in the middle of "Bedbug"; the dumbbell movements start with the word it means.
     const bug: Option = { slug: 'bug', name: 'Bedbug hold', isCatalog: true, aliases: [] };
     const curl: Option = { slug: 'curl', name: 'Dumbbell curl', isCatalog: true, aliases: [] };
     const incline: Option = {
@@ -726,6 +731,11 @@ describe('bounded (P6, the contract’s half)', () => {
       near: [],
       shortFormHit: null,
       foundByAlias: new Map(),
+      hits: [],
+      hitsOutsideFilters: [],
+      custom: [],
+      outsideFilters: 0,
+      enterTarget: null,
     });
     expect(search(thirteen, options).matches).toEqual([]);
     // The same for a near miss: `prss` is word thirteen and is in no name.
