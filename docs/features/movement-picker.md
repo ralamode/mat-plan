@@ -276,7 +276,9 @@ path and **creating** the deliberate one.
       search matched anything, otherwise a near miss or a some-words row (P5, P9).
     - **A folded section opens itself while it holds a ticked row** (`FoldedSection`, shared with
       Today's program): the item form focuses the row it just made, and a row in a closed
-      `<details>` cannot take focus in a browser.
+      `<details>` cannot take focus in a browser. **It is a latch:** once held open it stays held,
+      so unticking the last row never closes the section under the person's thumb and takes focus
+      with it; only a tap on the summary closes it.
     - 🔴 **The create button and its hint read the UNFILTERED search** (panel row 9): loud only
       when nothing at all matches, and a near miss the filters hide is still named ("… is listed
       but is not in your filters."). A filter that hid a match and turned the button loud would

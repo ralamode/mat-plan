@@ -1242,12 +1242,20 @@ function FoldedSection({
   /** Show the rows' count in the summary. */
   count?: boolean;
 }) {
-  if (rows.length === 0) return null;
   const holdsTicked =
     mode.kind === 'multi' && rows.some(({ option }) => mode.selected.has(option.publicId));
+  // A LATCH, not a live value: once the section is held open (by the caller, or by a ticked row)
+  // it stays held. If `open` followed `holdsTicked` live, unticking the last ticked row would drop
+  // the attribute, React would close the section under the person's thumb, and the focused row
+  // would vanish with nowhere for focus to go. A tap on the summary still closes it: the browser
+  // owns the attribute after that, and React re-applies nothing while the prop stays `true`.
+  // Adjusted during render (React's pattern), as the sheet's reset is above.
+  const [held, setHeld] = useState(open || holdsTicked);
+  if ((open || holdsTicked) && !held) setHeld(true);
+  if (rows.length === 0) return null;
   return (
     <section aria-labelledby={headingId} className="mb-4">
-      <details open={open || holdsTicked || undefined}>
+      <details open={held || undefined}>
         {/*
           ⚠️ **The `h3` is INSIDE the `summary`**, not replaced by it. Every other section here is
           headed by an `h3`, and a screen-reader user navigating by heading — which is how you skim a
