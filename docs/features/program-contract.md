@@ -475,7 +475,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       fake, and a save for a program that is not on screen is not counted either. The real
       writers count the destination.
     - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
-      `weekDaysSchema`. That is safe because no writer stores a longer day: `saveWeek` parses the draft, and **`copyWorkout`, which adds a slot to each weekday it names without parsing a week, refuses the whole copy with `limit_reached` when one of them is already full** (the destination program's week; judged with the workouts cap; lane P's writer, #605). ⚠️ The fake does not refuse it yet: that follows in the next contract PR. The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      `weekDaysSchema`. That is safe because no real writer stores a longer day: `saveWeek` parses the draft, and **`copyWorkout`, which adds a slot to each weekday it names without parsing a week, refuses the whole copy with `limit_reached` when one of them is already full** (the destination program's week; judged with the workouts cap; lane P's writer, #605). ⚠️ The fake does not refuse it yet: that follows in the next contract PR. The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
       caps (`ProgramView.workouts` has none), and how many programs a household has is not
       capped.
 31. **An archived athlete is on no program page and no Programs list** (contract change C36;

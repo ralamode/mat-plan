@@ -347,8 +347,7 @@ gantt
 - **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
   critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a change after logging; it gates 15, not the day page (12c). It merged on 2026-11-17 (#525), before 6c-i and 6d: its reorder case is seeded by a direct band shift until 6d's writer exists.
 - **6c is two PRs since 2026-11-17**, the maintainer's decision (6c-i, Put on and the test data;
-  6c-ii, the program list and program view reads). Both are merged (#588, #612). The day page (12c) waited for 6c-i only. The pages (7b)
-  wait for 6c-ii, so 7b is drawn a wave later, inside lane B's slack.
+  6c-ii, the program list and program view reads). Both are merged (#588, #612). The day page (12c) waited for 6c-i only. The pages (7b) waited for 6c-ii, so 7b is drawn a wave later, inside lane B's slack.
 - **14 is two PRs since 2026-11-17** (14a, the program rows in the strength log, which gates 12c; 14b, the check-ins file, which does not block 12c; lane E's plan `docs/plans/fam-1-14-export.md`), in 14's one slot.
 - **11c is two PRs since 2026-11-17** (11c-i, Change; 11c-ii, the D35 revive), in 11c's one slot.
   12d's Change action waits for 11c-i only.
