@@ -88,6 +88,8 @@ async function main(): Promise<void> {
   // Ctrl-C mid-run must not leave a stray postgres holding the temp dir.
   process.on('SIGINT', () => void teardown().then(() => process.exit(130)));
   process.on('SIGTERM', () => void teardown().then(() => process.exit(143)));
+  // A closed terminal: tear down too, or the cluster outlives the run (and holds the heavy-run slot).
+  process.on('SIGHUP', () => void teardown().then(() => process.exit(129)));
 
   try {
     // Migrate + seed via the EXISTING packages/db scripts — exactly what CI's e2e job

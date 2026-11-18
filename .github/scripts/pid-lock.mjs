@@ -165,9 +165,11 @@ function clearIfStale(path, payload) {
     linkSync(tmp, guard);
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    // A guard whose holder is dead was left by a crashed stealer. Break it atomically: move it aside,
-    // then check what moved. Only the dead guard we judged is discarded; a guard someone retook in
-    // between is put back with link (never rename), so it cannot overwrite a newer one.
+    // A guard whose holder is dead was left by a crashed stealer. Break it by moving it aside, then
+    // check what moved: a guard someone retook in between is put back with link (never rename), so it
+    // cannot overwrite a newer one. The residual (a fourth taker links a guard inside that put-back
+    // gap) needs a crash mid-steal and four takers within microseconds; the guard holder re-checks
+    // that the guard is still its own before it clears a lock, which narrows it further.
     const held = readLock(guard);
     if (held !== null && !liveLock(held)) {
       const moved = `${guard}.broken.${process.pid}`;
@@ -194,7 +196,7 @@ function clearIfStale(path, payload) {
   }
   try {
     const now = readLock(path);
-    if (now !== null && !liveLock(now)) unlinkQuiet(path);
+    if (now !== null && !liveLock(now) && ours(guard, mine)) unlinkQuiet(path);
   } finally {
     if (ours(guard, mine)) unlinkQuiet(guard); // never someone else's, if ours was broken meanwhile
   }

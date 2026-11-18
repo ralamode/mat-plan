@@ -130,10 +130,27 @@ function nested() {
   return false;
 }
 
+/** A recorded process group whose leader has gone but whose members still run (signal 0 only). */
+function leftoverGroup(lock) {
+  const group = (lock.holders ?? []).find((h) => h?.group && Number.isInteger(h.pid) && h.pid > 1);
+  if (!group) return null;
+  const alive = (target) => {
+    try {
+      process.kill(target, 0);
+      return true;
+    } catch (error) {
+      return error.code === 'EPERM';
+    }
+  };
+  return !alive(group.pid) && alive(-group.pid) ? group.pid : null;
+}
+
 function describe(h) {
+  const left = leftoverGroup(h);
   return (
     `${clean(h.lane ?? 'unknown lane', 80)} ` +
-    `(${clean(h.command ?? '?', 200)}, since ${clean(h.startedAt ?? '?', 40)})`
+    `(${clean(h.command ?? '?', 200)}, since ${clean(h.startedAt ?? '?', 40)})` +
+    (left ? ` [only leftover processes, group ${left}: kill -TERM -- -${left} ends them]` : '')
   );
 }
 
@@ -144,8 +161,10 @@ const WRAPPER = fileURLToPath(import.meta.url);
  * For a runner (`e2e:local`, `screenshot:ephemeral`): re-run this process under the wrapper, unless it
  * already runs under a holder of a slot (or the slot is skipped). Returns true when it re-ran: the
  * caller returns at once, and this process exits with the wrapped run's code. The wrapper records the
- * run's whole process group, so the slot stays held until every child it started (the build,
- * `next start`, Playwright, Postgres) has exited, even when the runner itself is killed with -9.
+ * run's whole process group, so the slot stays held until every child in that group (the build,
+ * Playwright, Postgres) has exited, even when the runner itself is killed with -9. A child a runner
+ * starts `detached` (screenshot's `next start`, Playwright's own server) is in a group of its own and
+ * is not waited for.
  */
 export function runUnderSlot(command) {
   if (skipped() || nested()) return false;
@@ -166,6 +185,10 @@ export function runUnderSlot(command) {
       }
     });
   }
+  child.on('error', (error) => {
+    console.error(`✗ heavy-run slot: could not re-run under the wrapper: ${error.message}`);
+    process.exit(127);
+  });
   child.on('close', (code, signal) => process.exit(code ?? 128 + (constants.signals[signal] ?? 0)));
   return true;
 }
@@ -250,10 +273,14 @@ function cli(argv) {
       /* ps could not read the child: the wrapper stays the only holder, and the run is not orphaned */
     }
   }
+  let waiting = false;
   const forward = (signal) => {
     try {
       // A detached child leads its own group; a plain pass-through child is not a group leader.
-      if (slot.payload) process.kill(-child.pid, signal);
+      // Once the child has gone, the leftovers are stopped outright: waiting for them must end.
+      // SIGHUP reaches the group as SIGTERM: Postgres reads a HUP as "reload config" and stays up.
+      if (slot.payload)
+        process.kill(-child.pid, waiting ? 'SIGKILL' : signal === 'SIGHUP' ? 'SIGTERM' : signal);
       // A pass-through child shares the terminal's group and already got Ctrl-C / Ctrl-\ from it.
       else if (signal !== 'SIGINT' && signal !== 'SIGQUIT') child.kill(signal);
     } catch {
@@ -286,7 +313,11 @@ function cli(argv) {
       }
     };
     if (slot.payload && groupAlive()) {
-      console.error("▸ heavy-run slot: waiting for the run's remaining processes to exit");
+      waiting = true;
+      console.error(
+        `▸ heavy-run slot: waiting for the run's remaining processes (group ${child.pid}) to exit. ` +
+          'Ctrl-C ends them.',
+      );
       const timer = setInterval(() => {
         if (groupAlive()) return;
         clearInterval(timer);
