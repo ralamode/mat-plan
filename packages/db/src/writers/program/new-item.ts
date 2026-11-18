@@ -75,13 +75,15 @@ async function addOrSelect(
   trackingType: TrackingType,
 ): Promise<NewItemResult> {
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
-  // unwrapped here; no row (a household that is gone) takes no lock, and the add then fails as before.
-  await exec
+  // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
+  // count below never runs without the lock.
+  const locked = await exec
     .select({
       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
     })
     .from(schema.households)
     .where(householdRowIs(scope));
+  if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
 
   const options = await movementOptions(exec, scope);
   const hit = existingItem(

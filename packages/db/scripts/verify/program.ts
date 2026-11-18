@@ -2971,6 +2971,17 @@ async function verifyCaps(): Promise<void> {
       again.ok && again.existed && again.itemPublicId === (last.ok ? last.itemPublicId : ''),
       'FAM-1 caps: at the cap, a name the household already has selects its item',
     );
+    // A household that is gone takes no lock, so nothing is counted or written: `not_found`.
+    const { scope: goneScope, proofId: goneId } = await capsHousehold(tx);
+    await tx.delete(schema.households).where(eq(schema.households.id, goneId));
+    assert.deepEqual(
+      await newItem(exec, goneScope, {
+        name: 'Caps Orphan Drill',
+        trackingType: TRACKING_TYPE.reps,
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.not_found },
+      'FAM-1 caps: newItem for a household that is gone is not_found, never counted unlocked',
+    );
     const library = await newItem(exec, scope, {
       name: MOVEMENT_SEED_ROWS[0]!.name,
       trackingType: TRACKING_TYPE.reps,
