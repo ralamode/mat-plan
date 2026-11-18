@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 0394abea..134e562d 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -145,7 +145,7 @@ export async function copyWorkout(
+ 
+     // The program it lands in is full (C35, invariant 30): its own count, never the source's, and
+     // judged before the name. A replay answered above, so it is never capped.
+-    if (targetWorkouts.filter((w) => w.deletedAt === null).length >= MAX_PROGRAM_WORKOUTS) {
++    if (targetWorkouts.filter((w) => w.deletedAt === null).length > 10 * MAX_PROGRAM_WORKOUTS) {
+       return refuse(PROGRAM_REFUSAL.limit_reached);
+     }
+     // So is a weekday it would go on: no day may hold more than `MAX_DAY_SLOTS` (the read parses the

@@ -127,6 +127,7 @@ flowchart TD
   B -->|none| N[not_found]
   B --> W[the program's workouts FOR NO KEY UPDATE: self by public id, or by client id for a new one]
   W -->|unknown or hidden| N
+  W -->|new, program full| L[limit_reached]
   W --> T{another live workout with the folded name?}
   T -->|yes| NT[name_taken]
   T --> M[items: available to the household, of the draft's type]
@@ -168,8 +169,8 @@ flowchart TD
     those, go through the band (`week-skips-the-band`, `week-band-moves-unmoved-slots`); added slots are inserted after that, so a slot can go in front of a kept one (`week-inserts-before-the-band`). A moved or relabelled slot is stamped with `updated_at` (`week-move-skips-the-stamp`).
     **Refusals, in the preview fake's order:** `once_per_day` when a day names a workout twice,
     whatever else is wrong with the draft and also when the ids differ only in case (after a refused
-    parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `invalid` (the
-    schema); then `not_found` (the program, or a workout that is not one of its live workouts:
+    parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `limit_reached` for a day past
+    `MAX_DAY_SLOTS` (`weekExceedsDaySlots`, C35, the contract's invariant 30); then `invalid` (the schema); then `not_found` (the program, or a workout that is not one of its live workouts:
     `week-takes-any-programs-workout`, `week-takes-a-hidden-workout`). `readWeek` leaves out a hidden
     workout's slot (`week-read-shows-a-hidden-workout`), and saving the week as read hides it.
     ⚠️ **An accepted race:** a ✓ checks `isScheduledOn` unlocked, so a `saveWeek` that takes the
@@ -247,6 +248,26 @@ flowchart TD
     `program-reads-list-removed-athletes`, `programs-by-athlete-drops-the-unassigned`). A copy's day is computed in JS with `Intl.formatToParts`, as the app's
     `localDayIso` is, not with Postgres's `at time zone`, which reads a bare offset with the sign
     reversed.
+21. 🔴 **The caps are counted under a lock, before the name** (C35; the contract's invariant 30).
+    `newItem` stops the household's own items at `MAX_HOUSEHOLD_ITEMS` (counted as the picker lists
+    them, so the library and an item a catalog row shadows never count),
+    under a transaction-scoped advisory lock keyed on the household (`ADVISORY_LOCK.householdItems` in `writers/locks.ts`, reached through
+    `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
+    other. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
+    (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live
+    workouts, under the block lock both take first; `copyWorkout` also refuses a weekday it would
+    go on that already holds `MAX_DAY_SLOTS`, since it writes slots without a week to parse. `saveWeek` answers a weekday past
+    `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`. Each answers
+    before the name check, so a full program says so even for a taken name, and none writes
+    anything. A proof checks the lock is taken under its namespace and key; no gate proves the waiting
+    (PGlite has one connection) (mutations `new-item-uncapped`,
+    `new-item-counts-every-household`, `save-workout-caps-a-replay`,
+    `save-workout-counts-removed-workouts`, `save-workout-cap-off-by-one`, `copy-uncapped`,
+    `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`, `copy-onto-a-full-weekday`,
+    `copy-cap-after-the-name`, `save-workout-cap-before-not-found`,
+    `copy-cap-before-the-source`, `copy-weekday-cap-after-the-name`, `new-item-takes-no-lock`,
+    `new-item-counts-shadowed-items`, `new-item-counts-without-its-household`, `copy-counts-removed-workouts-slots`). A household whose row is gone
+    takes no lock, so `newItem` answers `not_found` before it counts.
 
 ## Changing it
 

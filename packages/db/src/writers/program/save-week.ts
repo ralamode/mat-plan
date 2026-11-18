@@ -4,6 +4,7 @@ import {
   PROGRAM_REFUSAL,
   WEEKDAYS,
   weekDraftSchema,
+  weekExceedsDaySlots,
   weekRepeatsAWorkout,
   type ProgramResult,
   type Weekday,
@@ -26,7 +27,8 @@ const slotKey = (weekday: number, workoutId: number) => `${weekday}:${workoutId}
  *
  * - **Refusals, before anything is written,** in the preview fake's order: a draft the schema
  *   refuses is `once_per_day` when a day names a workout twice (`weekRepeatsAWorkout`: whatever
- *   else is wrong, and also when the two ids differ only in case), and `invalid` otherwise; a
+ *   else is wrong, and also when the two ids differ only in case), then `limit_reached` when a day
+ *   holds more than `MAX_DAY_SLOTS` (`weekExceedsDaySlots`, C35), and `invalid` otherwise; a
  *   program that is not this household's live program, or a workout that is not one of its live
  *   workouts, is `not_found`.
  * - **A slot keeps its row** while its workout stays on that day: only its place and label change.
@@ -45,9 +47,11 @@ export async function saveWeek(
 ): Promise<ProgramResult> {
   const parsed = weekDraftSchema.safeParse(input);
   if (!parsed.success) {
-    // A repeat answers `once_per_day` whatever else is wrong: the preview fake's rule, shared.
+    // A repeat answers `once_per_day` whatever else is wrong, then a day past `MAX_DAY_SLOTS`
+    // `limit_reached` (C35, invariant 30), then `invalid`: the preview fake's order, shared.
+    if (weekRepeatsAWorkout(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
     return refuse(
-      weekRepeatsAWorkout(input) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+      weekExceedsDaySlots(input) ? PROGRAM_REFUSAL.limit_reached : PROGRAM_REFUSAL.invalid,
     );
   }
   // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.
