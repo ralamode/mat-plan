@@ -61,13 +61,19 @@ describe('tenancy depends on dynamic rendering (ADR 0006 obligation 2)', () => {
     expect(readFileSync(join(APP_DIR, 'layout.tsx'), 'utf8')).toMatch(/tenancy|TEN-1/);
   });
 
-  it('the export Route Handler is dynamic on its own (a handler inherits no segment config)', () => {
-    const handler = code(join(APP_DIR, 'p', '[profileId]', 'export', 'route.ts'));
-    expect(
-      /\bcookies\(\)/.test(handler) ||
-        /export\s+const\s+dynamic\s*=\s*'force-dynamic'/.test(handler),
-      'the export handler must call cookies() or declare force-dynamic, or it can be served from a cache with no tenant in the key',
-    ).toBe(true);
+  it('every Route Handler is dynamic on its own (a handler inherits no segment config)', () => {
+    // A glob, not a hand-pinned path: the second handler (FAM-1 7b's How to) would otherwise have had
+    // no assertion at all. The floor proves the glob still finds the two that exist.
+    const handlers = globSync('**/route.ts', { cwd: APP_DIR }).map((file) => join(APP_DIR, file));
+    expect(handlers.length).toBeGreaterThanOrEqual(2);
+    for (const file of handlers) {
+      const handler = code(file);
+      expect(
+        /\bcookies\(\)/.test(handler) ||
+          /export\s+const\s+dynamic\s*=\s*'force-dynamic'/.test(handler),
+        `${relative(APP_DIR, file)} must call cookies() or declare force-dynamic, or it can be served from a cache with no tenant in the key`,
+      ).toBe(true);
+    }
   });
 
   it('nothing in apps/web caches a read without a household id in the key', () => {
