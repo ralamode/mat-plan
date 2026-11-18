@@ -116,6 +116,35 @@ check "SIGTERM to the wrapper: it dies by the same signal (143)" '[ "$code" = 14
 check "…its child's group is ended" 'wait_for "! kill -0 $CHILD 2>/dev/null"'
 check "…and the slot is freed" gone
 
+# ── More than one slot (MAT_PLAN_HEAVY_SLOTS) ───────────────────────────────────────────────────
+SLOT2="${MAT_PLAN_HEAVY_SLOT_PATH%.json}.2.json"
+hold
+node "$SLOT" -- true >"$T/out" 2>&1
+check "the busy message gives the load average and the override" 'grep -qF "load average" "$T/out" && grep -qF "MAT_PLAN_HEAVY_SLOTS=<n>" "$T/out"'
+MAT_PLAN_HEAVY_SLOTS=2 node "$SLOT" -- sh -c 'test -e "$0"' "$SLOT2" >"$T/out" 2>&1
+code=$?
+check "MAT_PLAN_HEAVY_SLOTS=2: a second run takes slot 2 while slot 1 is held" '[ "$code" = 0 ]'
+check "…and frees slot 2 when it ends, leaving slot 1 alone" '[ ! -e "$SLOT2" ] && [ "$(field pid)" = "$HOLDER" ]'
+MAT_PLAN_HEAVY_SLOTS=2 node "$SLOT" -- sleep 30 >"$T/hold2.out" 2>&1 &
+HOLDER2=$!
+pids+=("$HOLDER2")
+wait_for '[ -e "$SLOT2" ]' || no "the second holder took slot 2"
+MAT_PLAN_HEAVY_SLOTS=2 node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "…a third run with both held: exit 2, naming both holders" '[ "$code" = 2 ] && grep -qF "all 2 heavy-run slots held by" "$T/out" && [ "$(grep -o "sleep 30" "$T/out" | wc -l | tr -d " ")" = 2 ]'
+MAT_PLAN_HEAVY_SLOTS=2 MAT_PLAN_HEAVY_SLOT_HELD="$HOLDER2" node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "…a run under slot 2's holder is nested, not refused" '[ "$code" = 0 ]'
+kill -TERM "$HOLDER2"
+wait "$HOLDER2" 2>/dev/null
+check "…and slot 2's holder frees it when stopped" 'wait_for "[ ! -e $SLOT2 ]"'
+stop_holder
+for bad in 0 -1 two 1.5 17; do
+  MAT_PLAN_HEAVY_SLOTS="$bad" node "$SLOT" -- true >"$T/out" 2>&1
+  [ $? = 64 ] || no "MAT_PLAN_HEAVY_SLOTS=$bad is refused"
+done
+check "a slot count that is not 1 to 16 is refused (exit 64)" 'grep -qF "must be a whole number" "$T/out" && gone'
+
 # ── Stale and reused pids ───────────────────────────────────────────────────────────────────────
 sh -c 'exit 0' &
 dead=$!

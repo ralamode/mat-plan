@@ -292,7 +292,10 @@ movement picker.
   lockfile, manifest or tsconfig changed ([script](./.github/scripts/test-changed.mjs)). A courtesy,
   not a gate: CI runs every test.
 - **When to run locally** (DX-18, [plan](./docs/plans/dx-18-heavy-runs-to-ci.md)): one heavy local run
-  at a time, machine-wide. Run locally to write code (one file, one probe), debug a CI failure,
+  at a time, machine-wide by default, **enforced by the heavy-run slot**
+  ([heavy-slot.mjs](./.github/scripts/heavy-slot.mjs)): `db:mutations`, `e2e:local`,
+  `screenshot:ephemeral` and `verify` take it, and a second run exits 2 naming the holder.
+  `MAT_PLAN_HEAVY_SLOTS=<n>` allows more on a machine with the headroom. Run locally to write code (one file, one probe), debug a CI failure,
   `pnpm probe`, edit CI itself, during an Actions outage, for `pnpm dev`, and for production
   operations (corrections; never tests against production). **Everything else heavy runs on CI:
   push, and let it gate.** Until DX-18 PR 2 puts the mutation proof in CI, a diff touching

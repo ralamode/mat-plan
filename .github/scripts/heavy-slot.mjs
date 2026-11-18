@@ -15,24 +15,44 @@
  * sees `MAT_PLAN_HEAVY_SLOT_HELD`, which counts only when it equals the live lock's pid: a stray
  * `export` cannot turn the slot off.
  *
- * - Busy: exits 2 with who holds it. Push and let CI gate it, or wait.
+ * - **How many:** `HEAVY_SLOTS_DEFAULT` (1) at once; `MAT_PLAN_HEAVY_SLOTS=<n>` allows more on a machine
+ *   that has the headroom (the maintainer, 2026-11-17: more than one suite is fine while the machine
+ *   is on power and has resources). Slot 1 is the path below; slot k is `heavy-slot.k.json` beside it.
+ * - Busy: exits 2 naming every holder and the load average. Push and let CI gate it, or wait.
  * - `MAT_PLAN_HEAVY_SLOT=off` skips it, for a person who knows the machine is idle.
  * - Under `CI` or `GITHUB_ACTIONS` it does nothing: a runner has one job.
  * - `MAT_PLAN_HEAVY_SLOT_PATH` moves the lock; the self-tests use it, so they never touch a live slot.
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { homedir } from 'node:os';
+import { cpus, homedir, loadavg } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { acquire, holder, liveLock, readLock, release, rewrite } from './pid-lock.mjs';
 
 export const SLOT_BUSY_EXIT = 2;
+/** Heavy local runs allowed at once, unless `MAT_PLAN_HEAVY_SLOTS` says otherwise. */
+export const HEAVY_SLOTS_DEFAULT = 1;
 
-export function slotPath() {
-  return (
-    process.env.MAT_PLAN_HEAVY_SLOT_PATH || join(homedir(), '.cache', 'mat-plan', 'heavy-slot.json')
-  );
+export function slotCount() {
+  const raw = process.env.MAT_PLAN_HEAVY_SLOTS;
+  if (raw === undefined || raw === '') return HEAVY_SLOTS_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 16) {
+    console.error(
+      `✗ MAT_PLAN_HEAVY_SLOTS must be a whole number from 1 to 16, got: ${clean(raw, 20)}`,
+    );
+    process.exit(64);
+  }
+  return n;
+}
+
+/** Slot k's lock (1-based). Slot 1 is `MAT_PLAN_HEAVY_SLOT_PATH` or `~/.cache/mat-plan/heavy-slot.json`. */
+export function slotPath(k = 1) {
+  const first =
+    process.env.MAT_PLAN_HEAVY_SLOT_PATH ||
+    join(homedir(), '.cache', 'mat-plan', 'heavy-slot.json');
+  return k === 1 ? first : first.replace(/(\.json)?$/, `.${k}$1`);
 }
 
 const clean = (text, max) =>
@@ -63,12 +83,22 @@ function skipped() {
   return false;
 }
 
-/** Already inside a run that holds the slot: HELD names the live lock's own pid. */
-function nested(path) {
+/** Already inside a run that holds a slot: HELD names a live slot lock's own pid. */
+function nested(count) {
   const held = process.env.MAT_PLAN_HEAVY_SLOT_HELD;
   if (!held) return false;
-  const live = liveLock(readLock(path));
-  return Boolean(live) && String(live.pid) === held;
+  for (let k = 1; k <= count; k += 1) {
+    const live = liveLock(readLock(slotPath(k)));
+    if (live && String(live.pid) === held) return true;
+  }
+  return false;
+}
+
+function describe(h) {
+  return (
+    `${clean(h.lane ?? 'unknown lane', 80)} ` +
+    `(${clean(h.command ?? '?', 200)}, since ${clean(h.startedAt ?? '?', 40)})`
+  );
 }
 
 const NOOP = { release() {}, payload: null };
@@ -79,8 +109,9 @@ const NOOP = { release() {}, payload: null };
  * process runs under a holder of the slot.
  */
 export function takeSlot(command) {
-  const path = slotPath();
-  if (skipped() || nested(path)) return NOOP;
+  if (skipped()) return NOOP;
+  const count = slotCount();
+  if (nested(count)) return NOOP;
   const payload = {
     pid: process.pid,
     lane: lane(),
@@ -88,19 +119,32 @@ export function takeSlot(command) {
     startedAt: new Date().toISOString(),
     holders: [holder(process.pid)],
   };
-  const result = acquire(path, payload);
-  if (!result.held) {
-    const h = result.holder;
+  const busy = [];
+  let path = null;
+  for (let k = 1; k <= count && !path; k += 1) {
+    const result = acquire(slotPath(k), payload);
+    if (result.held) path = slotPath(k);
+    else busy.push(result.holder);
+  }
+  if (!path) {
+    const load = loadavg()
+      .map((n) => n.toFixed(2))
+      .join(' ');
+    const slots = count === 1 ? 'heavy-run slot' : `all ${count} heavy-run slots`;
     console.error(
-      `✗ heavy-run slot held by ${clean(h.lane ?? 'unknown lane', 80)} ` +
-        `(${clean(h.command ?? '?', 200)}, since ${clean(h.startedAt ?? '?', 40)}). ` +
-        'Push and let CI gate it, or wait.',
+      `✗ ${slots} held by ${busy.map(describe).join('; ')}. ` +
+        'Push and let CI gate it, or wait.\n' +
+        `  load average ${load} on ${cpus().length} cores` +
+        (count === 1
+          ? '; MAT_PLAN_HEAVY_SLOTS=<n> allows more when the machine has the headroom.'
+          : '.'),
     );
     process.exit(SLOT_BUSY_EXIT);
   }
   let released = false;
   const handle = {
     payload,
+    path,
     release() {
       if (released) return;
       released = true;
@@ -131,7 +175,7 @@ function cli(argv) {
   });
   if (slot.payload && child.pid) {
     slot.payload.holders.push(holder(child.pid, { group: true }));
-    rewrite(slotPath(), slot.payload);
+    rewrite(slot.path, slot.payload);
   }
   const forward = (signal) => {
     try {
