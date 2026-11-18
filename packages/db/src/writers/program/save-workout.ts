@@ -83,9 +83,11 @@ const quantityColumns = (q: WorkoutDraftItem['quantities'][number]) => ({
  *    fields do not fit its type.
  * 2. `not_found`: the program is not this household's live program, or `workoutPublicId` names no
  *    live workout of it.
- * 3. `name_taken`: another live workout of the program has the same folded name (plan D5).
- * 4. `not_found`: an item is not available to the household.
- * 5. `invalid`: an item's `trackingType` is not the item's own, or a `prescriptionClientId` this
+ * 3. `limit_reached`: a NEW workout in a program that holds `MAX_PROGRAM_WORKOUTS` live workouts
+ *    (C35; an edit and a replay are never capped), judged before the name.
+ * 4. `name_taken`: another live workout of the program has the same folded name (plan D5).
+ * 5. `not_found`: an item is not available to the household.
+ * 6. `invalid`: an item's `trackingType` is not the item's own, or a `prescriptionClientId` this
  *    workout already knows names another item or a removed card.
  *
  * `not_found` is one answer for every miss (ADR 0006), so a caller cannot tell which id missed.

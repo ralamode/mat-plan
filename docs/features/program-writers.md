@@ -124,6 +124,7 @@ flowchart TD
   B -->|none| N[not_found]
   B --> W[the program's workouts FOR NO KEY UPDATE: self by public id, or by client id for a new one]
   W -->|unknown or hidden| N
+  W -->|new, program full| L[limit_reached]
   W --> T{another live workout with the folded name?}
   T -->|yes| NT[name_taken]
   T --> M[items: available to the household, of the draft's type]
@@ -227,12 +228,14 @@ flowchart TD
     seeded workouts (`newItem`): "DB bench press" is seeded as the catalog's Dumbbell Bench Press.
 
 20. 🔴 **The caps are counted under a lock, before the name** (C35; the contract's invariant 30).
-    `newItem` stops the household's own items at `MAX_HOUSEHOLD_ITEMS` (the library never counts),
+    `newItem` stops the household's own items at `MAX_HOUSEHOLD_ITEMS` (counted as the picker lists
+    them, so the library and an item a catalog row shadows never count),
     under a transaction-scoped advisory lock keyed on the household (`ITEM_LOCK`, reached through
     `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
     other. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
     (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live
-    workouts, under the block lock both take first. `saveWeek` answers a weekday past
+    workouts, under the block lock both take first; `copyWorkout` also refuses a weekday it would
+    go on that already holds `MAX_DAY_SLOTS`, since it writes slots without a week to parse. `saveWeek` answers a weekday past
     `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`. Each answers
     before the name check, so a full program says so even for a taken name, and none writes
     anything. No gate proves a lock (PGlite has one connection) (mutations `new-item-uncapped`,

@@ -27,7 +27,8 @@ const slotKey = (weekday: number, workoutId: number) => `${weekday}:${workoutId}
  *
  * - **Refusals, before anything is written,** in the preview fake's order: a draft the schema
  *   refuses is `once_per_day` when a day names a workout twice (`weekRepeatsAWorkout`: whatever
- *   else is wrong, and also when the two ids differ only in case), and `invalid` otherwise; a
+ *   else is wrong, and also when the two ids differ only in case), then `limit_reached` when a day
+ *   holds more than `MAX_DAY_SLOTS` (`weekExceedsDaySlots`, C35), and `invalid` otherwise; a
  *   program that is not this household's live program, or a workout that is not one of its live
  *   workouts, is `not_found`.
  * - **A slot keeps its row** while its workout stays on that day: only its place and label change.

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import {
   existingItem,
@@ -16,12 +16,7 @@ import { movementOptions } from '../../queries/program/movement-options';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { findOrCreateTypedMovement } from '../movement-catalog';
-import {
-  householdRowIs,
-  movementInHousehold,
-  movementIsAvailableTo,
-  movementIsGlobal,
-} from '../ownership';
+import { householdRowIs, movementIsAvailableTo, movementIsGlobal } from '../ownership';
 import { refuse } from './refuse';
 
 type NewItemResult = ProgramResult<{
@@ -30,6 +25,13 @@ type NewItemResult = ProgramResult<{
   trackingType: TrackingType;
   existed: boolean;
 }>;
+
+/**
+ * The advisory-lock namespace for a household's own items (the first key; the household's id is
+ * `hashint8` of the household's id the second, so any bigint id fits). Any other per-household
+ * advisory lock takes its own namespace.
+ */
+export const ITEM_LOCK = 600_001;
 
 /**
  * `ProgramActions.newItem`'s writer (FAM-1 step 6a-iii-a; contract change C8): add an item by name
@@ -54,17 +56,12 @@ type NewItemResult = ProgramResult<{
  * transaction-scoped advisory lock on the household (`ITEM_LOCK`), so two adds at once count one
  * after the other, and the second sees the first's row (and selects it, if it is the same name).
  *
- * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`. D25's races
- * are accepted: two adds of one new name at once both reach step 3, the household slug index lets
- * one row in, and both answer it (each `existed: false`); two adds at once of names with one key
- * and different slugs (`pushups`, `push ups`) both insert, and leave two items.
+ * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`; past the cap,
+ * `limit_reached`. D25's races are closed by the lock: a second add at the same moment waits, then
+ * finds the first add's item by the picker's rule (`pushups` after `push ups` included) and selects
+ * it with `existed: true`. Only the strength logger's own find-or-create (`findOrCreateMovement`)
+ * still makes items outside the lock.
  */
-/**
- * The advisory-lock namespace for a household's own items (the first key; the household's id is
- * the second). Any other per-household advisory lock takes its own namespace.
- */
-export const ITEM_LOCK = 600_001;
-
 export async function newItem(
   exec: Executor,
   scope: HouseholdScope,
@@ -85,7 +82,7 @@ async function addOrSelect(
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
   // unwrapped here; no row (a household that is gone) takes no lock, and the add then fails as before.
   await exec
-    .select({ locked: sql`pg_advisory_xact_lock(${ITEM_LOCK}, ${schema.households.id}::int)` })
+    .select({ locked: sql`pg_advisory_xact_lock(${ITEM_LOCK}, hashint8(${schema.households.id}))` })
     .from(schema.households)
     .where(householdRowIs(scope));
 
@@ -130,11 +127,10 @@ async function addOrSelect(
     };
   }
 
-  const [own] = await exec
-    .select({ n: count() })
-    .from(schema.movements)
-    .where(movementInHousehold(scope));
-  if ((own?.n ?? 0) >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+  // The household's own items, as the picker lists them (live, not shadowed by a catalog item):
+  // the fake's count, from the list already read under the lock.
+  const own = options.filter((option) => option.owner !== 'catalog').length;
+  if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
 
   const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);
   const [row] = await exec

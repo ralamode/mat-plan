@@ -2944,7 +2944,7 @@ async function verifyCaps(): Promise<void> {
     });
     assert.ok(
       library.ok && library.existed,
-      'FAM-1 caps: at the cap, a library item is still selected (library items never count)',
+      'FAM-1 caps: at the cap, a library item is still selected',
     );
   });
 
@@ -3024,6 +3024,18 @@ async function verifyCaps(): Promise<void> {
       { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
       'FAM-1 caps: a copy into a full program is limit_reached',
     );
+    assert.deepEqual(
+      await copyWorkout(exec, scope, {
+        clientId: newId(),
+        workoutPublicId: workouts[1]!,
+        toProgramPublicId: full,
+        name: 'Caps workout 3',
+        weekdays: [],
+        label: null,
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
+      'FAM-1 caps: …judged before the name: a copy named like a workout of the full program says it is full',
+    );
     const copyClient = newId();
     const intoRoomy = await copy(roomy, copyClient);
     assert.ok(
@@ -3074,6 +3086,51 @@ async function verifyCaps(): Promise<void> {
       'FAM-1 caps: …but a repeat on that day is asked first (once_per_day)',
     );
     assert.deepEqual(await slotRows(tx), before, 'FAM-1 caps: …and neither writes anything');
+
+    // A copy onto a weekday that holds MAX_DAY_SLOTS: refused whole, nothing written (C35, (a)).
+    const spare = await mustCreate(tx, scope, 'Caps week program');
+    const dayWorkouts: string[] = [];
+    for (let i = 0; i < MAX_DAY_SLOTS + 1; i++) {
+      dayWorkouts.push(await mustSaveWorkout(tx, scope, spare, `Caps day ${i}`));
+    }
+    assert.deepEqual(
+      await saveWeek(exec, scope, {
+        programPublicId: spare,
+        days: weekOf({ 1: dayWorkouts.slice(0, MAX_DAY_SLOTS).map((w) => slot(w)) }),
+      }),
+      { ok: true },
+      'FAM-1 caps: the proof fills Monday',
+    );
+    const workoutsBefore = await count(spare);
+    const slotsBefore = await slotRows(tx);
+    assert.deepEqual(
+      await copyWorkout(exec, scope, {
+        clientId: newId(),
+        workoutPublicId: dayWorkouts[0]!,
+        toProgramPublicId: spare,
+        weekdays: [2, 1],
+        label: null,
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
+      'FAM-1 caps: a copy onto a full weekday is limit_reached',
+    );
+    assert.deepEqual(
+      [await count(spare), await slotRows(tx)],
+      [workoutsBefore, slotsBefore],
+      'FAM-1 caps: …and writes nothing, on any day',
+    );
+    assert.ok(
+      (
+        await copyWorkout(exec, scope, {
+          clientId: newId(),
+          workoutPublicId: dayWorkouts[0]!,
+          toProgramPublicId: spare,
+          weekdays: [2],
+          label: null,
+        })
+      ).ok,
+      'FAM-1 caps: a copy onto a day with room is made',
+    );
   });
   console.log(
     '✓ FAM-1 caps: items, workouts (a copy counts its destination) and a weekday’s slots answer limit_reached past their caps; an edit, a replay and an existing item never do',
