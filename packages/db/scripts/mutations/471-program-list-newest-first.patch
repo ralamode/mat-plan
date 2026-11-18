@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/queries/program/program-list.ts b/packages/db/src/queries/program/program-list.ts
+index d3c5abfa..458579ea 100644
+--- a/packages/db/src/queries/program/program-list.ts
++++ b/packages/db/src/queries/program/program-list.ts
+@@ -1,4 +1,4 @@
+-import { asc } from 'drizzle-orm';
++import { asc, desc } from 'drizzle-orm';
+ 
+ import { isoDaySchema, programListSchema, type ProgramList } from '@mat-plan/shared';
+ 
+@@ -35,7 +35,7 @@ export async function readProgramList(
+     })
+     .from(schema.programBlocks)
+     .where(liveTemplateBlockIn(scope))
+-    .orderBy(asc(schema.programBlocks.id));
++    .orderBy(desc(schema.programBlocks.id));
+ 
+   const on = new Map<number, string[]>();
+   for (const athlete of await athletesOnPrograms(exec, scope, today)) {

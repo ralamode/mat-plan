@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
+index bd5fe95e..a26dc037 100644
+--- a/packages/db/src/queries/program/program-view.ts
++++ b/packages/db/src/queries/program/program-view.ts
+@@ -95,7 +95,7 @@ export async function readProgramView(
+       name: w.name,
+       copiedFromProgramName: w.copiedFromProgramName,
+       // The day it was copied in the household's calendar; `tz` is a bound parameter.
+-      createdOn: sql<string>`to_char(${w.createdAt} at time zone ${tz}, 'YYYY-MM-DD')`,
++      createdOn: sql<string>`to_char(${w.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`,
+     })
+     .from(w)
+     .where(and(eq(w.blockId, program.id), isNull(w.deletedAt)))

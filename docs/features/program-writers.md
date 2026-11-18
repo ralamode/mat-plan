@@ -238,7 +238,12 @@ flowchart TD
     earliest made first. Both reads take `today` (and `readProgramView` the household's `tz`, for a
     copy's day) from the caller and parse their answer with the contract's schema. Each proof seeds
     the fixture world into a household of its own and compares ids exactly; it never reads the seed
-    household.
+    household (mutations `program-list-any-households-blocks`, `program-list-newest-first`,
+    `program-reads-list-archived-athletes`, `program-reads-any-households-athletes`,
+    `program-view-any-households-programs`, `program-view-counts-removed-cards`,
+    `program-view-copy-day-in-utc`, `program-view-drops-the-last-day`,
+    `program-view-lists-removed-workouts`, `program-workout-ids-keep-removed`,
+    `program-view-also-on-includes-itself`).
 
 ## Changing it
 
