@@ -1439,7 +1439,8 @@ Then:
 > it is `OPS-3`, whose runbook section is still a `_TODO_` stub below. **So until `OPS-3` exists and
 > has been rehearsed once, a mistaken or fraudulent deletion is not practically recoverable.** That is
 > a reason to be slow and careful at step 0 — not a reason to relax there. **`OPS-3`'s rehearsal is a
-> precondition of the first real deletion.**
+> precondition of the first real deletion of an outside family's data** (the maintainer's own family's
+> waits for none, _maintainer, 2026-11-18_, Q7).
 
 ### ⛔ Precondition 2 — a household with a seed id is not deleted here
 
@@ -1945,7 +1946,8 @@ transaction shape and its ledger, and says only what differs.
 
    Either way: the notice of a date and a way to cancel, the 7-day wait, the re-confirmation, and a
    Neon restore branch held 7 days, as the household delete. `OPS-3`'s rehearsal is a precondition of
-   the first real erasure, as it is of the first deletion.
+   the first real erasure of an outside family's athlete, as it is of the first such deletion; the
+   maintainer's own family's waits for none (Q7, 2026-11-18).
 
 2. **A seeded athlete is not erased here.** Refuse if the profile's `public_id` is in `SEED_PUBLIC_IDS`:
    it is removed with the seeded household by `CAT-3`'s fresh start. Production's seed no longer writes
@@ -2146,23 +2148,53 @@ workout or item, and says only what differs.
 
 ### ⛔ Preconditions
 
-1. **Who may ask:** the household owner, confirmed on the invitation channel, with the notice of a
-   date and a way to cancel, the 7-day wait, the re-confirmation, and a Neon restore branch held 7 days,
-   exactly as the household delete. An adult athlete asking about a program written for them asks the
-   owner, or asks for their own erasure ([Erase one athlete](#erase-one-athlete-fam-1-step-5)).
-2. **Only what the household built.** A program must be `kind = 'template'` with `household_id = H`;
-   a `legacy` program is the seed's, and the seed puts it back on the next push to `main`
-   (`packages/db/src/seed.ts`), so refuse it until `OPS-2` takes the seed out of production. An item
-   must have `household_id = H`; a row with `household_id IS NULL` is the shared catalog and is never
-   removed this way.
+The maintainer decided this section's policy on 2026-11-18 (Q7–Q10, relayed by the FAM-1 board), with a
+principle that also binds any later in-app removal:
+
+> _"we should not have one members change like this affect the others data in the long run - perhaps we
+> could warn the adult/owner deleting that this may affect data and propose archiving or renaming it
+> unless they are ok with changing the data and tell them who it affects. In the end, I would not want
+> this to hurt eventual reporting"_ _(maintainer, 2026-11-18)_
+
+1. **Who may ask:** the household owner, confirmed on the invitation channel, and re-confirmed once
+   they have been told who is affected (step 0). **No pause** (Q8): the removal runs right after that
+   confirmation. A Neon restore branch is cut immediately before it and **held 3 days**, then deleted.
+   An adult athlete asking about a program written for them asks the owner, or asks for their own
+   erasure ([Erase one athlete](#erase-one-athlete-fam-1-step-5)). `OPS-3`'s drill does not gate a
+   removal from the maintainer's own family; it gates an outside family's (Q7).
+2. **Only what the household built.** A program must be `kind = 'template'` with `household_id = H`; a
+   `legacy` program belongs to the seeded household, which the fresh start erases whole (CAT-3 R0), so
+   it is refused here. An item must have `household_id = H`; a row with `household_id IS NULL` is the
+   shared catalog and is never removed this way.
 3. **No `deleted_at` filter anywhere**, as in the household delete. A workout item taken out in the app,
    and a week slot taken off a day, are hidden, not gone, and their hidden rows are exactly what this
    removes. (No app path hides a program, a workout or an item.)
+4. **Logged history survives, for reporting.** A removal never deletes a log row and never leaves one
+   without the name it shows: every session, entry and superset keeps the text frozen onto it when it
+   was logged (`workout_name`, `movement_name`, `prescribed_snapshot`, `prescription_group`) and its set
+   numbers; only the link back to the removed program, workout or prescription is cleared. **A removal
+   that would delete or orphan another athlete's log rows is refused**: that is why a typed item a log
+   still names cannot be removed (STOP 2, Q10).
 
 ### Steps
 
-**0. Record the request** in the ledger (below). **1. Offer the export first**
-(`/p/<profileId>/export`, for each athlete who trained on it).
+**0. Record the request** in the ledger (below), then **say who is affected, and offer the alternative
+first.** Run the case's report (below) before anything else and tell the requester, on the verified
+channel, **every athlete with an assignment to it or a log naming it** (reports (1) and (2), or STOP 2
+for an item). Then offer, as the default, the change that touches nobody's data:
+
+| Target    | The alternative, offered first                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| A program | Rename it, or take every athlete off it (the app's take off): it stays, and so does who was on it |
+| A workout | Rename it, or take it off the week: it stays in the program, and its logs keep their link         |
+| An item   | Rename it, by a correction (the app cannot rename a typed item); every log keeps its name         |
+
+**Remove only if the requester, told who, explicitly accepts changing those athletes' data** (record
+"accepted, told who" in the ledger, without names). An **adult** athlete among them is told first, on
+their own channel, and cannot cancel it (Q9). There is no in-app archive for a program, a workout or an
+item yet; when one is built it is offered first, the same way.
+
+**1. Offer the export first** (`/p/<profileId>/export`, for each athlete who trained on it).
 
 **2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**
 household, never from the target row, and the target must carry it:
@@ -2182,8 +2214,8 @@ No row is a refusal: the target is not this household's, or it is the seed's or 
 **3. Dry run: the stops, then the report**, for the one case asked for. **4. Apply** in one
 transaction; its **first statement after the `SET LOCAL`s locks the target** (below), so the app's
 writers, which take `FOR NO KEY UPDATE` on a program before changing it, wait until `COMMIT`. Then
-re-run the stops and the report (the cooling-off made them stale; anything new is a new answer to get,
-never a row to delete silently), then count, delete and re-count to 0, `ROLLBACK` on any surprise.
+re-run the stops and the report (anything new since step 0, such as an athlete put on it, is a new answer
+to get, never a row to delete silently), then count, delete and re-count to 0, `ROLLBACK` on any surprise.
 
 #### A program (`:B`)
 
@@ -2209,8 +2241,8 @@ UNION ALL SELECT 'session', s.id FROM sessions s
   JOIN workouts w ON w.id = s.workout_id JOIN profiles p ON p.id = s.profile_id
  WHERE w.block_id = :B AND p.household_id <> :H;
 
--- REPORT (not a stop). Tell the household at the START of the cooling-off, and remove only if the
--- answer stands with it known.
+-- REPORT (not a stop). Told to the requester at step 0, and removed only if the requester accepts
+-- changing these athletes' data with it known.
 -- (1) Who is on it, or was: every assignment row, open, closed or hidden. Removing the program takes
 --     each athlete off it and removes the record of when they were on it (NO ACTION, so these rows are
 --     deleted, never left). An ADULT athlete in this list is told on their own channel before the
@@ -2365,14 +2397,14 @@ WHERE id = :M AND household_id = :H`), never `:M` alone, so a mistyped id cannot
 Never answer an abort here by setting `household_id` to NULL: that would publish the household's text
 into the shared catalog (the household delete's step 11 says why).
 
-**5. Close out.** Ledger, the held restore branch, and tell the household it is done.
+**5. Close out.** Ledger, the restore branch (deleted after 3 days), and tell the household it is done.
 
 ### The ledger, at item grain
 
 One ledger with the household delete. An entry records the request date, **the `public_id`** of the
 program, workout or item (`OPS-3`'s replay re-applies the removal after a restore), the verifying
 channel, the household's keep-or-remove answer to report lines (3) and (4) **by the copy's or the
-item's `public_id`**, the apply date and the restore-branch-deleted date. **Never who was on the program
+item's `public_id`**, whether the alternative was offered and the change to other athletes' data accepted (yes or no), the apply date and the restore-branch-deleted date. **Never who was on the program
 or trained on it** (reports (1) and (2) are told, not answered): that is the record the removal deletes.
 No names, no `profile_id`, no Clerk ids.
 

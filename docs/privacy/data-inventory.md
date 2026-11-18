@@ -685,7 +685,8 @@ every row that points at it; the household's programs stay). _(2026-11-18)_ A th
 one program, workout or typed item on request" deletes one program the household built (its workouts,
 items, targets, week and who was on it, hidden rows included), one workout, or one item the household
 typed that no log names. The logs of athletes who trained on a removed program stay, with the text
-frozen onto them when they were logged.
+frozen onto them when they were logged. It runs with no pause once the owner, told which athletes it affects, accepts; its
+restore branch is held 3 days, not 7 _(maintainer, 2026-11-18)_.
 
 ## 6. Getting data out — and what the export omits
 
