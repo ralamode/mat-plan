@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index 84c6b6d2..6f2f829e 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -1,4 +1,4 @@
+-import { and, count, desc, eq, sql } from 'drizzle-orm';
++import { and, count, desc, eq, isNotNull, sql } from 'drizzle-orm';
+ 
+ import {
+   existingItem,
+@@ -133,7 +133,7 @@ async function addOrSelect(
+   const [own] = await exec
+     .select({ n: count() })
+     .from(schema.movements)
+-    .where(movementInHousehold(scope));
++    .where(isNotNull(schema.movements.householdId));
+   if ((own?.n ?? 0) >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+ 
+   const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);

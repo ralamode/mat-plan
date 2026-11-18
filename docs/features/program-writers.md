@@ -226,6 +226,20 @@ flowchart TD
     `seed-fixtures-uses-a-wrongly-typed-item`). An item the catalog has is the catalog's in the
     seeded workouts (`newItem`): "DB bench press" is seeded as the catalog's Dumbbell Bench Press.
 
+20. 🔴 **The caps are counted under a lock, before the name** (C35; the contract's invariant 30).
+    `newItem` stops the household's own items at `MAX_HOUSEHOLD_ITEMS` (the library never counts),
+    under a transaction-scoped advisory lock keyed on the household (`ITEM_LOCK`, reached through
+    `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
+    other. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
+    (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live
+    workouts, under the block lock both take first. `saveWeek` answers a weekday past
+    `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`. Each answers
+    before the name check, so a full program says so even for a taken name, and none writes
+    anything. No gate proves a lock (PGlite has one connection) (mutations `new-item-uncapped`,
+    `new-item-counts-every-household`, `save-workout-caps-a-replay`,
+    `save-workout-counts-removed-workouts`, `save-workout-cap-off-by-one`, `copy-uncapped`,
+    `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`).
+
 ## Changing it
 
 Start from the step's row in the plan (§5) and the decisions it cites (D19 for matching a saved
