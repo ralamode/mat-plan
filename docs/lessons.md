@@ -640,6 +640,12 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   not a path exclusion, so real secrets in those files are still caught). Low-entropy placeholders
   (`ci-build-placeholder`) slip through by luck — don't rely on that. (V0-11)
 
+- **gitleaks red on `approved.json`, rule `sumologic-access-token`.** → The default rule's keyword is
+  `sumo`, so a catalog slug containing it (`sumo_deadlift`) followed by its 64-hex `entryHash` reads
+  as a token. → `.gitleaks.toml` allowlists exactly that line shape (a `sumo` slug, then 64 lowercase
+  hex). Another rule keyword in a future slug fails the same way: read the job log's `RuleID`, and
+  add a regex as tight as this one, never a path exclusion. (CAT-3 batch 7)
+
 ## Next.js 16
 
 - **A CSP "Applying inline style violates … style-src" on a page that looks fine, intermittent, and

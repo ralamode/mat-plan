@@ -16,9 +16,14 @@ title = "mat-plan"
 useDefault = true
 
 [allowlist]
-description = "Non-secret placeholder values, now surviving only in documentation"
+description = "Non-secret placeholder values, and catalog approval hashes on slugs that contain sumo"
 regexTarget = "line"
 regexes = [
   '''ci-e2e-placeholder-1234''',
   '''ci-build-placeholder''',
+  # A catalog approval line in packages/shared/src/catalog/data/approved.json: a movement slug and
+  # its entryHash (sha-256 hex). A slug with "sumo" in it (sumo_deadlift) trips the default
+  # sumologic-access-token rule, whose keyword is "sumo". Only that exact shape is allowed: a slug
+  # containing "sumo", then a 64-character lowercase hex value, and nothing else on the line.
+  '''^\s*"[a-z0-9_-]*sumo[a-z0-9_-]*": "[0-9a-f]{64}",?$''',
 ]
