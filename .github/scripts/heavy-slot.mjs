@@ -37,6 +37,8 @@ import { acquire, holder, liveLock, readLock, release, rewrite } from './pid-loc
 export const SLOT_BUSY_EXIT = 2;
 /** Heavy local runs allowed at once, unless `MAT_PLAN_HEAVY_SLOTS` says otherwise. */
 export const HEAVY_SLOTS_DEFAULT = 1;
+/** The most slots a count may allow; nesting checks all of them, whatever the count is now. */
+export const MAX_SLOTS = 16;
 
 /** The machine-wide count file: one number, beside the slot locks. */
 export function slotCountFile() {
@@ -45,8 +47,10 @@ export function slotCountFile() {
 
 function parseCount(raw, source) {
   const n = Number(String(raw).trim());
-  if (!Number.isInteger(n) || n < 1 || n > 16) {
-    console.error(`✗ ${source} must be a whole number from 1 to 16, got: ${clean(raw, 20)}`);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_SLOTS) {
+    console.error(
+      `✗ ${source} must be a whole number from 1 to ${MAX_SLOTS}, got: ${clean(raw, 20)}`,
+    );
     process.exit(64);
   }
   return n;
@@ -61,7 +65,8 @@ export function slotCount() {
     file = readFileSync(slotCountFile(), 'utf8').slice(0, 64);
   } catch (error) {
     if (error.code === 'ENOENT') return HEAVY_SLOTS_DEFAULT;
-    throw error;
+    console.error(`✗ could not read ${slotCountFile()}: ${error.code ?? error.message}`);
+    process.exit(64);
   }
   return file.trim() === '' ? HEAVY_SLOTS_DEFAULT : parseCount(file, slotCountFile());
 }
@@ -114,10 +119,11 @@ function skipped() {
 }
 
 /** Already inside a run that holds a slot: HELD names a live slot lock's own pid. */
-function nested(count) {
+function nested() {
   const held = process.env.MAT_PLAN_HEAVY_SLOT_HELD;
   if (!held) return false;
-  for (let k = 1; k <= count; k += 1) {
+  // Every possible slot, not 1..count: the machine file can be lowered while a run holds slot 2.
+  for (let k = 1; k <= MAX_SLOTS; k += 1) {
     const live = liveLock(readLock(slotPath(k)));
     if (live && String(live.pid) === held) return true;
   }
@@ -140,8 +146,9 @@ const NOOP = { release() {}, payload: null };
  */
 export function takeSlot(command) {
   if (skipped()) return NOOP;
+  // Nesting first: a run already holding a slot must not be refused because the count changed.
+  if (nested()) return NOOP;
   const count = slotCount();
-  if (nested(count)) return NOOP;
   const payload = {
     pid: process.pid,
     lane: lane(),

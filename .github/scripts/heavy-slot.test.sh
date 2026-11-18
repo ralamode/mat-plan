@@ -177,6 +177,23 @@ code=$?
 check "a machine file that is not 1 to 16 is refused, naming the file" '[ "$code" = 64 ] && grep -qF "heavy-slots must be a whole number" "$T/out"'
 rm -f "$COUNTFILE"
 stop_holder
+# Lowered mid-run: a run holding slot 2 keeps going when the file drops to 1.
+echo 2 >"$COUNTFILE"
+hold
+node "$SLOT" -- sh -c 'sleep 1; MAT_PLAN_HEAVY_SLOT_HELD="$MAT_PLAN_HEAVY_SLOT_HELD" node "$0" -- true' "$SLOT" >"$T/out" 2>&1 &
+lowered=$!
+track "$lowered"
+wait_for '[ -e "$SLOT2" ]'
+echo 1 >"$COUNTFILE"
+wait "$lowered"
+code=$?
+check "lowering the file mid-run does not fail a step of a run already holding slot 2" '[ "$code" = 0 ]'
+mkdir "$COUNTFILE.d" 2>/dev/null; rm -f "$COUNTFILE"; mv "$COUNTFILE.d" "$COUNTFILE"
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "an unreadable machine file is refused with a message, not a stack" '[ "$code" = 64 ] && grep -qF "could not read" "$T/out"'
+rmdir "$COUNTFILE"
+stop_holder
 
 for bad in 0 -1 two 1.5 17; do
   MAT_PLAN_HEAVY_SLOTS="$bad" node "$SLOT" -- true >"$T/out" 2>&1

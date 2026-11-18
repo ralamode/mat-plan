@@ -4,7 +4,9 @@
   command that hold the slot and the load average. The default is one run at a time. Writing a
   number to `~/.cache/mat-plan/heavy-slots` allows more for every session on the machine, and
   `MAT_PLAN_HEAVY_SLOTS=<n>` for one shell, when the machine has the headroom (the maintainer,
-  2026-11-17). Under CI the slot does nothing, and `MAT_PLAN_HEAVY_SLOT=off` skips it.
+  2026-11-17): `mkdir -p -m 700 ~/.cache/mat-plan && echo 3 > ~/.cache/mat-plan/heavy-slots`. Lowering
+  it never fails a run already going. Under CI the slot does nothing, and `MAT_PLAN_HEAVY_SLOT=off`
+  skips it; `heavy-slot.test.sh` runs in CI's `guards:test` on a temp lock.
 
   `pnpm verify` becomes a wrapper around `verify:run`, and records its child's process group, so
   killing the wrapper does not free the slot while the run continues. `.github/scripts/pid-lock.mjs` is
