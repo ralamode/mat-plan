@@ -37,8 +37,10 @@ import { rowName, type useRow } from './use-row';
  * a ✕ (cancel) under the ✓.
  *
  * **When a Change is sent: when focus leaves the row from any of its controls** (for anywhere
- * outside both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so a load and reps changed together are one write. Never
- * when the window loses focus (a kid checking a timer would save the half-typed number).
+ * outside both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so
+ * a load and reps changed together are one write. Never when the window loses focus (a kid
+ * checking a timer would save the half-typed number). ⚠️ "Any of its controls" (13b-ii said "one of
+ * its fields") is pending the maintainer, with the ✕ press rule below (`noteCancel`).
  *
  * 🔴 **Safari does not focus a tapped button**, so a field's blur (with no `relatedTarget`) arrives
  * before the button's click. Two buttons in the row are pressed during an edit, and each notes its
@@ -65,6 +67,14 @@ type Row = ReturnType<typeof useRow>;
 /** The attribute that marks a row's elements (both table rows of a set), so focus can tell it left. */
 export const ROW_ID_ATTR = 'data-row-id';
 export const rowIdProps = (rowId: string) => ({ [ROW_ID_ATTR]: rowId });
+
+/**
+ * How long after a ✕ press is released the click that cancels may still arrive. iOS sends its click
+ * after the compat mouse events and decides itself whether the tap hit the ✕ (tap slop, touch
+ * adjustment), so the release point says nothing; only a click that does not come calls the press
+ * off. Long enough for that click on a phone, short next to a person's next tap.
+ */
+const CANCEL_CLICK_GRACE_MS = 400;
 
 /**
  * A row's container props for Change: its id, and the row-level Escape and blur (`onRowKeyDown`,
@@ -183,6 +193,8 @@ export function useChange(
     // that still lands (the ✕ is invisible then, for the same reason).
     if (r.pending) return;
     cancelling.current = false;
+    // The ✕'s click (or Escape) is the cancel the press watch was waiting for.
+    stopPressWatch();
     const was = dirty;
     setDraft(null);
     clearChangeError();
@@ -320,28 +332,25 @@ export function useChange(
     /**
      * The ✕'s pointer-down: the blur that follows in Safari must not send what the ✕ discards. It
      * also watches how this press ends, once, by its `pointerId`:
-     * - released over the ✕ (`elementFromPoint`, never the event's target: a touch pointer is
-     *   captured to the ✕, so its `pointerup` targets the ✕ wherever the finger lifts): nothing
-     *   here, the click that follows cancels;
-     * - released anywhere else, or ended by a scroll (`pointercancel`): the cancel is called off, and
-     *   the row is left as a tap outside would leave it. Sent if it is still changed, not already
-     *   saving, and focus is outside the row; otherwise it stays open until focus leaves the row.
-     *   ⚠️ Pending the maintainer: this second branch is a new save (FAM-1 plan
-     *   `fam-1-change-escape-and-drag-off.md`, "A change to a recorded decision").
+     * - **released** (anywhere: where it lifts says nothing, since iOS targets its click itself):
+     *   the ✕'s click, if it comes, cancels and ends the watch (`revert`). If none comes within
+     *   `CANCEL_CLICK_GRACE_MS` (a press dragged off, a long press), the press is called off;
+     * - **ended by a scroll** (`pointercancel`): no click will come, so it is called off at once.
+     *
+     * Called off, the row is left as a tap outside would leave it: `cancelling` is cleared, so the
+     * next time focus leaves the row the Change is sent; and if focus has already left (Safari with
+     * a mouse blurs the field at pointer-down), it is sent now. ⚠️ Pending the maintainer: sending
+     * after a press that began on Cancel is a new save (FAM-1 plan
+     * `fam-1-change-escape-and-drag-off.md`, "A change to a recorded decision"); the alternative
+     * only clears `cancelling`.
      */
     noteCancel(event: React.PointerEvent<HTMLElement>) {
       cancelling.current = true;
       stopPressWatch();
-      // React clears `currentTarget` once the handler returns.
-      const button = event.currentTarget;
       const pointerId = event.pointerId;
-      const onEnd = (ended: PointerEvent) => {
-        if (ended.pointerId !== pointerId) return;
+      let grace: ReturnType<typeof setTimeout> | null = null;
+      const callOff = () => {
         stopPressWatch();
-        if (ended.type === 'pointerup') {
-          const at = document.elementFromPoint(ended.clientX, ended.clientY);
-          if (at !== null && button.contains(at)) return;
-        }
         cancelling.current = false;
         const now = latest.current;
         const active = document.activeElement;
@@ -349,11 +358,19 @@ export function useChange(
         if (active instanceof Element && inRow(active, rowId)) return;
         void now.commit();
       };
+      const onEnd = (ended: PointerEvent) => {
+        if (ended.pointerId !== pointerId) return;
+        window.removeEventListener('pointerup', onEnd, true);
+        window.removeEventListener('pointercancel', onEnd, true);
+        if (ended.type === 'pointercancel') callOff();
+        else grace = setTimeout(callOff, CANCEL_CLICK_GRACE_MS);
+      };
       window.addEventListener('pointerup', onEnd, true);
       window.addEventListener('pointercancel', onEnd, true);
       endPressWatch.current = () => {
         window.removeEventListener('pointerup', onEnd, true);
         window.removeEventListener('pointercancel', onEnd, true);
+        if (grace !== null) clearTimeout(grace);
       };
     },
     /** The ✓: saves an open Change; un-ticks only when no edit was open. */
@@ -390,11 +407,14 @@ export function useChange(
       const from = event.target;
       if (!(from instanceof Node) || !event.currentTarget.contains(from)) return;
       const fromField = from instanceof HTMLInputElement;
-      if (dirty && !r.pending) {
+      if (dirty) {
+        // Prevented even while saving, as the field's own Escape was: a sheet around the row must
+        // not close on it.
         event.preventDefault();
+        if (r.pending) return;
         if (!fromField) tickRef.current?.focus();
         revert();
-      } else if (!dirty && fromField) {
+      } else if (fromField) {
         revert();
       }
     },

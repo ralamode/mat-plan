@@ -6,7 +6,7 @@ import {
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
@@ -916,15 +916,17 @@ describe('Change: second-pass fixes', () => {
 });
 
 describe('Change: Escape from any control, and a ✕ press that ends elsewhere', () => {
-  /** Where a pointer is released: jsdom has no layout, so `elementFromPoint` is stubbed. */
-  function releaseOver(el: Element) {
-    Object.defineProperty(document, 'elementFromPoint', {
-      configurable: true,
-      value: () => el,
+  /** Past the grace in which the ✕'s click may still come (`CANCEL_CLICK_GRACE_MS`). */
+  const afterGrace = async () => {
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
     });
-  }
+  };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
   afterEach(() => {
-    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: undefined });
+    vi.useRealTimers();
   });
 
   it('Escape from the ✓ while typed over puts the number back, and focus stays on the ✓', () => {
@@ -979,46 +981,74 @@ describe('Change: Escape from any control, and a ✕ press that ends elsewhere',
     expect(actions.amendRow).toHaveBeenCalledTimes(1);
   });
 
-  it('a tap on the ✕ in a phone’s order cancels, and nothing is sent', async () => {
+  it('🔴 a tap on the ✕ in an iPhone’s order cancels, even when the finger lifts past its edge', async () => {
+    // iOS: pointerdown, pointerup (where the finger lifts says nothing: iOS targets the click itself),
+    // the compat mousedown's blur of the field, then the click on the ✕.
     const { actions } = mount(yesterdayHalfDone, { change: true });
     type(load(), '30');
     const x = cancelX();
-    releaseOver(x);
+    // The finger lifts past the ✕'s edge. jsdom has no layout, so the point is placed by hand: a
+    // rule that read the release point would take this for "elsewhere" (the bug this pins).
+    const restore = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => document.body,
+    });
     await act(async () => {
       fireEvent.pointerDown(x, { pointerId: 1 });
-      fireEvent.pointerUp(x, { pointerId: 1 }); // captured to the ✕, and over it
-      load().blur(); // focus moves at the compat mousedown, after pointerup
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+      load().blur();
     });
+    if (restore) Object.defineProperty(document, 'elementFromPoint', restore);
+    else Reflect.deleteProperty(document, 'elementFromPoint');
     await act(async () => {
       fireEvent.click(x);
     });
+    await afterGrace();
     expect(load().value).toBe('27.5');
     expect(actions.amendRow).not.toHaveBeenCalled();
   });
 
-  it('a ✕ press released over the page, with focus already out of the row, sends once (pending the maintainer)', async () => {
+  it('a ✕ press dragged off with a mouse in Safari (the field already blurred) is sent after the grace (pending the maintainer)', async () => {
     const { actions } = mount(yesterdayHalfDone, {
       change: true,
       wrap: () => ({ amendRow: amendOk }),
     });
     type(load(), '30');
-    const x = cancelX();
-    releaseOver(document.body);
     await act(async () => {
-      fireEvent.pointerDown(x, { pointerId: 1 });
-      load().blur(); // Safari: the field blurs at pointer-down, and the ✕ takes no focus
-      // A touch pointer is captured to the ✕, so its pointerup targets the ✕ wherever it lifts.
-      fireEvent.pointerUp(x, { pointerId: 1 });
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      load().blur(); // Safari blurs the field at pointer-down and does not focus the ✕
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
     });
+    expect(actions.amendRow).not.toHaveBeenCalled(); // the click may still come
+    await afterGrace();
     expect(actions.amendRow).toHaveBeenCalledTimes(1);
     // A later, unrelated release sends nothing more: the watch was one-shot.
     await act(async () => {
       fireEvent.pointerUp(document.body, { pointerId: 1 });
     });
+    await afterGrace();
     expect(actions.amendRow).toHaveBeenCalledTimes(1);
   });
 
-  it('a ✕ press that becomes a scroll, with focus already out of the row, sends once (pending the maintainer)', async () => {
+  it('an iPhone slide-off (the field still focused) is called off, and leaving the row then sends once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      fireEvent.pointerUp(cancelX(), { pointerId: 1 }); // captured to the ✕; no click follows
+    });
+    await afterGrace();
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+    await leave(load());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ✕ press that becomes a scroll, with focus already out of the row, sends at once (pending the maintainer)', async () => {
     const { actions } = mount(yesterdayHalfDone, {
       change: true,
       wrap: () => ({ amendRow: amendOk }),
@@ -1039,12 +1069,12 @@ describe('Change: Escape from any control, and a ✕ press that ends elsewhere',
     });
     type(load(), '30');
     const x = cancelX();
-    releaseOver(document.body);
     await act(async () => {
       fireEvent.pointerDown(x, { pointerId: 1 });
       x.focus(); // Chrome focuses a button on mousedown
       fireEvent.pointerUp(document.body, { pointerId: 1 });
     });
+    await afterGrace();
     expect(actions.amendRow).not.toHaveBeenCalled();
     expect(load().value).toBe('30');
     await act(async () => x.blur());

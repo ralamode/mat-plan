@@ -3,7 +3,7 @@
 > Lane C ([day-page.md](../features/day-page.md)). The two follow-ups #512's review left for 12d,
 > moved out of 12d by its panel ([12d plan](./fam-1-12d-change-on-page.md), findings A4, C1, C3,
 > C4, R2, R4, U1, U3), on the board's go (2026-11-18). Branch:
-> `fix/fam-1-change-escape-and-drag-off`. **Rev 3**, after a correctness lens and a UX lens (§ Review-response log). **Draft approved; merge held for the maintainer** _(roadmap thread, under the overnight delegation, 2026-11-18, D14/H8)_: on the behaviour change below, and on an iPhone check.
+> `fix/fam-1-change-escape-and-drag-off`. **Rev 3** (implementation note after the second-pass review: the release point is no longer read; every `pointerup` starts a click grace, `CANCEL_CLICK_GRACE_MS`, which the ✕'s click ends; only a press with no click, or a `pointercancel`, is called off, because iOS targets its click itself and a tap lifting past the ✕'s edge must still cancel), after a correctness lens and a UX lens (§ Review-response log). **Draft approved; merge held for the maintainer** _(roadmap thread, under the overnight delegation, 2026-11-18, D14/H8)_: on the behaviour change below, and on an iPhone check.
 
 ## Goal
 
