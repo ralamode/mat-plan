@@ -2283,9 +2283,10 @@ into the shared catalog (the household delete's step 11 says why).
 
 One ledger with the household delete. An entry records the request date, **the `public_id`** of the
 program, workout or item (`OPS-3`'s replay re-applies the removal after a restore), the verifying
-channel, the household's answer to each report line by the listed row's `public_id` (keep or remove;
-no names, and no athlete named beyond a `profile_id` the operator already holds), the apply date and
-the restore-branch-deleted date. No Clerk ids.
+channel, the household's keep-or-remove answer to report lines (3) and (4) **by the copy's or the
+item's `public_id`**, the apply date and the restore-branch-deleted date. **Never who was on the program
+or trained on it** (reports (1) and (2) are told, not answered): that is the record the removal deletes.
+No names, no `profile_id`, no Clerk ids.
 
 ### What is proven, and what is not
 
