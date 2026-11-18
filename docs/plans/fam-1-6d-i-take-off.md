@@ -80,8 +80,12 @@ has it set to NULL, so its rows stop counting.
 - E `packages/db/src/writers/program/assign.ts`: `lockAthletes`, taken out of `putOn` so both
   writers share it.
 - E `packages/db/src/writers/program/index.ts`: export `takeOff`.
-- E `packages/db/scripts/verify/program.ts`: `verifyTakeOff`. The 6c-i and 6c-ii proofs that stood
-  in for Take off with `active_to = today` call `takeOff`.
+- E `packages/db/scripts/verify/program.ts`: `verifyTakeOff`, and the stand-ins for Take off
+  (`active_to = today`) replaced by the real writer, each with the precondition its branch needs:
+  - 6c-i's x on P (`verifyPutOn`, starts today, nothing logged): the real Take off would REMOVE that
+    start, so x first gets a start before today. The reopen proof then sees a real end;
+  - 6c-i's z (started three days back): a real Take off ends it, as the stand-in did;
+  - 6c-ii's Athlete Two (started on `FIXTURE_SWITCH_DAY`): a real Take off ends it.
 - E `packages/db/src/writers/program/owed.test.ts`: the 6d take-off line goes.
 - E `docs/features/program-writers.md`: map rows 6d-i and 6d-ii, a files row, an invariant with the
   flowchart, and invariant 12's "6d's take off and reorder must take the same two" made true for
@@ -92,6 +96,7 @@ has it set to NULL, so its rows stop counting.
 
 ## Tests (`db:verify`, in households of the proof's own)
 
+- Bad bodies are `invalid`: a non-uuid program or athlete id.
 - Logged days keep their rows: a stretch with entries from earlier days, taken off; its entries and
   sessions are untouched.
 - A start dated today with nothing logged is removed and answers `lastDay: null`.
@@ -102,7 +107,16 @@ has it set to NULL, so its rows stop counting.
   (D15). Both write nothing (`ctid` snapshot).
 - `not_found`, writing nothing: never on it; a start removed in the past; an archived or removed
   athlete; another household's athlete or program; a legacy, removed or unknown program.
-- A row logged under ANOTHER program today does not keep this start.
+- "Logged" has four conjuncts, and each has its own negative case and patch. A start dated today is
+  still removed when the only live row is:
+  - a sibling's, today, in this program's workout (the athlete);
+  - this athlete's, yesterday, in this program (the day);
+  - this athlete's, today, in another program's workout, or a weigh-in (the block).
+    A row logged today under a removed workout of this block does keep the start ("live or removed").
+- Take off never moves the athlete's other programs: on A, B and C, a Take off of A leaves B's and
+  C's rows with the same `ctid`.
+- A same-day start with nothing logged, taken off then put on again: a new row, and the old one stays
+  hidden (the contrast to the reopen).
 - Put on after a real Take off today reopens the row, and the athlete is due today
   (`assignmentDueOn`): invariant 19's owed proof.
 - The accepted limit: tick, un-tick, Take off (`lastDay: null`), re-tick leaves a live entry on a
@@ -119,20 +133,28 @@ so a lock-order patch would stay green. The order is recorded in the guide as re
 
 The panel (correctness, db-safety, architecture/scope) ran on the combined 6d plan before the split.
 
-| Lens                | Finding                                                                        | Verdict               | What changed                                                               |
-| ------------------- | ------------------------------------------------------------------------------ | --------------------- | -------------------------------------------------------------------------- |
-| architecture P1     | H6 should not ride in 6d; "last" departs from A2 §7 and the fake               | **agreed**            | its own PR, after the maintainer's call; reframed for the morning question |
-| architecture P1     | a repeated Take off of a removed start answered `not_found`                    | **decided (D15)**     | `lastDay: null`, writing nothing                                           |
-| architecture P1     | the reorder relied on open #601                                                | **moved**             | 6d-ii, gated on #601                                                       |
-| architecture P1     | the profile lock would be copied                                               | **agreed**            | `lockAthletes`, shared with `putOn`                                        |
-| architecture P2     | split take off from reorder                                                    | **decided (D16)**     | this plan is 6d-i                                                          |
-| architecture P2     | an unstated race; no diagram; invariant 12's sentence                          | **agreed**            | the race on the function; a flowchart; invariant 12                        |
-| architecture P2     | the "logged" predicate re-typed                                                | **agreed**            | built on lane E's `programRowOf`                                           |
-| architecture (also) | C24 not named                                                                  | **agreed**            | the race paragraph cites it                                                |
-| db-safety P1        | re-tick and Restore all reach a logged row under a removed start, with no race | **accepted, written** | the limit stated, with a proof of the re-tick sequence                     |
-| db-safety P2        | the removal replay                                                             | **decided (D15)**     | `lastDay: null`                                                            |
-| db-safety P2        | lock-order patches cannot fail on PGlite                                       | **agreed**            | none; the guide says reviewed, not proven                                  |
-| db-safety P2        | reorder numbers a different set of rows than putOn                             | **moved**             | 6d-ii's plan                                                               |
-| db-safety P2        | invariant 12 contradicts reorder's lock; #601 not a gate                       | **moved**             | 6d-ii's plan                                                               |
-| db-safety NIT       | "writes nothing" needs `ctid`                                                  | **agreed**            | `assignmentRows`                                                           |
-| db-safety NIT       | reuse `programRowOf`; the purge edge                                           | **agreed**            | both, in step 4 and the limit                                              |
+| Lens                | Finding                                                                           | Verdict               | What changed                                                                  |
+| ------------------- | --------------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------- |
+| architecture P1     | H6 should not ride in 6d; "last" departs from A2 §7 and the fake                  | **agreed**            | its own PR, after the maintainer's call; reframed for the morning question    |
+| architecture P1     | a repeated Take off of a removed start answered `not_found`                       | **decided (D15)**     | `lastDay: null`, writing nothing                                              |
+| architecture P1     | the reorder relied on open #601                                                   | **moved**             | 6d-ii, gated on #601                                                          |
+| architecture P1     | the profile lock would be copied                                                  | **agreed**            | `lockAthletes`, shared with `putOn`                                           |
+| architecture P2     | split take off from reorder                                                       | **decided (D16)**     | this plan is 6d-i                                                             |
+| architecture P2     | an unstated race; no diagram; invariant 12's sentence                             | **agreed**            | the race on the function; a flowchart; invariant 12                           |
+| architecture P2     | the "logged" predicate re-typed                                                   | **agreed**            | built on lane E's `programRowOf`                                              |
+| architecture (also) | C24 not named                                                                     | **agreed**            | the race paragraph cites it                                                   |
+| db-safety P1        | re-tick and Restore all reach a logged row under a removed start, with no race    | **accepted, written** | the limit stated, with a proof of the re-tick sequence                        |
+| db-safety P2        | the removal replay                                                                | **decided (D15)**     | `lastDay: null`                                                               |
+| db-safety P2        | lock-order patches cannot fail on PGlite                                          | **agreed**            | none; the guide says reviewed, not proven                                     |
+| db-safety P2        | reorder numbers a different set of rows than putOn                                | **moved**             | 6d-ii's plan                                                                  |
+| db-safety P2        | invariant 12 contradicts reorder's lock; #601 not a gate                          | **moved**             | 6d-ii's plan                                                                  |
+| db-safety NIT       | "writes nothing" needs `ctid`                                                     | **agreed**            | `assignmentRows`                                                              |
+| db-safety NIT       | reuse `programRowOf`; the purge edge                                              | **agreed**            | both, in step 4 and the limit                                                 |
+| correctness P1      | the real Take off REMOVES 6c-i's same-day start, so the reopen proof breaks       | **agreed**            | each stand-in named with its precondition; a contrast case added              |
+| correctness P1      | the removal replay                                                                | **decided (D15)**     | `lastDay: null`                                                               |
+| correctness P1      | "logged" tests cannot catch a missing conjunct; other programs untouched unproven | **agreed**            | three negative cases, each with a patch; a `ctid` check on the other programs |
+| correctness P1      | mandatory boundary tests missing                                                  | **agreed**            | bad bodies; unknown, removed and other-household ids                          |
+| correctness P1      | reorder and #601                                                                  | **moved**             | 6d-ii's plan                                                                  |
+| correctness P2      | H6's framing and the reopen                                                       | **moved**             | the placement PR; reframed for the morning question                           |
+| correctness P2      | a ✓ racing Take off                                                               | **accepted, written** | the limit paragraph, with lane E's C24 proof cited                            |
+| correctness P2      | the owed "two open at one idx" line is already proved at the schema level         | **agreed (6d-ii)**    | it closes by pointing at `verify/schema.ts`'s FAM-1 5 proof                   |
