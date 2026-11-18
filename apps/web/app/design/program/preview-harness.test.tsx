@@ -47,7 +47,7 @@ vi.mock('@/components/day/athlete-switcher', () => ({
 vi.mock('@/components/day/program-line', () => ({ ProgramLine: probe('program-line') }));
 vi.mock('@/components/day/not-on-a-program', () => ({ NotOnAProgram: probe('not-on-a-program') }));
 
-import { pickerOptions } from './picker-options';
+import { pickerOptions, previewHowTo } from './picker-options';
 import { SETTINGS_COPY } from '@/lib/constants';
 
 import { PreviewHarness } from './preview-harness';
@@ -91,6 +91,8 @@ function expectedData({ screen: name, fixture }: PreviewSelection): Record<strin
       return {
         draft: of(WORKOUT_DRAFT_FIXTURES),
         picker: { options: pickerOptions },
+        // The preview's "How to" read, so a library row's steps open on the preview (P16).
+        howTo: previewHowTo,
         // The Programs list's entry for the draft's own program, never another's.
         program: PROGRAM_LIST_FIXTURES['programs-list'].find(
           (listed) => listed.programPublicId === of(WORKOUT_DRAFT_FIXTURES)?.programPublicId,

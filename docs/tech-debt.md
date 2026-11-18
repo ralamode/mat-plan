@@ -1223,7 +1223,9 @@ success.` Harmless there — nothing referenced the files yet.
 - **What:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`, V1-9) advances
   `entry_sets.updated_at` to the DB `now()` on each edit. The AGENTS.md schema convention mandates
   last-writer-wins on the **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so
-  offline clock-skew resolves correctly.
+  offline clock-skew resolves correctly. **The day page's Change does the same** (FAM-1 11c-i,
+  `amendRow` → `updateEntrySetRows` in `writers/session-rows.ts`: the set, its quantities and the
+  entry), and so will 11c-ii's revive; v1.5 sync must find all of them.
 - **Impact:** none today — there is a single ONLINE writer (no offline outbox until v1.5), so `now()` is
   always `> created_at` and no two devices race an edit. Correct for the current deployment.
 - **Proposed fix:** at **v1.5** (offline + TanStack Query + the sync outbox), take the client `updated_at`

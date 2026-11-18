@@ -13,20 +13,13 @@ import {
   type RowWrite,
   SESSION_TYPE,
   TRACKING_TYPE_FIELDS,
-  type TrackingType,
-  trackingTypeSchema,
-  unitsForTrackingType,
 } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../../client';
 import { schema } from '../../client';
-import {
-  liveQuantities,
-  type PrescribedQuantity,
-  prescriptionTerms,
-} from '../../queries/day/prescription-terms';
+import { prescriptionTerms } from '../../queries/day/prescription-terms';
 import {
   programRowOf,
   programRowSlot,
@@ -35,17 +28,20 @@ import {
 } from '../../queries/day/program-rows';
 import { rowDayOpen } from '../../queries/day/day-window';
 import { isOnProgramThatDay, isScheduledOn } from '../../queries/day/scheduled';
-import { readRowValues } from '../../queries/day/stored-row-values';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { hideEntries, restoreHidden } from '../hide';
-import {
-  athleteTemplateBlockIn,
-  isLiveProfile,
-  movementIsAvailableTo,
-  workoutIsLive,
-} from '../ownership';
+import { athleteTemplateBlockIn, workoutIsLive } from '../ownership';
 import { insertEntrySetRows } from '../session-rows';
+import {
+  type ById,
+  fitsItsType,
+  openProfile,
+  refuse,
+  rowItem,
+  rowTransaction,
+  storedValues,
+} from './row-steps';
 
 /**
  * FAM-1 step 11b — **the row writer**: a ✓ on any row of a program workout, for all seven tracking
@@ -67,32 +63,6 @@ import { insertEntrySetRows } from '../session-rows';
  *   clock.
  */
 
-/** Why a refused row write did not happen, thrown so the transaction rolls back. Never escapes. */
-class RowRefused extends Error {
-  constructor(readonly reason: RowRefusal) {
-    super(`row write refused: ${reason}`);
-    this.name = 'RowRefused';
-  }
-}
-
-/** Refuse from inside a writer's transaction: everything it began is rolled back. */
-function refuse(reason: RowRefusal): never {
-  throw new RowRefused(reason);
-}
-
-/** Run one writer's transaction, turning a `RowRefused` into its typed answer. */
-async function rowTransaction(
-  db: NodePgDatabase<Schema>,
-  fn: (tx: Executor) => Promise<RowResult>,
-): Promise<RowResult> {
-  try {
-    return await db.transaction((tx) => fn(tx));
-  } catch (error) {
-    if (error instanceof RowRefused) return { ok: false, reason: error.reason };
-    throw error;
-  }
-}
-
 // The named conjuncts (`programRowOf`, `workoutSessionSlot`, `workoutSupersetSlot`,
 // `programRowSlot`) live in `queries/day/program-rows.ts` since 12a: a read does not import a writer.
 
@@ -108,22 +78,10 @@ async function openRowDay(
   exec: Executor,
   args: { scope: HouseholdScope; today: string; profilePublicId: string; day: string },
 ): Promise<number> {
-  const [profile] = await exec
-    .select({ id: schema.profiles.id, archivedAt: schema.profiles.archivedAt })
-    .from(schema.profiles)
-    .where(isLiveProfile(args.profilePublicId, args.scope))
-    .limit(1);
-  if (!profile) refuse(ROW_REFUSAL.not_found);
+  const profile = await openProfile(exec, args);
   // Archived, or outside the window: the one rule the day resolver's `writable` reads too.
   if (!rowDayOpen(args.day, args.today, profile.archivedAt)) refuse(ROW_REFUSAL.closed_day);
   return profile.id;
-}
-
-/** What one stored row holds, read the one way (`readRowValues`). A program row always has a set. */
-async function storedValues(exec: Executor, entryId: number): Promise<RowValues> {
-  const values = (await readRowValues(exec, [entryId])).get(entryId);
-  if (!values) throw new Error(`program row entry ${entryId} has no live set`);
-  return values;
 }
 
 /** Who holds a write's `client_id`, and whether it is THIS write. */
@@ -202,7 +160,8 @@ async function answerHolder(
 export type RowWorkout = { id: number; blockId: number; name: string; live: boolean };
 
 /**
- * Step 4: **the workout a write names, if this athlete may log it** — a workout on a template block
+ * Step 4: **the workout a write names (by `public_id`, or by internal id for Change), if this athlete
+ * may log it** — a workout on a template block
  * of the scope AND of the profile's own household (`athleteTemplateBlockIn`: `templateBlockIn` ∧
  * `programBlockOfProfile`).
  * `null` for foreign, missing, and hidden-and-foreign alike: the scope is in the WHERE and liveness
@@ -215,9 +174,9 @@ export async function rowWorkout(
   exec: Executor,
   profileId: number,
   scope: HouseholdScope,
-  workoutPublicId: string,
+  workout: ById,
 ): Promise<RowWorkout | null> {
-  const [workout] = await exec
+  const [row] = await exec
     .select({
       id: schema.workouts.id,
       blockId: schema.workouts.blockId,
@@ -227,32 +186,16 @@ export async function rowWorkout(
     .from(schema.workouts)
     .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
     .where(
-      and(eq(schema.workouts.publicId, workoutPublicId), athleteTemplateBlockIn(scope, profileId)),
+      and(
+        'publicId' in workout
+          ? eq(schema.workouts.publicId, workout.publicId)
+          : eq(schema.workouts.id, workout.id),
+        athleteTemplateBlockIn(scope, profileId),
+      ),
     )
     .limit(1);
-  if (!workout) return null;
-  return {
-    id: workout.id,
-    blockId: workout.blockId,
-    name: workout.name,
-    live: workout.live === true,
-  };
-}
-
-/**
- * Step 10's first half: **does the prescription's quantity fit its tracking type?** Every live
- * quantity is in the type's slot and in a unit the type may use (`unitsForTrackingType`, the
- * editor's own list: the fixed unit where the type has one); and a type whose unit comes from the
- * prescription has one. A malformed
- * prescription (a Duration in `lb`) answers `bad_value` rather than storing a wrong row or reaching
- * `entryUnitFor`'s throw.
- */
-function fitsItsType(trackingType: TrackingType, quantities: readonly PrescribedQuantity[]) {
-  const fields = TRACKING_TYPE_FIELDS[trackingType];
-  const units = unitsForTrackingType(trackingType);
-  const fits = quantities.every((q) => q.slot === fields.slot && units.includes(q.unit));
-  const unitKnown = fields.slot === null || fields.unit !== null || quantities.length > 0;
-  return fits && unitKnown;
+  if (!row) return null;
+  return { id: row.id, blockId: row.blockId, name: row.name, live: row.live === true };
 }
 
 /**
@@ -299,55 +242,15 @@ export async function logRow(
     if (earlier.held) return answerHolder(tx, earlier);
 
     // 4 — the workout.
-    const workout = await rowWorkout(tx, profileId, scope, write.workoutPublicId);
+    const workout = await rowWorkout(tx, profileId, scope, { publicId: write.workoutPublicId });
     if (!workout) refuse(ROW_REFUSAL.not_found);
     if (!workout.live) refuse(ROW_REFUSAL.program_changed);
 
-    // 5 — the prescription, IN this workout (a mismatched pair is `not_found`), with its live
-    //     quantities in the same statement.
-    const rows = await tx
-      .select({
-        id: schema.prescriptions.id,
-        deletedAt: schema.prescriptions.deletedAt,
-        movementId: schema.prescriptions.movementId,
-        sets: schema.prescriptions.sets,
-        targetReps: schema.prescriptions.targetReps,
-        supersetLabel: schema.prescriptions.supersetLabel,
-        supersetOrder: schema.prescriptions.supersetOrder,
-        slot: schema.prescriptionQuantities.slot,
-        unit: schema.prescriptionQuantities.unit,
-        valueMin: schema.prescriptionQuantities.valueMin,
-        valueMax: schema.prescriptionQuantities.valueMax,
-      })
-      .from(schema.prescriptions)
-      .leftJoin(
-        schema.prescriptionQuantities,
-        and(
-          eq(schema.prescriptionQuantities.prescriptionId, schema.prescriptions.id),
-          isNull(schema.prescriptionQuantities.deletedAt),
-        ),
-      )
-      .where(
-        and(
-          eq(schema.prescriptions.publicId, write.prescriptionPublicId),
-          eq(schema.prescriptions.workoutId, workout.id),
-        ),
-      );
-    const prescription = rows[0];
-    if (!prescription) refuse(ROW_REFUSAL.not_found);
-    if (prescription.deletedAt !== null) refuse(ROW_REFUSAL.program_changed);
-    // Its live quantities as numbers; two in one slot throw (`liveQuantities`, E5).
-    const quantities = liveQuantities(prescription.id, rows);
-
-    // 6 — the movement, re-checked inside the transaction against the household, as
-    //     `writeStrengthSession` does.
-    const [movement] = await tx
-      .select({ name: schema.movements.name, trackingType: schema.movements.trackingType })
-      .from(schema.movements)
-      .where(and(eq(schema.movements.id, prescription.movementId), movementIsAvailableTo(scope)))
-      .limit(1);
-    if (!movement) refuse(ROW_REFUSAL.not_found);
-    const trackingType = trackingTypeSchema.parse(movement.trackingType);
+    // 5 · 6 — the prescription, IN this workout, and its movement (`rowItem`, shared with Change).
+    const { prescription, quantities, movement, trackingType } = await rowItem(tx, scope, {
+      prescription: { publicId: write.prescriptionPublicId },
+      workoutId: workout.id,
+    });
 
     // 7 — on the workout's week on this day.
     if (!(await isScheduledOn(tx, workout.blockId, workout.id, write.day))) {
@@ -531,8 +434,9 @@ export async function untickRow(
       if (!scheduled) refuse(ROW_REFUSAL.not_scheduled);
     }
 
-    // 5 — the hide.
-    const values = await storedValues(tx, entry.id);
+    // 5 — the hide, then the numbers it hid. Read AFTER `hideEntries` takes the entry's lock, so an
+    //     un-tick racing a Change (11c-i) answers the numbers it actually hid, which are what a
+    //     re-tick brings back.
     const hidden = await hideEntries(tx, {
       profilePublicId: input.profilePublicId,
       scope,
@@ -540,6 +444,7 @@ export async function untickRow(
       entryPublicIds: [input.entryPublicId],
     });
     if ('notFound' in hidden) refuse(ROW_REFUSAL.not_found);
+    const values = await storedValues(tx, entry.id);
     return { ok: true, entryPublicId: input.entryPublicId, values, hiddenAt: hidden.hiddenAt };
   });
 }

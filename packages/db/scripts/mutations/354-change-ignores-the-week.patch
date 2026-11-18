@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
+index 0c724670..4370f065 100644
+--- a/packages/db/src/writers/day/amend-row.ts
++++ b/packages/db/src/writers/day/amend-row.ts
+@@ -85,9 +85,6 @@ export async function amendRow(
+     if (entry.workoutId === null) refuse(ROW_REFUSAL.not_scheduled);
+     const workout = await rowWorkout(tx, profile.id, scope, { id: entry.workoutId });
+     if (!workout) refuse(ROW_REFUSAL.not_found);
+-    if (!(await isScheduledOn(tx, workout.blockId, workout.id, entry.day))) {
+-      refuse(ROW_REFUSAL.not_scheduled);
+-    }
+     if (!workout.live) refuse(ROW_REFUSAL.program_changed);
+ 
+     // 5 · 6 — the prescription, pinned to that workout, and its movement (`rowItem`, as a ✓).

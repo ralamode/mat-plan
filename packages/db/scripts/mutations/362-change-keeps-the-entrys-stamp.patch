@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/session-rows.ts b/packages/db/src/writers/session-rows.ts
+index 3c2f980a..a49361d8 100644
+--- a/packages/db/src/writers/session-rows.ts
++++ b/packages/db/src/writers/session-rows.ts
+@@ -155,7 +155,7 @@ export async function updateEntrySetRows(
+ 
+   const entries = await exec
+     .update(schema.entries)
+-    .set({ updatedAt: now })
++    .set({ updatedAt: schema.entries.updatedAt })
+     .where(eq(schema.entries.id, args.entryId))
+     .returning({ id: schema.entries.id });
+   if (entries.length !== 1) throw new Error(`entry ${args.entryId}: not found to stamp`);
