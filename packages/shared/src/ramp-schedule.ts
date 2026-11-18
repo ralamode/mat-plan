@@ -25,25 +25,6 @@ export { CALISTHENICS_METRIC_KEYS };
  */
 export const WEEK_LENGTH_DAYS = 7;
 
-/**
- * One week of the ramp: the ISO-week Monday (UTC, `YYYY-MM-DD`) and the target value for
- * each calisthenics metric that week. `targets` is a total map over the metric keys, so a
- * missing metric is a compile error (the schedule stays complete as the metric set evolves).
- */
-export type RampWeek = {
-  /** ISO-week Monday (UTC), `YYYY-MM-DD` — matches `ramp_targets.week_start`. */
-  weekStart: string;
-  /** Target value per calisthenics metric (reps for the counters, level for the skill step). */
-  targets: Record<CalisthenicsRampMetricKey, number>;
-};
-
-/**
- * SHIPPED EMPTY on purpose (V1-6b-1). The real ramp numbers are Ray's domain data — a fixed
- * weekly calendar that ramps rep targets to a CAP, coach-adjustable — and land in a later
- * DATA-ONLY follow-up, not here. Shipping `[]` avoids writing FICTION to prod: `migrate.yml`
- * seeds on merge, and the seed's `onConflictDoNothing` on the natural key would make any
- * placeholder rows permanently sticky (a re-seed with real numbers would be a no-op, not an
- * update). V1-6b-1 delivers the TABLE + the seed MECHANISM + the SQL-adherence proof; the
- * numbers are a separate, reversible-by-omission change.
- */
-export const CALISTHENICS_RAMP_SCHEDULE: readonly RampWeek[] = [];
+// OPS-2 PR 1 (plan D4, the maintainer's Q6): `CALISTHENICS_RAMP_SCHEDULE` and its `RampWeek` shape are
+// gone with the seed's ramp expansion, their only consumer. The schedule had shipped empty since
+// V1-6b-1; a real one arrives the way FAM-1's programs do, never through a production seed.

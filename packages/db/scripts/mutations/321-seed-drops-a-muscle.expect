@@ -1,1 +1,1 @@
-muscles rows equal their shared const EXACTLY
+OPS-2 A: seed({ fixtures: false }) writes muscles from its shared const

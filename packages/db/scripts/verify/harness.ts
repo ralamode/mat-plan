@@ -187,6 +187,24 @@ export async function constraintDef(conname: string): Promise<string> {
   return rows[0].def;
 }
 
+/**
+ * Run `fn` with `console.warn` captured, and return what it warned. The seed's TEN-2c shadow guard is
+ * a WARNING, not a `throw`, so `assert.rejects` cannot reach it, and what must be true of its text (it
+ * names the seed slug; it does NOT name a household's free text) is a privacy proof. Restores the real
+ * `console.warn` in a `finally`. Moved here from `verify.ts` at OPS-2 PR 1, its second caller.
+ */
+export async function captureWarnings(fn: () => Promise<void>): Promise<string> {
+  const real = console.warn;
+  const lines: string[] = [];
+  console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+  try {
+    await fn();
+  } finally {
+    console.warn = real;
+  }
+  return lines.join('\n');
+}
+
 /** The rows of a raw `execute` result, typed by the caller (the cast lives here once). */
 export function rowsOf<T>(res: unknown): T[] {
   return (res as { rows: T[] }).rows;

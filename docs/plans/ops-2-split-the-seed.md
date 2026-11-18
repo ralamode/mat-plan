@@ -40,6 +40,12 @@ way; moving those out of production is `OPS-2`'s."_
 
 ## Refresh 2 (2026-11-17), before PR 1's code
 
+**Approved** _(maintainer, orchestrator's chat, 2026-11-18)_: "Approve (Recommended)". Two decisions
+made with it, both folded into PR 1:
+
+- **D-S2, rename the secret `migrate.yml` reads: "Yes, rename it (Recommended)".** The workflow change is in PR 1; the maintainer sets the new secret in GitHub, and the PR body carries the guided steps and the order relative to the merge.
+- **The seed's `units` lock (found outside the plan): "Fix it (Recommended)".** The upsert skips a row whose values are unchanged, so an unchanged unit is never row-locked, and the seed sets a `lock_timeout` and a `statement_timeout`.
+
 Re-read against `main` at `cb588b71` by the PR's implementer (lane A), after `CAT-3` A1 (#577) and
 `PRIV-3` RC (#546) merged, and with lane P's `6c-i` described by lane P. **The decisions stand except
 where this table says otherwise**; ids are unchanged. The line cites in § "What the code does today"
