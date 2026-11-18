@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
+index e4b11183..65ab2d5d 100644
+--- a/packages/db/src/writers/strength-session.ts
++++ b/packages/db/src/writers/strength-session.ts
+@@ -185,7 +185,7 @@ async function insertSupersetRow(
+       exec,
+       schema.supersets,
+       args.clientId,
+-      eq(schema.supersets.sessionId, args.sessionId),
++      sql`true`,
+     )
+   );
+ }
