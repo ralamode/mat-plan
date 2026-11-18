@@ -240,8 +240,17 @@ export async function resolveDayPlan(
 export type ProgramOnDay = { blockId: number; programPublicId: string; name: string };
 
 /**
+ * A current program with its PLACING row's days (the row `currentPrograms` placed it by), so a reader
+ * that shows "since" or "last day" (lane P's `readProgramView`) takes them from here instead of
+ * re-deriving the rank rule.
+ */
+export type CurrentProgram = ProgramOnDay & { activeFrom: string; activeTo: string | null };
+
+/**
  * `DayPlan.currentPrograms` (R7): each program the athlete is on now or starts later, ONCE, placed
  * by its open or upcoming row's `idx`, else by its closed row's (`schema.ts` → `programAssignments`).
+ * **Ordered `(rank, idx, id)`** (ADR 0007 Amendment 5): every program that stays (an open or upcoming
+ * row) comes before every program ending today, then by `idx`, then by row id.
  * Exported within `queries/day/` for step 6c's program order, its second consumer.
  */
 export type CurrentProgramRow = Pick<
@@ -259,7 +268,7 @@ export type CurrentProgramRow = Pick<
 export function currentPrograms(
   assignments: readonly CurrentProgramRow[],
   today: string,
-): ProgramOnDay[] {
+): CurrentProgram[] {
   const placing = new Map<number, CurrentProgramRow>();
   // 0: an open row, or one starting after today; 1: a row closing today or later.
   const rank = (a: CurrentProgramRow) => (a.activeTo === null || a.activeFrom > today ? 0 : 1);
@@ -269,12 +278,19 @@ export function currentPrograms(
     // `assignments` is in `(idx, id)` order, so the first row of a rank is its lowest.
     if (!held || rank(a) < rank(held)) placing.set(a.blockId, a);
   }
-  // ⚠️ `idx` can TIE: a put-on compacts the OPEN rows' order (`writers/program/assign.ts`) and leaves a
-  // row closing today where it was, so the two can share a number (lane P's #588 review). The tie
-  // goes to the program that stays, then to the row id, so an unrelated put-on never swaps them.
+  // ⚠️ RANK FIRST (ADR 0007 Amendment 5, the maintainer, 2026-11-18). A put-on compacts the OPEN rows'
+  // `idx` (`writers/program/assign.ts`) and leaves a row closing today where it was, so `(idx, id)`
+  // could let an unrelated put-on swap two programs (lane P's #588 review). Ranking first keeps every
+  // program that stays in its own `idx` order, whatever the ids, and puts the ones ending today after.
   return [...placing.values()]
-    .sort((x, y) => x.idx - y.idx || rank(x) - rank(y) || x.id - y.id)
-    .map((a) => ({ blockId: a.blockId, programPublicId: a.programPublicId, name: a.programName }));
+    .sort((x, y) => rank(x) - rank(y) || x.idx - y.idx || x.id - y.id)
+    .map((a) => ({
+      blockId: a.blockId,
+      programPublicId: a.programPublicId,
+      name: a.programName,
+      activeFrom: a.activeFrom,
+      activeTo: a.activeTo,
+    }));
 }
 
 /**

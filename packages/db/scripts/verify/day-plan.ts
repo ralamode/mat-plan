@@ -609,25 +609,56 @@ async function plantSession(
 }
 
 async function verifyRules(): Promise<void> {
-  // R7, a tie on `idx` (lane P's #588 review): a put-on compacts the open rows and can leave one at
-  // the number a row closing today still holds. The program that stays goes first, whatever the ids.
+  // R7, ADR 0007 Amendment 5 (the maintainer, 2026-11-18): the programs that stay come first, in
+  // their own `idx` order, then the ones ending today. A put-on compacts the OPEN rows' `idx`
+  // (`writers/program/assign.ts`) and leaves a row closing today where it was; the order must not move
+  // under an unrelated put-on, whatever the ids. The rows are the states assign.ts writes.
   {
-    const row = (id: number, blockId: number, activeTo: string | null) => ({
+    const row = (id: number, blockId: number, idx: number, activeTo: string | null) => ({
       id,
       blockId,
       programPublicId: `program-${blockId}`,
       programName: `Program ${blockId}`,
-      idx: 0,
+      idx,
       activeFrom: '2026-11-01',
       activeTo,
       current: true,
     });
+    const order = (rows: ReturnType<typeof row>[]) =>
+      currentPrograms(rows, FIXTURE_TODAY).map((p) => p.blockId);
+    // Put on A (10) then B (11); take A off today; then put on C (12): B compacts onto A's 0.
     assert.deepEqual(
-      currentPrograms([row(1, 10, FIXTURE_TODAY), row(2, 11, null)], FIXTURE_TODAY).map(
-        (p) => p.blockId,
-      ),
-      [11, 10],
-      'FAM-1 12a R7: on a tied idx, the program that stays comes before one that ends today',
+      [
+        order([row(1, 10, 0, FIXTURE_TODAY), row(2, 11, 1, null)]),
+        order([row(1, 10, 0, FIXTURE_TODAY), row(2, 11, 0, null), row(3, 12, 1, null)]),
+      ],
+      [
+        [11, 10],
+        [11, 12, 10],
+      ],
+      'FAM-1 12a R7: a program ending today goes after the ones that stay, before and after a put-on',
+    );
+    // A reopen (the ids run against the order): X (20) reopened after Y (21) was put on, so X's row
+    // is the newer one; Y is then taken off today and Z (22) put on.
+    assert.deepEqual(
+      [
+        order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 1, null)]),
+        order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 0, null), row(7, 22, 1, null)]),
+      ],
+      [
+        [20, 21],
+        [20, 22, 21],
+      ],
+      'FAM-1 12a R7: the order holds when the ids run against it (a reopen)',
+    );
+    // The placing row's days ride with each program (lane P's program view reads them).
+    assert.deepEqual(
+      currentPrograms([row(1, 10, 0, FIXTURE_TODAY)], FIXTURE_TODAY).map((p) => [
+        p.activeFrom,
+        p.activeTo,
+      ]),
+      [['2026-11-01', FIXTURE_TODAY]],
+      'FAM-1 12a R7: each current program carries its placing row’s days',
     );
   }
   await rolledBack(async (tx) => {
