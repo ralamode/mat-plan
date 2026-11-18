@@ -254,6 +254,10 @@ export function ItemPicker({
     setNoticeNow('');
     const result = await newItem({ name: cleaned, trackingType });
     const known = result.ok ? byId.get(result.itemPublicId) : undefined;
+    // TODO(CAT-3 chunk R): an unlisted `existed` answer that is a BUILT-IN is built here as a custom
+    // item with no unit, so it reads "Custom item" and its card drops the declared unit. Unreachable
+    // while every built-in is listed (picker.ts); live once a row outside the list exists. The fix
+    // needs the answer's owner and unit, or a re-read (7a-ii review; board, 2026-11-17).
     const made = (answer: Extract<typeof result, { ok: true }>): MovementOptionDTO => ({
       publicId: answer.itemPublicId,
       // The stored name: the existing item's own when `existed`, the cleaned typed one otherwise.
