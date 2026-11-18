@@ -29,6 +29,7 @@ import {
   householdOption,
   pickerTrigger,
   stubSheetHistory,
+  TEST_TAXONOMY,
 } from '@/test/movement-picker-fixtures';
 
 import { listedAs, MovementPicker, type TodaysProgramForPicker } from './movement-picker';

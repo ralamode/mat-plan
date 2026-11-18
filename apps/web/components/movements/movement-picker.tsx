@@ -169,8 +169,8 @@ function matchable(options: readonly MovementOptionDTO[]) {
     isCatalog: option.owner === 'catalog',
     aliases: option.owner === 'catalog' ? option.aliases : [],
     // What a filter reads (P7). A household item has neither, so a filter cannot judge it (P9).
-    equipment: option.owner === 'catalog' ? option.equipment : undefined,
-    primaryMuscle: option.owner === 'catalog' ? option.primaryMuscle : null,
+    equipment: hasLibraryData(option) ? option.equipment : undefined,
+    primaryMuscle: hasLibraryData(option) ? option.primaryMuscle : null,
     option,
   }));
 }
@@ -495,21 +495,20 @@ export function MovementPicker({
       filtersOn > 0 ? searchMovementOptions(matchableOptions, { query: deferredTrimmed }) : result,
     [filtersOn, matchableOptions, deferredTrimmed, result],
   );
-  const hasLibrary = useMemo(
-    () => data.options.some((option) => option.owner === 'catalog'),
-    [data.options],
-  );
+  /**
+   * Whether any row has the library's data, so a filter can judge it. A taxonomy-less built-in
+   * (`BuiltInWithoutLibrary`, until CAT-3 chunk R) is a catalog row that every filter empties, so
+   * it does not count: a list of only those gets no filter panel (7a-ii review).
+   */
+  const hasLibrary = useMemo(() => data.options.some(hasLibraryData), [data.options]);
   /** The panel's numbers (P7), only while it is open. */
-  const panelCounts = useMemo(() => {
-    if (!panelOpen) return null;
-    const count = (f: MovementFilters) =>
-      movementFilterCounts(matchableOptions, { query: deferredTrimmed, filters: f });
-    return {
-      counts: count(filters),
-      any: count({ ...filters, equipment: 'any' }).total,
-      chosen: count({ ...filters, equipment: 'chosen' }).total,
-    };
-  }, [panelOpen, matchableOptions, deferredTrimmed, filters]);
+  const panelCounts = useMemo(
+    () =>
+      panelOpen
+        ? movementFilterCounts(matchableOptions, { query: deferredTrimmed, filters })
+        : null,
+    [panelOpen, matchableOptions, deferredTrimmed, filters],
+  );
   /** The equipment list's order, ranked with no muscle on, so ticking a muscle never reshuffles it. */
   const equipmentOrder = useMemo(
     () =>
@@ -751,15 +750,11 @@ export function MovementPicker({
         panelOpen
           ? panelNote && panelCounts
             ? panelNote.on === null
-              ? COPY.panelStatusChoice(
-                  panelNote.choice,
-                  panelCounts.counts.total,
-                  deferredTrimmed !== '',
-                )
+              ? COPY.panelStatusChoice(panelNote.choice, panelCounts.total, deferredTrimmed !== '')
               : COPY.panelStatus(
                   panelNote.choice,
                   panelNote.on,
-                  panelCounts.counts.total,
+                  panelCounts.total,
                   deferredTrimmed !== '',
                 )
             : ''
@@ -859,7 +854,7 @@ export function MovementPicker({
         ) : panelOpen && panelCounts ? (
           <FilterPanelFooter
             filters={filters}
-            total={panelCounts.counts.total}
+            total={panelCounts.total}
             searching={deferredTrimmed !== ''}
             onClear={() => clearFilters('panel')}
             onShow={closePanel}
@@ -942,8 +937,7 @@ export function MovementPicker({
       ) : panelOpen && panelCounts ? (
         <FilterPanelBody
           filters={filters}
-          counts={panelCounts.counts}
-          choiceTotals={{ any: panelCounts.any, chosen: panelCounts.chosen }}
+          counts={panelCounts}
           equipmentOrder={equipmentOrder}
           onChange={changeFilters}
           onBack={closePanel}

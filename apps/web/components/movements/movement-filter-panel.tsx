@@ -41,8 +41,6 @@ export type FilterPanelProps = {
   readonly filters: MovementFilters;
   /** Each choice's count under the filters as they are (`movementFilterCounts`). */
   readonly counts: MovementFilterCounts;
-  /** "Any equipment" and "Uses at least one of…" as totals: the counts give the per-item numbers. */
-  readonly choiceTotals: { readonly any: number; readonly chosen: number };
   /**
    * The equipment items in the order listed (`equipmentFilterOrder`), fixed while the panel is
    * open: ranked with no muscle on, so ticking a muscle never reshuffles the list above the
@@ -63,7 +61,6 @@ export type FilterPanelProps = {
 export function FilterPanelBody({
   filters,
   counts,
-  choiceTotals,
   equipmentOrder: order,
   onChange,
   onBack,
@@ -114,9 +111,9 @@ export function FilterPanelBody({
       </div>
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-2 font-semibold">{COPY.equipmentLegend}</legend>
-        {radio('any', COPY.equipmentAny, choiceTotals.any)}
+        {radio('any', COPY.equipmentAny, counts.equipmentAny)}
         {radio('none', COPY.emptyEquipment, counts.equipmentNone, COPY.equipmentNoneHint)}
-        {radio('chosen', COPY.equipmentChosen, choiceTotals.chosen, COPY.equipmentChosenHint)}
+        {radio('chosen', COPY.equipmentChosen, counts.equipmentChosen, COPY.equipmentChosenHint)}
         {filters.equipment === 'chosen' ? (
           <fieldset className="ml-9 flex flex-col gap-1">
             <legend className="sr-only">{COPY.equipmentItemsLegend}</legend>

@@ -58,11 +58,13 @@ function Harness({
   multi = false,
   onPick = vi.fn(),
   recentIds,
+  alreadyIn,
 }: {
   options?: readonly MovementOptionDTO[];
   multi?: boolean;
   onPick?: (picked: unknown) => void;
   recentIds?: readonly string[];
+  alreadyIn?: { ids: ReadonlySet<string>; label: string };
 }) {
   const [isOpen, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -73,6 +75,7 @@ function Harness({
     title: COPY.title,
     data: { options, recentIds },
     returnFocusTo: ref,
+    alreadyIn,
   };
   return (
     <main>
@@ -142,6 +145,16 @@ describe('the Filters control (P15)', () => {
 
   it('is not shown when no library movement is listed: there is nothing to filter', () => {
     render(<Harness options={[CIRCUIT, LADDER]} />);
+    open();
+    expect(screen.queryByRole('button', { name: /^Filters, / })).toBeNull();
+  });
+
+  it('⏳ is not shown over built-ins with no library data either: a filter can judge none of them', () => {
+    // Until CAT-3 chunk R every old built-in is listed, most with no taxonomy (7a-ii).
+    const bare = Object.fromEntries(
+      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
+    ) as MovementOptionDTO;
+    render(<Harness options={[bare, CIRCUIT]} />);
     open();
     expect(screen.queryByRole('button', { name: /^Filters, / })).toBeNull();
   });
@@ -470,6 +483,18 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(hit.textContent).toContain(COPY.tagNotInFilters);
     expect(hit.closest('section')).toBeNull();
     expect(status()).toContain(COPY.statusAlreadyListedOutside(PUSH_UPS.name));
+  });
+
+  it('🔴 an exact hit already in the workout says so, not "not in your filters" (one tag, by precedence)', () => {
+    render(
+      <Harness multi alreadyIn={{ ids: new Set([PUSH_UPS.publicId]), label: 'Strength A' }} />,
+    );
+    open();
+    withLats();
+    type('push-ups');
+    const hit = screen.getByRole('checkbox', { name: /^Push-Ups/ });
+    expect(hit.textContent).toContain(COPY.tagAlreadyIn('Strength A'));
+    expect(hit.textContent).not.toContain(COPY.tagNotInFilters);
   });
 
   it('after a hit the rest are "More matches" (row 15)', () => {
