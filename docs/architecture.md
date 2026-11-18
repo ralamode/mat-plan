@@ -648,6 +648,10 @@ erDiagram
   metric_definitions ||--o{ ramp_targets : "targets (V1-6b)"
   units ||--o{ activity_types : "default_unit"
   units ||--o{ movements : "unit_default"
+  movements ||--o{ movement_equipment : "required equipment (CAT-3 A1)"
+  equipment ||--o{ movement_equipment : "code"
+  movements ||--o{ movement_muscles : "one primary, any secondaries (CAT-3 A1)"
+  muscles ||--o{ movement_muscles : "code"
   units ||--o{ metric_definitions : "unit"
   units ||--o{ entries : "unit"
 
@@ -948,10 +952,10 @@ and 3). The athlete grain is the graph's 11 tables reachable from `profiles`, wh
 
 ```mermaid
 flowchart TD
-  G["HOUSEHOLD_GRAPH<br/>19 tables, child before parent<br/>11 of them athlete grain"]
+  G["HOUSEHOLD_GRAPH<br/>21 tables, child before parent<br/>11 of them athlete grain"]
   P["db:verify P1 P2 P7 P8<br/>the catalog and a household in every table"]
   C["delete core (planned, PRIV-3 2a)<br/>lock the parent rows<br/>re-run pre-flights a to h<br/>delete in graph order"]
-  EH["erase-household (planned, PRIV-3 2b)<br/>household grain: all 19"]
+  EH["erase-household (planned, PRIV-3 2b)<br/>household grain: all 21"]
   EA["erase-athlete (planned, PRIV-3 3)<br/>athlete grain: the 11"]
   L["deletion ledger<br/>grain and public id"]
   R["OPS-3 restore<br/>walks the graph in reverse,<br/>then replays the ledger through the core"]

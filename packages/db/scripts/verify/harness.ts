@@ -232,8 +232,8 @@ export async function assertCheckCoversConst(
  *
  * ## What a proof module can rely on
  *
- * `verify.ts` calls the five modules once each, in the order schema → program → day →
- * single-values → erasure, as the LAST thing it does. So when a module runs:
+ * `verify.ts` calls the six modules once each, in the order schema → program → day →
+ * single-values → erasure → catalog, as the LAST thing it does. So when a module runs:
  *
  * - every migration is applied and `seed()` has run (several times);
  * - 🔴 the database is NOT pristine: every row `verify.ts` wrote is still there, in household A
@@ -244,6 +244,10 @@ export async function assertCheckCoversConst(
  *   drops and re-adds `entries_activity_type_id_not_null` and the movements global-row CHECK by
  *   hand. A `convalidated` read of either belongs beside the TEN-2c block at the top of `verify.ts`,
  *   which exists for that reason. Every other catalog object is the migrations' own.
+ *
+ * **The one exception to "last":** `catalog.ts` → `verifyCatalogMigrationFacts` (`CAT-3` A1) runs
+ * right after `migrate()`, before `seed()`, because it proves the global-row CHECK the V1-1b
+ * simulation later replaces. It takes no `VerifyContext` (none exists yet) and reads no seeded row.
  *
  * Why last: nothing in `verify.ts` runs after the modules, so rows a lane writes cannot change what
  * an existing whole-table assertion counts, and a lane's proof cannot become the FIRST failure under

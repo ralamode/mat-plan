@@ -241,8 +241,11 @@ export function createFakeDayActions(
 
       async untickRow(input) {
         if (failed()) return refuse(ROW_REFUSAL.retry);
+        // Input the schema refuses is `bad_value`, as the real action answers it (12b's `writeRow`);
+        // `not_found` is for an entry that is not this athlete's on this day (C31).
         const parsed = rowUntickSchema.safeParse(input);
-        if (!parsed.success || !mine(parsed.data)) return refuse(ROW_REFUSAL.not_found);
+        if (!parsed.success) return refuse(ROW_REFUSAL.bad_value);
+        if (!mine(parsed.data)) return refuse(ROW_REFUSAL.not_found);
         if (!plan.writable) return refuse(ROW_REFUSAL.closed_day);
         const { entryPublicId } = parsed.data;
 
@@ -267,8 +270,11 @@ export function createFakeDayActions(
 
       async retickRow(input) {
         if (failed()) return refuse(ROW_REFUSAL.retry);
+        // As un-tick: a token `hiddenAtSchema` refuses (a wrong shape, or no real instant, as
+        // 30 February) is `bad_value`, and nothing is read or changed (C31).
         const parsed = rowRetickSchema.safeParse(input);
-        if (!parsed.success || !mine(parsed.data)) return refuse(ROW_REFUSAL.not_found);
+        if (!parsed.success) return refuse(ROW_REFUSAL.bad_value);
+        if (!mine(parsed.data)) return refuse(ROW_REFUSAL.not_found);
         if (!plan.writable) return refuse(ROW_REFUSAL.closed_day);
         const { entryPublicId, hiddenAt } = parsed.data;
 
