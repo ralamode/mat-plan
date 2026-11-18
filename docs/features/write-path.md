@@ -542,6 +542,11 @@ The shapes those lanes agree on, the fakes and the preview route are
      submit's row → `{ dayTaken: true }`, the typed "already logged" envelope.
    - **(c) it swallows a violation of ANY unique**, including future ones → a no-op that is neither
      THROWS. Adding a unique index to `entries` means deciding how this writer answers it.
+     🔴 **(c) is retried once first**, in this writer and in `writeCheckinEntries` (per item there): the
+     insert and the re-reads are separate statements, so a day holder cleared between them leaves
+     nothing to explain the skip, and the day is free by then. Only a second miss throws.
+     `verify/single-values.ts` stages it with a statement-level `AFTER INSERT` trigger that hides the
+     holder inside the skipped insert (mutations 420, 421).
      The replay lookup is scoped to the profile (the pre-1e fallback looked up `client_id` alone and could
      hand back another profile's public id). `db:verify` ("V1-24 1e") drives the app's own statement for
      insert, replay, other-device, soft-delete, the foreign-`client_id` throw, a soft-deleted submit's
