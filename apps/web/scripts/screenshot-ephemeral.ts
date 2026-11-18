@@ -46,6 +46,7 @@ import {
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
+  SETTINGS_PATH,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
@@ -462,6 +463,11 @@ const STATES = {
   'rename-rejected': null,
   // U0 — the shared sheet, OPEN. Not reachable by route: it exists only after a tap, and a closed
   // cell shows two buttons and nothing of the component under review.
+  // The focus ring (the tech-debt focus-ring fix): keyboard focus on a field, a button and a nav row.
+  // Interaction-only: `:focus-visible` exists only after keyboard input, which no fixture can seed.
+  'focus-field': null,
+  'focus-button': null,
+  'focus-nav-row': null,
   'sheet-open': null,
   'sheet-dialog-open': null,
   // CAT-3 B2-ii — the movement picker's filters, on the preview's workout editor. Interaction-only:
@@ -677,6 +683,20 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await quadsOnThenBack(page);
     await page.getByRole('searchbox').fill('chin');
     await page.getByText(PICKER_COPY.outsideAll(4, 'chin'), { exact: true }).waitFor();
+  },
+  // A key press first, so the programmatic focus that follows counts as KEYBOARD focus and
+  // `:focus-visible` (the ring under test) applies, as it does when a person tabs there.
+  'focus-field': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('input[name="name"]').first().focus();
+  },
+  'focus-button': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('form button[type="submit"]').first().focus();
+  },
+  'focus-nav-row': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator(`a[href="${SETTINGS_PATH}"]`).first().focus();
   },
   'sheet-open': async (page) => {
     await page.getByRole('button', { name: 'Open sheet' }).first().click();
