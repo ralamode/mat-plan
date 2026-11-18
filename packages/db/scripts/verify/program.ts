@@ -117,7 +117,8 @@ import { normalizeFixture } from './normalize-fixture';
  * - step 6b: once per weekday; a removed slot frees its place;
  * - step 6c: assignments; `program-view` deep-equals `family-program`; the seeded programs equal the
  *   contract fixtures;
- * - step 6d: logged days keep their rows; two open assignments at one `idx` are refused.
+ * - step 6d: Take off keeps logged days' rows; the reorder places an athlete's programs through the
+ *   band (two open assignments at one `idx` are refused in `verify/schema.ts`).
  *
  * Every proof that writes runs inside `rolledBack`, so this module leaves nothing behind. What a
  * module can rely on when it runs, and the helpers to import, are in `./harness` → `VerifyContext`.
@@ -3103,7 +3104,8 @@ async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promi
     // ── Refusals write nothing ──
     const n5 = await athlete('Left');
     await on(n5, A, addDays(T, -3));
-    await off(n5, A, addDays(T, -2));
+    // Its last day is yesterday: the boundary of "left before today".
+    await off(n5, A, addDays(T, -1));
     await on(n5, B);
     const n6 = await athlete('None');
     const n7 = await athlete('Other');
