@@ -1007,6 +1007,10 @@ async function verifyStep1(): Promise<void> {
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.prescriptionTargets)
         .where(inArray(schema.prescriptionTargets.prescriptionId, legacyPrescriptionsOf));
+      const [fp] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.prescriptions)
+        .where(inArray(schema.prescriptions.workoutId, workoutsOf));
       const [w] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.workouts)
@@ -1026,6 +1030,8 @@ async function verifyStep1(): Promise<void> {
         fixturePrograms: blocks.filter((b) => b.clientId !== null && fixtureIds.has(b.clientId))
           .length,
         workouts: w.n,
+        // The fixture programs' items: prescriptions of the household's workouts (legacy ones have none).
+        fixturePrescriptions: fp.n,
         assignments: a.n,
       };
     };
@@ -1049,7 +1055,7 @@ async function verifyStep1(): Promise<void> {
     await tx.delete(schema.prescriptions).where(inArray(schema.prescriptions.blockId, blocksOf));
     await tx.delete(schema.workouts).where(inArray(schema.workouts.blockId, blocksOf));
     await tx.delete(schema.programBlocks).where(eq(schema.programBlocks.householdId, household.id));
-    const none = { fixturePrograms: 0, workouts: 0, assignments: 0 };
+    const none = { fixturePrograms: 0, workouts: 0, fixturePrescriptions: 0, assignments: 0 };
     assert.deepEqual(
       await program(),
       { blocks: [], prescriptions: 0, targets: 0, ...none },
@@ -1085,7 +1091,9 @@ async function verifyStep1(): Promise<void> {
       {
         ...expected,
         fixturePrograms: SEED_FIXTURE_PROGRAM_CLIENT_IDS.length,
-        ...SEED_FIXTURE_COUNTS,
+        workouts: SEED_FIXTURE_COUNTS.workouts,
+        fixturePrescriptions: SEED_FIXTURE_COUNTS.prescriptions,
+        assignments: SEED_FIXTURE_COUNTS.assignments,
       },
       'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
     );

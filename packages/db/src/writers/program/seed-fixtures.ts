@@ -57,6 +57,9 @@ export const seedFixtureProgramClientId = (programId: string) => fixtureIds.prog
  */
 export const SEED_FIXTURE_COUNTS = {
   workouts: FIXTURE_WORLD.programs.flatMap((p) => p.workouts).length,
+  prescriptions: FIXTURE_WORLD.programs
+    .flatMap((p) => p.workouts)
+    .reduce((n, w) => n + w.items.length, 0),
   assignments: Object.keys(SEED_FIXTURE_ATHLETES).reduce(
     (n, athlete) => n + (FIXTURE_WORLD.assign[athlete]?.length ?? 0),
     0,
