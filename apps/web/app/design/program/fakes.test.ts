@@ -1868,8 +1868,8 @@ describe('the fakes stay on the preview route', () => {
    * 🔴 **That makes `e2e/` a way round this guard**, which reads each file's own imports: a helper
    * there may import a fixture, and a route importing the helper would look clean (`@/e2e/…`
    * resolves from anywhere in the app). So the last test here holds the other half: nothing in the
-   * app imports from `e2e/` at all. `scripts/` may: its screenshot script drives the same steps,
-   * and nothing under `scripts/` is bundled.
+   * app imports from `e2e/` at all, nor from `scripts/`, whose screenshot script drives the same
+   * steps and so may import `e2e/` itself.
    */
   const mayReadPreviewData = (file: string) =>
     file.startsWith(`${WEB_DIR}/app/design/program/`) || file.startsWith(`${WEB_DIR}/e2e/`);
@@ -1934,8 +1934,11 @@ describe('the fakes stay on the preview route', () => {
     expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
   });
 
-  /** An import from the end-to-end directory: by the alias, or relatively from any depth. */
-  const IMPORTS_E2E = /['"](?:@\/|(?:\.\.?\/)+)e2e\//;
+  /** An import from the end-to-end directory or from `scripts/`: by the alias, or relatively. */
+  const IMPORTS_E2E_OR_SCRIPTS = /['"](?:@\/|(?:\.\.?\/)+)(?:e2e|scripts)\//;
+  /** Test and tooling code, which no route bundles: the specs' directory and the dev scripts'. */
+  const isTestOrTooling = (file: string) =>
+    file.startsWith(`${WEB_DIR}/e2e/`) || file.startsWith(`${WEB_DIR}/scripts/`);
 
   it('the e2e matcher sees every spelling of the import', () => {
     for (const source of [
@@ -1943,28 +1946,43 @@ describe('the fakes stay on the preview route', () => {
       `import { signIn } from '../../e2e/steps';`,
       `import { signIn } from "../e2e/steps";`,
       `const steps = await import('./e2e/steps');`,
+      `import { capture } from '@/scripts/screenshot-ephemeral';`,
+      `import { capture } from '../scripts/screenshot-ephemeral';`,
     ]) {
-      expect(IMPORTS_E2E.test(source), source).toBe(true);
+      expect(IMPORTS_E2E_OR_SCRIPTS.test(source), source).toBe(true);
     }
     for (const source of [
       `import { test } from '@playwright/test';`,
       `import { thing } from '@/lib/e2e';`,
+      `import { thing } from '@/lib/scripts';`,
       `import { thing } from '@/components/e2e-banner';`,
       `import { steps } from './steps';`,
     ]) {
-      expect(IMPORTS_E2E.test(source), source).toBe(false);
+      expect(IMPORTS_E2E_OR_SCRIPTS.test(source), source).toBe(false);
     }
   });
 
-  it('🔴 nothing in the app imports from e2e/, so a helper there cannot carry a fixture into a route', () => {
-    const app = appSources().filter(
-      (file) =>
-        !file.startsWith(`${WEB_DIR}/e2e/`) &&
-        // The screenshot script drives the same steps as the specs. `scripts/` is never bundled.
-        !file.startsWith(`${WEB_DIR}/scripts/`),
-    );
+  it('test and tooling code is the two directories, and nothing that only looks like them', () => {
+    for (const file of ['e2e/steps.ts', 'scripts/screenshot-ephemeral.ts']) {
+      expect(isTestOrTooling(`${WEB_DIR}/${file}`), file).toBe(true);
+    }
+    for (const file of [
+      'sentry.server.config.ts',
+      'lib/scripts.ts',
+      'app/scripts/page.tsx',
+      'app/e2e/page.tsx',
+      'proxy.ts',
+    ]) {
+      expect(isTestOrTooling(`${WEB_DIR}/${file}`), file).toBe(false);
+    }
+  });
+
+  it('🔴 nothing in the app imports from e2e/ or scripts/, so neither can carry a fixture into a route', () => {
+    // The screenshot script drives the same steps as the specs, so `scripts/` may import `e2e/`.
+    // The app may import neither: through either one a helper's fixture would reach a route.
+    const app = appSources().filter((file) => !isTestOrTooling(file));
     expect(app.length).toBeGreaterThan(100);
-    const importers = app.filter((file) => IMPORTS_E2E.test(code(file)));
+    const importers = app.filter((file) => IMPORTS_E2E_OR_SCRIPTS.test(code(file)));
     expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
   });
 });

@@ -211,8 +211,8 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    `packages/db/scripts/verify/` do import the fixtures subpath: that is invariant 3. So may a
    test: the unit tests are not in the scan, and the end-to-end tests under `apps/web/e2e/` are
    left out of the fakes-and-fixtures scan by directory, so a spec reads a fixture's names and
-   never re-types them. In return nothing in the app may import from `e2e/` (the same test file checks it), or a helper
-   there could carry a fixture into a route; `scripts/` may, since nothing there is bundled.
+   never re-types them. In return nothing in the app may import from `e2e/` or from `scripts/` (the
+   same test file checks it), or a helper there could carry a fixture into a route.
 5. **A fake follows the prototype's rules and each rule has a test** (`fakes.test.ts`; plan §8,
    "Behaviour"). A fake and a real action parse an input with the same schema, so a screen sees the
    same refusal on the preview route and in production.
