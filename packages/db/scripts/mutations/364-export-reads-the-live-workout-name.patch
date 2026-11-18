@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
+index 32e51039..02123a32 100644
+--- a/packages/db/src/queries/export-month.ts
++++ b/packages/db/src/queries/export-month.ts
+@@ -91,7 +91,7 @@ export function strengthMonthRows(
+         isProgramRow: sql<boolean>`${programRow()}`,
+         // The FROZEN name (11b), never the live `workouts.name`: a renamed workout exports the name
+         // the row was logged under. NULL outside a program, and for another athlete's session.
+-        workoutName: schema.sessions.workoutName,
++        workoutName: sql<string | null>`(select ${schema.workouts.name} from ${schema.workouts} where ${schema.workouts.id} = ${schema.sessions.workoutId})`,
+         setId: schema.entrySets.id,
+         setIdx: schema.entrySets.idx,
+         reps: schema.entrySets.reps,

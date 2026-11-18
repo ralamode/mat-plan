@@ -9,6 +9,7 @@ import {
   type StrengthLogRow,
   STRENGTH_LOG_HEADER,
   strengthLogPath,
+  readCsvLine,
 } from '@mat-plan/shared/csv';
 import { ENTRY_STATUS, QUANTITY_SLOT, type QuantitySlot, SET_STATUS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
@@ -42,6 +43,7 @@ const row = (o: Partial<StrengthLogRow> = {}): StrengthLogRow => ({
   sets: [set()],
   prescribed: '',
   notes: '',
+  workoutName: null,
   ...o,
 });
 
@@ -50,6 +52,7 @@ const bodyOf = (r: StrengthLogRow) => buildStrengthLog([r]).split('\n')[1];
 
 describe('the contract’s own example rows, byte for byte', () => {
   // Every string below is lifted from docs/csv-export-contract.md § "strength-log — the hard one".
+  // FAM-1 14a: each ends with the empty `workout_name` cell, since none of them is a program row.
   it('a per-set ramp with a uniform-looking tail', () => {
     expect(
       bodyOf(
@@ -61,7 +64,7 @@ describe('the contract’s own example rows, byte for byte', () => {
         }),
       ),
     ).toBe(
-      '2020-07-20,strength-a,front-squat,5,5,70/75/75/75/80,5x5 @ ~70 target,ramped; top 80x5 clean',
+      '2020-07-20,strength-a,front-squat,5,5,70/75/75/75/80,5x5 @ ~70 target,ramped; top 80x5 clean,',
     );
   });
 
@@ -75,7 +78,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           sets: ['80', '85', '85'].map((v) => set({ quantities: [mass(v)] })),
         }),
       ),
-    ).toBe('2020-07-20,strength-a,back-squat,3,5,80/85/85,3x5 @ ~85-90,solid');
+    ).toBe('2020-07-20,strength-a,back-squat,3,5,80/85/85,3x5 @ ~85-90,solid,');
   });
 
   it('a SKIPPED movement — zero sets, 0,0,SKIPPED', () => {
@@ -93,7 +96,7 @@ describe('the contract’s own example rows, byte for byte', () => {
         }),
       ),
     ).toBe(
-      '2020-06-02,trainer,bulgarian-split-squat,0,0,SKIPPED,2x6/leg,acceptable — drop-if-yellow item',
+      '2020-06-02,trainer,bulgarian-split-squat,0,0,SKIPPED,2x6/leg,acceptable — drop-if-yellow item,',
     );
   });
 
@@ -114,7 +117,7 @@ describe('the contract’s own example rows, byte for byte', () => {
         }),
       ),
     ).toBe(
-      '2020-06-02,trainer,pull-ups,2,sub-failure,BW,2 sets sub-failure,max 4 clean unassisted',
+      '2020-06-02,trainer,pull-ups,2,sub-failure,BW,2 sets sub-failure,max 4 clean unassisted,',
     );
   });
 
@@ -131,7 +134,7 @@ describe('the contract’s own example rows, byte for byte', () => {
         }),
       ),
     ).toBe(
-      '2020-07-20,strength-a,pull-up,4,4/3/4/2,BW+8 (vest),4x4 last AMRAP,reps declined across sets',
+      '2020-07-20,strength-a,pull-up,4,4/3/4/2,BW+8 (vest),4x4 last AMRAP,reps declined across sets,',
     );
   });
 
@@ -153,7 +156,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           ),
         }),
       ),
-    ).toBe('2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Athlete B; heavy');
+    ).toBe('2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Athlete B; heavy,');
   });
 
   it('a timed movement — duration in LOAD, reps is 1', () => {
@@ -174,7 +177,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           ),
         }),
       ),
-    ).toBe('2020-06-02,trainer,wall-sit,3,1,30s,3x30s,warmup — cut from 45s');
+    ).toBe('2020-06-02,trainer,wall-sit,3,1,30s,3x30s,warmup — cut from 45s,');
   });
 
   it('a height — 30in, no parens', () => {
@@ -191,7 +194,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           ),
         }),
       ),
-    ).toBe('2020-07-20,strength-a,box-jump,4,3,30in,4x3 @ 30in,');
+    ).toBe('2020-07-20,strength-a,box-jump,4,3,30in,4x3 @ 30in,,');
   });
 
   it('a band', () => {
@@ -234,14 +237,51 @@ describe('the unit tripwire — refuse, never convert', () => {
   // A unit with no spelling must never reach the file as a bare number: in this column a bare number
   // is POUNDS, so a bare kg is a 2.2x error in the value that drives load progression. Since V1-30
   // every loggable unit has a spelling, so the tripwire guards the units no form offers.
+  // FAM-1 14a: a primary `count` now goes to `reps` (the Count rule), so the tripwire is pinned on a
+  // unit that still has no spelling and is no count: `timing`.
   it('REFUSES a unit with no spelling, naming the movement', () => {
+    expect(() =>
+      bodyOf(
+        row({
+          sets: [
+            set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'timing', value: '5' }] }),
+          ],
+        }),
+      ),
+    ).toThrow(/logged in 'timing'[\s\S]*refuses rather than converting/);
+    expect(() =>
+      bodyOf(
+        row({
+          sets: [set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'bool', value: '1' }] })],
+        }),
+      ),
+    ).toThrow(/logged in 'bool'[\s\S]*refuses rather than converting/);
+  });
+
+  it('writes a Count in `count` in reps, with load empty (the maintainer, 2026-11-17)', () => {
+    expect(
+      bodyOf(
+        row({
+          movementSlug: 'plank_taps',
+          sets: [
+            set({
+              reps: null,
+              quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'count', value: '25' }],
+            }),
+          ],
+        }),
+      ),
+    ).toBe('2020-07-20,strength-a,plank-taps,1,25,,,,');
+  });
+
+  it('REFUSES a set with reps AND a count, rather than picking one', () => {
     expect(() =>
       bodyOf(
         row({
           sets: [set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'count', value: '5' }] })],
         }),
       ),
-    ).toThrow(/logged in 'count'[\s\S]*refuses rather than converting/);
+    ).toThrow(/has reps and a count/);
   });
 
   // THE contract pin (AGENTS.md → constants: the literal belongs on the assertion side, exactly once).
@@ -327,11 +367,22 @@ describe('the unit tripwire — refuse, never convert', () => {
   });
 });
 
-describe('the raw joiner — no CSV library', () => {
-  // Any RFC-4180 writer re-emits these as "" and the diff fails.
-  it('passes bare inch marks through untouched', () => {
+describe('the joiner — no CSV library, RFC 4180 quoting (FAM-1 14a)', () => {
+  // The legacy files wrote these raw; ADR 0009 retired that contract, and the maintainer chose
+  // standard quoting for the whole file (2026-11-17), so a spreadsheet reads the cell back exactly.
+  it('quotes inch marks, doubling each one', () => {
     expect(csvRow(['Athlete A at 30" box (Athlete B did 36")'], ['notes'])).toBe(
-      'Athlete A at 30" box (Athlete B did 36")\n',
+      '"Athlete A at 30"" box (Athlete B did 36"")"\n',
+    );
+  });
+
+  it('quotes a workout name with a comma and a double quote', () => {
+    expect(csvRow(['Heavy, "A"'], ['workout_name'])).toBe('"Heavy, ""A"""\n');
+  });
+
+  it('quotes a note that opens a quote and never closes it', () => {
+    expect(csvRow(['"felt off', 'Heavy A'], ['notes', 'workout_name'])).toBe(
+      '"""felt off",Heavy A\n',
     );
   });
 
@@ -344,8 +395,8 @@ describe('the raw joiner — no CSV library', () => {
     expect(csvRow(['5, last set to failure'], ['prescribed'])).toBe('"5, last set to failure"\n');
   });
 
-  it('REFUSES a comma anywhere it cannot quote', () => {
-    expect(() => csvRow(['front,squat'], ['movement'])).toThrow(/cannot contain a comma/);
+  it('quotes a comma in any column, which used to be refused outside notes and prescribed', () => {
+    expect(csvRow(['front,squat'], ['movement'])).toBe('"front,squat"\n');
   });
 
   it('refuses a line break, which would end the row early', () => {
@@ -362,7 +413,7 @@ describe('the raw joiner — no CSV library', () => {
 describe('file shape', () => {
   it('is header + LF, trailing newline, no BOM', () => {
     const out = buildStrengthLog([]);
-    expect(out).toBe('date,session_type,movement,sets,reps,load,prescribed,notes\n');
+    expect(out).toBe('date,session_type,movement,sets,reps,load,prescribed,notes,workout_name\n');
     expect(out.endsWith('\n')).toBe(true);
     expect(out.charCodeAt(0)).not.toBe(0xfeff);
     expect(out).not.toContain('\r');
@@ -391,7 +442,7 @@ describe('the assertion a golden diff can never make', () => {
   // The contract: "assert that `sets` equals the element count of any slash-list in reps/load. All
   // eight real files would pass a golden diff while carrying a mismatched list."
   const lists = (r: StrengthLogRow) => {
-    const [, , , sets, reps, load] = bodyOf(r).split(',');
+    const [, , , sets, reps, load] = readCsvLine(bodyOf(r));
     return { sets: Number(sets), reps, load };
   };
 

@@ -260,6 +260,8 @@ all derived from the one unit, so none can disagree with it:
      `superRefine`'s check (7) **only where there is no `movementPublicId`**. 🔴 **An id-resolved
      movement is never refused for its own name** — that name is whatever the catalog row holds, and
      the household cannot fix it until `MOV-1`. Refusing it would make a row unusable by its owner.
+     Since FAM-1 14a the comma rule is an input rule only: the export quotes a comma in the
+     `movement` column (RFC 4180, `csv/row.ts`) instead of failing, as it once did.
    - **The path is `['movements', i, 'movementName']`.** The action's `Movement N: <message>` mapping
      keys on a numeric `path[1]`, so a check that reported at `['movements', i]` would silently turn
      every one of these messages into something unlocatable.

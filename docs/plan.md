@@ -3168,6 +3168,10 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   risk table names: _"the exporter is provable only against fixtures we wrote… both the fixtures and the
   formatter encode the same understanding, so a misreading passes both."_
 
+  ⚠️ **Since FAM-1 14a (2026-11-17) the export is no longer byte-faithful to the legacy files:** it adds
+  a ninth column (`workout_name`) and quotes the RFC 4180 way (inch marks included). The diff therefore
+  compares each row's first eight cells, read with a CSV reader, not bytes.
+
   **The diff will not be clean on the first run, and that is the point.** Known non-matches to expect,
   each already documented: four `load` shapes are not importable yet (`BW+8 (vest)` and `123 (50ft)`
   need GAP-3 PR 4b; `BW (unassisted)` and `30 (2x 15 DB)` need V1-9a notes), `bodyweight.context` can

@@ -63,7 +63,7 @@ export const sessionMovementSchema = z.object({
   // be refused for a name the DATABASE supplied and the household cannot yet fix (`MOV-1` is what
   // makes it fixable). The comma rule itself is unchanged and still a CSV-contract guard (GAP-1 P2-2)
   // — ⚠️ though what it guards is the **slug** derived from this text, which is the export's
-  // `movement` column, and `csvRow` **throws** on a comma there rather than shifting the row.
+  // `movement` column. Since FAM-1 14a `csvRow` quotes a comma there (RFC 4180) rather than throwing.
   // `entries.movement_name` is not exported; the claim that it was is corrected in
   // `typedMovementNameIssues`' docblock, which now holds the full trace.
   movementName: movementLabelSchema,

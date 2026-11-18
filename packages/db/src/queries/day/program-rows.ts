@@ -56,3 +56,33 @@ export function programRowSlot(sessionId: number, prescriptionId: number, set: n
     eq(schema.entries.prescriptionSet, set),
   );
 }
+
+/**
+ * **Which program item a logged row belongs to** (R4, FAM-1 12a): its prescription, or, once an ADR
+ * 0008 purge has cleared `prescription_id` (`schema.ts`, "Logged in a program"), its movement. The day
+ * resolver groups a removed item's rows by it, and the export folds a program row by it (step 14),
+ * so the two cannot disagree about what one item is.
+ *
+ * ⚠️ Two purged prescriptions of the SAME movement share a key: nothing is left to tell them apart.
+ */
+export function programItemKey(row: {
+  prescriptionId: number | null;
+  movementId: number | null;
+}): string {
+  return row.prescriptionId !== null ? `p:${row.prescriptionId}` : `m:${row.movementId}`;
+}
+
+/** The fields {@link byFirstLogged} orders by: the row's set, when it was logged, and its id. */
+export type FirstLoggedFields = { set: number | null; createdAt: Date; id: number };
+
+/**
+ * The order "first logged" means for program rows: the lowest set first when `bySet`, then the
+ * earliest `created_at`, then the lowest id. The day resolver's heading and removed items, and the
+ * export's fold, all sort with it.
+ */
+export function byFirstLogged(bySet = false) {
+  return (x: FirstLoggedFields, y: FirstLoggedFields): number =>
+    (bySet ? (x.set ?? 0) - (y.set ?? 0) : 0) ||
+    x.createdAt.getTime() - y.createdAt.getTime() ||
+    x.id - y.id;
+}
