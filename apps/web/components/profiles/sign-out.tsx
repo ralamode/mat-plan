@@ -28,7 +28,7 @@ import { SIGN_OUT_COPY } from '@/lib/constants';
  * major and absent from the lockfile — so our assertion can only be about our own code. The runbook
  * carries the manual check.
  *
- * ⚠️ **No `redirectUrl` here.** `app/layout.tsx` already sets `afterSignOutUrl={SIGN_IN_PATH}` on
+ * ⚠️ **No `redirectUrl` here.** `ClerkRoot` already sets `afterSignOutUrl={SIGN_IN_PATH}` on
  * the provider — one source for one value (AGENTS.md → Constants) — and the first time a redirect
  * target comes from a prop or a query parameter it has to go through `safeInternalPath` (SEC-4).
  *
@@ -62,7 +62,7 @@ export const SIGN_OUT_CONSEQUENCE_ID = 'sign-out-consequence';
  * cosmetic one.**
  *
  * Both harnesses deliberately blank the Clerk keys (`e2e-local.ts`, `screenshot-ephemeral.ts`), so
- * `clerkIsConfigured()` is false, `app/layout.tsx` renders no `<ClerkProvider>`, and a `useClerk()`
+ * `clerkIsConfigured()` is false, `ClerkRoot` renders no `<ClerkProvider>`, and a `useClerk()`
  * component would **throw**. 1c-3a's seam supplied a *principal*, not *keys*, and arming real keys
  * in the harness would permanently destroy `e2e/theme.spec.ts`'s one-way zero-egress assertion.
  *

@@ -43,7 +43,7 @@ describe('SignOutButton (AUTH-1 1c-3b)', () => {
   it('calls Clerk signOut with no arguments — the redirect lives on the provider', () => {
     render(<SignOutButton />);
     screen.getByRole('button', { name: SIGN_OUT_COPY.action }).click();
-    // ⚠️ No `redirectUrl`: `app/layout.tsx` sets `afterSignOutUrl` once, and the first time a
+    // ⚠️ No `redirectUrl`: `ClerkRoot` sets `afterSignOutUrl` once, and the first time a
     // redirect target comes from a prop or a query parameter it must go through `safeInternalPath`
     // (SEC-4). A per-call argument here would be a second source for one value.
     expect(signOut).toHaveBeenCalledWith();

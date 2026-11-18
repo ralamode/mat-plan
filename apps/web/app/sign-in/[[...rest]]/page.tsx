@@ -44,7 +44,7 @@ export const metadata: Metadata = {
  * and the boundary is enforced in the pages, actions and handlers that read data.
  *
  * **Two states, and only the dark one is reachable without keys.** `clerkIsConfigured()` is the same
- * predicate `app/layout.tsx` uses to decide whether to render `<ClerkProvider>` — they MUST agree,
+ * predicate `ClerkRoot` (`components/layout/clerk-root.tsx`) uses to decide whether to render `<ClerkProvider>` — they MUST agree,
  * because `<SignIn/>` without a provider above it throws. With no keys the page is a plain
  * server-rendered panel saying so.
  * 🔴 **The dark state is now a genuine dead end, and that is a deliberate narrowing.** Until `1d` it
