@@ -32,9 +32,10 @@ import {
   TRACKING_TYPES,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notExists, notInArray, or, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
+import { SEED_FIXTURE_PROGRAM_CLIENT_IDS } from '../../src/writers/program/seed-fixtures';
 import {
   assignmentCurrentAsOf,
   assignmentDueOn,
@@ -489,7 +490,15 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
   );
   const kinds = await db
     .selectDistinct({ kind: schema.programBlocks.kind })
-    .from(schema.programBlocks);
+    .from(schema.programBlocks)
+    // Every block but the seed's fixture programs (FAM-1 6c-i), which are templates by design and are
+    // named here by their fixed client ids, so any other template block still fails this.
+    .where(
+      or(
+        isNull(schema.programBlocks.clientId),
+        notInArray(schema.programBlocks.clientId, [...SEED_FIXTURE_PROGRAM_CLIENT_IDS]),
+      ),
+    );
   assert.deepEqual(
     kinds.map((k) => k.kind),
     [PROGRAM_BLOCK_KIND.legacy],
@@ -950,31 +959,93 @@ async function verifyStep1(): Promise<void> {
       .from(schema.prescriptions)
       .where(inArray(schema.prescriptions.blockId, blocksOf));
 
-    /** What the seed household's program holds now: block slugs, and the live rows under them. */
+    const legacyBlocksOf = tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(
+        and(
+          eq(schema.programBlocks.householdId, household.id),
+          eq(schema.programBlocks.kind, PROGRAM_BLOCK_KIND.legacy),
+        ),
+      );
+    const legacyPrescriptionsOf = tx
+      .select({ id: schema.prescriptions.id })
+      .from(schema.prescriptions)
+      .where(inArray(schema.prescriptions.blockId, legacyBlocksOf));
+    const workoutsOf = tx
+      .select({ id: schema.workouts.id })
+      .from(schema.workouts)
+      .where(inArray(schema.workouts.blockId, blocksOf));
+    const assignmentsOf = tx
+      .select({ id: schema.programAssignments.id })
+      .from(schema.programAssignments)
+      .where(inArray(schema.programAssignments.blockId, blocksOf));
+
+    /**
+     * What the seed household's program holds now. The LEGACY rows (`PROGRAM_SEED`: block slugs,
+     * prescriptions, targets), and apart from them the fixture programs (FAM-1 6c-i, named by their
+     * fixed client ids), with their workouts and assignments: every block of the household is one
+     * or the other, so a program that is neither is still caught.
+     */
     const program = async () => {
       const blocks = await tx
-        .select({ slug: schema.programBlocks.slug })
+        .select({ slug: schema.programBlocks.slug, clientId: schema.programBlocks.clientId })
         .from(schema.programBlocks)
         .where(eq(schema.programBlocks.householdId, household.id));
       const [p] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.prescriptions)
-        .where(inArray(schema.prescriptions.blockId, blocksOf));
+        .where(inArray(schema.prescriptions.blockId, legacyBlocksOf));
       const [t] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.prescriptionTargets)
-        .where(inArray(schema.prescriptionTargets.prescriptionId, prescriptionsOf));
-      return { blocks: blocks.map((b) => b.slug).sort(), prescriptions: p.n, targets: t.n };
+        .where(inArray(schema.prescriptionTargets.prescriptionId, legacyPrescriptionsOf));
+      const [w] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.workouts)
+        .where(inArray(schema.workouts.id, workoutsOf));
+      const [a] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.programAssignments)
+        .where(inArray(schema.programAssignments.id, assignmentsOf));
+      const fixtureIds = new Set<string>(SEED_FIXTURE_PROGRAM_CLIENT_IDS);
+      return {
+        blocks: blocks
+          .filter((b) => b.clientId === null || !fixtureIds.has(b.clientId))
+          .map((b) => b.slug)
+          .sort(),
+        prescriptions: p.n,
+        targets: t.n,
+        fixturePrograms: blocks.filter((b) => b.clientId !== null && fixtureIds.has(b.clientId))
+          .length,
+        workouts: w.n,
+        assignments: a.n,
+      };
     };
 
+    // Children before parents, every table a program owns (FAM-1 6c-i added the template rows).
+    await tx
+      .delete(schema.programAssignmentWeekdays)
+      .where(inArray(schema.programAssignmentWeekdays.assignmentId, assignmentsOf));
+    await tx
+      .delete(schema.programAssignments)
+      .where(inArray(schema.programAssignments.blockId, blocksOf));
+    await tx
+      .delete(schema.blockDayWorkouts)
+      .where(inArray(schema.blockDayWorkouts.blockId, blocksOf));
+    await tx
+      .delete(schema.prescriptionQuantities)
+      .where(inArray(schema.prescriptionQuantities.prescriptionId, prescriptionsOf));
     await tx
       .delete(schema.prescriptionTargets)
       .where(inArray(schema.prescriptionTargets.prescriptionId, prescriptionsOf));
     await tx.delete(schema.prescriptions).where(inArray(schema.prescriptions.blockId, blocksOf));
+    await tx.delete(schema.workouts).where(inArray(schema.workouts.blockId, blocksOf));
     await tx.delete(schema.programBlocks).where(eq(schema.programBlocks.householdId, household.id));
+    const none = { fixturePrograms: 0, workouts: 0, assignments: 0 };
     assert.deepEqual(
       await program(),
-      { blocks: [], prescriptions: 0, targets: 0 },
+      { blocks: [], prescriptions: 0, targets: 0, ...none },
       'FAM-1 1: the seed household holds no program before the seed runs',
     );
 
@@ -982,14 +1053,21 @@ async function verifyStep1(): Promise<void> {
     await seed(seedDb, { fixtures: false });
     assert.deepEqual(
       await program(),
-      { blocks: [], prescriptions: 0, targets: 0 },
+      { blocks: [], prescriptions: 0, targets: 0, ...none },
       'FAM-1 1: seed({ fixtures: false }) writes no program, which is how production seeds',
     );
 
     await seed(seedDb, { fixtures: true });
     assert.deepEqual(
       await program(),
-      expected,
+      // The fixture world's three programs, six workouts, and three stretches on them: a1 on two,
+      // a2 on one (Adult One has no seed profile; `seed-fixtures.ts`).
+      {
+        ...expected,
+        fixturePrograms: SEED_FIXTURE_PROGRAM_CLIENT_IDS.length,
+        workouts: 6,
+        assignments: 3,
+      },
       'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
     );
   });

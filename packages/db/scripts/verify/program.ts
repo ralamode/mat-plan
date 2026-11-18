@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  addDays,
   DEFAULT_TRACKING_TYPE,
   foldMovementQuery,
   MAX_REPS_PER_SET,
@@ -9,6 +10,7 @@ import {
   MOVEMENT_SEED_ROWS,
   movementSlug,
   newId,
+  PROFILE_KIND,
   PROGRAM_BLOCK_KIND,
   PROGRAM_NAME_MAX,
   PROGRAM_REFUSAL,
@@ -20,7 +22,13 @@ import {
   WEEKDAYS,
   weekDaysSchema,
 } from '@mat-plan/shared';
-import { heavyADraft } from '@mat-plan/shared/program/fixtures';
+import {
+  DAY_PLAN_FIXTURE_SOURCES,
+  fixtureIds,
+  heavyADraft,
+  programView,
+  workoutDraft,
+} from '@mat-plan/shared/program/fixtures';
 import type { TrackingType, WeekDraft, WorkoutDraft } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
@@ -28,11 +36,19 @@ import { schema } from '../../src/client';
 import type { HouseholdScope } from '../../src/scope';
 import {
   insertMovementOwnedBy,
+  insertProfileOwnedBy,
   insertProgramBlockOwnedBy,
   movementInHousehold,
+  programBlockByClientId,
   programBlockInHousehold,
   programBlockIsLegacy,
 } from '../../src/writers/ownership';
+import { putOn } from '../../src/writers/program/assign';
+import {
+  SEED_FIXTURE_ATHLETES,
+  seedFixtureProgramClientId,
+  seedProgramFixtures,
+} from '../../src/writers/program/seed-fixtures';
 import { createProgram } from '../../src/writers/program/create-program';
 import { newItem } from '../../src/writers/program/new-item';
 import { lostSlugRace } from '../../src/writers/program/program-name';
@@ -85,6 +101,8 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifySaveWeek(ctx);
   await verifyWorkoutInHousehold(ctx);
   await verifyMovementOptionsAndNewItem(ctx);
+  await verifyPutOn(ctx);
+  await verifySeedFixtures(ctx);
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -1813,5 +1831,512 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
   });
   console.log(
     '✓ FAM-1 6a-iii-a: movementOptions and newItem (catalog, own, shadowed, alias, re-spelled, new, refusals)',
+  );
+}
+
+// ── FAM-1 6c-i: put on, and the fixture seed ────────────────────────────────────────────────────────
+
+/** The proofs' today, fixed: the writer takes the day as an argument. */
+const PUT_ON_TODAY = '2026-11-17';
+
+/** A new live athlete of `scope`'s household, by public id. */
+async function mustAddAthlete(tx: VerifyTx, scope: HouseholdScope, name: string) {
+  const clientId = newId();
+  await insertProfileOwnedBy(asTx(tx), scope, { name, kind: PROFILE_KIND.kid, clientId });
+  const [row] = await tx
+    .select({ publicId: schema.profiles.publicId })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.clientId, clientId));
+  assert.ok(row, `FAM-1 6c-i: adding the athlete "${name}" succeeds`);
+  return row.publicId;
+}
+
+/**
+ * Every assignment row and weekday row, live and hidden, with each row's `ctid`, so a write that
+ * leaves the values as they were is still seen (`updated_at` cannot see it inside one transaction).
+ */
+async function assignmentRows(tx: VerifyTx) {
+  const a = schema.programAssignments;
+  const assignments = await tx
+    .select({
+      ctid: sql<string>`${a}.ctid::text`,
+      id: a.id,
+      profile: schema.profiles.publicId,
+      program: schema.programBlocks.publicId,
+      idx: a.idx,
+      activeFrom: a.activeFrom,
+      activeTo: a.activeTo,
+      deletedAt: a.deletedAt,
+    })
+    .from(a)
+    .innerJoin(schema.profiles, eq(schema.profiles.id, a.profileId))
+    .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, a.blockId))
+    .orderBy(a.id);
+  const w = schema.programAssignmentWeekdays;
+  const weekdays = await tx
+    .select({
+      ctid: sql<string>`${w}.ctid::text`,
+      assignmentId: w.assignmentId,
+      weekday: w.weekday,
+      deletedAt: w.deletedAt,
+    })
+    .from(w)
+    .orderBy(w.assignmentId, w.weekday);
+  return { assignments, weekdays };
+}
+
+async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const tryIt = (scope: HouseholdScope, input: unknown, today = PUT_ON_TODAY) =>
+      putOn(exec, scope, input, today).catch((e: unknown) => ({ threw: String(e) }));
+    const tomorrow = addDays(PUT_ON_TODAY, 1);
+    const yesterday = addDays(PUT_ON_TODAY, -1);
+
+    const P = await mustCreate(tx, A_SCOPE, 'Put-on P');
+    const Q = await mustCreate(tx, A_SCOPE, 'Put-on Q');
+    const R = await mustCreate(tx, A_SCOPE, 'Put-on R');
+    const gone = await mustCreate(tx, A_SCOPE, 'Put-on removed');
+    await hide(tx, gone);
+    const legacy = (await seededBlock(tx, A_SCOPE)).publicId;
+    const theirs = await mustCreate(tx, B_SCOPE, 'Put-on B');
+
+    const x = await mustAddAthlete(tx, A_SCOPE, 'Put-on Athlete X');
+    const y = await mustAddAthlete(tx, A_SCOPE, 'Put-on Athlete Y');
+    const archived = await mustAddAthlete(tx, A_SCOPE, 'Put-on Archived');
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, archived));
+    const removed = await mustAddAthlete(tx, A_SCOPE, 'Put-on Removed');
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, removed));
+    const b = await mustAddAthlete(tx, B_SCOPE, 'Put-on B Athlete');
+
+    const rowsOf = async (profile: string) =>
+      (await assignmentRows(tx)).assignments.filter((r) => r.profile === profile);
+    const openOrder = async (profile: string) =>
+      (await rowsOf(profile))
+        .filter((r) => r.deletedAt === null && r.activeTo === null)
+        .sort((m, n) => m.idx - n.idx)
+        .map((r) => ({ program: r.program, idx: r.idx }));
+
+    // ── A first put on: one row each, from the day given, last in their order, all seven days ──
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [x, y], from: PUT_ON_TODAY }),
+      { ok: true },
+      'FAM-1 6c-i: put on answers ok',
+    );
+    const all = await assignmentRows(tx);
+    for (const athlete of [x, y]) {
+      const rows = all.assignments.filter((r) => r.profile === athlete);
+      assert.deepEqual(
+        rows.map((r) => ({ ...r, ctid: undefined, id: undefined })),
+        [
+          {
+            ctid: undefined,
+            id: undefined,
+            profile: athlete,
+            program: P,
+            idx: 0,
+            activeFrom: PUT_ON_TODAY,
+            activeTo: null,
+            deletedAt: null,
+          },
+        ],
+        'FAM-1 6c-i: put on writes one open row from `from`, at the first place',
+      );
+      assert.deepEqual(
+        all.weekdays
+          .filter((w) => w.assignmentId === rows[0]!.id && w.deletedAt === null)
+          .map((w) => w.weekday),
+        [...WEEKDAYS].sort((m, n) => m - n),
+        'FAM-1 6c-i: put on writes all seven weekday rows',
+      );
+    }
+
+    // ── A replay is one effect ──
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [y, x], from: tomorrow }),
+      { ok: true },
+      'FAM-1 6c-i: putting someone on a program they are on answers ok',
+    );
+    assert.deepEqual(
+      await assignmentRows(tx),
+      all,
+      'FAM-1 6c-i: …and writes nothing, whatever `from` says',
+    );
+
+    // ── A second program goes last, and may start tomorrow ──
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: Q, profilePublicIds: [x], from: tomorrow }),
+      { ok: true },
+      'FAM-1 6c-i: put on from tomorrow answers ok',
+    );
+    assert.deepEqual(
+      await openOrder(x),
+      [
+        { program: P, idx: 0 },
+        { program: Q, idx: 1 },
+      ],
+      'FAM-1 6c-i: a second program takes the next place in the athlete’s order',
+    );
+    assert.equal(
+      (await rowsOf(x)).find((r) => r.program === Q)?.activeFrom,
+      tomorrow,
+      'FAM-1 6c-i: …from tomorrow',
+    );
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: Q, profilePublicIds: [x], from: PUT_ON_TODAY }),
+      { ok: true },
+      'FAM-1 6c-i: a start still to come counts as on',
+    );
+    assert.equal(
+      (await rowsOf(x)).filter((r) => r.program === Q).length,
+      1,
+      'FAM-1 6c-i: …so a second put on adds no row',
+    );
+
+    // ── Refusals write nothing ──
+    const before = await assignmentRows(tx);
+    const refusals: Array<[string, HouseholdScope, unknown, string]> = [
+      [
+        'a start yesterday',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [x], from: yesterday },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a start two days ahead',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [x], from: addDays(PUT_ON_TODAY, 2) },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'no athlete',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'an athlete named twice',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [x, x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'a program id that is not a uuid',
+        A_SCOPE,
+        { programPublicId: 'p1', profilePublicIds: [x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'another household’s program',
+        A_SCOPE,
+        { programPublicId: theirs, profilePublicIds: [x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a legacy block',
+        A_SCOPE,
+        { programPublicId: legacy, profilePublicIds: [x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a removed program',
+        A_SCOPE,
+        { programPublicId: gone, profilePublicIds: [x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an unknown program',
+        A_SCOPE,
+        { programPublicId: newId(), profilePublicIds: [x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'another household’s athlete beside one of ours',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [x, b], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an archived athlete',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [archived], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a removed athlete',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [removed], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an unknown athlete',
+        A_SCOPE,
+        { programPublicId: R, profilePublicIds: [newId()], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'household B putting A’s athlete on its program',
+        B_SCOPE,
+        { programPublicId: theirs, profilePublicIds: [x], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'household B putting its athlete on A’s program',
+        B_SCOPE,
+        { programPublicId: R, profilePublicIds: [b], from: PUT_ON_TODAY },
+        PROGRAM_REFUSAL.not_found,
+      ],
+    ];
+    for (const [what, scope, input, reason] of refusals) {
+      assert.deepEqual(
+        await tryIt(scope, input),
+        { ok: false, reason },
+        `FAM-1 6c-i: put on refuses ${what}`,
+      );
+    }
+    assert.deepEqual(
+      await assignmentRows(tx),
+      before,
+      'FAM-1 6c-i: …and every refusal writes nothing',
+    );
+
+    // ── Take off P, put on R, put on P again: P is reopened, one row, last, no gap ──
+    // `active_to = today` stands in for Take off, step 6d's writer, which is what it writes.
+    const pRow = (await rowsOf(x)).find((r) => r.program === P)!;
+    await tx
+      .update(schema.programAssignments)
+      .set({ activeTo: PUT_ON_TODAY })
+      .where(eq(schema.programAssignments.id, pRow.id));
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: R, profilePublicIds: [x], from: PUT_ON_TODAY }),
+      { ok: true },
+      'FAM-1 6c-i: after a take off, put on another program answers ok',
+    );
+    assert.deepEqual(
+      await openOrder(x),
+      [
+        { program: Q, idx: 0 },
+        { program: R, idx: 1 },
+      ],
+      'FAM-1 6c-i: …and the place the take off freed is closed up, the order kept',
+    );
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [x], from: tomorrow }),
+      { ok: true },
+      'FAM-1 6c-i: putting them back on the program they came off today answers ok',
+    );
+    const pRows = (await rowsOf(x)).filter((r) => r.program === P);
+    assert.deepEqual(
+      pRows.map((r) => ({ id: r.id, activeFrom: r.activeFrom, activeTo: r.activeTo })),
+      [{ id: pRow.id, activeFrom: PUT_ON_TODAY, activeTo: null }],
+      'FAM-1 6c-i: …reopens the same row, its start kept: one stretch, no gap, whatever `from` says',
+    );
+    assert.deepEqual(
+      await openOrder(x),
+      [
+        { program: Q, idx: 0 },
+        { program: R, idx: 1 },
+        { program: P, idx: 2 },
+      ],
+      'FAM-1 6c-i: …in the last place of their order',
+    );
+
+    // ── A stretch that ended before today is history: a new row, the old one untouched ──
+    const yRow = (await rowsOf(y)).find((r) => r.program === P)!;
+    await tx
+      .update(schema.programAssignments)
+      .set({ activeFrom: addDays(PUT_ON_TODAY, -5), activeTo: yesterday })
+      .where(eq(schema.programAssignments.id, yRow.id));
+    const yBefore = (await rowsOf(y)).find((r) => r.id === yRow.id);
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [y], from: PUT_ON_TODAY }),
+      { ok: true },
+      'FAM-1 6c-i: put on after a stretch that ended yesterday answers ok',
+    );
+    const yRows = await rowsOf(y);
+    assert.deepEqual(
+      yRows.find((r) => r.id === yRow.id),
+      yBefore,
+      'FAM-1 6c-i: …leaves the ended stretch as it was',
+    );
+    assert.deepEqual(
+      yRows
+        .filter((r) => r.id !== yRow.id)
+        .map((r) => ({
+          program: r.program,
+          activeFrom: r.activeFrom,
+          activeTo: r.activeTo,
+          idx: r.idx,
+        })),
+      [{ program: P, activeFrom: PUT_ON_TODAY, activeTo: null, idx: 0 }],
+      'FAM-1 6c-i: …and starts a new one',
+    );
+
+    // A today the writer cannot read is the caller's bug, not a refusal: it throws.
+    const bad = await tryIt(
+      A_SCOPE,
+      { programPublicId: R, profilePublicIds: [y], from: PUT_ON_TODAY },
+      'today',
+    );
+    assert.ok(
+      'threw' in bad && bad.threw.includes('putOn needs today'),
+      'FAM-1 6c-i: put on throws on a today that is not an ISO day',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6c-i: put on writes one row and seven weekdays, last in the order; a replay adds nothing; refusals write nothing; a take off today is reopened on its row',
+  );
+}
+
+/**
+ * The fixture seed (FAM-1 6c-i). `verify.ts` seeds with fixtures, twice, before this module runs, so
+ * household A holds them now. Proved through the reads lane P has: each workout through
+ * `readWorkoutDraft` against `workoutDraft(world, p, w)`, each week through `readWeek` against the
+ * fixture's week, and the assignment rows against the world's. 6c-ii's `program-view` and
+ * `program-list` deep-equals finish it.
+ */
+async function verifySeedFixtures({ A_SCOPE }: VerifyContext): Promise<void> {
+  const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const programIds = new Map<string, string>();
+    const workoutIds = new Map<string, string>();
+
+    for (const program of world.programs) {
+      const block = await programBlockByClientId(
+        exec,
+        A_SCOPE,
+        seedFixtureProgramClientId(program.id),
+      );
+      assert.ok(
+        block && !block.deleted,
+        `FAM-1 6c-i: the seed made the live program ${program.id}`,
+      );
+      assert.equal(block.kind, PROGRAM_BLOCK_KIND.template, 'FAM-1 6c-i: …a template program');
+      assert.equal(
+        (await blockRow(tx, block.publicId))?.name,
+        program.name,
+        'FAM-1 6c-i: …with the fixture’s name',
+      );
+      programIds.set(fixtureIds.program(program.id), block.publicId);
+
+      const workouts = await tx
+        .select({ publicId: schema.workouts.publicId, name: schema.workouts.name })
+        .from(schema.workouts)
+        .where(and(eq(schema.workouts.blockId, block.id), isNull(schema.workouts.deletedAt)));
+      assert.deepEqual(
+        workouts.map((w) => w.name).sort(),
+        program.workouts.map((w) => w.name).sort(),
+        `FAM-1 6c-i: ${program.id} holds the fixture’s workouts, and no other`,
+      );
+      for (const workout of program.workouts) {
+        const publicId = workouts.find((w) => w.name === workout.name)!.publicId;
+        workoutIds.set(fixtureIds.workout(workout.wid), publicId);
+        const read = await readWorkoutDraft(exec, A_SCOPE, {
+          programPublicId: block.publicId,
+          workoutPublicId: publicId,
+        });
+        assert.ok(read, `FAM-1 6c-i: the seeded workout ${workout.wid} reads back`);
+        const fixture = workoutDraft(world, program.id, workout.wid);
+        // Each item is the one a person typing the fixture's name gets (`newItem`: an item the
+        // catalog has is the catalog's, under its stored name, "DB bench press" is "Dumbbell Bench
+        // Press"). Asked again here, it answers that item and writes nothing. Card ids are the
+        // database's own; every other field is the fixture's.
+        const expectedItems = [];
+        for (const [i, item] of workout.items.entries()) {
+          const { name, type } = world.catalog[item.iid];
+          const found = await newItem(exec, A_SCOPE, { name, trackingType: type });
+          assert.ok(found.ok && found.existed, `FAM-1 6c-i: the seed made or found ${item.iid}`);
+          const { prescriptionClientId: _c, ...rest } = fixture.items[i]!;
+          expectedItems.push({ ...rest, itemPublicId: found.itemPublicId, itemName: found.name });
+        }
+        const withoutCardIds = (draft: WorkoutDraft) =>
+          draft.items.map(({ prescriptionClientId: _c, ...rest }) => rest);
+        assert.deepEqual(
+          { name: read.name, description: read.description, items: withoutCardIds(read) },
+          { name: fixture.name, description: fixture.description, items: expectedItems },
+          `FAM-1 6c-i: the seeded workout ${workout.wid} equals the contract’s workoutDraft`,
+        );
+      }
+
+      const week = await readWeek(exec, A_SCOPE, block.publicId);
+      const expected = programView(world, program.id).week;
+      assert.deepEqual(
+        week,
+        Object.fromEntries(
+          Object.entries(expected).map(([day, slots]) => [
+            day,
+            slots.map((slot) => ({
+              ...slot,
+              workoutPublicId: workoutIds.get(slot.workoutPublicId),
+            })),
+          ]),
+        ),
+        `FAM-1 6c-i: the seeded week of ${program.id} equals the fixture’s`,
+      );
+    }
+
+    // Who is on what, from which day, in which order.
+    const rows = await assignmentRows(tx);
+    for (const [athlete, profile] of Object.entries(SEED_FIXTURE_ATHLETES)) {
+      const ours = rows.assignments
+        .filter((r) => r.profile === profile && r.deletedAt === null)
+        .filter((r) => [...programIds.values()].includes(r.program))
+        .sort((m, n) => m.idx - n.idx);
+      assert.deepEqual(
+        ours.map((r) => ({ program: r.program, from: r.activeFrom, to: r.activeTo })),
+        (world.assign[athlete] ?? []).map((a) => ({
+          program: programIds.get(fixtureIds.program(a.prog)),
+          from: a.from,
+          to: null,
+        })),
+        `FAM-1 6c-i: ${athlete} is on the fixture’s programs, from its days, in its order`,
+      );
+      for (const r of ours) {
+        assert.equal(
+          rows.weekdays.filter((w) => w.assignmentId === r.id && w.deletedAt === null).length,
+          WEEKDAYS.length,
+          `FAM-1 6c-i: ${athlete}'s seeded stretches are due all seven days`,
+        );
+      }
+    }
+    assert.equal(
+      rows.assignments.filter(
+        (r) => r.program === programIds.get(fixtureIds.program('p3')) && r.deletedAt === null,
+      ).length,
+      0,
+      'FAM-1 6c-i: Adult One has no seed profile, so nobody is on Adult One’s program',
+    );
+
+    // A third run, after a person changed a fixture program, leaves it as they left it.
+    const p1 = programIds.get(fixtureIds.program('p1'))!;
+    await renameProgram(exec, A_SCOPE, { programPublicId: p1, name: 'Renamed family program' });
+    const snapshotOf = async () => ({
+      rows: await assignmentRows(tx),
+      blocks: await blocksIn(tx, A_SCOPE),
+      name: (await blockRow(tx, p1))?.name,
+      movements: (
+        await tx
+          .select({ id: schema.movements.id })
+          .from(schema.movements)
+          .where(movementInHousehold(A_SCOPE))
+      ).length,
+    });
+    const before = await snapshotOf();
+    await seedProgramFixtures(exec, A_SCOPE);
+    assert.deepEqual(
+      await snapshotOf(),
+      before,
+      'FAM-1 6c-i: the seed run again writes nothing, and leaves a changed fixture program as it is',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6c-i: the seeded fixture programs equal the contract’s workouts and weeks, the seed’s athletes are on them in order, and a re-run writes nothing',
   );
 }

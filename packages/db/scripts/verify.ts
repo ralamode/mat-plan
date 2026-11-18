@@ -592,7 +592,7 @@ assert.equal(
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
 assert.equal(
-  movements.length,
+  movements.filter((m) => m.householdId === null).length,
   MOVEMENT_SEED_ROWS.length,
   'movements: full catalog seeded from the shared const, exactly once',
 );
@@ -3770,7 +3770,8 @@ await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 // The seed is now POPULATED with Ray's real block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
 assert.ok(PROGRAM_SEED.length >= 1, 'V1-10: PROGRAM_SEED is populated (Ray’s real block)');
 const seededBlocks = (
-  (await db.execute(sql`select count(*)::int as count from program_blocks`)).rows as unknown as {
+  (await db.execute(sql`select count(*)::int as count from program_blocks where kind = 'legacy'`))
+    .rows as unknown as {
     count: number;
   }[]
 )[0].count;
@@ -6906,6 +6907,9 @@ console.log(
       await tx.execute(sql`delete from entries where profile_id in ${hhProfiles}`);
       await tx.execute(sql`
         delete from prescription_targets where prescription_id in (
+          select id from prescriptions where block_id in ${hhBlocks})`);
+      await tx.execute(sql`
+        delete from prescription_quantities where prescription_id in (
           select id from prescriptions where block_id in ${hhBlocks})`);
       await tx.execute(sql`delete from prescriptions where block_id in ${hhBlocks}`);
       await tx.execute(sql`delete from movements where household_id = ${ten2bHousehold.id}`);
