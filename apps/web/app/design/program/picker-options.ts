@@ -115,8 +115,9 @@ const slugByPublicId = new Map(libraryRows.map(({ slug, option }) => [option.pub
  * with the supervision label that goes above them (K17). `null` for a household's item, an id
  * that is not listed, and a movement with no instructions.
  *
- * It is the fake of the server action a real page will have: that one maps the row's public id to
- * its catalog slug under the caller's scope and calls `catalogHowToOf` over the library; this one
+ * It is the fake of the read a real page has (a Route Handler, FAM-1 7b): that one maps the
+ * row's public id to its catalog slug under the caller's scope and calls `catalogHowToOf` over
+ * the library; this one
  * does the same over the test library. Async for the same reason the other fakes are: the real
  * one is.
  */
