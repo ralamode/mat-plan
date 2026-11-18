@@ -8,9 +8,15 @@ import { keyBySelf } from '../enums';
  * entry schema (`./entry`), the reference tables and CHECKs lane A's migration mirrors, and the
  * picker's filters.
  *
- * 🔴 **`EQUIPMENT`, `MUSCLES` and `MODALITIES` become stored data** when lane A's tables ship
- * (`equipment`, `muscles`, `movements.modality`), each pinned to its array by `db:verify`. From
- * then on, adding, renaming or removing a member is a migration, never an edit here alone.
+ * 🔴 **`EQUIPMENT`, `MUSCLES` and `MODALITIES` are stored data** since lane A's tables (chunk A1,
+ * migration 0032: `equipment`, `muscles`, `movements.modality`), each pinned to its array by
+ * `db:verify`. What a change needs:
+ *
+ * - **Adding** an `EQUIPMENT` or `MUSCLES` member: the member here, and the seed, which writes
+ *   the two reference tables with `ON CONFLICT DO NOTHING`. No migration.
+ * - **Renaming or removing** one: a migration, since rows may already name the code.
+ * - **`MODALITIES`**: any change is a migration, because the list is a CHECK on
+ *   `movements.modality`, not a table.
  */
 
 /**

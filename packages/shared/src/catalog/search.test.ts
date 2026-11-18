@@ -735,6 +735,7 @@ describe('bounded (P6, the contract’s half)', () => {
       hitsOutsideFilters: [],
       custom: [],
       outsideFilters: 0,
+      outsideWithoutData: 0,
       enterTarget: null,
     });
     expect(search(thirteen, options).matches).toEqual([]);

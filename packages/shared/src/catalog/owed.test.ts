@@ -14,18 +14,8 @@ import { describe, it } from 'vitest';
  * review tab carries the maintainer's `lgtm` (spec K21).
  */
 
-describe('owed by lane A: the tables (chunk A1)', () => {
-  it.todo(
-    'S1: equipment and muscles equal EQUIPMENT and MUSCLES after a seed, and are reference tables',
-  );
-  it.todo("S2: a household deletion leaves every global movement's equipment and muscle rows");
-  it.todo('S3: a second primary muscle row for one movement is refused');
-  it.todo('S4: a row with a household_id cannot be given a modality');
-  it.todo(
-    'S5: a global row with no pattern and no modality is refused; a non-strength catalog row is not',
-  );
-  it.todo('S6: no module in apps/ reads the new tables or column before the option read');
-});
+// Chunk A1 (the tables, #577) holds S1 to S6: `packages/db/scripts/verify/catalog.ts`, and the
+// stay-dark scan for S6.
 
 describe('owed by lane A: the seed (chunk A2, then A3)', () => {
   it.todo('E1: one catalog row per entry, with its join rows, in one transaction');

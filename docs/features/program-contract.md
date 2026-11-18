@@ -569,7 +569,10 @@ under its own CAT-3 heading).
     move to `custom`, one section after the filtered matches (a custom item that is a hit stays
     first in `matches`), and `passesMovementFilters` answering `false` for one is never a reason
     to hide it; (c) **what the filters removed is counted** in `outsideFilters`, and the screen
-    never falls back to the whole list. With no filter on (`movementFiltersOn` is zero, which
+    never falls back to the whole list. ⏳ Until the catalog's fresh start `outsideWithoutData` says how
+    many of those have no taxonomy at all (the old built-ins with no library entry, spec K22),
+    so the screen can tell "needs something else" from "nothing is known"; after the fresh start
+    it is always zero and the field goes. With no filter on (`movementFiltersOn` is zero, which
     includes "chosen" with nothing ticked) the result is the unfiltered one and a custom item
     sits among `matches`.
 16. **Equipment is one choice of three, and changing it clears nothing.** `any`, `none` (the set
