@@ -355,7 +355,7 @@ gantt
   12d's Change action waits for 11c-i only.
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
-  one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, so 7a-ii (which needed 6b and 6a-iii-b) can start; it is not open yet.
+  one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, so 7a-ii (which needed 6b and 6a-iii-b) could start; it is open as a draft (#586).
 - **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 40 of the 53). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
   themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525) and 11c-i (#539); lane B's six screen steps
