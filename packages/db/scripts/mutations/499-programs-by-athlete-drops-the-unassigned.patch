@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/queries/program/program-list.ts b/packages/db/src/queries/program/program-list.ts
+index a1e3f130..6dbf17ca 100644
+--- a/packages/db/src/queries/program/program-list.ts
++++ b/packages/db/src/queries/program/program-list.ts
+@@ -77,7 +77,9 @@ export async function readProgramsByAthlete(
+     throw new Error('readProgramsByAthlete needs today as an ISO day');
+   }
+   return new Map(
+-    (await athletesOnPrograms(exec, scope, today)).map((athlete) => [
++    (await athletesOnPrograms(exec, scope, today))
++      .filter((athlete) => athlete.current.length > 0)
++      .map((athlete) => [
+       athlete.publicId,
+       athlete.current.map((p) =>
+         programRefSchema.parse({ programPublicId: p.programPublicId, name: p.name }),

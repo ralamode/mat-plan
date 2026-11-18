@@ -3296,6 +3296,11 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       'FAM-1 6c-ii: readProgramsByAthlete maps an athlete on no program to no programs',
     );
     byAthlete.delete(lone);
+    // Removed again, so the fixture world below is exactly the fixture's.
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, lone));
     assert.deepEqual(
       [...byAthlete.entries()],
       world.athletes.map((a) => [
