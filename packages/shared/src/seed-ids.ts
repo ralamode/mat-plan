@@ -4,6 +4,11 @@
  * BOTH the DB seed and the app-authored `PROGRAM_SEED` (which references the household + specific kids by
  * public_id) can single-source them — `packages/shared` can't import `packages/db`, so the consts live here
  * and `packages/db/src/seed.ts` re-exports them for back-compat.
+ *
+ * ⚠️ **In the maintainer's deployment these may equal live production `public_id`s** until the fresh
+ * start (`CAT-3` K7) or SEC-6's re-key: migration 0001 and the pre-`OPS-2` seed wrote them there. They
+ * are never authorization. Since `OPS-2` PR 1 only the fixture seed writes the profile ids; migration
+ * 0001 still writes the household id on every new database.
  */
 
 /** The root household (named `HOUSEHOLD_DEFAULT_NAME`, in `enums.ts`). */

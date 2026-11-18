@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -249,7 +249,7 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
+   const stored = new Map(storedUnits.map((u) => [u.code, u]));
+   const unitsToWrite = UNITS.filter((u) => {
+     const s = stored.get(u.code);
+-    return !s || s.label !== u.label || s.dimension !== u.dimension;
++    return !s;
+   });
+   if (unitsToWrite.length > 0) {
+     await db

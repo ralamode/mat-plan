@@ -29,7 +29,7 @@ Two independent axes that are easy to confuse, and confusing them has already co
   strength, then a habit). This is the shape of a **day**, not a block of strength work. V1-18
   shipped its editor.
 
-They **co-exist permanently**. Ray runs a daily A/B program _and_ a weekday S&C block at once.
+They **co-exist permanently**. The maintainer runs a daily A/B program _and_ a weekday S&C block at once.
 
 ## The map
 
@@ -126,7 +126,7 @@ epoch-day parity — every calendar day is A or B, alternating, with no rest day
 a weekday map: seven is odd, so a weekday map repeats a letter across every Sat→Sun boundary.
 
 The program spec says the letter must come from the count of COMPLETED SESSIONS and warns that a
-calendar-derived letter doubles up box jumps after a missed day. **Ray accepted that deliberately**
+calendar-derived letter doubles up box jumps after a missed day. **The maintainer accepted that deliberately**
 — the motivation model is streak and consistency. **Do not "fix" it without asking**; session
 indexing is YDP-1, blocked on SCHED-1. The tests pin the decision, so a "fix" turns them red.
 

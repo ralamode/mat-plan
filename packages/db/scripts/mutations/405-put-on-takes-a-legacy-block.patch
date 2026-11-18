@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 3ff52570..35d4c307 100644
+index 58457d24..0ff97290 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
 @@ -13,7 +13,7 @@ import {
@@ -11,12 +11,12 @@ index 3ff52570..35d4c307 100644
  import { refuse } from './refuse';
  import { shiftIntoBand } from './shift-band';
  
-@@ -65,7 +65,7 @@ export async function putOn(
-       .select({ id: schema.programBlocks.id })
-       .from(schema.programBlocks)
-       .where(
--        and(eq(schema.programBlocks.publicId, draft.programPublicId), liveTemplateBlockIn(scope)),
-+        and(eq(schema.programBlocks.publicId, draft.programPublicId), programBlockInHousehold(scope), isNull(schema.programBlocks.deletedAt)),
-       )
-       .for('no key update');
-     if (!block) return refuse(PROGRAM_REFUSAL.not_found);
+@@ -29,7 +29,7 @@ export async function lockProgram(
+   const [block] = await tx
+     .select({ id: schema.programBlocks.id })
+     .from(schema.programBlocks)
+-    .where(and(eq(schema.programBlocks.publicId, programPublicId), liveTemplateBlockIn(scope)))
++    .where(and(eq(schema.programBlocks.publicId, programPublicId), programBlockInHousehold(scope), isNull(schema.programBlocks.deletedAt)))
+     .for('no key update');
+   return block ?? null;
+ }

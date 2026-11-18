@@ -1,17 +1,15 @@
 import {
   ACTIVITY_CATEGORY_ROWS,
+  HOUSEHOLD_DEFAULT_NAME,
   EQUIPMENT,
   MUSCLES,
   ACTIVITY_TYPE_SEED_ROWS,
-  CALISTHENICS_METRIC_KEYS,
-  CALISTHENICS_RAMP_SCHEDULE,
   databaseNameOf,
   isLocalDbHost,
   METRIC_DEFINITION_SEED_ROWS,
   MOVEMENT_SEED_ROWS,
   namesPreviewDatabase,
   newId,
-  PROFILE_KIND,
   PROGRAM_SEED,
   QUANTITY_SLOT_ROWS,
   type ProgramBlockSeedRow,
@@ -131,14 +129,12 @@ export {
 } from '@mat-plan/shared';
 
 /**
- * 🔴 **The environment flag that turns the PROGRAM fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10).
+ * 🔴 **The environment flag that turns the fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10, `OPS-2`).
  *
- * With it, the seed also writes `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c).
- * Without it, which is how `migrate.yml` seeds **production**, it writes neither, and program rows a
- * database already holds stay as they are. Only the exact value `1` turns it on.
- *
- * ⚠️ **It gates the PROGRAM fixtures only.** The seed household (`Home`) and its three fixture
- * profiles are still written either way; moving those out of production is `OPS-2`'s.
+ * With it, the seed also writes `seedFixtures` (the seed household and its three role-named athletes),
+ * `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c). Without it, which is how
+ * `migrate.yml` seeds **production**, it writes reference data only (`seedReference`), and household
+ * rows a database already holds stay as they are. Only the exact value `1` turns it on.
  *
  * The runners that set it: CI's e2e job (`ci.yml`), the preview migration (`migrate-preview.yml`) and
  * the local harnesses (`apps/web/scripts/embedded-pg.ts` → `migrateAndSeed`). A test pins that no
@@ -146,19 +142,19 @@ export {
  */
 export const SEED_FIXTURES_ENV = 'SEED_FIXTURES';
 
-/** Whether the flag's raw value turns the program fixtures on. Fail closed: only `'1'` does. */
+/** Whether the flag's raw value turns the fixtures on. Fail closed: only `'1'` does. */
 export function seedFixturesRequested(raw: string | undefined): boolean {
   return raw === '1';
 }
 
 /** The refusal `assertFixturesTargetAllowed` throws. Fixed text: it names nothing from the URL. */
 export const FIXTURES_TARGET_REFUSED =
-  'db:seed: refusing to seed program fixtures — SEED_FIXTURES=1 is allowed only against a local ' +
+  'db:seed: refusing to seed fixtures — SEED_FIXTURES=1 is allowed only against a local ' +
   'database or the preview database, and this connection string names neither (FAM-1 plan D10; ' +
   'docs/features/programming.md, invariant 3)';
 
 /**
- * 🔴 **Program fixtures go only to a database that is provably not production**: one on this machine,
+ * 🔴 **Fixtures go only to a database that is provably not production**: one on this machine,
  * or one whose name marks it as the preview database. An ALLOWLIST on the connection string itself,
  * not a check of `EXPECTED_DB_ENV`, which is a declaration and is simply absent from a seed run by
  * hand (the security lens's finding on the step-1 plan). Run after `assertMigrationTarget`, on the
@@ -193,21 +189,77 @@ export function resolveSeedOptions(
   return { fixtures };
 }
 
+/**
+ * 🔴 **OPS-2 PR 1: production's seed writes reference data and nothing else.** `seed(db, { fixtures })`
+ * is two building blocks ([plan](../../../docs/plans/ops-2-split-the-seed.md), D1):
+ *
+ * - `seedReference` always: units, quantity slots, categories, equipment, muscles, activity types,
+ *   metric definitions and the legacy movement catalog, plus the TEN-2c shadow detection. No row a
+ *   household owns. It never reads `households` or `profiles`, so no household state can make it throw.
+ * - `seedFixtures` only with fixtures: the seed household (1c-4's guard and refusal) and its three
+ *   fixture athletes, then the program and lane P's fixture world. Never in production: `migrate.yml`
+ *   seeds without `SEED_FIXTURES`, and `resolveSeedOptions` refuses the flag for any database that is
+ *   not provably local or the preview.
+ *
+ * ⚠️ **A household-scoped write belongs inside the `fixtures` branch**, never in `seedReference`
+ * (`docs/features/write-path.md` → Traps). `MOVEMENT_SEED_ROWS` stays in `seedReference` until
+ * `CAT-3` A2 moves the legacy movements under the flag (plan D1).
+ */
 export async function seed(
   db: NodePgDatabase<typeof schema>,
   { fixtures }: SeedOptions,
 ): Promise<void> {
-  // GAP-3: onConflictDoUPDATE, not DoNothing. The 7 pre-GAP-3 rows already exist in every deployed DB,
-  // so DoNothing would leave them with whatever `dimension` the migration backfilled and never reconcile
-  // them with the shared const again — a reference table that silently stops being a mirror of its source.
-  // The migration backfills once; this keeps the seed authoritative on every subsequent run.
-  await db
-    .insert(schema.units)
-    .values(UNITS)
-    .onConflictDoUpdate({
-      target: schema.units.code,
-      set: { label: sql`excluded.label`, dimension: sql`excluded.dimension` },
-    });
+  const shadowedSlugs = await seedReference(db);
+
+  // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
+  // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
+  // for fixtures, which production's seed never does. So, since OPS-2 PR 1, are the seed household and
+  // its athletes, which they need first. Program rows a database already holds are left alone.
+  if (fixtures) {
+    const household = await seedFixtures(db);
+    await seedProgram(db, PROGRAM_SEED);
+    await seedProgramFixtures(db, householdScopeForScript(household.id));
+  }
+
+  reportShadowedMovements(shadowedSlugs);
+}
+
+/**
+ * Every reference table, idempotently, and the TEN-2c shadow detection taken before the movements
+ * insert (so it reads only what households owned beforehand). Returns the shadowed seed slugs for
+ * `reportShadowedMovements`. Exported for `db:verify`; `seed` is its only other caller.
+ */
+export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<string[]> {
+  // GAP-3: the seed mirrors `UNITS` exactly (onConflictDoUPDATE, not DoNothing): the 7 pre-GAP-3 rows
+  // already existed in every deployed DB, and DoNothing would leave them with whatever `dimension` the
+  // migration backfilled, a reference table that silently stops mirroring its source.
+  //
+  // OPS-2 PR 1: ONLY the rows that are missing or differ are written. `dimension` is part of the key
+  // that `entry_set_quantities`' and `prescription_quantities`' composite FKs reference, so an UPDATE
+  // that sets it takes a full row lock even when the value is unchanged, and it did that to every
+  // unit on every push, against any open insert that references a unit. An unchanged unit is now
+  // never touched. (`scripts/seed.ts` also sets a lock and a statement timeout on its connections.)
+  const storedUnits = await db
+    .select({
+      code: schema.units.code,
+      label: schema.units.label,
+      dimension: schema.units.dimension,
+    })
+    .from(schema.units);
+  const stored = new Map(storedUnits.map((u) => [u.code, u]));
+  const unitsToWrite = UNITS.filter((u) => {
+    const s = stored.get(u.code);
+    return !s || s.label !== u.label || s.dimension !== u.dimension;
+  });
+  if (unitsToWrite.length > 0) {
+    await db
+      .insert(schema.units)
+      .values(unitsToWrite)
+      .onConflictDoUpdate({
+        target: schema.units.code,
+        set: { label: sql`excluded.label`, dimension: sql`excluded.dimension` },
+      });
+  }
 
   // GAP-3: onConflictDoNOTHING here, deliberately NOT the DoUpdate above. `quantity_slots` is the
   // parent of a composite FK with no ON UPDATE CASCADE, so once any `entry_set_quantities` row exists,
@@ -228,8 +280,7 @@ export async function seed(
   // CAT-3 A1: the library's two vocabularies, codes only (labels stay in shared). DoNothing, not
   // DoUpdate: the code is the whole row, and movement_equipment / movement_muscles reference it, so
   // there is nothing to update. Adding a word lands here with no migration; removing or renaming one
-  // needs a migration, because join rows name the code. These move to `seedReference` with the others
-  // when OPS-2 PR 1 lands.
+  // needs a migration, because join rows name the code.
   await db
     .insert(schema.equipment)
     .values(EQUIPMENT.map((code) => ({ code })))
@@ -239,6 +290,82 @@ export async function seed(
     .values(MUSCLES.map((code) => ({ code })))
     .onConflictDoNothing({ target: schema.muscles.code });
 
+  // V1-2: the FULL catalog (activity_types + metric_definitions + movements), sourced from
+  // @mat-plan/shared (single source of truth). ON CONFLICT on each natural key → idempotent,
+  // and a safe no-op for V1-1b's 3 reused rows (weigh_in / sc_lift / bodyweight). Runs after
+  // the FK parents (units + activity_type_categories) so category/unit references resolve.
+  await db
+    .insert(schema.activityTypes)
+    .values([...ACTIVITY_TYPE_SEED_ROWS])
+    .onConflictDoNothing({ target: schema.activityTypes.key });
+
+  await db
+    .insert(schema.metricDefinitions)
+    .values([...METRIC_DEFINITION_SEED_ROWS])
+    .onConflictDoNothing({ target: schema.metricDefinitions.key });
+
+  // ── TEN-2b's SHADOW GUARD, DEMOTED TO A REPORT AT TEN-2c — and BOTH halves had to move ─────────
+  //
+  // 🔴 **What the guard was for, and why its premise is GONE.** TEN-2b moved the arbiter below onto
+  // the partial `uq_movements_slug_global` (predicate repeated literally, per the V1-5 lesson;
+  // `where:` not `targetWhere:`, which `onConflictDoNothing` silently drops). But while the
+  // non-partial `movements_slug_unique` lived, Postgres inferred BOTH arbiters for `(slug)` — the
+  // non-partial one's empty predicate is trivially implied by `WHERE household_id IS NULL` — so if a
+  // household already owned a slug this seed was about to add globally, `DO NOTHING` absorbed the
+  // GLOBAL-unique collision too and the catalog row was NEVER INSERTED while `db:seed` reported
+  // success (measured). The failure was SILENCE, not a duplicate, which is why the guard was the only
+  // detector, and why it REFUSED rather than adopting — adopting would promote one household's free
+  // text into the global reference namespace, the defect `ON DELETE SET NULL` is forbidden for
+  // (schema.ts → `movements`).
+  //
+  // **Migration 0017 DELETED that premise.** With only `uq_movements_slug_global` left, a
+  // household-owned row sits OUTSIDE the index's subset, so the global insert does not collide with
+  // it and the curated row lands. A global row and a household row sharing one slug is the INTENDED
+  // end state: global-first then serves the curated row to everyone.
+  //
+  // ⚠️ **SO THIS IS NOW A REPORT, AND IT SUPPRESSES NO WRITE — both halves, or it is worse than
+  // either was.** TEN-2c's panel caught the half-fix: the guard was detect → **omit** → seed → throw,
+  // and the omission (a `seedableMovements` filter) happened BEFORE the arbiter was ever consulted. So
+  // demoting only the `throw` would leave the curated row still never inserted, forever, with nothing
+  // complaining loudly — a loud confidentiality guard turned into a silent, permanent gap in reference
+  // data, strictly worse than the status quo. The filter is therefore gone and `MOVEMENT_SEED_ROWS` is
+  // inserted whole; the partial arbiter is correct and idempotent on its own.
+  //
+  // ⚠️ **Why detect at all, then?** Because a household owning a seeded slug is still worth saying out
+  // loud: global-first means that household's own row is now permanently shadowed by the curated one,
+  // which is the right outcome but not an obvious one, and `TEN-2c-1` / `TEN-2b-2` are the rows that
+  // tidy it up. It is **not** an error. `migrate.yml` runs `db:migrate` then `db:seed` against
+  // PRODUCTION in one job on every push to `main`, and `migrate.yml:16-22` spells out what a throw
+  // there costs: the job turns red on every subsequent push and *cannot clear itself by re-running*.
+  // Recovery / context: `docs/runbooks.md` → "the seed's shadow guard fired".
+  //
+  // ⚠️ The message names SEED SLUGS ONLY — a public const. Never the colliding row's `name`, which is
+  // uncontrolled household free text, because this lands in a world-readable Actions log. `db:verify`
+  // asserts both halves of that, and the privacy half is the one that is easy to lose in a rewrite.
+  const seedMovementSlugs = MOVEMENT_SEED_ROWS.map((m) => m.slug);
+  const shadowedSlugs = (
+    await db
+      .select({ slug: schema.movements.slug })
+      .from(schema.movements)
+      .where(and(inArray(schema.movements.slug, seedMovementSlugs), movementIsOwned()))
+  )
+    .map((r) => r.slug)
+    .sort();
+
+  // No filter: every seeded movement is offered to the arbiter, which is the whole fix.
+  await db
+    .insert(schema.movements)
+    .values([...MOVEMENT_SEED_ROWS])
+    .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+
+  return shadowedSlugs;
+}
+
+/**
+ * The seed household and its three fixture athletes (fixture databases only). Returns the household
+ * the fixture programs are scoped to. Exported for `db:verify`; `seed` is its only other caller.
+ */
+export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{ id: number }> {
   // 🔴 **CONDITIONAL ON NO LIVE HOUSEHOLD EXISTING — `AUTH-1` 1c-4.**
   //
   // The arbiter used to be `onConflictDoNothing` on `public_id`, which is idempotent for THIS row
@@ -265,7 +392,7 @@ export async function seed(
   if (!liveHousehold) {
     await db
       .insert(schema.households)
-      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
+      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: HOUSEHOLD_DEFAULT_NAME })
       .onConflictDoNothing({ target: schema.households.publicId });
   }
 
@@ -336,123 +463,11 @@ export async function seed(
     ])
     .onConflictDoNothing({ target: schema.profiles.publicId });
 
-  // V1-2: the FULL catalog (activity_types + metric_definitions + movements), sourced from
-  // @mat-plan/shared (single source of truth). ON CONFLICT on each natural key → idempotent,
-  // and a safe no-op for V1-1b's 3 reused rows (weigh_in / sc_lift / bodyweight). Runs after
-  // the FK parents (units + activity_type_categories) so category/unit references resolve.
-  await db
-    .insert(schema.activityTypes)
-    .values([...ACTIVITY_TYPE_SEED_ROWS])
-    .onConflictDoNothing({ target: schema.activityTypes.key });
+  return household;
+}
 
-  await db
-    .insert(schema.metricDefinitions)
-    .values([...METRIC_DEFINITION_SEED_ROWS])
-    .onConflictDoNothing({ target: schema.metricDefinitions.key });
-
-  // ── TEN-2b's SHADOW GUARD, DEMOTED TO A REPORT AT TEN-2c — and BOTH halves had to move ─────────
-  //
-  // 🔴 **What the guard was for, and why its premise is GONE.** TEN-2b moved the arbiter below onto
-  // the partial `uq_movements_slug_global` (predicate repeated literally, per the V1-5 lesson;
-  // `where:` not `targetWhere:`, which `onConflictDoNothing` silently drops). But while the
-  // non-partial `movements_slug_unique` lived, Postgres inferred BOTH arbiters for `(slug)` — the
-  // non-partial one's empty predicate is trivially implied by `WHERE household_id IS NULL` — so if a
-  // household already owned a slug this seed was about to add globally, `DO NOTHING` absorbed the
-  // GLOBAL-unique collision too and the catalog row was NEVER INSERTED while `db:seed` reported
-  // success (measured). The failure was SILENCE, not a duplicate, which is why the guard was the only
-  // detector, and why it REFUSED rather than adopting — adopting would promote one household's free
-  // text into the global reference namespace, the defect `ON DELETE SET NULL` is forbidden for
-  // (schema.ts → `movements`).
-  //
-  // **Migration 0017 DELETED that premise.** With only `uq_movements_slug_global` left, a
-  // household-owned row sits OUTSIDE the index's subset, so the global insert does not collide with
-  // it and the curated row lands. A global row and a household row sharing one slug is the INTENDED
-  // end state: global-first then serves the curated row to everyone.
-  //
-  // ⚠️ **SO THIS IS NOW A REPORT, AND IT SUPPRESSES NO WRITE — both halves, or it is worse than
-  // either was.** TEN-2c's panel caught the half-fix: the guard was detect → **omit** → seed → throw,
-  // and the omission (a `seedableMovements` filter) happened BEFORE the arbiter was ever consulted. So
-  // demoting only the `throw` would leave the curated row still never inserted, forever, with nothing
-  // complaining loudly — a loud confidentiality guard turned into a silent, permanent gap in reference
-  // data, strictly worse than the status quo. The filter is therefore gone and `MOVEMENT_SEED_ROWS` is
-  // inserted whole; the partial arbiter is correct and idempotent on its own.
-  //
-  // ⚠️ **Why detect at all, then?** Because a household owning a seeded slug is still worth saying out
-  // loud: global-first means that household's own row is now permanently shadowed by the curated one,
-  // which is the right outcome but not an obvious one, and `TEN-2c-1` / `TEN-2b-2` are the rows that
-  // tidy it up. It is **not** an error. `migrate.yml` runs `db:migrate` then `db:seed` against
-  // PRODUCTION in one job on every push to `main`, and `migrate.yml:16-22` spells out what a throw
-  // there costs: the job turns red on every subsequent push and *cannot clear itself by re-running*.
-  // Recovery / context: `docs/runbooks.md` → "the seed's shadow guard fired".
-  //
-  // ⚠️ The message names SEED SLUGS ONLY — a public const. Never the colliding row's `name`, which is
-  // uncontrolled household free text, because this lands in a world-readable Actions log. `db:verify`
-  // asserts both halves of that, and the privacy half is the one that is easy to lose in a rewrite.
-  const seedMovementSlugs = MOVEMENT_SEED_ROWS.map((m) => m.slug);
-  const shadowedSlugs = (
-    await db
-      .select({ slug: schema.movements.slug })
-      .from(schema.movements)
-      .where(and(inArray(schema.movements.slug, seedMovementSlugs), movementIsOwned()))
-  )
-    .map((r) => r.slug)
-    .sort();
-
-  // No filter: every seeded movement is offered to the arbiter, which is the whole fix.
-  await db
-    .insert(schema.movements)
-    .values([...MOVEMENT_SEED_ROWS])
-    .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
-
-  // V1-6b-1: expand the calisthenics ramp schedule into `ramp_targets` rows —
-  // CALISTHENICS_RAMP_SCHEDULE × KID profiles × the calisthenics metric keys. The schedule
-  // ships EMPTY (see ramp-schedule.ts), so this seeds ZERO rows today; the mechanism is present
-  // and correct for the later data-only follow-up that fills the schedule. Config data is
-  // per-KID, so profiles are filtered to `kind='kid'` (never all profiles). Idempotency is the
-  // partial natural-key UNIQUE — the ON CONFLICT arbiter repeats its `WHERE deleted_at IS NULL`
-  // predicate (the V1-5 partial-index lesson) so a re-seed with real numbers can't duplicate.
-  const kidProfiles = await db
-    .select({ id: schema.profiles.id })
-    .from(schema.profiles)
-    .where(eq(schema.profiles.kind, PROFILE_KIND.kid));
-
-  const rampTargetRows = kidProfiles.flatMap((p) =>
-    CALISTHENICS_RAMP_SCHEDULE.flatMap((week) =>
-      CALISTHENICS_METRIC_KEYS.map((metricKey) => ({
-        publicId: newId(),
-        profileId: p.id,
-        metricKey,
-        weekStart: week.weekStart,
-        targetValue: String(week.targets[metricKey]), // numeric column takes a string (precision-safe)
-      })),
-    ),
-  );
-
-  // Drizzle rejects an empty VALUES list; skip the insert entirely under the empty schedule.
-  if (rampTargetRows.length > 0) {
-    await db
-      .insert(schema.rampTargets)
-      .values(rampTargetRows)
-      .onConflictDoNothing({
-        target: [
-          schema.rampTargets.profileId,
-          schema.rampTargets.metricKey,
-          schema.rampTargets.weekStart,
-        ],
-        where: isNull(schema.rampTargets.deletedAt),
-      });
-  }
-
-  // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
-  // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
-  // for fixtures, which production's seed never does. Both calls sit in this one branch on purpose, so
-  // neither can drift outside it. Program rows a database already holds are left alone either way.
-  if (fixtures) {
-    await seedProgram(db, PROGRAM_SEED);
-    // The seed household's scope, minted from the household resolved (and refused) above.
-    await seedProgramFixtures(db, householdScopeForScript(household.id));
-  }
-
+/** The TEN-2c report, last and in both modes (see the note above the movements insert). */
+function reportShadowedMovements(shadowedSlugs: readonly string[]): void {
   // TEN-2c: the shadow guard's REPORT, LAST (it was a `throw` until 0017 removed its premise — see
   // the long note above the movements insert). A warning, not an error: the curated row IS inserted
   // now, so there is nothing to recover from, and `migrate.yml` seeds production on every push to
