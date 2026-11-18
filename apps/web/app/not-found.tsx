@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 import { SiteFooter } from '@/components/layout/site-footer';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,8 @@ export default function NotFound() {
           <h1 className="text-3xl font-semibold tracking-tight">{NOT_FOUND_COPY.heading}</h1>
           <p className="text-muted-foreground max-w-prose">{NOT_FOUND_COPY.body}</p>
           <Button asChild size="lg" className={CTA_CLASS}>
-            <Link href={APP_HOME_PATH}>{ALL_ATHLETES_LINK}</Link>
+            {/* A plain `<a>`: the root not-found has no Clerk provider (`clerk-root.tsx`). */}
+            <a href={APP_HOME_PATH}>{ALL_ATHLETES_LINK}</a>
           </Button>
         </div>
       </main>

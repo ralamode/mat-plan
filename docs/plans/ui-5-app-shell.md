@@ -105,7 +105,7 @@ PR must not change a form's measure as a side effect.
 
 ### Decision 3 · The shell is a COMPONENT each page renders, and the guard already exists
 
-No nested `layout.tsx` files exist. Rejected: a route group (a layout **cannot** take content from
+No nested `layout.tsx` files exist. _(Superseded 2026-11-18: four segment layouts now render `ClerkRoot` for the Clerk provider only, [td-clerk-off-public-pages](./td-clerk-off-public-pages.md); the shell is still a component, as decided here.)_ Rejected: a route group (a layout **cannot** take content from
 its page — Next 16's `layout.md:366` — which is the whole point of a rail), and parallel routes (a
 `default.tsx` per slot, plus slots keeping their last active subpage across soft navigation, which is
 a stale-rail trap on this app's picker → Today → settings hops).

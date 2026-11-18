@@ -2705,7 +2705,7 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `@clerk/ui@1.41.1` **no stylesheet is fetched at all** — every asset from Clerk's CDN is `.js`
       (`ui.browser.js`, `signin_ui_*.js`, …), and styles are injected from JavaScript. So there is no
       **host** to allowlist, and the only question left is the narrow one: **does `clerk-js`
-      propagate the nonce we pass (`<ClerkProvider nonce dynamic>`, `app/layout.tsx`) onto the
+      propagate the nonce we pass (`<ClerkProvider nonce dynamic>`, then `app/layout.tsx`; now `components/layout/clerk-root.tsx`) onto the
       `<style>` elements it creates?** If it does, production needs no change at all. If it does not,
       they are blocked under `'nonce-…'` and the card goes unstyled — losing contrast, focus-visible
       and every tap target at once.

@@ -1,6 +1,6 @@
 /* AUTH-1 1a — Clerk's style layer, ordered BETWEEN Tailwind's `base` and `components`.
    Layer priority is declaration order, and `@layer` statements are the one thing CSS allows ahead of
-   `@import`. `<ClerkProvider appearance={{ cssLayerName: CLERK_CSS_LAYER }}>` (app/layout.tsx) is
+   `@import`. `<ClerkProvider appearance={{ cssLayerName: CLERK_CSS_LAYER }}>` (components/layout/clerk-root.tsx) is
    what puts Clerk's CSS in here.
 
    🔴 **The position matters in BOTH directions, and getting it wrong is invisible in CI** — no CI run

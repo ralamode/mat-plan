@@ -5,7 +5,7 @@
  * oversight** _(the 1d plan made "decide, don't go silent" an explicit obligation)_. Split out of
  * `lib/access-gate.ts` at 1a, it had three callers: the gate page, the gate Server Action, and
  * Clerk's post-sign-in return. `1d` deletes the first two, and Clerk's own `signInUrl` /
- * `signInFallbackRedirectUrl` are set from constants in `app/layout.tsx` rather than from anything a
+ * `signInFallbackRedirectUrl` are set from constants in `components/layout/clerk-root.tsx` rather than from anything a
  * caller supplies — so nothing in the app currently hands a user-controlled path to a redirect.
  *
  * **Why keep it rather than delete it.** SEC-4's rule is pre-positioned, not dead: the two surfaces

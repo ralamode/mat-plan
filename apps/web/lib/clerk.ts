@@ -4,7 +4,7 @@ import { env } from './env';
  * Clerk wiring facts, in one module (AUTH-1 1a).
  *
  * Three call sites must agree on "is Clerk configured": `proxy.ts` (compose `clerkMiddleware()`,
- * widen the CSP), `app/layout.tsx` (render `<ClerkProvider>`) and `app/sign-in/[[...rest]]/page.tsx`
+ * widen the CSP), `components/layout/clerk-root.tsx` (render `<ClerkProvider>`) and `app/sign-in/[[...rest]]/page.tsx`
  * (render Clerk's prebuilt sign-in, or the dark fallback). Three copies of `!!env.X && !!env.Y` is
  * how one of them ends up disagreeing with the other two, and the one that disagrees is either a
  * throw on every route or a sign-in page with no provider above it.
@@ -116,7 +116,7 @@ export const CLERK_IMG_ORIGIN = 'https://img.clerk.com';
 
 /**
  * The CSS layer Clerk's own stylesheet is confined to, passed to `<ClerkProvider appearance>` in
- * `app/layout.tsx`.
+ * `components/layout/clerk-root.tsx`.
  *
  * 🔴 **`app/globals.css` must name this layer BETWEEN Tailwind's `base` and `components`, and the
  * position matters in both directions** — `@layer theme, base, clerk, components, utilities;`.
