@@ -304,7 +304,7 @@ gantt
   10b dialogs                  :done, b6, 6, 7
   7a (7a-i merged)             :active, b7, 7, 8
   7b pages                     :b8, 8, 9
-  15 put on, take off          :crit, b9, 10, 11
+  15 put on, take off          :crit, b9, 11, 12
 
   section C · day page
   13 rows and ✓                :done, c1, 1, 2
@@ -326,7 +326,7 @@ gantt
 
   section Slices
   1 · walking skeleton on preview (after 12c) :milestone, m1, 10, 10
-  2 · the family can switch (after 15, 12d)   :milestone, m2, 11, 11
+  2 · the family can switch (after 12d, then 15) :milestone, m2, 12, 12
   3 · order, Clear this day, clean-up         :milestone, m3, 12, 12
 ```
 
@@ -336,7 +336,7 @@ gantt
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
-  real ✓, the day page, and the two steps the switch waits on (12d and 15). Nothing shortens it:
+  real ✓, the day page, and the two steps the switch waits on (12d, then 15: since 2026-11-17 step 15 waits for 12d). Nothing shortens it:
   only one migration may be unapplied at a time, and each must be seen applied before the next
   merges. A delay on a red bar moves the end; a delay on a blue bar usually does not.
 - **Lane B has slack** (waves 7 to 9), and lanes B, C and S do their first six waves before any
@@ -351,11 +351,11 @@ gantt
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's four takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii-b) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 35 of the 52). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 36 of the 52). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
   themselves. Since then: all of lane A's chain; lane E's 11a, 11b and 12a-i (#505); lane B's six screen steps
   (8a to 10b) and 7a-i; lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
-  6a-i, 6a-ii and 6b (#522) are merged and 6a-iii's two are not, so 6a's bar is part merged; so are 7a's bar
+  6a-i, 6a-ii, 6a-iii-a (#557) and 6b (#522) are merged and 6a-iii-b is not, so 6a's bar is part merged; so are 7a's bar
   (7a-i is merged, 7a-ii is not). A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
