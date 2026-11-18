@@ -45,7 +45,8 @@ it is approved, one batch PR at a time.
 2. Once the maintainer has approved the batch, one PR, "catalog batch N", adds `batch-NN.ts`, its
    line in `index.ts`, and its lines in both record files. A correction batch adds approval lines
    only. **It merges only once every row of its sheet tab reads "lgtm"**, and then the lane merges
-   it _(maintainer, 2026-11-17; until then the maintainer merged every batch)_ (D3).
+   it _(maintainer, 2026-11-17)_. This supersedes D3's "merged only by the maintainer"; the spec
+   is being amended to match.
 3. Each approval line is the entry's `entryHash` (`../approvals.ts`). `approvals.test.ts` fails any
    entry whose current content has no matching hash.
 
