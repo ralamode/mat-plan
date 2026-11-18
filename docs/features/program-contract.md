@@ -478,6 +478,23 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
       caps (`ProgramView.workouts` has none), and how many programs a household has is not
       capped.
+31. **An archived athlete is on no program page and no Programs list** (contract change C36;
+    decided under the maintainer's overnight delegation, 2026-11-18, on lane P's question from
+    6c-ii's review). `ProgramView.athletes`, `ProgramView.candidates` and the names of a
+    `ProgramList` entry hold the household's athletes who are not archived, as the day page's
+    switcher does (invariant 24).
+    - **The assignment is untouched**, so they are back on the page when restored. A program
+      with only an archived athlete on it keeps its page and its list entry, with no names.
+    - **Put on refuses an archived athlete with `not_found`, for the whole draft**, as for any
+      athlete it cannot put on (lane P's writer, 6c-i; the fake answers the same because they
+      are no candidate). So a candidate is always someone Put on would take.
+    - `family-program-archived-athlete` and `programs-list-archived-athlete` hold it: one world,
+      the seeded family with Athlete Two archived while still on the Family program.
+    - **`PROGRAM_VIEW_FIXTURE_SOURCES` and `PROGRAM_LIST_FIXTURE_SOURCES`** give every program
+      fixture's world (`{ world, program, before }` and `{ world, before }`), as
+      `DAY_PLAN_FIXTURE_SOURCES` does for the day's (invariant 3): `before` is the world the
+      fixture changes from, or `null` when it is the seeded world itself. A proof seeds
+      `before ?? world`, makes the change with the real writers, and deep-equals the fixture.
 
 ## Traps
 

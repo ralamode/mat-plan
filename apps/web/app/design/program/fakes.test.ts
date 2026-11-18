@@ -25,6 +25,7 @@ import {
   everyTypeOnce,
   familyProgram,
   familyProgramAfterTakeOff,
+  familyProgramArchivedAthlete,
   FIXTURE_TODAY,
   fixtureIds,
   futurePreview,
@@ -1451,6 +1452,34 @@ describe('the fake ProgramActions: items and athletes', () => {
     expect(
       state().programs.find((p) => p.programPublicId === programPublicId)?.athletes,
     ).not.toContain(off.name);
+  });
+
+  it('🔴 put on refuses an archived athlete, whoever else is named: not_found, nobody put on (C36)', async () => {
+    // Athlete Two is archived and still on the Family program; they are no candidate, so the fake
+    // answers as lane P's writer does for any athlete it cannot put on: the whole draft, refused.
+    const { actions, view } = builder({ program: familyProgramArchivedAthlete });
+    const before = view();
+    const archived = fixtureIds.athlete('a2');
+    expect(before.candidates.map((c) => c.profilePublicId)).not.toContain(archived);
+    const other = before.candidates.find((c) => !c.on)!;
+    const from = addDays(FIXTURE_TODAY, 1);
+    const { programPublicId } = before;
+    expect(await actions.putOn({ programPublicId, profilePublicIds: [archived], from })).toEqual(
+      refusal('not_found'),
+    );
+    expect(
+      await actions.putOn({
+        programPublicId,
+        profilePublicIds: [other.profilePublicId, archived],
+        from,
+      }),
+    ).toEqual(refusal('not_found'));
+    expect(view()).toBe(before);
+    // Without the archived athlete the same draft is taken.
+    expect(
+      (await actions.putOn({ programPublicId, profilePublicIds: [other.profilePublicId], from }))
+        .ok,
+    ).toBe(true);
   });
 
   it('put on starts today or tomorrow, skips whoever is on it, and needs someone picked', async () => {

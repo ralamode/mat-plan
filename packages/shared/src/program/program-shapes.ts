@@ -302,7 +302,11 @@ export const programRefSchema = z.object({
   name: programNameSchema,
 });
 
-/** The Programs list: each program, in the household's order, and the athletes on it. */
+/**
+ * The Programs list: each program, in the household's order, and the athletes on it. **An archived
+ * athlete is not named** (C36): as every list of a household. A program with only an archived
+ * athlete on it still has its entry, with no names.
+ */
 export const programListSchema = z.array(
   programRefSchema.extend({
     athletes: z.array(athleteLabelSchema).max(MAX_HOUSEHOLD_ATHLETES),
@@ -324,8 +328,10 @@ export const programViewSchema = z
      */
     today: isoDaySchema,
     /**
-     * Who's on it. `since` is the day they start, which may be after today. `lastDay` is set once
-     * they were taken off: the last day they are on it. `alsoOn` names their other programs.
+     * Who's on it, of the athletes who are not archived (C36). `since` is the day they start,
+     * which may be after today. `lastDay` is set once they were taken off: the last day they are
+     * on it. `alsoOn` names their other programs. **An archived athlete is not listed**, though
+     * their assignment stays: they are back here when restored.
      */
     athletes: z.array(
       z.object({
@@ -337,8 +343,10 @@ export const programViewSchema = z
       }),
     ),
     /**
-     * "Put someone on": every athlete in the household. `on` is whether they are on this program
-     * already; `keeps` names the programs they are on now, in their own order, this one included.
+     * "Put someone on": every athlete in the household who is not archived (C36: Put on refuses
+     * an archived athlete with `not_found`, so one here would be a choice that always fails).
+     * `on` is whether they are on this program already; `keeps` names the programs they are on
+     * now, in their own order, this one included.
      */
     candidates: z.array(
       z.object({
