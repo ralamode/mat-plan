@@ -369,14 +369,18 @@ describe('a supervised movement’s steps name the coach (V7, K20)', () => {
         // Part of another word is not the word.
         entry('coaching', steps('Follow the coaching cues.')),
         entry('coaches', steps('Two coaches stand by.')),
+        entry('coached', steps('You are coached through it.')),
+        entry('compound', steps('Ride the stagecoach.')),
         entry('named', steps('Kick up to the wall.', 'Your coach holds your legs.')),
         entry('capital', steps('COACH BESIDE YOU.')),
         entry('possessive', steps('Wait for your coach’s call.')),
+        entry('hyphen', steps('Coach-led only.')),
+        entry('own_line', steps('Lower slowly.', 'Coach.')),
         // Not this rule's: a label with no steps, and steps with no label.
         entry('label_only', { supervision: 'coach', instructions: undefined }),
         entry('steps_only', { supervision: undefined, instructions: 'Kick up to the wall.' }),
       ]),
-    ).toEqual(['no_coach', 'coaching', 'coaches']);
+    ).toEqual(['no_coach', 'coaching', 'coaches', 'coached', 'compound']);
   });
 });
 

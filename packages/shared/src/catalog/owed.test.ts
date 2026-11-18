@@ -47,7 +47,10 @@ describe('owed by lane B and lane P: filters and browse (after chunk C0b-2; B2, 
   it.todo('P10: "N more are not in your filters" with Clear filters; never the whole list');
   it.todo('P11: the option read returns taxonomy from the tables and aliases from the const');
   it.todo('P12: two folding sections; kinds and families closed until opened; the old groups gone');
-  // P13's row half and P16's screen half are held by B2-i (`movement-picker.test.tsx`, #569).
+  // B2-i (`movement-picker.test.tsx`, #569) holds part of P13 (the label as text, the same in both
+  // modes, never dropped for a tag) and P16's screen half. What each still owes is listed here.
+  it.todo('P13: a supervision label never hides, blocks or reorders an option or a row');
+  it.todo('P13: the label’s wording names no age, level, "ready", "safe" or warning mark');
   it.todo(
     'P13: only the option read, the picker row, the day read and the day row read supervision',
   );
