@@ -518,7 +518,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(status()).not.toContain(COPY.statusAlreadyListedOutside(FRONT.name));
   });
 
-  it('🔴 a folded section held open by a tick stays open when the tick is undone: focus keeps its row', async () => {
+  it('🔴 a folded section held open by a tick stays open when the tick is undone', async () => {
     render(<Harness multi />);
     open();
     withLats();
@@ -532,8 +532,25 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     tick(row());
     tick(row());
     await act(async () => {});
+    // Only `open` is checkable here: jsdom lets focus sit inside a closed <details>, so the focus
+    // half of the bug shows in a browser only.
     expect(details.open).toBe(true);
-    expect(row().isConnected).toBe(true);
+  });
+
+  it('after the latch, a tap on the summary still closes it, and a re-render does not reopen it', () => {
+    render(<Harness multi />);
+    open();
+    withLats();
+    const details = screen
+      .getByRole('heading', { name: COPY.foldedCount(COPY.householdNotFiltered, 2) })
+      .closest('details')!;
+    tick(screen.getByRole('checkbox', { name: new RegExp(`^${CIRCUIT.name}`) }));
+    act(() => {
+      details.open = false;
+    });
+    const fit = screen.getByRole('region', { name: COPY.fitHeading });
+    tick(within(fit).getAllByRole('checkbox')[0]!);
+    expect(details.open).toBe(false);
   });
 
   it('after a hit the rest are "More matches" (row 15)', () => {
