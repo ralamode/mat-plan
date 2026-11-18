@@ -441,11 +441,13 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     action** (contract change C31, from #547's review). The real actions parse first and answer
     `bad_value` for anything the schema refuses (12b's `writeRow`); the fake's un-tick and re-tick
     answered `not_found` there and now answer the same word. `not_found` stays for an entry that
-    is not this athlete's on that day. **A hide token must name a real instant**: `hiddenAtSchema`
-    (`packages/shared/src/hide.ts`, lane S's) refuses 30 February, month 13, hour 24, second 60 and
-    year 0000, each of which has the token's shape and would fail the database's cast, and
-    `rowRetickSchema` takes that rule whole (`shapes.test.ts` pins it, so a looser token schema
-    fails the contract's own test). Nothing is read or changed on a refused token.
+    is not this athlete's on that day. **A hide token is one the app could have written**: `hiddenAtSchema`
+    (`packages/shared/src/hide.ts`, lane S's) refuses 30 February, month 13 and year 0000, which
+    have the token's shape and fail the database's cast, and hour 24 and second 60, which pass
+    the cast as the next midnight or minute and so are a second spelling of an instant.
+    Refusing all five keeps one spelling a token, and `rowRetickSchema` takes that rule whole
+    (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
+    real action refuses before anything is read, and the fake changes nothing.
 
 ## Traps
 

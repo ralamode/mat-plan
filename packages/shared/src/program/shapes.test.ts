@@ -582,15 +582,17 @@ describe('the row writes', () => {
   });
 
   // The token's own rule is `hiddenAtSchema`'s (`../hide.ts`, lane S's). This pins that the re-tick
-  // takes it whole: a token of the right shape that names no real instant would fail Postgres'
-  // `::timestamptz` cast and reach the error page, where the contract says `bad_value` (C31).
+  // takes it whole (C31). 30 February, month 13 and year 0000 fail Postgres' `::timestamptz` cast,
+  // which would reach the error page where the contract says `bad_value`. Hour 24 and second 60
+  // pass the cast as the next midnight or minute: a second spelling of an instant, which no token
+  // the app writes has. Refusing all five keeps one spelling a token.
   it.each([
     ['30 February', '2026-02-30T00:00:00.000000Z'],
     ['month 13', '2026-13-01T00:00:00.000000Z'],
     ['hour 24', '2026-11-17T24:00:00.000000Z'],
     ['second 60', '2026-11-17T18:04:60.000000Z'],
     ['year 0000', '0000-01-01T00:00:00.000000Z'],
-  ])('🔴 RowRetick refuses a hide token that names no real instant: %s', (_label, hiddenAt) => {
+  ])('🔴 RowRetick refuses a hide token the app could not have written: %s', (_label, hiddenAt) => {
     const row = { profilePublicId: A_PROFILE, day: A_DAY, entryPublicId: AN_ENTRY };
     expect(rowRetickSchema.safeParse({ ...row, hiddenAt }).success).toBe(false);
   });

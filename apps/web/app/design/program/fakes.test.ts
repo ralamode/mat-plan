@@ -327,7 +327,11 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     const { actions, plan } = day(everyTypeOnce);
     const { entryPublicId, values } = loggedBench();
     const badValue = { ok: false, reason: ROW_REFUSAL.bad_value };
-    // An id that is not a lower-case UUID never reaches the list of this athlete's entries.
+    // The real entry, with a day the schema refuses: `bad_value`, where the fake said `not_found`.
+    expect(
+      await actions.untickRow({ profilePublicId, day: on.slice(0, -1), entryPublicId }),
+    ).toEqual(badValue);
+    // An id that is not a UUID is refused the same way.
     expect(
       await actions.untickRow({ profilePublicId, day: on, entryPublicId: 'not-an-id' }),
     ).toEqual(badValue);
@@ -339,7 +343,8 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
       await actions.untickRow({ profilePublicId, day: on, entryPublicId }),
     );
     const retick = { profilePublicId, day: on, entryPublicId };
-    // The right shape, but no real instant: the database's cast would throw on each.
+    // The right shape, but not a token the app writes: 30 February and month 13 fail the
+    // database's cast, and hour 24 and second 60 are a second spelling of the next midnight or minute.
     for (const hiddenAt of [
       '2026-02-30T00:00:00.000000Z',
       '2026-13-01T00:00:00.000000Z',
