@@ -86,7 +86,7 @@ flowchart LR
 | `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. No page imports it until 7b.                                                                                                                          |
 | `apps/web/app/programs/actions.registry.ts`                             | Each action's refusal set and scope, read by the boundary matrices ([write-path.md](./write-path.md) invariant 1).                                                                                                                                                      |
 | `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                    |
-| `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported.                                                                                                                                                                        |
+| `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                                                                               |
 | `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                    |
 
 ## Invariants
@@ -323,8 +323,9 @@ flowchart LR
       `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`, as the
       preview's fake does.
     - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
-      helper): a week's program, then each workout it names (distinct, at most
-      `WEEK_PROBE_LIMIT`); a copy's TARGET program, then its source workout by id alone
+      helper): a week's program, then each workout it names (distinct, every one, looked up in
+      one read of the program's live workout ids, lane P's `programWorkoutIds`, 6c-ii); a copy's
+      TARGET program, then its source workout by id alone
       (`workoutInHousehold`).
     - **The item picker's data** (`lib/dal/program/picker.ts`, CAT-3 P11-i): the household's own
       items and, ⏳ **until the catalog's fresh start (CAT-3 chunk R), every old built-in**
