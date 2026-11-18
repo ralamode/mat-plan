@@ -1860,10 +1860,16 @@ describe('the fakes stay on the preview route', () => {
    * preview and test data.
    *
    * **Tests may read them.** `appSources()` already leaves out the unit tests (`*.test.ts`). The
-   * end-to-end tests are Playwright's `*.spec.ts` and their helpers, all under `apps/web/e2e/`,
-   * which no route can import: they are left out here, by directory, so a spec can read a
-   * fixture's names and never re-type them (12c's `day-page.spec.ts`). ⚠️ Here and not in
-   * `appSources()`: the session and secrets guards share that list, and they must keep seeing `e2e/`.
+   * end-to-end tests are Playwright's `*.spec.ts` and their helpers, all under `apps/web/e2e/`:
+   * they are left out here, by directory, so a spec can read a fixture's names and never re-type
+   * them (12c's `day-page.spec.ts`). ⚠️ Here and not in `appSources()`: the session and secrets
+   * guards share that list, and they must keep seeing `e2e/`.
+   *
+   * 🔴 **That makes `e2e/` a way round this guard**, which reads each file's own imports: a helper
+   * there may import a fixture, and a route importing the helper would look clean (`@/e2e/…`
+   * resolves from anywhere in the app). So the last test here holds the other half: nothing in the
+   * app imports from `e2e/` at all. `scripts/` may: its screenshot script drives the same steps,
+   * and nothing under `scripts/` is bundled.
    */
   const mayReadPreviewData = (file: string) =>
     file.startsWith(`${WEB_DIR}/app/design/program/`) || file.startsWith(`${WEB_DIR}/e2e/`);
@@ -1925,6 +1931,40 @@ describe('the fakes stay on the preview route', () => {
 
   it('nothing outside app/design/program imports the fakes or the fixtures', () => {
     const importers = outside.filter((file) => IMPORTS_PREVIEW_DATA.test(code(file)));
+    expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
+  });
+
+  /** An import from the end-to-end directory: by the alias, or relatively from any depth. */
+  const IMPORTS_E2E = /['"](?:@\/|(?:\.\.?\/)+)e2e\//;
+
+  it('the e2e matcher sees every spelling of the import', () => {
+    for (const source of [
+      `import { signIn } from '@/e2e/steps';`,
+      `import { signIn } from '../../e2e/steps';`,
+      `import { signIn } from "../e2e/steps";`,
+      `const steps = await import('./e2e/steps');`,
+    ]) {
+      expect(IMPORTS_E2E.test(source), source).toBe(true);
+    }
+    for (const source of [
+      `import { test } from '@playwright/test';`,
+      `import { thing } from '@/lib/e2e';`,
+      `import { thing } from '@/components/e2e-banner';`,
+      `import { steps } from './steps';`,
+    ]) {
+      expect(IMPORTS_E2E.test(source), source).toBe(false);
+    }
+  });
+
+  it('🔴 nothing in the app imports from e2e/, so a helper there cannot carry a fixture into a route', () => {
+    const app = appSources().filter(
+      (file) =>
+        !file.startsWith(`${WEB_DIR}/e2e/`) &&
+        // The screenshot script drives the same steps as the specs. `scripts/` is never bundled.
+        !file.startsWith(`${WEB_DIR}/scripts/`),
+    );
+    expect(app.length).toBeGreaterThan(100);
+    const importers = app.filter((file) => IMPORTS_E2E.test(code(file)));
     expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
   });
 });
