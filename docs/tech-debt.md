@@ -15,6 +15,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
+
+- **What & why it's debt:** `apps/web/app/p/[profileId]/loading.tsx` reserves the athlete
+  switcher's 44px row below `lg`, but `AthleteSwitcher` renders nothing when the household has no
+  other athlete (`apps/web/components/day/athlete-switcher.tsx`). A Suspense fallback has no data, so
+  it cannot know the count; 12c chose to reserve the row for the common case, a household of several.
+- **Impact:** in a one-athlete household, on a phone or tablet, the content below the header moves
+  up by one row when the page replaces the skeleton. This is a layout shift on that path only. Nothing
+  has measured it against the CLS budget.
+- **The fix:** keep a row of that height in the real header too, for example the athlete's name as
+  static text when there is no one to switch to, so the skeleton and the page agree. Alternatively,
+  have the fallback read the household's athlete count from a value it can see without the DAL.
+- **Severity:** low. Maintainer, 2026-11-17: "Add to tech-debt".
+
 ### Two shell-wrapper walks (added 2026-11-17, DX-18 1b)
 
 - **What & why it's debt:** `.claude/hooks/guard-process-kill.mjs` imports `lex()` from
