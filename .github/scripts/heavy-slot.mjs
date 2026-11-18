@@ -30,7 +30,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { constants, cpus, homedir, loadavg } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { acquire, holder, liveLock, readLock, release, rewrite } from './pid-lock.mjs';
 
@@ -138,6 +138,37 @@ function describe(h) {
 }
 
 const NOOP = { release() {}, payload: null };
+const WRAPPER = fileURLToPath(import.meta.url);
+
+/**
+ * For a runner (`e2e:local`, `screenshot:ephemeral`): re-run this process under the wrapper, unless it
+ * already runs under a holder of a slot (or the slot is skipped). Returns true when it re-ran: the
+ * caller returns at once, and this process exits with the wrapped run's code. The wrapper records the
+ * run's whole process group, so the slot stays held until every child it started (the build,
+ * `next start`, Playwright, Postgres) has exited, even when the runner itself is killed with -9.
+ */
+export function runUnderSlot(command) {
+  if (skipped() || nested()) return false;
+  const child = spawn(
+    process.execPath,
+    [WRAPPER, '--', process.execPath, ...process.execArgv, ...process.argv.slice(1)],
+    { stdio: 'inherit', env: { ...process.env, MAT_PLAN_HEAVY_SLOT_LABEL: clean(command, 200) } },
+  );
+  // The terminal gives Ctrl-C / Ctrl-\ to the wrapper too (same group), which passes them on; Ctrl-Z
+  // is held by the wrapper. A signal sent to this pid alone is passed to the wrapper.
+  for (const signal of ['SIGINT', 'SIGQUIT', 'SIGTSTP']) process.on(signal, () => {});
+  for (const signal of ['SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => {
+      try {
+        child.kill(signal);
+      } catch {
+        /* already gone */
+      }
+    });
+  }
+  child.on('close', (code, signal) => process.exit(code ?? 128 + (constants.signals[signal] ?? 0)));
+  return true;
+}
 
 /**
  * Take the slot for this process, or exit 2 when another run holds it. Returns a handle whose
@@ -200,7 +231,7 @@ function cli(argv) {
     console.error('usage: node .github/scripts/heavy-slot.mjs -- <command> [args…]');
     process.exit(64);
   }
-  const slot = takeSlot(command.join(' '));
+  const slot = takeSlot(process.env.MAT_PLAN_HEAVY_SLOT_LABEL || command.join(' '));
   // Its own process group, so the group can be recorded as a holder and signalled as one; async, so
   // the signal handlers below run while it does (a spawnSync blocks every handler, lessons.md).
   const child = spawn(command[0], command.slice(1), {
@@ -229,15 +260,43 @@ function cli(argv) {
       /* the child has already gone */
     }
   };
-  // Not forwarded: SIGTSTP (Ctrl-Z stops the wrapper while the run continues; stop it with Ctrl-C).
   const signals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
   for (const signal of signals) process.on(signal, () => forward(signal));
+  // Ctrl-Z would stop the wrapper while the detached run went on: held, with a note, while we hold a
+  // slot. A pass-through wrapper's child is in the terminal's group and stops with it, as usual.
+  if (slot.payload) {
+    process.on('SIGTSTP', () =>
+      console.error('▸ Ctrl-Z is held while a heavy run has the slot; Ctrl-C stops the run.'),
+    );
+  }
   child.on('error', (error) => {
     console.error(`✗ ${command[0]}: ${error.message}`);
     slot.release();
     process.exit(127);
   });
   child.on('close', (code, signal) => {
+    // The direct child is gone, but what it started may not be (a runner killed with -9 leaves
+    // Playwright, next or Postgres running in the group): keep the slot until the group is empty.
+    const groupAlive = () => {
+      try {
+        process.kill(-child.pid, 0);
+        return true;
+      } catch (error) {
+        return error.code === 'EPERM';
+      }
+    };
+    if (slot.payload && groupAlive()) {
+      console.error("▸ heavy-run slot: waiting for the run's remaining processes to exit");
+      const timer = setInterval(() => {
+        if (groupAlive()) return;
+        clearInterval(timer);
+        finish(code, signal);
+      }, 200);
+      return;
+    }
+    finish(code, signal);
+  });
+  function finish(code, signal) {
     slot.release();
     if (signal) {
       for (const s of signals) process.removeAllListeners(s);
@@ -246,7 +305,7 @@ function cli(argv) {
       process.exit(128 + (constants.signals[signal] ?? 0));
     }
     process.exit(code ?? 1);
-  });
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

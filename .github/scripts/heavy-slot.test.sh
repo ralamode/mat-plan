@@ -236,6 +236,45 @@ node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
 check "a guard left by a dead stealer is broken, and the stale lock taken" '[ "$code" = 0 ] && gone && [ ! -e "$MAT_PLAN_HEAVY_SLOT_PATH.steal" ]'
 
+# ── A runner under the slot (runUnderSlot: e2e:local, screenshot:ephemeral) ─────────────────────
+cat >"$T/runner.mjs" <<EOF
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { runUnderSlot } from '$SLOT';
+if (!runUnderSlot('test runner')) {
+  const c = spawn('sleep', ['30'], { stdio: 'ignore' });
+  writeFileSync(process.env.RUNNER_OUT, process.pid + ' ' + c.pid);
+  c.on('close', () => process.exit(0));
+}
+EOF
+RUNNER_OUT="$T/runner.out" node "$T/runner.mjs" >"$T/runner.log" 2>&1 &
+outer=$!
+track "$outer"
+wait_for '[ -s "$T/runner.out" ] && [ "$(field "holders.length" 2>/dev/null)" = 2 ]' || no "the runner re-ran under the wrapper"
+read -r inner kid <"$T/runner.out"
+inner_start="$(start_of "$inner")"
+kid_start="$(start_of "$kid")"
+track "$inner"
+track "$kid"
+check "a runner re-runs itself under the wrapper, labelled with its command" '[ "$(field command)" = "test runner" ] && [ "$(field "holders[1].pid")" = "$inner" ]'
+RUNNER_OUT="$T/r2.out" node "$T/runner.mjs" >"$T/out" 2>&1
+code=$?
+check "a second runner while the slot is held: exit 2" '[ "$code" = 2 ] && [ ! -e "$T/r2.out" ]'
+own_kill "$inner" "$inner_start"
+sleep 0.5
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "the runner killed with -9 while its child runs: the slot stays held" '[ "$code" = 2 ]'
+own_kill "$kid" "$kid_start"
+wait "$outer" 2>/dev/null
+check "…and is freed once the child has exited too" 'wait_for gone'
+
+hold
+kill -TSTP "$HOLDER"
+sleep 0.3
+check "Ctrl-Z (SIGTSTP) to a wrapper holding the slot: it is not stopped" '! ps -o stat= -p "$HOLDER" | grep -q T && grep -qF "Ctrl-Z is held" "$T/hold.out"'
+stop_holder
+
 # ── Stale and reused pids ───────────────────────────────────────────────────────────────────────
 sh -c 'exit 0' &
 dead=$!
