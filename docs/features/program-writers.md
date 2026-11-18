@@ -245,7 +245,8 @@ flowchart TD
     `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`, `copy-onto-a-full-weekday`,
     `copy-cap-after-the-name`, `save-workout-cap-before-not-found`,
     `copy-cap-before-the-source`, `copy-weekday-cap-after-the-name`, `new-item-takes-no-lock`,
-    `new-item-counts-shadowed-items`).
+    `new-item-counts-shadowed-items`, `new-item-counts-without-its-household`). A household whose row is gone
+    takes no lock, so `newItem` answers `not_found` before it counts.
 
 ## Changing it
 
