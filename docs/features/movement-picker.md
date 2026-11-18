@@ -70,11 +70,12 @@ path and **creating** the deliberate one.
 
    **`trackingType`** (FAM-1 step 0b) is one of the seven `TRACKING_TYPES`: how the item is logged,
    set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The
-   movement picker shows it on each row's second line (invariant 14). ⚠️ **No read fills it yet.** The column
-   arrives in step 3 and the picker's read in step 6a, homed in `packages/db/src/queries/program/`
-   ([program-writers.md](./program-writers.md)), not in the `queries/movement-options.ts` this
-   guide's frontmatter note expects. Until then only fixtures build the DTO: the tests here, and
-   the contract's `picker-options` ([program-contract.md](./program-contract.md)).
+   movement picker shows it on each row's second line (invariant 14). **The program builder's read
+   fills it** (FAM-1 7a-ii, `apps/web/lib/dal/program/picker.ts`, over lane P's
+   `packages/db/src/queries/program/movement-options.ts`; [program-builder.md](./program-builder.md)
+   invariant 19): from the DATABASE ROW, never from the library, since the row is what a save and a
+   log use. The preview's fixtures still build it there (`picker-options`,
+   [program-contract.md](./program-contract.md)).
 
 4. **"Use as typed" is withheld when the text already names a movement**, and that is the whole
    point. Typing `rdl` must offer Romanian Deadlift, never mint a household movement called "rdl".
@@ -201,6 +202,11 @@ path and **creating** the deliberate one.
       it is found by search, carries no group tag, and is left out of the legacy browse groups
       (invariant 11) until B3's tree. ⚠️ A read that has not got the equipment set must not build a
       library option: `equipment: []` MEANS "No equipment" and passes that filter.
+    - ⏳ **Until the catalog's fresh start (CAT-3 chunk R), an old built-in with no library entry is
+      `BuiltInWithoutLibrary`** (FAM-1 7a-ii; maintainer, 2026-11-17: "Show all 35 until reset"): a
+      catalog row with NO taxonomy field at all, never a placeholder. `hasLibraryData` tells the two
+      catalog shapes apart: such a row's second line is its tracking label alone (no equipment is
+      claimed), no filter passes it, and it has no "How to". The arm goes at chunk R.
     - **The supervision label** ("Learn with a coach present") is its own line between the name
       and the second line, at full contrast in every row state, and never replaced by a tag.
     - **The row's accessible name reads its parts apart** ("Pull-Up, Learn with a coach present,

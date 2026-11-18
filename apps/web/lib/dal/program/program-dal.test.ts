@@ -10,18 +10,49 @@ vi.mock('@mat-plan/db', () => ({
   renameProgram: vi.fn(async () => ({ ok: true })),
   saveWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
   readWorkoutDraft: vi.fn(async () => null),
+  saveWeek: vi.fn(async () => ({ ok: true })),
+  copyWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
+  newItem: vi.fn(async () => ({
+    ok: true,
+    itemPublicId: WORKOUT_ID,
+    name: 'Bear crawl',
+    trackingType: TRACKING_TYPE.reps,
+    existed: false,
+  })),
 }));
 // Which id missed is `report-miss.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
-vi.mock('./report-miss', () => ({ reportProgramMiss: vi.fn(async () => {}) }));
+vi.mock('./report-miss', () => ({
+  reportProgramMiss: vi.fn(async () => {}),
+  reportWeekMiss: vi.fn(async () => {}),
+  reportCopyMiss: vi.fn(async () => {}),
+}));
 
-import { createProgram, readWorkoutDraft, renameProgram, saveWorkout } from '@mat-plan/db';
+import {
+  copyWorkout,
+  createProgram,
+  newItem,
+  readWorkoutDraft,
+  renameProgram,
+  saveWeek,
+  saveWorkout,
+} from '@mat-plan/db';
+import { emptyWeek, TRACKING_TYPE } from '@mat-plan/shared';
 
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
 import { getWorkoutDraft } from './reads';
-import { reportProgramMiss } from './report-miss';
-import { createHouseholdProgram, renameHouseholdProgram, saveHouseholdWorkout } from './writes';
+import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import {
+  copyHouseholdWorkout,
+  createHouseholdProgram,
+  newHouseholdItem,
+  renameHouseholdProgram,
+  saveHouseholdWeek,
+  saveHouseholdWorkout,
+} from './writes';
+
+const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
@@ -72,12 +103,11 @@ describe('the program DAL (FAM-1 7a-i)', () => {
   });
 
   it('a writer’s not_found reports which id missed, once, and is still not_found', async () => {
-    const notFound = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
-    vi.mocked(saveWorkout).mockResolvedValueOnce(notFound);
-    expect(await saveHouseholdWorkout(heavyADraft)).toEqual(notFound);
-    vi.mocked(renameProgram).mockResolvedValueOnce(notFound);
+    vi.mocked(saveWorkout).mockResolvedValueOnce(NOT_FOUND);
+    expect(await saveHouseholdWorkout(heavyADraft)).toEqual(NOT_FOUND);
+    vi.mocked(renameProgram).mockResolvedValueOnce(NOT_FOUND);
     const rename = { programPublicId: PROGRAM_ID, name: 'A' };
-    expect(await renameHouseholdProgram(rename)).toEqual(notFound);
+    expect(await renameHouseholdProgram(rename)).toEqual(NOT_FOUND);
     expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
       [SCOPE, heavyADraft],
       [SCOPE, rename],
@@ -151,5 +181,83 @@ describe('the program DAL (FAM-1 7a-i)', () => {
     expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
       [null, { programPublicId: PROGRAM_ID, workoutPublicId: WORKOUT_ID }],
     ]);
+  });
+});
+
+describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
+  const OTHER = '019826b4-0000-7000-8000-0000000000b2';
+  const week = () => ({
+    programPublicId: PROGRAM_ID,
+    days: {
+      ...emptyWeek(),
+      1: [{ workoutPublicId: WORKOUT_ID, label: null }],
+      4: [{ workoutPublicId: OTHER, label: 'Long' }],
+    },
+  });
+  const copy = () => ({
+    clientId: CLIENT_ID,
+    workoutPublicId: WORKOUT_ID,
+    toProgramPublicId: PROGRAM_ID,
+    weekdays: [],
+    label: null,
+  });
+
+  it('each goes through the caller’s scope, with the parsed input', async () => {
+    await saveHouseholdWeek(week());
+    expect(vi.mocked(saveWeek).mock.calls[0]).toEqual([db, SCOPE, week()]);
+    await copyHouseholdWorkout(copy());
+    expect(vi.mocked(copyWorkout).mock.calls[0]).toEqual([db, SCOPE, copy()]);
+    const item = { name: 'Bear crawl', trackingType: TRACKING_TYPE.reps };
+    await newHouseholdItem(item);
+    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item]);
+    expect(reportWeekMiss).not.toHaveBeenCalled();
+    expect(reportCopyMiss).not.toHaveBeenCalled();
+  });
+
+  it('a week’s not_found reports its program and every workout it names, in order', async () => {
+    vi.mocked(saveWeek).mockResolvedValueOnce(NOT_FOUND);
+    expect(await saveHouseholdWeek(week())).toEqual(NOT_FOUND);
+    expect(vi.mocked(reportWeekMiss).mock.calls).toEqual([
+      [SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: [WORKOUT_ID, OTHER] }],
+    ]);
+  });
+
+  it('a copy’s not_found reports the target and the source', async () => {
+    vi.mocked(copyWorkout).mockResolvedValueOnce(NOT_FOUND);
+    expect(await copyHouseholdWorkout(copy())).toEqual(NOT_FOUND);
+    expect(vi.mocked(reportCopyMiss).mock.calls).toEqual([[SCOPE, copy()]]);
+  });
+
+  it('another refusal passes through, and nothing is reported', async () => {
+    vi.mocked(copyWorkout).mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.name_taken });
+    expect(await copyHouseholdWorkout(copy())).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.name_taken,
+    });
+    expect(reportCopyMiss).not.toHaveBeenCalled();
+  });
+
+  it('no scope: not_found, the writer never called; week and copy report, a new item has no id', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await saveHouseholdWeek(week())).toEqual(NOT_FOUND);
+    expect(await copyHouseholdWorkout(copy())).toEqual(NOT_FOUND);
+    expect(
+      await newHouseholdItem({ name: 'Bear crawl', trackingType: TRACKING_TYPE.reps }),
+    ).toEqual(NOT_FOUND);
+    expect(saveWeek).not.toHaveBeenCalled();
+    expect(copyWorkout).not.toHaveBeenCalled();
+    expect(newItem).not.toHaveBeenCalled();
+    expect(vi.mocked(reportWeekMiss).mock.calls[0]![0]).toBeNull();
+    expect(vi.mocked(reportCopyMiss).mock.calls[0]![0]).toBeNull();
+  });
+
+  it('a thrown database error leaves as a DbWriteError, carrying none of the input', async () => {
+    vi.mocked(newItem).mockRejectedValueOnce(new Error('insert failed: Bear crawl'));
+    const thrown = await newHouseholdItem({
+      name: 'Bear crawl',
+      trackingType: TRACKING_TYPE.reps,
+    }).catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(DbWriteError);
+    expect(String((thrown as Error).message)).not.toContain('Bear crawl');
   });
 });
