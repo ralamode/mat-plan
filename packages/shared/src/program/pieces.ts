@@ -522,12 +522,42 @@ export const COPY_NAME_SUFFIX = ' (copy)';
 /**
  * The name a copy of a workout takes in its own program when the person gives none, and what the
  * Copy dialog prefills its Name field with: the workout's name and " (copy)", **cut so the whole
- * still fits `WORKOUT_NAME_MAX`** (a 30-character name keeps its first 23). One function, so the
- * dialog's prefill and the writer's default cannot differ (contract change C15).
+ * still fits `WORKOUT_NAME_MAX`** (a 30-character name keeps at most its first 23). One function,
+ * so the dialog's prefill and the writer's default cannot differ (contract change C15).
+ *
+ * 🔴 **The cut is by whole characters, counted the way the name's schema counts** (contract change
+ * C33, found by step 6a-iii-b's review, the first writer to store one). `workoutNameSchema` limits
+ * a name's `length`, which counts an emoji as two; a plain `slice` at that length can keep the
+ * first half of one, and a database stores that half as a replacement mark. So the name is taken a
+ * character at a time while it fits. **Only when something was cut**, what the cut left hanging
+ * is dropped: a space (or the copy would read `Heavy  (copy)`, with two) and a joiner that no
+ * longer joins anything. A name with room is kept exactly as it is.
+ *
+ * By character and not by what a person sees as one (a flag, a family, a skin tone are several):
+ * splitting those needs `Intl.Segmenter`, whose answer depends on the engine's version, and the
+ * browser's prefill and the server's default must be the same string. A cut inside one leaves a
+ * plainer emoji, never a broken one.
  */
 export function copyName(name: string): string {
-  return `${name.slice(0, WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length)}${COPY_NAME_SUFFIX}`;
+  const room = WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length;
+  let kept = '';
+  let cut = false;
+  // A string iterates by code point, so a surrogate pair is taken whole or not at all.
+  for (const character of name) {
+    if (kept.length + character.length > room) {
+      cut = true;
+      break;
+    }
+    kept += character;
+  }
+  if (!cut) return `${kept}${COPY_NAME_SUFFIX}`;
+  // If the clean-up would leave nothing, the name is kept as cut: a copy still has a name.
+  const tidy = kept.replace(DANGLING_AT_A_CUT, '');
+  return `${tidy === '' ? kept : tidy}${COPY_NAME_SUFFIX}`;
 }
+
+/** Trailing white space and zero-width joiners: what a cut can leave at the end of a name. */
+const DANGLING_AT_A_CUT = /[\s\u200d]+$/u;
 
 /**
  * The unit an item logs in, which is `DayItem.unit`: `null` for a type with no quantity (a Check,
