@@ -4,6 +4,23 @@
 reverts. A patch that leaves `db:verify` green is a patch whose assertions were never proving
 anything.
 
+## Stopping a run, and what it leaves behind
+
+The runner edits tracked source while it runs, so it is built never to leave an edit behind
+([plan](../../../../docs/plans/dx-mutations-kill-safe.md); the header of `../mutations.mjs` has the
+rules, and `../mutations.test.sh` proves each, in `guards:test`):
+
+- **Ctrl-C, `SIGTERM`, `SIGHUP`:** it restores the patched files from their pre-patch bytes (never
+  from `HEAD`, so uncommitted work survives), ends the whole `db:verify` process tree, and exits by
+  the same signal.
+- **`kill -9`** cannot be caught. The next `pnpm db:mutations` restores from the journal in the
+  worktree's git dir first; `node packages/db/scripts/mutations.mjs --recover` does only that.
+- **A file edited while its patch was applied** is never overwritten: the run fails, keeps the
+  journal and prints how to finish by hand.
+- **A second run in the same worktree** refuses while the first is alive.
+- **A patch left applied by something else** (a probe, a hand edit): the run stops and names it
+  (`still applied: <patch>`, and whether `HEAD` carries it) before applying anything.
+
 ## Why this exists
 
 TEN-1's household scoping is ~58 mechanical `verify.ts` call-site edits (~22 at 1b, the rest at 1c) plus one predicate. The plan
