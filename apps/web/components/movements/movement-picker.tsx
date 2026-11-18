@@ -8,12 +8,20 @@ import {
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
   existingItem,
+  filterMovementOptions,
+  equipmentFilterOrder,
+  movementFilterCounts,
+  movementFiltersOn,
+  NO_MOVEMENT_FILTERS,
   type CatalogHowTo,
+  type Equipment,
+  type MovementFilters,
   movementNameSchema,
   searchMovementOptions,
 } from '@mat-plan/shared';
 import {
   useDeferredValue,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -29,6 +37,11 @@ import {
 } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { Button } from '@/components/ui/button';
+import {
+  FilterPanelBody,
+  FilterPanelFooter,
+  type FilterChange,
+} from '@/components/movements/movement-filter-panel';
 import { SHEET_COPY, Sheet, sheetStatusId } from '@/components/ui/sheet';
 import { INPUT_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -155,6 +168,9 @@ function matchable(options: readonly MovementOptionDTO[]) {
     name: option.name,
     isCatalog: option.owner === 'catalog',
     aliases: option.owner === 'catalog' ? option.aliases : [],
+    // What a filter reads (P7). A household item has neither, so a filter cannot judge it (P9).
+    equipment: hasLibraryData(option) ? option.equipment : undefined,
+    primaryMuscle: hasLibraryData(option) ? option.primaryMuscle : null,
     option,
   }));
 }
@@ -165,8 +181,12 @@ function matchable(options: readonly MovementOptionDTO[]) {
  * `shortFormHit` is the third signal beside them (spec P1, C30): any of the three means the
  * movement is already listed, as the server's `existingItem` says.
  */
-export function searchPickerOptions(options: readonly MovementOptionDTO[], text: string) {
-  return searchMovementOptions(matchable(options), { query: text });
+export function searchPickerOptions(
+  options: readonly MovementOptionDTO[],
+  text: string,
+  filters?: MovementFilters,
+) {
+  return searchMovementOptions(matchable(options), { query: text, filters });
 }
 
 /**
@@ -272,6 +292,78 @@ export function MovementPicker({
   const searchRef = useRef<HTMLInputElement>(null);
   const headingId = useId();
 
+  // ── Filters (CAT-3 P7 to P10, B2-ii) ─────────────────────────────────────────────────────────────
+  // 🔴 **Kept across opens, reset on leaving the workout** (P7): the state lives here and the
+  // caller keeps this component mounted while its editor is, so a reopen still has them and leaving
+  // the editor drops them. The panel REPLACES the body and footer while open (panel row 11).
+  const [filters, setFilters] = useState<MovementFilters>(NO_MOVEMENT_FILTERS);
+  const filtersOn = movementFiltersOn(filters);
+  const [panelOpen, setPanelOpen] = useState(false);
+  /** The panel's last change, said once in the sheet's one region (P15, panel row 12). */
+  const [panelNote, setPanelNote] = useState<Omit<FilterChange, 'next'> | null>(null);
+  const [shownBeyond, setShownBeyond] = useState<ReadonlySet<Equipment>>(() => new Set());
+  /** Said once after a reopen with filters still on (panel row 10). */
+  const [keptNote, setKeptNote] = useState('');
+  const filtersButtonRef = useRef<HTMLButtonElement>(null);
+  const panelHeadingRef = useRef<HTMLHeadingElement>(null);
+  // Where focus goes once the next render has drawn it: the panel's heading, or the Filters button
+  // the panel hid. A ref and an effect, because the target does not exist until after the render.
+  const focusNext = useRef<'heading' | 'filters' | null>(null);
+  useEffect(() => {
+    const target = focusNext.current;
+    focusNext.current = null;
+    if (target === 'heading') panelHeadingRef.current?.focus();
+    if (target === 'filters') filtersButtonRef.current?.focus();
+  });
+  /** The panel's own state, as a close and a reopen both leave it. */
+  const resetPanel = () => {
+    setPanelOpen(false);
+    setPanelNote(null);
+    setShownBeyond(new Set());
+  };
+  const openPanel = () => {
+    setHow(null);
+    setPanelNote(null);
+    // The reopen's line was said; Back must not say it again (review of B2-ii).
+    setKeptNote('');
+    setPanelOpen(true);
+    focusNext.current = 'heading';
+  };
+  const closePanel = () => {
+    resetPanel();
+    focusNext.current = 'filters';
+  };
+  const changeFilters = (change: FilterChange) => {
+    // A ticked item stays listed after it is unticked while the panel is open (panel row 13).
+    setShownBeyond((shown) => new Set([...shown, ...filters.chosenEquipment]));
+    setFilters(change.next);
+    setPanelNote({ choice: change.choice, on: change.on });
+    setKeptNote('');
+  };
+  const clearFilters = (from: 'panel' | 'list') => {
+    setFilters(NO_MOVEMENT_FILTERS);
+    setKeptNote('');
+    if (from === 'panel') {
+      setPanelNote({ choice: COPY.filtersCleared, on: null });
+      focusNext.current = 'heading';
+    } else {
+      // The line holding the button goes with the filters: focus moves to Filters (panel row 13).
+      focusNext.current = 'filters';
+    }
+  };
+  // The reopen's line is set AFTER the sheet has mounted its region: a region that mounts with its
+  // text is silent (Announcer's rule 1). So the reopen marks it pending (below, during render) and
+  // a timer says it once the region is there.
+  const [keptPending, setKeptPending] = useState(false);
+  useEffect(() => {
+    if (!keptPending) return;
+    const timer = setTimeout(() => {
+      setKeptPending(false);
+      if (filtersOn > 0) setKeptNote(COPY.statusFiltersKept(filtersOn));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [keptPending, filtersOn]);
+
   // ── "How to" (CAT-3 P16): one row open at a time, its steps loaded by the caller's `howTo` ──────
   // 🔴 **Keyed by the row ON SCREEN** (`${section}:${publicId}`), not the movement: a movement can
   // be listed twice (Recent and its group), and two open boxes would share an id. Each load carries
@@ -337,6 +429,10 @@ export function MovementPicker({
       setQuery('');
       setHow(null);
     }
+    // The panel never reopens with the sheet: it opens on the list, filters kept (P7).
+    resetPanel();
+    setKeptNote('');
+    setKeptPending(open && filtersOn > 0);
   }
 
   // Multi: the search is cleared when the caller's takeover (the new-item form) OPENS, not when it
@@ -384,9 +480,47 @@ export function MovementPicker({
   // FOLDED value for emptiness — the point of panel 2 · 4, below.
   const deferredTrimmed = useDeferredValue(query).trim();
 
+  const matchableOptions = useMemo(() => matchable(data.options), [data.options]);
   const result = useMemo(
-    () => searchPickerOptions(data.options, deferredTrimmed),
-    [data.options, deferredTrimmed],
+    () => searchMovementOptions(matchableOptions, { query: deferredTrimmed, filters }),
+    [matchableOptions, deferredTrimmed, filters],
+  );
+  /**
+   * The search with no filter, for what must not depend on them (panel row 9): whether the create
+   * button is loud, and the similar name its hint names. A filter hides rows; it never makes a
+   * name new, so a duplicate is still a duplicate under one.
+   */
+  const unfiltered = useMemo(
+    () =>
+      filtersOn > 0 ? searchMovementOptions(matchableOptions, { query: deferredTrimmed }) : result,
+    [filtersOn, matchableOptions, deferredTrimmed, result],
+  );
+  /**
+   * Whether any row has the library's data, so a filter can judge it. A taxonomy-less built-in
+   * (`BuiltInWithoutLibrary`, until CAT-3 chunk R) is a catalog row that every filter empties, so
+   * it does not count: a list of only those gets no filter panel (7a-ii review).
+   */
+  const hasLibrary = useMemo(() => data.options.some(hasLibraryData), [data.options]);
+  /** The panel's numbers (P7), only while it is open. */
+  const panelCounts = useMemo(
+    () =>
+      panelOpen
+        ? movementFilterCounts(matchableOptions, { query: deferredTrimmed, filters })
+        : null,
+    [panelOpen, matchableOptions, deferredTrimmed, filters],
+  );
+  /** The equipment list's order, ranked with no muscle on, so ticking a muscle never reshuffles it. */
+  const equipmentOrder = useMemo(
+    () =>
+      panelOpen
+        ? equipmentFilterOrder(
+            movementFilterCounts(matchableOptions, {
+              query: deferredTrimmed,
+              filters: NO_MOVEMENT_FILTERS,
+            }),
+          )
+        : [],
+    [panelOpen, matchableOptions, deferredTrimmed],
   );
 
   const byId = useMemo(
@@ -397,6 +531,10 @@ export function MovementPicker({
   /** The ONE tag a row earns, highest precedence first (Decision 8; panel 2 · 5). */
   const tagFor = (option: MovementOptionDTO, inSearchResults: boolean) => {
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
+    // An exact hit the filters would hide is listed anyway, and says why it is there (P8).
+    if (hitsOutside.has(option.publicId)) {
+      return hasLibraryData(option) ? COPY.tagNotInFilters : COPY.tagNoLibraryData;
+    }
     // `also called` fires ONLY for a row the search found through another name, naming that alias:
     // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`). Otherwise it would
     // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
@@ -439,14 +577,32 @@ export function MovementPicker({
   const near = result.near.map((m) => m.option);
   const nearIds = new Set(near.map((o) => o.publicId));
   const someWords = result.someWords.map((m) => m.option).filter((o) => !nearIds.has(o.publicId));
-  /** Anything listed for the query: what makes the create button the quiet one (UX2 B1, P5). */
-  const hasCandidates = matches.length > 0 || near.length > 0 || someWords.length > 0;
+  /** Under a filter, the household's items the query found: their own section (P9). */
+  const custom = result.custom.map((m) => m.option);
+  /** Hits a filter would hide, listed first anyway (P8). Only under a filter. */
+  const hitsOutside = new Set(result.hitsOutsideFilters.map((m) => m.option.publicId));
+  /** The hits lead `matches` with no heading under a filter (P8, panel row 15). */
+  const hitCount = filtersOn > 0 ? result.hits.length : 0;
+  /** Rows on the screen for the query. */
+  const shown = matches.length + custom.length + near.length + someWords.length;
+  /**
+   * Anything listed for the query, filters or not: what makes the create button the quiet one
+   * (UX2 B1, P5). 🔴 **Read before the filters** (panel row 9): a match the filters hide is still
+   * a movement of that name, and a loud create beside it invites a permanent duplicate.
+   */
+  const hasCandidates =
+    unfiltered.matches.length > 0 || unfiltered.near.length > 0 || unfiltered.someWords.length > 0;
   /**
    * The row the create hint names: the closest similar name, and only that. A some-words row is not
    * similar, and naming the first of several (by name) would point a new movement at an arbitrary
-   * one (review of B1: `zercher squat` named Back Squat).
+   * one (review of B1: `zercher squat` named Back Squat). From the unfiltered search, so a filter
+   * never hides the name a person may mean; the hint then says it is outside the filters.
    */
-  const similar = near[0];
+  const similar = unfiltered.near[0]?.option;
+  const similarOutside =
+    similar !== undefined &&
+    !near.some((o) => o.publicId === similar.publicId) &&
+    !custom.some((o) => o.publicId === similar.publicId);
   /**
    * The movement the text already names, by the server's three signals (spec P1, C30): an exact
    * name or exact alias is the first row, else the row its short forms spell. The status names it,
@@ -458,12 +614,10 @@ export function MovementPicker({
     result.exact || result.aliasHit !== null
       ? matches[0]
       : (result.shortFormHit?.option ?? undefined);
-  // Enter picks the listed movement, or the one match when it is unambiguous. Not a match found only
-  // through part of another name (P5, P17), and never a similar name or a some-words row (P5): a
-  // typo and Enter must not choose a guess.
-  const soleMatch =
-    matches.length === 1 && !aliasFound.has(matches[0]!.publicId) ? matches[0] : undefined;
-  const enterTarget = listed ?? soleMatch;
+  // Enter picks the search's own target (P5, P8): a hit, whatever the filters, or the one match
+  // there is when it was found by its own name. Never a similar name or a some-words row: a typo
+  // and Enter must not choose a guess. A test holds it to `listed` for every hit.
+  const enterTarget = result.enterTarget?.option;
 
   // ── "Use as typed": offered for non-empty text that is not already in the list ─────────────────
   // 🔴 **Emptiness is tested on the RAW text, never on the fold** (panel 2 · 4). `🙂` and `---` fold
@@ -483,11 +637,30 @@ export function MovementPicker({
   const status = (() => {
     if (deferredTrimmed === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
     // With no matches: "No matches." once, then each list's own count, close spellings first (P5).
+    // Custom items set apart under a filter are on the screen, so they are counted (P9), each as
+    // what it was found as: the search fills near misses and some-words only when nothing at all
+    // matched, so with unfiltered matches every custom row is a match, and otherwise it is a near
+    // miss or a some-words row (review of B2-ii: a custom near miss was announced as "1 match.").
+    const customMatched = unfiltered.matches.length > 0 ? custom.length : 0;
+    const nearIdsUnfiltered = new Set(unfiltered.near.map((m) => m.option.publicId));
+    const customNear =
+      customMatched > 0 ? 0 : custom.filter((o) => nearIdsUnfiltered.has(o.publicId)).length;
+    const customSome = custom.length - customMatched - customNear;
     const count =
-      matches.length > 0
-        ? COPY.statusCount(matches.length)
-        : COPY.statusNone(near.length, someWords.length);
-    const reason = listed ? COPY.statusAlreadyListed(listed.name) : typedNameIssue;
+      matches.length + customMatched > 0
+        ? COPY.statusCount(matches.length + customMatched)
+        : near.length + customNear + someWords.length + customSome > 0
+          ? COPY.statusNone(near.length + customNear, someWords.length + customSome)
+          : result.outsideFilters > 0
+            ? COPY.statusOutsideOnly(result.outsideFilters)
+            : COPY.statusNone(0, 0);
+    const reason = listed
+      ? hitsOutside.has(listed.publicId)
+        ? hasLibraryData(listed)
+          ? COPY.statusAlreadyListedOutside(listed.name)
+          : COPY.statusAlreadyListedNoData(listed.name)
+        : COPY.statusAlreadyListed(listed.name)
+      : typedNameIssue;
     return reason ? `${count} ${reason}` : count;
   })();
 
@@ -529,6 +702,45 @@ export function MovementPicker({
       />
     ));
 
+  // Browsing with a filter on (P9; P12's heading until B3's tree): the household's items first,
+  // folded to one line and marked "not filtered", then the library movements that fit, in the
+  // browse groups' order, each row tagged with its group. Recent and Today's program are not shown.
+  const groupIndex = (option: MovementOptionDTO) => {
+    const index =
+      option.owner === 'catalog' && option.group
+        ? MOVEMENT_PICKER_GROUPS.indexOf(option.group)
+        : -1;
+    return index === -1 ? MOVEMENT_PICKER_GROUPS.length : index;
+  };
+  const filteredBrowse =
+    filtersOn > 0
+      ? (() => {
+          const { fitting, custom: own } = filterMovementOptions(matchableOptions, filters);
+          const fits = fitting.map((m) => m.option).sort((a, b) => groupIndex(a) - groupIndex(b));
+          return (
+            <>
+              <FoldedSection
+                headingId={`${headingId}-household-folded`}
+                heading={COPY.householdNotFiltered}
+                rows={rowsFrom(own.map((m) => m.option))}
+                mode={mode}
+                count
+              />
+              {fits.length > 0 ? (
+                <Section
+                  mode={mode}
+                  id={`${headingId}-fit`}
+                  heading={COPY.fitHeading}
+                  rows={rowsFrom(fits, { inSearchResults: true })}
+                />
+              ) : (
+                <ListLine text={COPY.noneFit} />
+              )}
+            </>
+          );
+        })()
+      : null;
+
   return (
     <Sheet
       id={SHEET_ID}
@@ -538,10 +750,35 @@ export function MovementPicker({
       returnFocusTo={returnFocusTo}
       onReturned={onReturned}
       initialFocus={prefersKeyboardFocus && !multiple?.takeover ? searchRef : undefined}
-      status={howMessage || multiple?.notice || status}
+      status={
+        panelOpen
+          ? panelNote && panelCounts
+            ? panelNote.on === null
+              ? COPY.panelStatusChoice(panelNote.choice, panelCounts.total, deferredTrimmed !== '')
+              : COPY.panelStatus(
+                  panelNote.choice,
+                  panelNote.on,
+                  panelCounts.total,
+                  deferredTrimmed !== '',
+                )
+            : ''
+          : howMessage || multiple?.notice || keptNote || status
+      }
+      onEscapeKeyDown={
+        panelOpen
+          ? (event) => {
+              // Escape closes the panel only, as a nested dialog's would (panel row 11).
+              event.preventDefault();
+              closePanel();
+            }
+          : undefined
+      }
       headerExtra={
         multiple?.takeover ? undefined : (
-          <div>
+          // Hidden, not unmounted, while the panel is open (panel row 11): the query and the button
+          // focus returns to are kept.
+          // Wraps at 200 % text, where the button beside the box would leave it a few letters wide.
+          <div hidden={panelOpen} className="flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor={SEARCH_ID}>
               {multiple?.searchLabel ?? COPY.searchLabel}
             </label>
@@ -552,6 +789,7 @@ export function MovementPicker({
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setKeptNote('');
                 // Typing closes an open "How to" (the prototype's rule): the row may leave the list.
                 if (how) setHow(null);
                 multiple?.onQueryChange?.();
@@ -563,7 +801,7 @@ export function MovementPicker({
                 if (!enterTarget) {
                   // Nothing to pick. On a phone the Search key still puts the keyboard away, so
                   // the rows it is covering show: several matches, near misses, some-words.
-                  if (!prefersKeyboardFocus && hasCandidates) {
+                  if (!prefersKeyboardFocus && shown > 0) {
                     e.currentTarget.blur();
                   }
                   return;
@@ -593,14 +831,38 @@ export function MovementPicker({
               placeholder={multiple?.searchPlaceholder ?? COPY.searchPlaceholder}
               aria-describedby={sheetStatusId(SHEET_ID)}
               // The placeholder is the field's only visible label: muted text, not the 3.74:1 default.
-              className={cn(INPUT_CLASS, 'placeholder:text-muted-foreground w-full')}
+              className={cn(
+                INPUT_CLASS,
+                'placeholder:text-muted-foreground min-w-48 flex-1 basis-48',
+              )}
             />
+            {hasLibrary ? (
+              <Button
+                ref={filtersButtonRef}
+                type="button"
+                variant="outline"
+                size="lg"
+                aria-label={COPY.filtersName(filtersOn)}
+                onClick={openPanel}
+                className="shrink-0 text-base"
+              >
+                {COPY.filters(filtersOn)}
+              </Button>
+            ) : null}
           </div>
         )
       }
       footer={
         multiple?.takeover ? (
           multiple.takeover.footer
+        ) : panelOpen && panelCounts ? (
+          <FilterPanelFooter
+            filters={filters}
+            total={panelCounts.total}
+            searching={deferredTrimmed !== ''}
+            onClear={() => clearFilters('panel')}
+            onShow={closePanel}
+          />
         ) : multiple ? (
           // The caller's action beside the picker's own Close, which stays LAST (panel 2 · 7).
           <div className="flex flex-col gap-2">
@@ -654,7 +916,9 @@ export function MovementPicker({
                 <p id={TYPED_HINT_ID} className="text-muted-foreground text-sm wrap-anywhere">
                   {typedNameIssue ??
                     (similar
-                      ? COPY.asTypedHintNear(similar.name, deferredTrimmed)
+                      ? similarOutside
+                        ? COPY.asTypedHintOutside(similar.name, deferredTrimmed)
+                        : COPY.asTypedHintNear(similar.name, deferredTrimmed)
                       : COPY.asTypedHint(deferredTrimmed))}
                 </p>
               </>
@@ -674,6 +938,16 @@ export function MovementPicker({
     >
       {multiple?.takeover ? (
         multiple.takeover.body
+      ) : panelOpen && panelCounts ? (
+        <FilterPanelBody
+          filters={filters}
+          counts={panelCounts}
+          equipmentOrder={equipmentOrder}
+          onChange={changeFilters}
+          onBack={closePanel}
+          headingRef={panelHeadingRef}
+          shownBeyond={shownBeyond}
+        />
       ) : (
         <>
           {multiple ? (
@@ -687,12 +961,89 @@ export function MovementPicker({
               // Never a ticked row: tapping it would untick what the person meant to keep.
               similar={
                 offersTyped && similar && !selectedSet.has(similar.publicId)
-                  ? similar.name
+                  ? { name: similar.name, outside: similarOutside }
                   : undefined
               }
             />
           ) : null}
-          {deferredTrimmed === '' ? (
+          {filtersOn > 0 ? (
+            <ListLine text={COPY.filtersOnLine(filtersOn)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={() => clearFilters('list')}
+                className="shrink-0 text-base"
+              >
+                {COPY.clearFilters}
+              </Button>
+            </ListLine>
+          ) : null}
+          {deferredTrimmed === '' && filtersOn > 0 ? (
+            filteredBrowse
+          ) : filtersOn > 0 ? (
+            // Under a query with a filter on (P8 to P10): the hits first with no heading, the
+            // filtered matches, the custom items set apart, then the near misses and some-words.
+            <>
+              {hitCount > 0 ? (
+                <div className="mb-4">
+                  <OptionList
+                    rows={rowsFrom(matches.slice(0, hitCount), { inSearchResults: true })}
+                    mode={mode}
+                    scope={`${headingId}-hits`}
+                  />
+                </div>
+              ) : null}
+              <Section
+                mode={mode}
+                id={`${headingId}-matches`}
+                heading={hitCount > 0 ? COPY.moreMatches : COPY.matches}
+                rows={rowsFrom(matches.slice(hitCount), { inSearchResults: true })}
+              />
+              <Section
+                mode={mode}
+                id={`${headingId}-custom`}
+                heading={COPY.householdNotFiltered}
+                rows={rowsFrom(custom, { inSearchResults: true })}
+              />
+              <Section
+                mode={mode}
+                id={`${headingId}-near`}
+                heading={COPY.near}
+                rows={rowsFrom(near, { inSearchResults: true })}
+              />
+              <Section
+                mode={mode}
+                id={`${headingId}-some`}
+                heading={COPY.someWords}
+                rows={rowsFrom(someWords, { inSearchResults: true })}
+              />
+              {result.outsideFilters > 0 ? (
+                <ListLine
+                  text={
+                    shown > 0
+                      ? COPY.outsideMore(result.outsideFilters)
+                      : COPY.outsideAll(result.outsideFilters, deferredTrimmed)
+                  }
+                >
+                  {/* Its own Clear filters: after a scroll, the line at the top is out of reach. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => clearFilters('list')}
+                    className="shrink-0 text-base"
+                  >
+                    {COPY.clearFilters}
+                  </Button>
+                </ListLine>
+              ) : null}
+              {/* No match at all: the list beneath is the filtered one, never the whole (P10). With
+                  matches the filters hide, it is not shown: a kid reads it as results for the query
+                  (the accepted prototype shows it only when nothing matched). */}
+              {shown === 0 && result.outsideFilters === 0 ? filteredBrowse : null}
+            </>
+          ) : deferredTrimmed === '' ? (
             <>
               {data.recentIds && data.recentIds.length > 0 ? (
                 <Section
@@ -780,12 +1131,18 @@ function CreateTop({
    * maintainer's placement, 2026-11-16) and carries the person's own spelling, so its hint names
    * the movement they may mean, for sight and for a screen reader alike (UX panel, B1).
    */
-  similar?: string;
+  similar?: { name: string; outside: boolean };
 }) {
   if (typed !== '' && !offersTyped) return null;
   const hint =
     issue ??
-    (noMatch ? multiple.noMatchHint : similar ? COPY.similarListed(similar, 'below') : null);
+    (noMatch
+      ? multiple.noMatchHint
+      : similar
+        ? similar.outside
+          ? COPY.similarOutside(similar.name)
+          : COPY.similarListed(similar.name, 'below')
+        : null);
   return (
     <div className="mb-4 flex flex-col gap-1">
       <Button
@@ -836,8 +1193,61 @@ function TodaysProgram({
   // row, so a second card for one stays one tap away — only the summary changes.
   const allOnForm = options.every((o) => program.onFormIds.has(o.publicId));
   return (
+    <FoldedSection
+      headingId={headingId}
+      heading={allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
+      rows={rowsFrom(options)}
+      mode={mode}
+      open={!allOnForm}
+    />
+  );
+}
+
+/**
+ * A line in the list with an optional control beside it: the filters-on line (panel row 10) and
+ * the counts outside the filters (P10). Plain text: the sheet's one region says the count.
+ */
+function ListLine({ text, children }: { text: string; children?: ReactNode }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      {/* `wrap-anywhere`: the outside line quotes the query, which may have no space. */}
+      <p className="text-sm font-medium wrap-anywhere">{text}</p>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A section folded to one line: Today's program (open while any of it is not yet on a card) and,
+ * under a filter, the household's items (P9), whose summary carries its count.
+ *
+ * 🔴 **It opens itself while it holds a ticked row** (multi mode). A caller focuses the row it just
+ * made or selected (the item form's Create), and a row inside a closed `<details>` cannot take
+ * focus in a browser: focus would fall to the page and the new item would look lost, inviting a
+ * second, permanent create (review of B2-ii).
+ */
+function FoldedSection({
+  headingId,
+  heading,
+  rows,
+  mode,
+  open = false,
+  count = false,
+}: {
+  headingId: string;
+  heading: string;
+  rows: Row[];
+  mode: RowMode;
+  open?: boolean;
+  /** Show the rows' count in the summary. */
+  count?: boolean;
+}) {
+  if (rows.length === 0) return null;
+  const holdsTicked =
+    mode.kind === 'multi' && rows.some(({ option }) => mode.selected.has(option.publicId));
+  return (
     <section aria-labelledby={headingId} className="mb-4">
-      <details open={!allOnForm}>
+      <details open={open || holdsTicked || undefined}>
         {/*
           ⚠️ **The `h3` is INSIDE the `summary`**, not replaced by it. Every other section here is
           headed by an `h3`, and a screen-reader user navigating by heading — which is how you skim a
@@ -847,10 +1257,10 @@ function TodaysProgram({
         */}
         <summary className="min-h-11">
           <h3 id={headingId} className="text-muted-foreground mb-1 inline text-sm font-semibold">
-            {allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
+            {count ? COPY.foldedCount(heading, rows.length) : heading}
           </h3>
         </summary>
-        <OptionList rows={rowsFrom(options)} mode={mode} scope={headingId} />
+        <OptionList rows={rows} mode={mode} scope={headingId} />
       </details>
     </section>
   );
