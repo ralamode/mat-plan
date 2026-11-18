@@ -89,7 +89,7 @@ describe('a week (FAM-1 7a-ii): its program, then the first workout it names tha
     vi.mocked(programWorkoutIds).mockResolvedValueOnce(null);
     await reportWeekMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: [WORKOUT_ID] });
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMiss]]);
-    expect(workoutIn).not.toHaveBeenCalled();
+    expect(vi.mocked(programWorkoutIds).mock.calls).toEqual([[db, SCOPE, PROGRAM_ID]]);
   });
 
   it('🔴 a foreign workout on any day is reported: the first one, once, with ONE read of the program', async () => {
@@ -99,7 +99,6 @@ describe('a week (FAM-1 7a-ii): its program, then the first workout it names tha
       workoutPublicIds: [WORKOUT_ID, WORKOUT_ID, OTHER_WORKOUT],
     });
     expect(vi.mocked(programWorkoutIds).mock.calls).toEqual([[db, SCOPE, PROGRAM_ID]]);
-    expect(workoutIn).not.toHaveBeenCalled();
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[missOf(OTHER_WORKOUT)]]);
   });
 

@@ -96,7 +96,7 @@ export async function workoutInHousehold(
 
 /**
  * The public ids of every live workout of this household's live program `programPublicId`, in one
- * query; `null` when the program is not one (a miss, or an id that is not a uuid). For the week's
+ * read (two queries: the program, then its workouts); `null` when the program is not one (a miss, or an id that is not a uuid). For the week's
  * scope-miss report (lane B's `reportWeekMiss`), which can then test each id a week names against
  * the set, with no cap on how many it checks (FAM-1 6c-ii; a P2 on #586).
  */

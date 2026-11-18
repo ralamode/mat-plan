@@ -36,8 +36,21 @@ import { readWeek } from './week';
  *
  * The answer is parsed with `programViewSchema` (which also checks that every slot names one of the
  * workouts) before it is returned. ⚠️ Several reads, not one snapshot: a save committing between
- * them can be seen in part; the page's next load is whole.
+ * them can be seen in part. **The week keeps only slots of the workouts read**, so a workout saved
+ * and put on the week in that window never makes the page throw on the schema's slot check; it
+ * shows on the next load.
  */
+/** An IANA zone name `Intl` accepts (`America/New_York`), or `UTC`; never a bare offset. */
+function isIanaZoneName(tz: string): boolean {
+  if (tz !== 'UTC' && !tz.includes('/')) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function readProgramView(
   exec: Executor,
   scope: HouseholdScope,
@@ -47,12 +60,10 @@ export async function readProgramView(
   if (!isoDaySchema.safeParse(today).success) {
     throw new Error('readProgramView needs today as an ISO day');
   }
-  // A zone Postgres would refuse is the caller's bug: fail here, with fixed text.
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-  } catch {
-    throw new Error('readProgramView needs an IANA time zone');
-  }
+  // A zone Postgres would refuse is the caller's bug: fail here, with fixed text. A bare offset
+  // (`+05:00`) passes `Intl` but Postgres reads it with the sign reversed (POSIX), so only an IANA
+  // name (`Area/City`) or `UTC` is taken.
+  if (!isIanaZoneName(tz)) throw new Error('readProgramView needs an IANA time zone');
   if (!uuidSchema.safeParse(programPublicId).success) return null;
 
   const programs = await exec
@@ -109,9 +120,16 @@ export async function readProgramView(
     .groupBy(schema.prescriptions.workoutId);
   const itemCount = new Map(counts.map((c) => [c.workoutId, c.n]));
 
-  const week = await readWeek(exec, scope, program.publicId);
+  const read = await readWeek(exec, scope, program.publicId);
   // Removed between the two reads: the program is gone, so the page is.
-  if (!week) return null;
+  if (!read) return null;
+  const listed = new Set(workouts.map((workout) => workout.publicId));
+  const week = Object.fromEntries(
+    Object.entries(read).map(([day, slots]) => [
+      day,
+      slots.filter((slot) => listed.has(slot.workoutPublicId)),
+    ]),
+  ) as typeof read;
 
   return programViewSchema.parse({
     programPublicId: program.publicId,

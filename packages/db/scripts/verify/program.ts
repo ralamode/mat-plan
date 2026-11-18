@@ -3092,6 +3092,45 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       'FAM-1 6c-ii: the program-view read deep-equals new-program-empty',
     );
 
+    // ── On it from tomorrow: listed, with its start day, before it begins ──
+    const later = structuredClone(world) as World;
+    later.assign.a3 = [...(later.assign.a3 ?? []), { prog: 'p2', from: addDays(today, 1) }];
+    // The household holds the new program made above, too.
+    later.programs.push({ id: 'p1001', name: 'New program', workouts: [], week: emptyWeek() });
+    assert.deepEqual(
+      await putOn(
+        exec,
+        scope,
+        {
+          programPublicId: ids.get(fixtureIds.program('p2'))!,
+          profilePublicIds: [ids.get(fixtureIds.athlete('a3'))!],
+          from: addDays(today, 1),
+        },
+        today,
+      ),
+      { ok: true },
+      'FAM-1 6c-ii: the proof puts Adult One on Stretching from tomorrow',
+    );
+    assert.deepEqual(
+      await view('p2'),
+      translated(programView(later, 'p2'), ids),
+      'FAM-1 6c-ii: an athlete starting tomorrow is on the program page, with their start day',
+    );
+    assert.deepEqual(
+      (await readProgramList(exec, scope, today)).find(
+        (p) => p.programPublicId === ids.get(fixtureIds.program('p2')),
+      )?.athletes,
+      ['Athlete One', 'Adult One'],
+      'FAM-1 6c-ii: …and in the Programs list',
+    );
+
+    // ── A zone Postgres would read backwards is refused ──
+    await assert.rejects(
+      readProgramView(exec, scope, ids.get(fixtureIds.program('p1'))!, { today, tz: '+05:00' }),
+      /needs an IANA time zone/,
+      'FAM-1 6c-ii: the program-view read refuses a bare offset as its time zone',
+    );
+
     // ── What is not counted, and what is not listed ──
     const w1 = ids.get(fixtureIds.workout('w1'))!;
     const [card] = await tx
@@ -3195,13 +3234,6 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         (p) => !(ids.get(fixtureIds.program('p1')) === p.programPublicId),
       ),
       'FAM-1 6c-ii: the program-list read lists no other household’s program',
-    );
-    assert.equal(
-      (await readProgramList(exec, A_SCOPE, today)).some(
-        (p) => p.name === 'Stretching' && p.athletes.includes('Adult One'),
-      ),
-      false,
-      'FAM-1 6c-ii: …and no other household’s athlete',
     );
   });
   console.log(

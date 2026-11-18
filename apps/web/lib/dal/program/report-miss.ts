@@ -90,7 +90,7 @@ export async function reportProgramMiss(
  * A week (FAM-1 7a-ii): its program, then each workout it names, distinct, in the draft's order,
  * until the first that is not one of the program's (`saveWeek` answers `not_found` for both).
  *
- * **One query, however many ids the week names** (FAM-1 6c-ii, a board-granted edit by lane P):
+ * **One read (two queries), however many ids the week names** (FAM-1 6c-ii, a board-granted edit by lane P):
  * `programWorkoutIds` answers the program's live workout ids, or `null` when the program is not the
  * household's, and each id is looked up in that set. So no id goes unchecked, and a long week costs
  * no more than a short one.

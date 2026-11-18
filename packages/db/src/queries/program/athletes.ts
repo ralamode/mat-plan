@@ -28,6 +28,11 @@ export type AthleteOnPrograms = {
  * page's switcher leaves them out (C18) and `putOn` refuses them.
  *
  * One read per athlete: a household holds at most `MAX_HOUSEHOLD_ATHLETES`.
+ *
+ * ⚠️ A second household-profile list beside `householdProfileRows` (`queries/household-profiles.ts`),
+ * which asks that its consumers filter rather than add a rule: this one needs the internal id and an
+ * `Executor`, which that read does not give, and its `archived_at` conjunct is the program pages'
+ * rule, not the picker's. Both keep the same tenancy predicate (`inHousehold` and live).
  */
 export async function athletesOnPrograms(
   exec: Executor,
