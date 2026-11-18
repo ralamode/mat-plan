@@ -18,6 +18,7 @@ import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
 import { ProgramScreen } from '@/components/program-builder/program-screen';
 import { ProgramsListScreen } from '@/components/program-builder/programs-list-screen';
+import { BuilderLinkPrefetch } from '@/components/program-builder/route-link';
 import { WorkoutEditorScreen } from '@/components/program-builder/workout-editor-screen';
 import { NAME_WRAP_CLASS, NOTICE_CLASS, SETTINGS_COPY } from '@/lib/constants';
 
@@ -41,8 +42,22 @@ import { dayPreviewHrefFor, type PreviewSelection } from './preview-registry';
  * **The data is state.** A fake changes its copy of the fixture and hands it back; this passes it
  * to the screen again as props. That is the preview's stand-in for the re-render a real action
  * causes, so a screen needs no code that exists only for the preview.
+ *
+ * **No builder link prefetches here.** The screens hold fixture ids, so every `/programs/<id>` a
+ * Next `<Link>` would prefetch is a page that answers 404: in a production build, one for each
+ * link on each page load. The builder's
+ * links read `BuilderLinkPrefetch` (lane B's `route-link.tsx`); this is the one place that says
+ * `false`. A real page provides nothing and prefetches as Next does.
  */
-export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) {
+export function PreviewHarness(selection: PreviewSelection) {
+  return (
+    <BuilderLinkPrefetch value={false}>
+      <PreviewScreen {...selection} />
+    </BuilderLinkPrefetch>
+  );
+}
+
+function PreviewScreen({ screen, fixture, failNext }: PreviewSelection) {
   switch (screen) {
     case 'programs-list':
       return (
