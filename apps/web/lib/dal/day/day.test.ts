@@ -1,4 +1,5 @@
 import { ACTIVITY_TYPE_KEYS, PROFILE_KIND, ROW_REFUSAL } from '@mat-plan/shared';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { DAY_PLAN_FIXTURES } from '@mat-plan/shared/program/fixtures';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -87,6 +88,8 @@ describe('getDayPlan (FAM-1 12b)', () => {
       profilePublicId: PROFILE_ID,
       day: YESTERDAY,
       today: TODAY,
+      // C32: the real library, read by slug for a day item's coach label.
+      catalog: CATALOG_MOVEMENTS,
     });
     expect(plan).toEqual({
       ...RESOLVED,

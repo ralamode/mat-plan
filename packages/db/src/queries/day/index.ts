@@ -14,6 +14,7 @@ export * from './previous';
 export * from './prescription-live-in';
 export {
   currentPrograms,
+  programEndsToday,
   resolveDayPlan,
   type CurrentProgram,
   type CurrentProgramRow,

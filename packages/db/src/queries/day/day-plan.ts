@@ -1,4 +1,5 @@
 import {
+  type CatalogMovement,
   type DayItem,
   type DayPlan,
   type DayRow,
@@ -7,6 +8,7 @@ import {
   ON_PROGRAM,
   type RowValues,
   showsOnlyLogged,
+  type Supervision,
   TRACKING_TYPE_FIELDS,
   type TrackingType,
   trackingTypeSchema,
@@ -77,11 +79,28 @@ type LivePrescription = {
   quantities: PrescriptionQuantityRow[];
 };
 
-type Movement = { publicId: string; name: string; trackingType: TrackingType };
+type Movement = {
+  publicId: string;
+  name: string;
+  trackingType: TrackingType;
+  /** C32: the library's label for a GLOBAL movement whose entry carries one; absent otherwise. */
+  supervision?: Supervision;
+};
 
 export async function resolveDayPlan(
   exec: Executor,
-  args: { scope: HouseholdScope; profilePublicId: string; day: string; today: string },
+  args: {
+    scope: HouseholdScope;
+    profilePublicId: string;
+    day: string;
+    today: string;
+    /**
+     * C32: the movement library the database was seeded from, read by slug for each GLOBAL movement's
+     * `supervision` label. The DAL passes `CATALOG_MOVEMENTS`; the proofs pass the test library.
+     * Handed in, so the query never decides which library a database holds.
+     */
+    catalog: readonly CatalogMovement[];
+  },
 ): Promise<ResolvedDayPlan | null> {
   const { scope, day, today } = args;
 
@@ -131,10 +150,15 @@ export async function resolveDayPlan(
   const prescriptions = await livePrescriptions(exec, [...liveWorkoutIds]);
 
   // E2: one movement read, under `movementIsAvailableTo`, for the live items and the logged rows.
-  const movements = await availableMovements(exec, scope, [
-    ...prescriptions.map((p) => p.movementId),
-    ...logged.flatMap((r) => (r.movementId === null ? [] : [r.movementId])),
-  ]);
+  const movements = await availableMovements(
+    exec,
+    scope,
+    [
+      ...prescriptions.map((p) => p.movementId),
+      ...logged.flatMap((r) => (r.movementId === null ? [] : [r.movementId])),
+    ],
+    supervisionBySlug(args.catalog),
+  );
 
   // E3: a live entry with no live set is a broken row.
   const values = await readRowValues(
@@ -225,7 +249,13 @@ export async function resolveDayPlan(
         ? ON_PROGRAM['not-this-day']
         : ON_PROGRAM.never,
     canGoForward: day < today || assignments.some((a) => a.onNextDay),
-    currentPrograms: current.map((p) => ({ programPublicId: p.programPublicId, name: p.name })),
+    // C37: `endsToday` is present, and `true`, only on a program ending today (Amendment 5's rank);
+    // absent on one that stays.
+    currentPrograms: current.map((p) => ({
+      programPublicId: p.programPublicId,
+      name: p.name,
+      ...(programEndsToday(p, today) ? { endsToday: true as const } : {}),
+    })),
     programs: onDay.map((p) => ({
       programPublicId: p.programPublicId,
       name: p.name,
@@ -253,6 +283,18 @@ export type CurrentProgram = ProgramOnDay & { activeFrom: string; activeTo: stri
  * row) comes before every program ending today, then by `idx`, then by row id.
  * Exported within `queries/day/` for step 6c's program order, its second consumer.
  */
+/**
+ * **A program ends today** (ADR 0007 Amendment 5; C37): its placing row has a last day and has
+ * started. The one rule for `currentPrograms`' rank (such programs sort after every one that stays)
+ * and for `DayPlan.currentPrograms[].endsToday`. Lane P's reorder writer (6d-ii) imports it too.
+ */
+export function programEndsToday(
+  row: { activeFrom: string; activeTo: string | null },
+  today: string,
+): boolean {
+  return row.activeTo !== null && row.activeFrom <= today;
+}
+
 export type CurrentProgramRow = Pick<
   DayAssignment,
   | 'id'
@@ -271,7 +313,7 @@ export function currentPrograms(
 ): CurrentProgram[] {
   const placing = new Map<number, CurrentProgramRow>();
   // 0: an open row, or one starting after today; 1: a row closing today or later.
-  const rank = (a: CurrentProgramRow) => (a.activeTo === null || a.activeFrom > today ? 0 : 1);
+  const rank = (a: CurrentProgramRow) => (programEndsToday(a, today) ? 1 : 0);
   for (const a of assignments) {
     if (!a.current) continue;
     const held = placing.get(a.blockId);
@@ -456,22 +498,44 @@ async function availableMovements(
   exec: Executor,
   scope: HouseholdScope,
   ids: readonly number[],
+  labels: ReadonlyMap<string, Supervision>,
 ): Promise<Map<number, Movement>> {
   const found = new Map<number, Movement>();
   if (ids.length === 0) return found;
   const m = schema.movements;
   const rows = await exec
-    .select({ id: m.id, publicId: m.publicId, name: m.name, trackingType: m.trackingType })
+    .select({
+      id: m.id,
+      publicId: m.publicId,
+      name: m.name,
+      trackingType: m.trackingType,
+      slug: m.slug,
+      householdId: m.householdId,
+    })
     .from(m)
     .where(and(inArray(m.id, [...new Set(ids)]), movementIsAvailableTo(scope)));
   for (const r of rows) {
+    // C32: only a GLOBAL movement (no household) reads the library; a household's own item on
+    // the same slug never carries a label.
+    const supervision = r.householdId === null ? labels.get(r.slug) : undefined;
     found.set(r.id, {
       publicId: r.publicId,
       name: r.name,
       trackingType: trackingTypeSchema.parse(r.trackingType),
+      ...(supervision ? { supervision } : {}),
     });
   }
   return found;
+}
+
+/** C32: each library entry's label, by slug; an entry with none is left out. */
+function supervisionBySlug(catalog: readonly CatalogMovement[]): Map<string, Supervision> {
+  return new Map(catalog.flatMap((e) => (e.supervision ? [[e.slug, e.supervision] as const] : [])));
+}
+
+/** C32: the item's `supervision` key, present only when the movement carries a label. */
+function supervisionOf(movement: Movement): Pick<DayItem, 'supervision'> {
+  return movement.supervision ? { supervision: movement.supervision } : {};
 }
 
 // ── Assembly ──────────────────────────────────────────────────────────────────────────────────────
@@ -615,6 +679,7 @@ function dayWorkout(
       itemPublicId: movement.publicId,
       name: movement.name,
       trackingType: movement.trackingType,
+      ...supervisionOf(movement),
       // Where only logged rows show, the heading is what the first-logged row was logged against.
       prescribedText: showing === 'logged' ? snapshotOf(firstOf(mine)!) : terms.text,
       target: terms.target,
@@ -642,6 +707,8 @@ function dayWorkout(
       itemPublicId: movement.publicId,
       name: first.movementName ?? movement.name,
       trackingType: movement.trackingType,
+      // C32: it follows the MOVEMENT, so a removed prescription's item carries it too.
+      ...supervisionOf(movement),
       prescribedText: snapshotOf(first),
       target: { reps: null, quantities: [] },
       notes: null,
