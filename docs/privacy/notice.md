@@ -179,9 +179,10 @@ load no Clerk code.** Your browser talks to this app, which runs on Vercel (abov
 from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's domain — and opens a
 connection to them, so Clerk sees your IP address and your browser there, and so does Cloudflare,
 which Clerk puts in front of that address. Two edges, so this is exact: if you reach this page from a
-signed-in page, Clerk's code is already running in your browser; and if you signed in here before
-and your session has lapsed, opening any page, this one included, can send your browser to Clerk to
-refresh it.
+signed-in page, Clerk's code is already running in your browser; and **if you are signed in, opening
+any page directly, this one included, usually sends your browser briefly to Clerk to refresh your
+sign-in** (Clerk then sees the address of the page you asked for). The "before you sign in" above is
+the part that holds for everyone.
 
 ⚠️ **Until 2026-11-18 Clerk's code loaded on every page, including this one**, and an earlier
 version of this paragraph wrongly said the sign-in screen was the only exception (checked against the

@@ -598,9 +598,9 @@ describe('Clerk is provided on every page except the public ones', () => {
 
   // Everything that renders WITHOUT the provider: the root layout and its boundaries, which also
   // stand in for a segment's own when the root's not-found or error renders, and the public pages.
-  const ROOT_ONLY = ['layout.tsx', 'not-found.tsx', 'error.tsx']
-    .map((f) => join(APP_DIR, f))
-    .filter(existsSync);
+  // Every non-page file of the root segment (layout, not-found, error, and any loading, template or
+  // global-error added later), not a hand-kept list.
+  const ROOT_ONLY = segmentFiles(APP_DIR);
   const freeGraph = localGraph([...ROOT_ONLY, ...freePages]);
 
   it('finds both kinds of page (an empty list would pass everything below)', () => {
@@ -622,32 +622,40 @@ describe('Clerk is provided on every page except the public ones', () => {
   // (2) Nothing that renders without the provider pulls Clerk in, through any local import.
   it('the root layout, its boundaries and the public pages import no Clerk code', () => {
     expect(freeGraph.length).toBeGreaterThan(3);
-    const clerky = freeGraph.filter(
-      (f) => f === CLERK_ROOT || /from\s+['"]@clerk\/nextjs/.test(code(f)),
-    );
+    const clerky = freeGraph.filter((f) => f === CLERK_ROOT || /['"]@clerk\//.test(code(f)));
     expect(clerky.map((f) => relative(WEB_DIR, f))).toEqual([]);
   });
 
-  // (3) The P0 rule: from a page with no provider, a link into a Clerk segment is a plain `<a>`. A
-  // `<Link>` would load Clerk in a client navigation, with a nonce the page's CSP does not allow.
-  const INTO_CLERK =
-    /<Link\b[^>]*\bhref=\{?\s*(?:['"`]\/(?:p|settings|sign-in|design)\b|SIGN_IN_PATH|APP_HOME_PATH|SETTINGS_PATH|athlete\w*Path)/;
-  it('no page without the provider has a <Link> into a Clerk segment', () => {
-    const offenders = freeGraph.filter((f) => INTO_CLERK.test(code(f)));
-    expect(offenders.map((f) => relative(WEB_DIR, f))).toEqual([]);
+  // (3) The P0 rule: from a page with no provider, a `<Link>` may only point at a page with no provider.
+  // Anything else must be a plain `<a>`: a client navigation into a Clerk segment would load Clerk
+  // with a nonce the page's CSP does not allow. An ALLOWLIST of targets, so a new constant, a
+  // template literal or a variable cannot slip past; `item.href` is the footer's, whose items are `/`
+  // and the privacy path (`components/layout/site-footer.tsx`).
+  const LINK_HREF = /<Link\b[^>]*?\bhref=(?:\{([^}]*)\}|(['"][^'"]*['"]))/g;
+  const SAFE_HREFS = new Set(["'/'", '"/"', 'PRIVACY_PATH', 'item.href']);
+  const unsafeLinks = (src: string) =>
+    [...src.matchAll(LINK_HREF)]
+      .map((m) => (m[1] ?? m[2])!.trim())
+      .filter((href) => !SAFE_HREFS.has(href));
+  it('no page without the provider has a <Link> to anything but a public page', () => {
+    const offenders = freeGraph.flatMap((f) =>
+      unsafeLinks(code(f)).map((href) => `${relative(WEB_DIR, f)}: ${href}`),
+    );
+    expect(offenders).toEqual([]);
   });
   it.each([
     '<Link href={SIGN_IN_PATH}>',
-    '<Link href={APP_HOME_PATH}>',
+    '<Link href={ADD_ATHLETE_PATH}>',
+    '<Link href={`${SIGN_IN_PATH}?x=1`}>',
     "<Link href='/p'>",
-    '<Link className="x" href="/settings">',
+    '<Link className="x" href={target}>',
   ])('the link rule catches %s', (jsx) => {
-    expect(INTO_CLERK.test(jsx)).toBe(true);
+    expect(unsafeLinks(jsx)).not.toEqual([]);
   });
   it.each(['<Link href={PRIVACY_PATH}>', "<Link href='/'>", '<a href={SIGN_IN_PATH}>'])(
     'the link rule passes %s',
     (jsx) => {
-      expect(INTO_CLERK.test(jsx)).toBe(false);
+      expect(unsafeLinks(jsx)).toEqual([]);
     },
   );
 

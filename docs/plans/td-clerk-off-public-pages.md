@@ -139,3 +139,35 @@ PR B the privacy docs and comment sweep, merged together.
 | UX           | P2  | Check "sign-out enabled on arrival, no fade" in the merge gate                                                                                                                                                                        | **Accepted.**                                                                                                                            |
 | UX           | P2  | Record why the `(clerk)` route group was rejected                                                                                                                                                                                     | **Accepted:** Design.                                                                                                                    |
 | UX           | —   | The optional note under the landing CTA                                                                                                                                                                                               | **Declined**, as the lens recommends: `/sign-in` discloses above the card before the Google consent tap, and the notice covers the rest. |
+
+## Implementation status (2026-11-18)
+
+Implemented and committed on the branch, **not pushed** (the board is holding new PRs while the
+queue clears).
+
+**Fresh review of the code** (security and correctness, opus): no P0. Its P1 is fixed. The notice and
+the inventory understated the handshake edge: a signed-in visitor who opens any page directly is
+usually sent to Clerk to refresh their sign-in, not only one whose session lapsed. Its P2s are fixed:
+
+- the link rule is an allowlist (`/`, `PRIVACY_PATH`, the footer's `item.href`);
+- the Clerk-import rule catches any `@clerk/` package;
+- the root's files come from `segmentFiles`;
+- the stale runbook line is corrected, and the UI-5 plan has a superseding note;
+- `NONCE_HEADER` is documented as Clerk's literal name and pinned in `proxy.test.ts`.
+
+🔴 **Open blocker, found locally: `e2e/theme.spec.ts:151` ("the choice survives a reload") fails on
+this branch, consistently (twice), and passes on `main` (6/6, the same machine and load).**
+
+- After the reload the page shows Dark selected: React's state is `dark` and the label is styled as
+  selected. The Dark radio carries the `checked` attribute, but its DOM `checked` property is
+  `false`, so `toBeChecked()` fails.
+- The radios are controlled (`components/theme/theme-toggle.tsx`, `checked={selected}`, all
+  `name="theme"`).
+- The cause is not yet found. Two leads:
+  - The new `app/p/layout.tsx` (an async server component) changes when the page hydrates, and a
+    same-name radio group's checked state desyncs across the `useSyncExternalStore` hydration flip
+    (`system` on the server render, then `dark`).
+  - Or a second `name="theme"` group is present in the document.
+- **Must be resolved before this ships.** The other three failures in the first full run
+  (`day-page.spec.ts` ×2, `log-bodyweight.spec.ts`) passed on a re-run, with the machine's load
+  average over 50; they are treated as load flakes, not as this change.

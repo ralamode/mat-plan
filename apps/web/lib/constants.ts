@@ -110,6 +110,10 @@ export const SIGN_IN_PATH = '/sign-in';
  * The request header `proxy.ts` sets to this request's CSP nonce, which the layouts read: the root
  * for the theme script, `ClerkRoot` for Clerk's scripts. One name, so the writer and the readers
  * cannot drift.
+ *
+ * ⚠️ **The value is not ours to change.** Clerk's `DynamicClerkScripts` reads the header itself, by its
+ * literal name (`headers().get('X-Nonce')`), so renaming this would silently strip the nonce from
+ * Clerk's scripts. `proxy.test.ts` pins the value.
  */
 export const NONCE_HEADER = 'x-nonce';
 

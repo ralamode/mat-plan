@@ -548,7 +548,7 @@ layout (`components/layout/clerk-root.tsx`), and `app/pages-need-a-session.test.
 page or the root layout reaches Clerk ([plan](../plans/td-clerk-off-public-pages.md)). **Exact
 scope, two edges:** a visitor who reaches a public page by a soft navigation from a signed-in page
 already has clerk-js running; and `clerkMiddleware` still runs on every route, so a returning visitor
-with an expired Clerk session can be sent to Clerk's Frontend API to refresh it on any page load. The
+who is signed in is usually sent to Clerk's Frontend API to refresh their session when they open any page directly, `/` and `/privacy` included (the session token is short-lived, so this is the normal case for a signed-in visitor, not a lapsed one; Clerk receives the page URL as `redirect_url`). The
 host, Vercel, sees every request regardless.
 
 | Public route                                            | What it serves                                                                                                                                                                                                                                                                                                               | Reads                                                                                                                                                    |

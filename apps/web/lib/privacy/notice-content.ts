@@ -1313,7 +1313,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ",\nfrom clerk.mat-plan.dev — Clerk's own servers, under a name on this app's domain — and opens a\nconnection to them, so Clerk sees your IP address and your browser there, and so does Cloudflare,\nwhich Clerk puts in front of that address. Two edges, so this is exact: if you reach this page from a\nsigned-in page, Clerk's code is already running in your browser; and if you signed in here before\nand your session has lapsed, opening any page, this one included, can send your browser to Clerk to\nrefresh it."
+        "text": ",\nfrom clerk.mat-plan.dev — Clerk's own servers, under a name on this app's domain — and opens a\nconnection to them, so Clerk sees your IP address and your browser there, and so does Cloudflare,\nwhich Clerk puts in front of that address. Two edges, so this is exact: if you reach this page from a\nsigned-in page, Clerk's code is already running in your browser; and "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "if you are signed in, opening\nany page directly, this one included, usually sends your browser briefly to Clerk to refresh your\nsign-in"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " (Clerk then sees the address of the page you asked for). The \"before you sign in\" above is\nthe part that holds for everyone."
       }
     ]
   },
