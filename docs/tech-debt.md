@@ -78,6 +78,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Severity:** low today, high the moment the schedule has a row. Owner: lane A (`seed.ts` is its
   file), with step 12f.
 
+### A check-in submit that repeats one `client_id` reports a skipped practice as saved (found 2026-11-17, #578 review)
+
+- **What & why it's debt:** `logCheckinsAction` (`apps/web/app/p/[profileId]/actions.ts`) checks
+  each item's `client_id` is a UUID but never that they differ. A crafted submit of a practice and a
+  habit under ONE `client_id`, on a day that already holds a practice, skips the practice (the day
+  index), inserts the habit, and `writeCheckinEntries` answers both `created` from the one id it
+  saw inserted. The action returns `ok`, so the skipped practice reads as saved.
+- **Impact:** low. It needs crafted FormData (the form mints one id per field) and only misreports
+  the sender's own write; nothing is written that should not be.
+- **Fix:** refuse non-distinct `client_id`s before the DAL, as a typed field error, with a boundary
+  test, and have the writer throw on a repeated id so no other caller can reach it. Lane S's
+  follow-up after #578 (board, 2026-11-17); mutations from 422.
+- **Severity:** low. Introduced by #385 (`createdByClientId`) and #461 (`day_taken`).
+
 ### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel) — ✅ CLOSED 2026-11-17
 
 - **Closed:** `writeCheckinEntries` and `insertBodyweightEntry` re-run the insert once, for exactly
