@@ -89,7 +89,9 @@ because a pasted copy goes stale. Done when:
 - **Open state:**
   - It lives in the picker. It survives the filter panel, the item-form takeover, a no-match query
     and clearing the search, and resets only when the sheet opens.
-  - A person's tap always beats the derived default.
+  - A person's tap always beats the derived default, **except that a new selection reopens the
+    groups above it**: a row ticked, selected or created by the caller, or made current, opens its
+    ancestors even if the person closed one earlier (round 2).
   - Every group on the path to a ticked row (multi mode) or to the current row (single mode)
     starts open: the family, its kind, All movements, or "Not sorted yet".
   - Unticking never closes a group.
@@ -149,14 +151,16 @@ Every group (the custom section, All movements, a kind, a family, Not sorted yet
 disclosure pattern:
 
 ```tsx
-<section aria-labelledby={headingId}>
+<Group headingId={headingId}>
+  {/* <section aria-labelledby> for the top sections only; a plain <div> for a kind, a family and
+      Not sorted yet (round 2, a11y: one landmark per group floods VoiceOver's and NVDA's lists) */}
   <hN id={headingId}>
     <button
       type="button"
       aria-expanded={open}
       aria-controls={open ? bodyId : undefined}
       onClick={() => toggle(key)}
-      className="focus-visible:ring-ring flex min-h-11 w-full items-center gap-2 text-left outline-none focus-visible:ring-3"
+      className="focus-visible:ring-ring flex min-h-11 w-full items-center gap-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-inset"
     >
       <Chevron aria-hidden className="motion-reduce:transition-none" />
       <span className="min-w-0 flex-1">{label}</span>
@@ -167,7 +171,7 @@ disclosure pattern:
     </button>
   </hN>
   {open ? <div id={bodyId}>{children}</div> : null}
-</section>
+</Group>
 ```
 
 **Why not `<details>`,** which the prototype and `FoldedSection` use:
@@ -183,6 +187,8 @@ disclosure pattern:
 - React controls it fully.
 - It sits inside its heading, which every screen reader exposes.
 - The 44px check measures it (`e2e/a11y-checks.ts` lists `button`).
+- **Its focus ring is inset** (`ring-inset`), so the sheet's scroll container cannot clip it at the
+  edges at 360px.
 - The custom section moves onto the same component, so the picker has one disclosure.
   `FoldedSection` stays only where it is still used outside browse, keeping #596's tick latch.
 
@@ -208,6 +214,16 @@ open(key) = userChoice.get(key) ?? (auto || seeded.has(key) || defaultOpen(key))
   maintainer accepts Q2(A), it becomes `library.length <= BROWSE_OPEN_AT_MOST`.
 - **`defaultOpen`** is true for the top sections (custom, subject to Q1; All movements) and false
   for kinds, families and Not sorted yet.
+- **A new selection reopens its ancestors** (round 2, correctness). When an id enters `selected`
+  (the person's tick, or the caller's select or create) or becomes `currentId`, its ancestors are
+  added to `seeded` **and their entries are deleted from `userChoice`**. So an earlier close never
+  hides a row the caller is about to focus (the regression `FoldedSection`'s `holdsTicked` exists
+  to stop, `movement-picker.tsx:1224-1227`), and a later tap can still close the group again.
+  - This happens **during render**, by diffing the previous `selected` and `currentId` (the
+    `wasOpen`/`wasTakeover` pattern at `:425-450`), never in an effect. The row is then in the same
+    commit the caller's focus runs after.
+  - It also closes S-S3: a tick made under an auto-opened filtered tree stays visible after the
+    filter is cleared.
 - **On a filter change, the `false` entries in `userChoice` are dropped**, so a group the person
   closed under one filter can auto-open under the next. `true` entries stay.
 - **Keys and ids are kind-qualified**, because `core`, `back`, `hips_legs` and `whole_body` occur
@@ -418,6 +434,21 @@ change in this design.
 | U3-6       | Trust       | K23: say both rows log, and steer toward neither                        | **accepted**                      | In Risks                                                                                            |
 | U3-7       | Trust       | A note inside K24's section                                             | **rejected**                      | Only the maintainer sees it before R2, and each row's second line already says what it lacks        |
 | U3-8       | Trust       | Kind labels                                                             | **accepted (no change)**          | "Conditioning" kept; "Mobility and stretching" passed to the contract owner as an FYI               |
+
+### Re-review (round 2)
+
+> Light passes by the lenses whose blocking findings reshaped the plan: correctness 52k · 56s,
+> UX a11y/360 42k · 37s. Models: opus, effort medium.
+
+| #     | Lens        | Critique (short)                                                                                                                                               | Verdict      | Resolution                                                                                                                                             |
+| ----- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C2-B1 | Correctness | An earlier close (`userChoice=false`) beats `seeded`, so a row the caller creates and focuses can be off the DOM; the plan's two rules contradicted each other | **accepted** | A new selection (any source) seeds its ancestors **and clears their `userChoice`**, during render. Tests in multi and single mode. Acceptance reworded |
+| C2    | Correctness | R-B1/A-B1 and C-B1 resolved; focus on a person's own close is safe; the latch growing is harmless                                                              | —            | Confirmed                                                                                                                                              |
+| U2-R1 | a11y/360    | U2-1 resolved; button-in-heading, the accessible name, levels, 44px and 360px math hold                                                                        | —            | Confirmed                                                                                                                                              |
+| U2-R2 | a11y/360    | A `<section>` per kind and family floods the region landmarks                                                                                                  | **accepted** | `section` only for the top sections; `div` below                                                                                                       |
+| U2-R3 | a11y/360    | `ring-3` may clip at the scroll container's edges                                                                                                              | **accepted** | `ring-inset`                                                                                                                                           |
+
+No blocking concern survives round 2.
 
 ### `ID-1`'s six keep-open items
 
