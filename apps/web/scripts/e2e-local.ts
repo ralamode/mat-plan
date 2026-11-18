@@ -14,6 +14,8 @@ import {
 
 import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
 
+import { takeSlot } from '../../../.github/scripts/heavy-slot.mjs';
+
 /**
  * Run the Playwright smoke LOCALLY against a throwaway database (`pnpm e2e:local`).
  *
@@ -55,6 +57,8 @@ import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
 const EPHEMERAL_DB_PASSWORD = 'e2e-local';
 
 async function main(): Promise<void> {
+  // One heavy local run machine-wide (DX-18 D3): exits 2 while another run holds the slot.
+  takeSlot('e2e:local');
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-e2e-pg-'));
   const pgPort = await freePort();
 
