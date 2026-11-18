@@ -3,6 +3,9 @@ import {
   dayPlanSchema,
   existingItem,
   hiddenAtSchema,
+  MAX_DAY_SLOTS,
+  MAX_HOUSEHOLD_ITEMS,
+  MAX_PROGRAM_WORKOUTS,
   newId,
   PROGRAM_REFUSAL,
   programViewSchema,
@@ -14,6 +17,7 @@ import {
   type DayPlan,
   type RowResult,
   type RowWrite,
+  type Weekday,
 } from '@mat-plan/shared';
 import {
   adultProgramWithCopy,
@@ -1026,6 +1030,137 @@ describe('the fake ProgramActions: workouts and the week', () => {
     expect(view()).toBe(familyProgram);
   });
 
+  describe('🔴 the caps: limit_reached, and nothing written (C35)', () => {
+    /** The Family program with `count` workouts: its own, then made-up ones. */
+    const programOf = (count: number) => {
+      const program = structuredClone(familyProgram);
+      while (program.workouts.length < count) {
+        program.workouts.push({
+          workoutPublicId: newId(),
+          name: `Workout ${program.workouts.length}`,
+          itemCount: 1,
+          usedOn: [],
+          copiedFrom: null,
+        });
+      }
+      return program;
+    };
+    const copyOf = (name: string) => ({
+      clientId: newId(),
+      workoutPublicId: heavyA.workoutPublicId,
+      toProgramPublicId: familyProgram.programPublicId,
+      weekdays: [] as Weekday[],
+      label: null,
+      name,
+    });
+
+    it('a full program takes no new workout and no copy, whatever its name; one short of full takes one', async () => {
+      const full = builder({ program: programOf(MAX_PROGRAM_WORKOUTS) });
+      const before = full.view();
+      expect(await full.actions.saveWorkout({ ...newWorkoutEmpty, name: 'One more' })).toEqual(
+        refusal('limit_reached'),
+      );
+      // The cap is judged before the name: a taken name in a full program is still the cap.
+      expect(await full.actions.saveWorkout({ ...newWorkoutEmpty, name: heavyA.name })).toEqual(
+        refusal('limit_reached'),
+      );
+      expect(await full.actions.copyWorkout(copyOf('A copy'))).toEqual(refusal('limit_reached'));
+      expect(await full.actions.copyWorkout(copyOf(heavyA.name))).toEqual(refusal('limit_reached'));
+      expect(full.view()).toBe(before);
+
+      const room = builder({ program: programOf(MAX_PROGRAM_WORKOUTS - 1) });
+      const saved = await room.actions.saveWorkout({ ...newWorkoutEmpty, name: 'The last one' });
+      expect(saved.ok).toBe(true);
+      expect(room.view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+      // A replay of that save is not a new workout: it answers as the first call did.
+      expect(await room.actions.saveWorkout({ ...newWorkoutEmpty, name: 'The last one' })).toEqual(
+        saved,
+      );
+    });
+
+    it('a copy is capped as a new workout is: one short takes it, a replay of it still answers', async () => {
+      const { actions, view } = builder({ program: programOf(MAX_PROGRAM_WORKOUTS - 1) });
+      const copy = copyOf('The last copy');
+      const copied = await actions.copyWorkout(copy);
+      expect(copied.ok).toBe(true);
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+      // The program is full now. The same client id is not a new workout; another one is.
+      expect(await actions.copyWorkout(copy)).toEqual(copied);
+      expect(await actions.copyWorkout(copyOf('One too many'))).toEqual(refusal('limit_reached'));
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+    });
+
+    it('the cap is the program’s the copy lands in: a full program can still be copied FROM', async () => {
+      const { actions, view, state } = builder({ program: programOf(MAX_PROGRAM_WORKOUTS) });
+      const other = state().programs.find((p) => p.programPublicId !== view().programPublicId)!;
+      // ⚠️ The fake holds only the program on screen, so it cannot count the other one's workouts:
+      // it never refuses this. The real writer counts the program the copy lands in.
+      expect(
+        (
+          await actions.copyWorkout({
+            ...copyOf('Into another'),
+            toProgramPublicId: other.programPublicId,
+          })
+        ).ok,
+      ).toBe(true);
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+    });
+
+    it('a full program still takes an edit of a workout it has', async () => {
+      const { actions, view } = builder({ program: programOf(MAX_PROGRAM_WORKOUTS) });
+      expect((await actions.saveWorkout({ ...heavyADraft, name: 'Heavy A, renamed' })).ok).toBe(
+        true,
+      );
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+    });
+
+    it('a household with every item it may make gets no new one, and still selects one it has', async () => {
+      const own: MovementOptionDTO[] = Array.from({ length: MAX_HOUSEHOLD_ITEMS }, (_, i) => ({
+        publicId: newId(),
+        name: `Own item ${i}`,
+        trackingType: TRACKING_TYPE.check,
+        owner: 'household',
+        unitDefault: null,
+        isBodyweight: false,
+      }));
+      // The library's rows do not count: they are there as well, and the cap is the household's.
+      const { actions, state } = builder({ items: [...catalogPickerOptions, ...own] });
+      const before = state();
+      expect(
+        await actions.newItem({ name: 'One more item', trackingType: TRACKING_TYPE.check }),
+      ).toEqual(refusal('limit_reached'));
+      expect(state()).toBe(before);
+      expect(
+        await actions.newItem({ name: 'own item 7', trackingType: TRACKING_TYPE.check }),
+      ).toMatchObject({ ok: true, existed: true, name: 'Own item 7' });
+
+      const room = builder({ items: [...catalogPickerOptions, ...own.slice(1)] });
+      expect(
+        await room.actions.newItem({ name: 'One more item', trackingType: TRACKING_TYPE.check }),
+      ).toMatchObject({ ok: true, existed: false });
+    });
+
+    it('a weekday holds MAX_DAY_SLOTS workouts and no more; a repeat is still once_per_day', async () => {
+      const program = programOf(MAX_DAY_SLOTS + 1);
+      const slots = program.workouts.map((w) => ({
+        workoutPublicId: w.workoutPublicId,
+        label: null,
+      }));
+      const week = (monday: typeof slots) => ({
+        programPublicId: program.programPublicId,
+        days: { ...structuredClone(program.week), 1: monday },
+      });
+      const { actions, view } = builder({ program });
+      const before = view();
+      expect(await actions.saveWeek(week(slots))).toEqual(refusal('limit_reached'));
+      // Past the cap AND a repeat: the repeat is what is said, as for any other fault.
+      expect(await actions.saveWeek(week([...slots, slots[0]!]))).toEqual(refusal('once_per_day'));
+      expect(view()).toBe(before);
+      expect((await actions.saveWeek(week(slots.slice(0, MAX_DAY_SLOTS)))).ok).toBe(true);
+      expect(view().week[1]).toHaveLength(MAX_DAY_SLOTS);
+    });
+  });
+
   it('refuses a week that names a workout the program does not have', async () => {
     const { actions } = builder();
     const days = structuredClone(familyProgram.week);
@@ -1858,8 +1993,43 @@ describe('the fakes stay on the preview route', () => {
    * A production route passes the real actions it has, never a fake (plan §6). So no module outside
    * the preview route's own directory may import this one. Fixtures are held the same way: they are
    * preview and test data.
+   *
+   * **Tests may read them.** `appSources()` already leaves out the unit tests (`*.test.ts`). The
+   * end-to-end tests are Playwright's `*.spec.ts` and their helpers, all under `apps/web/e2e/`:
+   * they are left out here, by directory, so a spec can read a fixture's names and never re-type
+   * them (12c's `day-page.spec.ts`). ⚠️ Here and not in `appSources()`: the session and secrets
+   * guards share that list, and they must keep seeing `e2e/`.
+   *
+   * 🔴 **That makes `e2e/` a way round this guard**, which reads each file's own imports: a helper
+   * there may import a fixture, and a route importing the helper would look clean (`@/e2e/…`
+   * resolves from anywhere in the app). So the last test here holds the other half: nothing in the
+   * app imports from `e2e/` at all, nor from `scripts/`, whose screenshot script drives the same
+   * steps and so may import `e2e/` itself.
    */
-  const outside = appSources().filter((file) => !file.startsWith(`${WEB_DIR}/app/design/program/`));
+  const mayReadPreviewData = (file: string) =>
+    file.startsWith(`${WEB_DIR}/app/design/program/`) || file.startsWith(`${WEB_DIR}/e2e/`);
+  const outside = appSources().filter((file) => !mayReadPreviewData(file));
+
+  it('leaves out the preview route and the end-to-end tests, and nothing that only looks like them', () => {
+    for (const file of [
+      'app/design/program/preview-harness.tsx',
+      'e2e/day-page.spec.ts',
+      'e2e/steps.ts',
+    ]) {
+      expect(mayReadPreviewData(`${WEB_DIR}/${file}`), file).toBe(true);
+    }
+    for (const file of [
+      'app/e2e/page.tsx',
+      'app/design/tokens/page.tsx',
+      'components/e2e/steps.ts',
+      'lib/e2e.ts',
+      'e2e.ts',
+    ]) {
+      expect(mayReadPreviewData(`${WEB_DIR}/${file}`), file).toBe(false);
+    }
+    // The end-to-end tests are in the list this guard starts from, so leaving them out is a choice.
+    expect(appSources().some((file) => file.startsWith(`${WEB_DIR}/e2e/`))).toBe(true);
+  });
 
   it('finds the sources (an empty glob would pass the scan below)', () => {
     expect(outside.length).toBeGreaterThan(100);
@@ -1896,6 +2066,58 @@ describe('the fakes stay on the preview route', () => {
 
   it('nothing outside app/design/program imports the fakes or the fixtures', () => {
     const importers = outside.filter((file) => IMPORTS_PREVIEW_DATA.test(code(file)));
+    expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
+  });
+
+  /** An import from the end-to-end directory or from `scripts/`: by the alias, or relatively. */
+  const IMPORTS_E2E_OR_SCRIPTS = /['"](?:@\/|(?:\.\.?\/)+)(?:e2e|scripts)\//;
+  /** Test and tooling code, which no route bundles: the specs' directory and the dev scripts'. */
+  const isTestOrTooling = (file: string) =>
+    file.startsWith(`${WEB_DIR}/e2e/`) || file.startsWith(`${WEB_DIR}/scripts/`);
+
+  it('the e2e matcher sees every spelling of the import', () => {
+    for (const source of [
+      `import { signIn } from '@/e2e/steps';`,
+      `import { signIn } from '../../e2e/steps';`,
+      `import { signIn } from "../e2e/steps";`,
+      `const steps = await import('./e2e/steps');`,
+      `import { capture } from '@/scripts/screenshot-ephemeral';`,
+      `import { capture } from '../scripts/screenshot-ephemeral';`,
+    ]) {
+      expect(IMPORTS_E2E_OR_SCRIPTS.test(source), source).toBe(true);
+    }
+    for (const source of [
+      `import { test } from '@playwright/test';`,
+      `import { thing } from '@/lib/e2e';`,
+      `import { thing } from '@/lib/scripts';`,
+      `import { thing } from '@/components/e2e-banner';`,
+      `import { steps } from './steps';`,
+    ]) {
+      expect(IMPORTS_E2E_OR_SCRIPTS.test(source), source).toBe(false);
+    }
+  });
+
+  it('test and tooling code is the two directories, and nothing that only looks like them', () => {
+    for (const file of ['e2e/steps.ts', 'scripts/screenshot-ephemeral.ts']) {
+      expect(isTestOrTooling(`${WEB_DIR}/${file}`), file).toBe(true);
+    }
+    for (const file of [
+      'sentry.server.config.ts',
+      'lib/scripts.ts',
+      'app/scripts/page.tsx',
+      'app/e2e/page.tsx',
+      'proxy.ts',
+    ]) {
+      expect(isTestOrTooling(`${WEB_DIR}/${file}`), file).toBe(false);
+    }
+  });
+
+  it('🔴 nothing in the app imports from e2e/ or scripts/, so neither can carry a fixture into a route', () => {
+    // The screenshot script drives the same steps as the specs, so `scripts/` may import `e2e/`.
+    // The app may import neither: through either one a helper's fixture would reach a route.
+    const app = appSources().filter((file) => !isTestOrTooling(file));
+    expect(app.length).toBeGreaterThan(100);
+    const importers = app.filter((file) => IMPORTS_E2E_OR_SCRIPTS.test(code(file)));
     expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
   });
 });

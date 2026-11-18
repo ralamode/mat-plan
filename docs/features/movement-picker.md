@@ -33,18 +33,21 @@ path and **creating** the deliberate one.
   three-width screenshots.
 - **CAT-3 B1** — the list reads the library's search (short forms, similar names); invariant 13.
 - **CAT-3 B2-i** — every row's second line, the supervision label and "How to"; invariant 14.
+- **CAT-3 B2-ii** — the filters (equipment, main muscle) and the list under them; invariant 15.
 
 ## The map
 
-| File                                                | What                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/movement-search.ts`            | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`, and CAT-3's `searchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
-| `packages/shared/src/movement-picker-catalog.ts`    | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                                                                                                                                                                    |
-| `apps/web/lib/movements/movement-option.ts`         | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                                                     |
-| `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                                                          |
-| `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                                                         |
-| `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                                                                                                                                                                           |
-| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                                                                                                                                                                                 |
+| File                                                      | What                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/movement-search.ts`                  | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`, and CAT-3's `searchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
+| `packages/shared/src/movement-picker-catalog.ts`          | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                                                                                                                                                                    |
+| `apps/web/lib/movements/movement-option.ts`               | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                                                     |
+| `apps/web/lib/movements/movement-picker-copy.ts`          | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                                                          |
+| `apps/web/components/movements/movement-picker.tsx`       | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                                                         |
+| `apps/web/components/movements/movement-filter-panel.tsx` | The filter panel's body and footer (CAT-3 B2-ii, invariant 15). Draws what the picker holds and reports each change.                                                                                                                                                                                                                    |
+| `apps/web/test/movement-picker-fixtures.ts`               | The picker suites' fixtures, from the seeded catalog. Outside the folder because the P6 scan reads every non-test module in it.                                                                                                                                                                                                         |
+| `apps/web/lib/i18n/plural.ts`                             | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                                                                                                                                                                                                                           |
+| `apps/web/lib/i18n/locale.ts`                             | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                                                                                                                                                                                                                 |
 
 ## Invariants
 
@@ -160,9 +163,10 @@ path and **creating** the deliberate one.
       an exact alias, or what the text's short forms spell (`bb curl` is Barbell Curls). Any of the
       three withholds "use as typed", gives the status its "Already in the list as …", and is what
       Enter picks.
-    - **Enter otherwise picks only a sole match found by its own name**: never one found through
-      part of another name (P17), a similar name or a some-words row (P5). With nothing to pick it
-      puts a touch screen's keyboard away so the rows show.
+    - **Enter picks the search's `enterTarget`** (since B2-ii): a hit, whatever the filters, or a
+      sole match found by its own name; never one found through part of another name (P17), a
+      similar name or a some-words row (P5). With nothing to pick and rows on screen it puts a touch
+      screen's keyboard away so the rows show.
     - **"Also called" reads the search's `foundByAlias`**: an exact alias, part of one, or a near
       miss of one. The component never re-derives which alias matched.
     - **The dedupe is the component's**, not the contract's: a row in `near` is dropped from
@@ -233,6 +237,56 @@ path and **creating** the deliberate one.
       own option read, and calls `catalogHowToOf`. That is a READ, so the page owes a choice the
       repo's rule makes visible (Route Handlers for reads): a Route Handler, or an action recorded
       as the exception, with an adapter turning a refusal into a rejection.
+
+15. **Filters narrow the library; they never make a name new** (CAT-3 B2-ii;
+    [spec](../specs/cat-3-movement-library.md) P7 to P10, P15). What lives between files:
+    - **The state is the picker's**, so it lasts while the caller keeps the picker mounted (the
+      builder's item picker does, for the editor's life) and goes when it unmounts: "kept while
+      adding to the same workout" (P7). A reopen opens on the list, never the panel, and says once
+      that filters are still on, after the sheet's region has mounted (Announcer's rule 1).
+    - **The panel (`movement-filter-panel.tsx`) replaces the body and footer**, as the new-item
+      form does; the search and the Filters button are hidden, not unmounted. **Escape closes the
+      panel only**, through the sheet's `onEscapeKeyDown` (the consumer calls `preventDefault`); the
+      back gesture and ✕ still close the sheet. Focus goes to the panel's heading on open and to
+      Filters on close, through a ref the next render reads, since neither exists until it draws.
+    - **One region**: while the panel is open the sheet's status is the panel's last change
+      ("Lats on. 2 movements."), and the panel's visible count is plain text.
+    - **Counts are `movementFilterCounts`'**, computed only while the panel is open. A choice whose
+      count is 0 is `aria-disabled` unless it is ticked, so whatever is on can always be undone.
+      🔴 **Never `disabled`**: a ticked choice can count 0, and unticking it would disable the control
+      under focus. A ticked equipment item beyond the first ten stays listed after it is unticked,
+      until the panel closes, and **the items' order is ranked with no muscle on**, so ticking a
+      muscle never reshuffles the list above the muscles.
+    - **The list under a filter reads the filtered search** (`searchPickerOptions(…, filters)`):
+      an exact hit first with no heading, tagged "not in your filters" when outside them (P8);
+      "More matches" after a hit; the household's items apart, "Your custom items (not filtered)"
+      (P9); then the near misses and some-words; then how many more are outside, with its own
+      Clear filters (P10). **With no match at all**, the list beneath is the filtered browse, never
+      the whole list; with matches the filters hide, nothing else is listed (a kid reads a browse
+      there as results for the query, and the accepted prototype shows it only when nothing
+      matched). Browsing with a filter shows no Recent and no Today's program.
+    - ⏳ **A built-in with no library data is never "not in your filters"** (until CAT-3 chunk R;
+      board call, 2026-11-17, after a UX lens): no filter can judge it, so its exact-hit tag is
+      "equipment and muscles not known yet" (`tagNoLibraryData`, never starting "No equipment",
+      which is a library row's equipment line) and the status says "whose equipment and muscles
+      aren't known yet". The Filters button shows only when some row `hasLibraryData`. **The line
+      after the results splits them out** (`COPY.outsideLine`, from the search's `outsideFilters`
+      and `outsideWithoutData`, #590): "2 more are not in your filters. Your filters also hide 1
+      more: its equipment and muscles aren't known yet." One function decides the whole line.
+    - **The status counts each custom row as what it was found as**: a match when the unfiltered
+      search matched anything, otherwise a near miss or a some-words row (P5, P9).
+    - **A folded section opens itself while it holds a ticked row** (`FoldedSection`, shared with
+      Today's program): the item form focuses the row it just made, and a row in a closed
+      `<details>` cannot take focus in a browser.
+    - 🔴 **The create button and its hint read the UNFILTERED search** (panel row 9): loud only
+      when nothing at all matches, and a near miss the filters hide is still named ("… is listed
+      but is not in your filters."). A filter that hid a match and turned the button loud would
+      invite the permanent duplicate invariant 4 exists to prevent.
+    - **The filtered browse is interim**: one "Movements that fit your filters" section in the
+      legacy groups' order, each row tagged with its group, until B3's tree (P12). ⚠️ It lists
+      every library row that fits, so a library entry with no legacy group (invariant 11 keeps it
+      out of the unfiltered browse) appears here, after the grouped ones: invariant 11 governs the
+      unfiltered browse only.
 
 ## Traps
 
