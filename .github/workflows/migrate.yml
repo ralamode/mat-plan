@@ -52,6 +52,12 @@ jobs:
     # from `main`; this makes the instruction unnecessary rather than merely written down. A push to
     # `main` and a dispatch from `main` both satisfy it, so the documented procedure is unchanged.
     if: github.ref == 'refs/heads/main'
+    # OPS-2 PR 1: PROD_DATABASE_URL_UNPOOLED is an ENVIRONMENT secret of "Production" (the maintainer,
+    # 2026-11-18), so only a job that declares this environment can read it. That environment's
+    # deployment-branch policy must be "main only" (docs/runbooks.md -> "Rotate or rename the
+    # production database secret"). No older version of this file declares it, so an old run re-run
+    # from the Actions tab cannot read the secret even before the old one is deleted.
+    environment: Production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

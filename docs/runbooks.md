@@ -1067,8 +1067,11 @@ in order:
 
 1. **Before the PR merges:** Neon → the **mat-plan** production project → **Connection details** → the
    **direct** (not `-pooler`) string for the production database, `sslmode=require`. GitHub → repo →
-   **Settings → Secrets and variables → Actions → New repository secret**: name
-   `PROD_DATABASE_URL_UNPOOLED`, value that string. (GitHub cannot show the old secret's value, so copy
+   **Settings → Environments → Production → Add environment secret** (done 2026-11-18): name
+   `PROD_DATABASE_URL_UNPOOLED`, value that string. `migrate.yml` declares `environment: Production`.
+   🔴 **The environment's deployment-branch policy must be "Selected branches: `main`"** (Settings →
+   Environments → Production → Deployment branches) **before the merge**: without it, any branch's
+   workflow that declares the environment could read the secret. (GitHub cannot show the old secret's value, so copy
    it from Neon, not from GitHub.) **Check the host before saving:** it must be Vercel Production's
    `DATABASE_URL` host with `-pooler` removed (the same endpoint id), not a restore branch's and not the
    pooled one. Leave `DATABASE_URL_UNPOOLED` in place for now.

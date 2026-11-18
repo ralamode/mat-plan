@@ -55,9 +55,10 @@ describe('the program-fixtures flag is contained (FAM-1 D10)', () => {
         /secrets\.DATABASE_URL_UNPOOLED\b/,
       );
     }
-    expect(readFileSync(join(REPO, '.github/workflows/migrate.yml'), 'utf8')).toContain(
-      'secrets.PROD_DATABASE_URL_UNPOOLED',
-    );
+    const migrate = readFileSync(join(REPO, '.github/workflows/migrate.yml'), 'utf8');
+    expect(migrate).toContain('secrets.PROD_DATABASE_URL_UNPOOLED');
+    // The secret is an environment secret of "Production": the job must declare it, or it reads empty.
+    expect(migrate).toMatch(/^\s+environment: Production$/m);
   });
 
   it('the local harness sets it after the environment spread, where a caller cannot unset it', () => {
