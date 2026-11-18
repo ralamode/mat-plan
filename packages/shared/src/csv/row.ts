@@ -13,6 +13,20 @@ import { hasLineBreak } from '../text';
  * (`30" box`) sat unquoted, but it left a note with an opening `"` able to swallow the rest of its
  * line in a standard reader. ADR 0009 retired the byte contract, and §4 lets a PR change those tests.
  */
+/**
+ * **A cell a spreadsheet would run as a formula opens as text** (the maintainer, 2026-11-18): one that
+ * starts with `=`, `+`, `-`, `@` or a tab gets a leading `'`. A workout name, a note or a typed
+ * movement is free text a person wrote, and `=HYPERLINK(…)` in it would otherwise run when the family
+ * opens its own export (the OWASP "CSV injection" rule). A carriage return is already refused as a line
+ * break. No number the export writes starts with one of these: loads, reps and values are never
+ * negative, and a skipped movement is `0`.
+ */
+export const FORMULA_LEAD = /^[=+\-@\t]/;
+
+function neutralizeFormula(value: string): string {
+  return FORMULA_LEAD.test(value) ? `'${value}` : value;
+}
+
 function quoteIfNeeded(value: string): string {
   if (!value.includes(',') && !value.includes('"')) return value;
   return `"${value.replaceAll('"', '""')}"`;
@@ -38,7 +52,7 @@ export function csvRow(fields: readonly (string | null | undefined)[], names: re
         if (hasLineBreak(value)) {
           throw new Error(`CSV export: the '${names[i]}' field cannot contain a line break`);
         }
-        return quoteIfNeeded(value);
+        return quoteIfNeeded(neutralizeFormula(value));
       })
       .join(',') + '\n'
   );

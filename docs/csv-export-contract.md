@@ -73,6 +73,11 @@ refused. ADR 0009 retired the byte-faithful contract and calls RFC 4180 "preferr
 chose it for the whole file (2026-11-17). The rule lives in `packages/shared/src/csv/row.ts`. The
 evidence above stays, because it is why the legacy files themselves are not valid CSV.
 
+**A cell a spreadsheet would run as a formula opens as text** (the maintainer, 2026-11-18): a value
+starting with `=`, `+`, `-`, `@` or a tab is written with a leading `'` (`'=SUM(A1)`), then quoted as
+above if it needs it (`"'=a,b"`). It applies to every file and every column. No number the export
+writes starts with one of those characters.
+
 `notes` is free text, **single-line**. No newlines occur — do not allow them.
 
 ## strength-log — the hard one

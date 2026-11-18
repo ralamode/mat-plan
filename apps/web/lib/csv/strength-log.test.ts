@@ -408,6 +408,22 @@ describe('the joiner — no CSV library, RFC 4180 quoting (FAM-1 14a)', () => {
     expect(csvRow(['5, last set to failure'], ['prescribed'])).toBe('"5, last set to failure"\n');
   });
 
+  // The maintainer, 2026-11-18: a cell a spreadsheet would run as a formula opens as text.
+  it.each([
+    ['=HYPERLINK("x")', `"'=HYPERLINK(""x"")"`],
+    ['+1 day', "'+1 day"],
+    ['-3 sets', "'-3 sets"],
+    ['@home', "'@home"],
+    ['\tindent', "'\tindent"],
+    ['=a,b', `"'=a,b"`],
+  ])('opens %j as text in any column', (value, written) => {
+    expect(csvRow([value, value], ['notes', 'workout_name'])).toBe(`${written},${written}\n`);
+  });
+
+  it('leaves a value that only contains those characters alone', () => {
+    expect(csvRow(['3x5 - easy', 'a=b'], ['notes', 'workout_name'])).toBe('3x5 - easy,a=b\n');
+  });
+
   it('quotes a comma in any column, which used to be refused outside notes and prescribed', () => {
     expect(csvRow(['front,squat'], ['movement'])).toBe('"front,squat"\n');
   });

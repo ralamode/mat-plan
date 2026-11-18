@@ -1844,7 +1844,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it."
+        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it. One change is made on the way out: a value that starts with\n=, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it\nas a formula."
       }
     ]
   },
