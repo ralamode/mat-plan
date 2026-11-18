@@ -22,15 +22,16 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## The map
 
-| Step     | Adds                                                                                                                                |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                                                |
-| 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                                               |
-| 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅                                        |
-| 6a-iii-b | `writers/program/copy-workout.ts` (`copyWorkout`, C15) ✅                                                                           |
-| 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                                                        |
-| 6c       | `writers/program/assign.ts` (put on); `queries/program/{program-view,program-list}.ts`; fills in `writers/program/seed-fixtures.ts` |
-| 6d       | take off and reorder, in `assign.ts`                                                                                                |
+| Step     | Adds                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                            |
+| 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅           |
+| 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅    |
+| 6a-iii-b | `writers/program/copy-workout.ts` (`copyWorkout`, C15) ✅                                       |
+| 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                    |
+| 6c-i     | `writers/program/assign.ts` (put on, C15's reopen); fills in `writers/program/seed-fixtures.ts` |
+| 6c-ii    | `queries/program/{program-view,program-list}.ts`                                                |
+| 6d       | take off and reorder, in `assign.ts`                                                            |
 
 ## Files
 
@@ -50,7 +51,8 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/queries/program/movement-options.ts` | `movementOptions`: every item the household can pick, catalog rows (with group and aliases) first, then its own live items no catalog slug shadows, used or not.                                                                                                                                                                  |
 | `packages/db/src/writers/program/new-item.ts`         | `newItem`: selects the item a name already names (`existingItem`, then the slug), with its stored name and own type; else makes a household item typed as asked.                                                                                                                                                                  |
 | `packages/db/src/writers/program/copy-workout.ts`     | `copyWorkout`: an independent copy of a workout into one of the household's programs, named by C15, with frozen provenance, optionally onto weekdays.                                                                                                                                                                             |
-| `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                                                                                                                   |
+| `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: the test seed's fixture programs (`SEED_FIXTURES=1` only), built with the real writers, and the seed's athletes on them. A program the household already has, by its fixed `client_id`, is left as it is.                                                                                                  |
+| `packages/db/src/writers/program/assign.ts`           | `putOn`: athletes onto a template program from today or tomorrow, one row last in their order and all seven weekday rows; already on is skipped; a last day of today is reopened on the same row.                                                                                                                                 |
 | `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                         |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                             |
 | `packages/db/scripts/verify/program.ts`               | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                     |
@@ -108,7 +110,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
     `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
     unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use the same helper. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
 12. **Every refusal comes before the first write**, and the whole save is one transaction (a
-    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
+    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. `putOn` takes the block, then the athletes' `profiles` rows `FOR NO KEY UPDATE` in id order, so two put-ons of one athlete number their order one after the other (6d's take off and reorder must take the same two). The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
     `save-takes-any-households-item`) and of the type the draft says; a type's fields are
     `TRACKING_TYPE_FIELDS`' (Reps a whole number 1 to 1000; at most one quantity, in the type's slot
     and units); supersets are neighbours, numbered 1..n, at least two, with the rest on the last.
@@ -179,7 +181,7 @@ flowchart TD
     must list **every** live household item, used or not (maintainer, 2026-11-17), or an item made
     and not yet used could be added again under a re-spelled name (mutations
     `options-list-shadowed-items`, `options-list-hidden-items`, `options-list-any-households-items`,
-    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`, `new-item-answers-the-asked-type`, `new-item-slug-reads-household-first`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation. What the picker shows is the DAL's narrower list: catalog rows with a library entry, plus the household's own (maintainer, 2026-11-17); `newItem` checks against this whole read, so an old built-in is never duplicated. A catalog option carries its `slug` (CAT-3 P11-i), for the DAL to attach the taxonomy and "How to" from the catalog const; a household option never does, and the slug stops at the DAL (`options-catalog-slug-is-the-name`, `options-household-items-carry-a-slug`).
+    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`, `new-item-answers-the-asked-type`, `new-item-slug-reads-household-first`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation. What the picker shows, and in what order, is the DAL's (`apps/web/lib/dal/program/picker.ts`, lane B's 7a-ii): every catalog row this read returns, the old built-ins included, until the fresh start (CAT-3's R2) replaces them with the library, plus the household's own (maintainer, 2026-11-17, "Show all 35 until reset"). `newItem` checks against this same read, so an old built-in is never duplicated. A catalog option carries its `slug` (CAT-3 P11-i), for the DAL to attach the taxonomy and "How to" from the catalog const; a household option never does, and the slug stops at the DAL (`options-catalog-slug-is-the-name`, `options-household-items-carry-a-slug`).
     ⚠️ Latent, and gated by the constraint on `movements.deleted_at` in `schema.ts` (nothing may
     set it until the indexes and the resolver change together): once something hides a movement
     (`MOV-1`'s merge, or C4m), `newItem`'s step 2 misses the hidden row, and the resolver
@@ -198,6 +200,31 @@ flowchart TD
     `name_taken` (`copy-name-not-folded`). A replay is answered once the target program is found, before the source and the name, so it still answers after the source was removed (`copy-checks-name-before-replay`, `copy-checks-the-source-before-replay`). A live card's hidden quantity stays out (`copy-takes-hidden-quantities`), and a copy into another program carries its items too (`copy-elsewhere-leaves-out-the-items`). The source must be a live workout of a live program of the
     household (`copy-takes-a-removed-programs-workout`; `insertWorkoutOwnedBy` refuses another
     household's source by itself). It goes last on each weekday named (`copy-puts-itself-first`). Removed cards stay out and the stored order is kept (`copy-takes-removed-cards`, `copy-ignores-the-order`); every quantity column travels, a range included (`copy-drops-the-range`); the provenance names the SOURCE program, frozen (`copy-records-the-targets-name`); a name a removed workout had is free (`copy-name-counts-removed-workouts`). The source is read in one statement, not locked: locking it would let a copy P→Q and a copy Q→P deadlock.
+19. 🔴 **Put on looks for the athlete's row of this program before it inserts** (6c-i; ADR 0007
+    Amendment 4, C15). Already on it (an open row, started or still to start): skipped, so a replay
+    is one effect without a client id. Its last day is today (Take off was tapped today): the
+    **same row** is reopened (`active_to` cleared, its start kept), whatever `from` says. Otherwise a
+    new row from `from`. A blind insert would either hit the start key on the closed row or put the
+    program on twice today (`schema.ts` → `programAssignments`). Each put on closes up the gaps a
+    take off left in the athlete's order and takes the last place, through the band; it writes all
+    seven weekday rows; `from` is today or tomorrow of the `today` the caller passes, and an
+    archived athlete is `not_found` (mutations `put-on-takes-any-start-day`,
+    `put-on-takes-an-archived-athlete`, `put-on-athletes-unscoped`, `put-on-takes-a-legacy-block`,
+    `put-on-never-reopens`, `put-on-leaves-the-gap`, `put-on-six-weekdays`,
+    `put-on-reopens-an-ended-stretch`, `put-on-reopens-before-closing-the-gap`,
+    `put-on-takes-a-removed-athlete`, `put-on-takes-a-removed-program`,
+    `put-on-reopens-only-a-start-today`). ⚠️ **A reopen writes no
+    weekday rows: it trusts take off to leave them live.** 6d's take off must not hide them, or a
+    reopened program is on but never due (`assignmentDueOn`), and 6d proves a reopen after a real
+    take off is due today. The seed passes each start day as `today`, so its past
+    starts are ones a person made that day; it puts an athlete on in their own order and writes a
+    program once (`seed-fixtures-reverses-the-order`, `seed-fixtures-rewrites-a-seeded-program`).
+    State a person can make in the app is a warning, never a throw: an archived seed athlete is put
+    on nothing, and a program whose item the household has under another type, or whose name a
+    program of the household already has, is left out, since `migrate-preview.yml` seeds the long-lived preview
+    database on every push (`seed-fixtures-puts-on-an-archived-athlete`,
+    `seed-fixtures-uses-a-wrongly-typed-item`). An item the catalog has is the catalog's in the
+    seeded workouts (`newItem`): "DB bench press" is seeded as the catalog's Dumbbell Bench Press.
 
 ## Changing it
 

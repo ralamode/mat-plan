@@ -27,6 +27,7 @@ import {
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
   PROFILE_NAME_MAX,
+  PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
   QUANTITY_SLOT,
   QUANTITY_SLOT_ROWS,
@@ -60,6 +61,7 @@ import {
   type RoutineConfig,
   uuidSchema,
 } from '@mat-plan/shared';
+import { FIXTURE_ITEMS } from '@mat-plan/shared/program/fixtures';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
@@ -229,9 +231,14 @@ const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
 // The 1c-4 seed guard's proof is BELOW, after the idempotency block it depends on — see
 // "AUTH-1 1c-4: the seed refuses a household it does not own".
 
-// Seed twice → must be idempotent.
-await seed(asPg, { fixtures: true });
-await seed(asPg, { fixtures: true });
+// Seed twice → must be idempotent. The second run is asserted, so a seed that cannot run twice fails
+// on a named line (FAM-1 6c-i: the fixture programs are written once, then left alone).
+await seed(asPg, { fixtures: true }).catch((e: unknown) =>
+  assert.fail(`FAM-1 6c-i: the first seed run succeeds (${String(e)})`),
+);
+await seed(asPg, { fixtures: true }).catch((e: unknown) =>
+  assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
+);
 
 const units = await db.select().from(schema.units);
 const profiles = await db.select().from(schema.profiles);
@@ -614,10 +621,25 @@ assert.equal(
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
 assert.equal(
-  movements.length,
+  movements.filter((m) => m.householdId === null).length,
   MOVEMENT_SEED_ROWS.length,
   'movements: full catalog seeded from the shared const, exactly once',
 );
+// The seed writes household items only through the fixture programs (FAM-1 6c-i): each one in the
+// seed household, and each named for a fixture item the catalog does not already have.
+{
+  const [seedHousehold] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+  const fixtureNames = new Set(FIXTURE_ITEMS.map((item) => item.name));
+  const owned = movements.filter((m) => m.householdId !== null);
+  assert.ok(
+    owned.length > 0 &&
+      owned.every((m) => m.householdId === seedHousehold?.id && fixtureNames.has(m.name)),
+    'movements: the seed writes household items only for the fixture programs, in the seed household',
+  );
+}
 console.log(
   `✓ full catalog seeded: ${activityTypes.length} activity_types, ${metricDefinitions.length} metric_definitions, ${movements.length} movements`,
 );
@@ -3793,15 +3815,24 @@ console.log('✓ V1-10: program_blocks / prescriptions / prescription_targets co
 // The frozen migration day_role list can't silently drift from the shared DAY_ROLES const.
 await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 
-// The seed is now POPULATED with Ray's real block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
-assert.ok(PROGRAM_SEED.length >= 1, 'V1-10: PROGRAM_SEED is populated (Ray’s real block)');
+// The seed is now POPULATED with the maintainer's authored block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
+assert.ok(
+  PROGRAM_SEED.length >= 1,
+  'V1-10: PROGRAM_SEED is populated (the maintainer’s authored block)',
+);
 const seededBlocks = (
-  (await db.execute(sql`select count(*)::int as count from program_blocks`)).rows as unknown as {
+  (
+    await db.execute(
+      sql`select count(*)::int as count from program_blocks where kind = ${PROGRAM_BLOCK_KIND.legacy}`,
+    )
+  ).rows as unknown as {
     count: number;
   }[]
 )[0].count;
-// EXACT count (not just ≥1): the DB must hold precisely the blocks PROGRAM_SEED declares — nothing extra
-// (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard provided).
+// EXACT count (not just ≥1): the DB must hold precisely the LEGACY blocks PROGRAM_SEED declares — nothing
+// extra (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard
+// provided). Since FAM-1 6c-i the seed also writes the fixture TEMPLATE programs, so a stray template
+// block is caught by `verify/schema.ts`'s 4a-i kind check, which names the fixture programs alone.
 assert.equal(
   seededBlocks,
   PROGRAM_SEED.length,
@@ -6932,6 +6963,9 @@ console.log(
       await tx.execute(sql`delete from entries where profile_id in ${hhProfiles}`);
       await tx.execute(sql`
         delete from prescription_targets where prescription_id in (
+          select id from prescriptions where block_id in ${hhBlocks})`);
+      await tx.execute(sql`
+        delete from prescription_quantities where prescription_id in (
           select id from prescriptions where block_id in ${hhBlocks})`);
       await tx.execute(sql`delete from prescriptions where block_id in ${hhBlocks}`);
       await tx.execute(sql`delete from movements where household_id = ${ten2bHousehold.id}`);

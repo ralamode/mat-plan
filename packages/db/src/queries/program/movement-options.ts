@@ -59,8 +59,9 @@ const PICKER_SLUGS = Object.keys(MOVEMENT_PICKER_ENTRIES) as Array<
  *   reaches, and listing it would offer a second "Push-ups".
  * - **Every household item is listed, used or not**, and every catalog row the picker map names.
  *   `newItem` decides "this item exists" over this list (`existingItem`), so an item left out could be
- *   added again under a re-spelled name. **What the picker SHOWS is the DAL's:** only catalog rows the
- *   library has an entry for, plus the household's own (maintainer, 2026-11-17), and in what order.
+ *   added again under a re-spelled name. **What the picker SHOWS, and in what order, is the DAL's**
+ *   (`apps/web/lib/dal/program/picker.ts`): every catalog row here, the old built-ins included, until
+ *   the fresh start (CAT-3's R2) replaces them, plus the household's own (maintainer, 2026-11-17).
  *   This is one read with no filters (CAT-3 later adds each catalog row's taxonomy).
  */
 export async function movementOptions(
