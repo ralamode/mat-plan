@@ -87,7 +87,13 @@ function Harness({
           {...common}
           multiple={{
             selected,
-            onToggle: (option) => setSelected((all) => [...all, option.publicId]),
+            // A real toggle: a second tap unticks, as the item picker's does.
+            onToggle: (option) =>
+              setSelected((all) =>
+                all.includes(option.publicId)
+                  ? all.filter((id) => id !== option.publicId)
+                  : [...all, option.publicId],
+              ),
             onCreate: vi.fn(),
             createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
             noMatchHint: 'No item matches.',
