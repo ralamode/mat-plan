@@ -3280,8 +3280,22 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
     const listSource = PROGRAM_LIST_FIXTURE_SOURCES['programs-list-archived-athlete'];
     const viewSource = PROGRAM_VIEW_FIXTURE_SOURCES['family-program-archived-athlete'];
     const { scope, ids } = await seedViewWorld(tx, viewSource.before ?? viewSource.world);
+    // An athlete on no program is a key too, with no programs.
+    const loneClient = newId();
+    await insertProfileOwnedBy(exec, scope, {
+      name: 'Athlete Unassigned',
+      kind: PROFILE_KIND.kid,
+      clientId: loneClient,
+    });
+    const lone = (await profileByClientId(exec, scope, loneClient))!.publicId;
     // Programs by athlete, before the archive: every athlete, their programs in their own order.
     const byAthlete = await readProgramsByAthlete(exec, scope, today);
+    assert.deepEqual(
+      byAthlete.get(lone),
+      [],
+      'FAM-1 6c-ii: readProgramsByAthlete maps an athlete on no program to no programs',
+    );
+    byAthlete.delete(lone);
     assert.deepEqual(
       [...byAthlete.entries()],
       world.athletes.map((a) => [
@@ -3300,7 +3314,7 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
     assert.deepEqual(
       await readProgramList(exec, scope, listSource.world.today),
       translated(programsListArchivedAthlete, ids),
-      'FAM-1 6c-ii: the program-list read deep-equals programs-list-archived-athlete',
+      'FAM-1 6c-ii: with an archived athlete, the Programs list matches its fixture (programs-list-archived-athlete)',
     );
     assert.deepEqual(
       await readProgramView(exec, scope, ids.get(fixtureIds.program(viewSource.program))!, {
@@ -3308,7 +3322,7 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         tz: VIEW_TZ,
       }),
       translated(familyProgramArchivedAthlete, ids),
-      'FAM-1 6c-ii: the program-view read deep-equals family-program-archived-athlete',
+      'FAM-1 6c-ii: with an archived athlete, the program page matches its fixture (family-program-archived-athlete)',
     );
     assert.equal(
       (await readProgramsByAthlete(exec, scope, today)).has(ids.get(fixtureIds.athlete('a2'))!),

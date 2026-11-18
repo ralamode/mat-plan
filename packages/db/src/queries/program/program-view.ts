@@ -16,10 +16,10 @@ import { athletesOnPrograms } from './athletes';
 import { readWeek } from './week';
 
 /**
- * The household's calendar day of an instant, in `tz`. In JS, with `Intl`, the rule the app's
- * `localDayIso` (`apps/web/lib/date.ts`) follows, so a zone the app accepts reads the same here:
- * Postgres's `at time zone` reads a bare offset (`+05:00`) with the sign reversed (POSIX), `Intl`
- * does not.
+ * The household's calendar day of an instant, in `tz`. In JS, with `Intl.formatToParts`, as the
+ * app's `localDayIso` (`apps/web/lib/date.ts`) builds it: assembled by part, never from a locale's
+ * format string. So a zone the app accepts reads the same here: Postgres's `at time zone` reads a
+ * bare offset (`+05:00`) with the sign reversed (POSIX), `Intl` does not.
  */
 function localDayOf(tz: string): (instant: Date) => string {
   let format: Intl.DateTimeFormat;
@@ -33,7 +33,12 @@ function localDayOf(tz: string): (instant: Date) => string {
   } catch {
     throw new Error('readProgramView needs a time zone Intl accepts');
   }
-  return (instant) => format.format(instant);
+  return (instant) => {
+    const parts = format.formatToParts(instant);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  };
 }
 
 /**

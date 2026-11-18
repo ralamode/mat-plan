@@ -5,9 +5,11 @@ import {
   programListSchema,
   programRefSchema,
   type ProgramList,
+  type ProgramView,
 } from '@mat-plan/shared';
 
-type ProgramRef = { programPublicId: string; name: string };
+/** A program, by id and name: the contract's `programRefSchema`, as `ProgramView.otherPrograms` holds it. */
+type ProgramRef = ProgramView['otherPrograms'][number];
 
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
