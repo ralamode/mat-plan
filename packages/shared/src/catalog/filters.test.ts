@@ -172,7 +172,12 @@ describe('searching under the filters (P7 to P10)', () => {
   it('with no filter on, nothing changes and nothing is set apart', () => {
     for (const query of ['push', 'dumbell', 'row zzzz', 'incline push-up', '', 'zzzz']) {
       const plain = search(query);
-      expect(plain).toMatchObject({ custom: [], hitsOutsideFilters: [], outsideFilters: 0 });
+      expect(plain).toMatchObject({
+        custom: [],
+        hitsOutsideFilters: [],
+        outsideFilters: 0,
+        outsideWithoutData: 0,
+      });
       for (const off of [NO_MOVEMENT_FILTERS, chosen(), filters({ chosenEquipment: ['bench'] })]) {
         expect(search(query, off), query).toEqual(plain);
       }
@@ -360,6 +365,7 @@ describe('the same search, over the test library (properties)', () => {
           shown.length + under.custom.length,
         );
         expect(shown.length + under.custom.length + under.outsideFilters, label).toBe(found.length);
+        expect(under.outsideWithoutData, label).toBeLessThanOrEqual(under.outsideFilters);
         expect(under.hitsOutsideFilters, label).toEqual(
           plain.hits.filter((option) => option.isCatalog && !passesMovementFilters(option, given)),
         );
@@ -502,6 +508,29 @@ describe('the counts in the panel (P7)', () => {
     expect(found.custom).toEqual([]);
     // With no filter on it is a row like any other.
     expect(search('push', undefined, [pushUp, bare]).matches).toEqual([pushUp, bare]);
+  });
+
+  it('⏳ says how many of the rows outside the filters have no taxonomy at all (K22)', () => {
+    const bare: Option = { name: 'Push press', isCatalog: true, aliases: [] };
+    // Incline push-up needs a bench, so "No equipment" removes it for a reason; `bare` is removed
+    // because nothing is known about it. Both are outside the filters; one is without data.
+    const found = search('push', NONE, [pushUp, incline, bare]);
+    expect(found.matches).toEqual([pushUp]);
+    expect(found.outsideFilters).toBe(2);
+    expect(found.outsideWithoutData).toBe(1);
+    // A row with taxonomy that the filters remove is never counted as without data.
+    expect(search('push', NONE, [pushUp, incline]).outsideWithoutData).toBe(0);
+    // A hit is shown, not counted, with or without taxonomy.
+    const hit = search('push press', NONE, [pushUp, bare]);
+    expect(hit.hitsOutsideFilters).toEqual([bare]);
+    expect(hit).toMatchObject({ outsideFilters: 0, outsideWithoutData: 0 });
+    // With no filter on nothing is outside them.
+    expect(search('push', undefined, [pushUp, bare]).outsideWithoutData).toBe(0);
+    // A custom item has no equipment field either, and is never counted: it is not outside the
+    // filters, it is set apart in `custom`.
+    const withCustom = search('push', NONE, [pushUp, incline, bare, ladder]);
+    expect(withCustom.custom).toEqual([ladder]);
+    expect(withCustom).toMatchObject({ outsideFilters: 2, outsideWithoutData: 1 });
   });
 
   it('lists equipment by how many movements each would leave, most first; zero last (P7)', () => {

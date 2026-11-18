@@ -14,17 +14,14 @@ import { describe, it } from 'vitest';
  * review tab carries the maintainer's `lgtm` (spec K21).
  */
 
-describe('owed by lane A: the tables (chunk A1)', () => {
+// Chunk A1 (the tables, #577) holds S2 to S5, the proven part of S1 and the tables half of S6:
+// `packages/db/scripts/verify/catalog.ts`, `verify/erasure.ts` for the delete order, and
+// `apps/web/test/program-tables-stay-dark.test.ts` for the four tables. What it leaves owed:
+describe('owed by lane A: what the tables chunk (A1) left', () => {
+  it.todo('S1: equipment and muscles hold a code and no label, and sit among REFERENCE_TABLES');
   it.todo(
-    'S1: equipment and muscles equal EQUIPMENT and MUSCLES after a seed, and are reference tables',
+    'S6: no module in apps/ reads movements.modality before P11-ii (the scan holds the tables only)',
   );
-  it.todo("S2: a household deletion leaves every global movement's equipment and muscle rows");
-  it.todo('S3: a second primary muscle row for one movement is refused');
-  it.todo('S4: a row with a household_id cannot be given a modality');
-  it.todo(
-    'S5: a global row with no pattern and no modality is refused; a non-strength catalog row is not',
-  );
-  it.todo('S6: no module in apps/ reads the new tables or column before the option read');
 });
 
 describe('owed by lane A: the seed (chunk A2, then A3)', () => {
