@@ -1,8 +1,8 @@
 # FAM-1 7b — the program builder's real pages
 
 > Backlog: [plan.md](../plan.md) row `FAM-1`; plan row **7b** in
-> [fam-1-family-program](./fam-1-family-program.md). Lane B. **Plan only:** no code until the
-> maintainer approves it.
+> [fam-1-family-program](./fam-1-family-program.md). Lane B. **Approved by the maintainer
+> (orchestrator's chat, 2026-11-18: "Approve (Recommended)").**
 
 ## Where this sits
 
@@ -344,10 +344,10 @@ The pin's replacement test checks three things:
 - ~~Q2, Home tiles~~: decided, step 15 (2026-11-18).
 - ~~Q3, whether 7b-i waits for lane P's caps~~: decided, yes, #605 is a merge gate (board).
 - ~~The copy refusal's cap field~~: decided, none (D13); the dialog names both causes.
-- **H7, held for the maintainer:** the program-deletion notice, (a) a runbook "remove one program on
-  request" or (b) a recorded gap. The roadmap thread recommends (a). 7b-i drafts both and merges
-  after the answer. If (b), drop "yet" from the permanence hints or cite a row; if (a), the runbook
-  ships before the notice says "ask" (privacy round 2).
+- ~~**H7**~~ **Decided by the maintainer (2026-11-18): (a), the runbook.** 7b-i's notice says "ask,
+  and a program or workout is removed". The runbook section "Remove one program on request" is
+  Native Scaling's (PRIV-3). **7b-i merges only once that section is on `main`**, so the notice is
+  true when it lands.
 - **Asked of the contract owner:** `catalogHowToSchema` beside `CatalogHowTo` (gates PR 1); the
   `option.ts` docblock; the `family-program-full-weekday` fixture (already queued).
 
