@@ -1,4 +1,4 @@
-import { ON_PROGRAM, type DayPlan } from '@mat-plan/shared';
+import { ON_PROGRAM, showsOnlyLogged, type DayPlan } from '@mat-plan/shared';
 
 import { PROGRAM_COPY } from './day-copy';
 
@@ -6,17 +6,11 @@ import { PROGRAM_COPY } from './day-copy';
  * The day screen's notices, as pure functions of the plan. No directive: a server component (the
  * "not on a program" notice, the page at 12c) may call them, which an export of the `'use client'`
  * `day-screen.tsx` could not.
+ *
+ * "Shows only what was logged" is the contract's `showsOnlyLogged` (C23): an older day, and an
+ * archived athlete's today or yesterday. The resolver, the fixtures and these notices read that one
+ * test, so the rest line and the "No workouts logged" line can never both show.
  */
-
-/**
- * Whether the day shows only what was logged: neither writable (today and yesterday, for an athlete
- * who is not archived) nor a look-ahead day: an older day, and an archived athlete's today or
- * yesterday.
- * The rest line and the "No workouts logged" line read this one test, so a day is never both.
- */
-export function showsOnlyLogged(plan: DayPlan): boolean {
-  return !plan.writable && !plan.future;
-}
 
 /**
  * The rest-day line (FAM-1 step 13d), worded as v12 has it (maintainer, 2026-11-16): when every

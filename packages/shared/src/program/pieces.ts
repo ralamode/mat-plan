@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { uuidSchema } from '../id';
-import { matchMovementOptions, type MatchableMovement } from '../movement-search';
+import { searchMovementOptions, type MatchableMovement } from '../movement-search';
 import { TRACKING_TYPES, type TrackingType } from '../movements';
 import { PROFILE_NAME_MAX } from '../profiles';
 import {
@@ -363,17 +363,29 @@ export function hasSetRows(type: TrackingType): boolean {
  * The item a typed name already names, or `undefined`: **the one definition of "this item exists"
  * for `newItem`**. The preview's fake reads it, and the real writer will (plan step 6a).
  *
- * It is the picker's own rule (`matchMovementOptions`), not a second one: the name's key equals an
- * item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups` are one item), or equals the
- * key of one of an item's aliases (`RDL`, `rdl`). Those are exactly the two cases in which the
- * picker withholds "add as new", so the server and the picker cannot disagree about a duplicate.
+ * It is the picker's own rule (`searchMovementOptions`), not a second one. Three cases, and they
+ * are exactly the three in which the picker withholds "add as new", so the server and the picker
+ * cannot disagree about a duplicate:
  *
- * When more than one item qualifies (a household item named `RDL` made before this rule, beside
- * the catalog's Romanian Deadlift), the first in the picker's order is the answer: a catalog item
- * before a household one, then by name. 🔴 **So `isCatalog` is required here**, where the picker's
- * own type leaves it optional: an option list passed without it would compile and silently pick by
- * name alone, and the server would then select a different item than the picker offers. A caller
- * holding `MovementOptionDTO`s maps `owner === 'catalog'` to it, as the picker does.
+ * 1. the name's key equals an item's key (`movementNameKey`: `push ups`, `Push-Ups` and `pushups`
+ *    are one item);
+ * 2. it equals the key of one of an item's aliases (`RDL`, `rdl`);
+ * 3. **it spells an item once its equipment short forms are expanded** (`db row` for Dumbbell row;
+ *    contract change C30, the maintainer's decision of 2026-11-17: an abbreviation that spells a
+ *    movement is that movement).
+ *
+ * When more than one item qualifies, the answer is the picker's first row, which is the row its
+ * Enter picks: an item whose own name it is, before an item it is another name of, before one a
+ * short form spells; then the shorter spelling (two spellings of one name tie); then a catalog
+ * item before a household one, then by name (CAT-3 spec P2).
+ * So a household item literally named `RDL`, made before this rule, is what `RDL` means in that
+ * household, and the catalog's Romanian Deadlift is still found by its own name. (Until C30 the
+ * catalog's item won that case; the picker now lists a movement's own name first, and the server
+ * follows it so the two never name different items.) 🔴 **`isCatalog` is required here**, where
+ * the picker's own type leaves it optional: an option list passed without it would compile and
+ * silently break a tie by name alone, and the server would then select a different item than the
+ * picker offers. A caller holding
+ * `MovementOptionDTO`s maps `owner === 'catalog'` to it, as the picker does.
  *
  * ⚠️ `options` must be every item the household can pick, with each catalog item's `aliases`. An
  * item left out can be duplicated; an alias left out is not honoured.
@@ -385,8 +397,11 @@ export function existingItem<T extends MatchableMovement & { readonly isCatalog:
   options: readonly T[],
   name: string,
 ): T | undefined {
-  const { matches, exact, aliasHit } = matchMovementOptions(options, name);
-  return exact || aliasHit !== null ? matches[0] : undefined;
+  const found = searchMovementOptions(options, { query: name });
+  // An exact name or an exact alias as typed is always the first row: only a row a short form
+  // spells shares its quality, and that row comes after it.
+  if (found.exact || found.aliasHit !== null) return found.matches[0];
+  return found.shortFormHit ?? undefined;
 }
 
 /** The prescribed numbers of one item, as a `DayItem` carries them in `target`. */
@@ -507,12 +522,42 @@ export const COPY_NAME_SUFFIX = ' (copy)';
 /**
  * The name a copy of a workout takes in its own program when the person gives none, and what the
  * Copy dialog prefills its Name field with: the workout's name and " (copy)", **cut so the whole
- * still fits `WORKOUT_NAME_MAX`** (a 30-character name keeps its first 23). One function, so the
- * dialog's prefill and the writer's default cannot differ (contract change C15).
+ * still fits `WORKOUT_NAME_MAX`** (a 30-character name keeps at most its first 23). One function,
+ * so the dialog's prefill and the writer's default cannot differ (contract change C15).
+ *
+ * 🔴 **The cut is by whole characters, counted the way the name's schema counts** (contract change
+ * C33, found by step 6a-iii-b's review, the first writer to store one). `workoutNameSchema` limits
+ * a name's `length`, which counts an emoji as two; a plain `slice` at that length can keep the
+ * first half of one, and a database stores that half as a replacement mark. So the name is taken a
+ * character at a time while it fits. **Only when something was cut**, what the cut left hanging
+ * is dropped: a space (or the copy would read `Heavy  (copy)`, with two) and a joiner that no
+ * longer joins anything. A name with room is kept exactly as it is.
+ *
+ * By character and not by what a person sees as one (a flag, a family, a skin tone are several):
+ * splitting those needs `Intl.Segmenter`, whose answer depends on the engine's version, and the
+ * browser's prefill and the server's default must be the same string. A cut inside one leaves a
+ * plainer emoji, never a broken one.
  */
 export function copyName(name: string): string {
-  return `${name.slice(0, WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length)}${COPY_NAME_SUFFIX}`;
+  const room = WORKOUT_NAME_MAX - COPY_NAME_SUFFIX.length;
+  let kept = '';
+  let cut = false;
+  // A string iterates by code point, so a surrogate pair is taken whole or not at all.
+  for (const character of name) {
+    if (kept.length + character.length > room) {
+      cut = true;
+      break;
+    }
+    kept += character;
+  }
+  if (!cut) return `${kept}${COPY_NAME_SUFFIX}`;
+  // If the clean-up would leave nothing, the name is kept as cut: a copy still has a name.
+  const tidy = kept.replace(DANGLING_AT_A_CUT, '');
+  return `${tidy === '' ? kept : tidy}${COPY_NAME_SUFFIX}`;
 }
+
+/** Trailing white space and zero-width joiners: what a cut can leave at the end of a name. */
+const DANGLING_AT_A_CUT = /[\s\u200d]+$/u;
 
 /**
  * The unit an item logs in, which is `DayItem.unit`: `null` for a type with no quantity (a Check,

@@ -37,7 +37,8 @@ import {
  * needs to change one clones it first (`structuredClone`).
  *
  * `picker-options` is not here: it uses the web's `MovementOptionDTO`, so it is step 0b's
- * (`apps/web/app/design/program/picker-options.ts`), built from `FIXTURE_ITEMS` below.
+ * (`apps/web/app/design/program/picker-options.ts`), built from `FIXTURE_ITEMS` below and the test
+ * library (`CATALOG_FIXTURE`).
  */
 
 export { FIXTURE_SWITCH_DAY, FIXTURE_TODAY } from './world';

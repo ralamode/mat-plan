@@ -96,6 +96,10 @@ it proves anything. Run it.
 
 ## 5. Local gates
 
+Where each gate runs is one list: [AGENTS.md](../../../AGENTS.md) → "Local hooks vs CI merge-gates".
+A schema change is one of its run-locally cases until DX-18 PR 2: `pnpm verify` carries
+`db:mutations`, which no CI job runs yet.
+
 ```bash
 pnpm db:generate && git status --short packages/db/migrations   # must be clean: no drift
 pnpm verify                                                       # includes db:verify
