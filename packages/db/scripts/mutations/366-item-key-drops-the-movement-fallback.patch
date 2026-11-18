@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/program-rows.ts b/packages/db/src/queries/day/program-rows.ts
+index cc40ddc6..3e9129c1 100644
+--- a/packages/db/src/queries/day/program-rows.ts
++++ b/packages/db/src/queries/day/program-rows.ts
+@@ -69,7 +69,7 @@ export function programItemKey(row: {
+   prescriptionId: number | null;
+   movementId: number | null;
+ }): string {
+-  return row.prescriptionId !== null ? `p:${row.prescriptionId}` : `m:${row.movementId}`;
++  return `p:${row.prescriptionId}`;
+ }
+ 
+ /** The fields {@link byFirstLogged} orders by: the row's set, when it was logged, and its id. */

@@ -516,6 +516,9 @@ The shapes those lanes agree on, the fakes and the preview route are
    is worth knowing before B1-2 unifies them:
    - **strength** → `reselectLiveByClientId` throws `no live row for client_id`, which reaches
      `error.tsx` and loses the form. `db:verify`'s B0 case asserts it; mutation `39` proves it fails.
+     The same throw answers a row held by **someone else** (another athlete's session, another
+     session's entry or superset): the re-select carries an owner conjunct, same message on purpose
+     ([strength-logging.md](./strength-logging.md) invariant 6; mutations `440`–`443`).
    - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
      branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
      now names this case. Also asserted in the B0 block.
@@ -740,6 +743,19 @@ it cannot tell a fresh intent from a replay — and a v1.5 sync replay that sile
 deleted on another device would be the worst outcome in this feature. The per-form lifetime table is
 in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.md` owns the rest.
 
+15. 🔴 **The export's strength log is folded beside its query, and a session must be the athlete's**
+    (FAM-1 14a, [plan](../plans/fam-1-14-export.md); the file's own rules are
+    [csv-export-contract.md](../csv-export-contract.md) → "Program rows").
+    - `foldStrengthMonth` lives in `queries/export-month.ts`, not the DAL, so `db:verify` proves the
+      chain from `logRow` to the file (`verify/day.ts`, `verifyExport`). `lib/dal/export.ts` only
+      calls it and fills `prescribed`.
+    - The fold keys a program row on the day resolver's own `programItemKey` (mutation 366), so the
+      page and the export cannot disagree about what one item is.
+    - **The sessions join's ON carries `sessions.profile_id = entries.profile_id`** and
+      `sessions.deleted_at IS NULL` (runbook (i)): a session of another athlete, or a hidden one,
+      lends no `workout_name` and no `session_type` (mutation 365). In the ON, not the WHERE, so the
+      athlete's own entry is still exported.
+
 ## Traps
 
 - **A household-scoped write in the seed goes inside the `fixtures` branch** (`seedFixtures`), never in
@@ -805,7 +821,7 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
     `household.ts#reportScopeMiss`, the probe). Two lists rather than one because assertion 1 **cannot** see the
     probe: it resolves a scope to classify the outcome and then queries without it, so it reads as
     scoped there. The unit is a **top-level declaration, exported or not**, because a private helper
-    reaching `db` unscoped is the same leak as a public one (`export.ts` → `prescribedFor` is that
+    reaching `db` unscoped is the same leak as a public one (`export.ts` → `liveMatchesFor` is that
     shape). Comments are stripped, so a `// TODO: getHouseholdScope()` cannot satisfy it. And a
     **dead-entry** assertion fails if an allowlisted function stops needing its entry, so `TEN-2` has
     to delete `findOrCreateMovementId`'s rather than leave it standing — the

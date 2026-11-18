@@ -12,6 +12,10 @@ export const STRENGTH_LOG_HEADER = [
   'load',
   'prescribed',
   'notes',
+  // FAM-1 14a: the workout's FROZEN name (`sessions.workout_name`), never an id. Last, so the first
+  // eight columns and the fixtures that pin them are unchanged. `workout_name`, not `workout`: every
+  // program row's `session_type` already reads `workout`.
+  'workout_name',
 ] as const;
 
 /** One logged movement, with everything the row needs resolved by the caller. */
@@ -23,6 +27,8 @@ export type StrengthLogRow = ExportMovement & {
   /** The plan, verbatim. NEVER rewritten to match what happened — that gap is the column's purpose. */
   prescribed: string;
   notes: string;
+  /** The session's frozen workout name; `null` outside a program (the cell is then empty). */
+  workoutName: string | null;
 };
 
 /**
@@ -52,6 +58,7 @@ export function buildStrengthLog(rows: readonly StrengthLogRow[]): string {
         load,
         row.prescribed,
         row.notes,
+        row.workoutName,
       ],
       STRENGTH_LOG_HEADER,
     );

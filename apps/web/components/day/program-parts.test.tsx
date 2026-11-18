@@ -107,8 +107,15 @@ describe('AthleteSwitcher', () => {
 describe('NotOnAProgram', () => {
   it('no-program: not on a program yet, with no link while there is no Programs page', () => {
     render(<NotOnAProgram plan={noProgram} />);
-    expect(screen.getByText(PROGRAM_COPY.notYet)).toBeTruthy();
+    expect(noProgram.writable).toBe(true);
+    expect(screen.getByText(`${PROGRAM_COPY.notYet} ${PROGRAM_COPY.notYetLogHere}`)).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('no-program on a day that logs nothing: no "log here" (FAM-1 12c)', () => {
+    render(<NotOnAProgram plan={{ ...noProgram, writable: false }} />);
+    expect(screen.getByText(PROGRAM_COPY.notYet)).toBeTruthy();
+    expect(screen.queryByText(new RegExp(PROGRAM_COPY.notYetLogHere))).toBeNull();
   });
 
   it('no-program with a Programs page: asks for the athlete to be put on one, and links there', () => {

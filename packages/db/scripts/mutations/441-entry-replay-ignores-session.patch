@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
+index e4b11183..d6c54f54 100644
+--- a/packages/db/src/writers/strength-session.ts
++++ b/packages/db/src/writers/strength-session.ts
+@@ -269,7 +269,7 @@ async function writeSessionStrengthEntry(
+         exec,
+         schema.entries,
+         args.clientId,
+-        eq(schema.entries.sessionId, args.sessionId),
++        sql`true`,
+       )),
+       created: false,
+     };

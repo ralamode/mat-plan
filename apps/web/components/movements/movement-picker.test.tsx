@@ -8,10 +8,8 @@ import {
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
   EQUIPMENT_CODE,
-  MODALITY,
   SUPERVISION_KIND,
   type CatalogHowTo,
-  type CatalogOptionTaxonomy,
 } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -26,6 +24,14 @@ import {
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { SHEET_COPY } from '@/components/ui/sheet';
 
+import {
+  catalogOption,
+  householdOption,
+  pickerTrigger,
+  stubSheetHistory,
+  TEST_TAXONOMY,
+} from '@/test/movement-picker-fixtures';
+
 import { listedAs, MovementPicker, type TodaysProgramForPicker } from './movement-picker';
 
 afterEach(cleanup);
@@ -38,64 +44,10 @@ afterEach(cleanup);
 // `trackingType` is `weight_reps` on every option here: it is the default FAM-1 step 3 gives the
 // column, and no seeded row carries its own type until that step types each built-in by slug. From
 // then on `catalogOption` reads the row's.
-/**
- * The library fields a catalog option must carry (CAT-3 C0b-2), as a test default: a barbell lift
- * with no supervision and no instructions. ⚠️ Not `equipment: []`, which MEANS "No equipment". A
- * test that needs another shape passes `taxonomy`, typed as the contract's, so a misspelt or
- * missing field does not compile.
- */
-const TEST_TAXONOMY: CatalogOptionTaxonomy = {
-  modality: MODALITY.strength,
-  pattern: null,
-  equipment: [EQUIPMENT_CODE.barbell],
-  primaryMuscle: null,
-  secondaryMuscles: [],
-  supervision: null,
-  hasInstructions: false,
-};
-
-const catalogOption = (
-  name: string,
-  taxonomy: Partial<CatalogOptionTaxonomy> = {},
-): MovementOptionDTO => {
-  const row = MOVEMENT_SEED_ROWS.find((r) => r.name === name);
-  if (!row) throw new Error(`fixture: no seeded movement named ${name}`);
-  const entry = MOVEMENT_PICKER_ENTRIES[row.slug];
-  if (!entry) throw new Error(`fixture: ${row.slug} has no picker entry`);
-  return {
-    publicId: row.publicId,
-    name: row.name,
-    owner: 'catalog',
-    group: entry.group,
-    aliases: entry.aliases ?? [],
-    unitDefault: row.unitDefault,
-    isBodyweight: row.isBodyweight,
-    trackingType: TRACKING_TYPE.weight_reps,
-    ...TEST_TAXONOMY,
-    ...taxonomy,
-  };
-};
-
-const householdOption = (name: string, publicId: string): MovementOptionDTO => ({
-  publicId,
-  name,
-  owner: 'household',
-  unitDefault: null,
-  isBodyweight: false,
-  trackingType: TRACKING_TYPE.weight_reps,
-});
-
 const ALL_CATALOG = MOVEMENT_SEED_ROWS.map((r) => catalogOption(r.name));
 /** A household item literally named `RDL`, beside the catalog's Romanian Deadlift (C30's tie). */
 const HOUSEHOLD_RDL_ID = '00000000-0000-7000-8000-00000000a0d1';
-/**
- * ⚠️ **Queried from the DOM, not through `screen`.** Radix's modal dialog puts `aria-hidden` on the
- * rest of the document while it is open, and Testing Library's role queries skip hidden nodes — so
- * `getByRole('button', { name: 'Open' })` stops finding the trigger the moment the sheet opens, with
- * an error that reads as "the harness did not render". The last `main > button` is this render's
- * trigger regardless.
- */
-const trigger = () => [...document.querySelectorAll('main > button')].at(-1) as HTMLButtonElement;
+const trigger = pickerTrigger;
 
 function Harness({
   data,
@@ -1006,6 +958,8 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       '@mat-plan/shared',
       '@/components/ui/button',
       '@/components/ui/sheet',
+      // The filter panel (B2-ii): scanned here too, as a file of this folder.
+      '@/components/movements/movement-filter-panel',
       '@/lib/constants',
       '@/lib/utils',
       '@/lib/i18n/plural',
@@ -1044,10 +998,7 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
 describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: P13, P14, P16)', () => {
   // The sheet pops its history entry on close, and in jsdom that popstate lands in a LATER test and
   // closes its sheet; these tests await, so it arrives. Stubbed as item-picker.test.tsx does.
-  beforeEach(() => {
-    window.history.replaceState(null, '');
-    vi.spyOn(window.history, 'back').mockImplementation(() => {});
-  });
+  beforeEach(stubSheetHistory);
 
   const SQUAT = catalogOption('Back Squat', {
     equipment: [EQUIPMENT_CODE.barbell, EQUIPMENT_CODE.bench],

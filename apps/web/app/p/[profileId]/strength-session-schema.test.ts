@@ -143,9 +143,9 @@ describe('logStrengthSessionSchema — superset validation (V1-8-3c)', () => {
   });
 });
 
-// GAP-1 P2-2 / P2-3 — the CSV joins fields RAW (deliberately not RFC-4180), so a comma shifts every
-// downstream field in a row and a CR/LF splits the record. Guarded at the write boundary, which is the
-// same call `parseLoad` already makes for the load field.
+// GAP-1 P2-2 / P2-3 — guarded at the write boundary, the same call `parseLoad` already makes for the
+// load field. The rules were set when the CSV joined fields raw; since FAM-1 14a it quotes a comma (RFC
+// 4180), so the comma rule is an input rule now. A CR/LF would still split the record (`csvRow` refuses).
 describe('logStrengthSessionSchema — CSV-unsafe input is rejected at the boundary (GAP-1 P2-2)', () => {
   const withName = (movementName: string) =>
     logStrengthSessionSchema.safeParse(

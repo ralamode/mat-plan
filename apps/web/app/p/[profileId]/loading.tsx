@@ -22,19 +22,20 @@ export default function Loading() {
       {/*
         🔴 **These bars mirror the day page's HEADER, measured, not the picker's.** This file was
         first written by copying `app/p/loading.tsx`'s picker skeleton, which is the shape it exists
-        to stop reserving: the real header is the back link (44) + `h1` (36) + `DayNav`'s arrow row
-        and day strip (44 + 44) + the export link (44), so every element moved when the data landed.
-        A frame that reserves the wrong shape buys nothing over reserving none.
+        to stop reserving. Since FAM-1 12c the real header is the back link (44) + `h1` (36) + the
+        athlete switcher's row below `lg` (44) + `DayNav`'s arrow row and day strip (44 + 44); the
+        export link moved to the foot. Then the one notice every athlete sees until step 15 ("Not on
+        a program yet", ~64), then the sections. A frame that reserves the wrong shape buys nothing
+        over reserving none.
       */}
       <div className="flex flex-col gap-2">
         <Skeleton className="h-11 w-32" />
         <Skeleton className="h-9 w-48" />
-      </div>
-      <div className="flex flex-col gap-2">
+        <Skeleton className="h-11 w-48 lg:hidden" />
         <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-11 w-28" />
       </div>
+      <Skeleton className="h-16 w-full" />
       <div className="flex flex-col gap-3">
         <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />

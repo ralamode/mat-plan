@@ -1623,7 +1623,7 @@ const [sessionProfileA] = await db
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
-  .returning({ id: schema.profiles.id });
+  .returning({ id: schema.profiles.id, publicId: schema.profiles.publicId });
 const [sessionProfileB] = await db
   .insert(schema.profiles)
   .values({
@@ -1632,7 +1632,7 @@ const [sessionProfileB] = await db
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
-  .returning({ id: schema.profiles.id });
+  .returning({ id: schema.profiles.id, publicId: schema.profiles.publicId });
 
 /** Insert `values` into a session-graph table idempotently (onConflictDoNothing on client_id) and
  *  return the row id — re-selecting by client_id on a replay conflict. ONE helper so the three
@@ -1650,7 +1650,9 @@ async function upsertReturningId(
     .returning({ id: table.id });
   if (row) return row.id;
   // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the production writer's
-  // `reselectLiveByClientId` shape, not a shortcut.** Before V1-9b B0 the partial UNIQUE kept a
+  // `reselectLiveByClientId` guard, not a shortcut.** (Only that half: the writer's re-select also
+  // carries an owner conjunct, which this raw-SQL fixture has no foreign holders to need; the
+  // replay-owner block proves the writer's.) Before V1-9b B0 the partial UNIQUE kept a
   // hidden row out of the index, so a conflict implied a LIVE row and an unguarded re-select was
   // merely sloppy. B0 puts hidden rows back in the index, so a conflict can now be WITH a hidden
   // row — and this re-select would hand its id back and attach children to a dead parent. The
@@ -2520,10 +2522,11 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 
 // ── V1-30: a newly loggable unit round-trips from the REAL writer to the export read ───────────────
 // The CSV tests build rows by hand; this proves the stored side. Before V1-30 the session schema
-// refused `m` outright and a `kg` set made the export throw. The fold + CSV builder live in apps/web
-// (`foldStrengthRows`), out of reach here, so this asserts on what they consume: the quantity row's
-// (dimension, unit) and `strengthMonthRows`' unit + value — the bytes `20m`/`85kg` are pinned by the
-// strength-log CSV tests over those same fields.
+// refused `m` outright and a `kg` set made the export throw. This asserts on what the fold and the CSV
+// builder consume: the quantity row's (dimension, unit) and `strengthMonthRows`' unit + value; the
+// bytes `20m`/`85kg` are pinned by the strength-log CSV tests over those same fields. (Since FAM-1 14a
+// the fold, `foldStrengthMonth`, sits beside the query, and lane E's `verifyExport` asserts the
+// program rows' bytes through it.)
 {
   const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
   await writeStrengthSession(asPg, {
@@ -4937,7 +4940,7 @@ assert.equal(
 
 console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');
 
-// --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
+// --- a comma survives the column (the CSV quotes it: csv/row.ts quotes any field, FAM-1 14a) -----
 await insertSnapshot('movement', SNAP_COMMA);
 console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
 
@@ -9075,6 +9078,13 @@ console.log(
   );
 }
 
+/**
+ * The strength writer's refusal of a replay it may not answer: a hidden row (V1-9b B0) and a row
+ * someone else owns (the replay-owner block) share this message ON PURPOSE, so a caller cannot tell
+ * the two apart. One regex, so the two blocks cannot drift apart on it.
+ */
+const REPLAY_REFUSED = /no live row for client_id/;
+
 // ── V1-9b B0 — a hide no longer frees a `client_id` ───────────────────────────────────────────────
 //
 // 🔴 **The behavioural case comes FIRST, deliberately.** `db:verify` is fail-fast and the mutation
@@ -9125,7 +9135,7 @@ console.log(
   //     succeeds and this `rejects` never fires.
   await assert.rejects(
     () => writeStrengthSession(asPg, b0Args),
-    /no live row for client_id/,
+    REPLAY_REFUSED,
     'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
       'frees the client_id',
   );
@@ -9272,6 +9282,210 @@ console.log(
     '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden entry is REFUSED rather ' +
       'than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
       'slot arbiters still do',
+  );
+}
+
+// ── TD: a strength replay is answered only by a row the request owns ───────────────────────────────
+//
+// `client_id` is UNIQUE across each graph table, not per athlete, so `writeStrengthSession`'s
+// ON CONFLICT can meet ANOTHER athlete's row. Its re-select used to match on `client_id` alone and
+// answer with that row: a borrowed session (this request's entries attached to someone else's), a
+// borrowed superset, or an entry reported as saved that never was. The re-select now carries an
+// owner conjunct (session → profile, superset and entry → session), and a foreign holder is refused
+// with the same message as V1-9b B0's hidden row (plan: docs/plans/td-strength-replay-scope.md).
+//
+// Fixtures: client ids under `…0000000e8xxx`, days in 2026-06, which nothing else in this file or
+// `verify/*.ts` uses. Each `rejects` pins the message AND names its case, because the mutation runner
+// matches the first AssertionError line and a bare `rejects` would give every patch the same one.
+{
+  const cid = (n: string) => `019826b4-0000-7000-8000-0000000e8${n}`;
+  const graphOf = async (sessionClientId: string) => {
+    const [session] = await db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.clientId, sessionClientId));
+    if (!session) return null;
+    const members = await db
+      .select({ id: schema.entries.id, clientId: schema.entries.clientId })
+      .from(schema.entries)
+      .where(eq(schema.entries.sessionId, session.id));
+    return { id: session.id, members };
+  };
+  const entryExists = async (entryClientId: string) =>
+    (
+      await db
+        .select({ id: schema.entries.id })
+        .from(schema.entries)
+        .where(eq(schema.entries.clientId, entryClientId))
+    ).length > 0;
+  const one = (movementClientId: string, extra: object = {}) => ({
+    movementName: 'Bench Press',
+    unit: 'lb' as const,
+    movementId: movY.id,
+    clientId: movementClientId,
+    sets: [{ reps: 5, weight: 100 }],
+    ...extra,
+  });
+  const base = {
+    profilePublicId: sessionProfileA.publicId,
+    scope: A_SCOPE,
+    sessionType: SESSION_TYPES[0],
+    activityTypeId: scLiftActivityId,
+  };
+
+  // 1 · Control: athlete A logs S and replays it unchanged. Same session, one entry, one set. Without
+  //     this, every refusal below would also pass for a writer that throws on EVERY replay.
+  const sArgs = {
+    ...base,
+    day: '2026-06-01',
+    sessionClientId: cid('100'),
+    movements: [one(cid('101'))],
+  };
+  const s1 = await writeStrengthSession(asPg, sArgs);
+  const s2 = await writeStrengthSession(asPg, sArgs);
+  assert.equal(
+    s2.sessionId,
+    s1.sessionId,
+    'TD replay-owner: a same-athlete replay returns the same session',
+  );
+  const sGraph = await graphOf(cid('100'));
+  assert.deepEqual(
+    sGraph?.members.map((m) => m.clientId),
+    [cid('101')],
+    'TD replay-owner: a same-athlete replay writes no second entry',
+  );
+  const sSets = await db
+    .select({ id: schema.entrySets.id })
+    .from(schema.entrySets)
+    .where(eq(schema.entrySets.entryId, sGraph!.members[0].id));
+  assert.equal(sSets.length, 1, 'TD replay-owner: a same-athlete replay does not double the set');
+
+  // 2 · Same household, OTHER athlete, sending S's session id. 🔴 Mutation 440's assertion.
+  await assert.rejects(
+    () =>
+      writeStrengthSession(asPg, {
+        ...sArgs,
+        profilePublicId: sessionProfileB.publicId,
+        movements: [one(cid('201'))],
+      }),
+    REPLAY_REFUSED,
+    'TD replay-owner (2): another athlete of the same household cannot reuse a session client_id',
+  );
+  assert.equal(
+    await entryExists(cid('201')),
+    false,
+    'TD replay-owner (2): …and the refused entry was not written',
+  );
+  assert.deepEqual(
+    (await graphOf(cid('100')))?.members.map((m) => m.clientId),
+    [cid('101')],
+    'TD replay-owner (2): …and S still holds only its own entry',
+  );
+
+  // 3 · ANOTHER household. The positive control proves the profile and `movX` resolve under
+  //     B_SCOPE, so the refusal below is the replay's, reached past both pre-checks.
+  //     ⚠️ Not isolable: anything that reddens this reddens case 2 first.
+  const bBase = { ...base, profilePublicId: VERIFY_PROFILE_PUBLIC_ID, scope: B_SCOPE };
+  await writeStrengthSession(asPg, {
+    ...bBase,
+    day: '2026-06-02',
+    sessionClientId: cid('300'),
+    movements: [one(cid('301'), { movementId: movX.id })],
+  });
+  await assert.rejects(
+    () =>
+      writeStrengthSession(asPg, {
+        ...bBase,
+        day: '2026-06-01',
+        sessionClientId: cid('100'),
+        movements: [one(cid('302'), { movementId: movX.id })],
+      }),
+    REPLAY_REFUSED,
+    'TD replay-owner (3): another household cannot reuse a session client_id',
+  );
+  assert.equal(
+    await entryExists(cid('302')),
+    false,
+    'TD replay-owner (3): …and nothing was written',
+  );
+
+  // 4 · The SAME athlete's other session T carrying S's entry id: not a replay of this request, so
+  //     not a success. 🔴 Mutation 441's assertion (the entry's `session_id` conjunct).
+  await assert.rejects(
+    () =>
+      writeStrengthSession(asPg, {
+        ...base,
+        day: '2026-06-03',
+        sessionClientId: cid('400'),
+        movements: [one(cid('101'))],
+      }),
+    REPLAY_REFUSED,
+    'TD replay-owner (4): an entry client_id held by another session is refused, not reported as saved',
+  );
+  assert.equal(await graphOf(cid('400')), null, 'TD replay-owner (4): …and T was rolled back');
+
+  // 5 · Superset. W owns superset e8510 with members at orders 1 and 2. U reuses e8510 with its
+  //     member at order 3, so under 442 the mutated write SUCCEEDS silently instead of tripping
+  //     `uq_entries_superset_order`. 🔴 Mutation 442's assertion.
+  const SS = cid('510');
+  await writeStrengthSession(asPg, {
+    ...base,
+    day: '2026-06-04',
+    sessionClientId: cid('500'),
+    supersets: [{ clientId: SS }],
+    movements: [
+      one(cid('501'), { supersetClientId: SS, supersetOrder: 1 }),
+      one(cid('502'), { movementId: movX.id, supersetClientId: SS, supersetOrder: 2 }),
+    ],
+  });
+  await assert.rejects(
+    () =>
+      writeStrengthSession(asPg, {
+        ...base,
+        day: '2026-06-05',
+        sessionClientId: cid('600'),
+        supersets: [{ clientId: SS }],
+        movements: [one(cid('601'), { supersetClientId: SS, supersetOrder: 3 })],
+      }),
+    REPLAY_REFUSED,
+    'TD replay-owner (5): a superset client_id held by another session is refused',
+  );
+  assert.equal(await graphOf(cid('600')), null, 'TD replay-owner (5): …and U was rolled back');
+  const [ssRow] = await db
+    .select({ id: schema.supersets.id })
+    .from(schema.supersets)
+    .where(eq(schema.supersets.clientId, SS));
+  const ssMembers = await db
+    .select({ id: schema.entries.id })
+    .from(schema.entries)
+    .where(eq(schema.entries.supersetId, ssRow.id));
+  assert.equal(
+    ssMembers.length,
+    2,
+    "TD replay-owner (5): …and the superset still has only W's two members",
+  );
+
+  // 6 · The SAME athlete re-sending S's session id under ANOTHER day. Its entries would be dated
+  //     2026-06-06 inside a session dated 2026-06-01. 🔴 Mutation 443's assertion.
+  await assert.rejects(
+    () =>
+      writeStrengthSession(asPg, {
+        ...sArgs,
+        day: '2026-06-06',
+        movements: [one(cid('701'))],
+      }),
+    REPLAY_REFUSED,
+    "TD replay-owner (6): the athlete's own session id sent under another day is refused",
+  );
+  assert.equal(
+    await entryExists(cid('701')),
+    false,
+    'TD replay-owner (6): …and the refused entry was not written',
+  );
+
+  console.log(
+    '✓ TD replay-owner: a strength replay is answered only by a row the request owns — another ' +
+      "athlete's session, another household's, another day's, another session's entry or superset is refused",
   );
 }
 
