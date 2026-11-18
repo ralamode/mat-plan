@@ -15,7 +15,7 @@ RUNNER_SRC="$(cd "$(dirname "$0")" && pwd)/mutations.mjs"
 SCRIPTS_SRC="$(cd "$(dirname "$0")/../../../.github/scripts" && pwd)"
 # The runner takes the machine-wide heavy-run slot (DX-18 D3). Each setup points it at the throwaway
 # dir, so the test never touches a live slot; CI is unset so the slot is exercised, not skipped.
-unset CI GITHUB_ACTIONS MAT_PLAN_HEAVY_SLOT MAT_PLAN_HEAVY_SLOT_HELD
+unset CI GITHUB_ACTIONS MAT_PLAN_HEAVY_SLOT MAT_PLAN_HEAVY_SLOTS MAT_PLAN_HEAVY_SLOT_HELD
 pass=0
 fail=0
 pids=()

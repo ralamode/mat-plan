@@ -9,7 +9,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SLOT="$HERE/heavy-slot.mjs"
 LOCKLIB="$HERE/pid-lock.mjs"
-unset CI GITHUB_ACTIONS MAT_PLAN_HEAVY_SLOT MAT_PLAN_HEAVY_SLOT_HELD
+unset CI GITHUB_ACTIONS MAT_PLAN_HEAVY_SLOT MAT_PLAN_HEAVY_SLOTS MAT_PLAN_HEAVY_SLOT_HELD
 T="$(mktemp -d)"
 export MAT_PLAN_HEAVY_SLOT_PATH="$T/slot.json"
 pass=0
@@ -17,7 +17,8 @@ fail=0
 pids=()
 # Each tracked pid is stored with its start time, and cleanup stops it only while that still matches:
 # a pid reused by another lane's process on this shared machine is never signalled.
-start_of() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//;s/ *$//'; }
+# The same pinned environment pid-lock.mjs uses, so the two agree on a start time.
+start_of() { TZ=UTC LC_ALL=C LANG=C ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//;s/ *$//'; }
 track() { pids+=("$1|$(start_of "$1")"); }
 # SIGKILL <pid> only while it is still the process that started at <start>.
 own_kill() { [ -n "$2" ] && [ "$(start_of "$1")" = "$2" ] && kill -9 "$1" 2>/dev/null; return 0; }
@@ -161,6 +162,41 @@ for bad in 0 -1 two 1.5 17; do
   [ $? = 64 ] || no "MAT_PLAN_HEAVY_SLOTS=$bad is refused"
 done
 check "a slot count that is not 1 to 16 is refused (exit 64)" 'grep -qF "must be a whole number" "$T/out" && gone'
+
+# ── Time zone and pass-through signals ──────────────────────────────────────────────────────────
+TZ=UTC node "$SLOT" -- sleep 30 >"$T/hold.out" 2>&1 &
+HOLDER=$!
+track "$HOLDER"
+wait_for '[ -e "$MAT_PLAN_HEAVY_SLOT_PATH" ] && [ "$(field "holders.length" 2>/dev/null)" = 2 ]'
+CHILD="$(field 'holders[1].pid')"
+CHILD_START="$(field 'holders[1].start')"
+TZ=Asia/Tokyo node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "a holder started under TZ=UTC still holds against a taker under TZ=Asia/Tokyo" '[ "$code" = 2 ]'
+stop_holder
+
+MAT_PLAN_HEAVY_SLOT=off node "$SLOT" -- sleep 30 >"$T/out" 2>&1 &
+bypassed=$!
+track "$bypassed"
+sleep 0.5
+kill -TERM "$bypassed"
+wait "$bypassed" 2>/dev/null
+code=$?
+check "SIGTERM to a bypassed wrapper reaches its child: 143" '[ "$code" = 143 ]'
+
+# ── The steal guard ─────────────────────────────────────────────────────────────────────────────
+sh -c 'exit 0' &
+gone_pid=$!
+wait "$gone_pid"
+plant "$gone_pid" "Mon Jan  1 00:00:00 2024"
+printf '{"pid":%s,"holders":[{"pid":%s,"start":"%s"}]}' "$$" "$$" "$(start_of $$)" >"$MAT_PLAN_HEAVY_SLOT_PATH.steal"
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "a stale lock under a LIVE steal guard is not cleared by another taker" '[ "$code" != 0 ] && grep -qF planted "$MAT_PLAN_HEAVY_SLOT_PATH"'
+printf '{"pid":%s,"holders":[{"pid":%s,"start":"then"}]}' "$gone_pid" "$gone_pid" >"$MAT_PLAN_HEAVY_SLOT_PATH.steal"
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "a guard left by a dead stealer is broken, and the stale lock taken" '[ "$code" = 0 ] && gone && [ ! -e "$MAT_PLAN_HEAVY_SLOT_PATH.steal" ]'
 
 # ── Stale and reused pids ───────────────────────────────────────────────────────────────────────
 sh -c 'exit 0' &

@@ -35,18 +35,29 @@ import { dirname } from 'node:path';
 const ATTEMPTS = 200;
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-/** The process's start time as `ps` reports it, or null when it is gone. */
+/** `ps` could not run (a fork failure, say): nothing is known, so a holder counts as alive. */
+export const UNKNOWN = Symbol('start time unknown');
+/** `lstart` is local time in the caller's locale: pinned, so two runs with different TZ agree. */
+const PS_ENV = { ...process.env, TZ: 'UTC', LC_ALL: 'C', LANG: 'C' };
+
+/** The process's start time as `ps` reports it; null when it is gone; UNKNOWN when ps failed. */
 export function startTime(pid) {
   try {
     const out = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
       encoding: 'utf8',
+      env: PS_ENV,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
     return out || null;
-  } catch {
-    return null; // ps exits 1 for a pid that is not running
+  } catch (error) {
+    return error.status === 1 ? null : UNKNOWN; // ps exits 1 for a pid that is not running
   }
 }
+
+const sameStart = (pid, recorded) => {
+  const now = startTime(pid);
+  return now === UNKNOWN || now === recorded;
+};
 
 function signalled(target) {
   try {
@@ -59,7 +70,11 @@ function signalled(target) {
 
 /** A holder record for `pid`: `{ pid, start }`, plus `group: true` for its process group. */
 export function holder(pid, { group = false } = {}) {
-  return { pid, start: startTime(pid), ...(group ? { group: true } : {}) };
+  const start = startTime(pid);
+  if (start === UNKNOWN || start === null) {
+    throw new Error(`could not read the start time of pid ${pid}; not taking a lock without it`);
+  }
+  return { pid, start, ...(group ? { group: true } : {}) };
 }
 
 export function holderAlive(h) {
@@ -68,9 +83,9 @@ export function holderAlive(h) {
     if (!signalled(-h.pid)) return false;
     // The group exists. A live leader must be the one recorded; a dead leader with live members is
     // still this group, because its id cannot be handed to a new process while the group exists.
-    return signalled(h.pid) ? startTime(h.pid) === h.start : true;
+    return signalled(h.pid) ? sameStart(h.pid, h.start) : true;
   }
-  return signalled(h.pid) && startTime(h.pid) === h.start;
+  return signalled(h.pid) && sameStart(h.pid, h.start);
 }
 
 /** The parsed lock, or null when it is unreadable or every holder is gone. */
@@ -134,25 +149,36 @@ export function acquire(path, payload) {
 }
 
 /** Remove the lock at `path` if it is still dead, holding the steal guard; else wait a moment. */
+const unlinkQuiet = (p) => {
+  try {
+    unlinkSync(p);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+};
+
 function clearIfStale(path, payload) {
   const guard = `${path}.steal`;
-  const tmp = writePrivate(guard, { pid: process.pid, holders: payload.holders });
+  const mine = { pid: process.pid, holders: payload.holders };
+  const tmp = writePrivate(guard, mine);
   try {
     linkSync(tmp, guard);
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
+    // A guard whose holder is dead was left by a crashed stealer; break it, re-reading first. The
+    // residual (it is retaken between that read and the unlink) needs a crash mid-steal AND a race.
     const held = readLock(guard);
-    if (held !== null && !liveLock(held) && readLock(guard) === held) unlinkSync(guard); // crashed
+    if (held !== null && !liveLock(held) && readLock(guard) === held) unlinkQuiet(guard);
     sleepSync(10);
     return;
   } finally {
-    unlinkSync(tmp);
+    unlinkQuiet(tmp);
   }
   try {
     const now = readLock(path);
-    if (now !== null && !liveLock(now)) unlinkSync(path);
+    if (now !== null && !liveLock(now)) unlinkQuiet(path);
   } finally {
-    unlinkSync(guard);
+    if (ours(guard, mine)) unlinkQuiet(guard); // never someone else's, if ours was broken meanwhile
   }
 }
 

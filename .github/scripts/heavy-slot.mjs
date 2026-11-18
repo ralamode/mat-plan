@@ -24,7 +24,7 @@
  * - `MAT_PLAN_HEAVY_SLOT_PATH` moves the lock; the self-tests use it, so they never touch a live slot.
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { cpus, homedir, loadavg } from 'node:os';
+import { constants, cpus, homedir, loadavg } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -191,12 +191,15 @@ function cli(argv) {
   }
   const forward = (signal) => {
     try {
-      process.kill(-child.pid, signal);
+      // A detached child leads its own group; a plain pass-through child is not a group leader.
+      if (slot.payload) process.kill(-child.pid, signal);
+      else child.kill(signal);
     } catch {
-      /* the group has already gone */
+      /* the child has already gone */
     }
   };
-  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  // Not forwarded: SIGTSTP (Ctrl-Z stops the wrapper while the run continues; stop it with Ctrl-C).
+  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
   for (const signal of signals) process.on(signal, () => forward(signal));
   child.on('error', (error) => {
     console.error(`✗ ${command[0]}: ${error.message}`);
@@ -208,7 +211,8 @@ function cli(argv) {
     if (signal) {
       for (const s of signals) process.removeAllListeners(s);
       process.kill(process.pid, signal); // die by the same signal, so the shell sees 128+n
-      return;
+      // A signal Node ignores or handles itself (SIGPIPE, SIGUSR1) would not end us: never report 0.
+      process.exit(128 + (constants.signals[signal] ?? 0));
     }
     process.exit(code ?? 1);
   });
