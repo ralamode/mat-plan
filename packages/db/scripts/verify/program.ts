@@ -40,6 +40,7 @@ import type { HouseholdScope } from '../../src/scope';
 import {
   insertMovementOwnedBy,
   insertProfileOwnedBy,
+  profileByClientId,
   insertProgramBlockOwnedBy,
   movementInHousehold,
   programBlockByClientId,
@@ -2247,10 +2248,8 @@ const PUT_ON_TODAY = '2026-11-17';
 async function mustAddAthlete(tx: VerifyTx, scope: HouseholdScope, name: string) {
   const clientId = newId();
   await insertProfileOwnedBy(asTx(tx), scope, { name, kind: PROFILE_KIND.kid, clientId });
-  const [row] = await tx
-    .select({ publicId: schema.profiles.publicId })
-    .from(schema.profiles)
-    .where(eq(schema.profiles.clientId, clientId));
+  // Read back through the seam: `profiles.client_id` is named only inside it (scope.test.ts).
+  const row = await profileByClientId(asTx(tx), scope, clientId);
   assert.ok(row, `FAM-1 6c-i: adding the athlete "${name}" succeeds`);
   return row.publicId;
 }
