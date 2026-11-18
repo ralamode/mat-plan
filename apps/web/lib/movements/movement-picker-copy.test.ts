@@ -17,25 +17,24 @@ describe('MOVEMENT_PICKER_COPY — the counted sentences', () => {
     expect(COPY.statusCount(n)).toBe(expected);
   });
 
-  it('statusSomeWords uses "movement", and conjugates both ways', () => {
-    expect(COPY.statusSomeWords(1)).toBe('1 movement matches some of your words.');
-    expect(COPY.statusSomeWords(3)).toBe('3 movements match some of your words.');
+  // The accepted prototype's wording (spec P5 as amended, 2026-11-17): the near misses are
+  // "close spellings" in the count, under the heading "Did you mean"; the some-words rows are
+  // "N with some of your words". The two lists join with a comma into one sentence.
+  it('statusSomeWords counts the rows with some of your words', () => {
+    expect(COPY.statusSomeWords(1)).toBe('1 with some of your words');
+    expect(COPY.statusSomeWords(3)).toBe('3 with some of your words');
   });
 
-  it("statusNear counts similar names, both ways, with the heading's noun (CAT-3 P5)", () => {
-    expect(COPY.statusNear(1)).toBe('1 similar name.');
-    expect(COPY.statusNear(2)).toBe('2 similar names.');
-    // A screen-reader user matches the count to the heading: renaming one alone fails here.
-    expect(COPY.statusNear(2).toLowerCase()).toContain(COPY.near.toLowerCase());
+  it('statusNear counts close spellings, both ways', () => {
+    expect(COPY.statusNear(1)).toBe('1 close spelling');
+    expect(COPY.statusNear(2)).toBe('2 close spellings');
   });
 
-  it('statusNone says "No matches." once, then each list, similar names first', () => {
+  it('statusNone says "No matches." once, then each list, close spellings first', () => {
     expect(COPY.statusNone(0, 0)).toBe('No matches.');
-    expect(COPY.statusNone(1, 0)).toBe('No matches. 1 similar name.');
-    expect(COPY.statusNone(0, 2)).toBe('No matches. 2 movements match some of your words.');
-    expect(COPY.statusNone(1, 2)).toBe(
-      'No matches. 1 similar name. 2 movements match some of your words.',
-    );
+    expect(COPY.statusNone(1, 0)).toBe('No matches. 1 close spelling.');
+    expect(COPY.statusNone(0, 2)).toBe('No matches. 2 with some of your words.');
+    expect(COPY.statusNone(1, 2)).toBe('No matches. 1 close spelling, 2 with some of your words.');
   });
 
   it('asTypedHintNear names the movement and what to do, then keeps the permanence warning', () => {

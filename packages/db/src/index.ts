@@ -45,6 +45,8 @@ export * from './writers/checkin';
 // tombstone's values (ADR 0008 decisions 2 and 3.3).
 export * from './writers/hide';
 export * from './queries/hidden-entries';
+// V1-9b B1-2: a day's clear events for the banner. Only the read: its conjuncts stay in the package.
+export { clearEventsForDay } from './queries/clear-events';
 // V1-24 3b-bw: Clear on the day page, through `hideEntries`. Its pre-read sees a hidden row too, but
 // returns only its day (delete-and-restore.md's reader audit).
 export * from './writers/single-value';

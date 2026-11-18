@@ -4,8 +4,8 @@ import type { HideReason } from '@mat-plan/shared';
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
 import type { Executor } from '../writers/executor';
-import { hiddenAtText } from '../writers/hide';
 import { isLiveProfile } from '../writers/ownership';
+import { hiddenAtText, ownedOnDay } from './clear-events';
 
 /**
  * 🔴 **The repo's FIRST read that returns `deleted_at IS NOT NULL` rows, and it says so because every
@@ -18,14 +18,18 @@ import { isLiveProfile } from '../writers/ownership';
  * pre-read in `writers/single-value.ts` sees a hidden row only to answer a replay, and returns its
  * day and nothing else.)
  *
- * ⚠️ **Neither function reads `scope.householdId` directly** — both go through `isLiveProfile`, so
+ * ⚠️ **No function here reads `scope.householdId` directly** — each goes through `isLiveProfile`, so
  * `packages/db/src/scope.test.ts`'s rule that exactly one module names that field still holds.
  */
 
 export type HiddenEntryRow = {
   entryPublicId: string;
   hiddenAt: string;
-  /** `'clear_day'` for an entry hidden by Clear this day (B2-0), else NULL: the banner's event filter. */
+  /**
+   * `'clear_day'` for an entry hidden by Clear this day (B2-0), else NULL. The banner does not read
+   * it here: it reads `clearEventsForDay` (`./clear-events.ts`), which shares the predicate with the
+   * clear's writers.
+   */
   hideReason: HideReason | null;
   kind: string | null;
   metricKey: string | null;
@@ -64,13 +68,7 @@ export async function hiddenEntriesForDay(
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-    .where(
-      and(
-        isLiveProfile(args.profilePublicId, args.scope),
-        eq(schema.entries.activityDate, args.day),
-        isNotNull(schema.entries.deletedAt),
-      ),
-    )
+    .where(and(ownedOnDay(args), isNotNull(schema.entries.deletedAt)))
     .orderBy(desc(schema.entries.deletedAt), schema.entries.createdAt);
 }
 

@@ -60,6 +60,7 @@ import {
   type EditorField,
 } from './editor-draft';
 import { ItemCard, type CardControl, type CardLink } from './item-card';
+import type { MovementPickerProps } from '@/components/movements/movement-picker';
 import { ItemPicker } from './item-picker/item-picker';
 import { NameField } from './name-field';
 import { programPath } from './routes';
@@ -93,6 +94,12 @@ export type WorkoutEditorScreenProps = {
   picker: MovementPickerData;
   actions: ProgramActions;
   program?: ProgramListEntry;
+  /**
+   * The item picker's "How to" loader (CAT-3 P16): a library row's steps by its public id, or
+   * `null`; a failure rejects. Absent, no row shows "How to". The preview passes a fixture one; the
+   * real page passes one once the option read carries the slug (P11).
+   */
+  howTo?: MovementPickerProps['howTo'];
 };
 
 const HEADING_ID = 'workout-editor-heading';
@@ -119,7 +126,13 @@ const snapshot = (name: string, description: string, cards: readonly EditorCard[
   return JSON.stringify([name, description, plain]);
 };
 
-export function WorkoutEditorScreen({ draft, picker, actions, program }: WorkoutEditorScreenProps) {
+export function WorkoutEditorScreen({
+  draft,
+  picker,
+  actions,
+  program,
+  howTo,
+}: WorkoutEditorScreenProps) {
   const router = useRouter();
   // The draft as opened, held for the life of the screen.
   const [loaded] = useState(() => {
@@ -681,6 +694,7 @@ export function WorkoutEditorScreen({ draft, picker, actions, program }: Workout
         onOpenChange={setPickerOpen}
         returnFocusTo={pickerReturn}
         options={pickerOptions}
+        howTo={howTo}
         selected={picked}
         onToggle={(option) =>
           setPicked((all) =>
