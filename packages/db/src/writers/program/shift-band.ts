@@ -11,8 +11,8 @@ export const SHIFT_BAND = 1_000_000;
 
 /**
  * Reordering rows whose places are a NON-deferrable partial unique index (FAM-1 plan D19: a
- * workout's `uq_prescriptions_workout_idx`; a week's `uq_block_day_workouts_slot`, 6b; later an
- * athlete's program order). Setting the final places one row at a time collides as soon as two rows
+ * workout's `uq_prescriptions_workout_idx`; a week's `uq_block_day_workouts_slot`, 6b; an athlete's
+ * program order, `uq_program_assignments_profile_idx`, through `placeAssignments`). Setting the final places one row at a time collides as soon as two rows
  * swap: Postgres checks such an index row by row.
  *
  * So a reorder is two passes: **move every row it will place into the band** (`idx + SHIFT_BAND`, one

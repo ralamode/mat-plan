@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/program/reorder-programs.ts b/packages/db/src/writers/program/reorder-programs.ts
+index 3f4a7ec1..46da1fd2 100644
+--- a/packages/db/src/writers/program/reorder-programs.ts
++++ b/packages/db/src/writers/program/reorder-programs.ts
+@@ -63,8 +63,7 @@ export async function reorderPrograms(
+     // `programOrderSchema` already refuses a repeat, so equal sizes and every id known is exactly
+     // a permutation.
+     if (
+-      programPublicIds.length !== current.length ||
+-      !programPublicIds.every((id) => blockOf.has(id))
++      programPublicIds.length !== current.length
+     ) {
+       return refuse(PROGRAM_REFUSAL.invalid);
+     }

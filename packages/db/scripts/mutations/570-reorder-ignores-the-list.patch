@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 1b443276..92390bea 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -97,7 +97,7 @@ export async function placeAssignments(
+   const rank = new Map(first.map((blockId, i) => [blockId, i]));
+   const placed = [
+     ...open
+-      .filter((row) => rank.has(row.blockId))
++      .filter((row) => rank.has(row.blockId) && first.length === 0)
+       .sort((x, y) => rank.get(x.blockId)! - rank.get(y.blockId)!),
+     ...open.filter((row) => !rank.has(row.blockId)),
+   ];

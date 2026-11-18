@@ -1,32 +1,24 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 3ff52570..444e97ff 100644
+index 1b443276..ae820dfc 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -112,6 +112,13 @@ export async function putOn(
+@@ -190,16 +190,15 @@ export async function putOn(
        // Take off writes `active_to = today`; a later last day is no writer's, and is reopened too.
        const endsToday = current.find((row) => row.blockId === block.id);
  
-+      if (endsToday) {
-+        await tx
-+          .update(a)
-+          .set({ activeTo: null, idx: open.length, updatedAt: sql`now()` })
-+          .where(eq(a.id, endsToday.id));
-+        continue;
-+      }
-       // Close any gap in the order, then take the last place. Rows already in place stay put.
-       const moved = open.flatMap((row, idx) => (row.idx === idx ? [] : [{ id: row.id, idx }]));
-       if (moved.length > 0) {
-@@ -132,13 +139,6 @@ export async function putOn(
-       }
-       const last = open.length;
- 
--      if (endsToday) {
--        await tx
--          .update(a)
+-      // Close any gap in the order, then take the last place. Rows already in place stay put.
+-      const last = await placeAssignments(tx, athlete.id, []);
+-
+       if (endsToday) {
+         await tx
+           .update(a)
 -          .set({ activeTo: null, idx: last, updatedAt: sql`now()` })
--          .where(eq(a.id, endsToday.id));
--        continue;
--      }
++          .set({ activeTo: null, idx: open.length, updatedAt: sql`now()` })
+           .where(eq(a.id, endsToday.id));
+         continue;
+       }
++      // Close any gap in the order, then take the last place. Rows already in place stay put.
++      const last = await placeAssignments(tx, athlete.id, []);
  
        const [made] = await tx
          .insert(a)

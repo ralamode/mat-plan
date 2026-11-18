@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 3ff52570..95e0895b 100644
+index 1b443276..ec5ac40e 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -99,6 +99,7 @@ export async function putOn(
+@@ -182,6 +182,7 @@ export async function putOn(
              isNull(a.deletedAt),
              // `active_to` is the inclusive last day: a row that ended before today is history.
              gte(a.activeTo, today),
 +            eq(a.activeFrom, today),
            ),
          );
-       const open = await tx
+       const open = await openAssignments(tx, athlete.id);
