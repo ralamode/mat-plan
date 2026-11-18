@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
-index e4b11183..bab4a301 100644
+index 04bd2ec9..16400695 100644
 --- a/packages/db/src/writers/strength-session.ts
 +++ b/packages/db/src/writers/strength-session.ts
-@@ -153,7 +153,7 @@ async function insertStrengthSessionRow(
-       exec,
+@@ -156,7 +156,7 @@ async function insertStrengthSessionRow(
        schema.sessions,
        args.clientId,
--      eq(schema.sessions.profileId, args.profileId),
-+      sql`true`,
+       and(
+-        eq(schema.sessions.profileId, args.profileId),
++        sql`true`,
+         eq(schema.sessions.activityDate, args.day),
+       )!,
      )
-   );
- }

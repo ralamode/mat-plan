@@ -100,11 +100,11 @@ async function reselectLiveByClientId(
 }
 ```
 
-| Caller                      | `owner`                                                                                                                     |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `insertStrengthSessionRow`  | `eq(sessions.profileId, args.profileId)`: the profile `isLiveProfile(publicId, scope)` resolved in-tx, so household-scoped. |
-| `insertSupersetRow`         | `eq(supersets.sessionId, args.sessionId)`                                                                                   |
-| `writeSessionStrengthEntry` | `eq(entries.sessionId, args.sessionId)`                                                                                     |
+| Caller                      | `owner`                                                                                                                                                                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `insertStrengthSessionRow`  | `and(eq(sessions.profileId, args.profileId), eq(sessions.activityDate, args.day))`: the profile `isLiveProfile(publicId, scope)` resolved in-tx, so household-scoped, on the day the request names (added after the second pass, below). |
+| `insertSupersetRow`         | `eq(supersets.sessionId, args.sessionId)`                                                                                                                                                                                                |
+| `writeSessionStrengthEntry` | `eq(entries.sessionId, args.sessionId)`                                                                                                                                                                                                  |
 
 The parameter is required, not optional: a new graph insert that forgets it is a compile error.
 That is the same mechanism TEN-1 used for `scope` (`writeStrengthSession`'s docblock).
@@ -261,3 +261,16 @@ None.
 Found outside the diff (correctness): the session re-select matches the profile but not
 `activity_date`, so the athlete's own replay with a different `day` attaches entries to a session on
 another date. It is the athlete's own data and predates this PR; sent to the board.
+
+### Mid-build change: the session re-select also pins the day (2026-11-18)
+
+The second pass found (outside the diff) that the session re-select matched the profile but not
+`activity_date`, so the athlete's own session id sent under another day took entries dated `day`
+into a session dated differently. The board defaulted it to FIX in this PR, since it is the same
+conjunct on the same re-select. The session owner is now `profile_id` AND `activity_date`; case 6 and
+mutation `443` prove the date half, and `440` was regenerated against the new conjunct (it drops only
+the profile half; case 2 sends the same day, so it still reddens there).
+
+Risk weighed: a legitimate retry is refused only if it sends a different `day` under the same
+session id. The day is fixed when the form renders (the page's `?d=`), not at submit, so a retry
+repeats it. A fresh review of this delta is logged below.

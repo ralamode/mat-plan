@@ -145,15 +145,20 @@ async function insertStrengthSessionRow(
       where: isNull(schema.sessions.deletedAt),
     })
     .returning({ id: schema.sessions.id, publicId: schema.sessions.publicId });
-  // On conflict (a replay) re-select the LIVE row, and only this profile's: another athlete's session
-  // holding the id is refused, never joined.
+  // On conflict (a replay) re-select the LIVE row, and only this profile's, on THIS day: another
+  // athlete's session holding the id is refused, never joined, and so is the athlete's own session
+  // on another date, which would otherwise take entries dated `args.day` under a session dated
+  // differently. A true replay repeats the day it was first sent with.
   return (
     row ??
     reselectLiveByClientId(
       exec,
       schema.sessions,
       args.clientId,
-      eq(schema.sessions.profileId, args.profileId),
+      and(
+        eq(schema.sessions.profileId, args.profileId),
+        eq(schema.sessions.activityDate, args.day),
+      )!,
     )
   );
 }

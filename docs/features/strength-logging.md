@@ -240,7 +240,7 @@ all derived from the one unit, so none can disagree with it:
    `write-path.md` invariant 6.
    🔴 **A replay is answered only by a row the request owns.** `client_id` is unique per table, not
    per athlete, so the conflict can be with another athlete's row. `reselectLiveByClientId` takes a
-   required `owner` conjunct: the session by the profile resolved in the transaction, a superset
+   required `owner` conjunct: the session by the profile resolved in the transaction and the day, a superset
    and an entry by that session. Any other holder gets the same `no live row for client_id` refusal
    as a hidden row, and the transaction rolls back. `db:verify`'s replay-owner block; mutations
    `440`–`442` ([plan](../plans/td-strength-replay-scope.md)).

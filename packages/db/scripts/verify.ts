@@ -9479,9 +9479,27 @@ const REPLAY_REFUSED = /no live row for client_id/;
     "TD replay-owner (5): …and the superset still has only W's two members",
   );
 
+  // 6 · The SAME athlete re-sending S's session id under ANOTHER day. Its entries would be dated
+  //     2026-06-06 inside a session dated 2026-06-01. 🔴 Mutation 443's assertion.
+  await assert.rejects(
+    () =>
+      writeStrengthSession(asPg, {
+        ...sArgs,
+        day: '2026-06-06',
+        movements: [one(cid('701'))],
+      }),
+    REPLAY_REFUSED,
+    "TD replay-owner (6): the athlete's own session id sent under another day is refused",
+  );
+  assert.equal(
+    await entryExists(cid('701')),
+    false,
+    'TD replay-owner (6): …and the refused entry was not written',
+  );
+
   console.log(
     '✓ TD replay-owner: a strength replay is answered only by a row the request owns — another ' +
-      "athlete's session, another household's, another session's entry or superset is refused",
+      "athlete's session, another household's, another day's, another session's entry or superset is refused",
   );
 }
 
