@@ -14,8 +14,15 @@ import { describe, it } from 'vitest';
  * review tab carries the maintainer's `lgtm` (spec K21).
  */
 
-// Chunk A1 (the tables, #577) holds S1 to S6: `packages/db/scripts/verify/catalog.ts`, and the
-// stay-dark scan for S6.
+// Chunk A1 (the tables, #577) holds S2 to S5, the proven part of S1 and the tables half of S6:
+// `packages/db/scripts/verify/catalog.ts`, `verify/erasure.ts` for the delete order, and
+// `apps/web/test/program-tables-stay-dark.test.ts` for the four tables. What it leaves owed:
+describe('owed by lane A: what the tables chunk (A1) left', () => {
+  it.todo('S1: equipment and muscles hold a code and no label, and sit among REFERENCE_TABLES');
+  it.todo(
+    'S6: no module in apps/ reads movements.modality before P11-ii (the scan holds the tables only)',
+  );
+});
 
 describe('owed by lane A: the seed (chunk A2, then A3)', () => {
   it.todo('E1: one catalog row per entry, with its join rows, in one transaction');

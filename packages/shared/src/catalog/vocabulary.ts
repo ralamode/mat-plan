@@ -12,8 +12,10 @@ import { keyBySelf } from '../enums';
  * migration 0032: `equipment`, `muscles`, `movements.modality`), each pinned to its array by
  * `db:verify`. What a change needs:
  *
- * - **Adding** an `EQUIPMENT` or `MUSCLES` member: the member here, and the seed, which writes
- *   the two reference tables with `ON CONFLICT DO NOTHING`. No migration.
+ * - **Adding** an `EQUIPMENT` or `MUSCLES` member: the member here, with its label. The seed
+ *   already writes both reference tables from these lists (`ON CONFLICT DO NOTHING`), and
+ *   `migrate.yml` runs it on every push to `main`, so the new row arrives on its next run. No
+ *   migration, and no edit to the seed.
  * - **Renaming or removing** one: a migration, since rows may already name the code.
  * - **`MODALITIES`**: any change is a migration, because the list is a CHECK on
  *   `movements.modality`, not a table.

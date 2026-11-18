@@ -365,6 +365,7 @@ describe('the same search, over the test library (properties)', () => {
           shown.length + under.custom.length,
         );
         expect(shown.length + under.custom.length + under.outsideFilters, label).toBe(found.length);
+        expect(under.outsideWithoutData, label).toBeLessThanOrEqual(under.outsideFilters);
         expect(under.hitsOutsideFilters, label).toEqual(
           plain.hits.filter((option) => option.isCatalog && !passesMovementFilters(option, given)),
         );
@@ -525,6 +526,11 @@ describe('the counts in the panel (P7)', () => {
     expect(hit).toMatchObject({ outsideFilters: 0, outsideWithoutData: 0 });
     // With no filter on nothing is outside them.
     expect(search('push', undefined, [pushUp, bare]).outsideWithoutData).toBe(0);
+    // A custom item has no equipment field either, and is never counted: it is not outside the
+    // filters, it is set apart in `custom`.
+    const withCustom = search('push', NONE, [pushUp, incline, bare, ladder]);
+    expect(withCustom.custom).toEqual([ladder]);
+    expect(withCustom).toMatchObject({ outsideFilters: 2, outsideWithoutData: 1 });
   });
 
   it('lists equipment by how many movements each would leave, most first; zero last (P7)', () => {
