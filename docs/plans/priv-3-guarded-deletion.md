@@ -720,7 +720,9 @@ kept from the first draft.
       renaming it unless they are ok with changing the data and tell them who it affects. In the end, I
       would not want this to hurt eventual reporting"_. So: say who is affected, offer archive or rename
       first, remove only on explicit acceptance, and never delete or orphan another athlete's log rows.
-      PR 3b's correction and any in-app removal are held to it.
+      PR 3b's correction and any in-app removal are held to it. **"Orphan", confirmed** _(2026-11-18)_: clearing a log's link back to a removed
+      program is not orphaning, since the log keeps its frozen names and set numbers. A program someone trained on
+      can be removed once the requester, told who it affects, accepts.
 
 **Board and harness, 2026-11-17.** The fifth module is ruled (above). Lane A has no open PR on its
 two files, so PR 1 is cut now; whichever of it and lane A's `VALIDATE` PR merges second merges `main`.
