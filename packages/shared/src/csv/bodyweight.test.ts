@@ -34,7 +34,7 @@ describe('buildBodyweight — weight_lb holds pounds; kg is converted with the o
 
   it('existing notes are kept, joined with "; "', () => {
     expect(body([row({ unit: 'kg', notes: 'after practice' })])).toBe(
-      '2026-09-30,186.3,,after practice; logged 84.5 kg\n',
+      '2026-09-30,186.3,,"after practice; logged 84.5 kg"\n',
     );
   });
 
