@@ -1,7 +1,4 @@
-import { DAY_PLAN_FIXTURE_SOURCES } from '@mat-plan/shared/program/fixtures';
 import { describe, it } from 'vitest';
-
-import { ARCHIVE_ONLY_FIXTURES } from '../../../scripts/verify/fixture-groups';
 
 /**
  * The tests lane E (day data) still owes the program contract, tagged by step: 12a-ii and 14
@@ -19,15 +16,12 @@ import { ARCHIVE_ONLY_FIXTURES } from '../../../scripts/verify/fixture-groups';
  */
 
 describe('DayPlan: owed by its consumers', () => {
-  // 12a-i proves the fixtures with no `before` (`scripts/verify/day-plan.ts`), and the two whose
-  // only change is an archive, which a proof applies directly. The other `before` fixtures change
-  // the program after logging, so they need its edits replayed: 12a-ii.
-  const ARCHIVE_ONLY = new Set<string>(ARCHIVE_ONLY_FIXTURES);
-  for (const [name, source] of Object.entries(DAY_PLAN_FIXTURE_SOURCES)) {
-    if (source.before === null || ARCHIVE_ONLY.has(name)) continue;
-    it.todo(`12a-ii: the resolver, on the seeded state, deep-equals ${name}`);
-  }
-  it.todo('12a-ii: progress does not count removed items’ rows');
+  // Every fixture is proved: the fixed-world ones by 12a-i, the archive-only ones by its rules, and
+  // the replays by 12a-ii (`scripts/verify/day-plan.ts`). The reorder fixture applies its change by
+  // a direct `idx` update (the board's Q6, 2026-11-17); its exit is this line.
+  it.todo(
+    '12a-ii: when 6d lands, replay today-stretching-first through its writer and assert the same rows',
+  );
 });
 
 describe('prescribedText: owed by its consumers', () => {

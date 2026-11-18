@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 91e40e87..ac51df10 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -563,7 +563,7 @@ function dayWorkout(
+   }
+ 
+   for (const { prescription, movement } of live) {
+-    const mine = draft.rows.filter((r) => r.prescriptionId === prescription.id);
++    const mine = draft.rows.filter((r) => r.movementId === prescription.movementId);
+     for (const r of mine) claimed.add(r.id);
+     const terms = prescriptionTerms({
+       trackingType: movement.trackingType,

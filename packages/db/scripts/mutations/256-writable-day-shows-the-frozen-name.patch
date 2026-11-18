@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 91e40e87..d0e61b47 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -652,7 +652,7 @@ function dayWorkout(
+ 
+   // R2: where only logged rows show, the session's frozen name; else the live one.
+   const firstLogged = firstOf(draft.rows);
+-  const frozen = showing === 'logged' && firstLogged ? firstLogged.frozenName : null;
++  const frozen = firstLogged ? firstLogged.frozenName : null;
+   const name = frozen ?? draft.liveName;
+   if (name === null) throw new Error('a workout that left the week has no frozen name');
+   return {
