@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import {
+  MAX_PROGRAM_WORKOUTS,
   foldName,
   newId,
   PROGRAM_REFUSAL,
@@ -148,6 +149,11 @@ export async function saveWorkout(
     );
     if ((draft.workoutPublicId !== null && !self) || self?.deletedAt) {
       return refuse(PROGRAM_REFUSAL.not_found);
+    }
+    // A NEW workout in a full program (C35, invariant 30), judged before the name. An edit and a
+    // replay have `self`, so neither is capped.
+    if (!self && workouts.filter((w) => !w.deletedAt).length >= MAX_PROGRAM_WORKOUTS) {
+      return refuse(PROGRAM_REFUSAL.limit_reached);
     }
     const folded = foldName(draft.name);
     if (workouts.some((w) => w !== self && !w.deletedAt && foldName(w.name) === folded)) {

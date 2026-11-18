@@ -4,6 +4,7 @@ import {
   PROGRAM_REFUSAL,
   WEEKDAYS,
   weekDraftSchema,
+  weekExceedsDaySlots,
   weekRepeatsAWorkout,
   type ProgramResult,
   type Weekday,
@@ -45,9 +46,11 @@ export async function saveWeek(
 ): Promise<ProgramResult> {
   const parsed = weekDraftSchema.safeParse(input);
   if (!parsed.success) {
-    // A repeat answers `once_per_day` whatever else is wrong: the preview fake's rule, shared.
+    // A repeat answers `once_per_day` whatever else is wrong, then a day past `MAX_DAY_SLOTS`
+    // `limit_reached` (C35, invariant 30), then `invalid`: the preview fake's order, shared.
+    if (weekRepeatsAWorkout(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
     return refuse(
-      weekRepeatsAWorkout(input) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+      weekExceedsDaySlots(input) ? PROGRAM_REFUSAL.limit_reached : PROGRAM_REFUSAL.invalid,
     );
   }
   // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.

@@ -1,7 +1,8 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 
 import {
   existingItem,
+  MAX_HOUSEHOLD_ITEMS,
   movementSlug,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -15,7 +16,12 @@ import { movementOptions } from '../../queries/program/movement-options';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { findOrCreateTypedMovement } from '../movement-catalog';
-import { movementIsAvailableTo, movementIsGlobal } from '../ownership';
+import {
+  householdRowIs,
+  movementInHousehold,
+  movementIsAvailableTo,
+  movementIsGlobal,
+} from '../ownership';
 import { refuse } from './refuse';
 
 type NewItemResult = ProgramResult<{
@@ -42,11 +48,23 @@ type NewItemResult = ProgramResult<{
  * 3. **Otherwise a new household item** through `findOrCreateTypedMovement`, typed as asked, with
  *    `existed: false`.
  *
+ * **The household's own items are capped** (`MAX_HOUSEHOLD_ITEMS`, contract change C35, invariant 30):
+ * step 3 answers `limit_reached` when the household already made that many. Steps 1 and 2 never do:
+ * selecting an item adds nothing. The library's items do not count. Race-safe: the whole call holds a
+ * transaction-scoped advisory lock on the household (`ITEM_LOCK`), so two adds at once count one
+ * after the other, and the second sees the first's row (and selects it, if it is the same name).
+ *
  * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`. D25's races
  * are accepted: two adds of one new name at once both reach step 3, the household slug index lets
  * one row in, and both answer it (each `existed: false`); two adds at once of names with one key
  * and different slugs (`pushups`, `push ups`) both insert, and leave two items.
  */
+/**
+ * The advisory-lock namespace for a household's own items (the first key; the household's id is
+ * the second). Any other per-household advisory lock takes its own namespace.
+ */
+export const ITEM_LOCK = 600_001;
+
 export async function newItem(
   exec: Executor,
   scope: HouseholdScope,
@@ -55,6 +73,21 @@ export async function newItem(
   const parsed = newItemSchema.safeParse(input);
   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
   const { name, trackingType } = parsed.data;
+  return exec.transaction(async (tx) => addOrSelect(tx, scope, name, trackingType));
+}
+
+async function addOrSelect(
+  exec: Executor,
+  scope: HouseholdScope,
+  name: string,
+  trackingType: TrackingType,
+): Promise<NewItemResult> {
+  // Held until the transaction ends. Reached through the household row, so the tenant id is never
+  // unwrapped here; no row (a household that is gone) takes no lock, and the add then fails as before.
+  await exec
+    .select({ locked: sql`pg_advisory_xact_lock(${ITEM_LOCK}, ${schema.households.id}::int)` })
+    .from(schema.households)
+    .where(householdRowIs(scope));
 
   const options = await movementOptions(exec, scope);
   const hit = existingItem(
@@ -96,6 +129,12 @@ export async function newItem(
       existed: true,
     };
   }
+
+  const [own] = await exec
+    .select({ n: count() })
+    .from(schema.movements)
+    .where(movementInHousehold(scope));
+  if ((own?.n ?? 0) >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
 
   const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);
   const [row] = await exec

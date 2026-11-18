@@ -4,6 +4,7 @@ import {
   copyDraftSchema,
   copyName,
   foldName,
+  MAX_PROGRAM_WORKOUTS,
   newId,
   PROGRAM_REFUSAL,
   type ProgramResult,
@@ -138,6 +139,12 @@ export async function copyWorkout(
       const entry = last?.item.id === row.item.id ? last : { item: row.item, quantities: [] };
       if (entry !== last) items.push(entry);
       if (row.quantity) entry.quantities.push(row.quantity);
+    }
+
+    // The program it lands in is full (C35, invariant 30): its own count, never the source's, and
+    // judged before the name. A replay answered above, so it is never capped.
+    if (targetWorkouts.filter((w) => w.deletedAt === null).length >= MAX_PROGRAM_WORKOUTS) {
+      return refuse(PROGRAM_REFUSAL.limit_reached);
     }
 
     const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);

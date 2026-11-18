@@ -287,8 +287,10 @@ export function programBlockInHousehold(scope: HouseholdScope) {
 
 /**
  * `households.id = <scope>` — THE household row itself (`PRIV-3`). Here because it unwraps
- * `scope.householdId`, which only this module may do. Its one consumer is the erasure graph
- * (`src/erasure/graph.ts`); no writer reads a household row through it.
+ * `scope.householdId`, which only this module may do. Two consumers: the erasure graph
+ * (`src/erasure/graph.ts`), and `newItem`'s advisory lock (`writers/program/new-item.ts`, C35), which
+ * reads only the row's `id` as the lock's key, so the household's own items are counted one add at
+ * a time. No writer writes a household row through it.
  */
 export function householdRowIs(scope: HouseholdScope) {
   return eq(schema.households.id, scope.householdId);
