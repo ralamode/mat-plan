@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
-index a1bef8aa..f48a5cab 100644
+index 67aa4449..a0e64458 100644
 --- a/packages/db/src/queries/export-month.ts
 +++ b/packages/db/src/queries/export-month.ts
-@@ -120,7 +120,6 @@ export function strengthMonthRows(
+@@ -123,7 +123,6 @@ export function strengthMonthRows(
          schema.sessions,
          and(
            eq(schema.sessions.id, schema.entries.sessionId),
 -          eq(schema.sessions.profileId, schema.entries.profileId),
-           // A hidden session lends nothing either (ADR 0008: a hidden row is out of the export).
-           // No writer hides a session today; this keeps the query's "every level" promise.
+           // A hidden session lends nothing either: its columns are NULL, and its entries are kept
+           // unless they are hidden themselves. No writer hides a session today.
            isNull(schema.sessions.deletedAt),
