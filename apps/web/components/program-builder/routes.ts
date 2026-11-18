@@ -18,3 +18,10 @@ export const workoutPath = (programPublicId: string, workoutPublicId: string) =>
 
 export const newWorkoutPath = (programPublicId: string) =>
   `${programPath(programPublicId)}/workouts/new`;
+
+/**
+ * The "How to" read for one picker option (FAM-1 7b, a Route Handler: reads are Route Handlers). A
+ * static segment, so it wins over `[programId]`; the id is encoded, since it comes from the client.
+ */
+export const howToPath = (optionId: string) =>
+  `${PROGRAMS_PATH}/how-to/${encodeURIComponent(optionId)}`;

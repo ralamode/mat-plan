@@ -232,11 +232,13 @@ path and **creating** the deliberate one.
     - **The failure is said in the sheet's one status region**, derived from the box: it stands
       through a retry (so the region does not fall back to re-reading the search count), goes with
       the box, and wins over the caller's `notice` until a tick silences it. When it ends (Hide, a successful retry), the region falls back to the search count or the notice, which is read again: one re-read on purpose, since the failure no longer stands.
-    - ⚠️ **No production caller passes a loader yet.** It is wired when lane P's option read
-      carries the slug (P11): the page's loader takes the public id, finds the row in the caller's
-      own option read, and calls `catalogHowToOf`. That is a READ, so the page owes a choice the
-      repo's rule makes visible (Route Handlers for reads): a Route Handler, or an action recorded
-      as the exception, with an adapter turning a refusal into a rejection.
+    - **The production loader is a Route Handler** (FAM-1 7b): `howToLoader`
+      (`components/program-builder/how-to-loader.ts`) fetches `howToPath(id)`, served by
+      `app/programs/how-to/[optionId]/route.ts`, which resolves the id among the caller's own
+      options (`getHowTo`, `lib/dal/program/picker.ts`) and answers the strict `CatalogHowTo` or
+      one byte-identical 404. The loader keeps this invariant: a 404 is `null`; any other failure,
+      or a body the schema refuses, **rejects**. A page supplies it through `WorkoutEditorPage`,
+      because a Server Component cannot pass a function to a Client Component.
 
 15. **Filters narrow the library; they never make a name new** (CAT-3 B2-ii;
     [spec](../specs/cat-3-movement-library.md) P7 to P10, P15). What lives between files:

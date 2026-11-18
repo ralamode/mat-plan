@@ -3,7 +3,14 @@ import 'server-only';
 import { cache } from 'react';
 
 import { movementOptions, type MovementOption } from '@mat-plan/db';
-import { catalogOptionOf, movementNameKey, type CatalogMovement } from '@mat-plan/shared';
+import {
+  catalogHowToOf,
+  catalogOptionOf,
+  movementNameKey,
+  uuidSchema,
+  type CatalogHowTo,
+  type CatalogMovement,
+} from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
@@ -87,13 +94,38 @@ export function pickerOptionOf(row: MovementOption): MovementOptionDTO {
   };
 }
 
+/**
+ * The household's option rows, slugs included (they never leave this module), or `null` with no
+ * household. One query per request for a page that reads the picker and How to both (`cache()`
+ * does nothing inside a Route Handler, which runs one query per request).
+ */
+const householdMovementRows = cache(async function householdMovementRows() {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+  // Through `quietDbErrors`, as the writes are: a failed query's parameters stay out of the logs.
+  return quietDbErrors('movementOptions', () => movementOptions(db, scope));
+});
+
 /** The picker's data for the caller's household, or `null` with no household. */
 export const getItemPickerData = cache(
   async function getItemPickerData(): Promise<MovementPickerData | null> {
-    const scope = await getHouseholdScope();
-    if (!scope) return null;
-    // Through `quietDbErrors`, as the writes are: a failed query's parameters stay out of the logs.
-    const rows = await quietDbErrors('movementOptions', () => movementOptions(db, scope));
-    return { options: rows.map((row) => pickerOptionOf(row)) };
+    const rows = await householdMovementRows();
+    return rows && { options: rows.map((row) => pickerOptionOf(row)) };
   },
 );
+
+/**
+ * One picker option's "How to" (FAM-1 7b; CAT-3 P16; the spec owner, 2026-11-18), or `null`.
+ *
+ * Resolved AMONG THE CALLER'S OWN OPTIONS, so another household's id and an unknown id are the same
+ * `null`; a household's own item and a built-in with no library entry (K22) are `null` too, and
+ * the picker shows no button for either. A non-uuid id is `null` before any query. The slug is
+ * how the entry is found and never leaves this module; the answer is the strict `CatalogHowTo`.
+ * Nothing is reported for a miss: no answer here can hold household data (the 7b plan, security N2).
+ */
+export async function getHowTo(optionId: string): Promise<CatalogHowTo | null> {
+  if (!uuidSchema.safeParse(optionId).success) return null;
+  const id = optionId.toLowerCase();
+  const row = (await householdMovementRows())?.find((option) => option.publicId === id);
+  return row?.owner === 'catalog' ? catalogHowToOf(CATALOG_MOVEMENTS, row.slug) : null;
+}
