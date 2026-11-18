@@ -1620,7 +1620,7 @@ const [sessionProfileA] = await db
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
-  .returning({ id: schema.profiles.id });
+  .returning({ id: schema.profiles.id, publicId: schema.profiles.publicId });
 const [sessionProfileB] = await db
   .insert(schema.profiles)
   .values({
@@ -1629,7 +1629,7 @@ const [sessionProfileB] = await db
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
-  .returning({ id: schema.profiles.id });
+  .returning({ id: schema.profiles.id, publicId: schema.profiles.publicId });
 
 /** Insert `values` into a session-graph table idempotently (onConflictDoNothing on client_id) and
  *  return the row id — re-selecting by client_id on a replay conflict. ONE helper so the three
@@ -1647,7 +1647,9 @@ async function upsertReturningId(
     .returning({ id: table.id });
   if (row) return row.id;
   // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the production writer's
-  // `reselectLiveByClientId` shape, not a shortcut.** Before V1-9b B0 the partial UNIQUE kept a
+  // `reselectLiveByClientId` guard, not a shortcut.** (Only that half: the writer's re-select also
+  // carries an owner conjunct, which this raw-SQL fixture has no foreign holders to need; the
+  // replay-owner block proves the writer's.) Before V1-9b B0 the partial UNIQUE kept a
   // hidden row out of the index, so a conflict implied a LIVE row and an unguarded re-select was
   // merely sloppy. B0 puts hidden rows back in the index, so a conflict can now be WITH a hidden
   // row — and this re-select would hand its id back and attach children to a dead parent. The
@@ -9089,6 +9091,13 @@ console.log(
   );
 }
 
+/**
+ * The strength writer's refusal of a replay it may not answer: a hidden row (V1-9b B0) and a row
+ * someone else owns (the replay-owner block) share this message ON PURPOSE, so a caller cannot tell
+ * the two apart. One regex, so the two blocks cannot drift apart on it.
+ */
+const REPLAY_REFUSED = /no live row for client_id/;
+
 // ── V1-9b B0 — a hide no longer frees a `client_id` ───────────────────────────────────────────────
 //
 // 🔴 **The behavioural case comes FIRST, deliberately.** `db:verify` is fail-fast and the mutation
@@ -9139,7 +9148,7 @@ console.log(
   //     succeeds and this `rejects` never fires.
   await assert.rejects(
     () => writeStrengthSession(asPg, b0Args),
-    /no live row for client_id/,
+    REPLAY_REFUSED,
     'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
       'frees the client_id',
   );
@@ -9302,7 +9311,6 @@ console.log(
 // `verify/*.ts` uses. Each `rejects` pins the message AND names its case, because the mutation runner
 // matches the first AssertionError line and a bare `rejects` would give every patch the same one.
 {
-  const REPLAY_REFUSED = /no live row for client_id/;
   const cid = (n: string) => `019826b4-0000-7000-8000-0000000e8${n}`;
   const graphOf = async (sessionClientId: string) => {
     const [session] = await db
@@ -9316,6 +9324,13 @@ console.log(
       .where(eq(schema.entries.sessionId, session.id));
     return { id: session.id, members };
   };
+  const entryExists = async (entryClientId: string) =>
+    (
+      await db
+        .select({ id: schema.entries.id })
+        .from(schema.entries)
+        .where(eq(schema.entries.clientId, entryClientId))
+    ).length > 0;
   const one = (movementClientId: string, extra: object = {}) => ({
     movementName: 'Bench Press',
     unit: 'lb' as const,
@@ -9325,7 +9340,7 @@ console.log(
     ...extra,
   });
   const base = {
-    profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+    profilePublicId: sessionProfileA.publicId,
     scope: A_SCOPE,
     sessionType: SESSION_TYPES[0],
     activityTypeId: scLiftActivityId,
@@ -9363,25 +9378,26 @@ console.log(
     () =>
       writeStrengthSession(asPg, {
         ...sArgs,
-        profilePublicId: '019826b4-0000-7000-8000-0000000009b0', // sessionProfileB
+        profilePublicId: sessionProfileB.publicId,
         movements: [one(cid('201'))],
       }),
     REPLAY_REFUSED,
     'TD replay-owner (2): another athlete of the same household cannot reuse a session client_id',
   );
-  const [stray2] = await db
-    .select({ id: schema.entries.id })
-    .from(schema.entries)
-    .where(eq(schema.entries.clientId, cid('201')));
-  assert.equal(stray2, undefined, 'TD replay-owner (2): …and the refused entry was not written');
+  assert.equal(
+    await entryExists(cid('201')),
+    false,
+    'TD replay-owner (2): …and the refused entry was not written',
+  );
   assert.deepEqual(
     (await graphOf(cid('100')))?.members.map((m) => m.clientId),
     [cid('101')],
     'TD replay-owner (2): …and S still holds only its own entry',
   );
 
-  // 3 · ANOTHER household. Positive control first, so a "Profile not found" cannot pass for the
-  //     refusal. ⚠️ Not isolable: anything that reddens this reddens case 2 first.
+  // 3 · ANOTHER household. The positive control proves the profile and `movX` resolve under
+  //     B_SCOPE, so the refusal below is the replay's, reached past both pre-checks.
+  //     ⚠️ Not isolable: anything that reddens this reddens case 2 first.
   const bBase = { ...base, profilePublicId: VERIFY_PROFILE_PUBLIC_ID, scope: B_SCOPE };
   await writeStrengthSession(asPg, {
     ...bBase,
@@ -9400,11 +9416,11 @@ console.log(
     REPLAY_REFUSED,
     'TD replay-owner (3): another household cannot reuse a session client_id',
   );
-  const [stray3] = await db
-    .select({ id: schema.entries.id })
-    .from(schema.entries)
-    .where(eq(schema.entries.clientId, cid('302')));
-  assert.equal(stray3, undefined, 'TD replay-owner (3): …and nothing was written');
+  assert.equal(
+    await entryExists(cid('302')),
+    false,
+    'TD replay-owner (3): …and nothing was written',
+  );
 
   // 4 · The SAME athlete's other session T carrying S's entry id: not a replay of this request, so
   //     not a success. 🔴 Mutation 441's assertion (the entry's `session_id` conjunct).
