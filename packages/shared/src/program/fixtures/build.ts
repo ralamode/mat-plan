@@ -170,9 +170,22 @@ function onPrograms(world: World, athlete: string, day: string) {
   return (world.assign[athlete] ?? []).filter((a) => day >= a.from && (!a.to || day < a.to));
 }
 
-/** The athlete's current programs (on now, or starting later), in their own order. */
+/**
+ * The athlete's current programs (on now, or starting later), in their own order, **a program
+ * ending today after every one that stays** (ADR 0007 Amendment 5; contract change C37): the sort
+ * is stable, so each group keeps the athlete's order. `to` is the first day OFF the program, so a
+ * program ending today has `to` = tomorrow and has started.
+ */
 function currentPrograms(world: World, athlete: string) {
-  return (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
+  const current = (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
+  return [
+    ...current.filter((a) => !endsToday(world, a)),
+    ...current.filter((a) => endsToday(world, a)),
+  ];
+}
+
+function endsToday(world: World, a: { from: string; to?: string }): boolean {
+  return a.to !== undefined && a.from <= world.today;
 }
 
 function programRef(world: World, programId: string) {
@@ -381,7 +394,11 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     })),
     onProgram: on.length ? 'yes' : current.length ? 'not-this-day' : 'never',
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
-    currentPrograms: current.map((a) => programRef(world, a.prog)),
+    currentPrograms: current.map((a) => ({
+      ...programRef(world, a.prog),
+      // `to` is the first day OFF the program, so a program ending today has `to` = tomorrow.
+      ...(endsToday(world, a) ? { endsToday: true as const } : {}),
+    })),
     programs: on.map((a) => {
       const order = orderOf(a);
       return { ...programRef(world, a.prog), order: order < 0 ? null : order };

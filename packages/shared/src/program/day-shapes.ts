@@ -233,7 +233,13 @@ export const dayPlanSchema = z.object({
    * later, whatever the viewed day. This is the list the Program order dialog shows and
    * `ProgramOrder` must be a permutation of.
    */
-  currentPrograms: z.array(programRefSchema),
+  /**
+   * `endsToday` (contract change C37) is present, and `true`, exactly on a program the athlete comes
+   * off after today: the ones ADR 0007 Amendment 5 sorts after every program that stays, so they are
+   * last here. Absent on a program that stays. The Reorder dialog lists such a program with no
+   * arrows, since no order can move it up.
+   */
+  currentPrograms: z.array(programRefSchema.extend({ endsToday: z.literal(true).optional() })),
   /**
    * Live programs only, here and in `currentPrograms`: a hidden program is in neither (C21).
    *
