@@ -382,15 +382,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
   edit and belongs to whichever chunk next touches that file deliberately.
 
-### `--ring` is ~2.59:1 on the light background, under SC 1.4.11 for focus indicators (added 2026-11-09)
-
-- **What & why it's debt:** every `focus-visible:ring-ring` in the app. Pre-existing since the
-  scaffold; `token-sets.test.ts` asserts the 3:1 bar only for the **candidate** palettes, not the
-  shipped one. ⚠️ A reviewer's calculation, not a measured capture — verify before acting.
-- **Why it is not urgent:** focus is also carried by a 3px ring width and, on most controls, a border
-  change. It is a real SC 1.4.11 gap, not an unusable one.
-- **The fix:** belongs with `UI-3`'s palette choice, which is already re-deriving these tokens.
-
 ### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
@@ -690,24 +681,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `packages/db` alone until a second consumer there justifies the shared module.
 - **Severity:** low.
 
-### The light-mode focus ring misses SC 1.4.11, and the test that looks like it checks this skips the shipping palette (found 2026-10-07, ONB-0 UX panel)
-
-- **What & why:** `--ring: oklch(0.708 0 0)` on `--background: oklch(1 0 0)` (`apps/web/app/globals.css`)
-  measures **~2.59:1**, under the 3:1 non-text bar; the outer `ring-ring/50` against the white page is
-  ~1.44:1. Dark mode is fine (~4.2:1). `app/design/tokens/token-sets.test.ts` **does** assert
-  `ring` vs `background` ≥ 3:1 — but that `describe.each` iterates `SCOPED_SETS` only, and the control
-  set declares no tokens by design (`tokens: null`), so **the palette that actually ships is never
-  measured on this axis.** A gate that looks like it covers this and does not is the recurring shape in
-  this file.
-- **Impact:** affects every focusable control in light mode, including both landing CTAs and ONB-0's
-  first-run link. Pre-existing — introduced with the scaffold palette, not by any recent change.
-- **Proposed fix:** add a `ring` vs `background` row to the "known AA failures in the live palette
-  (UI-3 inputs)" block in `token-sets.test.ts`, which is that file's own stated pattern for exactly
-  this ("a finding recorded as a test cannot be quietly lost"); then it is an input to UI-3's reskin
-  rather than a surprise. Not fixed in ONB-0 because changing `--ring` changes the live app's
-  appearance, which is UI-3's call.
-- **Severity:** medium (a11y, every screen).
-
 ### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
 
 - **What & why:** `profiles.birthdate` has **no writer, no reader, no UI and no seed value** anywhere
@@ -760,20 +733,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
   at 15c, which wires that dialog.
 - **Severity:** low.
-
-### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)
-
-- **What & why:** `INPUT_CLASS` (`lib/constants.ts`) and `Button` (`components/ui/button.tsx`) draw
-  focus with `ring-ring/50`. A reviewer measured it at about **1.54:1** on the page background (and
-  about 1.48:1 light / 1.67:1 dark on the done tint), under WCAG 2.2's 3:1 for a focus indicator
-  (SC 1.4.11 / 2.4.13). Not measured by any gate: axe does not check focus styles.
-- **Impact:** a keyboard or switch user cannot reliably see where focus is. The day page now hands
-  focus to Change or the field after every log, save and clear (V1-24 3b-bw), so the ring is the only
-  "where am I" cue on the screen it was built for.
-- **Proposed fix:** a stronger ring token (`ring-foreground`, or a solid `ring` at full opacity) in
-  the two shared places, with a contrast pin in `app/done-tokens.test.ts`'s style; its own PR, since
-  it changes every focusable control.
-- **Severity:** medium (accessibility, every screen).
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
 
