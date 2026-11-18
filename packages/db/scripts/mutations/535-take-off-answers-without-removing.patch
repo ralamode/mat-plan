@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index 6028767d..1eb4b435 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -100,7 +100,7 @@ export async function takeOff(
+         .where(eq(a.id, row.id));
+       return { ok: true as const, lastDay: null };
+     };
+-    if (row.activeFrom > today) return remove();
++    if (row.activeFrom > today) return { ok: true as const, lastDay: null };
+     if (row.activeFrom === today) {
+       const [logged] = await tx
+         .select({ id: schema.entries.id })

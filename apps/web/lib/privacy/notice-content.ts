@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-16. This is a beta."
+            "text": "Last updated: 2026-11-18. This is a beta."
           }
         ]
       }
@@ -2021,7 +2021,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the three athletes the app\nstarted with cannot yet, because setup would put them back."
+        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the athletes the app started with\ncannot be erased one at a time yet, because an older copy of the setup could put them back; they are\nremoved together, with the rest of the starting data, when the app is started fresh."
       }
     ]
   },
@@ -2043,7 +2043,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not hidden. Your\nsign-in accounts are deleted too."
+        "text": ", not hidden. Your\nsign-in accounts are deleted too. The household the app started with is the one exception for now: it\nis removed with the rest of the starting data when the app is started fresh, not on its own."
       }
     ]
   },

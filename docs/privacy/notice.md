@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-16. This is a beta.**
+**Last updated: 2026-11-18. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -283,12 +283,14 @@ program it was copied into removed too; and a movement your household typed that
 log, or a program you chose to remove, used. A program another athlete has trained on is not
 removed, and we will tell you. For an athlete,
 the record of the deletion holds the athlete's internal identifier and no login ids unless their
-account went too. An athlete added through the app can be erased today; the three athletes the app
-started with cannot yet, because setup would put them back.
+account went too. An athlete added through the app can be erased today; the athletes the app started with
+cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
+removed together, with the rest of the starting data, when the app is started fresh.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
-sign-in accounts are deleted too.
+sign-in accounts are deleted too. The household the app started with is the one exception for now: it
+is removed with the rest of the starting data when the app is started fresh, not on its own.
 
 Because this cannot be undone, both of the steps below stay in place:
 

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -217,8 +217,8 @@ export async function seed(
+   // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
+   // for fixtures, which production's seed never does. So, since OPS-2 PR 1, are the seed household and
+   // its athletes, which they need first. Program rows a database already holds are left alone.
++  const household = await seedFixtures(db);
+   if (fixtures) {
+-    const household = await seedFixtures(db);
+     await seedProgram(db, PROGRAM_SEED);
+     await seedProgramFixtures(db, householdScopeForScript(household.id));
+   }
