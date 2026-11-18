@@ -95,7 +95,9 @@ in both themes:
   the ✓ goes with it ("Done ✓").
 - **Focus on a ✓ is a full-opacity `ring-foreground` ring OUTSIDE the ✓**, offset onto the tint or
   the card, where it is at least 3:1 in both themes. Never inset it on the fill: there it is 2.0:1
-  in dark. `ring` is under 3:1 on the tint in both themes, so it isn't used there.
+  in dark. `ring` now clears 3:1 on the tint too (4.27 light, 5.16 dark), but the ✓ keeps
+  `foreground` because the ring sits offset over a `done` fill, where `foreground` is the stronger
+  edge.
 
 The prototype's light fill was 3.7:1 under white, so the app's is darker. A reskin (UI-3) re-measures
 these pairs, since the candidate sets don't declare them.

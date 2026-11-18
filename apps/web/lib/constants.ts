@@ -355,9 +355,12 @@ export const NAV_LINK_CLASS =
  * ⚠️ **Named at its second use, which is the trigger.** `app/p/page.tsx` hand-typed it for the
  * settings row; `UI-5`'s nav rail wants exactly the same shape for every item, and a third copy is
  * how a focus ring or a tap-target height ends up different on one of them.
+ *
+ * `ring-inset` because the nav rail scrolls (`overflow-y-auto`), which clips a ring drawn outside
+ * the row; inside it, the full-opacity ring stays whole.
  */
 export const NAV_ROW_CLASS =
-  'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3';
+  'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3 focus-visible:ring-inset';
 
 export const QUIET_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
@@ -641,7 +644,7 @@ export const SHELL_CELL_CLASS = 'lg:mx-0 lg:max-w-none';
  * (e.g. `${INPUT_CLASS} w-24`). Extracted from the three form-local copies it used to be duplicated in.
  */
 export const INPUT_CLASS =
-  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 aria-invalid:border-destructive';
 
 /**
  * The saved-state copy (V1-24 PR 1a) — one definition shared by the components and the specs.
@@ -697,11 +700,11 @@ export const LIFE_COPY = {
  * athlete switcher). With `tabIndex={-1}` at the use site. The day page's rows hand focus to a real
  * control instead since V1-24 3b-life.
  */
-export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus-visible:ring-3';
+export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring outline-none focus-visible:ring-3';
 
 /**
- * The ✓'s focus ring (design.md), and any Tab stop that needs one at ≥3:1 (the day page's athlete
- * switcher, FAM-1 12c): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
+ * The ✓'s focus ring (design.md), and any Tab stop on the day page that should focus like it (the
+ * athlete switcher, FAM-1 12c): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
  * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
  *
  * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline

@@ -1,12 +1,13 @@
 import 'server-only';
 
-import { logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
+import { amendRow, logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
   ROW_REFUSAL,
   isoDaySchema,
   uuidSchema,
   type DayPlan,
+  type RowAmend,
   type RowResult,
   type RowRetick,
   type RowUntick,
@@ -21,8 +22,8 @@ import { quietDbErrors } from '../quiet-db-errors';
 import { reportRowMiss } from './report-miss';
 
 /**
- * The day page's data access (FAM-1 step 12b; [guide](../../../../../docs/features/day-page.md)):
- * the athlete's `DayPlan`, and the three row writes the day screen makes.
+ * The day page's data access (FAM-1 steps 12b and 12d; [guide](../../../../../docs/features/day-page.md)):
+ * the athlete's `DayPlan`, and the four row writes the day screen makes.
  *
  * - 🔴 **`today` is an argument, never read here.** The action (or, at 12c, the page) reads the
  *   time zone and passes its active-zone day. Nothing at or below this file reads a cookie or a
@@ -81,6 +82,17 @@ export async function untickDayRow(input: RowUntick, today: string): Promise<Row
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
   return quietDbErrors('untickRow', () => untickRow(db, { scope, today, input }));
+}
+
+/**
+ * Change a logged row's numbers (FAM-1 12d; lane E's writer, 11c-i). Like un-tick it carries only an
+ * entry id, so a `not_found` is answered and not reported. The writer checks the entry in the scope,
+ * its day against `today`'s window, and the numbers in the unit the row was logged in (C28).
+ */
+export async function amendDayRow(input: RowAmend, today: string): Promise<RowResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) return NOT_FOUND;
+  return quietDbErrors('amendRow', () => amendRow(db, { scope, today, input }));
 }
 
 /** Re-tick a row un-ticked in this page visit. Reported as un-tick is: not at all. */

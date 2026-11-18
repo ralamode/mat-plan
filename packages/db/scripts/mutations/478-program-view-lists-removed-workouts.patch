@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
+index 123aa5b4..ffa87bac 100644
+--- a/packages/db/src/queries/program/program-view.ts
++++ b/packages/db/src/queries/program/program-view.ts
+@@ -118,7 +118,7 @@ export async function readProgramView(
+       createdAt: w.createdAt,
+     })
+     .from(w)
+-    .where(and(eq(w.blockId, program.id), isNull(w.deletedAt)))
++    .where(eq(w.blockId, program.id))
+     .orderBy(asc(w.id));
+   const counts = await exec
+     .select({ workoutId: schema.prescriptions.workoutId, n: count() })

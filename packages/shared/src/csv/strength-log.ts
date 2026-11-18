@@ -46,7 +46,9 @@ export type StrengthLogRow = ExportMovement & {
  */
 export function buildStrengthLog(rows: readonly StrengthLogRow[]): string {
   const body = rows.map((row) => {
-    const context = `${row.date} ${row.movementSlug}`;
+    // The day and the set locate the row; the movement's slug is NOT in an error's message, since a
+    // slug can carry what a person typed and a thrown message reaches Sentry (`exception.value`).
+    const context = row.date;
     const { sets, reps, load } = aggregateMovement(row, context);
     return csvRow(
       [

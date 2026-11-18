@@ -382,15 +382,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
   edit and belongs to whichever chunk next touches that file deliberately.
 
-### `--ring` is ~2.59:1 on the light background, under SC 1.4.11 for focus indicators (added 2026-11-09)
-
-- **What & why it's debt:** every `focus-visible:ring-ring` in the app. Pre-existing since the
-  scaffold; `token-sets.test.ts` asserts the 3:1 bar only for the **candidate** palettes, not the
-  shipped one. ⚠️ A reviewer's calculation, not a measured capture — verify before acting.
-- **Why it is not urgent:** focus is also carried by a 3px ring width and, on most controls, a border
-  change. It is a real SC 1.4.11 gap, not an unusable one.
-- **The fix:** belongs with `UI-3`'s palette choice, which is already re-deriving these tokens.
-
 ### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
@@ -690,24 +681,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `packages/db` alone until a second consumer there justifies the shared module.
 - **Severity:** low.
 
-### The light-mode focus ring misses SC 1.4.11, and the test that looks like it checks this skips the shipping palette (found 2026-10-07, ONB-0 UX panel)
-
-- **What & why:** `--ring: oklch(0.708 0 0)` on `--background: oklch(1 0 0)` (`apps/web/app/globals.css`)
-  measures **~2.59:1**, under the 3:1 non-text bar; the outer `ring-ring/50` against the white page is
-  ~1.44:1. Dark mode is fine (~4.2:1). `app/design/tokens/token-sets.test.ts` **does** assert
-  `ring` vs `background` ≥ 3:1 — but that `describe.each` iterates `SCOPED_SETS` only, and the control
-  set declares no tokens by design (`tokens: null`), so **the palette that actually ships is never
-  measured on this axis.** A gate that looks like it covers this and does not is the recurring shape in
-  this file.
-- **Impact:** affects every focusable control in light mode, including both landing CTAs and ONB-0's
-  first-run link. Pre-existing — introduced with the scaffold palette, not by any recent change.
-- **Proposed fix:** add a `ring` vs `background` row to the "known AA failures in the live palette
-  (UI-3 inputs)" block in `token-sets.test.ts`, which is that file's own stated pattern for exactly
-  this ("a finding recorded as a test cannot be quietly lost"); then it is an input to UI-3's reskin
-  rather than a surprise. Not fixed in ONB-0 because changing `--ring` changes the live app's
-  appearance, which is UI-3's call.
-- **Severity:** medium (a11y, every screen).
-
 ### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
 
 - **What & why:** `profiles.birthdate` has **no writer, no reader, no UI and no seed value** anywhere
@@ -761,20 +734,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   at 15c, which wires that dialog.
 - **Severity:** low.
 
-### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)
-
-- **What & why:** `INPUT_CLASS` (`lib/constants.ts`) and `Button` (`components/ui/button.tsx`) draw
-  focus with `ring-ring/50`. A reviewer measured it at about **1.54:1** on the page background (and
-  about 1.48:1 light / 1.67:1 dark on the done tint), under WCAG 2.2's 3:1 for a focus indicator
-  (SC 1.4.11 / 2.4.13). Not measured by any gate: axe does not check focus styles.
-- **Impact:** a keyboard or switch user cannot reliably see where focus is. The day page now hands
-  focus to Change or the field after every log, save and clear (V1-24 3b-bw), so the ring is the only
-  "where am I" cue on the screen it was built for.
-- **Proposed fix:** a stronger ring token (`ring-foreground`, or a solid `ring` at full opacity) in
-  the two shared places, with a contrast pin in `app/done-tokens.test.ts`'s style; its own PR, since
-  it changes every focusable control.
-- **Severity:** medium (accessibility, every screen).
-
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
 
 - **What & why:** `renameProfile` (`packages/db/src/writers/profile.ts`) has no `expected`/version
@@ -790,18 +749,6 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
   assume:** a replayed submit after a success would then refuse rather than no-op.
 - **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
   rule is scoped to `/api/sync`, so there is no standing convention this violates.
-
-### The strength writer's replay re-select is not scoped to the profile (found 2026-10-02, #212 review)
-
-- **What & why:** `reselectLiveByClientId` (`packages/db/src/writers/strength-session.ts`, from #59)
-  re-selects a session by `client_id` only. Replaying another profile's session `client_id` under
-  profile B would attach B's entries to A's session, and since V1-24 3a-ii return A's public id as
-  `savedId`.
-- **Impact:** low today: it needs a device-generated `client_id` that is never exposed, and ownership
-  is existence-only until AUTH-1. It becomes a cross-household leak once households exist.
-- **Proposed fix:** add the profile (or household) to the re-select's WHERE, with a `db:verify` proof.
-  Fold into AUTH-1's ownership pass.
-- **Severity:** medium after AUTH-1.
 
 ### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
 
@@ -893,35 +840,6 @@ success.` Harmless there — nothing referenced the files yet.
   that has to touch the file anyway. A refactor-for-its-own-sake PR at ~4h/wk is the wrong trade, and
   a big mechanical diff is the hardest kind to review.
 - **Payoff trigger:** the next PR that touches one of the named files. V1-15 touches `page.tsx`.
-
-### `apps/web`'s drizzle peers are incidental, so a dep bump can split `drizzle-orm` in two
-
-- **What & why:** `apps/web` declares `drizzle-orm` but **none of its optional peers** — `pg`,
-  `@types/pg`, `@electric-sql/pglite` are declared **only in `packages/db`**. So `apps/web`'s peer
-  resolution is whatever pnpm happened to pick, not something we state. Dependabot's lockfile updater is
-  **minimal by design**: it rewrites the input it bumped and leaves the rest of drizzle's five-part peer
-  key frozen. Bump one peer package and the two workspaces can end up on **two copies of the same
-  `drizzle-orm` version**, which TypeScript treats as nominally distinct (private `shouldInlineParams`) —
-  so every `eq()`/`and()` across the seam fails and `next build` dies at type-check **in files the PR
-  never touched**.
-- **Impact:** medium, and **recurring**. Two samples so far:
-  - **#111** — `pg` ^8.22.0 → ^8.23.0 **broke it**. `@dependabot recreate` reproduced a byte-identical
-    commit; `pnpm dedupe` and `pnpm.overrides` both produced **zero churn**. Fixed with
-    `pnpm update pg --recursive`.
-  - **#112** — bumped **two** more peer-key packages (`@types/pg`, `@electric-sql/pglite`) and **did not
-    break**, because the merge conflict forced a lockfile **regeneration**, which re-resolves the whole
-    peer key at once. The weakness wasn't fixed there, it just wasn't triggered.
-  - **The tell:** read the full `.pnpm/` paths in the type error — they differ only in one peer segment.
-    Diagnosis is that one line; without it this reads as an inscrutable drizzle bug.
-- **Proposed fix:** declare `pg`, `@types/pg` and `@electric-sql/pglite` in `apps/web` so dependabot bumps
-  both workspaces together and the peer is **stated rather than inferred**. Costs three declared-but-
-  unimported devDeps. (`pnpm.overrides` is the alternative, but it only takes effect at lockfile-creation
-  time — verified inert on an already-pinned peer — and needs manual bumping.)
-- **Trigger:** the next dependency PR that bumps **exactly one** peer-key package **and merges without a
-  conflict**. A conflict masks the bug by forcing regeneration, so a _clean_ dep PR is the dangerous one.
-- **Severity:** medium — never reaches production (it fails the build), but it burns a full debugging
-  cycle each time and looks nothing like its cause. Symptom → fix is in
-  [lessons.md](./lessons.md) → **pnpm / build**.
 
 ### A labeled set can't be edited, and a duration isn't structurally queryable (GAP-1 P0-2)
 

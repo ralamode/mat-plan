@@ -3,7 +3,9 @@
  * exports only**, so a later step adds its read here, in the lane's own file, with no further turn on
  * the package's barrel.
  */
-export { programIn, workoutIn, workoutInHousehold } from './exists';
+export { programIn, programWorkoutIds, workoutIn, workoutInHousehold } from './exists';
 export { readWorkoutDraft } from './workout';
 export { readWeek } from './week';
 export { movementOptions, type MovementOption } from './movement-options';
+export { readProgramList, readProgramsByAthlete } from './program-list';
+export { readProgramView } from './program-view';

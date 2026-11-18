@@ -3,6 +3,7 @@
 import * as Sentry from '@sentry/nextjs';
 import {
   ROW_REFUSAL,
+  rowAmendSchema,
   rowRetickSchema,
   rowUntickSchema,
   rowWriteSchema,
@@ -15,14 +16,14 @@ import type { z } from 'zod';
 import { enterMutation } from '@/app/p/mutation-entry';
 import { getActiveLocalDay } from '@/lib/active-timezone';
 import { athletePath } from '@/lib/constants';
-import { logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
+import { amendDayRow, logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 
 /**
- * The day page's row writes (FAM-1 step 12b): three of `DayActions`' members, `logRow`, `untickRow`
- * and `retickRow`. `amendRow` (12d) and `reorderPrograms` (15c) are not here yet, so the screen
- * keeps their controls hidden. Each action is a PUBLIC endpoint and re-checks the boundary itself
+ * The day page's row writes: four of `DayActions`' members, `logRow`, `untickRow` and `retickRow`
+ * (FAM-1 step 12b), and `amendRow` (12d, Change). `reorderPrograms` (15c) is not here yet, so the
+ * screen keeps Program order hidden. Each action is a PUBLIC endpoint and re-checks the boundary itself
  * (AGENTS.md → Server conventions):
  *
  * 1. Sentry's wrapper, with NO options: headers and form data never reach a captured event.
@@ -48,7 +49,7 @@ const BAD_VALUE = { ok: false, reason: ROW_REFUSAL.bad_value } as const;
 const NOT_FOUND = { ok: false, reason: ROW_REFUSAL.not_found } as const;
 
 /**
- * Steps 3 to 6, the same for the three writes; only the schema and the DAL call differ. Steps 1 and 2
+ * Steps 3 to 6, the same for the four writes; only the schema and the DAL call differ. Steps 1 and 2
  * stay in each action's own body, where the session guard reads them
  * (`app/pages-need-a-session.test.ts`). This is the one place today is read.
  */
@@ -102,6 +103,17 @@ export async function retickRowAction(input: unknown): Promise<RowResult> {
       const entry = await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT);
       if (!entry.ok) return entry;
       return writeRow(rowRetickSchema, input, retickDayRow);
+    },
+  );
+}
+
+export async function amendRowAction(input: unknown): Promise<RowResult> {
+  return await Sentry.withServerActionInstrumentation(
+    'amendRowAction',
+    async (): Promise<RowResult> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT);
+      if (!entry.ok) return entry;
+      return writeRow(rowAmendSchema, input, amendDayRow);
     },
   );
 }
