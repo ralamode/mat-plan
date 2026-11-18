@@ -287,7 +287,7 @@ gantt
   section P · program data
   6a (four PRs, merged)        :done, p1, 5, 6
   6b                           :done, p2, 6, 7
-  6c-i put on, test data       :p3, 7, 8
+  6c-i put on, test data       :done, p3, 7, 8
   6c-ii the two reads          :p3b, 8, 9
   6d                           :p4, 9, 10
 
@@ -347,18 +347,18 @@ gantt
 - **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
   critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a change after logging; it gates 15, not the day page (12c). It merged on 2026-11-17 (#525), before 6c-i and 6d: its reorder case is seeded by a direct band shift until 6d's writer exists.
 - **6c is two PRs since 2026-11-17**, the maintainer's decision (6c-i, Put on and the test data;
-  6c-ii, the program list and program view reads). The day page (12c) waits for 6c-i only. The pages (7b)
+  6c-ii, the program list and program view reads). 6c-i is merged (#588). The day page (12c) waits for 6c-i only. The pages (7b)
   wait for 6c-ii, so 7b is drawn a wave later, inside lane B's slack.
-- **14 is two PRs since 2026-11-17** (14a, the program rows in the strength log, which gates 12c; 14b, the check-ins file, which gates nothing; lane E's plan `docs/plans/fam-1-14-export.md`), in 14's one slot.
+- **14 is two PRs since 2026-11-17** (14a, the program rows in the strength log, which gates 12c; 14b, the check-ins file, which does not block 12c; lane E's plan `docs/plans/fam-1-14-export.md`), in 14's one slot.
 - **11c is two PRs since 2026-11-17** (11c-i, Change; 11c-ii, the D35 revive), in 11c's one slot.
   12d's Change action waits for 11c-i only.
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, and so is 7a-ii, which needed 6b and 6a-iii-b (#586).
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-18, 42 of the 54). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-18, 43 of the 54). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
   themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525), 11c-i (#539) and 14a (#582); lane B's six screen steps (8a to 10b) and both of 7a's (7a-i, 7a-ii); lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
-  All four of 6a's PRs (6a-iii-b, copying a workout, is #571) and 6b (#522) are merged. Both of 7a's PRs are merged (7a-ii is #586). The bar for 14 and 11c is part merged: 14a and 11c-i are merged, 14b and 11c-ii are not. A bar is marked here when its PRs are on `main`.
+  All four of 6a's PRs (6a-iii-b, copying a workout, is #571), 6b (#522) and 6c-i (#588) are merged. Both of 7a's PRs are merged (7a-ii is #586). The bar for 14 and 11c is part merged: 14a and 11c-i are merged, 14b and 11c-ii are not. A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
