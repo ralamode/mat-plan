@@ -7,6 +7,9 @@ import {
   type ProgramActions,
   type WorkoutDraft,
   NEW_ITEM_NAME_MESSAGES,
+  EQUIPMENT_CODE,
+  MODALITY,
+  MUSCLE,
 } from '@mat-plan/shared';
 import { heavyADraft, newWorkoutEmpty } from '@mat-plan/shared/program/fixtures';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -15,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
-import { pickerOptions } from '@/app/design/program/picker-options';
+import { householdPickerOptions, pickerOptions } from '@/app/design/program/picker-options';
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY } from '@/lib/movements/movement-picker-copy';
 
@@ -497,7 +500,8 @@ describe('the item picker (FAM-1 9)', () => {
       const withNew: MovementOptionDTO[] = [
         ...pickerOptions,
         {
-          ...pickerOptions[0]!,
+          // A household item, as one made in the form is: the first option is a library row now.
+          ...householdPickerOptions[0]!,
           publicId: NEW_ID,
           name: 'Bear crawl',
           trackingType: TRACKING_TYPE.reps,
@@ -563,6 +567,13 @@ describe('the item picker (FAM-1 9)', () => {
         unitDefault: null,
         isBodyweight: false,
         trackingType: TRACKING_TYPE.weight_reps,
+        modality: MODALITY.strength,
+        pattern: 'hinge',
+        equipment: [EQUIPMENT_CODE.barbell],
+        primaryMuscle: MUSCLE.hamstrings,
+        secondaryMuscles: [],
+        supervision: null,
+        hasInstructions: false,
       };
       const all = editor({}, newWorkoutEmpty, [...pickerOptions, rdl]);
       openPicker();

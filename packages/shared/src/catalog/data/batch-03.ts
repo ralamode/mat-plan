@@ -381,7 +381,7 @@ export const CATALOG_BATCH_03: readonly CatalogMovement[] = [
     secondaryMuscles: ['biceps', 'forearms'],
     supervision: 'coach',
     instructions:
-      'Grip the rope high with both hands and pinch it between your feet.\nPull with your arms while you stand up on your feet.\nReach higher and repeat until you reach the top.\nClimb down hand under hand; never slide.',
+      'Climb only with your coach standing beside the rope.\nGrip the rope high with both hands and pinch it between your feet.\nPull with your arms while you stand up on your feet.\nReach higher and repeat, going only as high as your coach says.\nClimb down hand under hand; never slide.',
   },
   {
     slug: 'legless_rope_climb',
@@ -397,7 +397,7 @@ export const CATALOG_BATCH_03: readonly CatalogMovement[] = [
     secondaryMuscles: ['biceps', 'forearms'],
     supervision: 'coach',
     instructions:
-      'Grip the rope high with both hands and let your legs hang.\nPull yourself up hand over hand using only your arms.\nClimb down hand under hand with control; never slide.',
+      'Climb only with your coach standing beside the rope.\nGrip the rope high with both hands and let your legs hang.\nPull yourself up hand over hand using only your arms, going only as high as your coach says.\nClimb down hand under hand with control; never slide.',
   },
   {
     slug: 'lat_pulldown',
@@ -743,7 +743,7 @@ export const CATALOG_BATCH_03: readonly CatalogMovement[] = [
     secondaryMuscles: ['triceps'],
     supervision: 'coach',
     instructions:
-      'Kick up into a handstand with your heels against a wall.\nLower your head toward the floor with control.\nPress back up to straight arms.\nCome down from the wall the way you went up.',
+      'With your coach standing beside you, kick up into a handstand with your heels against a wall.\nLower your head toward the floor with control while your coach watches your neck and shoulders.\nPress back up to straight arms.\nCome down from the wall the way you went up, with your coach ready to help.',
   },
   {
     slug: 'dip',

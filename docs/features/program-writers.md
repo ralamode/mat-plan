@@ -27,7 +27,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                                                |
 | 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                                               |
 | 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅                                        |
-| 6a-iii-b | the copy path (`copyWorkout`, C15)                                                                                                  |
+| 6a-iii-b | `writers/program/copy-workout.ts` (`copyWorkout`, C15) ✅                                                                           |
 | 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                                                        |
 | 6c       | `writers/program/assign.ts` (put on); `queries/program/{program-view,program-list}.ts`; fills in `writers/program/seed-fixtures.ts` |
 | 6d       | take off and reorder, in `assign.ts`                                                                                                |
@@ -49,6 +49,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/queries/program/week.ts`             | `readWeek`: a program's week as `WeekDraft['days']`, every weekday present, live slots of live workouts in order.                                                                                                                                                                                                                 |
 | `packages/db/src/queries/program/movement-options.ts` | `movementOptions`: every item the household can pick, catalog rows (with group and aliases) first, then its own live items no catalog slug shadows, used or not.                                                                                                                                                                  |
 | `packages/db/src/writers/program/new-item.ts`         | `newItem`: selects the item a name already names (`existingItem`, then the slug), with its stored name and own type; else makes a household item typed as asked.                                                                                                                                                                  |
+| `packages/db/src/writers/program/copy-workout.ts`     | `copyWorkout`: an independent copy of a workout into one of the household's programs, named by C15, with frozen provenance, optionally onto weekdays.                                                                                                                                                                             |
 | `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                                                                                                                   |
 | `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                         |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                             |
@@ -178,7 +179,7 @@ flowchart TD
     must list **every** live household item, used or not (maintainer, 2026-11-17), or an item made
     and not yet used could be added again under a re-spelled name (mutations
     `options-list-shadowed-items`, `options-list-hidden-items`, `options-list-any-households-items`,
-    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`, `new-item-answers-the-asked-type`, `new-item-slug-reads-household-first`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation.
+    `new-item-skips-the-pickers-rule`, `new-item-returns-the-typed-name`, `new-item-skips-the-slug`, `new-item-drops-the-catalog-tie-break`, `new-item-slug-answers-the-typed-name`, `options-household-items-unsorted`, `new-item-answers-the-asked-type`, `new-item-slug-reads-household-first`). Since C30, an item's own name ranks before another item's alias: a household item literally named `RDL` is what `RDL` means in that household, and the catalog's Romanian Deadlift is found by its own name. The list is ordered by folded name in code, not by the database's collation. What the picker shows is the DAL's narrower list: catalog rows with a library entry, plus the household's own (maintainer, 2026-11-17); `newItem` checks against this whole read, so an old built-in is never duplicated. A catalog option carries its `slug` (CAT-3 P11-i), for the DAL to attach the taxonomy and "How to" from the catalog const; a household option never does, and the slug stops at the DAL (`options-catalog-slug-is-the-name`, `options-household-items-carry-a-slug`).
     ⚠️ Latent, and gated by the constraint on `movements.deleted_at` in `schema.ts` (nothing may
     set it until the indexes and the resolver change together): once something hides a movement
     (`MOV-1`'s merge, or C4m), `newItem`'s step 2 misses the hidden row, and the resolver
@@ -187,6 +188,16 @@ flowchart TD
     predicate) stops the name being made again. The PR that first hides a movement revisits that
     constraint's list and adds `newItem`'s step 2 and `movementOptions`' catalog and shadow
     `deleted_at` filters to it.
+
+18. 🔴 **A copy is independent of its source, and never a second workout of one name** (6a-iii-b;
+    contract change C15). It writes a new workout, new prescription rows (new client ids) and new
+    quantity rows; only `copied_from_workout_id` and the source program's name, frozen, point back
+    (mutations `copy-leaves-out-the-items`, `copy-leaves-out-the-quantities`). Its name is
+    `CopyDraft.name` when given, else `copyName` in its own program and the workout's own name in
+    another (`copy-name-ignores-the-program`); a name a live workout of the target has, folded, is
+    `name_taken` (`copy-name-not-folded`). A replay is answered once the target program is found, before the source and the name, so it still answers after the source was removed (`copy-checks-name-before-replay`, `copy-checks-the-source-before-replay`). A live card's hidden quantity stays out (`copy-takes-hidden-quantities`), and a copy into another program carries its items too (`copy-elsewhere-leaves-out-the-items`). The source must be a live workout of a live program of the
+    household (`copy-takes-a-removed-programs-workout`; `insertWorkoutOwnedBy` refuses another
+    household's source by itself). It goes last on each weekday named (`copy-puts-itself-first`). Removed cards stay out and the stored order is kept (`copy-takes-removed-cards`, `copy-ignores-the-order`); every quantity column travels, a range included (`copy-drops-the-range`); the provenance names the SOURCE program, frozen (`copy-records-the-targets-name`); a name a removed workout had is free (`copy-name-counts-removed-workouts`). The source is read in one statement, not locked: locking it would let a copy P→Q and a copy Q→P deadlock.
 
 ## Changing it
 
