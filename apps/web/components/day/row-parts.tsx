@@ -34,8 +34,8 @@ export const secondaryText = (onTint: boolean) =>
   onTint ? 'text-done-muted-foreground' : 'text-muted-foreground';
 
 /**
- * A field's focus ring: the ✓'s foreground outline, since `INPUT_CLASS`'s `ring-ring/50` is under 3:1
- * on the tint, with a 1px offset so the ring (4px) stays inside the 4px between two fields.
+ * A field's focus ring: the ✓'s foreground outline, so a field on the tint focuses the way the ✓
+ * beside it does (docs/design.md: the offset outline over a `done` fill), with a 1px offset so the ring (4px) stays inside the 4px between two fields.
  */
 const FIELD_FOCUS_CLASS = `focus-visible:ring-0 ${TICK_FOCUS_CLASS.replace(
   'focus-visible:outline-offset-2',
@@ -53,7 +53,7 @@ const FIELD_FOCUS_CLASS = `focus-visible:ring-0 ${TICK_FOCUS_CLASS.replace(
  */
 export const LOGGED_FIELD_CLASS = `${TINT_CLASS} ${LOGGED_CARD_CLASS} ${FIELD_FOCUS_CLASS}`;
 export const CHANGED_FIELD_CLASS = `bg-background border-2 border-foreground ${FIELD_FOCUS_CLASS}`;
-/** A button on the tint (Undo, the Change's ✕, "+ Add set"): the ✓'s outline, not `Button`'s faint ring. */
+/** A button on the tint (Undo, the Change's ✕, "+ Add set"): the ✓'s outline, so the row's controls focus alike. */
 export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
 
 export const TICK_CLASS =

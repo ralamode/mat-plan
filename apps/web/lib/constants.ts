@@ -703,8 +703,8 @@ export const LIFE_COPY = {
 export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring outline-none focus-visible:ring-3';
 
 /**
- * The ✓'s focus ring (design.md), and any Tab stop that needs one at ≥3:1 (the day page's athlete
- * switcher, FAM-1 12c): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
+ * The ✓'s focus ring (design.md), and any Tab stop on the day page that should focus like it (the
+ * athlete switcher, FAM-1 12c): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
  * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
  *
  * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline
