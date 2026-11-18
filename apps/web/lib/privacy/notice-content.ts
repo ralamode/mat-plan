@@ -1663,7 +1663,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
+        "text": " (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete\nor household, and asking for one program, workout or typed item to be removed. "
       },
       {
         "k": "strong",
@@ -1794,13 +1794,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "no way to permanently remove one single item on demand"
+            "text": "no way to permanently remove one single logged item on demand"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the finest grain for a\npermanent removal is an athlete. Ask, and that is done."
+        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.)"
       }
     ]
   },
