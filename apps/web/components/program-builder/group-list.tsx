@@ -9,8 +9,8 @@ import { BuilderLink } from './route-link';
  * lane B: the Programs list, a program's workouts).
  *
  * A row is `NAV_ROW_CLASS` without its own border and corners. Its focus ring is inset by
- * `NAV_ROW_CLASS` itself, so the box does not clip it. The link stacks its children, so the title, its lines and the `›` sit in a
- * row of their own inside it.
+ * `NAV_ROW_CLASS` itself, so the box does not clip it. The link stacks its children, so the title,
+ * its lines and the `›` sit in a row of their own inside it.
  */
 export function GroupList({ children }: { children: ReactNode }) {
   return <ul className="divide-y overflow-hidden rounded-lg border">{children}</ul>;

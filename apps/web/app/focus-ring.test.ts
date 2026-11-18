@@ -49,8 +49,11 @@ describe.each([
  * A ring or outline with an alpha under a focus variant. `aria-invalid:` rings are an error STATE
  * shown without focus, not a focus indicator, so they are not this rule's.
  */
+// One class token (no whitespace or quote), `focus` anywhere in its variant prefix (stacked, named
+// group, bracket), then an optionally `!` ring or outline utility whose colour and alpha may be a
+// name, an arbitrary `[…]` value or a v4 `(…)` variable.
 const FOCUS_ALPHA =
-  /(?:[a-z-]*focus[a-z-]*|[a-z-]*\[[^\]]*focus[^\]]*\]):(?:ring|outline)-(?:[a-z0-9-]+|\[[^\]]+\])\/(?:\d+|\[[^\]]+\])/g;
+  /[^\s'"`]*focus[^\s'"`]*:!?(?:ring|outline)-(?:[a-z0-9-]+|\[[^\]]+\]|\([^)]+\))\/(?:\d+|\[[^\]]+\]|\([^)]+\))/g;
 
 describe('no focus ring is drawn translucent', () => {
   // The temporary `/design` harness is left out: it demonstrates candidate palettes, not the app.
@@ -83,6 +86,12 @@ describe('no focus ring is drawn translucent', () => {
     '[&:focus-visible]:ring-ring/50',
     'focus-visible:ring-[color:var(--ring)]/50',
     'focus-visible:ring-ring/[.5]',
+    'focus-visible:ring-(--ring)/50',
+    'focus-visible:ring-ring/(--alpha)',
+    'group-focus-visible/row:ring-ring/50',
+    'focus-visible:dark:ring-ring/50',
+    'focus-visible:!ring-ring/50',
+    'has-[input:focus-visible]:ring-ring/50',
   ])('the scan catches %s', (cls) => {
     expect(cls.match(FOCUS_ALPHA)).not.toBeNull();
   });

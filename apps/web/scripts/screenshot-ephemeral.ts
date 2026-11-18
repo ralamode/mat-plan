@@ -634,10 +634,17 @@ async function quadsOnThenBack(page: Page) {
   await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
 }
 
-/** Resolve once no CSS transition or animation is running, so a capture is not mid-animation. */
+/**
+ * Resolve once no FINITE transition or animation is running, so a capture is not mid-animation. An
+ * infinite one (`animate-spin`, `animate-pulse`) never finishes, so it is not waited for.
+ */
 async function settleAnimations(page: Page): Promise<void> {
   await page.waitForFunction(() =>
-    document.getAnimations().every((a) => a.playState !== 'running'),
+    document
+      .getAnimations()
+      .every(
+        (a) => a.playState !== 'running' || a.effect?.getComputedTiming().endTime === Infinity,
+      ),
   );
 }
 
@@ -717,8 +724,6 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.locator(`a[href="${SETTINGS_PATH}"]`).first().focus();
     await settleAnimations(page);
   },
-  // A row INSIDE the nav rail's scrolling list, the case `NAV_ROW_CLASS`'s `ring-inset` exists for
-  // (an outer ring would be clipped there). The rail renders from the tablet width up.
   // A row of the builder's grouped list (`group-list.tsx`), whose ring now comes inset from
   // `NAV_ROW_CLASS` alone. Route: the programs-list preview.
   'focus-group-row': async (page) => {
@@ -726,6 +731,8 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.locator('main ul a').first().focus();
     await settleAnimations(page);
   },
+  // A row INSIDE the nav rail's scrolling list, the case `NAV_ROW_CLASS`'s `ring-inset` exists for
+  // (an outer ring would be clipped there). The rail renders from the tablet width up.
   'focus-rail-row': async (page) => {
     await page.keyboard.press('Shift');
     const row = page.locator(`nav[aria-label="${NAV_RAIL_COPY.label}"] ul a`).first();

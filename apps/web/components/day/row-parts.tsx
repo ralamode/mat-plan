@@ -35,7 +35,8 @@ export const secondaryText = (onTint: boolean) =>
 
 /**
  * A field's focus ring: the ✓'s foreground outline, so a field on the tint focuses the way the ✓
- * beside it does (docs/design.md: the offset outline over a `done` fill), with a 1px offset so the ring (4px) stays inside the 4px between two fields.
+ * beside it does (docs/design.md: the offset outline over a `done` fill), with a 1px offset so the
+ * ring (4px) stays inside the 4px between two fields.
  */
 const FIELD_FOCUS_CLASS = `focus-visible:ring-0 ${TICK_FOCUS_CLASS.replace(
   'focus-visible:outline-offset-2',
