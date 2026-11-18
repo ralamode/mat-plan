@@ -1858,8 +1858,37 @@ describe('the fakes stay on the preview route', () => {
    * A production route passes the real actions it has, never a fake (plan §6). So no module outside
    * the preview route's own directory may import this one. Fixtures are held the same way: they are
    * preview and test data.
+   *
+   * **Tests may read them.** `appSources()` already leaves out the unit tests (`*.test.ts`). The
+   * end-to-end tests are Playwright's `*.spec.ts` and their helpers, all under `apps/web/e2e/`,
+   * which no route can import: they are left out here, by directory, so a spec can read a
+   * fixture's names and never re-type them (12c's `day-page.spec.ts`). ⚠️ Here and not in
+   * `appSources()`: the session and secrets guards share that list, and they must keep seeing `e2e/`.
    */
-  const outside = appSources().filter((file) => !file.startsWith(`${WEB_DIR}/app/design/program/`));
+  const mayReadPreviewData = (file: string) =>
+    file.startsWith(`${WEB_DIR}/app/design/program/`) || file.startsWith(`${WEB_DIR}/e2e/`);
+  const outside = appSources().filter((file) => !mayReadPreviewData(file));
+
+  it('leaves out the preview route and the end-to-end tests, and nothing that only looks like them', () => {
+    for (const file of [
+      'app/design/program/preview-harness.tsx',
+      'e2e/day-page.spec.ts',
+      'e2e/steps.ts',
+    ]) {
+      expect(mayReadPreviewData(`${WEB_DIR}/${file}`), file).toBe(true);
+    }
+    for (const file of [
+      'app/e2e/page.tsx',
+      'app/design/tokens/page.tsx',
+      'components/e2e/steps.ts',
+      'lib/e2e.ts',
+      'e2e.ts',
+    ]) {
+      expect(mayReadPreviewData(`${WEB_DIR}/${file}`), file).toBe(false);
+    }
+    // The end-to-end tests are in the list this guard starts from, so leaving them out is a choice.
+    expect(appSources().some((file) => file.startsWith(`${WEB_DIR}/e2e/`))).toBe(true);
+  });
 
   it('finds the sources (an empty glob would pass the scan below)', () => {
     expect(outside.length).toBeGreaterThan(100);
