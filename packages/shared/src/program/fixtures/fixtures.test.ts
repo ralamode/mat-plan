@@ -1213,14 +1213,17 @@ describe('coach-label-program-ending-today (C32, C37)', () => {
     });
 
     it('🔴 a program that starts later is not ending today, whatever end it carries', () => {
-      const upcoming = edit(world, (draft) => {
-        Object.assign(draft.assign[athlete]![0]!, { from: tomorrow, to: '2026-11-18' });
-      });
-      // Camp week is first in the athlete's order and stays there: it has not started.
-      expect(current(upcoming)).toEqual([
-        ['Camp week', undefined],
-        ['Barbell club', undefined],
-      ]);
+      // An end on the day it starts included: `to` is tomorrow there, as for a program ending today.
+      for (const to of [tomorrow, '2026-11-18']) {
+        const upcoming = edit(world, (draft) => {
+          Object.assign(draft.assign[athlete]![0]!, { from: tomorrow, to });
+        });
+        // Camp week is first in the athlete's order and stays there: it has not started.
+        expect(current(upcoming), to).toEqual([
+          ['Camp week', undefined],
+          ['Barbell club', undefined],
+        ]);
+      }
     });
 
     it('🔴 refuses a started program that ends after today: no writer makes one', () => {
