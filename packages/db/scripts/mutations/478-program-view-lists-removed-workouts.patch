@@ -1,9 +1,9 @@
 diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
-index bd5fe95e..b8163abf 100644
+index 123aa5b4..ffa87bac 100644
 --- a/packages/db/src/queries/program/program-view.ts
 +++ b/packages/db/src/queries/program/program-view.ts
-@@ -98,7 +98,7 @@ export async function readProgramView(
-       createdOn: sql<string>`to_char(${w.createdAt} at time zone ${tz}, 'YYYY-MM-DD')`,
+@@ -118,7 +118,7 @@ export async function readProgramView(
+       createdAt: w.createdAt,
      })
      .from(w)
 -    .where(and(eq(w.blockId, program.id), isNull(w.deletedAt)))
