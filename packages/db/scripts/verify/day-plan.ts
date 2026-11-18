@@ -638,12 +638,13 @@ async function verifyRules(): Promise<void> {
       ],
       'FAM-1 12a R7: a program ending today goes after the ones that stay, before and after a put-on',
     );
-    // A reopen (the ids run against the order): X (20) reopened after Y (21) was put on, so X's row
-    // is the newer one; Y is then taken off today and Z (22) put on.
+    // A reopen (the ids run against the order): X (20, row 8) is taken off and put back on, which
+    // reopens its OLDER row at the last place, after Y (21, row 9); Y is then taken off today and Z
+    // (22, row 10, the newest) put on, so X compacts onto Y's 0.
     assert.deepEqual(
       [
         order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 1, null)]),
-        order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 0, null), row(7, 22, 1, null)]),
+        order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 0, null), row(10, 22, 1, null)]),
       ],
       [
         [20, 21],
@@ -651,13 +652,17 @@ async function verifyRules(): Promise<void> {
       ],
       'FAM-1 12a R7: the order holds when the ids run against it (a reopen)',
     );
-    // The placing row's days ride with each program (lane P's program view reads them).
+    // The PLACING row's days ride with each program (lane P's program view reads them): one program
+    // with a row ending today at 0 and an upcoming row at 2 is placed by the upcoming one.
     assert.deepEqual(
-      currentPrograms([row(1, 10, 0, FIXTURE_TODAY)], FIXTURE_TODAY).map((p) => [
-        p.activeFrom,
-        p.activeTo,
-      ]),
-      [['2026-11-01', FIXTURE_TODAY]],
+      currentPrograms(
+        [
+          row(1, 10, 0, FIXTURE_TODAY),
+          { ...row(2, 10, 2, null), activeFrom: addDays(FIXTURE_TODAY, 1) },
+        ],
+        FIXTURE_TODAY,
+      ).map((p) => [p.activeFrom, p.activeTo]),
+      [[addDays(FIXTURE_TODAY, 1), null]],
       'FAM-1 12a R7: each current program carries its placing row’s days',
     );
   }
