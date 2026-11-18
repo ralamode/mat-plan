@@ -230,7 +230,7 @@ flowchart TD
 20. 🔴 **The caps are counted under a lock, before the name** (C35; the contract's invariant 30).
     `newItem` stops the household's own items at `MAX_HOUSEHOLD_ITEMS` (counted as the picker lists
     them, so the library and an item a catalog row shadows never count),
-    under a transaction-scoped advisory lock keyed on the household (`ITEM_LOCK`, reached through
+    under a transaction-scoped advisory lock keyed on the household (`ADVISORY_LOCK.householdItems` in `writers/locks.ts`, reached through
     `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
     other. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
     (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live

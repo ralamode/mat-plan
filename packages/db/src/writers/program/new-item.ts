@@ -17,6 +17,7 @@ import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { findOrCreateTypedMovement } from '../movement-catalog';
 import { householdRowIs, movementIsAvailableTo, movementIsGlobal } from '../ownership';
+import { ADVISORY_LOCK } from '../locks';
 import { refuse } from './refuse';
 
 type NewItemResult = ProgramResult<{
@@ -25,13 +26,6 @@ type NewItemResult = ProgramResult<{
   trackingType: TrackingType;
   existed: boolean;
 }>;
-
-/**
- * The advisory-lock namespace for a household's own items (the first key; the household's id is
- * `hashint8` of the household's id the second, so any bigint id fits). Any other per-household
- * advisory lock takes its own namespace.
- */
-export const ITEM_LOCK = 600_001;
 
 /**
  * `ProgramActions.newItem`'s writer (FAM-1 step 6a-iii-a; contract change C8): add an item by name
@@ -53,7 +47,8 @@ export const ITEM_LOCK = 600_001;
  * **The household's own items are capped** (`MAX_HOUSEHOLD_ITEMS`, contract change C35, invariant 30):
  * step 3 answers `limit_reached` when the household already made that many. Steps 1 and 2 never do:
  * selecting an item adds nothing. The library's items do not count. Race-safe: the whole call holds a
- * transaction-scoped advisory lock on the household (`ITEM_LOCK`), so two adds at once count one
+ * transaction-scoped advisory lock on the household (`ADVISORY_LOCK.householdItems`, `writers/locks.ts`; the second key
+ * is `hashint8` of the household's id, so any bigint id fits), so two adds at once count one
  * after the other, and the second sees the first's row (and selects it, if it is the same name).
  *
  * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`; past the cap,
@@ -82,7 +77,9 @@ async function addOrSelect(
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
   // unwrapped here; no row (a household that is gone) takes no lock, and the add then fails as before.
   await exec
-    .select({ locked: sql`pg_advisory_xact_lock(${ITEM_LOCK}, hashint8(${schema.households.id}))` })
+    .select({
+      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
+    })
     .from(schema.households)
     .where(householdRowIs(scope));
 
