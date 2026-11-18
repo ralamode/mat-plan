@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 70189345..cf3d80ff 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -107,7 +107,6 @@ export async function copyWorkout(
+         schema.prescriptions,
+         and(
+           eq(schema.prescriptions.workoutId, schema.workouts.id),
+-          isNull(schema.prescriptions.deletedAt),
+         ),
+       )
+       .leftJoin(
