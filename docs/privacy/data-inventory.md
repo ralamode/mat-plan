@@ -7,6 +7,9 @@ walking `packages/db/src/schema.ts` and the third-party call sites — **not fro
 only way a notice about minors' health data is worth anything.
 
 > **Derived at `38f62de`, 2026-10-07** (PRIV-1, [plan](../plans/priv-1-privacy-review.md)).
+> 🔴 **§5 / §8 re-read 2026-11-18** for `PRIV-3`'s "Remove one program, workout or typed item on
+> request" (FAM-1 7b's H7): a third removal path, narrower than the athlete's erasure. Nothing new is
+> stored; three retention sentences gain it.
 > 🔴 **§1a / §2 re-read 2026-11-06** for `PROF-1` a-0 ([plan](../plans/prof-1-athletes.md)): `profiles`
 > gains **`client_id`** and **`archived_at`**, so **at a-0** this entry recorded two columns that
 > existed and held nothing; both have since woken, each on its own dated line below. `client_id` is a
@@ -662,7 +665,11 @@ ADR 0008 makes _"a hide must never remove the export path"_ a precondition on `V
 
 Two paths actually remove rows: the household deletion in [runbooks.md](../runbooks.md) → "Delete a
 household and everyone in it", and, since FAM-1 step 5, "Erase one athlete" (the athlete's profile and
-every row that points at it; the household's programs stay).
+every row that points at it; the household's programs stay). _(2026-11-18)_ A third removes less: "Remove
+one program, workout or typed item on request" deletes one program the household built (its workouts,
+items, targets, week and who was on it, hidden rows included), one workout, or one item the household
+typed that no log names. The logs of athletes who trained on a removed program stay, with the text
+frozen onto them when they were logged.
 
 ## 6. Getting data out — and what the export omits
 
@@ -817,7 +824,7 @@ code guarantee — it is on the operator checklist in [runbooks.md](../runbooks.
 
 **Program membership (`program_assignments`, FAM-1 5)** is kept as history: taking an athlete off closes
 the row and keeps it, and taking them off then putting them back on a later day leaves the closed row and a new one (back on the same day reopens the row, Amendment 4).
-Both are kept until the athlete is erased or the household deleted; nothing purges them.
+Both are kept until the athlete is erased, the household deleted, or the program removed on request (runbooks.md, "Remove one program"); nothing purges them.
 
 **A built program's items (`prescriptions.notes`, `rest_after`, `superset_label`, and
 `prescription_quantities`, FAM-1 4b) are household-scoped, and are NOT removed with one athlete.**
@@ -831,7 +838,7 @@ go with the household (runbook steps 8a, 9).
 
 **A household's own item (`movements` with `household_id`, written by the strength form and, from 7b, by "+ New item", whose Server Action exists since 7a-ii but no page serves it is NOT removed with one athlete either.** It has no profile column. Erasing an athlete hard-deletes their entries, and the item stays: since 6a-iii-a the picker lists it whether or not anything uses it, so a label written about one child ("<child>'s knee band") is still listed after that child's erasure. It goes with the household (runbook step 11, a hard delete). ✅ **Since PRIV-3 (#561)** the "Erase one athlete" REPORT lists them (part 3): the household's own items nothing would reference once the athlete is gone, to keep or remove. The app cannot remove an item, so a removal is a correction. An in-place edit overwrites with no history. **What a save hides instead, and keeps until the household is deleted** (since 6a-ii; nothing purges): under plan D19 a **removed** card's row and a **swapped** item's replaced row keep their instructions, rest note, superset label, reps, `client_id` and quantities (a prescribed load among them); a target **cleared** from a kept card is hidden with its value, and re-adding one writes a new row, so hidden targets accumulate; a workout saved **empty** hides every card. A hidden card's id is refused by the next save, so nothing in the app can show, restore, export or erase these rows. ⚠️ The notice's "hidden, not erased" paragraph ties hiding to delete and clear, not to removing, swapping or clearing in the editor; the PR that makes save-workout reachable from a screen (7b) owns that sentence.
 
-**What a week save hides** (`block_day_workouts`, since 6b; nothing purges): a slot taken off a day, or moved to another day, is hidden with its label, and putting the workout back on that day writes a new row, so hidden labels accumulate. No id of a slot leaves the server, so nothing in the app can show, restore, export or erase a hidden one; they go with the household (runbook step 9a) or with a program removed at "Erase one athlete". A relabel overwrites in place, with no history. The notice's "hidden, not erased" sentence for the week is owned by the PR that makes save-week reachable from a screen (7b).
+**What a week save hides** (`block_day_workouts`, since 6b; nothing purges): a slot taken off a day, or moved to another day, is hidden with its label, and putting the workout back on that day writes a new row, so hidden labels accumulate. No id of a slot leaves the server, so nothing in the app can show, restore, export or erase a hidden one; they go with the household (runbook step 9a) or with a program or workout removed, at "Erase one athlete" or on request ("Remove one program"). A relabel overwrites in place, with no history. The notice's "hidden, not erased" sentence for the week is owned by the PR that makes save-week reachable from a screen (7b).
 
 **A session's workout name (`sessions.workout_name`, FAM-1 4a-ii)** is frozen at log time, so a rename never
 rewrites history. It is kept for the **session's** lifetime and goes with the session (household

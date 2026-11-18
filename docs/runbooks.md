@@ -1982,7 +1982,7 @@ made step 3's numbers stale), then the eleven DELETEs in this order, child befor
 
 **4b. Only if the household chose to remove a program only P was on**, and only for blocks with
 `household_id = :H`. **Before step 10** (after it the report cannot be computed), re-run the report
-inside the transaction and keep only blocks it still lists. Then this must read 0, because nobody else
+inside the transaction and keep only blocks it still lists (a copy's program added by "Remove both", below, is exempt: it is checked by its own query). Lock them first: `SELECT id FROM program_blocks WHERE id = ANY(:B) AND household_id = :H FOR UPDATE`, so a session or assignment the app writes cannot land between this check and the deletes. Then this must read 0, because nobody else
 may have logged against those blocks without an assignment (doing someone else's workout creates none):
 
 ```sql
@@ -2004,27 +2004,28 @@ SELECT c.id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_
 On a non-zero from the first query, tell the household and skip that block (someone else trained on
 it). On the copy list: remove the source only as the household answered. "Remove it and keep the copy"
 leaves the copy whole, with its link back cleared. "Remove both" adds the copy's own program to `:B`,
-after it passes the same checks **and this one**: the copy's program may have OTHER athletes on it who
-never trained on it, which the first query cannot see (it looks for logs, not assignments), and their
-assignment rows refuse the block's delete (`23503`, `NO ACTION`, so the whole erasure rolls back):
+after it passes the same checks **and this one**, which the first query cannot do (it looks for logs,
+not assignments):
 
 ```sql
--- Other athletes assigned to a block in :B (open, closed or hidden). NOT a must-be-0: removing the
--- program takes each of them off it and removes the record that they were on it. Name them to the
--- household with the "remove both" question; remove the block only if the answer stands with that known.
+-- Other athletes assigned to a block in :B (open, closed or hidden). A STOP for that block: skip it, as
+-- for one someone trained on. Which programs an athlete was on is THEIR record (notice.md, "What gets
+-- logged"), so one athlete's erasure never removes it. Tell the household the copy's program stays, and
+-- that the owner can ask for it separately (Remove one program, below).
 SELECT a.id, a.profile_id, a.block_id FROM program_assignments a
  WHERE a.block_id = ANY(:B) AND a.profile_id <> :P;
 ```
 
-Otherwise, after step 11, delete for those blocks: `prescription_targets` (a count that must read 0 by
-now) → `prescription_quantities` → `prescriptions` → `block_day_workouts` → `workouts` →
-`program_assignment_weekdays` → `program_assignments` (both scoped by `block_id` ∈ `:B`: the other
-athletes' rows the query above listed) → `program_blocks`, counting each first and re-counting to 0.
-This is [Remove one program](#remove-one-program-workout-or-typed-item-on-request)'s own order.
+So every block left in `:B` has assignment rows of P's only, and step 10 has removed them. Then, after
+step 11, delete for those blocks: `prescription_targets` (a count that must read 0 by now) →
+`prescription_quantities` → `prescriptions` → `block_day_workouts` → `workouts` → `program_blocks`,
+counting each first and re-counting to 0. Before this check, an athlete assigned to the copy's program
+who had never trained on it made `program_blocks`' delete abort `23503` (`program_assignments.block_id`
+is `NO ACTION`), and the whole erasure rolled back.
 `db:verify` → FAM-1 5 proves equivalent queries for the report's first part (this household only)
-and for this pre-flight's two queries together (`othersOnTheseBlocks` returns their union; the split
-is which rows are a stop and which are a question). Report parts 2 and 3 are operator queries with no
-proof yet; `PRIV-3` PR 3 scripts them; this sub-order is the household delete's own (steps 8–10).
+and for this pre-flight's first two queries together (`othersOnTheseBlocks` returns their union; the
+split is which rows are a stop and which are a question). The assignment check above and report parts
+2 and 3 are operator queries with no proof yet; `PRIV-3` PR 3 scripts them; this sub-order is the household delete's own (steps 8–10).
 
 Then re-run step 3's counts: **every row reads 0**, and the household's other athletes' counts and its
 program-table counts are unchanged. `COMMIT`, or `ROLLBACK` on any surprise. `db:verify` → FAM-1 5
@@ -2049,11 +2050,12 @@ also asked for their account to go (step 0); no names. Retention as for a househ
 ## Remove one program, workout or typed item on request
 
 **When:** the household asks for one program it built, one workout in such a program, or one item it
-typed (a movement of its own) to be removed, and nothing else. The app can rename these but not delete
-them, so [privacy/notice.md](./privacy/notice.md) → "Deleting your data" says to ask. **Manual until
-`PRIV-3` PR 3 scripts it.** Read ["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1)
-first: this section reuses its transaction shape, its pre-flights and its delete order, restricted to
-one program, workout or item, and says only what differs.
+typed (a movement of its own) to be removed, and nothing else. The app can rename a program or a
+workout but delete neither, and it can neither rename nor delete a typed item, so FAM-1 7b-i's notice
+sentence tells the household to ask. **Manual until `PRIV-3` scripts it** (PR 3b scripts the program
+removal). Read ["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1) first: this
+section reuses its transaction shape, its pre-flights and its delete order, restricted to one program,
+workout or item, and says only what differs.
 
 ### ⛔ Preconditions
 
@@ -2066,37 +2068,53 @@ one program, workout or item, and says only what differs.
    (`packages/db/src/seed.ts`), so refuse it until `OPS-2` takes the seed out of production. An item
    must have `household_id = H`; a row with `household_id IS NULL` is the shared catalog and is never
    removed this way.
-3. **No `deleted_at` filter anywhere**, as in the household delete. A workout or an item taken out in
-   the app is hidden, not gone, and its hidden rows are exactly what this removes.
+3. **No `deleted_at` filter anywhere**, as in the household delete. A workout item taken out in the app,
+   and a week slot taken off a day, are hidden, not gone, and their hidden rows are exactly what this
+   removes. (No app path hides a program, a workout or an item.)
 
 ### Steps
 
 **0. Record the request** in the ledger (below). **1. Offer the export first**
-(`/p/<profileId>/export`, for each athlete who trained on it). **2. Resolve by `public_id`** on the
-**production** database (`SELECT current_database(), inet_server_addr();` first), and assert the
-household and, for a program, the kind:
+(`/p/<profileId>/export`, for each athlete who trained on it).
+
+**2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**
+household, never from the target row, and the target must carry it:
 
 ```sql
-SELECT id, household_id, kind FROM program_blocks WHERE public_id = :block_public_id;   -- :B, :H
-SELECT w.id, w.block_id, b.household_id, b.kind FROM workouts w
-  JOIN program_blocks b ON b.id = w.block_id WHERE w.public_id = :workout_public_id;      -- :W, :B, :H
-SELECT id, household_id FROM movements WHERE public_id = :movement_public_id;           -- :M, :H
+SELECT current_database(), inet_server_addr();
+SELECT id FROM households WHERE public_id = :household_public_id;                          -- :H
+SELECT id FROM program_blocks
+ WHERE public_id = :block_public_id AND household_id = :H AND kind = 'template';          -- :B
+SELECT w.id, w.block_id FROM workouts w JOIN program_blocks b ON b.id = w.block_id
+ WHERE w.public_id = :workout_public_id AND b.household_id = :H AND b.kind = 'template';  -- :W, :B
+SELECT id FROM movements WHERE public_id = :movement_public_id AND household_id = :H;     -- :M
 ```
 
-**3. Dry run: the stops, then the report.** Run the queries for the one case asked for.
+No row is a refusal: the target is not this household's, or it is the seed's or the shared catalog's.
+
+**3. Dry run: the stops, then the report**, for the one case asked for. **4. Apply** in one
+transaction; its **first statement after the `SET LOCAL`s locks the target** (below), so the app's
+writers, which take `FOR NO KEY UPDATE` on a program before changing it, wait until `COMMIT`. Then
+re-run the stops and the report (the cooling-off made them stale; anything new is a new answer to get,
+never a row to delete silently), then count, delete and re-count to 0, `ROLLBACK` on any surprise.
 
 #### A program (`:B`)
 
 ```sql
--- STOP 1 (must be 0): rows of ANOTHER household on this program. A target or an assignment for a
--- profile outside H (the household delete's (a) and (h)), a workout copied from it into another
--- household's program, or another household's session naming one of its workouts ((e) and (f)). No
--- writer makes one. STOP and clear the stray row with a correction first.
+-- STOP 1 (must be 0): rows of ANOTHER household on this program, the household delete's (a), (e),
+-- (f), (g) and (h): a target or an assignment for a profile outside H, an entry of theirs logged
+-- against its prescription, a copy of its workout in their program, or their session naming its
+-- workout. No writer makes one. STOP, and clear the stray row with a correction first ((g)'s
+-- correction clears the entry's prescription_id, prescribed_snapshot and its superset's
+-- prescription_group, which are H's text).
 SELECT 'target' k, t.id FROM prescription_targets t
   JOIN prescriptions x ON x.id = t.prescription_id JOIN profiles p ON p.id = t.profile_id
  WHERE x.block_id = :B AND p.household_id <> :H
 UNION ALL SELECT 'assignment', a.id FROM program_assignments a JOIN profiles p ON p.id = a.profile_id
  WHERE a.block_id = :B AND p.household_id <> :H
+UNION ALL SELECT 'entry', e.id FROM entries e
+  JOIN prescriptions x ON x.id = e.prescription_id JOIN profiles p ON p.id = e.profile_id
+ WHERE x.block_id = :B AND p.household_id <> :H
 UNION ALL SELECT 'copy', c.id FROM workouts c
   JOIN workouts src ON src.id = c.copied_from_workout_id JOIN program_blocks cb ON cb.id = c.block_id
  WHERE src.block_id = :B AND cb.household_id <> :H
@@ -2104,29 +2122,33 @@ UNION ALL SELECT 'session', s.id FROM sessions s
   JOIN workouts w ON w.id = s.workout_id JOIN profiles p ON p.id = s.profile_id
  WHERE w.block_id = :B AND p.household_id <> :H;
 
--- REPORT (not a stop; tell the household at the START of the cooling-off, and remove only if the
--- answer stands with it known):
+-- REPORT (not a stop). Tell the household at the START of the cooling-off, and remove only if the
+-- answer stands with it known.
 -- (1) Who is on it, or was: every assignment row, open, closed or hidden. Removing the program takes
---     each athlete off it and removes the record of when they were on it. The FK is NO ACTION, so
---     these rows are deleted, never left (they would abort the block's delete, 23503).
-SELECT a.id, a.profile_id, a.active_from, a.active_to, a.deleted_at FROM program_assignments a
+--     each athlete off it and removes the record of when they were on it (NO ACTION, so these rows are
+--     deleted, never left). An ADULT athlete in this list is told on their own channel before the
+--     removal, because that record is theirs (notice.md, "What gets logged"); they cannot cancel it.
+SELECT a.profile_id, p.kind, a.active_from, a.active_to, a.deleted_at
+  FROM program_assignments a JOIN profiles p ON p.id = a.profile_id
  WHERE a.block_id = :B;
--- (2) Who trained on it. Their logs STAY: each session keeps the workout's name as it was logged and
---     each set row keeps its set number. Only the link back is cleared (ON DELETE SET NULL on
---     sessions.workout_id and entries.prescription_id), so a log no longer says which program it was.
-SELECT s.profile_id, count(*) FROM sessions s JOIN workouts w ON w.id = s.workout_id
+-- (2) Who trained on it. Their logs STAY, and so does what was frozen onto them when they were logged:
+--     the session's workout_name, each entry's movement_name and prescribed_snapshot (the targets as
+--     prescribed, a child's load included), and the superset's prescription_group label. Only the link
+--     back is cleared (SET NULL on sessions.workout_id and entries.prescription_id). Say so plainly:
+--     removing that text from the logs is not this procedure; erasing the athlete is.
+SELECT 'sessions' k, s.profile_id, count(*) FROM sessions s JOIN workouts w ON w.id = s.workout_id
  WHERE w.block_id = :B GROUP BY s.profile_id
 UNION ALL
-SELECT e.profile_id, count(*) FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+SELECT 'entries', e.profile_id, count(*) FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
  WHERE x.block_id = :B GROUP BY e.profile_id;
 -- (3) Its workouts copied into the household's OTHER programs. A copy is its program's, and stays
 --     whole; its link back is cleared and it keeps the name of the program it came from
---     (copied_from_program_name). Ask: keep the copy as is, clear that name, or remove the copy's
---     program too (a second program removal, with its own stops and report).
+--     (copied_from_program_name). Ask, for each: keep it as is, clear that name, or remove the copy's
+--     program too (a second removal, with its own stops and report).
 SELECT c.id, c.block_id FROM workouts c JOIN workouts src ON src.id = c.copied_from_workout_id
  WHERE src.block_id = :B AND c.block_id <> :B;
 -- (4) The household's own items only this program used: no other program and no log names them.
---     Ask, for each: keep, or remove (the typed item case below, once the program is gone).
+--     Ask, for each: keep, or remove (the typed-item case below, once the program is gone).
 SELECT m.id, m.public_id FROM movements m
  WHERE m.household_id = :H
    AND EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id AND x.block_id = :B)
@@ -2134,91 +2156,144 @@ SELECT m.id, m.public_id FROM movements m
    AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.movement_id = m.id);
 ```
 
-**Apply:** one transaction; re-run STOP 1 and the report inside it (the cooling-off made them stale;
-an athlete put on the program since is a new answer to get, never a row to delete silently). Then
-count, delete and re-count to 0, in the household delete's order (rows 8–10) restricted to `:B`:
+**Apply.** Lock first: `SELECT id FROM program_blocks WHERE id = :B AND household_id = :H AND kind =
+'template' FOR UPDATE;` (one row, or `ROLLBACK`). Then, in the household delete's order (rows 8–10),
+restricted to `:B`. Steps a and g keep the household delete's `AND` (rows 8 and 9d), so a row of another
+household that landed after STOP 1 aborts `23503` instead of being deleted:
 
-| Step | Table                         | Scoped by                                 |
-| ---- | ----------------------------- | ----------------------------------------- |
-| a    | `prescription_targets`        | `prescription_id` ∈ prescriptions of `:B` |
-| b    | `prescription_quantities`     | `prescription_id` ∈ prescriptions of `:B` |
-| c    | `prescriptions`               | `block_id` = `:B`                         |
-| d    | `block_day_workouts`          | `block_id` = `:B`                         |
-| e    | `workouts`                    | `block_id` = `:B`                         |
-| f    | `program_assignment_weekdays` | `assignment_id` ∈ assignments of `:B`     |
-| g    | `program_assignments`         | `block_id` = `:B`                         |
-| h    | `program_blocks`              | `id` = `:B`                               |
+| Step | Table                         | Scoped by                                                                      |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------ |
+| a    | `prescription_targets`        | `prescription_id` ∈ prescriptions of `:B` AND `profile_id` ∈ H                 |
+| b    | `prescription_quantities`     | `prescription_id` ∈ prescriptions of `:B`                                      |
+| c    | `prescriptions`               | `block_id` = `:B`                                                              |
+| d    | `block_day_workouts`          | `block_id` = `:B`                                                              |
+| e    | `workouts`                    | `block_id` = `:B`                                                              |
+| f    | `program_assignment_weekdays` | `assignment_id` ∈ step g's assignments                                         |
+| g    | `program_assignments`         | `block_id` = `:B` AND `profile_id` ∈ H                                         |
+| h    | `program_blocks`              | `id` = `:B` AND `household_id` = `:H` AND `kind` = `'template'`: exactly 1 row |
 
 Every FK in that list is `NO ACTION`, so an out-of-order step raises `23503` and the transaction rolls
 back; the three `SET NULL` keys (report (2) and (3)) are the only rows outside the list that change. If
-the household chose to clear a copy's name: `UPDATE workouts SET copied_from_program_name = NULL WHERE
-id = ANY(:C) AND copied_from_workout_id IS NULL` after step e (the pairing CHECK allows a name with no
-link, not the reverse).
+the household chose to clear a copy's name, with `:C` the report (3) `c.id` values they named: `UPDATE
+workouts SET copied_from_program_name = NULL WHERE id = ANY(:C) AND copied_from_workout_id IS NULL`
+after step e (the pairing CHECK allows a name with no link, not the reverse).
 
 #### One workout (`:W` in `:B`)
 
-The same, narrowed to the workout:
+The athletes on `:B` lose this workout from their week; tell the household who they are (report (1)
+of the program case, read as "who is on the program it leaves").
 
-- **STOP 1** drops its `assignment` arm (an assignment is to the program, not a workout) and keeps the
-  other three with `x.workout_id = :W`, `src.id = :W` and `w.id = :W`.
-- **Report (1)** does not apply. **(2)** uses `w.id = :W` and `x.workout_id = :W`. **(3)** is every
-  copy of it, in this program or another: `src.id = :W`, with no `block_id` condition.
-- **Report (4)** uses `x.workout_id = :W` in the first prescription subquery and
-  `x.workout_id IS DISTINCT FROM :W` in the second (a legacy prescription's `workout_id` is NULL, and
-  `<>` would skip it).
+```sql
+-- STOP 1 (must be 0), narrowed to the workout. There is no assignment arm: an assignment is to the
+-- program.
+SELECT 'target' k, t.id FROM prescription_targets t
+  JOIN prescriptions x ON x.id = t.prescription_id JOIN profiles p ON p.id = t.profile_id
+ WHERE x.workout_id = :W AND p.household_id <> :H
+UNION ALL SELECT 'entry', e.id FROM entries e
+  JOIN prescriptions x ON x.id = e.prescription_id JOIN profiles p ON p.id = e.profile_id
+ WHERE x.workout_id = :W AND p.household_id <> :H
+UNION ALL SELECT 'copy', c.id FROM workouts c JOIN program_blocks cb ON cb.id = c.block_id
+ WHERE c.copied_from_workout_id = :W AND cb.household_id <> :H
+UNION ALL SELECT 'session', s.id FROM sessions s JOIN profiles p ON p.id = s.profile_id
+ WHERE s.workout_id = :W AND p.household_id <> :H;
 
-Then:
+-- REPORT (2): who trained on it, and what stays on their logs (as the program case's (2)).
+SELECT 'sessions' k, s.profile_id, count(*) FROM sessions s WHERE s.workout_id = :W GROUP BY s.profile_id
+UNION ALL
+SELECT 'entries', e.profile_id, count(*) FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
+ WHERE x.workout_id = :W GROUP BY e.profile_id;
+-- REPORT (3): every copy of it, in this program or another (as the program case's (3)).
+SELECT c.id, c.block_id FROM workouts c WHERE c.copied_from_workout_id = :W;
+-- REPORT (4): the household's own items only this workout used. A legacy prescription's workout_id
+-- is NULL, hence IS DISTINCT FROM rather than <>.
+SELECT m.id, m.public_id FROM movements m
+ WHERE m.household_id = :H
+   AND EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id AND x.workout_id = :W)
+   AND NOT EXISTS (SELECT 1 FROM prescriptions x WHERE x.movement_id = m.id
+                    AND x.workout_id IS DISTINCT FROM :W)
+   AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.movement_id = m.id);
+```
 
-| Step | Table                     | Scoped by                                 |
-| ---- | ------------------------- | ----------------------------------------- |
-| a    | `prescription_targets`    | `prescription_id` ∈ prescriptions of `:W` |
-| b    | `prescription_quantities` | `prescription_id` ∈ prescriptions of `:W` |
-| c    | `prescriptions`           | `workout_id` = `:W` AND `block_id` = `:B` |
-| d    | `block_day_workouts`      | `workout_id` = `:W` AND `block_id` = `:B` |
-| e    | `workouts`                | `id` = `:W`                               |
+**Apply.** Lock the program first, as above (the app's writers lock the program, not the workout),
+then:
+
+| Step | Table                     | Scoped by                                                      |
+| ---- | ------------------------- | -------------------------------------------------------------- |
+| a    | `prescription_targets`    | `prescription_id` ∈ prescriptions of `:W` AND `profile_id` ∈ H |
+| b    | `prescription_quantities` | `prescription_id` ∈ prescriptions of `:W`                      |
+| c    | `prescriptions`           | `workout_id` = `:W` AND `block_id` = `:B`                      |
+| d    | `block_day_workouts`      | `workout_id` = `:W` AND `block_id` = `:B`                      |
+| e    | `workouts`                | `id` = `:W` AND `block_id` = `:B`: exactly 1 row               |
 
 Removing its week slots leaves a gap in that weekday's `idx`, which is harmless: the reader orders by
-`idx` (`queries/program/week.ts`) and the next `saveWeek` renumbers the day from 0. A program left with
-no workouts is still a program; removing it is the program case.
+`(weekday, idx)` (`queries/program/week.ts`) and the next `saveWeek` renumbers every slot from its
+position. A program left with no workouts is still a program; removing it is the program case. A
+device that later saves the removed workout gets the writer's `not_found` refusal
+(`writers/program/save-workout.ts`), not a new row.
 
 #### One typed item (`:M`, `household_id = :H`)
 
 ```sql
--- STOP 2 (must be 0): a LOG names it. The item is the name every one of those rows shows, so it
--- cannot go while they stay. Tell the household which athletes logged it and that the item stays;
--- never delete or repoint the logs to make this pass.
-SELECT e.profile_id, count(*) FROM entries e WHERE e.movement_id = :M GROUP BY e.profile_id;
--- STOP 3 (must be 0): a LIVE workout item names it. Ask the household to take it out of those
--- workouts in the app (which hides the row), or to have the workout removed; then re-run.
--- The second arm, a row on ANOTHER household's program hidden or not, is a stray (no writer makes one,
--- TEN-2c): clear it with a correction first.
-SELECT x.id, x.block_id, x.workout_id FROM prescriptions x JOIN program_blocks b ON b.id = x.block_id
- WHERE x.movement_id = :M AND (x.deleted_at IS NULL OR b.household_id <> :H);
+-- STOP 2 (must be 0): a LOG of this household names it. The item is the name those rows show, so it
+-- cannot go while they stay. Live and hidden are counted apart: a row hidden by "Clear this day" is
+-- kept hidden, not erased, and still names it. Tell the household which athletes, and that the item
+-- stays; the routes that remove those rows are erasing the athlete or deleting the household. Never
+-- delete or repoint the logs to make this pass.
+SELECT e.profile_id, (e.deleted_at IS NOT NULL) AS hidden, count(*) FROM entries e
+  JOIN profiles p ON p.id = e.profile_id
+ WHERE e.movement_id = :M AND p.household_id = :H GROUP BY 1, 2;
+-- STOP 3 (must be 0): a LIVE workout item of this household names it. Ask the household to take it
+-- out of those workouts in the app (which hides the row), or to have the workout removed; then re-run.
+SELECT x.id, x.workout_id FROM prescriptions x JOIN program_blocks b ON b.id = x.block_id
+ WHERE x.movement_id = :M AND b.household_id = :H AND x.deleted_at IS NULL;
+-- STOP 4 (must be 0): ANOTHER household's rows on it, the household delete's (d) and (a)/(g) shapes:
+-- their entry or prescription naming :M ((d): repoint it to a clone, as (d) says, never delete it),
+-- or their target or entry on one of this household's hidden prescriptions of :M. No writer makes one.
+SELECT 'entry' k, e.id FROM entries e JOIN profiles p ON p.id = e.profile_id
+ WHERE e.movement_id = :M AND p.household_id <> :H
+UNION ALL SELECT 'prescription', x.id FROM prescriptions x JOIN program_blocks b ON b.id = x.block_id
+ WHERE x.movement_id = :M AND b.household_id <> :H
+UNION ALL SELECT 'target', t.id FROM prescription_targets t
+  JOIN prescriptions x ON x.id = t.prescription_id JOIN profiles p ON p.id = t.profile_id
+ WHERE x.movement_id = :M AND p.household_id <> :H
+UNION ALL SELECT 'logged-against', e.id FROM entries e
+  JOIN prescriptions x ON x.id = e.prescription_id JOIN profiles p ON p.id = e.profile_id
+ WHERE x.movement_id = :M AND p.household_id <> :H;
 ```
 
-**Apply:** one transaction; re-run both stops inside it. Then count, delete and re-count to 0:
-`prescription_targets` → `prescription_quantities` → `prescriptions` (each for the HIDDEN
-prescriptions with `movement_id = :M`, which a take-out in the app left behind; an entry logged
-against one keeps its set number, with its link cleared by `SET NULL`) → `movement_equipment` →
-`movement_muscles` → `movements` (`id = :M AND household_id = :H`). Never answer an abort here by
-setting `household_id` to NULL: that would publish the household's text into the shared catalog (the
-household delete's step 11 says why).
+**Apply.** Lock first: `SELECT id FROM movements WHERE id = :M AND household_id = :H FOR UPDATE;`
+(one row, or `ROLLBACK`). Re-run STOPs 2–4. Then count, delete and re-count to 0, each step scoped to
+this household's rows:
 
-**4. Close out.** Ledger, the held restore branch, and tell the household it is done.
+1. `prescription_targets` for the hidden prescriptions of `:M` on H's programs, AND `profile_id` ∈ H;
+2. `prescription_quantities`, then `prescriptions`, for those prescriptions (`movement_id = :M AND
+block_id` ∈ H's programs). An entry logged against one keeps its set number and its frozen text,
+   with its link cleared by `SET NULL`;
+3. `movement_equipment`, then `movement_muscles`, with `movement_id` ∈ (`SELECT id FROM movements
+WHERE id = :M AND household_id = :H`), never `:M` alone, so a mistyped id cannot touch the shared
+   catalog's rows;
+4. `movements` with `id = :M AND household_id = :H`: **exactly 1 row**, or `ROLLBACK`.
+
+Never answer an abort here by setting `household_id` to NULL: that would publish the household's text
+into the shared catalog (the household delete's step 11 says why).
+
+**5. Close out.** Ledger, the held restore branch, and tell the household it is done.
 
 ### The ledger, at item grain
 
 One ledger with the household delete. An entry records the request date, **the `public_id`** of the
 program, workout or item (`OPS-3`'s replay re-applies the removal after a restore), the verifying
-channel, the household's answers to the report, the apply date and the restore-branch-deleted date. No
-names, no Clerk ids.
+channel, the household's answer to each report line by the listed row's `public_id` (keep or remove;
+no names, and no athlete named beyond a `profile_id` the operator already holds), the apply date and
+the restore-branch-deleted date. No Clerk ids.
 
 ### What is proven, and what is not
 
 The order is the household delete's (rows 8–10, 10a, 10b and 11), which `db:verify` proves at
 household grain through `HOUSEHOLD_GRAPH` (`packages/db/src/erasure/graph.ts`). Nothing proves it at
 one program, one workout or one item yet, and none of the queries above runs in `db:verify`: `PRIV-3`
-PR 3 scripts them and adds that proof.
+scripts them and adds that proof. A replayed create of a removed program would make a new, empty one
+when offline sync arrives (v1.5); the client id is not kept, so that is for v1.5's plan.
 
 ---
 
