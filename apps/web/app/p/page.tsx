@@ -167,7 +167,7 @@ export default async function ProfilePickerPage() {
       <div className="mt-auto flex flex-col gap-6">
         <ThemeToggle />
         <div className="flex flex-col items-start gap-2 border-t pt-6">
-          {/* `clerkIsConfigured()` gates the live control because `app/layout.tsx` renders no
+          {/* `clerkIsConfigured()` gates the live control because `ClerkRoot` (`p/layout.tsx`) renders no
               `<ClerkProvider>` without keys, and `useClerk()` would throw. Both harnesses blank the
               keys on purpose, so the placeholder is what they capture and axe measures — see
               `components/profiles/sign-out.tsx`. */}

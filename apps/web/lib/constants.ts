@@ -100,11 +100,18 @@ export const PRIVACY_PATH = '/privacy';
  * 1d deletes, so a route constant placed there would have to move twice.
  *
  * ⚠️ **This and `APP_HOME_PATH` feed `<ClerkProvider>`'s `signInUrl` /
- * `signInFallbackRedirectUrl` props** (`app/layout.tsx`) rather than a second copy in
+ * `signInFallbackRedirectUrl` props** (`components/layout/clerk-root.tsx`) rather than a second copy in
  * `NEXT_PUBLIC_CLERK_SIGN_IN_URL`. Clerk reads those env vars when they are set, which is exactly how
  * the route would silently drift from this constant; passing props keeps one definition.
  */
 export const SIGN_IN_PATH = '/sign-in';
+
+/**
+ * The request header `proxy.ts` sets to this request's CSP nonce, which the layouts read: the root
+ * for the theme script, `ClerkRoot` for Clerk's scripts. One name, so the writer and the readers
+ * cannot drift.
+ */
+export const NONCE_HEADER = 'x-nonce';
 
 /**
  * The token-set preview harness (UI-4, built to serve UI-3). Named here because the a11y spec and the

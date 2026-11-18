@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { isPublicPath } from '@/lib/public-paths';
+import { isPublicPath, PUBLIC_PATHS } from '@/lib/public-paths';
 import {
   code,
   exportedActionSlices,
@@ -156,6 +156,20 @@ const segmentFiles = (dir: string) =>
     .filter((f) => f !== 'page.tsx' && !/\.test\.tsx$/.test(f))
     .map((f) => join(dir, f));
 
+/**
+ * Every segment from `app/` down to the page's own, each with its non-page files: all of them render
+ * around the page. (Only the root and the page's own were read before, which could not see a layout in
+ * between, such as `app/sign-in/layout.tsx` above `app/sign-in/[[...rest]]/page.tsx`.)
+ */
+function ancestorSegmentFiles(page: string): string[] {
+  const dirs: string[] = [];
+  for (let dir = dirname(page); dir.startsWith(APP_DIR); dir = dirname(dir)) {
+    dirs.push(dir);
+    if (dir === APP_DIR) break;
+  }
+  return dirs.flatMap(segmentFiles);
+}
+
 describe('public pages pull no Server Action into their module graph', () => {
   const publicPages = pages.filter((f) => isPublicPath(routeOf(f)));
 
@@ -174,7 +188,7 @@ describe('public pages pull no Server Action into their module graph', () => {
 
   it.each(publicPages.map((f) => [routeOf(f), f]))('%s (with its segment files)', (_r, file) => {
     // The root segment's files render with EVERY page, so they are always in the graph.
-    const graph = localGraph([file, ...segmentFiles(APP_DIR), ...segmentFiles(dirname(file))]);
+    const graph = localGraph([file, ...ancestorSegmentFiles(file)]);
     expect(graph.length).toBeGreaterThan(2);
     const actions = graph.filter((f) => USE_SERVER_MENTION_RE.test(code(f)));
     expect(actions.map((f) => relative(WEB_DIR, f))).toEqual([]);
@@ -185,8 +199,9 @@ describe('public pages pull no Server Action into their module graph', () => {
  * 🔴 AUTH-1 1a — the limitation above, answered rather than restated.
  *
  * The suite follows LOCAL imports only, because "a package cannot contain this app's actions". 1a
- * puts `<ClerkProvider>` in the root layout, so `@clerk/nextjs` is now in EVERY public page's module
- * graph and is the first third-party package there — and it does ship `'use server'` modules, which
+ * put `<ClerkProvider>` in the root layout, so `@clerk/nextjs` was in EVERY public page's module
+ * graph; since the Clerk-off-public-pages fix it is in one public page's graph, `/sign-in` (public,
+ * but provided by its own layout), and it is still the first third-party package there — and it does ship `'use server'` modules, which
  * the runbook's grep box predicted and which this pins so a bump cannot add a third unnoticed.
  *
  * Both are benign, and that is the statement the plan asked for in place of extending the crawler:
@@ -563,5 +578,84 @@ describe('UI-5 · one <main>, declared in the shell', () => {
     // `nav={false}` opts out of the reserved rail column; its absence opts in. Asserted per file
     // because getting it backwards is invisible at phone widths and is a layout shift at `lg`.
     expect(shellProp('nav=\\{false\\}').test(src), spec.why).toBe(!spec.nav);
+  });
+});
+
+/**
+ * 🔴 **Clerk is on every page but the two public ones, and only there** (plan:
+ * docs/plans/td-clerk-off-public-pages.md; the rules are `components/layout/clerk-root.tsx`'s).
+ *
+ * "Public" here is `PUBLIC_PATHS` (`/`, `/privacy`), NOT `isPublicPath`, which also covers `/sign-in`:
+ * that page is reachable without a session but needs Clerk's card, so it keeps the provider.
+ */
+describe('Clerk is provided on every page except the public ones', () => {
+  const CLERK_ROOT = join(WEB_DIR, 'components', 'layout', 'clerk-root.tsx');
+  const isClerkFree = (f: string) => (PUBLIC_PATHS as readonly string[]).includes(routeOf(f));
+  const clerkPages = pages.filter((f) => !isClerkFree(f));
+  const freePages = pages.filter(isClerkFree);
+  const rendersClerkRoot = (file: string) => /<ClerkRoot>/.test(code(file));
+
+  // Everything that renders WITHOUT the provider: the root layout and its boundaries, which also
+  // stand in for a segment's own when the root's not-found or error renders, and the public pages.
+  const ROOT_ONLY = ['layout.tsx', 'not-found.tsx', 'error.tsx']
+    .map((f) => join(APP_DIR, f))
+    .filter(existsSync);
+  const freeGraph = localGraph([...ROOT_ONLY, ...freePages]);
+
+  it('finds both kinds of page (an empty list would pass everything below)', () => {
+    expect(clerkPages.length).toBeGreaterThan(3);
+    expect(freePages.map(routeOf).sort()).toEqual([...PUBLIC_PATHS].sort());
+  });
+
+  // (1) A page outside PUBLIC_PATHS has a layout on its way up that renders `<ClerkRoot>`.
+  it.each(clerkPages.map((f) => [routeOf(f), f]))('%s is inside a ClerkRoot layout', (_r, file) => {
+    const layouts = ancestorSegmentFiles(file).filter(
+      (f) => f.endsWith('/layout.tsx') && f !== join(APP_DIR, 'layout.tsx'),
+    );
+    expect(
+      layouts.some(rendersClerkRoot),
+      `no layout above ${relative(WEB_DIR, file)} renders <ClerkRoot>`,
+    ).toBe(true);
+  });
+
+  // (2) Nothing that renders without the provider pulls Clerk in, through any local import.
+  it('the root layout, its boundaries and the public pages import no Clerk code', () => {
+    expect(freeGraph.length).toBeGreaterThan(3);
+    const clerky = freeGraph.filter(
+      (f) => f === CLERK_ROOT || /from\s+['"]@clerk\/nextjs/.test(code(f)),
+    );
+    expect(clerky.map((f) => relative(WEB_DIR, f))).toEqual([]);
+  });
+
+  // (3) The P0 rule: from a page with no provider, a link into a Clerk segment is a plain `<a>`. A
+  // `<Link>` would load Clerk in a client navigation, with a nonce the page's CSP does not allow.
+  const INTO_CLERK =
+    /<Link\b[^>]*\bhref=\{?\s*(?:['"`]\/(?:p|settings|sign-in|design)\b|SIGN_IN_PATH|APP_HOME_PATH|SETTINGS_PATH|athlete\w*Path)/;
+  it('no page without the provider has a <Link> into a Clerk segment', () => {
+    const offenders = freeGraph.filter((f) => INTO_CLERK.test(code(f)));
+    expect(offenders.map((f) => relative(WEB_DIR, f))).toEqual([]);
+  });
+  it.each([
+    '<Link href={SIGN_IN_PATH}>',
+    '<Link href={APP_HOME_PATH}>',
+    "<Link href='/p'>",
+    '<Link className="x" href="/settings">',
+  ])('the link rule catches %s', (jsx) => {
+    expect(INTO_CLERK.test(jsx)).toBe(true);
+  });
+  it.each(['<Link href={PRIVACY_PATH}>', "<Link href='/'>", '<a href={SIGN_IN_PATH}>'])(
+    'the link rule passes %s',
+    (jsx) => {
+      expect(INTO_CLERK.test(jsx)).toBe(false);
+    },
+  );
+
+  // (4) No props: a remounted provider skips `clerk.load()`, so a second configuration would be
+  // silently ignored (`clerk-root.tsx`).
+  it('every <ClerkRoot> is rendered with no props', () => {
+    const uses = app('**/*.tsx').filter((f) => /<ClerkRoot\b/.test(code(f)));
+    expect(uses.length).toBeGreaterThan(3);
+    const withProps = uses.filter((f) => /<ClerkRoot\s+[^>]/.test(code(f)));
+    expect(withProps.map((f) => relative(WEB_DIR, f))).toEqual([]);
   });
 });
