@@ -1,7 +1,7 @@
 import type { DayPlan } from '@mat-plan/shared';
 import Link from 'next/link';
 
-import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { NAME_WRAP_CLASS, TICK_FOCUS_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { PROGRAM_COPY } from './day-copy';
@@ -62,7 +62,9 @@ export function AthleteSwitcher({
                 href={hrefFor(athlete.profilePublicId)}
                 aria-current={current ? 'page' : undefined}
                 className={cn(
-                  FOCUS_TARGET_CLASS,
+                  // The ✓'s foreground outline (≥3:1, WCAG 1.4.11): `FOCUS_TARGET_CLASS` is for an
+                  // element focused by script, and its `ring/50` is ~1.5:1 on a Tab stop (12c panel).
+                  TICK_FOCUS_CLASS,
                   'inline-flex min-h-11 max-w-full min-w-11 items-center justify-center rounded-full border px-4 text-sm font-medium',
                   NAME_WRAP_CLASS,
                   current

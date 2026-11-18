@@ -15,6 +15,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
+
+- **What & why it's debt:** `apps/web/app/p/[profileId]/loading.tsx` reserves the athlete
+  switcher's 44px row below `lg`, but `AthleteSwitcher` renders nothing when the household has no
+  other athlete (`apps/web/components/day/athlete-switcher.tsx`). A Suspense fallback has no data, so
+  it cannot know the count; 12c chose to reserve the row for the common case, a household of several.
+- **Impact:** in a one-athlete household, on a phone or tablet, the content below the header moves
+  up by one row when the page replaces the skeleton. This is a layout shift on that path only. Nothing
+  has measured it against the CLS budget.
+- **The fix:** keep a row of that height in the real header too, for example the athlete's name as
+  static text when there is no one to switch to, so the skeleton and the page agree. Alternatively,
+  have the fallback read the household's athlete count from a value it can see without the DAL.
+- **Severity:** low. Maintainer, 2026-11-17: "Add to tech-debt".
+
 ### Two shell-wrapper walks (added 2026-11-17, DX-18 1b)
 
 - **What & why it's debt:** `.claude/hooks/guard-process-kill.mjs` imports `lex()` from
@@ -740,6 +754,11 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
   `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
   `messageKey` when that lane next touches it.
+  ✅ **The day screen moved (FAM-1 12c, 2026-11-17)**: each announcement is a new `messageKey`, and
+  `day-screen.test.tsx` proves a repeat is a new node with the same text. ⚠️ **One copy is left:**
+  `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
+  prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
+  at 15c, which wires that dialog.
 - **Severity:** low.
 
 ### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)

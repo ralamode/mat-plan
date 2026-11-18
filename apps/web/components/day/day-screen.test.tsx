@@ -23,6 +23,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
+import { SAVING_LABEL } from '@/lib/constants';
 
 import { DAY_COPY, PROGRAM_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import { nothingLoggedNotice, restNotice } from './day-notices';
@@ -134,6 +135,59 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     expect(tick(splits).getAttribute('aria-disabled')).toBeNull();
   });
 
+  it('a ✓ after midnight pins the day in the URL BEFORE it is sent, and a closed_day reload pins too (12c)', async () => {
+    // The fixtures' today is in the past, so the device's day is past the page's: midnight has gone.
+    window.history.replaceState(null, '', '/p/x');
+    const seen: string[] = [];
+    const control = mount(todayTwoPrograms, {
+      wrap: (a) => ({
+        logRow: (input) => {
+          seen.push(window.location.search);
+          return a.logRow(input);
+        },
+      }),
+    });
+    await press(tick(card('Morning habits', 'Splits stretch')));
+    expect(seen).toEqual([`?d=${todayTwoPrograms.day}`]);
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    window.history.replaceState(null, '', '/p/x');
+    mount(todayTwoPrograms, {
+      wrap: () => ({ logRow: async () => ({ ok: false, reason: ROW_REFUSAL.closed_day }) }),
+    });
+    await press(tick(card('Morning habits', 'Splits stretch')));
+    expect(refresh).toHaveBeenCalled();
+    expect(window.location.search).toBe(`?d=${todayTwoPrograms.day}`);
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('a ✓ still being sent looks pending, says Saving, and warns before the page is left (12c)', async () => {
+    const gate = held();
+    mount(todayTwoPrograms, {
+      wrap: (a) => ({ logRow: (input) => gate.after(() => a.logRow(input)) }),
+    });
+    const splits = card('Morning habits', 'Splits stretch');
+    const leave = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(leave()).toBe(false);
+    await press(tick(splits));
+    expect(tick(splits).getAttribute('aria-busy')).toBe('true');
+    // Read by a screen reader as the ✓'s description, not hidden behind its aria-label.
+    expect(within(splits).getByRole('button', { description: SAVING_LABEL })).toBe(tick(splits));
+    // Visible on the done fill: foreground dashes, not the done colour's own.
+    expect(tick(splits).className).toMatch(/\bborder-foreground\b.*\bborder-dashed\b/);
+    expect(leave()).toBe(true);
+    await gate.resolve();
+    expect(tick(splits).getAttribute('aria-busy')).toBeNull();
+    expect(within(splits).queryByRole('button', { description: SAVING_LABEL })).toBeNull();
+    expect(tick(splits).className).not.toContain('border-dashed');
+    expect(leave()).toBe(false);
+  });
+
   it('logs what was typed, and focus stays on the ✓', async () => {
     const control = mount(todayTwoPrograms);
     const vest = card('Morning habits', 'Vest weight');
@@ -206,6 +260,28 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     expect(control.actions.retickRow).not.toHaveBeenCalled();
     expect(control.actions.logRow).toHaveBeenCalledTimes(1);
     expect(within(splits).getByText('7 min')).toBeTruthy();
+  });
+
+  it('a ✓ after an un-tick answered with a NEW entry id holds that entry, so the next un-tick names it (12c)', async () => {
+    // The fake revives the same entry (D35); the writer may answer with another id, and the row must
+    // follow the answer, not the entry it held before.
+    const NEW_ENTRY = '019826b4-0000-7000-8000-00000000e001';
+    const control = mount(yesterdayHalfDone, {
+      wrap: (a) => ({
+        logRow: async (input) => {
+          const result = await a.logRow(input);
+          return result.ok ? { ...result, entryPublicId: NEW_ENTRY } : result;
+        },
+      }),
+    });
+    const splits = card('Morning habits', 'Splits stretch');
+    await press(tick(splits));
+    fireEvent.change(field(splits), { target: { value: '7' } });
+    await press(tick(splits));
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+    await press(tick(splits));
+    expect(control.actions.untickRow).toHaveBeenCalledTimes(2);
+    expect(control.actions.untickRow.mock.calls[1]![0]).toMatchObject({ entryPublicId: NEW_ENTRY });
   });
 
   it('after an un-tick, an emptied field is a new ✓ of the prescription, not a re-tick', async () => {
@@ -313,6 +389,24 @@ describe('a ✓ that fails', () => {
     expect(within(workout('Morning habits')).queryByText(DAY_COPY.notSaved(1))).toBeNull();
     const [first, second] = control.actions.logRow.mock.calls.map(([input]) => input.clientId);
     expect(second).toBe(first);
+  });
+
+  it('the same sentence twice is announced twice: a new node, the same text', async () => {
+    mount(todayTwoPrograms, {
+      wrap: () => ({ logRow: async () => ({ ok: false, reason: ROW_REFUSAL.retry }) }),
+    });
+    const vest = card('Morning habits', 'Vest weight');
+    const said = DAY_COPY.announce.failed(
+      'Vest weight',
+      refusalCopy(ROW_REFUSAL.retry, 'tick').message,
+    );
+    await press(tick(vest));
+    const first = screen.getByRole('status').firstChild;
+    expect(status()).toBe(said);
+    await press(tick(vest));
+    // A live region reads a change; an unchanged node would be silent.
+    expect(screen.getByRole('status').firstChild).not.toBe(first);
+    expect(status()).toBe(said);
   });
 
   it('a retry with a different number is a new attempt with a new clientId', async () => {
