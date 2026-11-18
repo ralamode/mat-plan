@@ -116,6 +116,18 @@ export type BrowseKind<T> = {
 };
 
 /**
+ * The order a list of movements is read in: by name, folded as the search folds it (case, accents
+ * and punctuation aside), and by the name as written where two fold alike, so the order never
+ * depends on the order given. `browseTree` sorts each family with it. Exported so a list beside
+ * the tree sorts the same way: the picker's interim section for the old built-ins with no library
+ * entry (spec K24) uses it, and a second comparator there could drift from this one.
+ */
+export function byFoldedName(a: { readonly name: string }, b: { readonly name: string }): number {
+  const [x, y] = [foldMovementQuery(a.name), foldMovementQuery(b.name)];
+  return x < y ? -1 : x > y ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+}
+
+/**
  * "All movements" as a tree (P12): the kinds in `BROWSE_KINDS`' order, each with its families,
  * the biggest first (ties by label), each with its movements by name. **A kind or a family with
  * nothing in it is left out**, so a filtered list shows no empty heading. A count is
@@ -129,10 +141,6 @@ export type BrowseKind<T> = {
 export function browseTree<T extends Grouped & { readonly name: string }>(
   options: readonly T[],
 ): readonly BrowseKind<T>[] {
-  const byName = (a: T, b: T) => {
-    const [x, y] = [foldMovementQuery(a.name), foldMovementQuery(b.name)];
-    return x < y ? -1 : x > y ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-  };
   const unique = [...new Set(options)];
   return BROWSE_KINDS.flatMap((kind) => {
     const ofKind = unique.filter((option) => option.modality === kind);
@@ -145,7 +153,7 @@ export function browseTree<T extends Grouped & { readonly name: string }>(
     const families = [...grouped].map(([family, list]) => ({
       family,
       label: MOVEMENT_FAMILY_LABELS[family],
-      options: [...list].sort(byName),
+      options: [...list].sort(byFoldedName),
     }));
     families.sort(
       (a, b) =>

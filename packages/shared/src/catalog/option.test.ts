@@ -8,6 +8,7 @@ import {
   BROWSE_KINDS,
   BROWSE_OPEN_AT_MOST,
   browseTree,
+  byFoldedName,
   MOVEMENT_FAMILIES,
   MOVEMENT_FAMILY_LABELS,
   MUSCLE_BODY_AREA,
@@ -224,6 +225,37 @@ describe('the browse families (P12)', () => {
   it('every entry of the library and of the test library has a family', () => {
     for (const entry of [...CATALOG_FIXTURE, ...CATALOG_MOVEMENTS]) {
       expect(MOVEMENT_FAMILY_LABELS[movementFamilyOf(entry)], entry.slug).toBeTruthy();
+    }
+  });
+});
+
+describe('byFoldedName: the order a list of movements is read in (K24)', () => {
+  const named = (...names: string[]) => names.map((name) => ({ name }));
+  const sorted = (...names: string[]) =>
+    named(...names)
+      .sort(byFoldedName)
+      .map((row) => row.name);
+
+  it('orders by the folded name, so case and punctuation do not decide', () => {
+    expect(sorted('push-up', 'Ab rollout', 'Zercher squat', 'bear crawl')).toEqual([
+      'Ab rollout',
+      'bear crawl',
+      'push-up',
+      'Zercher squat',
+    ]);
+  });
+
+  it('orders two names that fold alike by the name as written, whatever order they came in', () => {
+    const pair = ['Push-up', 'push up'];
+    expect(sorted(...pair)).toEqual(sorted(...[...pair].reverse()));
+    expect(byFoldedName({ name: 'Plank' }, { name: 'Plank' })).toBe(0);
+  });
+
+  it('is the order browseTree lists a family in', () => {
+    for (const kind of browseTree(CATALOG_FIXTURE_OPTIONS)) {
+      for (const family of kind.families) {
+        expect([...family.options].sort(byFoldedName)).toEqual(family.options);
+      }
     }
   });
 });
