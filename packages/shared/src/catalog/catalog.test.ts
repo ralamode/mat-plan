@@ -327,6 +327,59 @@ describe('the checks a whole list is held to, on samples', () => {
   });
 });
 
+/** The slugs of the entries that have a supervision value and steps that never say "coach". */
+const stepsMissingTheCoach = (entries: readonly CatalogMovement[]) =>
+  entries
+    .filter(
+      (entry) =>
+        entry.supervision !== undefined &&
+        entry.instructions !== undefined &&
+        !/\bcoach\b/i.test(entry.instructions),
+    )
+    .map((entry) => entry.slug);
+
+describe('a supervised movement’s steps name the coach (V7, K20)', () => {
+  it('🔴 every entry with a supervision value and steps says "coach" in them', () => {
+    expect(stepsMissingTheCoach(CATALOG_MOVEMENTS)).toEqual([]);
+    expect(stepsMissingTheCoach(CATALOG_FIXTURE)).toEqual([]);
+  });
+
+  it('has entries to check in both lists, so the rule is not held by an empty set', () => {
+    const checked = (entries: readonly CatalogMovement[]) =>
+      entries.filter(
+        (entry) => entry.supervision !== undefined && entry.instructions !== undefined,
+      );
+    expect(checked(CATALOG_MOVEMENTS).length).toBeGreaterThanOrEqual(4);
+    expect(checked(CATALOG_FIXTURE).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('the check itself: it wants the whole word, in any case, and only where both are set', () => {
+    const entry = (slug: string, given: Partial<CatalogMovement>): CatalogMovement => ({
+      ...base,
+      slug,
+      ...given,
+    });
+    const steps = (...lines: string[]) => ({
+      supervision: 'coach' as const,
+      instructions: lines.join('\n'),
+    });
+    expect(
+      stepsMissingTheCoach([
+        entry('no_coach', steps('Kick up to the wall.', 'Lower slowly.')),
+        // Part of another word is not the word.
+        entry('coaching', steps('Follow the coaching cues.')),
+        entry('coaches', steps('Two coaches stand by.')),
+        entry('named', steps('Kick up to the wall.', 'Your coach holds your legs.')),
+        entry('capital', steps('COACH BESIDE YOU.')),
+        entry('possessive', steps('Wait for your coach’s call.')),
+        // Not this rule's: a label with no steps, and steps with no label.
+        entry('label_only', { supervision: 'coach', instructions: undefined }),
+        entry('steps_only', { supervision: undefined, instructions: 'Kick up to the wall.' }),
+      ]),
+    ).toEqual(['no_coach', 'coaching', 'coaches']);
+  });
+});
+
 describe('media is reserved (K18)', () => {
   it('🔴 no entry points at any media yet, in the library or in the test library', () => {
     // The field exists so a later plan can fill it. Until that plan says where media is hosted

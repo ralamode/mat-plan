@@ -10,7 +10,8 @@ import { describe, it } from 'vitest';
  *
  * Not listed, because no test can hold them: D1 beyond the schema's strictness (nothing names a
  * source), D4 (no batch names a household or a person), R1, R2 and R5 (the runbook, the dry runs
- * and the maintainer's go). Those are held by review, and a batch PR is merged by the maintainer.
+ * and the maintainer's go). Those are held by review: a batch PR merges only when every row of its
+ * review tab carries the maintainer's `lgtm` (spec K21).
  */
 
 describe('owed by lane A: the tables (chunk A1)', () => {
@@ -46,12 +47,16 @@ describe('owed by lane B and lane P: filters and browse (after chunk C0b-2; B2, 
   it.todo('P10: "N more are not in your filters" with Clear filters; never the whole list');
   it.todo('P11: the option read returns taxonomy from the tables and aliases from the const');
   it.todo('P12: two folding sections; kinds and families closed until opened; the old groups gone');
-  it.todo('P13: a supervision label shows as text, the same for every athlete');
-  it.todo('P16: "How to" opens the steps under the row, read by slug, with the label above them');
+  // P13's row half and P16's screen half are held by B2-i (`movement-picker.test.tsx`, #569).
+  it.todo(
+    'P13: only the option read, the picker row, the day read and the day row read supervision',
+  );
+  it.todo('P13: the day page’s workout row shows the supervision label (after C32)');
+  it.todo('P16: "How to" reads the steps by slug (P11-i and the page’s loader)');
 });
 
 describe('owed by lane B: the picker (chunks B1 to B3)', () => {
-  it.todo('P14: every row shows its tracking type, in both picker modes');
+  // P14 is held in full by B2-i (`movement-picker.test.tsx`, "the row: … (P14)", #569).
   it.todo("P15: the picker's new states pass the accessibility scan at the narrow width");
 });
 
