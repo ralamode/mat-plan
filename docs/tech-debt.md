@@ -15,6 +15,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
+
+- **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
+  HELPERS and erasure pins) finds lane P's imports by matching specifier text. #552 tried to harden
+  it, and its security review found that each fix met another spelling: a comment inside an import, a
+  backtick specifier, `require (` with a space, a `../node_modules` path, or an `@/` alias walking out
+  of `apps/web`.
+- **Impact:** an import written that way into a page or the day DAL would not be refused by the
+  guard. Code written in good faith uses the plain forms, which the guard catches.
+- **The fix:** a parser-based check, ESLint `no-restricted-imports` with path patterns per directory
+  (or the TypeScript import graph), so every specifier form, comment and alias resolves in one place.
+  Then the regex guard's directory rules move into it.
+- **Severity:** low. Maintainer, 2026-11-18: "Close; lint check as tech debt".
+
 ### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
 
 - **What & why it's debt:** `apps/web/app/p/[profileId]/loading.tsx` reserves the athlete
