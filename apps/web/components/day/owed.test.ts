@@ -20,18 +20,6 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
   it.todo('15c: two programs on one day, reordered (e2e)');
 });
 
-describe('DayPlan: owed by its consumers', () => {
-  it.todo('12c: an older day and a future day are read-only (e2e)');
-});
-
-describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers', () => {
-  it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
-  it.todo(
-    '12c: past local midnight (page.clock), a ✓ on the bare path keeps the logged day: the URL gains ?d= and the row stays ticked (e2e; proves a revalidated action render reads the replaced URL)',
-  );
-  it.todo('12c: a ✓ queued before an athlete switch is logged when the parent comes back (e2e)');
-});
-
 describe('RowAmend: owed by its consumers', () => {
   it.todo('12d: amendRow passes the inherited action matrix');
   it.todo('12d: a weight × reps set and a superset on real data; change a number (e2e)');

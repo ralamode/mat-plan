@@ -6,8 +6,7 @@ owns:
   - apps/web/app/p/[profileId]/row-actions.ts
   - apps/web/app/p/[profileId]/row-actions.registry.ts
   - apps/web/app/p/[profileId]/row-actions.test.ts
-  # Step 12c adds `apps/web/e2e/day-page.spec.ts`. It is not listed yet: `guides:check` fails a
-  # guide that claims a path which does not exist, so the entry arrives with its file.
+  - apps/web/e2e/day-page.spec.ts
 ---
 
 # The day page's workouts
