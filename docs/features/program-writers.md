@@ -243,7 +243,9 @@ flowchart TD
     `program-view-any-households-programs`, `program-view-counts-removed-cards`,
     `program-view-copy-day-in-utc`, `program-view-drops-the-last-day`,
     `program-view-lists-removed-workouts`, `program-workout-ids-keep-removed`,
-    `program-view-also-on-includes-itself`).
+    `program-view-also-on-includes-itself`, `program-reads-drop-upcoming-starts`,
+    `program-view-takes-an-offset-zone`). The zone must be an IANA name or `UTC`: Postgres reads a
+    bare offset with the sign reversed.
 
 ## Changing it
 

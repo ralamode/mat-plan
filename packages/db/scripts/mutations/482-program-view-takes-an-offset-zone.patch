@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
+index 671d2e5f..3d08a51c 100644
+--- a/packages/db/src/queries/program/program-view.ts
++++ b/packages/db/src/queries/program/program-view.ts
+@@ -42,7 +42,6 @@ import { readWeek } from './week';
+  */
+ /** An IANA zone name `Intl` accepts (`America/New_York`), or `UTC`; never a bare offset. */
+ function isIanaZoneName(tz: string): boolean {
+-  if (tz !== 'UTC' && !tz.includes('/')) return false;
+   try {
+     new Intl.DateTimeFormat('en-US', { timeZone: tz });
+     return true;

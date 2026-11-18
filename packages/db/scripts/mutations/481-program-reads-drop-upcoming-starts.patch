@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/athletes.ts b/packages/db/src/queries/program/athletes.ts
+index 7c0932fa..b49f99b6 100644
+--- a/packages/db/src/queries/program/athletes.ts
++++ b/packages/db/src/queries/program/athletes.ts
+@@ -57,7 +57,7 @@ export async function athletesOnPrograms(
+   const athletes: AthleteOnPrograms[] = [];
+   for (const profile of profiles) {
+     const assignments = await dayAssignments(exec, scope, profile.id, { day: today, today });
+-    athletes.push({ ...profile, assignments, current: currentPrograms(assignments, today) });
++    athletes.push({ ...profile, assignments, current: currentPrograms(assignments.filter((a) => a.activeFrom <= today), today) });
+   }
+   return athletes;
+ }
