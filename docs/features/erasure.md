@@ -22,11 +22,11 @@ erasure graph".
 
 ## The map
 
-| File                                    | What it holds                                                                                                                                                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/erasure/graph.ts`      | `HOUSEHOLD_GRAPH` (19 tables, child before parent, `householdRows(scope)`), `ATHLETE_GRAPH` (step 5's per-profile list), `REFERENCE_TABLES`, `NON_ABORTING_EDGES`, `isAthleteGrain`, `graphTableName`. Not in the barrel. |
-| `packages/db/scripts/verify/erasure.ts` | P1, P2, P7 and P8 (below), run last by `verify.ts`. Mutations `260`–`270` prove each can fail.                                                                                                                            |
-| `packages/db/src/writers/ownership.ts`  | The leaves the predicates are built from, including `householdRowIs` and `householdMemberInHousehold`. Owned by [write-path.md](./write-path.md): it is the one module allowed to unwrap a scope.                         |
+| File                                    | What it holds                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/erasure/graph.ts`      | `HOUSEHOLD_GRAPH` (21 tables, child before parent, `householdRows(scope)`; `CAT-3` A1 added `movement_equipment` and `movement_muscles`, scoped through `movementsOf`), `ATHLETE_GRAPH` (step 5's per-profile list), `REFERENCE_TABLES`, `NON_ABORTING_EDGES`, `isAthleteGrain`, `graphTableName`. Not in the barrel. |
+| `packages/db/scripts/verify/erasure.ts` | P1, P2, P7 and P8 (below), run by `verify.ts` after the lanes' modules and before `CAT-3`'s `verifyCatalogTables`, whose rolled-back rows they never see. P7's fixture plants a row in each join table on B's movement. Mutations `260`–`270` prove each can fail.                                                    |
+| `packages/db/src/writers/ownership.ts`  | The leaves the predicates are built from, including `householdRowIs` and `householdMemberInHousehold`. Owned by [write-path.md](./write-path.md): it is the one module allowed to unwrap a scope.                                                                                                                     |
 
 ## Invariants that live between the files
 
@@ -62,4 +62,8 @@ erasure graph".
 - drizzle's `and()` does not parenthesize its operands, so a two-part predicate carries its own
   parentheses; P7's `both()` wraps each side for the same reason.
 - `OPS-3` restores in reverse graph order into a database that already holds `REFERENCE_TABLES` and
-  every global movement the household references.
+  every global movement the household references, **with those movements' equipment and muscle
+  rows** (`CAT-3` A1): no household's `householdRows` match them, so an extract never carries them.
+- A library movement's join rows are matched by no household (`CAT-3` A1's S2 proof in
+  `verify/catalog.ts`, mutations `318` and `319`). P7 cannot see that case: none of its fixture rows is
+  on a global movement.
