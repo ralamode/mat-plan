@@ -17,6 +17,7 @@ import {
   type DayPlan,
   type RowResult,
   type RowWrite,
+  type Weekday,
 } from '@mat-plan/shared';
 import {
   adultProgramWithCopy,
@@ -1044,11 +1045,11 @@ describe('the fake ProgramActions: workouts and the week', () => {
       }
       return program;
     };
-    const copyOf = (name: string | null) => ({
+    const copyOf = (name: string) => ({
       clientId: newId(),
       workoutPublicId: heavyA.workoutPublicId,
       toProgramPublicId: familyProgram.programPublicId,
-      weekdays: [],
+      weekdays: [] as Weekday[],
       label: null,
       name,
     });
