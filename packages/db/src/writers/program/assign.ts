@@ -35,9 +35,10 @@ export async function lockProgram(
 }
 
 /**
- * The athletes an assignment writer works on, locked after the program, in id order so two writers
- * naming the same athletes never wait on each other in turn: live, **not archived** (invariant 31),
- * of this household, `FOR NO KEY UPDATE`. `null` unless every id named is one.
+ * The athletes an assignment writer works on, locked after the program (if the writer takes one),
+ * in id order so two writers naming the same athletes never wait on each other in turn: live,
+ * **not archived** (invariant 31), of this household, `FOR NO KEY UPDATE`. `null` unless every id
+ * named is one.
  */
 export async function lockAthletes(
   tx: Executor,
