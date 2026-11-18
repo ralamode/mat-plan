@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 70189345..84b5daa2 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -139,8 +139,8 @@ export async function copyWorkout(
+     }
+ 
+     const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);
+-    const folded = foldName(name);
+-    if (targetWorkouts.some((w) => w.deletedAt === null && foldName(w.name) === folded)) {
++    const folded = name;
++    if (targetWorkouts.some((w) => w.deletedAt === null && w.name === folded)) {
+       return refuse(PROGRAM_REFUSAL.name_taken);
+     }
+ 

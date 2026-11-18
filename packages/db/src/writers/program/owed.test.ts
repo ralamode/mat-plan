@@ -27,10 +27,8 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
   it.todo('6d: two open assignments at one place in an athlete’s order are refused');
 });
 
-describe('CopyDraft: owed by its consumers', () => {
-  it.todo('6a: a replayed copy with the same clientId adds nothing');
-});
-
 describe('MovementOption: owed by its consumer', () => {
-  it.todo('7a-ii: MovementOption (packages/db) is assignable to MovementOptionDTO (apps/web)');
+  it.todo(
+    "7a-ii: the DAL's option (movementOptions, plus the taxonomy lib/dal/program attaches by slug) is assignable to MovementOptionDTO",
+  );
 });
