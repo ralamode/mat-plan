@@ -26,8 +26,7 @@ import { WorkoutCard } from './workout-card';
  * read by a screen reader and not shown, as v12 shows none.
  *
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
- * hides its control (plan §6). `amendRow` and `reorderPrograms` arrive that way, at steps 12d and
- * 15c.
+ * hides its control (plan §6). `amendRow` arrived at step 12d; `reorderPrograms` arrives at 15c.
  *
  * **Everything a row remembers is keyed by athlete and day** (`DayBody`'s key): typed text, a
  * failure, an un-tick token. The page moves between days on one mount, and a workout has the same

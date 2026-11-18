@@ -15,19 +15,20 @@ vi.mock('@mat-plan/db', () => ({
   logRow: vi.fn(async () => LOGGED),
   untickRow: vi.fn(async () => ({ ...LOGGED, hiddenAt: HIDDEN_AT })),
   retickRow: vi.fn(async () => LOGGED),
+  amendRow: vi.fn(async () => LOGGED),
 }));
 
-import { logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
+import { amendRow, logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
 
 import { getActivityTypeIdByKey } from '../catalog';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
-import { getDayPlan, logDayRow, retickDayRow, untickDayRow } from './day';
+import { amendDayRow, getDayPlan, logDayRow, retickDayRow, untickDayRow } from './day';
 import { reportRowMiss } from './report-miss';
 
 /**
- * The day DAL (FAM-1 step 12b). Lane E's resolver and writers are mocked: what they decide (the
+ * The day DAL (FAM-1 steps 12b and 12d). Lane E's resolver and writers are mocked: what they decide (the
  * window, an archived athlete, the schedule, a replay) is proven by `db:verify` (`verify/day.ts`)
  * and the resolver's own tests. Here: the scope is the caller's, `today` is the argument handed in
  * and never a clock, `athletes` is added, an answer passes through as it is, and a thrown database
@@ -67,6 +68,11 @@ const write = {
 };
 const untick = { profilePublicId: PROFILE_ID, day: YESTERDAY, entryPublicId: ENTRY_ID };
 const retick = { ...untick, hiddenAt: HIDDEN_AT };
+const amend = {
+  profilePublicId: PROFILE_ID,
+  entryPublicId: ENTRY_ID,
+  values: { reps: 6, quantities: [] },
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -117,7 +123,7 @@ describe('getDayPlan (FAM-1 12b)', () => {
   });
 });
 
-describe('the row writes (FAM-1 12b)', () => {
+describe('the row writes (FAM-1 12b; Change, 12d)', () => {
   it('each write goes through the caller’s scope with today handed in, and answers as the writer did', async () => {
     expect(await logDayRow(write, TODAY)).toEqual(LOGGED);
     expect(getActivityTypeIdByKey).toHaveBeenCalledWith(ACTIVITY_TYPE_KEYS.workout_item);
@@ -133,6 +139,9 @@ describe('the row writes (FAM-1 12b)', () => {
 
     expect(await retickDayRow(retick, TODAY)).toEqual(LOGGED);
     expect(retickRow).toHaveBeenCalledWith(db, { scope: SCOPE, today: TODAY, input: retick });
+
+    expect(await amendDayRow(amend, TODAY)).toEqual(LOGGED);
+    expect(amendRow).toHaveBeenCalledWith(db, { scope: SCOPE, today: TODAY, input: amend });
   });
 
   it.each([
@@ -145,9 +154,11 @@ describe('the row writes (FAM-1 12b)', () => {
     vi.mocked(logRow).mockResolvedValueOnce(refused);
     vi.mocked(untickRow).mockResolvedValueOnce(refused);
     vi.mocked(retickRow).mockResolvedValueOnce(refused);
+    vi.mocked(amendRow).mockResolvedValueOnce(refused);
     expect(await logDayRow(write, TODAY)).toEqual(refused);
     expect(await untickDayRow(untick, TODAY)).toEqual(refused);
     expect(await retickDayRow(retick, TODAY)).toEqual(refused);
+    expect(await amendDayRow(amend, TODAY)).toEqual(refused);
   });
 
   it('a ✓ the writer answers not_found asks which id missed, with the scope and the write; nothing else does', async () => {
@@ -162,8 +173,11 @@ describe('the row writes (FAM-1 12b)', () => {
     await logDayRow(write, TODAY);
     vi.mocked(untickRow).mockResolvedValueOnce(notFound);
     vi.mocked(retickRow).mockResolvedValueOnce(notFound);
+    vi.mocked(amendRow).mockResolvedValueOnce(notFound);
     await untickDayRow(untick, TODAY);
     await retickDayRow(retick, TODAY);
+    // A Change carries only an entry id, as un-tick does: answered, not reported.
+    expect(await amendDayRow(amend, TODAY)).toEqual(notFound);
     expect(reportRowMiss).not.toHaveBeenCalled();
   });
 
@@ -173,9 +187,11 @@ describe('the row writes (FAM-1 12b)', () => {
     expect(await logDayRow(write, TODAY)).toEqual(notFound);
     expect(await untickDayRow(untick, TODAY)).toEqual(notFound);
     expect(await retickDayRow(retick, TODAY)).toEqual(notFound);
+    expect(await amendDayRow(amend, TODAY)).toEqual(notFound);
     expect(logRow).not.toHaveBeenCalled();
     expect(untickRow).not.toHaveBeenCalled();
     expect(retickRow).not.toHaveBeenCalled();
+    expect(amendRow).not.toHaveBeenCalled();
   });
 
   it('a thrown database error leaves without the logged numbers', async () => {
@@ -189,10 +205,12 @@ describe('the row writes (FAM-1 12b)', () => {
     vi.mocked(logRow).mockRejectedValueOnce(failed());
     vi.mocked(untickRow).mockRejectedValueOnce(failed());
     vi.mocked(retickRow).mockRejectedValueOnce(failed());
+    vi.mocked(amendRow).mockRejectedValueOnce(failed());
     for (const call of [
       () => logDayRow(write, TODAY),
       () => untickDayRow(untick, TODAY),
       () => retickDayRow(retick, TODAY),
+      () => amendDayRow(amend, TODAY),
     ]) {
       const thrown = await call().catch((error: unknown) => error);
       expect(thrown).toBeInstanceOf(DbWriteError);
