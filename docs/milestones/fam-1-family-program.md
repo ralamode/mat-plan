@@ -208,6 +208,8 @@ column in the schema, and requests already insert into `movements` and `sessions
 on either table is not dark (see the [A4 plan](../plans/v1-22-a4-create-program.md), Staging).
 Step 4a also takes over A4-1's source-scan check for `program_blocks`.
 
+**Who merges a PR** _(maintainer, orchestrator's chat, 2026-11-17: "Lanes can mark ready for review, review (unless trivial), ship then merge")_. The lane that wrote a PR merges it, in this order: mark it ready for review; an independent review ([review-pr](../../.claude/skills/review-pr/SKILL.md)), unless the change is trivial; fix what the review finds; the reviewer's shipit; merge. Two conditions: CI is green, and the branch is current with `main` or behind only by unrelated commits ([AGENTS.md](../../AGENTS.md), "Keep the branch up to date with `main` before merge"). **Nothing merges with a P0 or P1 finding open** _(maintainer, the same day: "ensure after they're reviewed that there are no outstanding p0/p1 items. P2 you can report back to this thread and ask me if I want to add to tech-debt backlog")_: a P2 the lane does not fix goes to the board, and the maintainer decides whether it joins [tech-debt.md](../tech-debt.md). The lane then tells the board what merged. The contract owner merges contract and plan PRs the same way. The rule is about who merges: a question that was the maintainer's to decide still goes to them, through the board. A movement-library batch has its own form of the review: it merges once every row of its review tab reads `lgtm` ([CAT-3 spec](../specs/cat-3-movement-library.md), D3).
+
 | Step    | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Plan                                                                                                                             | Gate                                                                                                                                                     | ~PRs · lines             |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | **d1**  | **ADR 0007 signed with Amendments 1 and 2**, plus A4-0's authorization re-scoped: `workouts`, the block's week template, a block-kind marker (legacy or template), `prescriptions.workout_id` with typed prescribed values (expand only), `program_blocks.client_id`, and SCHED-1's two tables. **Narrows decision 4**: a template block is reached only through an assignment and never by a legacy read (step 5b), so no exported cell moves                                                                                                                                                                                        | [ADR 0007 Amendment 2](../decisions/0007-scheduling-model.md#amendment-2-2026-11-14-what-fam-1-needs-authorized), replacing A4-0 | the maintainer's signature                                                                                                                               | 1 docs · ~80             |
@@ -283,7 +285,7 @@ gantt
   5                            :crit, done, a5, 5, 6
 
   section P · program data
-  6a (6a-i, 6a-ii, 6a-iii-a merged) :active, p1, 5, 6
+  6a (four PRs, merged)        :done, p1, 5, 6
   6b                           :done, p2, 6, 7
   6c-i put on, test data       :p3, 7, 8
   6c-ii the two reads          :p3b, 8, 9
@@ -293,7 +295,7 @@ gantt
   11a                          :done, e1, 4, 5
   11b row writer               :crit, done, e2, 5, 7
   12a-i the day's read         :crit, done, e3, 7, 8
-  14, 11c (11c-i, 11c-ii)      :e4, 8, 9
+  14, 11c (11c-i merged)       :active, e4, 8, 9
   12a-ii replayed fixtures     :done, e5, 9, 10
 
   section B · builder
@@ -322,7 +324,7 @@ gantt
   3b-bw                        :done, s2, 2, 3
   3b-0                         :done, s3, 6, 7
   3b-life, B2-0 (merged)       :done, s4, 7, 8
-  B1-2                         :s5, 8, 9
+  B1-2                         :done, s5, 8, 9
   B2                           :s6, 10, 11
 
   section Slices
@@ -355,12 +357,12 @@ gantt
   one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's four takes a full PR-length, 7a-ii
   (which needs 6b and 6a-iii-b) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
   PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 37 of the 53). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 40 of the 53). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
-  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505) and 12a-ii (#525); lane B's six screen steps
-  (8a to 10b) and 7a-i; lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
-  6a-i, 6a-ii, 6a-iii-a (#557) and 6b (#522) are merged and 6a-iii-b is not, so 6a's bar is part merged; so are 7a's bar
-  (7a-i is merged, 7a-ii is not). A bar is marked here when its PRs are on `main`.
+  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525) and 11c-i (#539); lane B's six screen steps
+  (8a to 10b) and 7a-i; lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
+  All four of 6a's PRs (6a-iii-b, copying a workout, is #571) and 6b (#522) are merged. 7a's bar is part merged (7a-i is merged, 7a-ii is not), and so
+  is 11c's (11c-i is merged, 11c-ii is not). A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
