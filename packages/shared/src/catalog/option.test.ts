@@ -251,12 +251,25 @@ describe('byFoldedName: the order a list of movements is read in (K24)', () => {
     expect(byFoldedName({ name: 'Plank' }, { name: 'Plank' })).toBe(0);
   });
 
-  it('is the order browseTree lists a family in', () => {
-    for (const kind of browseTree(CATALOG_FIXTURE_OPTIONS)) {
+  it('is the order browseTree lists a family in, where a raw comparison would differ', () => {
+    // Every other name in lower case: by code unit a lower-case name sorts after every capital,
+    // so a tree sorted on the raw name would not be in this order.
+    const mixed = CATALOG_FIXTURE_OPTIONS.map((option, i) => ({
+      ...option,
+      name: i % 2 === 1 ? option.name.toLowerCase() : option.name,
+    }));
+    const raw = (a: { name: string }, b: { name: string }) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    let differs = 0;
+    for (const kind of browseTree(mixed)) {
       for (const family of kind.families) {
         expect([...family.options].sort(byFoldedName)).toEqual(family.options);
+        const byRaw = [...family.options].sort(raw);
+        if (byRaw.some((option, i) => option !== family.options[i])) differs += 1;
       }
     }
+    // The sample must tell the two orders apart, or this test would pass for either.
+    expect(differs).toBeGreaterThan(0);
   });
 });
 

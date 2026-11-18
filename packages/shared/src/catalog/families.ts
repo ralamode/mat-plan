@@ -116,8 +116,8 @@ export type BrowseKind<T> = {
 };
 
 /**
- * The order a list of movements is read in: by name, folded as the search folds it (case, accents
- * and punctuation aside), and by the name as written where two fold alike, so the order never
+ * The order a list of movements is read in: by name, folded as the search folds it (case, accents,
+ * punctuation and a plural "s" aside), and by the name as written where two fold alike, so the order never
  * depends on the order given. `browseTree` sorts each family with it. Exported so a list beside
  * the tree sorts the same way: the picker's interim section for the old built-ins with no library
  * entry (spec K24) uses it, and a second comparator there could drift from this one.
