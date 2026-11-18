@@ -43,7 +43,7 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
 
 | File                                                 | What it is for                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/day/day-screen.tsx`             | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the one live region, the failure count, read-only after a `closed_day`; the rest line and "No workouts logged" boxes.                                                                                                                                                                                                                                                                          |
+| `apps/web/components/day/day-screen.tsx`             | `DayScreen({ plan, actions })`. A section of the day page: the workouts, the island's live region, the failure count, read-only after a `closed_day`; the rest line and "No workouts logged" boxes.                                                                                                                                                                                                                                                                     |
 | `apps/web/components/day/day-context.tsx`            | What every row of one day shares: athlete, day, actions, `readOnly`, `announce`, `reload`.                                                                                                                                                                                                                                                                                                                                                                              |
 | `apps/web/components/day/workout-card.tsx`           | One workout: slot line, name, progress ("2 of 10", "Done ✓", none at total 0), "N not saved", items.                                                                                                                                                                                                                                                                                                                                                                    |
 | `apps/web/components/day/item-card.tsx`              | One item: an empty card on a look-ahead day, its single row (field, "Last time", ✓), or its set table.                                                                                                                                                                                                                                                                                                                                                                  |
@@ -101,7 +101,7 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
    13d's three page-placed parts joined the preview at #441, and their side-by-side was taken in 13b.
 7. **The rules every screen step carries** are the plan's (§5, end): keyed components and no full
    redraw, so typed values survive ticking another row; set rows as a list or a table with headers;
-   the day label as a heading; one persistent live region; 44px targets; the layout at 360px.
+   the day label as a heading; one live region per island, never two for one action; 44px targets; the layout at 360px.
 8. **The DAL resolves the household scope itself**; lane E's resolver sets `writable`, `future`
    and `canGoForward` (C17), and the DAL adds `athletes`. The tenancy scan (`lib/dal/scoped.test.ts`) reaches sub-directories, so it
    holds `lib/dal/day/` to that.
@@ -171,14 +171,14 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     a stale tab on yesterday the next morning. The date line says "Yesterday ·" there (v12's label).
 20. 🔴 **The page shows one state notice, never a stack** (12c; maintainer, 2026-11-17): the
     archived notice ("… Nothing new can be logged. Restore them in Household settings."), else
-    "Coming up" on a future day, else the closed-day sentence, above the program line. The screen
+    "Coming up" on a future day, else the closed-day sentence, above the program line (D36). The screen
     adds none of its own except its `closed_day` callout, which says only what happened ("Not
     saved. This day can't be logged any more."), so it is true for an archived athlete too.
     "Not on a program yet." says "Bodyweight and practice log here." only on a writable day.
 21. **A future day is look-ahead, and only while on a program** (D32, plan §9). `dayNavBounds`
     sets both arrows and the week strip from `DayPlan.canGoForward`; `resolveViewedDay` passes a
     future `?d=` through and the page renders today instead unless the athlete is on a program
-    that day, and never past today plus `LOOK_AHEAD_DAYS` (6, the rest of the coming week;
+    that day, and never past today plus `LOOK_AHEAD_DAYS` (6, the rest of the coming week; D37;
     maintainer, 2026-11-17), past which a `?d=` renders today. A future day renders no Bodyweight or
     Life and no ✓.
 22. **A write in flight looks pending and warns before the page is left** (maintainer,
