@@ -155,19 +155,21 @@ usually sent to Clerk to refresh their sign-in, not only one whose session lapse
 - the stale runbook line is corrected, and the UI-5 plan has a superseding note;
 - `NONCE_HEADER` is documented as Clerk's literal name and pinned in `proxy.test.ts`.
 
-🔴 **Open blocker, found locally: `e2e/theme.spec.ts:151` ("the choice survives a reload") fails on
-this branch, consistently (twice), and passes on `main` (6/6, the same machine and load).**
+**e2e failures in the first local run, attributed to machine load, not to this change**
+(`docs/lessons.md` → "Load timeouts that look like failures": re-run alone; a real bug fails alone
+too). Every run was `e2e:local` on this branch unless noted:
 
-- After the reload the page shows Dark selected: React's state is `dark` and the label is styled as
-  selected. The Dark radio carries the `checked` attribute, but its DOM `checked` property is
-  `false`, so `toBeChecked()` fails.
-- The radios are controlled (`components/theme/theme-toggle.tsx`, `checked={selected}`, all
-  `name="theme"`).
-- The cause is not yet found. Two leads:
-  - The new `app/p/layout.tsx` (an async server component) changes when the page hydrates, and a
-    same-name radio group's checked state desyncs across the `useSyncExternalStore` hydration flip
-    (`system` on the server render, then `dark`).
-  - Or a second `name="theme"` group is present in the document.
-- **Must be resolved before this ships.** The other three failures in the first full run
-  (`day-page.spec.ts` ×2, `log-bodyweight.spec.ts`) passed on a re-run, with the machine's load
-  average over 50; they are treated as load flakes, not as this change.
+| Test                                                                          | Failed                                                | Passed                                                                                                |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `theme.spec.ts:151` "the choice survives a reload, and the control shows it"  | full suite (load ~52) and a three-file run (load ~52) | `theme.spec.ts` alone 6/6 (load ~30); the same three-file run 17/17 (load ~30); `main` 6/6 (load ~45) |
+| `day-page.spec.ts:249` "a weight × reps set and its superset partner change…" | full suite (load ~52)                                 | three-file run, twice (load ~52, ~30)                                                                 |
+| `day-page.spec.ts:114` "a ✓ in flight when the parent switches athlete…"      | full suite (load ~52)                                 | three-file run, twice                                                                                 |
+| `log-bodyweight.spec.ts:46` "picks a profile then logs a bodyweight…"         | full suite (load ~52, a 30.9s timeout)                | three-file run, twice                                                                                 |
+
+The theme failure looked like a hydration desync, so it was probed before being called load. Two
+temporary probe specs (not committed) reloaded `/p` in dark and sampled every `name="theme"` radio
+for 6 seconds. The server renders Auto checked; the client then checks Dark (property and attribute
+both); there is one group of three radios and there are no console or hydration errors. The
+server/client mismatch theory is ruled out. Under load the client's flip to Dark comes later than the
+assertion's 5-second wait, so a slow hydration is the reading consistent with every run. No timeout
+was padded. CI is the gate that settles it, once the PR is open.
