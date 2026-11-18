@@ -15,17 +15,21 @@
  * sees `MAT_PLAN_HEAVY_SLOT_HELD`, which counts only when it equals the live lock's pid: a stray
  * `export` cannot turn the slot off.
  *
- * - **How many:** `HEAVY_SLOTS_DEFAULT` (1) at once; `MAT_PLAN_HEAVY_SLOTS=<n>` allows more on a machine
- *   that has the headroom (the maintainer, 2026-11-17: more than one suite is fine while the machine
- *   is on power and has resources). Slot 1 is the path below; slot k is `heavy-slot.k.json` beside it.
+ * - **How many:** `HEAVY_SLOTS_DEFAULT` (1) at once, unless the machine allows more (the maintainer,
+ *   2026-11-17: more than one suite is fine while the machine is on power and has resources). In
+ *   order: `MAT_PLAN_HEAVY_SLOTS=<n>` for one shell; else the machine file `heavy-slots` beside the
+ *   lock (one number, read on every take, so one edit reaches every session:
+ *   `echo 3 > ~/.cache/mat-plan/heavy-slots`; delete it to go back to 1); else the default.
+ *   Slot 1 is the path below; slot k is `heavy-slot.k.json` beside it.
  * - Busy: exits 2 naming every holder and the load average. Push and let CI gate it, or wait.
  * - `MAT_PLAN_HEAVY_SLOT=off` skips it, for a person who knows the machine is idle.
  * - Under `CI` or `GITHUB_ACTIONS` it does nothing: a runner has one job.
  * - `MAT_PLAN_HEAVY_SLOT_PATH` moves the lock; the self-tests use it, so they never touch a live slot.
  */
 import { execFileSync, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { constants, cpus, homedir, loadavg } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { acquire, holder, liveLock, readLock, release, rewrite } from './pid-lock.mjs';
@@ -34,17 +38,32 @@ export const SLOT_BUSY_EXIT = 2;
 /** Heavy local runs allowed at once, unless `MAT_PLAN_HEAVY_SLOTS` says otherwise. */
 export const HEAVY_SLOTS_DEFAULT = 1;
 
-export function slotCount() {
-  const raw = process.env.MAT_PLAN_HEAVY_SLOTS;
-  if (raw === undefined || raw === '') return HEAVY_SLOTS_DEFAULT;
-  const n = Number(raw);
+/** The machine-wide count file: one number, beside the slot locks. */
+export function slotCountFile() {
+  return join(dirname(slotPath(1)), 'heavy-slots');
+}
+
+function parseCount(raw, source) {
+  const n = Number(String(raw).trim());
   if (!Number.isInteger(n) || n < 1 || n > 16) {
-    console.error(
-      `✗ MAT_PLAN_HEAVY_SLOTS must be a whole number from 1 to 16, got: ${clean(raw, 20)}`,
-    );
+    console.error(`✗ ${source} must be a whole number from 1 to 16, got: ${clean(raw, 20)}`);
     process.exit(64);
   }
   return n;
+}
+
+/** The env var for one shell, else the machine file, else the default. */
+export function slotCount() {
+  const env = process.env.MAT_PLAN_HEAVY_SLOTS;
+  if (env !== undefined && env !== '') return parseCount(env, 'MAT_PLAN_HEAVY_SLOTS');
+  let file;
+  try {
+    file = readFileSync(slotCountFile(), 'utf8').slice(0, 64);
+  } catch (error) {
+    if (error.code === 'ENOENT') return HEAVY_SLOTS_DEFAULT;
+    throw error;
+  }
+  return file.trim() === '' ? HEAVY_SLOTS_DEFAULT : parseCount(file, slotCountFile());
 }
 
 /** Slot k's lock (1-based). Slot 1 is `MAT_PLAN_HEAVY_SLOT_PATH` or `~/.cache/mat-plan/heavy-slot.json`. */
@@ -147,7 +166,7 @@ export function takeSlot(command) {
         'Push and let CI gate it, or wait.\n' +
         `  load average ${load} on ${cpus().length} cores` +
         (count === 1
-          ? '; MAT_PLAN_HEAVY_SLOTS=<n> allows more when the machine has the headroom.'
+          ? `; MAT_PLAN_HEAVY_SLOTS=<n> (one shell) or ${slotCountFile()} (the machine) allows more when it has the headroom.`
           : '.'),
     );
     process.exit(SLOT_BUSY_EXIT);

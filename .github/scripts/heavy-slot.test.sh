@@ -157,6 +157,27 @@ kill -TERM "$HOLDER2"
 wait "$HOLDER2" 2>/dev/null
 check "…and slot 2's holder frees it when stopped" 'wait_for "[ ! -e $SLOT2 ]"'
 stop_holder
+# ── The machine file (heavy-slots beside the lock) ──────────────────────────────────────────────
+COUNTFILE="$(dirname "$MAT_PLAN_HEAVY_SLOT_PATH")/heavy-slots"
+hold
+echo 2 >"$COUNTFILE"
+node "$SLOT" -- sh -c 'test -e "$0"' "$SLOT2" >"$T/out" 2>&1
+code=$?
+check "the machine file allows a second run with no env var set" '[ "$code" = 0 ] && [ ! -e "$SLOT2" ]'
+MAT_PLAN_HEAVY_SLOTS=1 node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "…and MAT_PLAN_HEAVY_SLOTS still wins over it" '[ "$code" = 2 ]'
+printf '\n' >"$COUNTFILE"
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "an empty machine file means the default of 1" '[ "$code" = 2 ]'
+echo lots >"$COUNTFILE"
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "a machine file that is not 1 to 16 is refused, naming the file" '[ "$code" = 64 ] && grep -qF "heavy-slots must be a whole number" "$T/out"'
+rm -f "$COUNTFILE"
+stop_holder
+
 for bad in 0 -1 two 1.5 17; do
   MAT_PLAN_HEAVY_SLOTS="$bad" node "$SLOT" -- true >"$T/out" 2>&1
   [ $? = 64 ] || no "MAT_PLAN_HEAVY_SLOTS=$bad is refused"

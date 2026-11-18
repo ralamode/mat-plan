@@ -292,7 +292,7 @@ movement picker.
   lockfile, manifest or tsconfig changed ([script](./.github/scripts/test-changed.mjs)). A courtesy,
   not a gate: CI runs every test.
 - **When to run locally** (DX-18, [plan](./docs/plans/dx-18-heavy-runs-to-ci.md)): one heavy local run
-  at a time, machine-wide unless `MAT_PLAN_HEAVY_SLOTS` allows more, held by
+  at a time, machine-wide unless `~/.cache/mat-plan/heavy-slots` (one number) allows more, held by
   [the slot](./.github/scripts/heavy-slot.mjs). Run locally to write code (one file, one probe), debug a CI failure,
   `pnpm probe`, edit CI itself, during an Actions outage, for `pnpm dev`, and for production
   operations (corrections; never tests against production). **Everything else heavy runs on CI:
