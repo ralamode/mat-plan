@@ -323,6 +323,44 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(await actions.untickRow(input)).toEqual(first);
   });
 
+  it('🔴 un-tick and re-tick answer bad_value for input the schema refuses, and change nothing (C31)', async () => {
+    const { actions, plan } = day(everyTypeOnce);
+    const { entryPublicId, values } = loggedBench();
+    const badValue = { ok: false, reason: ROW_REFUSAL.bad_value };
+    // An id that is not a lower-case UUID never reaches the list of this athlete's entries.
+    expect(
+      await actions.untickRow({ profilePublicId, day: on, entryPublicId: 'not-an-id' }),
+    ).toEqual(badValue);
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.entryPublicId).toBe(
+      entryPublicId,
+    );
+
+    const unticked = succeeded(
+      await actions.untickRow({ profilePublicId, day: on, entryPublicId }),
+    );
+    const retick = { profilePublicId, day: on, entryPublicId };
+    // The right shape, but no real instant: the database's cast would throw on each.
+    for (const hiddenAt of [
+      '2026-02-30T00:00:00.000000Z',
+      '2026-13-01T00:00:00.000000Z',
+      '2026-11-17T24:00:00.000000Z',
+      '2026-11-17T18:04:60.000000Z',
+    ]) {
+      expect(await actions.retickRow({ ...retick, hiddenAt }), hiddenAt).toEqual(badValue);
+    }
+    // Three fractional digits, as a token that went through a `Date`: the same answer.
+    expect(await actions.retickRow({ ...retick, hiddenAt: '2026-11-14T15:04:05.123Z' })).toEqual(
+      badValue,
+    );
+    // Nothing came back, and the true token still brings the entry back.
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged).toBeNull();
+    expect(await actions.retickRow({ ...retick, hiddenAt: unticked.hiddenAt! })).toEqual({
+      ok: true,
+      entryPublicId,
+      values,
+    });
+  });
+
   it('re-tick refuses another token; after a new ✓ the entry is already back, and it answers with it', async () => {
     const { actions } = day(everyTypeOnce);
     const { entryPublicId } = loggedBench();
