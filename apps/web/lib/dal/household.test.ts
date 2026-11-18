@@ -47,6 +47,7 @@ vi.mock('@sentry/nextjs', () => ({ captureMessage }));
 vi.mock('./session', () => ({ getCurrentUser: async () => state.principal }));
 
 import { getHouseholdScope, HOUSEHOLD_STATE, householdState } from './household';
+import { DbWriteError } from './quiet-db-errors';
 
 /**
  * ⚠️ **A fresh principal per test, and that is load-bearing.** `household.ts` bounds its B′/C
@@ -132,12 +133,15 @@ describe('getHouseholdScope — the one place a household is derived from a requ
     // A bare `catch { return null }` would tell the one family that does have data that nothing is
     // linked to their account, and send the operator looking for a membership problem.
     state.probeThrows = Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' });
-    // ⚠️ The message asserted is drizzle's wrapper ("Failed query: …"), not the driver's — which is
-    // itself the point: what propagates is the real error, cause and all, rather than a `null` the
-    // picker would render as "nothing is linked to this account".
-    await expect(getHouseholdScope()).rejects.toThrow();
+    // What propagates is a throw, never a `null` the picker would render as "nothing is linked to
+    // this account" — and since V1-9b B1-2 a `DbWriteError`, because drizzle's message embeds
+    // `params:` and the param here is the Clerk user id (`quiet-db-errors.ts`).
+    // drizzle wraps the driver's error here as it does in production, so the id IS in the original.
     const rejection = await getHouseholdScope().catch((e: unknown) => e);
-    expect((rejection as { cause?: { code?: string } }).cause?.code).toBe('ECONNREFUSED');
+    expect(rejection).toBeInstanceOf(DbWriteError);
+    expect((rejection as Error).message).toBe('getHouseholdScope failed (DrizzleQueryError)');
+    expect(String((rejection as Error).stack)).not.toContain('user_');
+    expect((rejection as Error).cause).toBeUndefined();
     expect(captureMessage).not.toHaveBeenCalled();
   });
 
