@@ -46,6 +46,7 @@ import {
 import { putOn } from '../../src/writers/program/assign';
 import {
   SEED_FIXTURE_ATHLETES,
+  SEED_FIXTURE_COUNTS,
   SEED_FIXTURE_PROGRAM_CLIENT_IDS,
   seedFixtureProgramClientId,
   seedProgramFixtures,
@@ -2120,10 +2121,12 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
         'FAM-1 6c-i: z goes on P, then Q',
       );
     }
+    // The usual case: on P since earlier in the week, taken off today, put straight back on.
     const zp = (await rowsOf(z)).find((r) => r.program === P)!;
+    const zStart = addDays(PUT_ON_TODAY, -3);
     await tx
       .update(schema.programAssignments)
-      .set({ activeTo: PUT_ON_TODAY })
+      .set({ activeFrom: zStart, activeTo: PUT_ON_TODAY })
       .where(eq(schema.programAssignments.id, zp.id));
     assert.deepEqual(
       await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [z], from: PUT_ON_TODAY }),
@@ -2137,6 +2140,13 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
         { program: P, idx: 1 },
       ],
       'FAM-1 6c-i: …the order closed up, the reopened program last',
+    );
+    assert.deepEqual(
+      (await rowsOf(z))
+        .filter((r) => r.program === P)
+        .map((r) => ({ id: r.id, activeFrom: r.activeFrom, activeTo: r.activeTo })),
+      [{ id: zp.id, activeFrom: zStart, activeTo: null }],
+      'FAM-1 6c-i: …a stretch that began before today is reopened on its own row, its start kept',
     );
 
     // ── One call, one athlete already on and one new: only the new one is written ──
@@ -2429,7 +2439,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
     );
     assert.equal(
       (await onMade(SEED_FIXTURE_ATHLETES.a1!)).length,
-      2,
+      DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world.assign.a1?.length,
       'FAM-1 6c-i: …and the other seed athlete on their two programs',
     );
   });
@@ -2465,7 +2475,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         (r) => r.deletedAt === null && Object.values(SEED_FIXTURE_ATHLETES).includes(r.profile),
       ).length,
       // Household A's seeded stretches only: A's seed athletes are not B's, so B puts none on.
-      3,
+      SEED_FIXTURE_COUNTS.assignments,
       'FAM-1 6c-i: …and puts no athlete of another household on its programs',
     );
   });

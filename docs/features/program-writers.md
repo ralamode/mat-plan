@@ -206,10 +206,11 @@ flowchart TD
     weekday rows: it trusts take off to leave them live.** 6d's take off must not hide them, or a
     reopened program is on but never due (`assignmentDueOn`), and 6d proves a reopen after a real
     take off is due today. The seed passes each start day as `today`, so its past
-    starts are ones a person made that day (`seed-fixtures-reverses-the-order`,
-    `seed-fixtures-rewrites-a-seeded-program`). State a person can make in the app is a warning,
-    never a throw: an archived seed athlete is put on nothing, and a program whose item the household
-    has under another type is left out, since `migrate-preview.yml` seeds the long-lived preview
+    starts are ones a person made that day; it puts an athlete on in their own order and writes a
+    program once (`seed-fixtures-reverses-the-order`, `seed-fixtures-rewrites-a-seeded-program`).
+    State a person can make in the app is a warning, never a throw: an archived seed athlete is put
+    on nothing, and a program whose item the household has under another type, or whose name a
+    program of the household already has, is left out, since `migrate-preview.yml` seeds the long-lived preview
     database on every push (`seed-fixtures-puts-on-an-archived-athlete`,
     `seed-fixtures-uses-a-wrongly-typed-item`). An item the catalog has is the catalog's in the
     seeded workouts (`newItem`): "DB bench press" is seeded as the catalog's Dumbbell Bench Press.

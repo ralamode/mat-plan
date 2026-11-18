@@ -6,6 +6,7 @@ import {
   type Weekday,
   WEEKDAYS,
   newId,
+  PROGRAM_REFUSAL,
 } from '@mat-plan/shared';
 import {
   DAY_PLAN_FIXTURE_SOURCES,
@@ -143,10 +144,13 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
         continue;
       }
 
-      const { programPublicId } = must(
-        await createProgram(tx, scope, { clientId, name: program.name }),
-        `program ${program.id}`,
-      );
+      const created = await createProgram(tx, scope, { clientId, name: program.name });
+      // A person's own program already has this name: theirs stays, the fixture is left out.
+      if (!created.ok && created.reason === PROGRAM_REFUSAL.name_taken) {
+        skip(`program ${program.id}`, 'the household has a program of that name');
+        continue;
+      }
+      const { programPublicId } = must(created, `program ${program.id}`);
 
       const workoutIds = new Map<string, string>();
       for (const workout of program.workouts) {

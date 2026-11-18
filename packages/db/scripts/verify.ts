@@ -59,6 +59,7 @@ import {
   type RoutineConfig,
   uuidSchema,
 } from '@mat-plan/shared';
+import { FIXTURE_ITEMS } from '@mat-plan/shared/program/fixtures';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
@@ -214,7 +215,9 @@ console.log('✓ migration applied to PGlite');
 
 // Seed twice → must be idempotent. The second run is asserted, so a seed that cannot run twice fails
 // on a named line (FAM-1 6c-i: the fixture programs are written once, then left alone).
-await seed(asPg, { fixtures: true });
+await seed(asPg, { fixtures: true }).catch((e: unknown) =>
+  assert.fail(`FAM-1 6c-i: the first seed run succeeds (${String(e)})`),
+);
 await seed(asPg, { fixtures: true }).catch((e: unknown) =>
   assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
 );
@@ -600,6 +603,21 @@ assert.equal(
   MOVEMENT_SEED_ROWS.length,
   'movements: full catalog seeded from the shared const, exactly once',
 );
+// The seed writes household items only through the fixture programs (FAM-1 6c-i): each one in the
+// seed household, and each named for a fixture item the catalog does not already have.
+{
+  const [seedHousehold] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+  const fixtureNames = new Set(FIXTURE_ITEMS.map((item) => item.name));
+  const owned = movements.filter((m) => m.householdId !== null);
+  assert.ok(
+    owned.length > 0 &&
+      owned.every((m) => m.householdId === seedHousehold?.id && fixtureNames.has(m.name)),
+    'movements: the seed writes household items only for the fixture programs, in the seed household',
+  );
+}
 console.log(
   `✓ full catalog seeded: ${activityTypes.length} activity_types, ${metricDefinitions.length} metric_definitions, ${movements.length} movements`,
 );
