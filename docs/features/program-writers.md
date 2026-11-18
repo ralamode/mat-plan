@@ -57,7 +57,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/copy-workout.ts`     | `copyWorkout`: an independent copy of a workout into one of the household's programs, named by C15, with frozen provenance, optionally onto weekdays.                                                                                                                                                                                                                                                                                                   |
 | `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: the test seed's fixture programs (`SEED_FIXTURES=1` only), built with the real writers, and the seed's athletes on them. A program the household already has, by its fixed `client_id`, is left as it is.                                                                                                                                                                                                                        |
 | `packages/db/src/writers/program/assign.ts`           | `putOn`: athletes onto a template program from today or tomorrow, one row last in their order and all seven weekday rows; already on is skipped; a last day of today is reopened on the same row.                                                                                                                                                                                                                                                       |
-| `packages/db/src/writers/program/take-off.ts`         | `takeOff`: removes a start not begun, or begun today with nothing logged under it (`lastDay: null`); otherwise ends the stretch today (`lastDay: today`). A replay answers the same (D15).                                                                                                                                                                                                                                                              |
+| `packages/db/src/writers/program/take-off.ts`         | `takeOff`: removes a start not begun, or begun today with nothing logged under it (`lastDay: null`); otherwise ends the stretch today (`lastDay: today`). A replay answers the same (decided 2026-11-18).                                                                                                                                                                                                                                               |
 | `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                                               |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                                                                                                                                                   |
 | `packages/db/scripts/verify/program.ts`               | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                                                                                                                                           |
@@ -272,7 +272,14 @@ flowchart TD
     takes no lock, so `newItem` answers `not_found` before it counts.
 
 22. 🔴 **Take off decides by where the start stands, and never ends an archived athlete's
-    assignment** (6d-i; ADR 0007 Amendment 4, C15, D15, contract invariant 31).
+    assignment** (6d-i; ADR 0007 Amendment 4, C15, the 2026-11-18 replay decision, contract invariant 31).
+
+    "Logged" is `programRowOf(profileId, today)` on a live session whose workout is one of this
+    program's, live or removed; an un-ticked row does not count, and a purged workout's rows stop
+    counting. Take off never hides the weekday rows (invariant 19) and never moves the athlete's
+    other programs. ⚠️ **An accepted limit:** "nothing logged" is read without a lock against the row
+    writers, so a ✓ racing it (no race needed: a re-tick, Restore all or `restoreHidden`, which has no app caller yet, of a row hidden before it), leaves a logged row under a removed start: contract change C24's state, which the day page shows as
+    a workout that left the week (mutations 521–531, `take-off-*`).
 
 ```mermaid
 flowchart TD
@@ -289,14 +296,6 @@ flowchart TD
   L -->|yes| END["active_to = today, lastDay: today"]
   C -->|started before today| END
 ```
-
-    "Logged" is `programRowOf(profileId, today)` on a live session whose workout is one of this
-    program's, live or removed; an un-ticked row does not count, and a purged workout's rows stop
-    counting. Take off never hides the weekday rows (invariant 19) and never moves the athlete's
-    other programs. ⚠️ **An accepted limit:** "nothing logged" is read without a lock against the row
-    writers, so a ✓ racing it, or a re-tick or Restore all of a row hidden before it (no race needed),
-    leaves a logged row under a removed start: contract change C24's state, which the day page shows as
-    a workout that left the week (mutations 521–531, `take-off-*`).
 
 ## Changing it
 

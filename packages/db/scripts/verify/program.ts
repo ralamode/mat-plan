@@ -3731,7 +3731,7 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
 
 // ── FAM-1 6d-i: Take off ───────────────────────────────────────────────────────────────────────────
 
-async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
+async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
   const T = world.today;
   await rolledBack(async (tx) => {
@@ -3810,7 +3810,7 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
     assert.deepEqual(
       await off(n1),
       { ok: true, lastDay: null },
-      'FAM-1 6d-i: a replay of a removal answers lastDay null (D15)',
+      'FAM-1 6d-i: a replay of a removal answers lastDay null (decided 2026-11-18)',
     );
     assert.deepEqual(await assignmentRows(tx), afterRemove, 'FAM-1 6d-i: …and writes nothing');
     // The contrast to a reopen: back on after a removal is a new row, the old one stays hidden.
@@ -3872,7 +3872,11 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
       { ok: true, lastDay: T },
       'FAM-1 6d-i: a replay of an end answers lastDay today',
     );
-    assert.deepEqual(await assignmentRows(tx), afterEnd, 'FAM-1 6d-i: …and writes nothing');
+    assert.deepEqual(
+      await assignmentRows(tx),
+      afterEnd,
+      'FAM-1 6d-i: …a replay of an end writes nothing',
+    );
 
     // ── Not started yet: removed ──
     const n4 = await athlete('Take-off Tomorrow');
@@ -3927,6 +3931,25 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
     // ── Take off never moves the athlete's other programs ──
     const n9 = await athlete('Take-off Three');
     for (const program of [p1, p2, p3]) await on(n9, program, addDays(T, -3));
+    await log(n9, w1, addDays(T, -2));
+    const history = async () => ({
+      entries: (
+        await tx
+          .select({ ctid: sql<string>`${schema.entries}.ctid::text` })
+          .from(schema.entries)
+          .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
+          .where(eq(schema.profiles.publicId, n9))
+      ).map((r) => r.ctid),
+      sessions: (
+        await tx
+          .select({ ctid: sql<string>`${schema.sessions}.ctid::text` })
+          .from(schema.sessions)
+          .innerJoin(schema.profiles, eq(schema.profiles.id, schema.sessions.profileId))
+          .where(eq(schema.profiles.publicId, n9))
+      ).map((r) => r.ctid),
+    });
+    const loggedBefore = await history();
+    assert.ok(loggedBefore.entries.length > 0, 'FAM-1 6d-i: the proof logged n9 two days back');
     const others = async () =>
       (await rowsOf(n9)).filter((r) => r.program !== p1).map((r) => r.ctid);
     const beforeOthers = await others();
@@ -3939,6 +3962,11 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
       await others(),
       beforeOthers,
       'FAM-1 6d-i: …and the athlete’s other programs are untouched',
+    );
+    assert.deepEqual(
+      await history(),
+      loggedBefore,
+      'FAM-1 6d-i: …and the logged days keep their rows (entries and sessions untouched)',
     );
 
     // ── Put on after a real Take off today reopens the row, due today ──
@@ -3981,6 +4009,42 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
     await hide(tx, gone);
     const bAthlete = await mustAddAthlete(tx, B_SCOPE, 'Take-off B Athlete');
     const bProgram = await mustCreate(tx, B_SCOPE, 'Take-off B Program');
+    // Stray cross-household rows (a writer bug's shape), so a lock that lost its household conjunct
+    // would find a row to end, and the refusal could fail.
+    const profileIdOf = async (publicId: string) =>
+      (
+        await tx
+          .select({ id: schema.profiles.id })
+          .from(schema.profiles)
+          .where(eq(schema.profiles.publicId, publicId))
+      )[0]!.id;
+    const blockIdOf = async (publicId: string) =>
+      (
+        await tx
+          .select({ id: schema.programBlocks.id })
+          .from(schema.programBlocks)
+          .where(eq(schema.programBlocks.publicId, publicId))
+      )[0]!.id;
+    for (const [profile, block] of [
+      [bAthlete, p1],
+      [n10, bProgram],
+    ] as const) {
+      await tx.insert(schema.programAssignments).values({
+        publicId: newId(),
+        profileId: await profileIdOf(profile),
+        blockId: await blockIdOf(block),
+        idx: 7,
+        activeFrom: addDays(T, -3),
+      });
+    }
+    const n14 = await athlete('Take-off Other Removal');
+    await on(n14, p2, T);
+    assert.deepEqual(
+      await off(n14, p2),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: the proof removes n14 from Stretching',
+    );
+    const legacy = (await seededBlock(tx, A_SCOPE)).publicId;
     const before = await assignmentRows(tx);
     for (const [what, input, reason] of [
       [
@@ -4026,6 +4090,16 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
       [
         'an unknown program',
         { programPublicId: newId(), profilePublicId: n2 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a legacy block',
+        { programPublicId: legacy, profilePublicId: n2 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an athlete whose removed start was on another program',
+        { programPublicId: p1, profilePublicId: n14 },
         PROGRAM_REFUSAL.not_found,
       ],
     ] as const) {

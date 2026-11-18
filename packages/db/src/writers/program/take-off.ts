@@ -25,7 +25,8 @@ import { refuse } from './refuse';
  *
  * **A replay answers as the first call did and writes nothing**: a row whose last day is already
  * today answers `lastDay: today`; with no current row, a hidden row of this program starting today
- * or later means a Take off already removed it, and answers `lastDay: null` (D15). Everything else
+ * or later means a Take off already removed it, and answers `lastDay: null` (decided under the
+ * maintainer's overnight delegation, 2026-11-18; the contract's next PR adds the sentence). Everything else
  * with no current row is `not_found`: never on it, a removed start now in the past, another
  * household's ids.
  *
@@ -41,8 +42,8 @@ import { refuse } from './refuse';
  *
  * ⚠️ **An accepted limit.** "Nothing logged" is read without a lock against the row writers, so a
  * logged row can stand today under a start this removed: a ✓ racing it (`logRow` checks the
- * assignment with a plain read), or with no race at all, a re-tick or Restore all of a row hidden
- * before the Take off (neither checks an assignment, C24). That is the state the day page shows as
+ * assignment with a plain read), or with no race at all, a re-tick, Restore all, or `restoreHidden`
+ * (no app caller yet) of a row hidden before the Take off (none checks an assignment, C24). That is the state the day page shows as
  * a workout that left the week. Closing it would need the row writers to lock the assignment, and
  * re-tick and Restore all would still get through.
  */
@@ -69,13 +70,15 @@ export async function takeOff(
 
     const a = schema.programAssignments;
     const ofThisProgram = and(eq(a.profileId, athlete.id), eq(a.blockId, block.id));
-    // The current row: an open or upcoming one first, else one closing today or later.
-    const [row] = await tx
+    // The current row. The writers leave at most one per program (a put on the day of a take off
+    // reopens it), so a second is a writer bug: thrown, so the transaction rolls back loudly.
+    const current = await tx
       .select({ id: a.id, activeFrom: a.activeFrom, activeTo: a.activeTo })
       .from(a)
       .where(and(ofThisProgram, assignmentCurrentAsOf(today)))
-      .orderBy(sql`${a.activeTo} is null desc`, desc(a.activeFrom), desc(a.id))
-      .limit(1);
+      .orderBy(sql`${a.activeTo} is null desc`, desc(a.activeFrom), desc(a.id));
+    if (current.length > 1) throw new Error('takeOff found two current rows of one program');
+    const row = current[0];
 
     if (!row) {
       // Removed already by a Take off (only Take off hides an assignment): the same answer again.
@@ -86,7 +89,9 @@ export async function takeOff(
         .limit(1);
       return removed ? { ok: true as const, lastDay: null } : refuse(PROGRAM_REFUSAL.not_found);
     }
-    if (row.activeTo !== null) return { ok: true as const, lastDay: today };
+    // A Take off ended it today already: the same answer again. (A later last day is no writer's;
+    // it is closed to today below like an open row.)
+    if (row.activeTo === today) return { ok: true as const, lastDay: today };
 
     const remove = async () => {
       await tx
