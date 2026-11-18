@@ -7,7 +7,7 @@ import {
   type Unit,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../client';
@@ -45,20 +45,31 @@ type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof sche
  * HIDDEN row, and an unguarded re-select would return that row's id and attach children to a dead
  * parent. Either way the guard stays, which is why B0 changes no code here.
  *
- * ⚠️ The throw is the behaviour `db:verify`'s B0 case asserts: replaying a hidden write is a
- * REFUSAL, not a twin. `B1-2` owns turning it into a typed envelope; today it reaches `error.tsx`.
- * Extracted so the three graph-row inserts can't drift on this. A SELECT over the table union needs
- * no `as never`.
+ * 🔴 **`owner` is load-bearing too, and required.** `client_id` is UNIQUE across the whole table, not
+ * per athlete, so the conflict can be with ANOTHER athlete's row, another household's included.
+ * Matched on `client_id` alone, the re-select answered with that row: a session `client_id` from
+ * someone else attached this request's entries to their session, and an entry `client_id` reported
+ * a save that never happened. Each caller passes the conjunct that makes the row its own: the
+ * session by the profile resolved in the transaction, a superset and an entry by the session just
+ * resolved. A row held by anyone else is refused exactly as a hidden one is, and the transaction
+ * rolls back. Required rather than optional, so a new graph insert that forgets it does not compile.
+ *
+ * ⚠️ The throw is the behaviour `db:verify` asserts (V1-9b B0 for a hidden row; the replay-owner
+ * block for a foreign one): a REFUSAL, not a twin or a borrowed row. The two refusals carry the same
+ * message on purpose, so a caller cannot tell "someone else holds this id" from "your hidden row".
+ * `B1-2` owns turning it into a typed envelope; today it reaches `error.tsx`. Extracted so the three
+ * graph-row inserts can't drift on this. A SELECT over the table union needs no `as never`.
  */
 async function reselectLiveByClientId(
   exec: Executor,
   table: GraphTable,
   clientId: string,
+  owner: SQL,
 ): Promise<{ id: number; publicId: string }> {
   const [row] = await exec
     .select({ id: table.id, publicId: table.publicId })
     .from(table)
-    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
+    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt), owner))
     .limit(1);
   // The re-select follows an ON-CONFLICT no-op, so a live row should exist. If it doesn't (e.g. the row
   // was soft-deleted between the conflict and this SELECT), fail with a clear error rather than let a
@@ -134,8 +145,17 @@ async function insertStrengthSessionRow(
       where: isNull(schema.sessions.deletedAt),
     })
     .returning({ id: schema.sessions.id, publicId: schema.sessions.publicId });
-  // On conflict (a replay) re-select the LIVE row (the deleted_at-guarded helper).
-  return row ?? reselectLiveByClientId(exec, schema.sessions, args.clientId);
+  // On conflict (a replay) re-select the LIVE row, and only this profile's: another athlete's session
+  // holding the id is refused, never joined.
+  return (
+    row ??
+    reselectLiveByClientId(
+      exec,
+      schema.sessions,
+      args.clientId,
+      eq(schema.sessions.profileId, args.profileId),
+    )
+  );
 }
 
 /**
@@ -159,7 +179,15 @@ async function insertSupersetRow(
       where: isNull(schema.supersets.deletedAt),
     })
     .returning({ id: schema.supersets.id });
-  return row ?? reselectLiveByClientId(exec, schema.supersets, args.clientId);
+  return (
+    row ??
+    reselectLiveByClientId(
+      exec,
+      schema.supersets,
+      args.clientId,
+      eq(schema.supersets.sessionId, args.sessionId),
+    )
+  );
 }
 
 /**
@@ -231,11 +259,18 @@ async function writeSessionStrengthEntry(
     })
     .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
 
-  // Idempotent replay: the entry already exists — return it, don't re-add sets (the deleted_at-guarded
-  // re-select, so a HIDDEN row holding this client_id is refused rather than returned — V1-9b B0).
+  // Idempotent replay: the entry already exists — return it, don't re-add sets. Guarded twice: a
+  // HIDDEN row holding this client_id is refused (V1-9b B0), and so is an entry of any OTHER session,
+  // the same athlete's included, which would otherwise report a save that never happened. The
+  // session was resolved under this request's profile, so `session_id` implies the profile.
   if (!entry) {
     return {
-      ...(await reselectLiveByClientId(exec, schema.entries, args.clientId)),
+      ...(await reselectLiveByClientId(
+        exec,
+        schema.entries,
+        args.clientId,
+        eq(schema.entries.sessionId, args.sessionId),
+      )),
       created: false,
     };
   }

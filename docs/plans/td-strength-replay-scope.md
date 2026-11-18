@@ -143,10 +143,10 @@ after V1-9b B0 so `A_SCOPE`, `B_SCOPE`, `sessionProfileA/B` and `VERIFY_PROFILE_
 4. **Entry, same athlete, other session:** athlete A logs a new session T whose movement carries S's
    entry `client_id`. Refused. Afterwards T does not exist (the rollback) and S's entry is unchanged.
    **Mutation 441's expect.**
-5. **Superset:** the block's own session W has superset `…e8310` with members at orders 1 and 2.
-   Then A logs session U whose superset reuses `…e8310`, with its member at **order 3**, so under 442
+5. **Superset:** the block's own session W has superset `…e8510` with members at orders 1 and 2.
+   Then A logs session U whose superset reuses `…e8510`, with its member at **order 3**, so under 442
    the mutated write succeeds silently instead of tripping `uq_entries_superset_order`. Refused.
-   Afterwards U does not exist and `…e8310` still has exactly W's two members. **Mutation 442's
+   Afterwards U does not exist and `…e8510` still has exactly W's two members. **Mutation 442's
    expect.**
 
 Local: `pnpm --filter @mat-plan/db db:verify` (PGlite), then `db:mutations` for 440–442, each only

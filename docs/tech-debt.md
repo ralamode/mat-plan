@@ -772,18 +772,6 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
 - **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
   rule is scoped to `/api/sync`, so there is no standing convention this violates.
 
-### The strength writer's replay re-select is not scoped to the profile (found 2026-10-02, #212 review)
-
-- **What & why:** `reselectLiveByClientId` (`packages/db/src/writers/strength-session.ts`, from #59)
-  re-selects a session by `client_id` only. Replaying another profile's session `client_id` under
-  profile B would attach B's entries to A's session, and since V1-24 3a-ii return A's public id as
-  `savedId`.
-- **Impact:** low today: it needs a device-generated `client_id` that is never exposed, and ownership
-  is existence-only until AUTH-1. It becomes a cross-household leak once households exist.
-- **Proposed fix:** add the profile (or household) to the re-select's WHERE, with a `db:verify` proof.
-  Fold into AUTH-1's ownership pass.
-- **Severity:** medium after AUTH-1.
-
 ### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
 
 - **What & why:** `.github/scripts/check-status-touched.mjs` still accepts a `docs/status.md` touch

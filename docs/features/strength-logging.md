@@ -238,6 +238,12 @@ all derived from the one unit, so none can disagree with it:
    `V1-9b` B1-2 is the chunk that turns it into a typed envelope. `db:verify`'s B0 case asserts the
    refusal and a committed mutation patch (`39`) proves it can fail. Why an identity and not a slot:
    `write-path.md` invariant 6.
+   🔴 **A replay is answered only by a row the request owns.** `client_id` is unique per table, not
+   per athlete, so the conflict can be with another athlete's row. `reselectLiveByClientId` takes a
+   required `owner` conjunct: the session by the profile resolved in the transaction, a superset
+   and an entry by that session. Any other holder gets the same `no live row for client_id` refusal
+   as a hidden row, and the transaction rolls back. `db:verify`'s replay-owner block; mutations
+   `440`–`442` ([plan](../plans/td-strength-replay-scope.md)).
 
 7. **The profile is resolved by `public_id` INSIDE the transaction.** Never a raw internal id from the
    request. That is the BOLA seam.
