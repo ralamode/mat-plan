@@ -7,6 +7,7 @@ import type { HouseholdScope } from '../scope';
 import { isLiveProfile } from '../writers/ownership';
 import {
   byFirstLogged,
+  entrySessionIsItsAthletes,
   type FirstLoggedFields,
   programItemKey,
   programRow,
@@ -123,7 +124,7 @@ export function strengthMonthRows(
         schema.sessions,
         and(
           eq(schema.sessions.id, schema.entries.sessionId),
-          eq(schema.sessions.profileId, schema.entries.profileId),
+          entrySessionIsItsAthletes(),
           // A hidden session lends nothing either: its columns are NULL, and its entries are kept
           // unless they are hidden themselves. No writer hides a session today.
           isNull(schema.sessions.deletedAt),

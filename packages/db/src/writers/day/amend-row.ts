@@ -11,7 +11,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Schema } from '../../client';
 import { schema } from '../../client';
 import { rowDayOpen } from '../../queries/day/day-window';
-import { programRow } from '../../queries/day/program-rows';
+import { entrySessionIsItsAthletes, programRow } from '../../queries/day/program-rows';
 import { isScheduledOn } from '../../queries/day/scheduled';
 import type { HouseholdScope } from '../../scope';
 import { updateEntrySetRows } from '../session-rows';
@@ -64,7 +64,7 @@ export async function amendRow(
           eq(schema.entries.publicId, input.entryPublicId),
           eq(schema.entries.profileId, profile.id),
           programRow(),
-          eq(schema.sessions.profileId, schema.entries.profileId),
+          entrySessionIsItsAthletes(),
         ),
       )
       .limit(1)
