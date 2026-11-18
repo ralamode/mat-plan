@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index ea4474a9..22e29140 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -109,7 +109,6 @@ export async function takeOff(
+           and(
+             programRowOf(athlete.id, today),
+             isNull(schema.entries.deletedAt),
+-            eq(schema.workouts.blockId, block.id),
+           ),
+         )
+         .limit(1);

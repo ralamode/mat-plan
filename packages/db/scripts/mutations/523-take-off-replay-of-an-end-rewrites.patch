@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index 6028767d..eb0f787e 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -91,7 +91,6 @@ export async function takeOff(
+     }
+     // A Take off ended it today already: the same answer again. (A later last day is no writer's;
+     // it is closed to today below like an open row.)
+-    if (row.activeTo === today) return { ok: true as const, lastDay: today };
+ 
+     const remove = async () => {
+       await tx
