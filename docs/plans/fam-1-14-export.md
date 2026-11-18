@@ -302,6 +302,95 @@ it:
   changes that assertion and runs `e2e:local`. The stale `checkinMonthRows` mock
   (`export-prescribed.test.ts:20`) becomes the real query or is deleted.
 
+### 14b — file by file (2026-11-18, after Q2; revised after its two lenses)
+
+Written from the constraints above and Q2's answer. Per the roadmap thread (overnight delegation,
+2026-11-18), plan #582's approval covers this file-by-file. Three choices in it are lane E's, not the
+maintainer's: the value column, the row order, and Wake as `HH:MM` (a raw number when it is not a
+clock). About 300 lines plus docs.
+
+- **EDIT `packages/db/src/queries/export-month.ts`.**
+  - **NEW `bodyweightEntry()`**: the one test for "this entry is a bodyweight reading", used by
+    both reads: `activity_types.key = SEED_ACTIVITY_TYPE_KEYS.weighIn OR entries.metric_key IS NOT
+DISTINCT FROM SEED_METRIC_KEYS.bodyweight`.
+    - It is the activity OR the metric, so a bodyweight metric under any other activity still lands
+      in the bodyweight file (the schema's own test is the metric, `schema.ts:520`).
+    - It is never NULL (the key is NOT NULL through the inner join), so the check-ins side is plain
+      `not(bodyweightEntry())`: one spelling, and a bare habit or Wake (no metric) is never dropped.
+  - **NEW `checkinMonthRows(db, { profilePublicId, month, scope })`**: every live entry of the month
+    with `movement_id IS NULL` and not `bodyweightEntry()`, under `isLiveProfile`.
+    - It selects `entryId` (for the proof only, never a column, as 14a keeps `prescriptionId`), date,
+      activity key, `metric_key`, `value_num`, `value_text`, unit and notes.
+    - It orders by `(activity_date, id)`.
+    - `event_at`, `client_id`, `context`, `scheme`, `status` and `session_id` are left out.
+  - **`bodyweightMonthRows` gains `entryId`**, for the proof only; `BodyweightRow` is unchanged.
+  - The header docblock's "all three reads" becomes four.
+- **EDIT `packages/shared/src/csv/checkins.ts`.** `CHECKINS_HEADER` becomes
+  `date,activity,metric,value,unit,notes`.
+  - `activity` and `metric` go through `csvToken()`. That helper is NEW in `columns.ts`, the one
+    `_`→`-` rule, which `csvMovement` and `csvSessionType` then call.
+  - `value` is `formatNumeric(value_num)`, else `value_text`, else empty.
+  - For unit `timing` (Wake, stored as local minutes since midnight), it is written `HH:MM` (24-hour,
+    zero-padded) through a NEW pure `minutesToHhMm` in `packages/shared`.
+    - `apps/web/lib/date.ts`'s `minutesToClock` is left alone: it renders `6:52 AM` for the day page.
+    - A value outside 0..1439, or not a whole number, is written as its raw number, never a wrapped
+      clock. The database only enforces `value_num >= 0`.
+  - `unit` is the stored unit code.
+  - A 1–10 rating (`pressure`, `reaction`, `scale_10`) is written as its number with unit `count`.
+    The contract says so; no value-type column.
+- **EDIT `apps/web/lib/dal/export.ts`.** The check-ins file is built from `checkinMonthRows`, mapping
+  fields explicitly, so `entryId` never reaches a row.
+- **Tests.**
+  - `packages/shared/src/csv/checkins.test.ts` (NEW): the header; one row per kind; a `bool` habit; a
+    Wake written `06:52`, and 1440 and 412.5 written raw; calisthenics' metrics told apart; a quoted note.
+  - `apps/web/lib/dal/export-prescribed.test.ts`: its stale mock becomes the real query's.
+  - `apps/web/e2e/export-full-day.spec.ts`:
+    - step 7's whole-file comparison (`:163-175`) is rescoped to this spec's own day's check-in rows,
+      like the bodyweight `ownDay` filter, so a parallel spec cannot make it flaky;
+    - step 6 asserts this spec's own check-in row;
+    - its comments at `:46`, `:121-125` and `:166-169` (header-only, practice not in the CSV) are
+      corrected;
+    - it runs once under `e2e:local`.
+- **`db:verify`** (`verify/day.ts`, with `verifyExport`). The proof: `14b: every live entry of a month
+lands in exactly one file`.
+  - It logs a weigh-in, a practice, a calisthenics day with two metrics, an old check-in metric, a
+    bare habit and a program row.
+  - It plants a hidden check-in, and a `bodyweight` metric under a non-weigh-in activity, in `lb`
+    and on another day than the weigh-in (so `buildBodyweight` accepts it and the one-per-day index
+    allows it).
+  - It reads the three month queries, using the unfolded strength rows for their ids.
+  - It asserts that every live entry's id is in exactly one of them, that the planted bodyweight row
+    is in the bodyweight file, and that no check-in row carries `bodyweight`.
+- **TEN-1:** `checkinMonthRows` joins `TEN1_READS_1C` in `verify.ts`, in both directions, and
+  mutation 03 is extended to drop its scope too.
+  - The matrix's 2026-03 fixture gains a check-in for both households, so the `> 0` rows assertion
+    holds; the "three export month reads" log line becomes four.
+- **Regenerate** mutations 03, 35, 364 and 365, whose context lines in `export-month.ts` move.
+- **Mutations 368–371** (lane E's block):
+  - 368: drops `movement_id IS NULL`;
+  - 369: drops the bodyweight exclusion;
+  - 370: drops `deleted_at`;
+  - 371: `bodyweightEntry()` keys on the activity alone, so the planted metric row leaks into
+    check-ins.
+- **Docs.**
+  - **`docs/csv-export-contract.md`:** the check-ins section in the long format; `timing` as `HH:MM`
+    local time; a 1–10 rating as a number with unit `count`.
+  - **`docs/privacy/notice.md`:** the export paragraph names what goes out (habits done, counts,
+    practice minutes, and the wake-up time); the "does not yet include" list loses check-ins.
+  - **`docs/privacy/data-inventory.md`:**
+    - §6's "What it contains" gains the check-ins file and its columns;
+    - §6's first omission bullet is rewritten;
+    - §2's row gains `entries.value_text` ("no writer; emitted in the check-ins file since 14b"),
+      and its `notes` sentence covers the check-ins file;
+    - a dated re-read entry.
+  - `write-path.md` and `day-writers.md`; a changelog fragment.
+- **ID-1:** the access path is unchanged (`isLiveProfile`); files are keyed by `public_id`; the
+  internal id is used only for order and the proof; no role changes. Check-ins are not privileged, so
+  the file reaches any household member, as the day page does.
+- **Out of scope, inherited:** the formula-injection follow-up covers the check-ins `value` and
+  `notes` cells too (its byte tests include a check-ins row). The operator-only bodyweight follow-up
+  relies on `bodyweightEntry()` being exact.
+
 ## Out of scope (sent to the board)
 
 - **Who may download bodyweight.** `.github/SECURITY.md:134` says "the household operator". The
@@ -410,3 +499,22 @@ exported row does not depend on a household-owned `workouts` row.
 | K12 | correctness | Departures: the proof renames by a direct `UPDATE`, not `saveWorkout`; the type test does not call `entryUnitFor`; the tripwire moved to `timing` only | **recorded**; `bool` added | The rename only needs `workouts.name` to change (`saveWorkout` never writes `sessions`, `save-workout.ts:203`); `fillRowValues` builds what the writer stores; the tripwire now pins `bool` and `timing` |
 | K13 | reuse       | **P2:** move `resolvePrescribed`/`rolesNeedingLiveMatch` beside the fold so the proof runs the DAL's last step                                         | **to the board**           | Not fixed here (it moves the V1-22 fallback across packages); listed for the maintainer                                                                                                                  |
 | K14 | reuse       | **P2:** "the session is the entry's athlete's" is now spelled in `amend-row.ts` and `export-month.ts`                                                  | **to the board**           | Not fixed here (a shared conjunct moves mutations 351 and 365's targets); listed for the maintainer                                                                                                      |
+
+### 14b file-by-file lenses (2026-11-18, on cdbbdec5)
+
+> Correctness and privacy, on **Opus 5.5** at medium effort. Privacy: no P0 or P1. Correctness: five
+> P1s, all on the plan, so no code was written that night.
+
+| #   | Lens                    | Finding (short)                                                                                          | Verdict      | Resolution                                                                                 |
+| --- | ----------------------- | -------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| B1  | correctness, privacy    | The bodyweight test keyed on the activity; the schema keys bodyweight on the metric                      | **accepted** | Activity OR metric, negated NULL-safely; a planted row and mutation 371                    |
+| B2  | correctness, privacy    | Wake would export as `412,timing`; the notice did not say the wake-up time leaves                        | **accepted** | `HH:MM` through a shared `minutesToClock` (lane E's choice); notice and contract say it    |
+| B3  | correctness, privacy    | The proof needs entry ids that two reads do not select                                                   | **accepted** | `entryId` on both, for the proof only, never a column                                      |
+| B4  | correctness             | The new household-scoped read is not in the TEN-1 matrix                                                 | **accepted** | A `TEN1_READS_1C` row; mutation 03 extended                                                |
+| B5  | correctness             | e2e step 7 compares the whole check-ins file, flaky once it has rows                                     | **accepted** | Rescoped to the spec's own day, like bodyweight                                            |
+| B6  | correctness             | A 1–10 rating exports as a count                                                                         | **accepted** | Documented in the contract; no new column                                                  |
+| B7  | privacy                 | `value_text`/`notes` belong in inventory §2, not §3; §6 "What it contains"; an ID-1 line                 | **accepted** | All three in § Docs and the ID-1 line                                                      |
+| B8  | correctness             | "Seven" legacy metrics overclaims (`footwork`); the "all three reads" header goes stale                  | **accepted** | Wording; the header becomes four                                                           |
+| B9  | correctness (re-review) | **P1:** `minutesToClock` writes `6:52 AM`, not `HH:MM`, and the day page depends on it                   | **accepted** | A new `minutesToHhMm` in shared; out-of-range values written raw; tests for 1440 and 412.5 |
+| B10 | correctness (re-review) | Two spellings of the bodyweight test would make mutation 371 land the row in no file                     | **accepted** | `IS NOT DISTINCT FROM` in the one conjunct; check-ins is `not(bodyweightEntry())`          |
+| B11 | correctness (re-review) | The planted row's unit and day; stale patches (03, 35, 364, 365), log line, matrix fixture, e2e comments | **accepted** | All in the file-by-file                                                                    |

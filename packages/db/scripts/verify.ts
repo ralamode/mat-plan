@@ -141,10 +141,12 @@ import {
   verifyCatalogTables,
 } from './verify/catalog';
 import { verifyDay } from './verify/day';
+import { verifySeedLeavesHouseholdsAlone, verifySeedOnAFreshDatabase } from './verify/seed';
 import { verifyErasure } from './verify/erasure';
 import {
   asPg,
   assertCheckCoversConst,
+  captureWarnings,
   assertRefTableMatches,
   asTx,
   columnCatalogShape,
@@ -227,6 +229,9 @@ console.log('✓ migration applied to PGlite');
 // V1-1b re-add below. HERE for the same reason as the block above: from the V1-1b simulation on, the
 // constraint in the database is this file's, not the migration's.
 const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
+
+// OPS-2 Proof A: production's seed on a fork's first run, before any fixture seed below.
+await verifySeedOnAFreshDatabase();
 
 // The 1c-4 seed guard's proof is BELOW, after the idempotency block it depends on — see
 // "AUTH-1 1c-4: the seed refuses a household it does not own".
@@ -341,6 +346,11 @@ console.log(
       () => seed(asPg, { fixtures: true }),
       /refusing to seed into a household this seed does not own/,
       'AUTH-1 1c-4: a live household under a foreign public_id makes the seed REFUSE, by the message it throws — not by a TypeError',
+    );
+    // OPS-2 Proof C: production's seed never refuses: the refusal is the fixtures' alone (`327`).
+    await assert.doesNotReject(
+      () => seed(asPg, { fixtures: false }),
+      'OPS-2 C: with a live household under a foreign public_id, seed({ fixtures: false }) resolves',
     );
 
     const liveAfter = await db
@@ -1173,15 +1183,8 @@ console.log(
 
 // ── V1-6b-1: ramp_targets table + SQL weekly-adherence parity against foldAggregation ──────
 
-// The empty ramp schedule seeds ZERO ramp_targets (the seed ran twice above); assert that so a
-// future non-empty schedule that regresses idempotency shows up here, not in prod.
-const seededRampTargets = await db.select().from(schema.rampTargets);
-assert.equal(
-  seededRampTargets.length,
-  0,
-  'V1-6b-1: empty CALISTHENICS_RAMP_SCHEDULE seeds zero ramp_targets (idempotent, no duplicates)',
-);
-console.log('✓ V1-6b-1: empty ramp schedule seeds zero rows (seed idempotent)');
+// OPS-2 PR 1 (D4): the seed's ramp expansion is gone, so there is no "empty schedule seeds zero
+// rows" to assert; OPS-2's Proof A counts `ramp_targets` among every household table instead.
 
 // Guard the sum/max assumption the weekly SQL adherence rests on: EVERY calisthenics metric must
 // aggregate by `sum` or `max` (a future `avg`/`last` calisthenics metric would silently break the
@@ -7060,24 +7063,7 @@ console.log(
     'TEN-2c guard fixture: at least one curated movement is referenced by nothing, so (b) can delete it and watch the seed restore it',
   );
 
-  /**
-   * Run `fn` with `console.warn` captured. The guard is a WARNING now, not a `throw`, so
-   * `assert.rejects` cannot reach it — and the two things that must be true of its text (it names the
-   * seed slug; it does NOT name the household's free text) are the privacy proof this PR was most at
-   * risk of dropping on the floor. Restores the real `console.warn` in a `finally`, because
-   * `findOrCreateMovement` also warns and a swallowed warning elsewhere would be its own defect.
-   */
-  const captureWarnings = async (fn: () => Promise<void>): Promise<string> => {
-    const real = console.warn;
-    const lines: string[] = [];
-    console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
-    try {
-      await fn();
-    } finally {
-      console.warn = real;
-    }
-    return lines.join('\n');
-  };
+  // `captureWarnings` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
 
   // (a) 🔴 THE BASELINE, INVERTED — the absorb the guard existed to detect is GONE.
   // Until 0017 this asserted that a global catalog insert whose slug a household already owns is
@@ -10430,5 +10416,6 @@ await verifyDay(verifyContext);
 await verifySingleValues(verifyContext);
 await verifyErasure(verifyContext);
 await verifyCatalogTables(verifyContext);
+await verifySeedLeavesHouseholdsAlone(verifyContext);
 
 console.log('✓ verify passed');

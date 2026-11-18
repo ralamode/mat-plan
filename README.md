@@ -74,8 +74,8 @@ Two things worth knowing before you add one:
   separate people as far as the log is concerned. Only the household's owner can archive, so the add
   screen shows this recovery to owners and tells everyone else who to ask.
 
-A brand-new deployment still needs `pnpm --filter @mat-plan/db db:seed` once, which creates the
-household and the reference data — not the athletes. See [Local development](#local-development) for
+A brand-new deployment gets its household from the first migration, and `pnpm --filter @mat-plan/db
+db:seed` writes the reference data — never a household or an athlete (`OPS-2`). See [Local development](#local-development) for
 the local sandbox and [docs/deploy.md](./docs/deploy.md) for a deployed one.
 
 ## Docs

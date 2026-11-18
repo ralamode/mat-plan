@@ -187,6 +187,24 @@ export async function constraintDef(conname: string): Promise<string> {
   return rows[0].def;
 }
 
+/**
+ * Run `fn` with `console.warn` captured, and return what it warned. The seed's TEN-2c shadow guard is
+ * a WARNING, not a `throw`, so `assert.rejects` cannot reach it, and what must be true of its text (it
+ * names the seed slug; it does NOT name a household's free text) is a privacy proof. Restores the real
+ * `console.warn` in a `finally`. Moved here from `verify.ts` at OPS-2 PR 1, its second caller.
+ */
+export async function captureWarnings(fn: () => Promise<void>): Promise<string> {
+  const real = console.warn;
+  const lines: string[] = [];
+  console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+  try {
+    await fn();
+  } finally {
+    console.warn = real;
+  }
+  return lines.join('\n');
+}
+
 /** The rows of a raw `execute` result, typed by the caller (the cast lives here once). */
 export function rowsOf<T>(res: unknown): T[] {
   return (res as { rows: T[] }).rows;
@@ -245,9 +263,12 @@ export async function assertCheckCoversConst(
  *   hand. A `convalidated` read of either belongs beside the TEN-2c block at the top of `verify.ts`,
  *   which exists for that reason. Every other catalog object is the migrations' own.
  *
- * **The one exception to "last":** `catalog.ts` → `verifyCatalogMigrationFacts` (`CAT-3` A1) runs
- * right after `migrate()`, before `seed()`, because it proves the global-row CHECK the V1-1b
- * simulation later replaces. It takes no `VerifyContext` (none exists yet) and reads no seeded row.
+ * **Two exceptions to "last", both right after `migrate()`:** `catalog.ts` →
+ * `verifyCatalogMigrationFacts` (`CAT-3` A1), which proves the global-row CHECK the V1-1b simulation
+ * later replaces and reads no seeded row; then `seed.ts` → `verifySeedOnAFreshDatabase` (`OPS-2` PR 1),
+ * which runs production's seed on a fork's first run, the only point where that state exists. Neither
+ * takes a `VerifyContext` (none exists yet). Proof A seeds, so it is the first failure for a mutation
+ * that breaks production's seed (`45`, `321`, `326`): that is by design, and their `.expect`s say so.
  *
  * Why last: nothing in `verify.ts` runs after the modules, so rows a lane writes cannot change what
  * an existing whole-table assertion counts, and a lane's proof cannot become the FIRST failure under

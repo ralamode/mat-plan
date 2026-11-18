@@ -1,1 +1,1 @@
-FAM-1 1: seed({ fixtures: false }) writes no program
+OPS-2 A: seed({ fixtures: false }) on a fresh database resolves

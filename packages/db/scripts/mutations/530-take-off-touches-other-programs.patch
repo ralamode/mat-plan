@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index ea4474a9..2d1a6903 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -116,6 +116,7 @@ export async function takeOff(
+       if (!logged) return remove();
+     }
+ 
++    await tx.update(a).set({ updatedAt: sql`now()` }).where(eq(a.profileId, athlete.id));
+     await tx
+       .update(a)
+       .set({ activeTo: today, updatedAt: sql`now()` })

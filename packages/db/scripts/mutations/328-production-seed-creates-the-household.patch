@@ -1,0 +1,21 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -360,6 +360,17 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
+     .values([...MOVEMENT_SEED_ROWS])
+     .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+ 
++  const [anyLive] = await db
++    .select({ id: schema.households.id })
++    .from(schema.households)
++    .where(isNull(schema.households.deletedAt))
++    .limit(1);
++  if (!anyLive) {
++    await db
++      .insert(schema.households)
++      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: HOUSEHOLD_DEFAULT_NAME })
++      .onConflictDoNothing({ target: schema.households.publicId });
++  }
+   return shadowedSlugs;
+ }
+ 

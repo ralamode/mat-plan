@@ -51,7 +51,7 @@ export const MOVEMENT_FAMILY_LABELS = {
   lunge: 'Lunges',
   jump: 'Jumps',
   carry: 'Carries and sleds',
-  isolation: 'Arms, calves and single muscles',
+  isolation: 'Curls, raises and single muscles',
   neck_shoulders: 'Neck and shoulders',
   chest_arms: 'Chest and arms',
   back: 'Back',
@@ -101,12 +101,26 @@ export function movementFamilyOf(option: Grouped): MovementFamily {
   return option.primaryMuscle === null ? 'whole_body' : MUSCLE_BODY_AREA[option.primaryMuscle];
 }
 
-/** When a filter leaves this many movements or fewer, every kind and family is shown open (P12). */
+/**
+ * When the list holds this many movements or fewer, every kind and family is shown open (P12),
+ * **with a filter on or not** _(maintainer, 2026-11-18, K26)_: a short list never hides a row
+ * behind two taps. The accepted prototype opened a short list only under a filter, because its
+ * library was always long.
+ */
 export const BROWSE_OPEN_AT_MOST = 20;
 
+/**
+ * The kinds of training listed with NO family level _(maintainer, 2026-11-18, K27)_: their
+ * movements by name, directly under the kind. Conditioning's families came from each movement's
+ * primary muscle, which put one drill's variants under headings nobody could predict (Bear crawl
+ * under "Neck and shoulders", Bear crawl hold under "Core").
+ */
+export const BROWSE_FLAT_KINDS: readonly Modality[] = [MODALITY.conditioning];
+
 export type BrowseFamily<T> = {
-  readonly family: MovementFamily;
-  readonly label: string;
+  /** `null` (and so is `label`) for the one family of a kind that has no family level. */
+  readonly family: MovementFamily | null;
+  readonly label: string | null;
   readonly options: readonly T[];
 };
 export type BrowseKind<T> = {
@@ -129,7 +143,8 @@ export function byFoldedName(a: { readonly name: string }, b: { readonly name: s
 
 /**
  * "All movements" as a tree (P12): the kinds in `BROWSE_KINDS`' order, each with its families,
- * the biggest first (ties by label), each with its movements by name. **A kind or a family with
+ * the biggest first (ties by label), each with its movements by name. A kind in
+ * `BROWSE_FLAT_KINDS` has one family with no name and no label instead (K27). **A kind or a family with
  * nothing in it is left out**, so a filtered list shows no empty heading. A count is
  * `options.length`; the whole tree's is the sum of its kinds'.
  *
@@ -142,9 +157,18 @@ export function browseTree<T extends Grouped & { readonly name: string }>(
   options: readonly T[],
 ): readonly BrowseKind<T>[] {
   const unique = [...new Set(options)];
-  return BROWSE_KINDS.flatMap((kind) => {
+  return BROWSE_KINDS.flatMap((kind): BrowseKind<T>[] => {
     const ofKind = unique.filter((option) => option.modality === kind);
     if (ofKind.length === 0) return [];
+    if (BROWSE_FLAT_KINDS.includes(kind)) {
+      // One family with no heading: a screen lists its rows straight under the kind.
+      const flat: BrowseFamily<T> = {
+        family: null,
+        label: null,
+        options: [...ofKind].sort(byFoldedName),
+      };
+      return [{ kind, count: ofKind.length, families: [flat] }];
+    }
     const grouped = new Map<MovementFamily, T[]>();
     for (const option of ofKind) {
       const family = movementFamilyOf(option);

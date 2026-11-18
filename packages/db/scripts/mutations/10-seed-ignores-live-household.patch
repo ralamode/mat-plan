@@ -1,19 +1,19 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -167,12 +167,10 @@
+@@ -391,12 +391,10 @@ export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{
      .where(isNull(schema.households.deletedAt))
      .limit(1);
  
 -  if (!liveHousehold) {
 -    await db
 -      .insert(schema.households)
--      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
+-      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: HOUSEHOLD_DEFAULT_NAME })
 -      .onConflictDoNothing({ target: schema.households.publicId });
 -  }
 +  await db
 +    .insert(schema.households)
-+    .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
++    .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: HOUSEHOLD_DEFAULT_NAME })
 +    .onConflictDoNothing({ target: schema.households.publicId });
  
    // Resolve the root household id to scope the seed profile (household_id is enforced
