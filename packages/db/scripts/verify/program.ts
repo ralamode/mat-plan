@@ -68,6 +68,9 @@ import {
 } from '../../src/writers/ownership';
 import { putOn } from '../../src/writers/program/assign';
 import { takeOff } from '../../src/writers/program/take-off';
+import { reorderPrograms } from '../../src/writers/program/reorder-programs';
+import { currentPrograms } from '../../src/queries/day/day-plan';
+import { dayAssignments } from '../../src/queries/day/scheduled';
 import { logRow, retickRow, untickRow } from '../../src/writers/day/log-row';
 import { assignmentDueOn } from '../../src/queries/program-assignments';
 import { activityTypeIdOf } from './day';
@@ -140,6 +143,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifySeedFixtures(ctx);
   await verifyProgramReads(ctx);
   await verifyTakeOff(ctx);
+  await verifyReorderPrograms(ctx);
   await verifyCaps();
 }
 
@@ -2937,6 +2941,250 @@ async function capsHousehold(tx: VerifyTx) {
     .returning({ id: schema.households.id });
   const scope = householdScopeForScript(household!.id);
   return { scope, proofId: household!.id };
+}
+
+/**
+ * FAM-1 6d-ii: `reorderPrograms`, an athlete's own order of their programs, in A's household.
+ * Read back through the day page's own rule (`currentPrograms`), and every write checked by `ctid`.
+ */
+async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  const T = '2026-11-18';
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const scope = A_SCOPE;
+    const program = (name: string) => mustCreate(tx, scope, `Reorder ${name}`);
+    const [A, B, C, D, H] = [
+      await program('A'),
+      await program('B'),
+      await program('C'),
+      await program('D'),
+      await program('H'),
+    ];
+    const athlete = (name: string) => mustAddAthlete(tx, scope, `Reorder ${name}`);
+    const on = async (who: string, prog: string, from = T, today = from) =>
+      assert.deepEqual(
+        await putOn(exec, scope, { programPublicId: prog, profilePublicIds: [who], from }, today),
+        { ok: true },
+        'FAM-1 6d-ii: the proof puts an athlete on',
+      );
+    const off = async (who: string, prog: string, today = T) =>
+      assert.ok(
+        (await takeOff(exec, scope, { programPublicId: prog, profilePublicId: who }, today)).ok,
+        'FAM-1 6d-ii: the proof takes an athlete off',
+      );
+    const reorder = (who: string, programPublicIds: string[], today = T, inScope = scope) =>
+      reorderPrograms(exec, inScope, { profilePublicId: who, programPublicIds }, today).catch(
+        (e: unknown) => ({ threw: String(e).slice(0, 120) }),
+      );
+    const profileIdOf = async (publicId: string) =>
+      (
+        await tx
+          .select({ id: schema.profiles.id })
+          .from(schema.profiles)
+          .where(eq(schema.profiles.publicId, publicId))
+      )[0]!.id;
+    // The order as the day page reads it.
+    const read = async (who: string) =>
+      currentPrograms(
+        await dayAssignments(exec, scope, await profileIdOf(who), { day: T, today: T }),
+        T,
+      ).map((p) => p.programPublicId);
+    // Each live row of one athlete, by program: its place and its ctid.
+    const rows = async (who: string) =>
+      Object.fromEntries(
+        (await assignmentRows(tx)).assignments
+          .filter((r) => r.profile === who && r.deletedAt === null)
+          .map((r) => [r.program, { idx: r.idx, ctid: r.ctid }]),
+      );
+    const idxOf = async (who: string) =>
+      Object.fromEntries(Object.entries(await rows(who)).map(([k, v]) => [k, v.idx]));
+
+    // ── The swap: [A, B, C] → [B, A, C]; C keeps its row ──
+    const n1 = await athlete('Swap');
+    for (const prog of [A, B, C]) await on(n1, prog);
+    const before = await rows(n1);
+    assert.deepEqual(
+      await reorder(n1, [B, A, C]),
+      { ok: true },
+      'FAM-1 6d-ii: a reorder of an athlete’s programs is ok',
+    );
+    assert.deepEqual(
+      await idxOf(n1),
+      { [A]: 1, [B]: 0, [C]: 2 },
+      'FAM-1 6d-ii: …B takes 0 and A takes 1, through the band',
+    );
+    assert.equal(
+      (await rows(n1))[C]!.ctid,
+      before[C]!.ctid,
+      'FAM-1 6d-ii: …and a row already in place is not written',
+    );
+    assert.deepEqual(await read(n1), [B, A, C], 'FAM-1 6d-ii: …and the day page reads [B, A, C]');
+
+    // ── The replay: the same order again writes nothing ──
+    const afterSwap = await assignmentRows(tx);
+    assert.deepEqual(
+      await reorder(n1, [B, A, C]),
+      { ok: true },
+      'FAM-1 6d-ii: a replay of a reorder is ok',
+    );
+    assert.deepEqual(
+      await assignmentRows(tx),
+      afterSwap,
+      'FAM-1 6d-ii: …and an unchanged order writes nothing',
+    );
+
+    // ── Upper-case ids are read as the parse hands them back ──
+    assert.deepEqual(
+      await reorder(
+        n1.toUpperCase(),
+        [A, B, C].map((id) => id.toUpperCase()),
+      ),
+      { ok: true },
+      'FAM-1 6d-ii: upper-case ids are accepted',
+    );
+    assert.deepEqual(await read(n1), [A, B, C], 'FAM-1 6d-ii: …and the order is written');
+
+    // ── A program with a last day stays where it is, and reads last ──
+    const n2 = await athlete('Closing');
+    for (const prog of [C, A, B]) await on(n2, prog, addDays(T, -2));
+    await off(n2, C);
+    const closing = await rows(n2);
+    assert.deepEqual(
+      await reorder(n2, [C, B, A]),
+      { ok: true },
+      'FAM-1 6d-ii: a list that names a program ending today is ok',
+    );
+    assert.deepEqual(
+      await idxOf(n2),
+      { [C]: 0, [B]: 0, [A]: 1 },
+      'FAM-1 6d-ii: …the programs that stay take 0 and 1',
+    );
+    assert.equal(
+      (await rows(n2))[C]!.ctid,
+      closing[C]!.ctid,
+      'FAM-1 6d-ii: …and the row ending today is never written',
+    );
+    assert.deepEqual(
+      await read(n2),
+      [B, A, C],
+      'FAM-1 6d-ii: …and the day page reads it after the ones that stay',
+    );
+
+    // ── A hidden program's open row in the middle keeps a place after the listed ones ──
+    const n3 = await athlete('Hidden');
+    for (const prog of [A, H, B]) await on(n3, prog);
+    await hide(tx, H);
+    assert.deepEqual(
+      await reorder(n3, [B, A]),
+      { ok: true },
+      'FAM-1 6d-ii: a reorder beside a hidden program’s open row is ok',
+    );
+    assert.deepEqual(
+      await idxOf(n3),
+      { [A]: 1, [B]: 0, [H]: 2 },
+      'FAM-1 6d-ii: …the hidden program’s row moves after the listed ones, with no collision',
+    );
+
+    // ── An upcoming program is placed ──
+    const n4 = await athlete('Upcoming');
+    await on(n4, A);
+    await on(n4, B, addDays(T, 1), T);
+    assert.deepEqual(
+      await reorder(n4, [B, A]),
+      { ok: true },
+      'FAM-1 6d-ii: a list with a program starting tomorrow is ok',
+    );
+    assert.deepEqual(
+      await idxOf(n4),
+      { [A]: 1, [B]: 0 },
+      'FAM-1 6d-ii: …and the program to come is placed',
+    );
+
+    // ── Refusals write nothing ──
+    const n5 = await athlete('Left');
+    await on(n5, A, addDays(T, -3));
+    await off(n5, A, addDays(T, -2));
+    await on(n5, B);
+    const n6 = await athlete('None');
+    const n7 = await athlete('Other');
+    await on(n7, D);
+    const bProgram = await mustCreate(tx, B_SCOPE, 'Reorder B Program');
+    const bAthlete = await mustAddAthlete(tx, B_SCOPE, 'Reorder B Athlete');
+    await putOn(
+      exec,
+      B_SCOPE,
+      { programPublicId: bProgram, profilePublicIds: [bAthlete], from: T },
+      T,
+    );
+    const archived = await athlete('Archived');
+    await on(archived, A);
+    await on(archived, B);
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, archived));
+    const removed = await athlete('Removed');
+    await on(removed, A);
+    await on(removed, B);
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, removed));
+
+    const unchanged = await assignmentRows(tx);
+    for (const [what, who, list, reason] of [
+      ['an athlete id that is not a uuid', 'n1', [A, B, C], PROGRAM_REFUSAL.invalid],
+      ['a program id that is not a uuid', n1, ['p1', B, C], PROGRAM_REFUSAL.invalid],
+      ['a program named twice', n1, [A, A, C], PROGRAM_REFUSAL.invalid],
+      ['an empty list', n1, [], PROGRAM_REFUSAL.invalid],
+      ['a list that leaves one out', n1, [B, A], PROGRAM_REFUSAL.invalid],
+      ['a list that adds one they are not on', n1, [A, B, C, D], PROGRAM_REFUSAL.invalid],
+      [
+        'a list with another athlete’s program in place of theirs',
+        n1,
+        [A, B, D],
+        PROGRAM_REFUSAL.invalid,
+      ],
+      ['a list with another household’s program', n1, [A, B, bProgram], PROGRAM_REFUSAL.invalid],
+      [
+        'a list naming a hidden program they have an open row on',
+        n3,
+        [B, A, H],
+        PROGRAM_REFUSAL.invalid,
+      ],
+      ['a list naming a program they left before today', n5, [B, A], PROGRAM_REFUSAL.invalid],
+      ['an athlete with no current programs', n6, [A], PROGRAM_REFUSAL.invalid],
+      ['an archived athlete', archived, [B, A], PROGRAM_REFUSAL.not_found],
+      ['a removed athlete', removed, [B, A], PROGRAM_REFUSAL.not_found],
+      ['an unknown athlete', newId(), [A], PROGRAM_REFUSAL.not_found],
+      ['another household’s athlete', bAthlete, [bProgram], PROGRAM_REFUSAL.not_found],
+    ] as const) {
+      assert.deepEqual(
+        await reorder(who, [...list]),
+        { ok: false, reason },
+        `FAM-1 6d-ii: a reorder refuses ${what}`,
+      );
+    }
+    assert.deepEqual(
+      await assignmentRows(tx),
+      unchanged,
+      'FAM-1 6d-ii: …and every refusal writes nothing',
+    );
+    assert.deepEqual(
+      await reorder(bAthlete, [bProgram], T, B_SCOPE),
+      { ok: true },
+      'FAM-1 6d-ii: …the other household’s athlete is reordered in their own household',
+    );
+
+    const badToday = await reorder(n1, [A, B, C], 'today');
+    assert.ok(
+      'threw' in badToday && badToday.threw.includes('reorderPrograms needs today'),
+      'FAM-1 6d-ii: a reorder throws on a today that is not an ISO day',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6d-ii: reorderPrograms places the listed programs through the band, leaves a program ending today and a row in place untouched, keeps a hidden program’s row after, and its refusals write nothing',
+  );
 }
 
 async function verifyCaps(): Promise<void> {
