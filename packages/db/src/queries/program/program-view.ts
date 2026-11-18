@@ -100,10 +100,9 @@ export async function readProgramView(
     const on = athlete.current.some((p) => p.blockId === program.id);
     candidates.push({ profilePublicId: athlete.publicId, name: athlete.name, on, keeps: names });
     if (!on) continue;
-    // The row that places it (`currentPrograms`' rank): an open or upcoming one, else the one
-    // closing today or later. `assignments` is in `(idx, id)` order.
-    const rows = athlete.assignments.filter((a) => a.current && a.blockId === program.id);
-    const placing = rows.find((a) => a.activeTo === null || a.activeFrom > today) ?? rows[0]!;
+    // The row that places it, as `currentPrograms` chose it (its rank rule, ADR 0007 Amendment 5),
+    // so this page's since and last day can never drift from the day page's.
+    const placing = athlete.current.find((p) => p.blockId === program.id)!;
     athletes.push({
       profilePublicId: athlete.publicId,
       name: athlete.name,

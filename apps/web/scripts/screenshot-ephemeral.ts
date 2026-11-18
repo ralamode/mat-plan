@@ -46,6 +46,8 @@ import {
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
+  NAV_RAIL_COPY,
+  SETTINGS_PATH,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
@@ -466,6 +468,13 @@ const STATES = {
   'rename-rejected': null,
   // U0 — the shared sheet, OPEN. Not reachable by route: it exists only after a tap, and a closed
   // cell shows two buttons and nothing of the component under review.
+  // The focus ring (the tech-debt focus-ring fix): keyboard focus on a field, a button and a nav row.
+  // Interaction-only: `:focus-visible` exists only after keyboard input, which no fixture can seed.
+  'focus-field': null,
+  'focus-button': null,
+  'focus-nav-row': null,
+  'focus-rail-row': null,
+  'focus-group-row': null,
   'sheet-open': null,
   'sheet-dialog-open': null,
   // CAT-3 B2-ii — the movement picker's filters, on the preview's workout editor. Interaction-only:
@@ -625,6 +634,20 @@ async function quadsOnThenBack(page: Page) {
   await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
 }
 
+/**
+ * Resolve once no FINITE transition or animation is running, so a capture is not mid-animation. An
+ * infinite one (`animate-spin`, `animate-pulse`) never finishes, so it is not waited for.
+ */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (a) => a.playState !== 'running' || a.effect?.getComputedTiming().endTime === Infinity,
+      ),
+  );
+}
+
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
   'form-partial-sets': async (page) => {
     const { reps, weight } = await scaffoldOpenCard(page);
@@ -681,6 +704,41 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await quadsOnThenBack(page);
     await page.getByRole('searchbox').fill('chin');
     await page.getByText(PICKER_COPY.outsideAll(4, 'chin'), { exact: true }).waitFor();
+  },
+  // A key press first, so the programmatic focus that follows counts as KEYBOARD focus and
+  // `:focus-visible` (the ring under test) applies, as it does when a person tabs there.
+  // Then wait out any running transition: `Button` has `transition-all`, and a capture taken
+  // mid-animation shows a faint hairline instead of the ring (#614's review).
+  'focus-field': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('input[name="name"]').first().focus();
+    await settleAnimations(page);
+  },
+  'focus-button': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('form button[type="submit"]').first().focus();
+    await settleAnimations(page);
+  },
+  'focus-nav-row': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator(`a[href="${SETTINGS_PATH}"]`).first().focus();
+    await settleAnimations(page);
+  },
+  // A row of the builder's grouped list (`group-list.tsx`), whose ring now comes inset from
+  // `NAV_ROW_CLASS` alone. Route: the programs-list preview.
+  'focus-group-row': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('main ul a').first().focus();
+    await settleAnimations(page);
+  },
+  // A row INSIDE the nav rail's scrolling list, the case `NAV_ROW_CLASS`'s `ring-inset` exists for
+  // (an outer ring would be clipped there). The rail renders from the tablet width up.
+  'focus-rail-row': async (page) => {
+    await page.keyboard.press('Shift');
+    const row = page.locator(`nav[aria-label="${NAV_RAIL_COPY.label}"] ul a`).first();
+    if ((await row.count()) === 0) return; // mobile: no rail, the capture shows the page as is
+    await row.focus();
+    await settleAnimations(page);
   },
   'sheet-open': async (page) => {
     await page.getByRole('button', { name: 'Open sheet' }).first().click();

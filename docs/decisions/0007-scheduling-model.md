@@ -193,6 +193,7 @@ prescription_group IS NOT NULL AND deleted_at IS NULL`. Entries need no arbiter,
   - Inserts, reopens and reorders all go through **one shifted-band writer**, the design in V1-22 W1
     (`docs/plans/v1-22-program-editor.md`), shared with §3's and §4's slot keys. It isn't built yet.
   - Take off frees the `idx` on the program's last day, so Today orders by `(idx, id)`.
+    ⚠️ _Amendment 5 (2026-11-18) changes this to `(rank, idx, id)`: a program ending today goes last._
 - ⚠️ _Amendment 4 adds two cases to the next paragraph: a start dated today, and reopening._
 - **Take off** sets `active_to` to today, ending the program after today. `active_to` is the
   **inclusive last day** (the prototype stores the exclusive day after; the meaning is the same). An assignment that hasn't
@@ -325,6 +326,30 @@ plan carries it in rows 6c and 6d, and the contract in `takeOffSchema` and `assi
   another Put on may have taken it since.
 - **Unchanged:** `active_to` is the inclusive last day; logged days keep their frozen workout; at
   most one open assignment per athlete and program.
+
+### Amendment 5 (2026-11-18): the day's program order puts a program ending today last
+
+Decided by the maintainer on 2026-11-18: _"Lane E can proceed with the fix from adr0007"_ (relayed by
+the FAM-1 board), choosing option (a) of lane E's question. It changes Amendment 2's line "Take off
+frees the `idx` on the program's last day, so Today orders by `(idx, id)`".
+
+- **Today orders the current programs `(rank, idx, id)`.** Rank 0 is a program that stays: its row
+  is open, or starts later. Rank 1 is a program ending today. So every program that stays comes first,
+  in its own `idx` order, and the ones ending today come after, among themselves by their old place
+  (`idx`, then id; their rows no longer move).
+- **Why:** a Put on compacts the OPEN rows' `idx` (Amendment 4's "another Put on may have taken it
+  since"), and a row closing today keeps its number, so the two can tie. Under `(idx, id)` an unrelated
+  Put on could then swap two programs on the day page. Ranked first, the order no longer depends on the
+  way ids compare with the compacted `idx`. Found in lane P's review of FAM-1 6c-i (#588).
+- **Visible effect:** a program taken off today goes after every program that stays, in the list for
+  today and for any day viewed today (the page orders by today's `currentPrograms`).
+- **Unchanged:** Amendment 4's compaction; the order of programs since left (`(idx, id)` among
+  themselves, after the current ones).
+- **Reordering** (decided under the maintainer's overnight delegation, 2026-11-18, by the roadmap
+  thread; the maintainer may overturn it): since no order can move a program ending today above one
+  that stays, the reorder dialog lists the ones ending today below the movable ones, with no arrows,
+  counts only the movable ones for "N of M", and shows the Reorder button only when two or more stay.
+  `ProgramOrder` stays a permutation of `currentPrograms`, and the writer keeps taking it.
 
 ### Signature
 

@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
-index 0c724670..5399ba96 100644
+index 872928ef..19b6cace 100644
 --- a/packages/db/src/writers/day/amend-row.ts
 +++ b/packages/db/src/writers/day/amend-row.ts
-@@ -71,7 +71,6 @@ export async function amendRow(
+@@ -64,7 +64,6 @@ export async function amendRow(
            eq(schema.entries.publicId, input.entryPublicId),
            eq(schema.entries.profileId, profile.id),
            programRow(),
--          eq(schema.sessions.profileId, schema.entries.profileId),
+-          entrySessionIsItsAthletes(),
          ),
        )
        .limit(1)
