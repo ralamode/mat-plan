@@ -194,17 +194,14 @@ test('more than the look-ahead ahead renders today', async ({ page }) => {
 // ── Change (FAM-1 12d) ─────────────────────────────────────────────────────────────────────────
 //
 // On Athlete Two, whose program rows no other spec writes. The workout is found by its superset
-// line, not by name: the page shows the movement library's names ("Inverted Rows"), not the
+// list ("Superset A"), not by name: the page shows the movement library's names ("Inverted Rows"), not the
 // fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
 // Saturday, so today or yesterday always has one.
 
-const SUPERSET = new RegExp(DAY_COPY.superset('A'), 'i');
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The superset itself: its own list, named "Superset A" (`workout-card.tsx`), holding its two items. */
 const supersetWorkout = (page: Page) =>
-  page
-    .getByRole('region')
-    .filter({ has: page.getByText(SUPERSET) })
-    .first();
+  page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
 
 /** Today, or yesterday when today has no superset workout. */
 async function openSupersetDay(page: Page): Promise<void> {
