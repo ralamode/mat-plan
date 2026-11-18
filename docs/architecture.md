@@ -937,8 +937,9 @@ sequenceDiagram
   OP->>CH: done + what remains (notice → Deleting your data)
 ```
 
-⛔ **Two preconditions this diagram assumes**: the household is **not in the seed** (`db:seed` runs on
-every merge and would re-create it — `OPS-2`), and **`OPS-3`'s per-household restore has been
+⛔ **Two preconditions this diagram assumes**: the household's `public_id` is **not a seed id** (an
+older seed could re-create it; the seeded household goes with `CAT-3`'s fresh start instead, see
+`runbooks.md` → "A household or athlete with a seed id"), and **`OPS-3`'s per-household restore has been
 rehearsed** (without it a mistaken deletion is not practically recoverable, because the branch above
 restores _everyone_).
 

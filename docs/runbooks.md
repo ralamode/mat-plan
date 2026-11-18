@@ -507,6 +507,9 @@ missing, and option 1 or 2 above was the fix. ✅ `.github/workflows/migrate.yml
 
 ## Rename / correct a seeded profile in prod
 
+⚠️ **Since `OPS-2` PR 1 production's seed writes no profile at all**, so this is only for a profile an
+older seed wrote. The seeded household and its athletes are removed by `CAT-3`'s fresh start.
+
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
 The seed is `ON CONFLICT (public_id) DO NOTHING`, so it **won't overwrite** an existing row — a
 one-off `UPDATE` is needed. (First occurrence: V1-3 changed the seed profile's name, and prod kept the
@@ -707,8 +710,9 @@ scope.** Create a separate record per scope, even where the value is the same.
 Repo → **Settings → Secrets and variables → Actions → New repository secret**:
 `PREVIEW_DATABASE_URL_UNPOOLED` = the preview **direct/unpooled** string.
 
-Eyeball the list: it should hold `DATABASE_URL_UNPOOLED` and `PREVIEW_DATABASE_URL_UNPOOLED` and
-nothing else database-related. `migrate-preview.yml` runs only on push to `main` and
+Eyeball the list: it should hold `PREVIEW_DATABASE_URL_UNPOOLED` and the production string, which is
+`PROD_DATABASE_URL_UNPOOLED` since `OPS-2` PR 1 (before it, `DATABASE_URL_UNPOOLED`), and nothing else
+database-related. `migrate-preview.yml` runs only on push to `main` and
 `workflow_dispatch`, so a fork never sees either secret.
 
 _Optional hardening:_ move both into a GitHub **Environment** with a `main`-only deployment-branch
@@ -872,7 +876,7 @@ deployment** (rotation is not retroactive).
 ## Manually re-seed / re-apply prod (`workflow_dispatch`)
 
 **When:** you need the prod migrate+seed to run out-of-band (e.g. a catch-up before the change merges,
-or after wiring the `DATABASE_URL_UNPOOLED` secret). Since `migrate.yml` now runs on **every** push to
+or after creating the `PROD_DATABASE_URL_UNPOOLED` secret). Since `migrate.yml` now runs on **every** push to
 `main`, this is rarely needed — merging is usually enough.
 
 **Steps:** GitHub → **Actions** → **"Migrate + seed (production)"** → **Run workflow** → branch `main`
@@ -880,20 +884,70 @@ or after wiring the `DATABASE_URL_UNPOOLED` secret). Since `migrate.yml` now run
 any other branch is a no-op rather than applying that branch's unmerged migrations to production —
 the instruction to pick `main` is now enforced, not just written down. To refresh the **preview**
 database from a branch, run `db:migrate` locally against the preview string (OPS-1 step 3), or
-dispatch **"Migrate + seed (preview database)"**, which holds no production credential. Check the "Apply migrations + idempotent seed" step didn't print the `DATABASE_URL_UNPOOLED …
-skipping` warning.
+dispatch **"Migrate + seed (preview database)"**, which holds no production credential. Check the "Apply migrations + idempotent seed" step is green (since `OPS-2` PR 1 a missing
+`PROD_DATABASE_URL_UNPOOLED` fails it rather than skipping) and printed `✓ seed complete (reference
+data only)`. ⚠️ **Never "Re-run jobs" on an old run**, and hand-run a seed only from a freshly fetched
+`origin/main`: older seed code wrote households and athletes.
 
-**Safety:** `db:migrate` is a no-op when nothing is pending. ⚠️ **`db:seed` is idempotent against an
-empty or seed-owned database — not against an arbitrary one, since `AUTH-1` 1c-4.** If a live
-household exists and none carries the seed's `public_id`, it **refuses** with
-_"refusing to seed into a household this seed does not own"_ and the job goes **red** rather than
-creating a second household (`packages/db/src/seed.ts`). That is the intended outcome; the recovery is
-Precondition 2 below.
+**Safety:** `db:migrate` is a no-op when nothing is pending, and production's `db:seed` writes
+reference data only (`OPS-2` PR 1), idempotently, so it never refuses on a household. The fixture
+seed (`SEED_FIXTURES=1`, local and preview only) still refuses to seed into a household it does not
+own (`AUTH-1` 1c-4).
 
 ---
 
 <!-- Placeholder runbooks — fill in when first needed. Keep titles even before the body exists so we
      have a known home for each procedure. -->
+
+## A household or athlete with a seed id (`OPS-2`)
+
+**Since `OPS-2` PR 1 production's `db:seed` writes reference data only:** no household, no athlete, no
+program (`packages/db/src/seed.ts` → `seedReference`; the rest is `seedFixtures`, written only with
+`SEED_FIXTURES`, which `migrate.yml` never sets). So the current seed can neither re-create a deleted
+household nor refuse on one. **Older seed code still can**, through "Re-run jobs" on an old
+`migrate.yml` run or a hand-run from a stale checkout, so one rule still holds:
+
+🔴 **A household or athlete whose `public_id` is in `SEED_PUBLIC_IDS`** (`packages/shared/src/seed-ids.ts`)
+**is never removed by "Delete a household" or "Erase one athlete".** The seeded household is removed,
+with everything in it, by `CAT-3`'s fresh start (`docs/specs/cat-3-movement-library.md` → "The fresh
+start, in order", step 3). A seed-id row it does not reach is removed only after `SEC-6`'s re-key gives
+it an ordinary id. A household or athlete created in the app is unaffected.
+
+**The check: run it immediately before the fresh start's step 3, before `PRIV-3` RC's production
+`--apply`, and before deleting a re-keyed seed row**, with merges frozen until that step commits. It is
+also what "`OPS-2` PR 1 is deployed" means:
+
+```bash
+git fetch origin
+MAIN=$(git rev-parse origin/main)
+# 1. Production's seed ran the current main, successfully, and nothing is queued or running —
+#    including a re-run of an OLD run, which keeps its old creation time.
+gh run list --workflow migrate.yml --branch main -L 20 --json databaseId,headSha,status,conclusion,attempt,updatedAt
+#    → the newest row: headSha == $MAIN, status completed, conclusion success; and NO row with
+#      attempt > 1 whose updatedAt is later than that run's.
+for st in in_progress queued waiting pending requested; do
+  gh run list --workflow migrate.yml --status "$st" --json databaseId,headSha   # → [] each time
+done
+gh run view <databaseId> --log | grep -F '✓ seed complete (reference data only)'
+# 2. db:verify (which carries OPS-2's proofs) passed on that same commit.
+gh run list --workflow ci.yml --commit "$MAIN" --json conclusion,status
+```
+
+**The rules that go with it:**
+
+- **Never "Re-run jobs" on an old `migrate.yml` run.** Since `OPS-2` PR 1 the production string is the
+  `PROD_DATABASE_URL_UNPOOLED` secret, and once the old `DATABASE_URL_UNPOOLED` is deleted an old run
+  finds it empty and exits 0 with a warning, writing nothing ("Rotate or rename the production
+  database secret", below). Until it is deleted, the rule is only written down. The cut-off is two
+  commits: `OPS-2` PR 1 (no household or athlete) and `CAT-3` A2 (no legacy movements).
+  `workflow_dispatch` is safe: it runs `main`.
+- **Hand-run a seed only from a freshly fetched `origin/main`** ("Manually re-seed", above).
+- Production's `migrate.yml` runs are **never deleted**: they are the record of which DDL reached
+  production and when.
+- **From the fresh start's step 3 on, `OPS-2` PR 1 is fixed forward only**: a revert would re-create
+  the seeded household on the next push.
+
+---
 
 ## "Sign-in is broken in dev or preview" — tell the four causes apart
 
@@ -989,6 +1043,31 @@ rotation that has actually been performed rather than one written from imaginati
 **The Neon role password + Actions secret — OPS-1 step 7**, propagating to the Vercel Production scope
 and the `DATABASE_URL_UNPOOLED` Actions secret: see
 [OPS-1 step 7](#7-purge-the-historical-previews-and-rotate-what-they-hold-️) above.
+
+### Rotate or rename the production database secret (`OPS-2` PR 1)
+
+`migrate.yml` reads production's direct string from **`PROD_DATABASE_URL_UNPOOLED`** since `OPS-2` PR 1
+(the maintainer's decision, 2026-11-18). The old name, `DATABASE_URL_UNPOOLED`, is deleted once the new
+one is proved, so a re-run of an old `migrate.yml` run finds it empty and writes nothing. The steps,
+in order:
+
+1. **Before the PR merges:** Neon → the **mat-plan** production project → **Connection details** → the
+   **direct** (not `-pooler`) string for the production database, `sslmode=require`. GitHub → repo →
+   **Settings → Secrets and variables → Actions → New repository secret**: name
+   `PROD_DATABASE_URL_UNPOOLED`, value that string. (GitHub cannot show the old secret's value, so copy
+   it from Neon, not from GitHub.) Leave `DATABASE_URL_UNPOOLED` in place for now.
+2. **Merge the PR.** Watch its `migrate.yml` run (`gh run list --workflow migrate.yml --branch main -L
+1`): green, `✓ migrations applied`, and `✓ seed complete (reference data only)` in the log. If it is
+   red with `PROD_DATABASE_URL_UNPOOLED is not set`, step 1 was missed: add the secret, then dispatch
+   the workflow from `main`.
+3. **Then delete `DATABASE_URL_UNPOOLED`** (Settings → Secrets → Actions → the secret → Remove). Nothing
+   else reads it (`git grep 'secrets.DATABASE_URL_UNPOOLED'` finds nothing).
+4. **Verify:** the secret list holds `PROD_DATABASE_URL_UNPOOLED` and `PREVIEW_DATABASE_URL_UNPOOLED` and
+   no other database secret. Dispatch "Migrate + seed (production)" from `main` once: green, the same
+   two log lines. ⚠️ Do not test the old-run guard by re-running an old run.
+
+To **rotate** the password later, change it in Neon and update `PROD_DATABASE_URL_UNPOOLED` (and Vercel's
+Production scope, OPS-1 step 7); the name stays.
 
 Generalise from these when the next rotation comes up, and carry the one durable lesson with you:
 **rotation is not retroactive.** A credential that was ever injected into a Vercel build stays in that
@@ -1341,27 +1420,13 @@ Then:
 > a reason to be slow and careful at step 0 — not a reason to relax there. **`OPS-3`'s rehearsal is a
 > precondition of the first real deletion.**
 
-### ⛔ Precondition 2 — a household in the seed cannot be deleted yet
+### ⛔ Precondition 2 — a household with a seed id is not deleted here
 
-`migrate.yml` runs `db:seed` against production **on every push to `main`**, and the seed upserts the
-household and its profiles by fixed `public_id` with `ON CONFLICT DO NOTHING`. 🔴 **Since `AUTH-1`
-1c-4 the consequence of deleting a seeded household depends on whether another live household
-exists**, and the two branches fail in opposite directions:
-
-- **No other live household** (today's single-household deployment) — unchanged: after a hard delete
-  there is no conflict and no live household, **so the seed inserts**, and the next merged PR
-  re-creates the household and its named child profiles.
-- **Another live household exists** (the intended end state once a family is invited) — the seed's
-  insert is now conditional on no live household existing, so it **skips**, finds nothing under the
-  seed's `public_id`, and **throws**. `migrate.yml` is then **red on every merge to `main`** until a
-  row under `SEED_HOUSEHOLD_PUBLIC_ID` exists again — and a dead step in that job means no new
-  reference data reaches production either. Recovery: re-insert a household row under that
-  `public_id`, or land `OPS-2`'s seed split first.
-
-So: **do not delete a seeded household until `OPS-2` splits the seed** (reference data for prod,
-fixtures for dev/CI). This applies to the maintainer's own household specifically — the one most
-likely to be deleted when the beta ends. A household created through the app is not in the seed and is
-unaffected.
+Refuse if the household's `public_id` is in `SEED_PUBLIC_IDS`: the seeded household is removed by
+`CAT-3`'s fresh start, not by this procedure. See ["A household or athlete with a seed id
+(`OPS-2`)"](#a-household-or-athlete-with-a-seed-id-ops-2) for why (older seed code can re-create it)
+and the check that goes with it. A household created through the app is not in the seed and is
+unaffected; since `OPS-2` PR 1 production's seed writes no household at all.
 
 ### Steps
 
@@ -1861,10 +1926,11 @@ transaction shape and its ledger, and says only what differs.
    Neon restore branch held 7 days, as the household delete. `OPS-3`'s rehearsal is a precondition of
    the first real erasure, as it is of the first deletion.
 
-2. **A seeded athlete cannot be erased yet.** The seed inserts its profiles by fixed `public_id` on every
-   push to `main` (`packages/db/src/seed.ts`), so a hard-deleted seed profile comes back, as an empty
-   athlete, on the next merge. Refuse if the profile's `public_id` is one of the `SEED_PROFILE*_PUBLIC_ID`
-   values until `OPS-2` takes the seed out of production. An athlete added in the app is unaffected.
+2. **A seeded athlete is not erased here.** Refuse if the profile's `public_id` is in `SEED_PUBLIC_IDS`:
+   it is removed with the seeded household by `CAT-3`'s fresh start. Production's seed no longer writes
+   profiles (`OPS-2` PR 1), but older seed code could put one back; see ["A household or athlete with
+   a seed id (`OPS-2`)"](#a-household-or-athlete-with-a-seed-id-ops-2). An athlete added in the app is
+   unaffected.
 
 ### Steps
 

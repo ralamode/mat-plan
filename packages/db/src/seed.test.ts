@@ -107,12 +107,23 @@ describe('scripts/seed.ts decides through resolveSeedOptions', () => {
 
   it('resolves its options from the environment and the URL it connects with', () => {
     expect(script).toContain('const options = resolveSeedOptions(process.env, url);');
-    expect(script).toContain('createDbPool(url)');
+    // OPS-2 PR 1: the seed's connections carry a lock and a statement timeout.
+    expect(script).toContain(
+      'createDbPool(url, { lockTimeoutMs: 5_000, statementTimeoutMs: 60_000 })',
+    );
   });
 
   it('passes exactly those options to seed(), and calls seed() once', () => {
     expect(script).toContain('await seed(createDb(pool), options);');
     expect(script.match(/\bseed\(/g)).toHaveLength(1);
     expect(script).not.toMatch(/fixtures\s*:/);
+  });
+
+  // OPS-2 D11: the whole expression, so a swapped ternary fails. `runbooks.md`'s check greps the
+  // reference-only line in production's public Actions log.
+  it('prints the reference-only line without fixtures, and only then', () => {
+    expect(script).toContain(
+      "options.fixtures ? '✓ seed complete (fixtures)' : '✓ seed complete (reference data only)'",
+    );
   });
 });

@@ -1887,7 +1887,7 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   **Rotation is not retroactive** — a credential that was ever in a build stays in that build.
 
 - **OPS-2 — split the seed: reference data for prod, fixtures for dev/CI.** `migrate.yml` seeds prod on
-  every push; the seed writes Ray's family with public fixed UUIDs and re-creates them if deleted, and
+  every push; the seed writes the maintainer's family with public fixed UUIDs and re-creates them if deleted, and
   expands ramp targets over every kid in the database. Split into `seedReference` and `seedFixtures`;
   keep `PROGRAM_SEED` reaching prod until V1-22; scope ramp targets by household. _(Beta 0.)_
   ⚠️ _2026-11-14:_ removing `PROGRAM_SEED` from production (the OPS-2 plan's Q3) is proposed as
@@ -1896,13 +1896,15 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   D10): from that PR the production seed no longer writes the program, existing rows stay, and only
   the test and preview seeds write it, behind `SEED_FIXTURES`. \"Keep `PROGRAM_SEED` reaching prod
   until V1-22\" above no longer holds.
-  **Planned 2026-11-13, refreshed 2026-11-16 onto #432** ([plan](./plans/ops-2-split-the-seed.md)), not
-  yet implemented. Two PRs: 1 moves the seed household and its three fixture profiles under #432's
+  **Planned 2026-11-13, refreshed 2026-11-16 onto #432 and 2026-11-17 onto `CAT-3`** ([plan](./plans/ops-2-split-the-seed.md)),
+  approved 2026-11-18. **PR 1 in review** (lane A): `seedReference` / `seedFixtures`, the ramp expansion
+  deleted, the `units` lock fixed, and `migrate.yml` reading a renamed secret, `PROD_DATABASE_URL_UNPOOLED`. Two PRs: 1 moves the seed household and its three fixture profiles under #432's
   `fixtures` branch and takes the ramp expansion out of production, so production's `db:seed` writes
   reference data only, and replaces both runbook preconditions that wait on OPS-2 with a check run
   before each deletion; 2 soft-deletes the fixture athlete `PROF-1 b`'s seed put in production. Decided
-  2026-11-16: SEC-6's production re-key runs before the first seed-id deletion (no tombstones); the
-  fixture athlete is soft-deleted; the ramp expansion is deleted.
+  2026-11-16: no tombstones; the fixture athlete is soft-deleted; the ramp expansion is deleted.
+  2026-11-17: for the seeded household, `CAT-3`'s fresh start (K7) replaces SEC-6's re-key, and PR 2
+  is unnecessary once it has run.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the

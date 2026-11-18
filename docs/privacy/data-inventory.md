@@ -208,6 +208,7 @@ only way a notice about minors' health data is worth anything.
 >
 > ```bash
 > git log --oneline 38f62de..HEAD -- packages/db/src/schema.ts packages/db/src/queries \
+>   packages/db/src/seed.ts packages/db/scripts/corrections \
 >   apps/web/lib/dal apps/web/proxy.ts apps/web/lib/access-gate.ts apps/web/lib/public-paths.ts \
 >   apps/web/lib/clerk.ts apps/web/next.config.ts apps/web/sentry.server.config.ts \
 >   apps/web/lib/sentry-scrub.ts apps/web/lib/rate-limit.ts .github/workflows
@@ -293,6 +294,10 @@ only way a notice about minors' health data is worth anything.
 > correction (environment input, counts-only output). `households.name` is a fixed `'Home'` from every
 > writer and joins re-review trigger 3's unused columns. No new column, processor, reader audience or
 > export change.
+> 🔴 **§1a / §5 / §9 re-read 2026-11-18 for `OPS-2` PR 1** ([plan](../plans/ops-2-split-the-seed.md)):
+> production's seed writes reference data only, so it stops writing the seeded household's athletes
+> and can no longer re-create them. No new processor, reader or retention. §5 gains the seed-id rule;
+> §9's residual 5 is restated; the staleness command watches `seed.ts` and the corrections.
 
 **Citation policy.** This file cites **path + symbol** (`access-gate.ts` → `PUBLIC_PATHS`), not
 `path:line`. Line cites rot on the next edit above them, which [ADR 0006](../decisions/0006-household-addressing.md)
@@ -554,6 +559,12 @@ a parent the consequence, this file links the cause.
 ## 5. "Deleted" does not mean deleted
 
 There is **no hard `DELETE` anywhere** in the app or the DAL. Soft delete is the only delete.
+
+🔴 **A household or athlete whose `public_id` is in `SEED_PUBLIC_IDS` is removed by neither of the two
+removal procedures** (`runbooks.md` → "Delete a household", "Erase one athlete"): older seed code could
+put it back. `CAT-3`'s fresh start (K7) removes the seeded household with everything in it; see
+`runbooks.md` → "A household or athlete with a seed id (`OPS-2`)". This is the row behind the notice's
+"cannot be erased one at a time yet". (`OPS-2` PR 1, 2026-11-18.)
 **Nothing purges a soft-deleted row today**, so it stays in the database indefinitely and a
 replacement coexists with it.
 
@@ -994,8 +1005,9 @@ program builder or a test seed; its numbers are still an instruction, not testim
 4. ⚠️ **PR refs #152–#167** still carry a third-party roster of minors that only GitHub Support can purge
    (`OSS-1`).
 5. **The production database is untouched, on purpose.** The real names in `profiles.name` are the
-   household's own legitimate data, and the seed is `onConflictDoNothing` on `public_id`, so a re-seed
-   cannot and does not rename a live row. No correction was written and none is proposed.
+   household's own legitimate data. Since `OPS-2` PR 1 production's seed writes no profile at all (it
+   was `onConflictDoNothing` on `public_id` before, so it never renamed a live row either). No
+   correction was written and none is proposed; the seeded household goes with `CAT-3`'s fresh start.
 
 **Status:** `OSS-1`'s rename is **done**; the Beta 0 blocker it held is cleared.
 

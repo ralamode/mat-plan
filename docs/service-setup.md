@@ -30,10 +30,10 @@ Related: [deploy.md](./deploy.md) (the deployment topology), [.github/SECURITY.m
 Two places, since OPS-1 — written down here because an unrecorded copy is the one a deletion request
 misses, and OPS-3's deletion ledger has to walk both:
 
-| Location                     | Holds                                                                                                                                       | Who can read it                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **Neon, production project** | the real thing — profiles, bodyweight, every logged entry                                                                                   | the household operator, through the app           |
-| **Neon, `mat-plan-preview`** | `db:seed`'s fixture profiles (**two minors' first names**, already public in `packages/db/src/seed.ts`) **plus whatever any preview wrote** | anyone with the preview gate code; the maintainer |
+| Location                     | Holds                                                                                                                                                | Who can read it                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Neon, production project** | the real thing — profiles, bodyweight, every logged entry                                                                                            | the household operator, through the app           |
+| **Neon, `mat-plan-preview`** | `db:seed`'s fixtures (`SEED_FIXTURES=1`: the role-named athletes `Athlete One`–`Three` and the fixture programs) **plus whatever any preview wrote** | anyone with the preview gate code; the maintainer |
 
 The preview project holds **no real family's logged data** and must never be allowed to: a preview is
 publicly listed and internet-reachable. It is **disposable** — [runbooks.md](./runbooks.md) → OPS-1

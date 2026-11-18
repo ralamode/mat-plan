@@ -63,7 +63,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
 - **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
 
-### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
+### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff) — ✅ CLOSED 2026-11-18
+
+- **Closed by `OPS-2` PR 1:** the expansion and `CALISTHENICS_RAMP_SCHEDULE` are deleted (plan D4, the maintainer's Q6), so no seed writes `ramp_targets`; `verify/seed.ts`'s Proof A counts the table after a production seed.
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
   `ramp_targets` rows for every profile with `kind = 'kid'`, with no household predicate and no
