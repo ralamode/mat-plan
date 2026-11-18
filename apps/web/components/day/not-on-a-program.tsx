@@ -26,6 +26,9 @@ export function NotOnAProgram({ plan, programsHref }: { plan: DayPlan; programsH
   return (
     <p className={cn(NOTICE_CLASS, NAME_WRAP_CLASS)}>
       {PROGRAM_COPY.notYet}
+      {/* Only where it is true: a closed day, an archived athlete and a future day log nothing
+          (maintainer, 2026-11-17). */}
+      {plan.writable ? ` ${PROGRAM_COPY.notYetLogHere}` : null}
       {programsHref && athlete ? (
         <>
           {' '}

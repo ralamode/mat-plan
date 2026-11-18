@@ -21,6 +21,8 @@ export type DayContextValue = {
   announce(message: string): void;
   /** A row reports a failed save, or that it has none any more, so its workout can count them. */
   setRowFailed(rowKey: string, failed: boolean): void;
+  /** A row reports a write in flight, or none any more, so the page can warn before it is left. */
+  setRowPending(rowKey: string, pending: boolean): void;
   /** The first `closed_day` turns the whole screen read-only. */
   closeDay(): void;
   /** Re-reads the page's data, keeping every row's typed text. */
