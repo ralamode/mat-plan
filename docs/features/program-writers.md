@@ -22,15 +22,16 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## The map
 
-| Step     | Adds                                                                                                                                |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                                                |
-| 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                                               |
-| 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅                                        |
-| 6a-iii-b | the copy path (`copyWorkout`, C15)                                                                                                  |
-| 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                                                        |
-| 6c       | `writers/program/assign.ts` (put on); `queries/program/{program-view,program-list}.ts`; fills in `writers/program/seed-fixtures.ts` |
-| 6d       | take off and reorder, in `assign.ts`                                                                                                |
+| Step     | Adds                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                            |
+| 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅           |
+| 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅    |
+| 6a-iii-b | the copy path (`copyWorkout`, C15)                                                              |
+| 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                    |
+| 6c-i     | `writers/program/assign.ts` (put on, C15's reopen); fills in `writers/program/seed-fixtures.ts` |
+| 6c-ii    | `queries/program/{program-view,program-list}.ts`                                                |
+| 6d       | take off and reorder, in `assign.ts`                                                            |
 
 ## Files
 
@@ -49,7 +50,8 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/queries/program/week.ts`             | `readWeek`: a program's week as `WeekDraft['days']`, every weekday present, live slots of live workouts in order.                                                                                                                                                                                                                 |
 | `packages/db/src/queries/program/movement-options.ts` | `movementOptions`: every item the household can pick, catalog rows (with group and aliases) first, then its own live items no catalog slug shadows, used or not.                                                                                                                                                                  |
 | `packages/db/src/writers/program/new-item.ts`         | `newItem`: selects the item a name already names (`existingItem`, then the slug), with its stored name and own type; else makes a household item typed as asked.                                                                                                                                                                  |
-| `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: seeds the fixture family's programs with the real writers. Writes nothing until step 6c.                                                                                                                                                                                                                   |
+| `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: the test seed's fixture programs (`SEED_FIXTURES=1` only), built with the real writers, and the seed's athletes on them. A program the household already has, by its fixed `client_id`, is left as it is.                                                                                                  |
+| `packages/db/src/writers/program/assign.ts`           | `putOn`: athletes onto a template program from today or tomorrow, one row last in their order and all seven weekday rows; already on is skipped; a last day of today is reopened on the same row.                                                                                                                                 |
 | `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                         |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                             |
 | `packages/db/scripts/verify/program.ts`               | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                     |
@@ -107,7 +109,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
     `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
     unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use the same helper. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
 12. **Every refusal comes before the first write**, and the whole save is one transaction (a
-    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
+    savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. `putOn` takes the block, then the athletes' `profiles` rows `FOR NO KEY UPDATE` in id order, so two put-ons of one athlete number their order one after the other (6d's take off and reorder must take the same two). The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
     `save-takes-any-households-item`) and of the type the draft says; a type's fields are
     `TRACKING_TYPE_FIELDS`' (Reps a whole number 1 to 1000; at most one quantity, in the type's slot
     and units); supersets are neighbours, numbered 1..n, at least two, with the rest on the last.
@@ -187,6 +189,22 @@ flowchart TD
     predicate) stops the name being made again. The PR that first hides a movement revisits that
     constraint's list and adds `newItem`'s step 2 and `movementOptions`' catalog and shadow
     `deleted_at` filters to it.
+
+18. 🔴 **Put on looks for the athlete's row of this program before it inserts** (6c-i; ADR 0007
+    Amendment 4, C15). Already on it (an open row, started or still to start): skipped, so a replay
+    is one effect without a client id. Its last day is today (Take off was tapped today): the
+    **same row** is reopened (`active_to` cleared, its start kept), whatever `from` says. Otherwise a
+    new row from `from`. A blind insert would either hit the start key on the closed row or put the
+    program on twice today (`schema.ts` → `programAssignments`). Each put on closes up the gaps a
+    take off left in the athlete's order and takes the last place, through the band; it writes all
+    seven weekday rows; `from` is today or tomorrow of the `today` the caller passes, and an
+    archived athlete is `not_found` (mutations `put-on-takes-any-start-day`,
+    `put-on-takes-an-archived-athlete`, `put-on-athletes-unscoped`, `put-on-takes-a-legacy-block`,
+    `put-on-never-reopens`, `put-on-leaves-the-gap`, `put-on-six-weekdays`,
+    `put-on-reopens-an-ended-stretch`). The seed passes each start day as `today`, so its past
+    starts are ones a person made that day (`seed-fixtures-reverses-the-order`,
+    `seed-fixtures-rewrites-a-seeded-program`). An item the catalog has is the catalog's in the
+    seeded workouts (`newItem`): "DB bench press" is seeded as the catalog's Dumbbell Bench Press.
 
 ## Changing it
 

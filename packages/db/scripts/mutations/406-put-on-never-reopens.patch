@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 3ff52570..a21e5fa0 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -132,7 +132,7 @@ export async function putOn(
+       }
+       const last = open.length;
+ 
+-      if (endsToday) {
++      if (endsToday && today === 'never') {
+         await tx
+           .update(a)
+           .set({ activeTo: null, idx: last, updatedAt: sql`now()` })

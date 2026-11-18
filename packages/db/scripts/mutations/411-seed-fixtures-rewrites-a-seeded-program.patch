@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
+index f4b71f31..86a59b2e 100644
+--- a/packages/db/src/writers/program/seed-fixtures.ts
++++ b/packages/db/src/writers/program/seed-fixtures.ts
+@@ -101,7 +101,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
+     const made = new Map<string, string>();
+     for (const program of FIXTURE_WORLD.programs) {
+       const clientId = seedFixtureProgramClientId(program.id);
+-      if (await programBlockByClientId(tx, scope, clientId)) continue;
++      if ((await programBlockByClientId(tx, scope, clientId))?.deleted) continue;
+ 
+       const { programPublicId } = must(
+         await createProgram(tx, scope, { clientId, name: program.name }),
