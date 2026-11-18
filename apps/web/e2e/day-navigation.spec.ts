@@ -1,13 +1,22 @@
+import { PROFILE_KIND, PROFILE_KIND_LABELS } from '@mat-plan/shared';
 import { expect, test } from '@playwright/test';
 
-import { BODYWEIGHT_COPY, CLOSED_DAY_NOTICE } from '../lib/constants';
+import {
+  ADD_ATHLETE_PATH,
+  ATHLETE_FORM_COPY,
+  BODYWEIGHT_COPY,
+  CLOSED_DAY_NOTICE,
+  SETTINGS_COPY,
+  SETTINGS_PATH,
+} from '../lib/constants';
+import { formatDayLong } from '../lib/date';
 
 import { bodyweightSection, changePrefix, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * Day navigation (V1-15).
  *
- * Motivated by a real confusion: Ray logged a session from a tab left open overnight and could not
+ * Motivated by a real confusion: the maintainer logged a session from a tab left open overnight and could not
  * tell which date it wrote to. The date is now in the URL, so the question is answerable by looking.
  */
 
@@ -18,9 +27,6 @@ test('yesterday is reachable even on a profile created today', async ({ page }) 
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
   const nav = page.getByRole('navigation', { name: 'Change day' });
   await expect(nav.getByRole('link', { name: /^Previous day/ })).toBeVisible();
-  // Forward IS at its bound on today — the future is never reachable, and it says so as a disabled
-  // button rather than a missing control.
-  await expect(nav.getByRole('button', { name: /^Next day/ })).toBeDisabled();
 });
 
 test('a dated URL renders that day, and paging forward from it returns toward today', async ({
@@ -41,10 +47,13 @@ test('a dated URL renders that day, and paging forward from it returns toward to
 test('yesterday KEEPS its forms — the UI must not be stricter than the server', async ({
   page,
 }) => {
-  // The server accepts a write within ±1 day (resolveDeclaredDay). A UI that hid yesterday's forms
-  // would refuse what the endpoint allows — and it is exactly how Ray's 09/29 session, submitted on
-  // 09/30 from a stale tab, succeeded.
+  // The server accepts a write for today and yesterday (resolveDeclaredDay). A UI that hid
+  // yesterday's forms would refuse what the endpoint allows — and it is exactly how the maintainer's
+  // 09/29 session, submitted on 09/30 from a stale tab, succeeded.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
+  // The date line names it (FAM-1 12c, v12's day label), so a pinned tab opened the next morning
+  // says it is yesterday.
+  await expect(page.getByText(/^Yesterday ·/)).toBeVisible();
   // A writable day offers the weigh-in: the field, or once logged, Change. A read-only day shows
   // neither, so this is the assertion that can fail.
   const section = bodyweightSection(page);
@@ -61,13 +70,42 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
 // unreachable here. The gating logic is unit-tested (`isWritableDay`), but this path has no e2e.
 // Closing it needs a backdated fixture profile; noted rather than left as a silent gap.
 
-test('the future is clamped, and a malformed date renders today rather than 404ing', async ({
+// An athlete on NO program (FAM-1 12c): look-ahead goes forward only while on a program, so
+// forward stops at today and a future `?d=` renders today. The seed athletes are on the fixture
+// world's programs (6c-i) and Athlete Three belongs to the archive specs, so this test adds its own
+// athlete, as `bodyweight-receipt.spec.ts` does: one per run, well inside `MAX_HOUSEHOLD_ATHLETES`.
+test('on no program, forward stops at today, the future renders today, and a malformed date does too', async ({
   page,
-}) => {
-  for (const bad of [`?d=${isoDaysAgo(-5)}`, '?d=not-a-date', '?d=09292026']) {
-    await page.goto(`${SEED_PROFILE_ROUTE}${bad}`, { waitUntil: 'networkidle' });
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+}, testInfo) => {
+  const name = `12C-NAV ${testInfo.workerIndex}-${testInfo.retry} ${Date.now().toString(36)}`;
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page
+    .getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[PROFILE_KIND.kid]}`) })
+    .check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+  const route = new URL(page.url()).pathname;
+
+  // A disabled button rather than a missing control, so the bound is visible.
+  const nav = page.getByRole('navigation', { name: 'Change day' });
+  await expect(nav.getByRole('button', { name: /^Next day/ })).toBeDisabled();
+
+  for (const bad of [
+    `?d=${isoDaysAgo(-1)}`,
+    `?d=${isoDaysAgo(-5)}`,
+    '?d=not-a-date',
+    '?d=09292026',
+  ]) {
+    await page.goto(`${route}${bad}`, { waitUntil: 'networkidle' });
+    await expect(page.getByText(/^Today ·/), bad).toBeVisible();
   }
+
+  // Archived again, so later specs' pickers, rail and switcher do not list it.
+  await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+  const archive = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
+  await archive.click();
+  await expect(archive).toHaveCount(0);
 });
 
 test('the week strip reaches a day in two taps, and marks the one being viewed', async ({
@@ -76,9 +114,15 @@ test('the week strip reaches a day in two taps, and marks the one being viewed',
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
   const nav = page.getByRole('navigation', { name: 'Change day' });
 
-  // aria-current="date" is how a screen reader user knows which day they are on.
-  await expect(nav.locator('[aria-current="date"]')).toHaveCount(1);
+  // aria-current is how a screen reader user knows which day they are on (`true`, since FAM-1 12c:
+  // "date" read as "the current date" beside today's own ", today").
+  await expect(nav.locator('[aria-current="true"]')).toHaveCount(1);
 
-  const yesterday = nav.getByRole('link', { name: /^\w+day, \w+ \d+, \d{4}$/ });
-  await expect(yesterday.first()).toBeVisible();
+  // Today's cell is a link named for its date and ", today". Other cells can be links too (the days
+  // before it, and tomorrow while the athlete is on a program), so the name is matched exactly.
+  const todayCell = nav.getByRole('link', {
+    name: `${formatDayLong(isoDaysAgo(0))}, today`,
+    exact: true,
+  });
+  await expect(todayCell).toBeVisible();
 });

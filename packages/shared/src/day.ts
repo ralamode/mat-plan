@@ -24,8 +24,8 @@ export function isoDayDiff(a: string, b: string): number {
 
 /**
  * How far from today a write is still accepted, in days: 1. One number for both rules that use it:
- * `inWritableWindow` below (that many days BEFORE today, and never after), and the older forms'
- * `isWritableDay` in the web app (that many days either side, until plan step 12c).
+ * `inWritableWindow` below (that many days BEFORE today, and never after), which the older forms'
+ * `isWritableDay` in the web app also calls (since plan step 12c).
  */
 export const WRITABLE_DAY_RADIUS = 1;
 
@@ -37,9 +37,8 @@ export const WRITABLE_DAY_RADIUS = 1;
  * Pure: the caller supplies `today` (the request's active-timezone day), so the database package
  * and the web app use the same rule (contract change C10).
  *
- * ⚠️ **Not the older forms' bound.** `apps/web/lib/entries/declared-day.ts` accepts tomorrow as
- * well (±`WRITABLE_DAY_RADIUS`), for the single-value forms that predate FAM-1. Plan step 12c makes
- * that one-sided by calling this; until then the two differ by exactly one day, tomorrow.
+ * The older forms' bound too: `apps/web/lib/entries/declared-day.ts`'s `isWritableDay` calls this
+ * (plan step 12c), so bodyweight, practice and a row share one window.
  */
 export function inWritableWindow(day: string, today: string): boolean {
   const diff = isoDayDiff(day, today);
@@ -53,7 +52,8 @@ export function inWritableWindow(day: string, today: string): boolean {
  * otherwise), and what a day's Restore all is held to (FAM-1 plan D32; the maintainer, 2026-11-17:
  * an archived athlete's day is never writable; contract change C34).
  *
- * ⚠️ **As of C34 only the contract's fixture world calls this.** The day resolver and the row
+ * ⚠️ **As of C34 only the contract's fixture world and the day page's `dayPageFlags` (plan step 12c,
+ * `apps/web/lib/entries/declared-day.ts`) call this.** The day resolver and the row
  * writer call lane E's `rowDayOpen`, and Restore all calls lane S's `dayIsOpen`
  * (`clear-day-actions.ts`): the same rule, written twice more. Each switches in its own lane's PR.
  *

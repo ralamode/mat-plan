@@ -1,7 +1,7 @@
 import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-plan/shared';
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
-import { CLOSED_DAY_NOTICE, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
+import { UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
 import { onDayText } from '@/lib/date';
 import { formatList, plural } from '@/lib/i18n/plural';
 
@@ -43,8 +43,13 @@ export const DAY_COPY = {
   rest: (text: string) => `Rest ${text}`,
   /** A row whose prescription left the workout after it was logged (v12, `index.html:2432`). */
   removed: 'No longer in this workout. What was logged stays.',
-  /** The whole screen turns read-only after the first `closed_day`. */
-  closed: CLOSED_DAY_NOTICE,
+  /**
+   * The whole screen turns read-only after the first `closed_day`. It says only what happened: the
+   * day closed under the page, or the athlete was archived mid-session, and the page's own notice,
+   * which the reload brings, gives the reason (maintainer, 2026-11-17; UX panel, 12c). The page's
+   * `CLOSED_DAY_NOTICE` ("only today and yesterday") would be false for an archived athlete.
+   */
+  closed: 'Not saved. This day can’t be logged any more.',
   progress: (done: number, total: number) => `${done} of ${total}`,
   notSaved: (count: number) => `${count} not saved`,
   logLabel: (name: string) => `Log ${name}`,
@@ -84,6 +89,7 @@ export const DAY_COPY = {
 /** "Couldn't save. Try again.": a ✓ and a reorder say the same thing when the server refuses. */
 const SAVE_FAILED = 'Couldn’t save. Try again.';
 const STALE = 'This changed since the page loaded.';
+const NOT_FOUND_COPY = 'Not saved. Reload the page.';
 
 /** The athlete the plan is for, by name (the plan names its own athlete in `athletes`). */
 export function athleteNameOf(plan: DayPlan): string {
@@ -110,11 +116,19 @@ export const PROGRAM_COPY = {
   orderStale: `${STALE} Here are the programs now.`,
   done: DAY_COPY.done,
   switcher: 'Switch athlete',
-  notYet: 'Not on a program yet. Bodyweight and practice log here.',
+  notYet: 'Not on a program yet.',
+  /** `notYet`'s second sentence, only on a day that can be logged (maintainer, 2026-11-17). */
+  notYetLogHere: 'Bodyweight and practice log here.',
   notYetPutOn: (athlete: string) => `Put ${athlete} on a program to see their workouts.`,
   /** The Programs page's own heading, so the link and the page it opens cannot drift. */
   programs: BUILDER_COPY.programs,
   notThisDay: 'Not on a program on this day.',
+  /**
+   * A future day (look-ahead), placed by the page in place of the read-only notice: v12's words
+   * (`index.html:2605`; maintainer, 2026-11-17). A day that has not happened is not a missed one.
+   */
+  comingUp: (athlete: string, day: string) =>
+    `Coming up. This is what ${athlete} has on ${weekdayName(localWeekday(day))}s. You can log it on the day.`,
   /** Every program the athlete is on rests this day. */
   restAll: (day: string) => `Rest day. Nothing is scheduled on ${weekdayName(localWeekday(day))}s.`,
   /** Some programs rest, on a day with two or more. */
@@ -169,11 +183,15 @@ export function refusalCopy(reason: RowRefusal, write: RowWriteKind): RefusalCop
       return { message: DAY_COPY.closed, reload: false };
     case ROW_REFUSAL.not_scheduled:
       return {
-        message: 'This workout isn’t scheduled on this day any more.',
+        message:
+          'This workout isn’t scheduled on this day any more. Numbers not saved here will be cleared.',
         reload: true,
       };
-    case ROW_REFUSAL.program_changed:
     case ROW_REFUSAL.not_found:
+      // True for every cause, a lapsed session among them (`noSession` answers `not_found`), where
+      // "this changed" blamed the program (maintainer, 2026-11-17; UX panel, 12c).
+      return { message: NOT_FOUND_COPY, reload: true };
+    case ROW_REFUSAL.program_changed:
     case ROW_REFUSAL.slot_taken:
       return { message: STALE, reload: true };
   }

@@ -208,9 +208,8 @@ flowchart LR
       (contract C8).
     - **Every link a screen draws is `BuilderLink`** (`route-link.tsx`, 7a-ii), never `next/link`
       itself (a scan): it prefetches as Next does, unless the `BuilderLinkPrefetch` context says
-      `false`. ⏳ **Not provided yet:** the design preview's harness will wrap the builder in
-      `<BuilderLinkPrefetch value={false}>` (its fixture ids prefetch 404s); the roadmap thread owns
-      that file and wires it after 7a-ii merges. Until then the preview still prefetches.
+      `false`. The design preview's harness provides `false` around every screen (#593), so its
+      fixture ids are never prefetched and never 404; a real page provides nothing.
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.
@@ -344,12 +343,12 @@ flowchart LR
   effect cleanup and leaves `pending` set. With `cacheComponents` on, Next hides a route in
   `<Activity>` instead of unmounting it, so a create answered while hidden would be dropped and
   the form would come back stuck on "Creating…". Revisit this if that flag is turned on.
-- **Until 7b, the preview route never reaches `networkidle`.** The screens link to `/programs/...`
-  pages that do not exist yet; Next prefetches each link, the 404 answers, and the response body
-  stays open. `pnpm --filter web screenshot:ephemeral` waits for `networkidle`, so it times out on
-  these states. Capture with a throwaway `e2e/<step>-capture.a11y.spec.ts` that waits for `load`
-  and the `<h1>` instead (the lane brief's capture recipe), and never commit it. Once 7b builds the
-  pages, the prefetches complete.
+- **Capturing the preview route: wait for `load`, not `networkidle`.** Before #593 the screens
+  prefetched `/programs/<fixture id>` pages that 404, and the route never went idle under `next
+start`. #593 stopped those prefetches; whether the route now reaches `networkidle` is unverified,
+  so `screenshot:ephemeral`'s picker states keep `waitUntil: 'load'` and wait on elements
+  (`scripts/capture.ts`). A throwaway `e2e/<step>-capture.a11y.spec.ts` does the same, and is never
+  committed.
 - **A hook result that holds a ref is read as a ref by the React compiler's lint.** Destructure
   `useNameForm()` (`const { name, fieldRef, … } = …`); `form.name` in JSX fails `react-hooks/refs`.
 - **Focus a field in the same tap that opens it.** Mount the form with `flushSync`, then focus: a

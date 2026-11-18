@@ -4,7 +4,7 @@ import { type DayItem } from '@mat-plan/shared';
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, NAME_WRAP_CLASS, SAVING_LABEL, TICK_FOCUS_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
@@ -32,16 +32,6 @@ export const LOGGED_CARD_CLASS = 'border-done';
 export const TINT_CLASS = 'bg-done-surface';
 export const secondaryText = (onTint: boolean) =>
   onTint ? 'text-done-muted-foreground' : 'text-muted-foreground';
-
-/**
- * The ✓'s focus ring (design.md): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
- * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
- *
- * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline
- * style to `none` through a variable that `outline-3` reads, so without it no ring is drawn.
- */
-export const TICK_FOCUS_CLASS =
-  'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
 /**
  * A field's focus ring: the ✓'s foreground outline, since `INPUT_CLASS`'s `ring-ring/50` is under 3:1
@@ -157,7 +147,14 @@ export function Tick({
         aria-pressed={r.logged !== null}
         aria-label={DAY_COPY.logLabel(label)}
         aria-disabled={r.pending || undefined}
-        aria-describedby={described ? errorId : undefined}
+        aria-busy={r.pending || undefined}
+        // "Saving…" is the ✓'s DESCRIPTION while it is sent: its name stays "Log …", which
+        // `aria-label` sets and content cannot change (12c review).
+        aria-describedby={
+          [described ? errorId : null, r.pending ? `${errorId}-saving` : null]
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         className={cn(
           TICK_FOCUS_CLASS,
           TICK_CLASS,
@@ -167,9 +164,18 @@ export function Tick({
           r.logged
             ? 'bg-done text-done-foreground border-done forced-colors:border-4'
             : 'bg-background text-muted-foreground',
+          // FAM-1 12c: a ✓ still being sent does not look saved. Dashes in the foreground colour,
+          // so they show on the done fill as on an empty ✓ (a `done` dash on a `done` fill does
+          // not); not a fade (a faded glyph fails contrast), and a border style forced colours keep.
+          r.pending && 'border-foreground border-2 border-dashed',
         )}
       >
         <span aria-hidden="true">✓</span>
+        {r.pending ? (
+          <span id={`${errorId}-saving`} className="sr-only">
+            {SAVING_LABEL}
+          </span>
+        ) : null}
       </button>
     );
   }
