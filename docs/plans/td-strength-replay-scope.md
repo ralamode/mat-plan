@@ -226,8 +226,8 @@ None.
 - `db:verify` green, with the new block (2026-11-17).
 - `db:mutations`: 306 mutations, all RED; `440`, `441` and `442` each fail on their own case's
   message (2026-11-17). Re-run after merging #582: 343, all RED (2026-11-18).
-- After the day conjunct (`443`, regenerated `440`): `git apply --check` passes for 440–443;
-  `db:verify` and `db:mutations` re-run when the board grants the next heavy slot. Result: _pending_.
+- After the day conjunct (`443`, regenerated `440`), merged with `main` through #582: `db:verify`
+  green; `db:mutations` 344, all RED, with `440`–`443` each failing on its own case (2026-11-18).
 
 ## Review-response log (adversarial panel)
 
