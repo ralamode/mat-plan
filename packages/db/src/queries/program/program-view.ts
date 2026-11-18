@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 
 import {
   isoDaySchema,
@@ -14,6 +14,27 @@ import type { Executor } from '../../writers/executor';
 import { liveTemplateBlockIn } from '../../writers/ownership';
 import { athletesOnPrograms } from './athletes';
 import { readWeek } from './week';
+
+/**
+ * The household's calendar day of an instant, in `tz`. In JS, with `Intl`, the rule the app's
+ * `localDayIso` (`apps/web/lib/date.ts`) follows, so a zone the app accepts reads the same here:
+ * Postgres's `at time zone` reads a bare offset (`+05:00`) with the sign reversed (POSIX), `Intl`
+ * does not.
+ */
+function localDayOf(tz: string): (instant: Date) => string {
+  let format: Intl.DateTimeFormat;
+  try {
+    format = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  } catch {
+    throw new Error('readProgramView needs a time zone Intl accepts');
+  }
+  return (instant) => format.format(instant);
+}
 
 /**
  * The program page (`ProgramView`, FAM-1 step 6c-ii), and the data its two dialogs open with. `null`
@@ -38,19 +59,9 @@ import { readWeek } from './week';
  * workouts) before it is returned. ⚠️ Several reads, not one snapshot: a save committing between
  * them can be seen in part. **The week keeps only slots of the workouts read**, so a workout saved
  * and put on the week in that window never makes the page throw on the schema's slot check; it
- * shows on the next load.
+ * shows on the next load. ⚠️ Not proved by a gate: PGlite has one connection, so no proof can commit
+ * a save between two reads of one call.
  */
-/** An IANA zone name `Intl` accepts (`America/New_York`), or `UTC`; never a bare offset. */
-function isIanaZoneName(tz: string): boolean {
-  if (tz !== 'UTC' && !tz.includes('/')) return false;
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function readProgramView(
   exec: Executor,
   scope: HouseholdScope,
@@ -60,10 +71,9 @@ export async function readProgramView(
   if (!isoDaySchema.safeParse(today).success) {
     throw new Error('readProgramView needs today as an ISO day');
   }
-  // A zone Postgres would refuse is the caller's bug: fail here, with fixed text. A bare offset
-  // (`+05:00`) passes `Intl` but Postgres reads it with the sign reversed (POSIX), so only an IANA
-  // name (`Area/City`) or `UTC` is taken.
-  if (!isIanaZoneName(tz)) throw new Error('readProgramView needs an IANA time zone');
+  // A zone `Intl` refuses is the caller's bug (the app's cookie check uses `Intl` too): fail here,
+  // with fixed text.
+  const dayIn = localDayOf(tz);
   if (!uuidSchema.safeParse(programPublicId).success) return null;
 
   const programs = await exec
@@ -105,8 +115,7 @@ export async function readProgramView(
       publicId: w.publicId,
       name: w.name,
       copiedFromProgramName: w.copiedFromProgramName,
-      // The day it was copied in the household's calendar; `tz` is a bound parameter.
-      createdOn: sql<string>`to_char(${w.createdAt} at time zone ${tz}, 'YYYY-MM-DD')`,
+      createdAt: w.createdAt,
     })
     .from(w)
     .where(and(eq(w.blockId, program.id), isNull(w.deletedAt)))
@@ -147,7 +156,7 @@ export async function readProgramView(
       copiedFrom:
         workout.copiedFromProgramName === null
           ? null
-          : { programName: workout.copiedFromProgramName, on: workout.createdOn },
+          : { programName: workout.copiedFromProgramName, on: dayIn(workout.createdAt) },
     })),
     week,
     otherPrograms: programs
