@@ -268,6 +268,9 @@ open(key) = userChoice.get(key) ?? (auto || seeded.has(key) || defaultOpen(key))
   `movementCount`, which already exists privately at `:12`, exposed for the `sr-only` count.
 - **`COPY.groupLabel`: deleted.** Its last reader, `tagFor`, goes.
 - **`foldedCount`:** kept as is, not renamed (reuse S8).
+- **One separator const** (board, 2026-11-18): the `' · '` join is written three times in
+  `movement-picker-copy.ts` (`ROW_META_JOIN`, `filters()`, `foldedCount`). B3 adds readers of it,
+  so it becomes one `SEPARATOR` const that all three, and B3's headings, use.
 - **Kind labels:** a bare lookup of the shared `MODALITY_LABELS`. **Changing a kind label means
   editing `MODALITY_LABELS` through the contract owner, never overriding it in the picker** (reuse
   S6).
@@ -470,7 +473,7 @@ No blocking concern survives round 2.
 
 - **`FoldedSection` closed under the thumb on an untick** (from #575). A probe was red on `main`;
   fixed in #596.
-- **The `' · '` join is written three times** in `movement-picker-copy.ts` (`ROW_META_JOIN`,
-  `filters()`, `foldedCount`). It goes on the board's P2 list.
+- **The `' · '` join is written three times** in `movement-picker-copy.ts`. Folded into B3
+  as one `SEPARATOR` const (board, 2026-11-18); see §Copy.
 - **F1's list of `MOVEMENT_SEED_ROWS` readers** leaves out the fixtures file and
   `movement-picker-catalog.ts`. Minor: F1's import scan would find both.
