@@ -1,5 +1,8 @@
 import { ENTRY_STATUS, ENTRY_STATUS_LABELS, SET_STATUS } from '../enums';
+import { QUANTITY_SLOT } from '../quantity-slots';
+import { UNIT_DIMENSION } from '../units';
 import { buildLoad, type ExportSet } from './load';
+import { dimensionOf } from './value';
 
 /** One logged movement — an `entry` plus its `entry_sets`, as the export reads it. */
 export type ExportMovement = {
@@ -7,6 +10,30 @@ export type ExportMovement = {
   status: string;
   sets: readonly (ExportSet & { status: string })[];
 };
+
+/**
+ * **A Count logged in `count` writes its number in `reps`, and `load` stays empty** (FAM-1 14a; the
+ * maintainer, 2026-11-17: `…,plank-taps,1,25,,…`).
+ *
+ * A count is "how many", which is what `reps` already means. It never goes in `load`, where a bare
+ * number means pounds: `CSV_UNIT_SUFFIX.count` stays `null`, so a count that reached `load` would still
+ * be refused (`assertExportableUnit`). A set that carries BOTH reps and a count throws: the export
+ * never picks one of two numbers the athlete logged.
+ */
+function countAsReps(set: ExportSet, context: string): ExportSet {
+  const counts = set.quantities.filter(
+    (q) => q.slot === QUANTITY_SLOT.primary && dimensionOf(q.unit) === UNIT_DIMENSION.count,
+  );
+  if (counts.length === 0) return set;
+  if (set.reps !== null || counts.length > 1) {
+    throw new Error(`CSV export: ${context} has reps and a count, and only one can be written`);
+  }
+  return {
+    ...set,
+    reps: Number(counts[0].value),
+    quantities: set.quantities.filter((q) => q !== counts[0]),
+  };
+}
 
 /** The three columns the aggregator produces. */
 export type AggregatedSets = { sets: string; reps: string; load: string };
@@ -52,7 +79,9 @@ export function aggregateMovement(movement: ExportMovement, context: string): Ag
     return { sets: '0', reps: '0', load: 'SKIPPED' };
   }
 
-  const counted = movement.sets.filter((s) => s.status !== ENTRY_STATUS.skipped);
+  const counted = movement.sets
+    .filter((s) => s.status !== ENTRY_STATUS.skipped)
+    .map((s, i) => ({ ...countAsReps(s, `${context} set ${i + 1}`), status: s.status }));
   if (counted.length === 0) return { sets: '0', reps: '', load: '' };
 
   // One set going to failure makes the whole movement's `reps` read `sub-failure`; the corpus has no

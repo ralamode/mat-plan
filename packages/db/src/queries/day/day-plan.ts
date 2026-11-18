@@ -30,7 +30,7 @@ import {
   prescriptionTerms,
 } from './prescription-terms';
 import { previousKey, type PreviousKey, previousRows } from './previous';
-import { programRowOf } from './program-rows';
+import { byFirstLogged, programItemKey, programRowOf } from './program-rows';
 import { type DayAssignment, dayAssignments, weekSlotsOn } from './scheduled';
 import { readRowValues } from './stored-row-values';
 
@@ -520,10 +520,7 @@ function setsOf(
 
 /** The first-logged of some rows: the lowest set where `bySet`, else the earliest; `created_at`, then id. */
 function firstOf(rows: readonly LoggedRow[], bySet = false): LoggedRow | undefined {
-  return [...rows].sort(
-    (x, y) =>
-      (bySet ? x.set! - y.set! : 0) || x.createdAt.getTime() - y.createdAt.getTime() || x.id - y.id,
-  )[0];
+  return [...rows].sort(byFirstLogged(bySet))[0];
 }
 
 function snapshotOf(row: LoggedRow): string {
@@ -615,7 +612,7 @@ function dayWorkout(
   const removed = new Map<string, LoggedRow[]>();
   for (const row of draft.rows) {
     if (claimed.has(row.id)) continue;
-    const key = row.prescriptionId !== null ? `p:${row.prescriptionId}` : `m:${row.movementId}`;
+    const key = programItemKey(row);
     removed.set(key, [...(removed.get(key) ?? []), row]);
   }
   for (const rows of removed.values()) {
@@ -635,9 +632,7 @@ function dayWorkout(
           : unitSchema.parse(first.unit),
       superset: null,
       rows: [...rows]
-        .sort(
-          (x, y) => x.set! - y.set! || x.createdAt.getTime() - y.createdAt.getTime() || x.id - y.id,
-        )
+        .sort(byFirstLogged(true))
         .map((row) => ({ set: row.set!, previous: null, logged: loggedOf(row, ctx.values) })),
     });
   }

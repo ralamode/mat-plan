@@ -36,6 +36,7 @@ vi.mock('./profiles', () => ({
 }));
 
 import type { StrengthMonthRow } from '@mat-plan/db';
+import { readCsvLine } from '@mat-plan/shared/csv';
 
 const { buildExportEntries } = await import('./export');
 
@@ -55,6 +56,12 @@ const flatRow = (over: Partial<StrengthMonthRow> = {}): StrengthMonthRow => ({
   dayRole: 'strength_a',
   sessionType: 'strength',
   sessionId: 1,
+  entrySessionId: 1,
+  createdAt: new Date('2026-03-02T12:00:00Z'),
+  prescriptionId: null,
+  prescriptionSet: null,
+  isProgramRow: false,
+  workoutName: null,
   setId: 1,
   setIdx: 0,
   reps: 5,
@@ -69,7 +76,7 @@ const flatRow = (over: Partial<StrengthMonthRow> = {}): StrengthMonthRow => ({
 
 const prescribedCellOf = (csv: string) => {
   const [header, row] = csv.split('\n');
-  return row.split(',')[header.split(',').indexOf('prescribed')];
+  return readCsvLine(row)[readCsvLine(header).indexOf('prescribed')];
 };
 
 const strengthCsv = async () => {

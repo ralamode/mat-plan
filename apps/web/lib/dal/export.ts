@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   bodyweightMonthRows,
+  foldStrengthMonth,
   type HouseholdScope,
   loggedMonths,
   programDayRows,
@@ -16,7 +17,6 @@ import {
   buildStrengthLog,
   buildZip,
   checkinsPath,
-  type StrengthLogRow,
   strengthLogPath,
   type ZipEntry,
   liveMatchesByKey,
@@ -42,81 +42,6 @@ import { getProfileByPublicId } from './profiles';
  * not one per month per file. The scope is an explicit parameter from here down — `lib/dal` is the only
  * layer allowed to hold it ambiently (invariant 8), and this module is that layer.
  */
-
-/**
- * A folded row plus the two values the `prescribed` resolution needs and the CSV does NOT emit.
- *
- * ⚠️ They are kept OFF `StrengthLogRow`, which is the byte contract for the file: a resolution input
- * is not a column, and widening the contract type to carry one is how a column appears by accident.
- */
-type FoldedStrengthRow = StrengthLogRow & {
-  /** `null` = never snapshotted; `''` = a real frozen rendering. The distinction is load-bearing. */
-  prescribedSnapshot: string | null;
-  /**
-   * Nullable because `entries.movement_id` is — the tagged union lets an entry name a metric
-   * instead. This query inner-joins `movements`, so a strength row always has one; typed honestly
-   * rather than asserted, and a null simply misses the live map and falls through to `''`.
-   */
-  movementId: number | null;
-};
-
-/** Fold the flat (entry × set × quantity) join into one row per movement. */
-function foldStrengthRows(
-  rows: Awaited<ReturnType<typeof strengthMonthRows>>,
-): FoldedStrengthRow[] {
-  const byEntry = new Map<number, FoldedStrengthRow>();
-  // Set identity is the SET ROW, not its index — a partial skip leaves gaps in `idx`.
-  const setsByEntry = new Map<number, Map<number, StrengthLogRow['sets'][number]>>();
-
-  for (const r of rows) {
-    if (!byEntry.has(r.entryId)) {
-      byEntry.set(r.entryId, {
-        date: r.date,
-        dayRole: r.dayRole,
-        sessionType: r.sessionType,
-        movementSlug: r.movementSlug,
-        movementId: r.movementId,
-        prescribedSnapshot: r.prescribedSnapshot,
-        status: r.entryStatus,
-        sets: [],
-        prescribed: '',
-        notes: r.notes ?? '',
-      });
-      setsByEntry.set(r.entryId, new Map());
-    }
-    if (r.setId === null) continue; // a skipped movement: zero set rows, by design
-
-    const sets = setsByEntry.get(r.entryId)!;
-    if (!sets.has(r.setId)) {
-      sets.set(r.setId, {
-        reps: r.reps,
-        // `?? false` because these arrive through a LEFT JOIN — null means "no set row", which the
-        // `r.setId === null` guard above already skipped, so this is a type narrowing, not a default.
-        isBodyweight: r.isBodyweight ?? false,
-        isBand: r.isBand ?? false,
-        quantities: [],
-        status: r.setStatus ?? '',
-      });
-    }
-    if (r.slot !== null && r.unit !== null && r.valueNum !== null) {
-      const set = sets.get(r.setId)!;
-      (set.quantities as ExportQuantityMutable[]).push({
-        slot: r.slot as never,
-        unit: r.unit as never,
-        value: r.valueNum,
-      });
-    }
-  }
-
-  for (const [entryId, entry] of byEntry) {
-    entry.sets = [...setsByEntry.get(entryId)!.values()];
-  }
-  // Map preserves insertion order, which is the query's ORDER BY — so the contract's row order
-  // survives the fold without a second sort.
-  return [...byEntry.values()];
-}
-
-type ExportQuantityMutable = StrengthLogRow['sets'][number]['quantities'][number];
 
 /**
  * The FALLBACK half of the `prescribed` column: today's program, for rows that were never
@@ -164,7 +89,8 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
   const entries: ZipEntry[] = [];
 
   for (const month of months) {
-    const strengthRows = foldStrengthRows(
+    // The fold lives beside the query (FAM-1 14a), so `db:verify` proves the same function this runs.
+    const strengthRows = foldStrengthMonth(
       await strengthMonthRows(db, { profilePublicId, month, scope }),
     );
 
