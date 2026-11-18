@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/clear-events.ts b/packages/db/src/queries/clear-events.ts
+index a484bb57..fbaa3c46 100644
+--- a/packages/db/src/queries/clear-events.ts
++++ b/packages/db/src/queries/clear-events.ts
+@@ -52,7 +52,7 @@ export function clearEventOn(args: {
+   scope: HouseholdScope;
+   day: string;
+ }): SQL {
+-  return and(ownedOnDay(args), eq(schema.entries.hideReason, HIDE_REASON.clear_day))!;
++  return and(eq(schema.entries.activityDate, args.day), eq(schema.entries.hideReason, HIDE_REASON.clear_day))!;
+ }
+ 
+ /**

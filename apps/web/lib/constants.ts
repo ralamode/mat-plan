@@ -915,7 +915,10 @@ export const AMEND_COPY = {
   change: 'Change',
   save: 'Save',
   cancel: 'Cancel',
-  /** The inline ✕'s name for a row with no `SingleValueCopy` (lane C's set rows). */
+  /**
+   * The inline ✕'s name for a row with no `SingleValueCopy`: lane C's day-page rows (set rows and
+   * single-value cards).
+   */
   cancelLabel: inlineCancelLabel,
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */

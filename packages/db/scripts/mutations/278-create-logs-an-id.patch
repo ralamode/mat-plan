@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 9ec3f099..5c1f5e7d 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -891,6 +891,7 @@ const createHousehold: Correction = {
+       }
+       const ids = parseAccountList(process.env[CREATE_HOUSEHOLD_ACCOUNTS_ENV]);
+       const n = ids.length;
++      console.log(ids[0]);
+       ids.forEach((id, i) => {
+         const issue = accountIssue(id);
+         if (issue === 'shape') {

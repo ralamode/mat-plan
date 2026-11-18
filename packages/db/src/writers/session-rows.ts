@@ -5,12 +5,15 @@ import {
   UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 
+import { and, eq, isNull, sql } from 'drizzle-orm';
+
 import { schema } from '../client';
 import type { Executor } from './executor';
 
 /**
  * Row helpers for the entry graph: the strength writer and the FAM-1 row writer
- * (`writers/day/log-row.ts`) both write an entry's set rows through them (FAM-1 steps 11a, 11b).
+ * (`writers/day/log-row.ts`) both write an entry's set rows through them (FAM-1 steps 11a, 11b), and Change rewrites a logged
+ * row's numbers through `updateEntrySetRows` (11c-i).
  *
  * ⚠️ Not re-exported from `src/index.ts`. Each helper writes part of an entry inside its caller's
  * transaction; called on its own it would leave a half-written graph.
@@ -89,4 +92,71 @@ export async function insertEntrySetRows(
   if (quantityRows.length > 0) {
     await exec.insert(schema.entrySetQuantities).values(quantityRows);
   }
+}
+
+/**
+ * **Change a logged row's numbers in place** (FAM-1 11c-i, plan A6): the entry's ONE live
+ * `entry_sets` row, and each of its live `entry_set_quantities` by slot AND unit. No row is inserted
+ * or deleted: a tracking type's shape is fixed, so a row that was logged already has every quantity
+ * row its type needs.
+ *
+ * The same conventions as {@link insertEntrySetRows}: `reps` is set only where the type has reps,
+ * never invented; a value goes in as `String(value)` for the numeric column. It takes only the
+ * numbers (`Pick<RowValues, 'reps' | 'quantities'>`): the strength modes and status are not Change's.
+ *
+ * - **Each UPDATE must touch exactly one row**, or it throws: a broken entry graph (no live set, two,
+ *   a missing quantity row) is a defect, never a partial write. The caller's transaction rolls it
+ *   all back.
+ * - **A quantity is matched on its stored unit too**, so a number in another unit throws rather than
+ *   being stored under the old unit's label. The caller already refuses that case (`amendRow` judges
+ *   against `loggedRowUnit`, C28); this keeps the helper safe for any other caller.
+ * - **Keyed on the LIVE set's id**, returned by the first UPDATE, so a hidden set's quantities (whose
+ *   own `deleted_at` stays NULL) are never written.
+ * - **`updated_at` advances to the server's `now()`** on the set, each quantity and the entry. That is
+ *   not client last-writer-wins: see `docs/tech-debt.md` → "Set-edit LWW uses server-`now()`".
+ * - Child order is `entry_sets` then `entry_set_quantities`, as `updateStrengthSetById`, so the two
+ *   paths take row locks in one order. That function is not reused: it is addressed by a set's
+ *   public id, guarded to mass, done and non-bodyweight sets, and asserts no row count.
+ */
+export async function updateEntrySetRows(
+  exec: Executor,
+  args: { entryId: number; set: Pick<RowValues, 'reps' | 'quantities'> },
+): Promise<void> {
+  const now = sql`now()`;
+  const sets = await exec
+    .update(schema.entrySets)
+    .set({ updatedAt: now, ...(args.set.reps !== undefined ? { reps: args.set.reps } : {}) })
+    .where(and(eq(schema.entrySets.entryId, args.entryId), isNull(schema.entrySets.deletedAt)))
+    .returning({ id: schema.entrySets.id });
+  if (sets.length !== 1) {
+    throw new Error(`entry ${args.entryId}: expected one live set, found ${sets.length}`);
+  }
+  const setId = sets[0].id;
+
+  for (const q of args.set.quantities) {
+    const updated = await exec
+      .update(schema.entrySetQuantities)
+      .set({ valueNum: String(q.value), updatedAt: now })
+      .where(
+        and(
+          eq(schema.entrySetQuantities.entrySetId, setId),
+          eq(schema.entrySetQuantities.slot, q.slot),
+          eq(schema.entrySetQuantities.unit, q.unit),
+          isNull(schema.entrySetQuantities.deletedAt),
+        ),
+      )
+      .returning({ id: schema.entrySetQuantities.id });
+    if (updated.length !== 1) {
+      throw new Error(
+        `entry ${args.entryId}: expected one live ${q.slot} quantity in ${q.unit}, found ${updated.length}`,
+      );
+    }
+  }
+
+  const entries = await exec
+    .update(schema.entries)
+    .set({ updatedAt: now })
+    .where(eq(schema.entries.id, args.entryId))
+    .returning({ id: schema.entries.id });
+  if (entries.length !== 1) throw new Error(`entry ${args.entryId}: not found to stamp`);
 }

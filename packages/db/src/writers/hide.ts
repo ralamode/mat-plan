@@ -2,12 +2,14 @@ import {
   HIDE_REASON,
   RESTORE_REASON,
   SEED_METRIC_KEYS,
+  type ClearEvent,
   type HideReason,
   type RestoreReason,
 } from '@mat-plan/shared';
 import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 
 import { schema } from '../client';
+import { clearEventOn, hiddenAtText, ownedOnDay } from '../queries/clear-events';
 import type { HouseholdScope } from '../scope';
 import {
   BODYWEIGHT_DAY_UNIQUE_INDEX,
@@ -56,14 +58,6 @@ import { isUniqueViolationOn } from './unique-violation';
 const uuidArray = (ids: readonly string[]) => sql`${sql.param(ids)}::uuid[]`;
 
 /**
- * `deleted_at`, rendered as the fixed-format UTC text a token is.
- *
- * ⚠️ Used for both the SELECT that produces a token and the UPDATE that returns one, so the two can
- * never disagree about the format; `queries/hidden-entries.ts` imports it for the same reason.
- */
-export const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
-
-/**
  * 🔴 **The one un-hide (V1-9b B2-0).** Every writer that makes a hidden entry live sets this, so the
  * hide reason goes in the same statement as `deleted_at`: a live row with a reason is refused by
  * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`). `no-bare-unhide.test.ts` fails on any other
@@ -71,14 +65,6 @@ export const hiddenAtText = sql<string>`to_char(${schema.entries.deletedAt} at t
  * must spread it: whichever of 11c and B2-0 lands second makes that edit.
  */
 export const UNHIDE = { deletedAt: null, hideReason: null } as const;
-
-/** The owned athlete's entries on one day: the join to `profiles` is the caller's. */
-function ownedOnDay(args: { profilePublicId: string; scope: HouseholdScope; day: string }): SQL {
-  return and(
-    isLiveProfile(args.profilePublicId, args.scope),
-    eq(schema.entries.activityDate, args.day),
-  )!;
-}
 
 /**
  * The entries hidden under one event. ⚠️ A **bound** text parameter cast in SQL, never a `Date`: a JS
@@ -543,7 +529,7 @@ async function restoreOne(
 // ── Clear this day (V1-9b B2-0) ─────────────────────────────────────────────────────────────────
 
 /** `count` is the entries under the token carrying `'clear_day'`, the same on a first call and a replay. */
-export type ClearDayResult = { hiddenAt: string; count: number } | { notFound: true };
+export type ClearDayResult = ClearEvent | { notFound: true };
 
 /**
  * Hide every live entry of one athlete on one day as ONE event, with the reason `'clear_day'`
@@ -572,7 +558,7 @@ export async function clearDay(
       .orderBy(schema.entries.id)
       .for('update', { of: schema.entries });
 
-    const clearEvent = and(ownedOnDay(args), eq(schema.entries.hideReason, HIDE_REASON.clear_day))!;
+    const clearEvent = clearEventOn(args);
     let hiddenAt: string;
     if (live.length > 0) {
       const hidden = await hideRows(
@@ -610,7 +596,8 @@ export type RestoreClearResult = { items: RestoreItemResult[] } | { notFound: tr
  *
  * ⚠️ **Its replay differs from `restoreHidden`'s, by construction:** the ids come from state a
  * successful restore erases (the token and the reason), so a Restore all retried after a lost
- * response answers `notFound`. B1-2's action reads that as "already restored", never as a refusal. A
+ * response answers `notFound`. B1-2's action reads that as "nothing left to restore" (0 and 0), never
+ * as a refusal. A
  * concurrent double tap is unaffected: both read the ids before either commits, and the item locks
  * settle the rest.
  */
@@ -624,13 +611,7 @@ export async function restoreClear(
         .select({ publicId: schema.entries.publicId })
         .from(schema.entries)
         .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-        .where(
-          and(
-            ownedOnDay(args),
-            hiddenUnder(args.hiddenAt),
-            eq(schema.entries.hideReason, HIDE_REASON.clear_day),
-          ),
-        )
+        .where(and(clearEventOn(args), hiddenUnder(args.hiddenAt)))
     ).map((r) => r.publicId);
     if (ids.length === 0) return { notFound: true };
     return { items: await restoreHidden(tx, { ...args, entryPublicIds: ids }) };

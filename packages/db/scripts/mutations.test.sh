@@ -12,6 +12,10 @@
 set -uo pipefail
 
 RUNNER_SRC="$(cd "$(dirname "$0")" && pwd)/mutations.mjs"
+SCRIPTS_SRC="$(cd "$(dirname "$0")/../../../.github/scripts" && pwd)"
+# The runner takes the machine-wide heavy-run slot (DX-18 D3). Each setup points it at the throwaway
+# dir, so the test never touches a live slot; CI is unset so the slot is exercised, not skipped.
+unset CI GITHUB_ACTIONS MAT_PLAN_HEAVY_SLOT MAT_PLAN_HEAVY_SLOTS MAT_PLAN_HEAVY_SLOT_HELD
 pass=0
 fail=0
 pids=()
@@ -35,8 +39,10 @@ setup() {
   [ -n "${T:-}" ] && rm -rf "$T"
   T="$(mktemp -d)"
   R="$T/repo"
-  mkdir -p "$R/packages/db/scripts/mutations" "$R/packages/db/src" "$T/bin"
+  mkdir -p "$R/packages/db/scripts/mutations" "$R/packages/db/src" "$R/.github/scripts" "$T/bin"
   cp "$RUNNER_SRC" "$R/packages/db/scripts/mutations.mjs"
+  cp "$SCRIPTS_SRC/heavy-slot.mjs" "$SCRIPTS_SRC/pid-lock.mjs" "$R/.github/scripts/"
+  export MAT_PLAN_HEAVY_SLOT_PATH="$T/heavy-slot.json"
   printf '%s' "$BASE" >"$R/packages/db/src/a.ts"
   printf '%s' "$BASE_B" >"$R/packages/db/src/b.ts"
   git -C "$R" init -q
@@ -152,7 +158,7 @@ check "a patch that creates a file: refused, exit 1, nothing created" \
   '[ "$(code)" = 1 ] && out_has "03-creates-a-file.patch: creates, deletes" && [ ! -e "$R/packages/db/src/c.ts" ]'
 
 # ── Signals: restore, end the gate's whole group, die by the signal ─────────────────────────────
-for pair in SIGTERM:143 SIGINT:130 SIGHUP:129; do
+for pair in SIGTERM:143 SIGINT:130 SIGHUP:129 SIGQUIT:131; do
   sig="${pair%%:*}"; want="${pair##*:}"
   setup; start_hanging || continue
   kill -s "${sig#SIG}" "$RUNNER"; wait "$RUNNER" 2>/dev/null; got=$?
@@ -197,13 +203,26 @@ setup; start_hanging && {
 }
 
 # ── One run per worktree ────────────────────────────────────────────────────────────────────────
+# The slot is bypassed for the second run, so the worktree lock is what refuses it.
 setup; start_hanging && {
-  node "$R/packages/db/scripts/mutations.mjs" >"$T/out2" 2>&1; second=$?
+  MAT_PLAN_HEAVY_SLOT=off node "$R/packages/db/scripts/mutations.mjs" >"$T/out2" 2>&1; second=$?
   check "a second run while the first is live: refuses" '[ "$second" = 1 ] && grep -qF "in flight in this worktree" "$T/out2"'
   check "…and leaves the first run's patch and journal alone" 'file_is_patched && ! journal_gone'
   kill -TERM "$RUNNER"; wait "$RUNNER" 2>/dev/null
   check "…and the first run still restores when stopped" 'file_is_original && journal_gone && lock_gone'
 }
+
+# ── The heavy-run slot (DX-18 D3) ───────────────────────────────────────────────────────────────
+setup; start_hanging && {
+  check "a live run holds the heavy-run slot" '[ -f "$MAT_PLAN_HEAVY_SLOT_PATH" ]'
+  node "$R/packages/db/scripts/mutations.mjs" >"$T/out2" 2>&1; second=$?
+  check "a second run while the slot is held: exit 2, names the holder" '[ "$second" = 2 ] && grep -qF "heavy-run slot held by" "$T/out2" && grep -qF "db:mutations" "$T/out2"'
+  check "…and leaves the first run's patch and journal alone" 'file_is_patched && ! journal_gone'
+  kill -TERM "$RUNNER"; wait "$RUNNER" 2>/dev/null
+  check "a run stopped by a signal frees the slot" 'file_is_original && [ ! -e "$MAT_PLAN_HEAVY_SLOT_PATH" ]'
+}
+setup; mode red-right; run
+check "a finished run frees the slot" '[ ! -e "$MAT_PLAN_HEAVY_SLOT_PATH" ]'
 
 echo
 echo "mutations.test.sh: $pass passed, $fail failed"

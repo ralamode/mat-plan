@@ -5,6 +5,7 @@ import { CATALOG_BATCH_02 } from './batch-02';
 import { CATALOG_BATCH_03 } from './batch-03';
 import { CATALOG_BATCH_04 } from './batch-04';
 import { CATALOG_BATCH_05 } from './batch-05';
+import { CATALOG_BATCH_07 } from './batch-07';
 
 /**
  * The movement library ([spec](../../../../../docs/specs/cat-3-movement-library.md), rule 3): the
@@ -13,7 +14,7 @@ import { CATALOG_BATCH_05 } from './batch-05';
  * 🔴 **Every entry here was reviewed by the maintainer, in a batch** (decision K9), and the library
  * is authored and reviewed in-house (K16). An entry, and any later edit to one, needs its line in
  * `./approved.json`; its slug and tracking type need their line in `./shipped.json`
- * (`../approvals.test.ts`). A batch PR is merged by the maintainer.
+ * (`../approvals.test.ts`). A batch PR merges only once every row of its review reads "lgtm".
  *
  * ⚠️ **Import this through `@mat-plan/shared/catalog/data`, never the root barrel**: it grows to
  * hundreds of entries and must not reach a client bundle (`../catalog.test.ts`).
@@ -26,6 +27,7 @@ export const CATALOG_MOVEMENTS: readonly CatalogMovement[] = [
   ...CATALOG_BATCH_03,
   ...CATALOG_BATCH_04,
   ...CATALOG_BATCH_05,
+  ...CATALOG_BATCH_07,
 ];
 
 /** The slug of every entry: what a lookup by slug (an alias, a supervision label) reads. */

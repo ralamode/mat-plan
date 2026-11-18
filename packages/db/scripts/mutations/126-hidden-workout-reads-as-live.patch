@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 845a1a22..f8964007 100644
+index 411b53f3..351603ca 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -235,7 +235,7 @@ export async function rowWorkout(
-     id: workout.id,
-     blockId: workout.blockId,
-     name: workout.name,
--    live: workout.live === true,
-+    live: true,
-   };
+@@ -194,7 +194,7 @@ export async function rowWorkout(
+     )
+     .limit(1);
+   if (!row) return null;
+-  return { id: row.id, blockId: row.blockId, name: row.name, live: row.live === true };
++  return { id: row.id, blockId: row.blockId, name: row.name, live: true };
  }
  
+ /**

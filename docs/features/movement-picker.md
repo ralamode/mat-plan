@@ -32,6 +32,7 @@ path and **creating** the deliberate one.
 - **PR 4** — mounts it in the log form, adds Decision 5's two reads, and owes a UX panel plus
   three-width screenshots.
 - **CAT-3 B1** — the list reads the library's search (short forms, similar names); invariant 13.
+- **CAT-3 B2-i** — every row's second line, the supervision label and "How to"; invariant 14.
 
 ## The map
 
@@ -68,8 +69,8 @@ path and **creating** the deliberate one.
    (AGENTS.md; strength-logging invariant 1).
 
    **`trackingType`** (FAM-1 step 0b) is one of the seven `TRACKING_TYPES`: how the item is logged,
-   set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The program
-   builder's item picker (step 9) shows it under each name. ⚠️ **No read fills it yet.** The column
+   set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The
+   movement picker shows it on each row's second line (invariant 14). ⚠️ **No read fills it yet.** The column
    arrives in step 3 and the picker's read in step 6a, homed in `packages/db/src/queries/program/`
    ([program-writers.md](./program-writers.md)), not in the `queries/movement-options.ts` this
    guide's frontmatter note expects. Until then only fixtures build the DTO: the tests here, and
@@ -91,7 +92,9 @@ path and **creating** the deliberate one.
    throw.** A review argued a crafted body makes it an _expected_ refusal owed a typed envelope; the
    maintainer kept Decision 2, and `C4m` (merge) — the chunk that makes a dead id genuinely reachable
    — owns turning it into one. ⚠️ The error surfaces at `app/error.tsx` and the form is lost; the
-   docblock used to claim otherwise.
+   docblock used to claim otherwise. ⚠️ Since `V1-9b` B1-2 the DAL rethrows it as a `DbWriteError`
+   (`logStrengthSession.resolveMovements failed (MovementNotAvailableError)`), so `C4m` must catch it
+   inside the wrap or return it as a writer result; an `instanceof` in the action never matches.
 
 7. ✅ **The `prescribed` match compares `movement_id` on BOTH sides, and a rename cannot move it.**
    **Closed, not pending.** This invariant used to read "after C4r renames a row, chunk 2's slug match
@@ -127,14 +130,15 @@ path and **creating** the deliberate one.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
     union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
-    - a row is a `button role="checkbox"` with `aria-checked`, in two columns (name and its meta
-      line, then a fixed box), so ticks line up at 360px; no `aria-current`;
+    - a row is a `button role="checkbox"` with `aria-checked`, the box on the LEFT and the text
+      after it (CAT-3 B2, the accepted prototype's), so ticks line up whether or not a row has
+      "How to" beside it, and a thumb aimed at the box never lands on it; no `aria-current`;
     - a tap toggles and the sheet stays open; Enter selects the one unambiguous match (never
       deselects, never creates) and clears the search;
     - "create" is the caller's: the button sits at the TOP of the body (with the keyboard up, the
       footer is about 110 rows down), is withheld when the text already names a movement (invariants 4 and 13),
       and hands the typed text to `onCreate`. The component still never writes (invariant 2);
-    - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts ("2 movements match some of your words") and `movementNameSchema`'s messages;
+    - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts, `movementNameSchema`'s messages and the row's second line (invariant 14), which replaced the caller's `describe`;
     - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
     - `onReturned` passes through to the sheet: the caller's moment for a page-level message after a close;
     - `matchable` is the one place a `MovementOptionDTO` becomes what the matcher reads; `searchPickerOptions` and `listedAs` both read through it, and the caller's "is this already an item" asks `listedAs`, never a copy;
@@ -180,10 +184,49 @@ path and **creating** the deliberate one.
       call on a desktop CPU (M1 Pro, Node 26), on the deferred value; not measured on a phone. C30's
       measure at 500 entries is the contract's.
 
-    ⚠️ **The heading is interim:** see `MOVEMENT_PICKER_COPY.near`. The picker's tests pin no
+    **The headings are the accepted prototype's**, "Did you mean" and "Has some of your words" (spec P5 as amended, 2026-11-17; B2-i). The picker's tests pin no
     result order beyond an exact hit first; the order is the contract's (C30). A near miss on a
     still-typing last word (`bulgara`) comes as a proposal. "Did you mean" on a new item's name is
     `PICK-2`'s (spec § Interactions).
+
+14. **Every row says how it is logged and what it needs, and may carry "How to"** (CAT-3 B2-i;
+    [spec](../specs/cat-3-movement-library.md) P13, P14, P16). In both modes:
+    - **The second line is `rowMeta`:** the tracking label, then the equipment in words, "No
+      equipment" for an empty set, or "Custom item" for a household's own item, which is never
+      called "No equipment". The row's tag joins that line with " · ", so a row stays short enough
+      that two fit with a phone's keyboard up. A household item carries no tag: its second line
+      already says what it is.
+    - **A library option IS the contract's `CatalogOption`** (the DTO's catalog arm), taxonomy
+      required, plus the legacy `group` where an old built-in has one. A library entry has no group:
+      it is found by search, carries no group tag, and is left out of the legacy browse groups
+      (invariant 11) until B3's tree. ⚠️ A read that has not got the equipment set must not build a
+      library option: `equipment: []` MEANS "No equipment" and passes that filter.
+    - **The supervision label** ("Learn with a coach present") is its own line between the name
+      and the second line, at full contrast in every row state, and never replaced by a tag.
+    - **The row's accessible name reads its parts apart** ("Pull-Up, Learn with a coach present,
+      Reps · Pull-up bar"), with hidden separators: stacked spans carry no space between them.
+    - **"How to" is the caller's loader, by public id** (`howTo(publicId)`, on `MovementPicker`,
+      `ItemPicker` and `WorkoutEditorScreen`): the steps are read by slug on the server, and the
+      picker imports no server action (invariant 2). A failure is a rejection. With no loader, no
+      row shows the button; with one, it shows only on a library row whose entry
+      `hasInstructions`, and a row without steps keeps the column empty so rows end at one edge.
+    - **One box per row ON SCREEN**, keyed `${section}:${publicId}`: a movement listed twice
+      (Recent and its group) opens one box, under the row tapped. Each load has a number, and an
+      answer applies only while that load is still the open one, read from state, so a reopen, a
+      search change (typing, Enter, the takeover) or opening another row drops a late answer.
+    - **The box** is a region named by its `h4` ("How to do X"), busy while loading: **the
+      supervision label first, read from the option** (so a loader that leaves it out cannot drop
+      it, K17), then the steps; "No steps for this movement yet." for `null` or blank steps; on
+      failure, "Try again". "Try again" and "Hide" put focus on "How to" before the box changes.
+      `aria-controls` is set only while open.
+    - **The failure is said in the sheet's one status region**, derived from the box: it stands
+      through a retry (so the region does not fall back to re-reading the search count), goes with
+      the box, and wins over the caller's `notice` until a tick silences it. When it ends (Hide, a successful retry), the region falls back to the search count or the notice, which is read again: one re-read on purpose, since the failure no longer stands.
+    - ⚠️ **No production caller passes a loader yet.** It is wired when lane P's option read
+      carries the slug (P11): the page's loader takes the public id, finds the row in the caller's
+      own option read, and calls `catalogHowToOf`. That is a READ, so the page owes a choice the
+      repo's rule makes visible (Route Handlers for reads): a Route Handler, or an action recorded
+      as the exception, with an adapter turning a refusal into a rejection.
 
 ## Traps
 

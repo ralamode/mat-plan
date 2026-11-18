@@ -55,6 +55,17 @@ describe('databaseNameOf', () => {
     expect(databaseNameOf('postgres://u:p@host.neon.tech/')).toBeNull();
   });
 
+  it('🔴 decodes the path the way pg-connection-string does, so an escaped name is the real one', () => {
+    expect(databaseNameOf('postgres://u:p@host.neon.tech/mat_plan_%70review')).toBe(
+      PREVIEW_DB_NAME,
+    );
+    expect(databaseNameOf('postgres://u:p@host.neon.tech/%6Dat_plan')).toBe('mat_plan');
+  });
+
+  it('fails closed to null on a malformed escape rather than guessing a name', () => {
+    expect(databaseNameOf('postgres://u:p@host.neon.tech/mat_plan_%E0%A4%A')).toBeNull();
+  });
+
   it('returns null for an unparseable string rather than throwing', () => {
     expect(databaseNameOf('not a url')).toBeNull();
     expect(databaseNameOf('')).toBeNull();

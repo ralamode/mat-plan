@@ -2,6 +2,8 @@
 // The canonical home for domain enums/constants (AGENTS.md constants convention):
 // define a value once here, import it in the app, engine, and DB seed.
 export * from './db-environment';
+// PRIV-3 RC: the one Clerk user-id shape (the two account corrections and `apps/web/lib/env.ts`).
+export * from './clerk';
 export * from './date';
 // SCHED-1 1a: the pure calendar-date arithmetic (moved from apps/web/lib/date.ts) and the weekday
 // vocabulary. No timezone, no `Intl`.
@@ -36,6 +38,7 @@ export * from './text';
 export * from './profiles';
 export * from './bodyweight';
 export * from './practice-shapes';
+export * from './clear-day-shapes';
 export * from './strength';
 export * from './strength-session';
 export * from './routine';

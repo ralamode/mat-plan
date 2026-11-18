@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/clear-events.ts b/packages/db/src/queries/clear-events.ts
+index 8bbb19e7..d78574e0 100644
+--- a/packages/db/src/queries/clear-events.ts
++++ b/packages/db/src/queries/clear-events.ts
+@@ -71,7 +71,7 @@ export async function clearEventsForDay(
+     .select({ hiddenAt: hiddenAtText, count: sql<number>`count(*)::int` })
+     .from(schema.entries)
+     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+-    .where(and(clearEventOn(args), isNotNull(schema.entries.deletedAt)))
++    .where(and(ownedOnDay(args), isNotNull(schema.entries.deletedAt)))
+     .groupBy(schema.entries.deletedAt)
+     .orderBy(desc(schema.entries.deletedAt));
+ }
