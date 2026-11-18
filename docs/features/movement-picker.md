@@ -265,6 +265,13 @@ path and **creating** the deliberate one.
       the whole list; with matches the filters hide, nothing else is listed (a kid reads a browse
       there as results for the query, and the accepted prototype shows it only when nothing
       matched). Browsing with a filter shows no Recent and no Today's program.
+    - ⏳ **A built-in with no library data is never "not in your filters"** (until CAT-3 chunk R;
+      board call, 2026-11-17, after a UX lens): no filter can judge it, so its exact-hit tag is
+      "equipment and muscles not known yet" (`tagNoLibraryData`, never starting "No equipment",
+      which is a library row's equipment line) and the status says "whose equipment and muscles
+      aren't known yet". The Filters button shows only when some row `hasLibraryData`. ⚠️ The "N
+      more are not in your filters" line still counts them; splitting it needs a count from the
+      shared search (asked of the roadmap thread).
     - **The status counts each custom row as what it was found as**: a match when the unfiltered
       search matched anything, otherwise a near miss or a some-words row (P5, P9).
     - **A folded section opens itself while it holds a ticked row** (`FoldedSection`, shared with

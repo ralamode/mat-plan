@@ -532,7 +532,9 @@ export function MovementPicker({
   const tagFor = (option: MovementOptionDTO, inSearchResults: boolean) => {
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
     // An exact hit the filters would hide is listed anyway, and says why it is there (P8).
-    if (hitsOutside.has(option.publicId)) return COPY.tagNotInFilters;
+    if (hitsOutside.has(option.publicId)) {
+      return hasLibraryData(option) ? COPY.tagNotInFilters : COPY.tagNoLibraryData;
+    }
     // `also called` fires ONLY for a row the search found through another name, naming that alias:
     // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`). Otherwise it would
     // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
@@ -654,7 +656,9 @@ export function MovementPicker({
             : COPY.statusNone(0, 0);
     const reason = listed
       ? hitsOutside.has(listed.publicId)
-        ? COPY.statusAlreadyListedOutside(listed.name)
+        ? hasLibraryData(listed)
+          ? COPY.statusAlreadyListedOutside(listed.name)
+          : COPY.statusAlreadyListedNoData(listed.name)
         : COPY.statusAlreadyListed(listed.name)
       : typedNameIssue;
     return reason ? `${count} ${reason}` : count;

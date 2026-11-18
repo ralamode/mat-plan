@@ -182,6 +182,13 @@ export const MOVEMENT_PICKER_COPY = {
   /** After a headingless hit (panel row 15): the hit is a match too. */
   moreMatches: 'More matches',
   tagNotInFilters: 'not in your filters',
+  /**
+   * ⏳ The same place, for an old built-in the library has no data for yet: no filter can judge it,
+   * so "not in your filters" would claim its equipment is known and does not fit. Never starts
+   * "No equipment", which is a library row's equipment line (7a-ii / B2-ii UX lens; board call,
+   * 2026-11-17). TODO(CAT-3 chunk R): goes with `BuiltInWithoutLibrary`.
+   */
+  tagNoLibraryData: 'equipment and muscles not known yet',
   /** The create hint (multi mode) when the filters hide the similar name (row 9). */
   similarOutside: similarHidden,
   /** Single mode's footer hint in the same case: that, then the warning. */
@@ -238,6 +245,9 @@ export const MOVEMENT_PICKER_COPY = {
   /** The same, for a hit the filters would hide (P8; the prototype's words). */
   statusAlreadyListedOutside: (name: string) =>
     `Already in the list as ${name}, which is not in your filters.`,
+  /** ⏳ The same, for a built-in with no library data yet (see `tagNoLibraryData`). */
+  statusAlreadyListedNoData: (name: string) =>
+    `Already in the list as ${name}, whose equipment and muscles aren’t known yet.`,
 
   // ── The footer ──────────────────────────────────────────────────────────────────────────────────
   /**

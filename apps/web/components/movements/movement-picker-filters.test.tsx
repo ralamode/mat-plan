@@ -497,6 +497,21 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(hit.textContent).not.toContain(COPY.tagNotInFilters);
   });
 
+  it('⏳ an exact hit with no library data says its equipment is not known, never "not in your filters"', () => {
+    const bare = Object.fromEntries(
+      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
+    ) as MovementOptionDTO;
+    render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
+    open();
+    withLats();
+    type('front squat');
+    const hit = screen.getByRole('button', { name: /^Front Squat/ });
+    expect(hit.textContent).toContain(COPY.tagNoLibraryData);
+    expect(hit.textContent).not.toContain(COPY.tagNotInFilters);
+    expect(status()).toContain(COPY.statusAlreadyListedNoData(FRONT.name));
+    expect(status()).not.toContain(COPY.statusAlreadyListedOutside(FRONT.name));
+  });
+
   it('after a hit the rest are "More matches" (row 15)', () => {
     const THRUST = catalogOption('Barbell Hip Thrust', { primaryMuscle: MUSCLE.glutes });
     const SINGLE = catalogOption('Single-Leg Hip Thrusts', { primaryMuscle: MUSCLE.glutes });
