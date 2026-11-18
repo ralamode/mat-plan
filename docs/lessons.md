@@ -642,9 +642,12 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 - **gitleaks red on `approved.json`, rule `sumologic-access-token`.** → The default rule's keyword is
   `sumo`, so a catalog slug containing it (`sumo_deadlift`) followed by its 64-hex `entryHash` reads
-  as a token. → `.gitleaks.toml` allowlists exactly that line shape (a `sumo` slug, then 64 lowercase
-  hex). Another rule keyword in a future slug fails the same way: read the job log's `RuleID`, and
-  add a regex as tight as this one, never a path exclusion. (CAT-3 batch 7)
+  as a token. → `.gitleaks.toml` extends THAT rule with `[[rules.allowlists]]`, `condition = "AND"`,
+  the file's path plus a tight line regex: never a bare path exclusion and never the global
+  allowlist, which would hide the line from every rule. Another rule keyword in a future slug fails
+  the same way: read the job log's `RuleID` and copy that block. ⚠️ CI runs gitleaks **8.24.3** (the
+  action's default) while a local install is newer, so a local green does not prove a config feature
+  exists in CI; the push's gitleaks job does. (CAT-3 batch 7)
 
 ## Next.js 16
 
