@@ -437,6 +437,17 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     the server's default are the same string on any engine; a cut inside a flag or a family
     leaves a plainer emoji, never a broken one. The dialog's prefill and the writer's default
     are this one function (invariant 20 is the rule for the copy's name).
+29. **A row action answers `bad_value` for input its schema refuses, in the fake as in the real
+    action** (contract change C31, from #547's review). The real actions parse first and answer
+    `bad_value` for anything the schema refuses (12b's `writeRow`); the fake's un-tick and re-tick
+    answered `not_found` there and now answer the same word. `not_found` stays for an entry that
+    is not this athlete's on that day. **A hide token is one the app could have written**: `hiddenAtSchema`
+    (`packages/shared/src/hide.ts`, lane S's) refuses 30 February, month 13 and year 0000, which
+    have the token's shape and fail the database's cast, and hour 24 and second 60, which pass
+    the cast as the next midnight or minute and so are a second spelling of an instant.
+    Refusing all five keeps each token to one spelling, and `rowRetickSchema` takes that rule whole
+    (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
+    real action refuses before anything is read, and the fake changes nothing.
 
 ## Traps
 
