@@ -5,6 +5,7 @@ Lane P's step **6d-ii**, the second half of row 6d ([fam-1-family-program.md](./
 `reorderPrograms`, in `packages/db/src/writers/program/reorder-programs.ts`, behind
 `DayActions.reorderPrograms`. Step 15c (lane C) wires it.
 
+- **Approved:** the maintainer, 2026-11-18 ("Approve"); the code follows in its own PR after #617.
 - **Gates:** #601 (merged: `currentPrograms` orders `(rank, idx, id)` and returns each program's
   placing row) and **6d-i (#617)**, for the shared `lockAthletes`. The code is written after #617
   merges; this plan can be panelled now.
