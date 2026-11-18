@@ -239,7 +239,7 @@ describe('the unit tripwire — refuse, never convert', () => {
   // every loggable unit has a spelling, so the tripwire guards the units no form offers.
   // FAM-1 14a: a primary `count` now goes to `reps` (the Count rule), so the tripwire is pinned on a
   // unit that still has no spelling and is no count: `timing`.
-  it('REFUSES a unit with no spelling, naming the movement', () => {
+  it('REFUSES a unit with no spelling, naming the day but not the movement', () => {
     expect(() =>
       bodyOf(
         row({
@@ -256,6 +256,19 @@ describe('the unit tripwire — refuse, never convert', () => {
         }),
       ),
     ).toThrow(/logged in 'bool'[\s\S]*refuses rather than converting/);
+    // The message locates the row by its day; the slug, which can carry typed text, stays out of it.
+    let message = '';
+    try {
+      bodyOf(
+        row({
+          sets: [set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'bool', value: '1' }] })],
+        }),
+      );
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toContain('2020-07-20');
+    expect(message).not.toContain('front');
   });
 
   it('writes a Count in `count` in reps, with load empty (the maintainer, 2026-11-17)', () => {

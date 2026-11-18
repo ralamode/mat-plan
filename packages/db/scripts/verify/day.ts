@@ -30,6 +30,7 @@ import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { foldStrengthMonth, strengthMonthRows } from '../../src/queries/export-month';
+import { resolvePrescribed } from '../../src/queries/export-prescribed';
 import { readRowValues } from '../../src/queries/day/stored-row-values';
 import { amendRow } from '../../src/writers/day/amend-row';
 import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/log-row';
@@ -661,9 +662,9 @@ async function verifyExport(): Promise<void> {
         scope: f.H_SCOPE,
       });
       const file = buildStrengthLog(
-        // The live `prescribed` fallback is the DAL's (`resolvePrescribed`); every program row carries
-        // its snapshot, so the file is written from it.
-        foldStrengthMonth(rows).map((r) => ({ ...r, prescribed: r.prescribedSnapshot ?? '' })),
+        // `prescribed` through the DAL's own resolution; every program row carries its snapshot, so no
+        // live program is read (the fallback map is the DAL's, for never-snapshotted legacy rows).
+        foldStrengthMonth(rows).map((r) => ({ ...r, prescribed: resolvePrescribed(r, null) })),
       );
       assert.equal(
         file,
