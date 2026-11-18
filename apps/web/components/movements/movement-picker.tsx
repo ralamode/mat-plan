@@ -9,6 +9,7 @@ import {
   TRACKING_TYPE_LABELS,
   existingItem,
   filterMovementOptions,
+  equipmentFilterOrder,
   movementFilterCounts,
   movementFiltersOn,
   NO_MOVEMENT_FILTERS,
@@ -308,16 +309,22 @@ export function MovementPicker({
     if (target === 'heading') panelHeadingRef.current?.focus();
     if (target === 'filters') filtersButtonRef.current?.focus();
   });
+  /** The panel's own state, as a close and a reopen both leave it. */
+  const resetPanel = () => {
+    setPanelOpen(false);
+    setPanelNote(null);
+    setShownBeyond(new Set());
+  };
   const openPanel = () => {
     setHow(null);
     setPanelNote(null);
+    // The reopen's line was said; Back must not say it again (review of B2-ii).
+    setKeptNote('');
     setPanelOpen(true);
     focusNext.current = 'heading';
   };
   const closePanel = () => {
-    setPanelOpen(false);
-    setPanelNote(null);
-    setShownBeyond(new Set());
+    resetPanel();
     focusNext.current = 'filters';
   };
   const changeFilters = (change: FilterChange) => {
@@ -417,9 +424,7 @@ export function MovementPicker({
       setHow(null);
     }
     // The panel never reopens with the sheet: it opens on the list, filters kept (P7).
-    setPanelOpen(false);
-    setPanelNote(null);
-    setShownBeyond(new Set());
+    resetPanel();
     setKeptNote('');
     setKeptPending(open && filtersOn > 0);
   }
@@ -469,9 +474,10 @@ export function MovementPicker({
   // FOLDED value for emptiness — the point of panel 2 · 4, below.
   const deferredTrimmed = useDeferredValue(query).trim();
 
+  const matchableOptions = useMemo(() => matchable(data.options), [data.options]);
   const result = useMemo(
-    () => searchPickerOptions(data.options, deferredTrimmed, filters),
-    [data.options, deferredTrimmed, filters],
+    () => searchMovementOptions(matchableOptions, { query: deferredTrimmed, filters }),
+    [matchableOptions, deferredTrimmed, filters],
   );
   /**
    * The search with no filter, for what must not depend on them (panel row 9): whether the create
@@ -479,10 +485,10 @@ export function MovementPicker({
    * name new, so a duplicate is still a duplicate under one.
    */
   const unfiltered = useMemo(
-    () => (filtersOn > 0 ? searchPickerOptions(data.options, deferredTrimmed) : result),
-    [filtersOn, data.options, deferredTrimmed, result],
+    () =>
+      filtersOn > 0 ? searchMovementOptions(matchableOptions, { query: deferredTrimmed }) : result,
+    [filtersOn, matchableOptions, deferredTrimmed, result],
   );
-  const matchableOptions = useMemo(() => matchable(data.options), [data.options]);
   const hasLibrary = useMemo(
     () => data.options.some((option) => option.owner === 'catalog'),
     [data.options],
@@ -498,6 +504,19 @@ export function MovementPicker({
       chosen: count({ ...filters, equipment: 'chosen' }).total,
     };
   }, [panelOpen, matchableOptions, deferredTrimmed, filters]);
+  /** The equipment list's order, ranked with no muscle on, so ticking a muscle never reshuffles it. */
+  const equipmentOrder = useMemo(
+    () =>
+      panelOpen
+        ? equipmentFilterOrder(
+            movementFilterCounts(matchableOptions, {
+              query: deferredTrimmed,
+              filters: NO_MOVEMENT_FILTERS,
+            }),
+          )
+        : [],
+    [panelOpen, matchableOptions, deferredTrimmed],
+  );
 
   const byId = useMemo(
     () => new Map(data.options.map((o) => [o.publicId, o] as const)),
@@ -564,7 +583,8 @@ export function MovementPicker({
    * (UX2 B1, P5). 🔴 **Read before the filters** (panel row 9): a match the filters hide is still
    * a movement of that name, and a loud create beside it invites a permanent duplicate.
    */
-  const hasCandidates = shown > 0 || result.outsideFilters > 0;
+  const hasCandidates =
+    unfiltered.matches.length > 0 || unfiltered.near.length > 0 || unfiltered.someWords.length > 0;
   /**
    * The row the create hint names: the closest similar name, and only that. A some-words row is not
    * similar, and naming the first of several (by name) would point a new movement at an arbitrary
@@ -610,17 +630,28 @@ export function MovementPicker({
   const status = (() => {
     if (deferredTrimmed === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
     // With no matches: "No matches." once, then each list's own count, close spellings first (P5).
-    // Custom items set apart under a filter are on the screen, so they are counted (P9). With
-    // nothing in the filters, the prototype's line says how many are outside them (P10).
+    // Custom items set apart under a filter are on the screen, so they are counted (P9), each as
+    // what it was found as: the search fills near misses and some-words only when nothing at all
+    // matched, so with unfiltered matches every custom row is a match, and otherwise it is a near
+    // miss or a some-words row (review of B2-ii: a custom near miss was announced as "1 match.").
+    const customMatched = unfiltered.matches.length > 0 ? custom.length : 0;
+    const nearIdsUnfiltered = new Set(unfiltered.near.map((m) => m.option.publicId));
+    const customNear =
+      customMatched > 0 ? 0 : custom.filter((o) => nearIdsUnfiltered.has(o.publicId)).length;
+    const customSome = custom.length - customMatched - customNear;
     const count =
-      matches.length + custom.length > 0
-        ? COPY.statusCount(matches.length + custom.length)
-        : near.length + someWords.length > 0
-          ? COPY.statusNone(near.length, someWords.length)
+      matches.length + customMatched > 0
+        ? COPY.statusCount(matches.length + customMatched)
+        : near.length + customNear + someWords.length + customSome > 0
+          ? COPY.statusNone(near.length + customNear, someWords.length + customSome)
           : result.outsideFilters > 0
             ? COPY.statusOutsideOnly(result.outsideFilters)
             : COPY.statusNone(0, 0);
-    const reason = listed ? COPY.statusAlreadyListed(listed.name) : typedNameIssue;
+    const reason = listed
+      ? hitsOutside.has(listed.publicId)
+        ? COPY.statusAlreadyListedOutside(listed.name)
+        : COPY.statusAlreadyListed(listed.name)
+      : typedNameIssue;
     return reason ? `${count} ${reason}` : count;
   })();
 
@@ -684,6 +715,7 @@ export function MovementPicker({
                 heading={COPY.householdNotFiltered}
                 rows={rowsFrom(own.map((m) => m.option))}
                 mode={mode}
+                count
               />
               {fits.length > 0 ? (
                 <Section
@@ -713,8 +745,17 @@ export function MovementPicker({
         panelOpen
           ? panelNote && panelCounts
             ? panelNote.on === null
-              ? COPY.panelStatusChoice(panelNote.choice, panelCounts.counts.total)
-              : COPY.panelStatus(panelNote.choice, panelNote.on, panelCounts.counts.total)
+              ? COPY.panelStatusChoice(
+                  panelNote.choice,
+                  panelCounts.counts.total,
+                  deferredTrimmed !== '',
+                )
+              : COPY.panelStatus(
+                  panelNote.choice,
+                  panelNote.on,
+                  panelCounts.counts.total,
+                  deferredTrimmed !== '',
+                )
             : ''
           : howMessage || multiple?.notice || keptNote || status
       }
@@ -731,7 +772,8 @@ export function MovementPicker({
         multiple?.takeover ? undefined : (
           // Hidden, not unmounted, while the panel is open (panel row 11): the query and the button
           // focus returns to are kept.
-          <div hidden={panelOpen} className="flex items-center gap-2">
+          // Wraps at 200 % text, where the button beside the box would leave it a few letters wide.
+          <div hidden={panelOpen} className="flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor={SEARCH_ID}>
               {multiple?.searchLabel ?? COPY.searchLabel}
             </label>
@@ -784,7 +826,10 @@ export function MovementPicker({
               placeholder={multiple?.searchPlaceholder ?? COPY.searchPlaceholder}
               aria-describedby={sheetStatusId(SHEET_ID)}
               // The placeholder is the field's only visible label: muted text, not the 3.74:1 default.
-              className={cn(INPUT_CLASS, 'placeholder:text-muted-foreground min-w-0 flex-1')}
+              className={cn(
+                INPUT_CLASS,
+                'placeholder:text-muted-foreground min-w-48 flex-1 basis-48',
+              )}
             />
             {hasLibrary ? (
               <Button
@@ -893,6 +938,7 @@ export function MovementPicker({
           filters={filters}
           counts={panelCounts.counts}
           choiceTotals={{ any: panelCounts.any, chosen: panelCounts.chosen }}
+          equipmentOrder={equipmentOrder}
           onChange={changeFilters}
           onBack={closePanel}
           headingRef={panelHeadingRef}
@@ -975,10 +1021,23 @@ export function MovementPicker({
                       ? COPY.outsideMore(result.outsideFilters)
                       : COPY.outsideAll(result.outsideFilters, deferredTrimmed)
                   }
-                />
+                >
+                  {/* Its own Clear filters: after a scroll, the line at the top is out of reach. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => clearFilters('list')}
+                    className="shrink-0 text-base"
+                  >
+                    {COPY.clearFilters}
+                  </Button>
+                </ListLine>
               ) : null}
-              {/* Nothing passes: the list beneath stays the filtered one, never the whole (P10). */}
-              {shown === 0 ? filteredBrowse : null}
+              {/* No match at all: the list beneath is the filtered one, never the whole (P10). With
+                  matches the filters hide, it is not shown: a kid reads it as results for the query
+                  (the accepted prototype shows it only when nothing matched). */}
+              {shown === 0 && result.outsideFilters === 0 ? filteredBrowse : null}
             </>
           ) : deferredTrimmed === '' ? (
             <>
@@ -1130,23 +1189,13 @@ function TodaysProgram({
   // row, so a second card for one stays one tap away — only the summary changes.
   const allOnForm = options.every((o) => program.onFormIds.has(o.publicId));
   return (
-    <section aria-labelledby={headingId} className="mb-4">
-      <details open={!allOnForm}>
-        {/*
-          ⚠️ **The `h3` is INSIDE the `summary`**, not replaced by it. Every other section here is
-          headed by an `h3`, and a screen-reader user navigating by heading — which is how you skim a
-          long sheet — skipped straight past the one section holding the day's actual program,
-          because a bare `summary` is a disclosure button and not a heading. Nesting them keeps the
-          disclosure behaviour and puts the section back in the heading list.
-        */}
-        <summary className="min-h-11">
-          <h3 id={headingId} className="text-muted-foreground mb-1 inline text-sm font-semibold">
-            {allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
-          </h3>
-        </summary>
-        <OptionList rows={rowsFrom(options)} mode={mode} scope={headingId} />
-      </details>
-    </section>
+    <FoldedSection
+      headingId={headingId}
+      heading={allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
+      rows={rowsFrom(options)}
+      mode={mode}
+      open={!allOnForm}
+    />
   );
 }
 
@@ -1157,32 +1206,54 @@ function TodaysProgram({
 function ListLine({ text, children }: { text: string; children?: ReactNode }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <p className="text-sm font-medium">{text}</p>
+      {/* `wrap-anywhere`: the outside line quotes the query, which may have no space. */}
+      <p className="text-sm font-medium wrap-anywhere">{text}</p>
       {children}
     </div>
   );
 }
 
-/** A section folded to one line, as Today's program folds: here the custom items under a filter (P9). */
+/**
+ * A section folded to one line: Today's program (open while any of it is not yet on a card) and,
+ * under a filter, the household's items (P9), whose summary carries its count.
+ *
+ * 🔴 **It opens itself while it holds a ticked row** (multi mode). A caller focuses the row it just
+ * made or selected (the item form's Create), and a row inside a closed `<details>` cannot take
+ * focus in a browser: focus would fall to the page and the new item would look lost, inviting a
+ * second, permanent create (review of B2-ii).
+ */
 function FoldedSection({
   headingId,
   heading,
   rows,
   mode,
+  open = false,
+  count = false,
 }: {
   headingId: string;
   heading: string;
   rows: Row[];
   mode: RowMode;
+  open?: boolean;
+  /** Show the rows' count in the summary. */
+  count?: boolean;
 }) {
   if (rows.length === 0) return null;
+  const holdsTicked =
+    mode.kind === 'multi' && rows.some(({ option }) => mode.selected.has(option.publicId));
   return (
     <section aria-labelledby={headingId} className="mb-4">
-      <details>
-        {/* The `h3` sits inside the `summary`, as in Today's program, so it stays in the heading list. */}
+      <details open={open || holdsTicked || undefined}>
+        {/*
+          ⚠️ **The `h3` is INSIDE the `summary`**, not replaced by it. Every other section here is
+          headed by an `h3`, and a screen-reader user navigating by heading — which is how you skim a
+          long sheet — skipped straight past the one section holding the day's actual program,
+          because a bare `summary` is a disclosure button and not a heading. Nesting them keeps the
+          disclosure behaviour and puts the section back in the heading list.
+        */}
         <summary className="min-h-11">
           <h3 id={headingId} className="text-muted-foreground mb-1 inline text-sm font-semibold">
-            {heading}
+            {count ? COPY.foldedCount(heading, rows.length) : heading}
           </h3>
         </summary>
         <OptionList rows={rows} mode={mode} scope={headingId} />

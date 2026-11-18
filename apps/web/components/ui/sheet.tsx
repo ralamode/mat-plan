@@ -449,10 +449,11 @@ export function Sheet({
           // and there is no undo. M12 chose full screen on phones so there is "no backdrop to
           // mis-tap" — above 600px a 520px dialog on an 820px tablet shows ~300px of scrim, so the
           // same reasoning has to be applied by hand.
-          onEscapeKeyDown={onEscapeKeyDown}
           onPointerDownOutside={(e) => {
             if (!isDialog) e.preventDefault();
           }}
+          // A consumer's own Escape first: `preventDefault` keeps the sheet open (see the prop).
+          onEscapeKeyDown={onEscapeKeyDown}
           onOpenAutoFocus={(e) => {
             // See `initialFocus`. Radix would otherwise pick the first tabbable candidate, which is
             // never the `tabIndex={-1}` title this file has always claimed is the target.

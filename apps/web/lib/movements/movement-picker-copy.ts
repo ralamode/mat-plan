@@ -27,6 +27,20 @@ const statusNear = (n: number) =>
  * do, without claiming a typo. `where` is where the list sits from the button: above the footer in
  * single mode, below the top in multi.
  */
+/** The household's section, in the maintainer's words (P9); the filtered form adds to it. */
+const HOUSEHOLD = 'Your custom items';
+const FILTERS = 'Filters';
+/** Between a filter choice's label and its count, in its accessible name ("Lats, 12 movements"). */
+const CHOICE_JOIN = ', ';
+/**
+ * The near miss a person may mean, when the filters hide it (panel row 9; reworded at B2-ii's
+ * review: the row is NOT on screen, so "is listed" sent people looking for it).
+ */
+const similarHidden = (name: string) =>
+  `${quote(name)} already exists, but your filters hide it. Clear filters to see it.`;
+/** Rows on screen, in the panel's one noun for the case: results under a query, else movements. */
+const shownCount = (n: number, searching: boolean) =>
+  searching ? plural(n, { one: `${n} result`, other: `${n} results` }) : movementCount(n);
 const similarListed = (name: string, where: 'above' | 'below') =>
   `${quote(name)} is ${where}. Tap it if that's the one.`;
 
@@ -59,7 +73,7 @@ export const MOVEMENT_PICKER_COPY = {
   /** ⚠️ "added", not "on your form" — "form" is our word for it, not a twelve-year-old's. */
   todaysProgramAllOnForm: "Today's program (already added)",
   /** A household's own items (CAT-3 P9: "Your custom items", the maintainer's words). */
-  household: 'Your custom items',
+  household: HOUSEHOLD,
   matches: 'Matches',
   someWords: 'Has some of your words',
   /** Near misses (CAT-3 spec P5 as amended at the prototype's sign-off, 2026-11-17). */
@@ -102,15 +116,17 @@ export const MOVEMENT_PICKER_COPY = {
   statusHowToFailed: (name: string) => `Couldn't load the steps for ${name}.`,
 
   // ── Filters (CAT-3 P7 to P10, B2-ii) ────────────────────────────────────────────────────────────
+  // ⚠️ `filters`, `filtersName`, `showAllEquipment` and `statusOutsideOnly` show a number with no
+  // counted noun beside it, so they need no `plural()` (invariant 10 is about counted nouns).
   /** The control's visible text: "Filters", or "Filters · 3" while three are on. */
-  filters: (on: number) => (on === 0 ? 'Filters' : `Filters · ${on}`),
+  filters: (on: number) => (on === 0 ? FILTERS : `${FILTERS} · ${on}`),
   /** Its accessible name carries how many are on (P15). */
-  filtersName: (on: number) => (on === 0 ? 'Filters, none on' : `Filters, ${on} on`),
-  filtersHeading: 'Filters',
+  filtersName: (on: number) => (on === 0 ? `${FILTERS}, none on` : `${FILTERS}, ${on} on`),
+  filtersHeading: FILTERS,
   filtersBack: 'Back to the list',
   equipmentLegend: 'Equipment',
   equipmentAny: 'Any equipment',
-  /** The radio; the same words a row with an empty set shows (`emptyEquipment`). */
+  /** The "No equipment" radio's hint. The radio's label is `emptyEquipment`, a row's same words. */
   equipmentNoneHint: 'Just you and the floor. A wall, a towel or a partner counts as equipment.',
   equipmentChosen: 'Uses at least one of…',
   equipmentChosenHint:
@@ -120,24 +136,26 @@ export const MOVEMENT_PICKER_COPY = {
   showAllEquipment: (n: number) => `Show all equipment (${n})`,
   showFewerEquipment: 'Show fewer',
   musclesLegend: 'Main muscle',
-  /** A choice's count, said after its label ("Lats, 12 movements"); the digits alone are shown. */
-  choiceCount: movementCount,
+  /** A choice's accessible name: its label, then its count said ("Lats, 12 movements"). */
+  choiceName: (label: string, n: number) => `${label}${CHOICE_JOIN}${movementCount(n)}`,
+  choiceJoin: CHOICE_JOIN,
   clearFilters: 'Clear filters',
   /** What the panel says after Clear filters: "Filters cleared. 120 movements." */
-  filtersCleared: 'Filters cleared',
+  filtersCleared: `${FILTERS} cleared`,
   /** The panel's button that shows the list: "Show 12 movements", or "Show 3 results" under a query. */
-  showResults: (n: number, searching: boolean) =>
-    searching
-      ? plural(n, { one: `Show ${n} result`, other: `Show ${n} results` })
-      : plural(n, { one: `Show ${n} movement`, other: `Show ${n} movements` }),
+  showResults: (n: number, searching: boolean) => `Show ${shownCount(n, searching)}`,
   nothingFits: 'Nothing fits',
-  /** The panel's visible count (plain text): the region below says the same once per change. */
-  panelCount: (n: number) => `${movementCount(n)}.`,
+  /** The panel's visible count (plain text), in the same noun as its button. */
+  panelCount: (n: number, searching: boolean) => `${shownCount(n, searching)}.`,
   /** Said once per change, in the sheet's one region while the panel is open (P15). */
-  panelStatus: (choice: string, on: boolean, n: number) =>
-    `${choice} ${on ? 'on' : 'off'}. ${movementCount(n)}.`,
-  /** Said when the filters are cleared, or a radio chosen. */
-  panelStatusChoice: (choice: string, n: number) => `${choice}. ${movementCount(n)}.`,
+  panelStatus: (choice: string, on: boolean, n: number, searching: boolean) =>
+    `${choice} ${on ? 'on' : 'off'}. ${shownCount(n, searching)}.`,
+  /**
+   * Said for a radio or Clear filters: the choice, then the count. A label that already ends in
+   * an ellipsis ("Uses at least one of…") takes no second stop.
+   */
+  panelStatusChoice: (choice: string, n: number, searching: boolean) =>
+    `${choice}${choice.endsWith('…') ? '' : '.'} ${shownCount(n, searching)}.`,
   /** The line at the top of the list while filters are on (panel row 10). */
   filtersOnLine: (on: number) =>
     plural(on, { one: `${on} filter on.`, other: `${on} filters on.` }),
@@ -158,15 +176,17 @@ export const MOVEMENT_PICKER_COPY = {
   /** Browsing with a filter on, until B3's tree (P12's heading). */
   fitHeading: 'Movements that fit your filters',
   /** The household's items under a filter: a filter cannot judge them (P9). */
-  householdNotFiltered: 'Your custom items (not filtered)',
+  householdNotFiltered: `${HOUSEHOLD} (not filtered)`,
+  /** A folded section's summary carries its count, so a person can tell whether to open it. */
+  foldedCount: (heading: string, n: number) => `${heading} · ${n}`,
   /** After a headingless hit (panel row 15): the hit is a match too. */
   moreMatches: 'More matches',
   tagNotInFilters: 'not in your filters',
-  /** The create hint when the similar name the person may mean is outside the filters (row 9). */
-  similarOutside: (name: string) => `${quote(name)} is listed but is not in your filters.`,
-  /** Single mode's footer hint while the similar name is outside the filters (panel row 9). */
+  /** The create hint (multi mode) when the filters hide the similar name (row 9). */
+  similarOutside: similarHidden,
+  /** Single mode's footer hint in the same case: that, then the warning. */
   asTypedHintOutside: (similar: string, typed: string) =>
-    `${quote(similar)} is listed but is not in your filters. ${asTypedHintText(typed)}`,
+    `${similarHidden(similar)} ${asTypedHintText(typed)}`,
   /** The status with nothing in the filters and some outside them (the prototype's words). */
   statusOutsideOnly: (n: number) => `Nothing in your filters. ${n} outside them.`,
   /** Said once after the picker opens with filters still on (panel row 10). */
@@ -215,6 +235,9 @@ export const MOVEMENT_PICKER_COPY = {
   },
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
+  /** The same, for a hit the filters would hide (P8; the prototype's words). */
+  statusAlreadyListedOutside: (name: string) =>
+    `Already in the list as ${name}, which is not in your filters.`,
 
   // ── The footer ──────────────────────────────────────────────────────────────────────────────────
   /**

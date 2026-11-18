@@ -5,7 +5,6 @@ import {
   EQUIPMENT_LABELS,
   MUSCLES,
   MUSCLE_LABELS,
-  equipmentFilterOrder,
   movementFiltersOn,
   type Equipment,
   type EquipmentChoice,
@@ -44,6 +43,12 @@ export type FilterPanelProps = {
   readonly counts: MovementFilterCounts;
   /** "Any equipment" and "Uses at least one of…" as totals: the counts give the per-item numbers. */
   readonly choiceTotals: { readonly any: number; readonly chosen: number };
+  /**
+   * The equipment items in the order listed (`equipmentFilterOrder`), fixed while the panel is
+   * open: ranked with no muscle on, so ticking a muscle never reshuffles the list above the
+   * muscles and moves the next tap's target (review of B2-ii). The counts beside them stay live.
+   */
+  readonly equipmentOrder: readonly Equipment[];
   readonly onChange: (change: FilterChange) => void;
   readonly onBack: () => void;
   readonly headingRef: RefObject<HTMLHeadingElement | null>;
@@ -59,6 +64,7 @@ export function FilterPanelBody({
   filters,
   counts,
   choiceTotals,
+  equipmentOrder: order,
   onChange,
   onBack,
   headingRef,
@@ -66,7 +72,6 @@ export function FilterPanelBody({
 }: FilterPanelProps) {
   const id = useId();
   const [showAll, setShowAll] = useState(false);
-  const order = equipmentFilterOrder(counts);
   const listed = showAll
     ? order
     : order.filter(
@@ -93,8 +98,14 @@ export function FilterPanelBody({
   const itemsId = `${id}-items`;
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-2">
-        <h3 ref={headingRef} tabIndex={-1} className="text-lg font-semibold outline-none">
+      {/* Wraps at 200 % text, where "Back to the list" no longer fits beside the heading. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3
+          ref={headingRef}
+          tabIndex={-1}
+          // Focus lands here on open and after Clear filters: it must show, as the sheet's title does.
+          className="focus-visible:ring-ring rounded text-lg font-semibold outline-none focus-visible:ring-3"
+        >
           {COPY.filtersHeading}
         </h3>
         <Button type="button" variant="ghost" size="lg" onClick={onBack} className="text-base">
@@ -199,8 +210,9 @@ export function FilterPanelFooter({
   const none = movementFiltersOn(filters) === 0;
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium">{COPY.panelCount(total)}</p>
-      <div className="grid grid-cols-2 gap-2">
+      <p className="text-sm font-medium">{COPY.panelCount(total, searching)}</p>
+      {/* Two columns at 360 px; one at 200 % text, where "movements" alone is wider than half. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
         <Button
           type="button"
           variant="outline"
@@ -251,6 +263,10 @@ function Choice({
   hintId?: string;
   onChange: (checked: boolean) => void;
 }): ReactNode {
+  // 🔴 **`aria-disabled`, not `disabled`** (review of B2-ii): a ticked choice can count 0, and
+  // unticking it would disable the control under focus, which drops focus to the page. An inert
+  // tap changes nothing: `onChange` ignores it and React puts the controlled box back.
+  // ⚠️ Not `preventDefault` on click: on a controlled checkbox that leaves the DOM out of step.
   const inert = count === 0 && !checked;
   return (
     <div className="flex flex-col">
@@ -264,15 +280,18 @@ function Choice({
           type={type}
           name={name}
           checked={checked}
-          disabled={inert}
+          aria-disabled={inert || undefined}
+          // The name is set whole: a visually hidden span inside the label is a separate box to a
+          // browser, which then reads "Neck , 0 movements" (Chromium; jsdom joins it). It starts
+          // with the visible label, so speech input finds it by what is on screen.
+          aria-label={COPY.choiceName(label, count)}
           aria-describedby={hintId}
-          onChange={(e) => onChange(e.target.checked)}
+          onChange={(e) => {
+            if (!inert) onChange(e.target.checked);
+          }}
           className="size-6 shrink-0 accent-current"
         />
-        <span className="min-w-0 flex-1 wrap-anywhere">
-          {label}
-          <span className="sr-only">, {COPY.choiceCount(count)}</span>
-        </span>
+        <span className="min-w-0 flex-1 wrap-anywhere">{label}</span>
         <span aria-hidden className="text-muted-foreground tabular-nums">
           {count}
         </span>
