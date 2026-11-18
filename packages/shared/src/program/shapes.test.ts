@@ -55,6 +55,9 @@ import {
   copyDraftSchema,
   createProgramSchema,
   emptyWeek,
+  MAX_DAY_SLOTS,
+  MAX_HOUSEHOLD_ITEMS,
+  MAX_PROGRAM_WORKOUTS,
   newItemSchema,
   programOrderSchema,
   programViewSchema,
@@ -62,6 +65,8 @@ import {
   saveWorkoutSchema,
   takeOffSchema,
   weekDraftSchema,
+  weekExceedsDaySlots,
+  weekRepeatsAWorkout,
   workoutDraftSchema,
   type CreateProgram,
 } from './program-shapes';
@@ -223,6 +228,7 @@ describe('the constants the lanes build against (contract pins)', () => {
       'invalid',
       'not_found',
       'once_per_day',
+      'limit_reached',
       'retry',
     ]);
     expect(ROW_REFUSALS).toEqual([
@@ -380,6 +386,38 @@ describe('WeekDraft and ProgramView', () => {
     expect(saves(days('l'.repeat(SLOT_LABEL_MAX + 1)))).toBe(false);
     const blank = weekDraftSchema.parse({ programPublicId: A_PROGRAM, days: days('  ') });
     expect(blank.days[0]).toEqual([{ workoutPublicId: A_WORKOUT, label: null }]);
+  });
+
+  it('🔴 holds a weekday to MAX_DAY_SLOTS workouts, and says which failure that was (C35)', () => {
+    // Distinct workouts, so the only thing wrong with the long day is its length.
+    const slots = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        workoutPublicId: `00000000-0000-7000-8000-${String(i).padStart(12, '0')}`,
+        label: null,
+      }));
+    const days = (monday: unknown) => ({ ...week, 1: monday });
+    expect(saves(days(slots(MAX_DAY_SLOTS)))).toBe(true);
+    expect(saves(days(slots(MAX_DAY_SLOTS + 1)))).toBe(false);
+
+    expect(weekExceedsDaySlots({ days: days(slots(MAX_DAY_SLOTS + 1)) })).toBe(true);
+    expect(weekExceedsDaySlots({ days: days(slots(MAX_DAY_SLOTS)) })).toBe(false);
+    // It reads raw input, as a refused parse hands back no value: anything else is "no".
+    for (const raw of [null, undefined, 'week', {}, { days: null }, { days: { 1: 'x' } }]) {
+      expect(weekExceedsDaySlots(raw)).toBe(false);
+    }
+    // A long day that also repeats a workout is both: the caller asks about the repeat first.
+    const [first] = slots(1);
+    const both = { days: days([...slots(MAX_DAY_SLOTS), first]) };
+    expect(weekExceedsDaySlots(both)).toBe(true);
+    expect(weekRepeatsAWorkout(both)).toBe(true);
+  });
+
+  it('names the caps the maintainer approved (C35): a change to one is a decision', () => {
+    expect({ MAX_HOUSEHOLD_ITEMS, MAX_PROGRAM_WORKOUTS, MAX_DAY_SLOTS }).toEqual({
+      MAX_HOUSEHOLD_ITEMS: 500,
+      MAX_PROGRAM_WORKOUTS: 50,
+      MAX_DAY_SLOTS: 30,
+    });
   });
 
   it('starts an empty week with every weekday, each with nothing on it (C26)', () => {

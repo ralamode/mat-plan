@@ -12,7 +12,7 @@ import {
   weekDraftSchema,
   workoutDraftSchema,
 } from '../program-shapes';
-import { dayPlan, edit, programOf, workoutDraft, workoutOf } from './build';
+import { dayPlan, edit, programList, programOf, workoutDraft, workoutOf } from './build';
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
@@ -25,6 +25,7 @@ import {
   everyTypeOnce,
   familyProgram,
   familyProgramAfterTakeOff,
+  familyProgramArchivedAthlete,
   FIXTURE_ITEM_KEYS,
   FIXTURE_ITEMS,
   FIXTURE_SWITCH_DAY,
@@ -37,9 +38,12 @@ import {
   newWorkoutEmpty,
   noProgram,
   notOnAProgramThatDay,
+  PROGRAM_LIST_FIXTURE_SOURCES,
   PROGRAM_LIST_FIXTURES,
+  PROGRAM_VIEW_FIXTURE_SOURCES,
   PROGRAM_VIEW_FIXTURES,
   programsList,
+  programsListArchivedAthlete,
   programView,
   sundayRestStretchOnly,
   todayStretchingFirst,
@@ -119,12 +123,18 @@ describe('every fixture round-trips through its own schema', () => {
       'every-type-once',
     ]);
     expect(Object.keys(WORKOUT_DRAFT_FIXTURES)).toEqual(['heavy-a-draft', 'new-workout-empty']);
-    expect(Object.keys(PROGRAM_LIST_FIXTURES)).toEqual(['programs-list']);
+    expect(Object.keys(PROGRAM_LIST_FIXTURES)).toEqual([
+      'programs-list',
+      // C36, not a prototype state: an archived athlete who is still on a program.
+      'programs-list-archived-athlete',
+    ]);
     expect(Object.keys(PROGRAM_VIEW_FIXTURES)).toEqual([
       'family-program',
       'family-program-after-take-off',
       'new-program-empty',
       'adult-program-with-copy',
+      // C36, not a prototype state.
+      'family-program-archived-athlete',
     ]);
   });
 
@@ -1396,5 +1406,89 @@ describe('programView, exported for a proof that saves a week (C27)', () => {
     );
     expect(is[5]).not.toEqual(was[5]);
     expect({ ...is, 5: was[5] }).toEqual(was);
+  });
+});
+
+describe('an archived athlete is on no program page and no Programs list (C36)', () => {
+  const view = familyProgramArchivedAthlete;
+  const { world, before } = PROGRAM_VIEW_FIXTURE_SOURCES['family-program-archived-athlete'];
+  const two = fixtureIds.athlete('a2');
+
+  it('is the seeded family with Athlete Two archived, and still on the Family program', () => {
+    expect(before).toBe(PROGRAM_VIEW_FIXTURE_SOURCES['family-program'].world);
+    expect(world.athletes.filter((a) => a.archived).map((a) => a.id)).toEqual(['a2']);
+    // The assignment is untouched: it is the filter that leaves them out, not a Take off.
+    expect(world.assign.a2).toEqual(before?.assign.a2);
+    expect(world.assign.a2?.some((a) => a.prog === 'p1' && a.to === undefined)).toBe(true);
+  });
+
+  it('🔴 leaves them out of who is on it and of who can be put on', () => {
+    // Before, they are in both lists; that is what the fixture takes away.
+    expect(familyProgram.athletes.map((a) => a.profilePublicId)).toContain(two);
+    expect(familyProgram.candidates.map((c) => c.profilePublicId)).toContain(two);
+    expect(view.athletes.map((a) => a.profilePublicId)).not.toContain(two);
+    expect(view.candidates.map((c) => c.profilePublicId)).not.toContain(two);
+    // Everyone else is as they were, their other programs included.
+    expect(view.athletes).toEqual(familyProgram.athletes.filter((a) => a.profilePublicId !== two));
+    expect(view.candidates).toEqual(
+      familyProgram.candidates.filter((c) => c.profilePublicId !== two),
+    );
+    expect(view.athletes.length).toBeGreaterThan(0);
+  });
+
+  it('changes nothing else on the page', () => {
+    const { athletes: _a, candidates: _c, ...rest } = view;
+    const { athletes: _fa, candidates: _fc, ...was } = familyProgram;
+    expect(rest).toEqual(was);
+  });
+
+  it('🔴 is not named on the Programs list, where the program keeps its entry', () => {
+    const list = programsListArchivedAthlete;
+    expect(PROGRAM_LIST_FIXTURE_SOURCES['programs-list-archived-athlete'].world).toBe(world);
+    expect(list.map((p) => p.programPublicId)).toEqual(programsList.map((p) => p.programPublicId));
+    const name = world.athletes.find((a) => a.id === 'a2')!.name;
+    expect(programsList.flatMap((p) => p.athletes)).toContain(name);
+    expect(list.flatMap((p) => p.athletes)).not.toContain(name);
+    expect(list).toEqual(
+      programsList.map((p) => ({ ...p, athletes: p.athletes.filter((a) => a !== name) })),
+    );
+  });
+});
+
+describe('PROGRAM_VIEW_FIXTURE_SOURCES and PROGRAM_LIST_FIXTURE_SOURCES (C36)', () => {
+  it('name every program fixture, and each fixture is its source built', () => {
+    expect(Object.keys(PROGRAM_VIEW_FIXTURE_SOURCES)).toEqual(Object.keys(PROGRAM_VIEW_FIXTURES));
+    expect(Object.keys(PROGRAM_LIST_FIXTURE_SOURCES)).toEqual(Object.keys(PROGRAM_LIST_FIXTURES));
+    for (const [name, { world, program }] of Object.entries(PROGRAM_VIEW_FIXTURE_SOURCES)) {
+      expect(programView(world, program), name).toEqual(
+        PROGRAM_VIEW_FIXTURES[name as keyof typeof PROGRAM_VIEW_FIXTURES],
+      );
+    }
+    for (const [name, { world }] of Object.entries(PROGRAM_LIST_FIXTURE_SOURCES)) {
+      expect(programList(world), name).toEqual(
+        PROGRAM_LIST_FIXTURES[name as keyof typeof PROGRAM_LIST_FIXTURES],
+      );
+    }
+  });
+
+  it('say which world a fixture changes from: the seeded one, or none when it is the seeded one', () => {
+    const seeded = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+    const sources = [
+      ...Object.entries(PROGRAM_VIEW_FIXTURE_SOURCES),
+      ...Object.entries(PROGRAM_LIST_FIXTURE_SOURCES),
+    ];
+    for (const [name, { world, before }] of sources) {
+      if (before === null) expect(world, name).toBe(seeded);
+      else {
+        expect(before, name).toBe(seeded);
+        expect(world, name).not.toEqual(seeded);
+      }
+    }
+    expect(sources.filter(([, source]) => source.before === null).map(([name]) => name)).toEqual([
+      'family-program',
+      'programs-list',
+    ]);
+    expect(Object.isFrozen(PROGRAM_VIEW_FIXTURE_SOURCES)).toBe(true);
+    expect(Object.isFrozen(PROGRAM_LIST_FIXTURE_SOURCES)).toBe(true);
   });
 });

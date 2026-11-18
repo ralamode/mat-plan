@@ -365,7 +365,7 @@ export const QUIET_LINK_CLASS =
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
  * notices on the day page, the day page's "Not on a program yet" and rest-day notices). Defined at
- * FAM-1 13d, the third copy; `page.tsx`'s two literals move to it when 12c next edits that file.
+ * FAM-1 13d, the third copy; `page.tsx`'s two literals moved to it at 12c.
  */
 export const NOTICE_CLASS =
   'border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm';
@@ -698,6 +698,17 @@ export const LIFE_COPY = {
  * control instead since V1-24 3b-life.
  */
 export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring/50 outline-none focus-visible:ring-3';
+
+/**
+ * The ✓'s focus ring (design.md), and any Tab stop that needs one at ≥3:1 (the day page's athlete
+ * switcher, FAM-1 12c): full-opacity `foreground`, OUTSIDE the ✓, never inset on the
+ * fill. An outline, so the gap shows the tint or the card behind it rather than a painted offset.
+ *
+ * ⚠️ `focus-visible:outline-solid` is load-bearing: Tailwind's `outline-none` sets the outline
+ * style to `none` through a variable that `outline-3` reads, so without it no ring is drawn.
+ */
+export const TICK_FOCUS_CLASS =
+  'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
@@ -1037,6 +1048,13 @@ export const strengthReceiptId = (sessionPublicId: string) =>
 
 /** A strength set amend's error id, unique per island (20 sets must not share one id). */
 export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
+
+/**
+ * How far past today the day page looks ahead (FAM-1 12c; maintainer, 2026-11-17: "6 days ahead",
+ * the rest of the coming week). The forward arrow and the week strip stop at today plus this, and a
+ * later `?d=` renders today. Look-ahead is read-only, so this bounds a view, never a write.
+ */
+export const LOOK_AHEAD_DAYS = 6;
 
 /**
  * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
@@ -1385,7 +1403,8 @@ export const SETTINGS_COPY = {
   /** Names what it undoes, so a screen-reader user hears which action this button reverses (A11Y-5). */
   undoLabel: (name: string) => `Undo archiving ${name}`,
   /** The day page's pointer back to the recovery, when the athlete it shows is archived. */
-  archivedNotice: (name: string) => `${name} is archived. Restore them in`,
+  archivedNotice: (name: string) =>
+    `${name} is archived. Nothing new can be logged. Restore them in`,
   /** The edit screen's pointer, since archive is not on that form. */
   archiveElsewhere: 'To archive an athlete, use',
 } as const;

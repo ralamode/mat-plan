@@ -26,12 +26,20 @@ import type {
  * Every member resolves a typed result. None throws for a refusal.
  */
 
-/** Why a program write did not happen. */
+/**
+ * Why a program write did not happen.
+ *
+ * `limit_reached` (contract change C35): the write would take the household's own items, a
+ * program's workouts or a weekday's workouts past its cap (`MAX_HOUSEHOLD_ITEMS`,
+ * `MAX_PROGRAM_WORKOUTS`, `MAX_DAY_SLOTS` in `./program-shapes`). Its own word, because `invalid`
+ * reads as "something you typed is wrong" and a screen marks a field for it.
+ */
 export const PROGRAM_REFUSALS = [
   'name_taken',
   'invalid',
   'not_found',
   'once_per_day',
+  'limit_reached',
   'retry',
 ] as const;
 export type ProgramRefusal = (typeof PROGRAM_REFUSALS)[number];

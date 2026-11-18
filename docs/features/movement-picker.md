@@ -269,14 +269,15 @@ path and **creating** the deliberate one.
       board call, 2026-11-17, after a UX lens): no filter can judge it, so its exact-hit tag is
       "equipment and muscles not known yet" (`tagNoLibraryData`, never starting "No equipment",
       which is a library row's equipment line) and the status says "whose equipment and muscles
-      aren't known yet". The Filters button shows only when some row `hasLibraryData`. ⚠️ The "N
-      more are not in your filters" line still counts them; splitting it needs a count from the
-      shared search (asked of the roadmap thread).
+      aren't known yet". The Filters button shows only when some row `hasLibraryData`. **The line
+      after the results splits them out** (`COPY.outsideLine`, from the search's `outsideFilters`
+      and `outsideWithoutData`, #590): "2 more are not in your filters. Your filters also hide 1
+      more: its equipment and muscles aren't known yet." One function decides the whole line.
     - **The status counts each custom row as what it was found as**: a match when the unfiltered
       search matched anything, otherwise a near miss or a some-words row (P5, P9).
     - **A folded section opens itself while it holds a ticked row** (`FoldedSection`, shared with
       Today's program): the item form focuses the row it just made, and a row in a closed
-      `<details>` cannot take focus in a browser.
+      `<details>` cannot take focus in a browser. **The tick is a latch:** once a ticked row held the section open it stays held, so unticking the last row never closes it under the person's thumb and takes focus with it; only a tap on the summary closes it. The caller's own `open` stays live.
     - 🔴 **The create button and its hint read the UNFILTERED search** (panel row 9): loud only
       when nothing at all matches, and a near miss the filters hide is still named ("… is listed
       but is not in your filters."). A filter that hid a match and turned the button loud would

@@ -438,6 +438,9 @@ const STATES = {
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
   'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
+  // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
+  // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
+  'day-look-ahead': null,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
   'bodyweight-rejected': null,
@@ -702,6 +705,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   // Retry-safe: the three widths share one database, and only the first finds the button.
   'practice-logged': (page) => logPractice(page),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
+  // The page's own Next arrow, not `gotoDaysAgo(-1)`: that counts from the app's default zone, which
+  // can be a day behind the zone the page renders in, and then "tomorrow" is the page's today.
+  'day-look-ahead': async (page) => {
+    await page
+      .getByRole('navigation', { name: 'Change day' })
+      .getByRole('link', { name: /^Next day/ })
+      .click();
+    await page.getByText(/^Tomorrow ·/).waitFor();
+  },
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });
     await section.getByLabel('Unit').selectOption('kg');

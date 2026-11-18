@@ -18,9 +18,11 @@ import { code, WEB_DIR } from '@/test/source-scan';
  *    members the screen and the preview's fake implement. The reads are listed before they exist
  *    (lane P's `workoutInHousehold`, lane E's `prescriptionLiveIn`, #527), so they are pinned the
  *    moment they land.
- * 2. **No page or component imports `row-actions.ts` until 12c.** Next registers a Server Action only
- *    when the module graph reaches it, so until then no request can write a row and no action id is
- *    in the build's manifest (the security lens's owed check, made structural). 12c lifts this pin.
+ * 2. **Only the day page imports `row-actions.ts`** (FAM-1 12c). A tripwire, not the boundary: an
+ *    importer puts the action ids in the build's manifest, and from then on Next 16 forwards a POST
+ *    naming one from any App Router path (`selectWorkerForForwarding`). Each action's own checks
+ *    are the boundary; this pin makes a NEW importer a reviewed change (the security lens's check,
+ *    structural since 12b, "no importer" until 12c mounted the screen).
  */
 
 const REPO = resolve(WEB_DIR, '../..');
@@ -78,9 +80,13 @@ const SPECIFIER = /(?:\bfrom\s*|\bimport\s+|\bimport\(\s*|\brequire\(\s*)['"]([^
 const ACTIONS = 'apps/web/app/p/[profileId]/row-actions';
 const namesActions = (file: string, source: string) =>
   [...source.matchAll(SPECIFIER)].some(([, spec]) => {
-    if (spec === '@/app/p/[profileId]/row-actions') return true;
-    if (!spec!.startsWith('.')) return false;
-    return relative(REPO, resolve(dirname(join(REPO, file)), spec!)) === ACTIONS;
+    // Both forms normalised, `@/./app/…` and `…/../[profileId]/…` included, with any extension.
+    const target = spec!.startsWith('@/')
+      ? resolve(WEB_DIR, spec!.slice(2))
+      : spec!.startsWith('.')
+        ? resolve(dirname(join(REPO, file)), spec!)
+        : null;
+    return target !== null && relative(REPO, target).replace(/\.(tsx?|jsx?)$/, '') === ACTIONS;
   });
 const THE_MODULE = new Set([`${ACTIONS}.ts`, `${ACTIONS}.registry.ts`]);
 
@@ -131,11 +137,11 @@ describe('the day DAL is the only way in (FAM-1 12b)', () => {
     expect(fromDb.test('day.actions.logRow({ clientId })')).toBe(false);
   });
 
-  it('no page or component imports the row actions until 12c', () => {
+  it('only the day page imports the row actions (FAM-1 12c)', () => {
     const reaching = nonTest.filter(
       (f) => !THE_MODULE.has(f) && namesActions(f, code(join(REPO, f))),
     );
-    expect(reaching, '12c lifts this pin when it mounts the day screen').toEqual([]);
+    expect(reaching).toEqual(['apps/web/app/p/[profileId]/page.tsx']);
   });
 
   it('the row-actions pin sees an import by alias and by relative path (non-vacuity)', () => {
@@ -145,6 +151,9 @@ describe('the day DAL is the only way in (FAM-1 12b)', () => {
       "import { logRowAction } from '@/app/p/[profileId]/row-actions';",
       "import { logRowAction } from './row-actions';",
       "const m = await import('./row-actions');",
+      "import { logRowAction } from '@/./app/p/[profileId]/row-actions';",
+      "import { logRowAction } from '@/app/p/[profileId]/../[profileId]/row-actions';",
+      "import { logRowAction } from './row-actions.ts';",
     ])
       expect(namesActions(page, form), form).toBe(true);
     expect(namesActions(page, "import { x } from './row-actions.registry';")).toBe(false);
