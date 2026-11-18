@@ -210,8 +210,10 @@ test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egre
     }
   });
 
+  // Once, before the loop: each init script adds its own listener, so a second call would record
+  // every violation twice.
+  await recordCspViolations(page);
   for (const path of ['/', SIGN_IN_PATH]) {
-    await recordCspViolations(page);
     const response = await page.goto(path, { waitUntil: 'networkidle' });
     expect(response?.status(), `${path} did not render`).toBe(200);
 
