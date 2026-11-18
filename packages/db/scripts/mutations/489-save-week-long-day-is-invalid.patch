@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index a740b3bd..98debe84 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -50,7 +50,7 @@ export async function saveWeek(
+     // `limit_reached` (C35, invariant 30), then `invalid`: the preview fake's order, shared.
+     if (weekRepeatsAWorkout(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
+     return refuse(
+-      weekExceedsDaySlots(input) ? PROGRAM_REFUSAL.limit_reached : PROGRAM_REFUSAL.invalid,
++      PROGRAM_REFUSAL.invalid,
+     );
+   }
+   // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.
