@@ -517,8 +517,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - **In a fixture world, `catalog[key].library` says an item IS a movement of the test
       library** (`CATALOG_FIXTURE`), by its slug. The builder reads the label from that entry and
       throws when the world's name or tracking type is not the entry's. A data lane's proof seeds
-      such an item as a library row with that slug and resolves the label from the library it is
-      handed, never from the world. The item's id is `fixtureIds.item(key)` like any other.
+      such an item as a library row (under a proof-only slug, with the library it hands the
+      resolver re-slugged to match, so a proof's rows never collide with the seeded library) and
+      resolves the label from the library it is handed, never from the world. The item's id is `fixtureIds.item(key)` like any other.
     - `coach-label-program-ending-today` holds all four cases: a labelled library movement, an
       unlabelled one, the household's own item, and a labelled movement whose prescription left.
 33. **A program the athlete comes off after today is last in `currentPrograms`, and says so**
