@@ -187,7 +187,7 @@ console.log('✓ migration applied to PGlite');
   assert.equal(
     checkRows.length,
     1,
-    `TEN-2c: ${CHECK} exists in pg_constraint, exactly once — a count of 0 means 0017 did not apply`,
+    `TEN-2c: ${CHECK} exists in pg_constraint, exactly once — a count of 0 means 0017 did not apply, or 0032 dropped it without re-adding it`,
   );
   assert.equal(
     checkRows[0].convalidated,
@@ -6705,7 +6705,7 @@ console.log(
       .filter((id) => !MOVEMENT_SEED_PUBLIC_IDS.has(id))
       .sort(),
     [],
-    'TEN-2c END-STATE MEMBERSHIP (4/4): every GLOBAL row the resolver returned is a member of MOVEMENT_SEED_PUBLIC_IDS — exact set membership, not a slug test and not a public_id-prefix test (both were tried in this arc and both were wrong). This is layer 2 of movements_global_row_has_pattern, which can only require a `pattern`',
+    'TEN-2c END-STATE MEMBERSHIP (4/4): every GLOBAL row the resolver returned is a member of MOVEMENT_SEED_PUBLIC_IDS — exact set membership, not a slug test and not a public_id-prefix test (both were tried in this arc and both were wrong). This is layer 2 of movements_global_row_has_pattern, which can only require a `pattern` (or, since CAT-3 A1, a non-strength modality)',
   );
   assert.deepEqual(
     allMovements

@@ -265,13 +265,11 @@ export async function verifyCatalogTables(ctx: VerifyContext): Promise<void> {
       'CAT-3 A1 S2: a muscle code the muscles table does not hold is refused',
       'movement_muscles_muscle_code_muscles_code_fk',
       () =>
-        tx
-          .insert(schema.movementMuscles)
-          .values({
-            movementId: global.id,
-            muscleCode: 'not_a_muscle',
-            role: MUSCLE_ROLE.secondary,
-          }),
+        tx.insert(schema.movementMuscles).values({
+          movementId: global.id,
+          muscleCode: 'not_a_muscle',
+          role: MUSCLE_ROLE.secondary,
+        }),
       tx,
     );
 
@@ -289,6 +287,10 @@ export async function verifyCatalogTables(ctx: VerifyContext): Promise<void> {
       const globalIds = rowsOf<{ id: number | string }>(
         await tx.execute(sql`SELECT id FROM ${table} WHERE movement_id = ${global.id}`),
       ).map((r) => Number(r.id));
+      assert.ok(
+        globalIds.length > 0,
+        `CAT-3 A1 S2: the proof planted ${graphTableName(table)} rows on a global movement`,
+      );
       for (const [name, scope] of [
         ['A', ctx.A_SCOPE],
         ['B', ctx.B_SCOPE],

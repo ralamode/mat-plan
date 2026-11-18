@@ -40,8 +40,9 @@
 -- unapplied migration on main at a time), and nobody is logging (not 18:30–21:00 ET).
 --
 -- IF IT FAILS (55P03 on the lock, or any error): the whole file rolls back, and every new item name
--- fails 42703 until it applies. Re-dispatch migrate.yml; a later push does not fix it by itself
--- (docs/runbooks.md → "A pending migration wedges prod", 0032).
+-- fails 42703 until it applies. Re-dispatch migrate.yml at once: merges are frozen while it is
+-- pending, so do not wait for a later push to retry it (docs/runbooks.md → "A pending migration
+-- wedges prod", 0032).
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
 LOCK TABLE "movements" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint

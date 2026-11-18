@@ -245,8 +245,8 @@ failure.
 
 - **A window with no CHECK.** None: the drop and the add are one transaction under D4's lock.
 - **Lock wait.** `lock_timeout = '5s'` fails the migration rather than queueing writers behind it.
-  **It is not "re-run on the next push":** the new app is live, and every new item name fails
-  `42703` until someone re-dispatches `migrate.yml`. The runbook gets that line (above). Rolling
+  The new app is live, and every new item name fails `42703` until it applies. A later push would
+  retry it, but merges are frozen while it is pending, so re-dispatch `migrate.yml` at once. The runbook gets that line (above). Rolling
   Vercel back is safe, because old code runs on either schema.
 - **A household movement acquires taxonomy.** No writer can do it. S4's proof holds it, and the
   inventory's trigger 3 names the change that would make it live.

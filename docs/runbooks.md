@@ -429,7 +429,7 @@ insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll
 previous deployment (its code works on either schema), then re-run as below. 0025: no request-path
 statement (the only insert into `prescriptions` is the fixtures seed, and nothing reads or writes
 `prescription_quantities`), so the app keeps serving; re-run as below. 0030 (V1-9b B2-0): as 0024,
-EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run. 0031 (lane A's VALIDATE): no request-path statement (it only scans), so the app keeps serving; a `23514` names the constraint and table, never the row (the read in [its plan](./plans/tdebt-validate-name-and-nan-checks.md) finds it), and its correction must repair the value, since a soft delete of that row is refused too; then re-run as below. 0032 (CAT-3 A1): EVERY insert into `movements` (a new item, the seed) fails `42703`; reads are unaffected and nothing reads the new tables. Roll Vercel back (old code runs on either schema) and re-dispatch `migrate.yml`: a later push does not fix it by itself. A failed insert's parameters carry `movements.name`, a household's free text, so keep them out of anything shared.
+EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run. 0031 (lane A's VALIDATE): no request-path statement (it only scans), so the app keeps serving; a `23514` names the constraint and table, never the row (the read in [its plan](./plans/tdebt-validate-name-and-nan-checks.md) finds it), and its correction must repair the value, since a soft delete of that row is refused too; then re-run as below. 0032 (CAT-3 A1): EVERY insert into `movements` (a new item, the seed) fails `42703`; reads are unaffected and nothing reads the new tables. Roll Vercel back (old code runs on either schema) and re-dispatch `migrate.yml` at once: merges are frozen (step 2), so do not wait for a later push to retry it. A failed insert's parameters carry `movements.name`, a household's free text, so keep them out of anything shared.
 ⚠️ **Once B2 has shipped, never roll Vercel back past B2-0's deploy:** older code un-hides without
 clearing `hide_reason`, which the CHECK refuses (`23514`) on any row Clear this day hid. ⚠️ Once the migration is
 observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
@@ -1446,7 +1446,7 @@ UNION ALL SELECT 'movement_equipment', count(*) FROM movement_equipment
   WHERE movement_id IN (SELECT id FROM movements WHERE household_id = (SELECT id FROM h))
 UNION ALL SELECT 'movement_muscles', count(*) FROM movement_muscles
   WHERE movement_id IN (SELECT id FROM movements WHERE household_id = (SELECT id FROM h))
--- AUTH-1 1b: the 19th per-household table. Its FK to `households` is NO ACTION, so a live row here
+-- AUTH-1 1b: the 19th per-household table when it was added. Its FK to `households` is NO ACTION, so a live row here
 -- aborts step 14 and rolls the whole transaction back. Counted for the same reason as `movements` —
 -- the counts are the proof, and 4d has nothing to compare against without it.
 UNION ALL SELECT 'household_members', count(*) FROM household_members
@@ -1758,6 +1758,13 @@ then confirm the catalog's **seeded** rows are still there:
 SELECT count(*) FROM movements WHERE household_id = :h_id;              -- must be 0
 -- …and the global reference catalog survived (TEN-2a: `household_id IS NULL` = owned by nobody).
 SELECT count(*) FROM movements WHERE household_id IS NULL;              -- must be > 0
+-- …and so did the library's equipment and muscles (CAT-3 A1): each count must EQUAL the one read
+-- before step 4. A 10a/10b typed with `OR household_id IS NULL` passes every check above and deletes
+-- these, for every household. Zero until CAT-3 A2 seeds them.
+SELECT count(*) FROM movement_equipment
+  WHERE movement_id IN (SELECT id FROM movements WHERE household_id IS NULL);
+SELECT count(*) FROM movement_muscles
+  WHERE movement_id IN (SELECT id FROM movements WHERE household_id IS NULL);
 ```
 
 Every FK except the two cascades and three `ON DELETE SET NULL` pointers is `NO ACTION`, so a table

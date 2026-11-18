@@ -50,3 +50,8 @@ P11-ii (`apps/web/test/program-tables-stay-dark.test.ts`).
 - **Owed by A2:** the `movements-ownership` report (`corrections/registry.ts`) restates the old
   predicate as `pattern === null`, so it would count a legal non-strength catalog row as a blocker
   once one exists. A2 also classes the join tables with `movements` in `OPS-2`'s Proof A.
+- **Owed by A2, too:** once the seed writes join rows on global movements, erasure P7's "no row is
+  matched by both households" sees them and becomes the first failure under mutations `318` and
+  `319`, so their `.expect` moves to P7's message (or P7 keeps them out). The S4 claim that no writer
+  makes a household row then rests on the stay-dark scan's catalog `describe`, which A2 relaxes for
+  the seed: the PR that relaxes it carries the guarantee forward.
