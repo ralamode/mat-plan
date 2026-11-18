@@ -1101,7 +1101,7 @@
       </label>
       <label
         ><input type="checkbox" id="foldsec" checked /> Bodyweight and Life collapse too, once
-        logged</label
+        logged (chosen)</label
       >
     </div>
   </div>
@@ -2523,13 +2523,15 @@
         '</span><span class="fold-chev" aria-hidden="true">▸</span></button>'
       );
     }
-    function foldAgain(id, key) {
+    function foldAgain(id, key, name) {
       return (
         ' <button class="txt" style="padding:0" id="unfold-' +
         id +
         '" data-act="fold-close" data-key="' +
         key +
-        '" aria-expanded="true">Collapse</button>'
+        '" aria-expanded="true" aria-label="Collapse ' +
+        esc(name) +
+        '">Collapse</button>'
       );
     }
     // Finish a workout for a jump state: an empty ✓ on every row not logged yet.
@@ -2637,7 +2639,7 @@
         (future(day)
           ? w.items.length + ' items'
           : done >= total
-            ? 'Done ✓' + (finished ? foldAgain(slot, fkey) : '')
+            ? 'Done ✓' + (finished ? foldAgain(slot, fkey, w.name) : '')
             : done + ' of ' + total) +
         '</span></div>' +
         (w.desc ? '<p class="hint">' + esc(w.desc) + '</p>' : '') +
@@ -2781,10 +2783,11 @@
           '</h2></section>';
       else if (!fut)
         html +=
-          '<section class="sec"><h2>Bodyweight ' +
+          '<section class="sec"><div class="row between"><h2>Bodyweight ' +
           chip('V1-24 1b') +
-          (bwDone ? foldAgain('bw', bwKey) : '') +
           '</h2>' +
+          (bwDone ? foldAgain('bw', bwKey, 'Bodyweight') : '') +
+          '</div>' +
           bwBody +
           '</section>';
       // Life sits under Bodyweight, near the top (usability panel, d3 round 1).
@@ -2835,10 +2838,11 @@
             '</h2></section>';
         else
           html +=
-            '<section class="sec"><h2>Life ' +
+            '<section class="sec"><div class="row between"><h2>Life ' +
             chip('V1-24 3b-life') +
-            (lifeDone ? foldAgain('life', lifeKey) : '') +
             '</h2>' +
+            (lifeDone ? foldAgain('life', lifeKey, 'Life') : '') +
+            '</div>' +
             (renderLife(life, day, wr, lifeKeys) ||
               (oldWake.length ? '' : '<p class="hint">Nothing logged.</p>')) +
             '</section>';

@@ -323,7 +323,7 @@ gantt
   12d-ii blank weight          :crit, c6b, 11, 12
   12d-iii, 12c-ii              :c6c, 12, 13
   15c, 12f                     :c7, 13, 14
-  12c-iii collapse when done   :c8, 13, 14
+  12c-iii collapse when done   :c8, 14, 15
 
   section S · single values
   3b-page (merged)             :done, s1, 1, 2
@@ -343,12 +343,12 @@ gantt
 
 The end of this chart is firm only for the steps planned in detail. Of the 14 PRs left:
 
-- **Nine are planned in detail**, each with a merged plan or a file-by-file row: 6d-ii, 14b, 11c-ii, 7b-i, 7b-ii, 12d-ii, 12d-iii, 12c-ii and B2.
-- **Five have only a row in the plan** (what the step does, its proof and what it waits for) and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path, 6d-iii, 15c, 12f and 12c-iii.
+- **Nine are planned in detail.** Six have a merged plan of their own: 6d-ii, 14b, 11c-ii, 7b-i, 7b-ii and B2. Three are small enough that the row is the whole design, with every file and the proof named and no open question: 12d-ii and 12d-iii (from the file tables in the comparison of forms) and 12c-ii (one heading).
+- **Five have only a row in the plan** and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path, 6d-iii, 15c, 12f and 12c-iii. Their rows name files too, but each is large or has a question its lane must answer first: what a put-back does when its old place is taken (6d-iii), how the order's action reaches the day page (15c), a deletion across several lanes' guides (12f), where the collapsed state lives and what a screen reader hears (12c-iii), and the put-on screen's wiring and its phone test (15).
 
 **What it shows**
 
-- **In a row, 61 PR-lengths; in lanes, about 14.** The lanes do the same work. They finish sooner
+- **In a row, 61 PR-lengths; in lanes, about 15.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
