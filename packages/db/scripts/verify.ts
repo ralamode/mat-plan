@@ -3767,8 +3767,11 @@ console.log('✓ V1-10: program_blocks / prescriptions / prescription_targets co
 // The frozen migration day_role list can't silently drift from the shared DAY_ROLES const.
 await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 
-// The seed is now POPULATED with Ray's real block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
-assert.ok(PROGRAM_SEED.length >= 1, 'V1-10: PROGRAM_SEED is populated (Ray’s real block)');
+// The seed is now POPULATED with the maintainer's authored block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
+assert.ok(
+  PROGRAM_SEED.length >= 1,
+  'V1-10: PROGRAM_SEED is populated (the maintainer’s authored block)',
+);
 const seededBlocks = (
   (await db.execute(sql`select count(*)::int as count from program_blocks where kind = 'legacy'`))
     .rows as unknown as {
