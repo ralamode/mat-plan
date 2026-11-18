@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
+index 4d83d424..35c310c3 100644
+--- a/packages/db/src/writers/program/seed-fixtures.ts
++++ b/packages/db/src/writers/program/seed-fixtures.ts
+@@ -201,7 +201,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
+         .select({ id: schema.profiles.id })
+         .from(schema.profiles)
+         .where(and(isLiveProfile(profilePublicId, scope), isNull(schema.profiles.archivedAt)));
+-      if (!live) {
++      if (!live && athlete === 'never') {
+         skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
+         continue;
+       }
