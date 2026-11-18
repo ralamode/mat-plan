@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 70189345..4d4e3c61 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -194,7 +194,7 @@ export async function copyWorkout(
+       await tx.insert(schema.blockDayWorkouts).values({
+         blockId: target.id,
+         weekday,
+-        idx: last?.idx === null || last?.idx === undefined ? 0 : last.idx + 1,
++        idx: 0,
+         workoutId: made.id,
+         label: draft.label,
+       });

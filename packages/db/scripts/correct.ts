@@ -115,7 +115,9 @@ try {
   const cause = err instanceof Error ? err.cause : undefined;
   if (cause) console.error(`  cause: ${cause instanceof Error ? cause.message : String(cause)}`);
   // The stack, so a crash in a correction's own code is locatable (an unhandled rejection used to
-  // print it). It carries ids and guards, never a value: no correction binds one.
+  // print it). ⚠️ A stack starts with the message, so it is only as safe as the message: a
+  // correction whose input is personal data (`create-household-…`) rethrows through
+  // `corrections/redact.ts`, whose errors carry counts, a SQLSTATE and a constraint name only.
   if (err instanceof Error && err.stack) console.error(`\n${err.stack}`);
   console.error('');
   process.exitCode = 1;

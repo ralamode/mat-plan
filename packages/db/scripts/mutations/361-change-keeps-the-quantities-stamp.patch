@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/session-rows.ts b/packages/db/src/writers/session-rows.ts
+index 3c2f980a..b74c40cf 100644
+--- a/packages/db/src/writers/session-rows.ts
++++ b/packages/db/src/writers/session-rows.ts
+@@ -136,7 +136,7 @@ export async function updateEntrySetRows(
+   for (const q of args.set.quantities) {
+     const updated = await exec
+       .update(schema.entrySetQuantities)
+-      .set({ valueNum: String(q.value), updatedAt: now })
++      .set({ valueNum: String(q.value), updatedAt: schema.entrySetQuantities.updatedAt })
+       .where(
+         and(
+           eq(schema.entrySetQuantities.entrySetId, setId),

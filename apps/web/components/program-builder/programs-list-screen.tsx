@@ -1,5 +1,4 @@
 import type { ProgramActions, ProgramList } from '@mat-plan/shared';
-import Link from 'next/link';
 
 import { APP_HOME_PATH, NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
 import { formatList } from '@/lib/i18n/plural';
@@ -8,6 +7,7 @@ import { BUILDER_COPY } from './builder-text';
 import { CreateProgram } from './create-program';
 import { GroupList, GroupRowLink } from './group-list';
 import { programPath } from './routes';
+import { BuilderLink } from './route-link';
 
 /**
  * The Programs list (FAM-1 step 8a; plan §8 "Programs list"; the prototype's `vPrograms`).
@@ -27,9 +27,9 @@ export type ProgramsListScreenProps = { programs: ProgramList; actions: ProgramA
 export function ProgramsListScreen({ programs, actions }: ProgramsListScreenProps) {
   return (
     <div className="flex flex-col gap-4">
-      <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
+      <BuilderLink href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
         {BUILDER_COPY.home}
-      </Link>
+      </BuilderLink>
       <h1 className="text-2xl font-semibold tracking-tight">{BUILDER_COPY.programs}</h1>
       {programs.length ? (
         <GroupList>

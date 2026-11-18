@@ -98,14 +98,49 @@ export type CheckinInsertValue = {
   status: string;
 };
 
+type CheckinArgs = {
+  /** INTERNAL id of a profile the caller has already resolved as LIVE and owned. */
+  profileId: number;
+  values: readonly CheckinInsertValue[];
+};
+
+/**
+ * Insert the items and say what happened to each, in submit order.
+ *
+ * 🔴 **One retry, for exactly the items nothing explains** (the tech-debt row "A day-taken insert can
+ * throw when the day is cleared in the same instant"). The insert, the holder read and the held-day
+ * read are three autocommit statements, so a live practice that skipped an insert can be cleared
+ * before the reads run: no insert, no holder, no taken day. The day is free by then, so those items
+ * are inserted once more and classified again. A second miss is not that race (it would need a new
+ * practice logged and cleared again inside the retry), so it throws as before.
+ */
 export async function writeCheckinEntries(
   exec: Executor,
-  args: {
-    /** INTERNAL id of a profile the caller has already resolved as LIVE and owned. */
-    profileId: number;
-    values: readonly CheckinInsertValue[];
-  },
+  args: CheckinArgs,
 ): Promise<CheckinWriteResult[]> {
+  const first = await attemptCheckinEntries(exec, args);
+  const missed = args.values.filter((_, i) => first[i] === null);
+  if (missed.length === 0) return first as CheckinWriteResult[];
+
+  const retried = await attemptCheckinEntries(exec, { ...args, values: missed });
+  const byClientId = new Map(missed.map((v, i) => [v.clientId, retried[i]]));
+  return args.values.map((v, i) => {
+    const result = first[i] ?? byClientId.get(v.clientId);
+    if (result == null) {
+      // No insert, no holder and no taken day, twice. The insert collided on another unique (a reused
+      // `public_id`), which no app path sends. Say so rather than guess: `reselectLiveByClientId`'s
+      // judgement about its own impossible branch.
+      throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);
+    }
+    return result;
+  });
+}
+
+/** One insert and its classification; `null` for an item no outcome explains (the race above). */
+async function attemptCheckinEntries(
+  exec: Executor,
+  args: CheckinArgs,
+): Promise<(CheckinWriteResult | null)[]> {
   if (args.values.length === 0) return [];
 
   const inserted = await exec
@@ -212,13 +247,9 @@ export async function writeCheckinEntries(
     if (holder !== undefined) {
       return { clientId: v.clientId, outcome: 'conflict' as const };
     }
-    // No insert, no holder and no taken day. Two ways to get here, neither an outcome to invent:
-    // - the insert collided on another unique (a reused `public_id`), which no app path sends;
-    // - since 3b-0, a RACE: the live practice that skipped this insert was hidden before the
-    //   held-day lookup ran (three autocommit statements, READ COMMITTED). Reachable since V1-24
-    //   3b-life-a ships the practice clear; ACCEPTED, as bodyweight's twin is (`tech-debt.md`).
-    // Either way, say so rather than guess — `reselectLiveByClientId`'s judgement about its own
-    // impossible branch.
-    throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);
+    // No insert, no holder and no taken day: the live practice that skipped this insert was hidden
+    // before the held-day lookup ran, or the insert collided on another unique (a reused
+    // `public_id`). `writeCheckinEntries` retries the first and throws on the second.
+    return null;
   });
 }

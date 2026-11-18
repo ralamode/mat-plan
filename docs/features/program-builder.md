@@ -197,10 +197,20 @@ flowchart LR
       inactive until a type is chosen, with a line explaining the chosen type, and the warning that
       the item can't be deleted or renamed and its type can't change.
     - **A name already in the list selects that item**, by the picker's own rule (aliases
-      included): "RDL" selects Romanian Deadlift. If the server still answers `existed` (a stale
-      list, or another parent got there first), the item it names is added under its stored name
-      and the status line says "… is in the list (Reps). Selected." (v12 has no such line). The
-      name is the answer's `name` (contract C8).
+      included): "RDL" selects Romanian Deadlift. If the server still answers `existed` for an item
+      the list does not have (another parent got there first), the item it names is added under its
+      stored name, and the status line says what happened: "… already exists (Reps), so nothing new
+      was made. Selected." (`existedUnlistedText`, 7a-ii; "is in the list" would be false, and the
+      type chosen was not used). **Except a retry whose first try landed**: when the last Create on
+      the form got no answer (a failure that is not the name's) and this one, for the same name and
+      type, answers `existed`, the first try made it, so it says "created" (`unanswered`, 7a-ii
+      review). The status text is chosen in one place, `said`. The name is the answer's `name`
+      (contract C8).
+    - **Every link a screen draws is `BuilderLink`** (`route-link.tsx`, 7a-ii), never `next/link`
+      itself (a scan): it prefetches as Next does, unless the `BuilderLinkPrefetch` context says
+      `false`. ⏳ **Not provided yet:** the design preview's harness will wrap the builder in
+      `<BuilderLinkPrefetch value={false}>` (its fixture ids prefetch 404s); the roadmap thread owns
+      that file and wires it after 7a-ii merges. Until then the preview still prefetches.
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.
@@ -294,8 +304,30 @@ flowchart LR
     - A miss is reported only after a writer or read has said "not here", never on a success, and
       once per request: the program first, then the workout; an item's miss reports nothing. A
       failed check reports nothing and never changes the answer.
-    - No page or component imports `app/programs/actions.ts` until 7b, which owes the notice and
-      inventory sentences that test lists (`OWED_AT_7B`).
+    - No page or component imports `app/programs/actions.ts` or `actions.contract.ts` until 7b,
+      which owes the notice and inventory sentences that test lists (`OWED_AT_7B`). The pin reads
+      both paths: the object holds every action.
+    - **The real `ProgramActions` is `PROGRAM_ACTIONS`** (`actions.contract.ts`, 7a-ii), the six
+      required members; `putOn` and `takeOff` are left out until step 15, so their controls stay
+      hidden. Not in `actions.ts`: a `'use server'` module exports only async functions.
+    - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
+      DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
+      editor reads it as a stale page.
+    - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
+      helper): a week's program, then each workout it names (distinct, at most
+      `WEEK_PROBE_LIMIT`); a copy's TARGET program, then its source workout by id alone
+      (`workoutInHousehold`).
+    - **The item picker's data** (`lib/dal/program/picker.ts`, CAT-3 P11-i): the household's own
+      items and, ⏳ **until the catalog's fresh start (CAT-3 chunk R), every old built-in**
+      (maintainer, 2026-11-17: "Show all 35 until reset", which suspends "only ones with library
+      data": hidden built-ins made search say a movement did not exist that `newItem` then
+      selected). A built-in the library has an entry for is the library's taxonomy on the DATABASE
+      ROW's name, tracking type, unit and bodyweight flag, since the row is what a save and a log use
+      (board, 2026-11-17); its aliases are the row's joined with the library's, so the client
+      withholds at least what the server selects. One without an entry is `BuiltInWithoutLibrary`
+      (`lib/movements/movement-option.ts`): the row with no taxonomy at all, so no filter passes it
+      and it has no "How to". The slug never leaves the DAL (a keys test). TODO at chunk R: list only
+      rows the library has, and drop that arm.
 
 ## Traps
 

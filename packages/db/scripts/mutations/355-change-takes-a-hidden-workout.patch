@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
+index 0c724670..44e9a262 100644
+--- a/packages/db/src/writers/day/amend-row.ts
++++ b/packages/db/src/writers/day/amend-row.ts
+@@ -88,7 +88,6 @@ export async function amendRow(
+     if (!(await isScheduledOn(tx, workout.blockId, workout.id, entry.day))) {
+       refuse(ROW_REFUSAL.not_scheduled);
+     }
+-    if (!workout.live) refuse(ROW_REFUSAL.program_changed);
+ 
+     // 5 · 6 — the prescription, pinned to that workout, and its movement (`rowItem`, as a ✓).
+     //     A purged one is `program_changed`, as the fake's removed item.

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
+index 0c724670..9fc410d8 100644
+--- a/packages/db/src/writers/day/amend-row.ts
++++ b/packages/db/src/writers/day/amend-row.ts
+@@ -76,7 +76,7 @@ export async function amendRow(
+       )
+       .limit(1)
+       .for('update', { of: schema.entries });
+-    if (!entry || entry.deletedAt !== null) refuse(ROW_REFUSAL.not_found);
++    if (!entry) refuse(ROW_REFUSAL.not_found);
+ 
+     // 3 — the window, from the entry's own day; an archived athlete's day is read-only.
+     if (!rowDayOpen(entry.day, args.today, profile.archivedAt)) refuse(ROW_REFUSAL.closed_day);

@@ -16,7 +16,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
+import {
+  hasLibraryData,
+  type MovementOptionDTO,
+  type MovementPickerData,
+} from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { SHEET_COPY } from '@/components/ui/sheet';
 
@@ -1081,6 +1085,36 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     ).toBeTruthy();
   });
   const howToButton = (name: string) => screen.queryByRole('button', { name: COPY.howToFor(name) });
+
+  /**
+   * ⏳ An old built-in the library has no entry for (7a-ii, until CAT-3 chunk R): the seeded row with
+   * its browse group, and none of the taxonomy's keys.
+   */
+  const BARE = Object.fromEntries(
+    Object.entries(catalogOption('Back Squat')).filter(([key]) => !(key in TEST_TAXONOMY)),
+  ) as MovementOptionDTO;
+
+  it('⏳ a built-in without library data says only how it is logged: no equipment, no label, no "How to" (7a-ii)', () => {
+    for (const multi of [false, true]) {
+      render(<RowHarness multi={multi} options={[BARE, ROPE]} howTo={vi.fn(async () => STEPS)} />);
+      open();
+      const text = row('Back Squat').textContent ?? '';
+      expect(text, `multi=${multi}`).toBe(`Back Squat, ${TRACKING_TYPE_LABELS.weight_reps}`);
+      expect(text).not.toContain(COPY.emptyEquipment);
+      expect(text).not.toContain(SUPERVISION_LABELS.coach);
+      expect(howToButton('Back Squat')).toBeNull();
+      // The row beside it still has its library data, so the loader is wired.
+      expect(howToButton('Pull-Up')).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it('hasLibraryData: a library row, even one needing no equipment; never a bare built-in or a custom item', () => {
+    expect(hasLibraryData(PUSH_UPS)).toBe(true);
+    expect(hasLibraryData(SQUAT)).toBe(true);
+    expect(hasLibraryData(BARE)).toBe(false);
+    expect(hasLibraryData(MINE)).toBe(false);
+  });
 
   it('says how each row is logged and what it needs, in both modes; a custom item never says "No equipment" (P14)', () => {
     for (const multi of [false, true]) {

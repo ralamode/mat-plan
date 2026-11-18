@@ -1,5 +1,7 @@
 import {
   ACTIVITY_CATEGORY_ROWS,
+  EQUIPMENT,
+  MUSCLES,
   ACTIVITY_TYPE_SEED_ROWS,
   CALISTHENICS_METRIC_KEYS,
   CALISTHENICS_RAMP_SCHEDULE,
@@ -222,6 +224,20 @@ export async function seed(
     .insert(schema.activityTypeCategories)
     .values(ACTIVITY_CATEGORY_ROWS)
     .onConflictDoNothing({ target: schema.activityTypeCategories.code });
+
+  // CAT-3 A1: the library's two vocabularies, codes only (labels stay in shared). DoNothing, not
+  // DoUpdate: the code is the whole row, and movement_equipment / movement_muscles reference it, so
+  // there is nothing to update. Adding a word lands here with no migration; removing or renaming one
+  // needs a migration, because join rows name the code. These move to `seedReference` with the others
+  // when OPS-2 PR 1 lands.
+  await db
+    .insert(schema.equipment)
+    .values(EQUIPMENT.map((code) => ({ code })))
+    .onConflictDoNothing({ target: schema.equipment.code });
+  await db
+    .insert(schema.muscles)
+    .values(MUSCLES.map((code) => ({ code })))
+    .onConflictDoNothing({ target: schema.muscles.code });
 
   // 🔴 **CONDITIONAL ON NO LIVE HOUSEHOLD EXISTING — `AUTH-1` 1c-4.**
   //

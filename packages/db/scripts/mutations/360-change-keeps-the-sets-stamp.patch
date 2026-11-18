@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/session-rows.ts b/packages/db/src/writers/session-rows.ts
+index 3c2f980a..16dccd82 100644
+--- a/packages/db/src/writers/session-rows.ts
++++ b/packages/db/src/writers/session-rows.ts
+@@ -125,7 +125,7 @@ export async function updateEntrySetRows(
+   const now = sql`now()`;
+   const sets = await exec
+     .update(schema.entrySets)
+-    .set({ updatedAt: now, ...(args.set.reps !== undefined ? { reps: args.set.reps } : {}) })
++    .set({ updatedAt: schema.entrySets.updatedAt, ...(args.set.reps !== undefined ? { reps: args.set.reps } : {}) })
+     .where(and(eq(schema.entrySets.entryId, args.entryId), isNull(schema.entrySets.deletedAt)))
+     .returning({ id: schema.entrySets.id });
+   if (sets.length !== 1) {

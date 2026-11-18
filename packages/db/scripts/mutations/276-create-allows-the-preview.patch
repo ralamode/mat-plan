@@ -1,0 +1,17 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 9ec3f099..96a9ff4d 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -883,12 +883,6 @@ const createHousehold: Correction = {
+   issue: 'PRIV-3',
+   async run(db, apply) {
+     try {
+-      if (correctionTargetIsPreview()) {
+-        throw new CorrectionRefusal(
+-          'the target is the preview database, which is seed-only and must never hold a production ' +
+-            'account; nothing written',
+-        );
+-      }
+       const ids = parseAccountList(process.env[CREATE_HOUSEHOLD_ACCOUNTS_ENV]);
+       const n = ids.length;
+       ids.forEach((id, i) => {

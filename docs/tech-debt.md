@@ -78,7 +78,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Severity:** low today, high the moment the schedule has a row. Owner: lane A (`seed.ts` is its
   file), with step 12f.
 
-### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel)
+### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel) — ✅ CLOSED 2026-11-17
+
+- **Closed:** `writeCheckinEntries` and `insertBodyweightEntry` re-run the insert once, for exactly
+  the items no outcome explains, before they throw. `db:verify` stages the race on PGlite with a
+  statement-level `AFTER INSERT` trigger that hides the holder inside the skipped insert
+  (`verify/single-values.ts` → `verifyDayTakenRace`); mutations 420 and 421 remove each retry.
+  A second miss still throws: for a check-in, a reused `public_id`; for a weigh-in, a replay of a
+  hidden one, a `client_id` already used by another metric or profile, or an evening-only day.
 
 - **What & why it's debt:** `writeCheckinEntries` (a practice) and `insertBodyweightEntry` (a
   weigh-in) are skipped by their day index when another live row holds the day, then re-read to say
@@ -1203,7 +1210,9 @@ success.` Harmless there — nothing referenced the files yet.
 - **What:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`, V1-9) advances
   `entry_sets.updated_at` to the DB `now()` on each edit. The AGENTS.md schema convention mandates
   last-writer-wins on the **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so
-  offline clock-skew resolves correctly.
+  offline clock-skew resolves correctly. **The day page's Change does the same** (FAM-1 11c-i,
+  `amendRow` → `updateEntrySetRows` in `writers/session-rows.ts`: the set, its quantities and the
+  entry), and so will 11c-ii's revive; v1.5 sync must find all of them.
 - **Impact:** none today — there is a single ONLINE writer (no offline outbox until v1.5), so `now()` is
   always `> created_at` and no two devices race an edit. Correct for the current deployment.
 - **Proposed fix:** at **v1.5** (offline + TanStack Query + the sync outbox), take the client `updated_at`

@@ -1,0 +1,9 @@
+diff --git a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+--- a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
++++ b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+@@ -86,4 +86,4 @@ CREATE UNIQUE INDEX "uq_movement_equipment_pair" ON "movement_equipment" USING b
+ CREATE INDEX "idx_movement_equipment_equipment_code" ON "movement_equipment" USING btree ("equipment_code");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_movement_muscles_pair" ON "movement_muscles" USING btree ("movement_id","muscle_code");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_movement_muscles_one_primary" ON "movement_muscles" USING btree ("movement_id") WHERE "movement_muscles"."role" = 'primary';--> statement-breakpoint
+-CREATE INDEX "idx_movement_muscles_muscle_code" ON "movement_muscles" USING btree ("muscle_code");
++SELECT 1;

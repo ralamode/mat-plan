@@ -1,6 +1,6 @@
 import {
   addDays,
-  inWritableWindow,
+  dayOpenFor,
   localWeekday,
   MONDAY_FIRST,
   type Weekday,
@@ -83,7 +83,7 @@ function weekdayOf(day: string): Weekday {
  */
 function isWritable(world: ProtoWorld, athlete: string, day: string): boolean {
   const archived = world.athletes.find((a) => a.id === athlete)?.archived === true;
-  return inWritableWindow(day, world.today) && !archived;
+  return dayOpenFor({ archived }, day, world.today);
 }
 
 /** The unit an item logs in: fixed by its type, or the one its prescription names. */

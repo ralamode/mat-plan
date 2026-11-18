@@ -30,7 +30,11 @@ import {
   type RefObject,
 } from 'react';
 
-import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
+import {
+  hasLibraryData,
+  type MovementOptionDTO,
+  type MovementPickerData,
+} from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { Button } from '@/components/ui/button';
 import {
@@ -241,17 +245,19 @@ type HowToControl = {
  */
 /** A library row's supervision, or `null`: a household item has none (P13). */
 function supervisionOf(option: MovementOptionDTO) {
-  return option.owner === 'catalog' ? option.supervision : null;
+  return hasLibraryData(option) ? option.supervision : null;
 }
 
 export function rowMeta(option: MovementOptionDTO): string {
-  const needs =
-    option.owner === 'household'
-      ? COPY.customItem
-      : requiresNoEquipment(option)
-        ? COPY.emptyEquipment
-        : COPY.equipmentList(option.equipment.map((item) => EQUIPMENT_LABELS[item]));
-  return COPY.rowMeta(TRACKING_TYPE_LABELS[option.trackingType], needs);
+  const tracking = TRACKING_TYPE_LABELS[option.trackingType];
+  if (option.owner === 'household') return COPY.rowMeta(tracking, COPY.customItem);
+  // ⏳ An old built-in with no library entry (until the fresh start) has no equipment to show, and
+  // saying "No equipment" would be a claim nobody made: just how it is logged.
+  if (!hasLibraryData(option)) return tracking;
+  const needs = requiresNoEquipment(option)
+    ? COPY.emptyEquipment
+    : COPY.equipmentList(option.equipment.map((item) => EQUIPMENT_LABELS[item]));
+  return COPY.rowMeta(tracking, needs);
 }
 
 /**
@@ -1306,7 +1312,7 @@ function OptionRow({
 }) {
   const howButton = useRef<HTMLButtonElement>(null);
   const supervision = supervisionOf(option);
-  const hasHowTo = mode.howTo !== null && option.owner === 'catalog' && option.hasInstructions;
+  const hasHowTo = mode.howTo !== null && hasLibraryData(option) && option.hasInstructions;
   const howState = hasHowTo && mode.howTo?.openKey === rowKey ? mode.howTo.state : null;
   const howId = `how-to-${rowKey}`;
   const checked = mode.kind === 'multi' && mode.selected.has(option.publicId);
