@@ -49,13 +49,13 @@ export function inWritableWindow(day: string, today: string): boolean {
 /**
  * **Is this day open for this athlete?** Inside the writable window (`inWritableWindow`: today and
  * yesterday, never a day after today) AND the athlete is not archived. This is the whole of "the
- * day is open": what `DayPlan.writable` means and what the row writer accepts a ✓ on (`closed_day`
- * otherwise), and the bound the day's clear and its Restore all are to take when lane S builds them
- * (FAM-1 plan D32; the maintainer, 2026-11-17: an archived athlete's day is never writable;
- * contract change C34).
+ * day is open": what `DayPlan.writable` means, what the row writer accepts a ✓ on (`closed_day`
+ * otherwise), and what a day's Restore all is held to (FAM-1 plan D32; the maintainer, 2026-11-17:
+ * an archived athlete's day is never writable; contract change C34).
  *
  * ⚠️ **As of C34 only the contract's fixture world calls this.** The day resolver and the row
- * writer still call lane E's `rowDayOpen`, which is the same rule; they switch in lane E's PR.
+ * writer call lane E's `rowDayOpen`, and Restore all calls lane S's `dayIsOpen`
+ * (`clear-day-actions.ts`): the same rule, written twice more. Each switches in its own lane's PR.
  *
  * One function, so the page and every writer answer alike: a second copy that forgot the archived
  * half would offer a ✓ the writer then refuses. Call this wherever the athlete is known;
