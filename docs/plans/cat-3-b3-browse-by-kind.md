@@ -63,8 +63,8 @@ The criterion is [spec P12](../specs/cat-3-movement-library.md) and K24, linked 
 because a pasted copy goes stale. Done when:
 
 - **Order, with no query and no filter.** Any section with no rows is omitted.
-  1. "Your custom items · N": open, or folded above `CUSTOM_OPEN_AT_MOST` if the maintainer accepts
-     Q1.
+  1. "Your custom items · N": open at ≤ `CUSTOM_OPEN_AT_MOST` (5) rows; above that, one folded
+     line (H2, maintainer-decided).
   2. "Recent", with no count, as today.
   3. "Today's program", unchanged.
   4. "All movements · N", open. It holds each kind (folded, with its count) in `BROWSE_KINDS` order,
@@ -84,8 +84,7 @@ because a pasted copy goes stale. Done when:
   - There is no Recent and no Today's program.
   - An empty tree shows `COPY.noneFit` with Clear filters (P10, unchanged).
 - **Auto-open:** with a filter on, every kind and family opens when the tree holds
-  ≤ `BROWSE_OPEN_AT_MOST` rows (P12). Whether that also applies with no filter is Q2. Either way it
-  is one derived expression.
+  ≤ `BROWSE_OPEN_AT_MOST` rows, **filter or not** (H3, maintainer-decided). One derived expression.
 - **Open state:**
   - It lives in the picker. It survives the filter panel, the item-form takeover, a no-match query
     and clearing the search, and resets only when the sheet opens.
@@ -210,9 +209,12 @@ seeded: Set<NodeKey>; // a latch: ancestors of every ticked/current row at sheet
 open(key) = userChoice.get(key) ?? (auto || seeded.has(key) || defaultOpen(key));
 ```
 
-- **`auto` is one expression:** `filtered && library.length <= BROWSE_OPEN_AT_MOST`. If the
-  maintainer accepts Q2(A), it becomes `library.length <= BROWSE_OPEN_AT_MOST`.
-- **`defaultOpen`** is true for the top sections (custom, subject to Q1; All movements) and false
+- **`auto` is one expression:** `library.length <= BROWSE_OPEN_AT_MOST`, filter or not (H3).
+- **Conditioning has no family level** (H4): its rows are listed by name (`byFoldedName`) directly
+  under "Conditioning · N". Which kinds are flat is a contract rule: asked of the roadmap thread as
+  a `BROWSE_FLAT_KINDS` const in `families.ts` that `browseTree` honours (one unnamed family), so
+  the picker only renders what it is given.
+- **`defaultOpen`** is true for All movements, and for custom items at ≤ `CUSTOM_OPEN_AT_MOST` (5; H2) and false
   for kinds, families and Not sorted yet.
 - **A new selection reopens its ancestors** (round 2, correctness). When an id enters `selected`
   (the person's tick, or the caller's select or create) or becomes `currentId`, its ancestors are
@@ -327,10 +329,9 @@ of tests, which is over the 400-line target. If the build confirms that, B3 ship
   - Mitigation: closed groups render nothing.
   - Not measured; there is no per-PR CWV tooling.
   - The search path already draws every match, so this risk covers browse's share only.
-- **The real tree is tiny until A2.** That is by design (K22 to K24). Q2 decides whether it opens
-  itself.
-- **Conditioning's families scatter on real data** (Q3). B3 renders whatever `browseTree` returns,
-  so a contract change fixes it without touching B3's code.
+- **The real tree is tiny until A2.** That is by design (K22 to K24), and it opens itself (H3).
+- **Conditioning's families scattered on real data**; it is now flat (H4), through the contract's
+  `BROWSE_FLAT_KINDS`. B3 renders whatever `browseTree` returns.
 - **The same movement can be listed twice:**
   - by name (K23);
   - by meaning, e.g. BB Bench / Bench press, KB Swings / Kettlebell swing.
@@ -355,23 +356,15 @@ of tests, which is over the 400-line target. If the build confirms that, B3 ship
 
 ## Open questions
 
-These were sent to the spec owner (the roadmap thread) on 2026-11-18. **Q1 to Q3 and Q4(a) are
-held for the maintainer**, because each changes the accepted prototype (K19). The plan carries each
-recommendation as **pending the maintainer**. None of them blocks the build: each is a one-line
-change in this design.
+**All decided by the maintainer, 2026-11-18 (orchestrator's chat), each as recommended:**
 
-- **Q1:** should "Your custom items" start folded above `CUSTOM_OPEN_AT_MOST` (5)? This amends P12's
-  "the two sections start open". It is the interaction lens's blocking finding: 24 open rows push
-  All movements 2.5 screens down at 390px. The spec owner recommends yes.
-- **Q2:** should a tree of ≤ 20 rows auto-open even with no filter? This amends P12. Until A2 the
-  interim tree costs two taps per movement. The spec owner recommends yes.
-- **Q3:** should Conditioning list its rows with no family level? This amends K19 for one kind,
-  based on the trust lens's real-library evidence: Bear crawl lands under Neck and shoulders, while
-  Bear crawl hold lands under Core. The spec owner leans yes and rules out clearing primary muscles.
-- **Q4(a):** should "Arms, calves and single muscles" become "Curls, raises and single muscles"? It
-  is the label for all `pattern: 'isolation'` strength work. Today only batch 7's hamstring and
-  glute half is in the library; arm and calf movements will land there as their batches merge. The
-  spec owner recommends yes.
+- ~~Q1~~ **H2:** "Your custom items" is open at ≤ `CUSTOM_OPEN_AT_MOST` (5), else one folded line.
+- ~~Q2~~ **H3:** the tree opens itself at ≤ `BROWSE_OPEN_AT_MOST` (20) rows, filter or not.
+- ~~Q3~~ **H4:** Conditioning has no family level; its rows are listed by name under
+  "Conditioning · N". The `BROWSE_FLAT_KINDS` const and `browseTree`'s change are the roadmap
+  thread's (contract).
+- ~~Q4(a)~~ **H5:** the label becomes "Curls, raises and single muscles" (contract,
+  `MOVEMENT_FAMILY_LABELS.isolation`; the roadmap thread's).
 - ~~**Q4(b)**~~ **Decided (2026-11-18):** the roadmap thread exports `byFoldedName` from
   `families.ts`.
 
@@ -414,29 +407,29 @@ change in this design.
 
 ### UX panel (round 1)
 
-| #          | Lens        | Critique (short)                                                        | Verdict                           | Resolution                                                                                          |
-| ---------- | ----------- | ----------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| U1-1       | Interaction | 24 open custom items bury the tree at 390px                             | **held for the maintainer (Q1)**  | Fold above 5; recommended by the spec owner                                                         |
-| U1-2       | Interaction | A family closes under the thumb on an untick                            | **accepted**                      | Same fix as C-B2. The same latent bug in `FoldedSection` was confirmed by a probe and fixed in #596 |
-| U1-3       | Interaction | N must include K24's rows                                               | **accepted**                      | Same fix as C-S2                                                                                    |
-| U1-4       | Interaction | The interim tree costs two taps per movement                            | **held for the maintainer (Q2)**  | Auto-open by tree size; recommended by the spec owner                                               |
-| U1-5       | Interaction | K24's order and label                                                   | **accepted**                      | `byFoldedName`; "Not sorted yet"                                                                    |
-| U1-6, U1-7 | Interaction | The returning-user risk is moot; no-match fallback                      | **accepted**                      | Risk removed; fallback specified                                                                    |
-| U2-1       | a11y/360    | `<details>` + `onToggle` drift; focus loss                              | **accepted**                      | Controlled APG button disclosure                                                                    |
-| U2-2       | a11y/360    | Headings inside `<summary>` are unproven on iOS VoiceOver               | **accepted**                      | The heading is now the button's parent                                                              |
-| U2-3       | a11y/360    | How to's `h4` sits above its row under an `h5`                          | **accepted**                      | The heading level is passed down                                                                    |
-| U2-4       | a11y/360    | Indenting rows costs 19% of the name column; 200% zoom overflows by 7px | **accepted**                      | Only the disclosure buttons indent; rows at most `ml-3`; a 200% e2e step                            |
-| U2-5       | a11y/360    | The count is orphaned on wrap; screen-reader wording                    | **accepted**                      | `shrink-0` count, `aria-hidden` dot, `sr-only` "N movements"                                        |
-| U2-6       | a11y/360    | State is lost across the panel and the takeover                         | **accepted**                      | Same fix as C-B1                                                                                    |
-| U2-7, U2-8 | a11y/360    | Summaries are not measured by the 44px check; keyboard untested         | **accepted**                      | A `<button>` is measured; keyboard e2e step                                                         |
-| U3-1       | Trust       | "Other movements" reads as a fifth kind, or as leftovers                | **accepted**                      | "Not sorted yet"                                                                                    |
-| U3-2       | Trust       | "Arms, calves and single muscles" names nothing it holds                | **held for the maintainer (Q4a)** | Contract label; recommended by the spec owner                                                       |
-| U3-3       | Trust       | Conditioning's families scatter                                         | **held for the maintainer (Q3)**  | The spec owner leans yes                                                                            |
-| U3-4       | Trust       | The evidence is the fixture, not the library                            | **accepted**                      | The real tree goes in the PR body; the plan's sentence is corrected                                 |
-| U3-5       | Trust       | A tick must open its kind and K24's section                             | **accepted**                      | Same fix as C-B2                                                                                    |
-| U3-6       | Trust       | K23: say both rows log, and steer toward neither                        | **accepted**                      | In Risks                                                                                            |
-| U3-7       | Trust       | A note inside K24's section                                             | **rejected**                      | Only the maintainer sees it before R2, and each row's second line already says what it lacks        |
-| U3-8       | Trust       | Kind labels                                                             | **accepted (no change)**          | "Conditioning" kept; "Mobility and stretching" passed to the contract owner as an FYI               |
+| #          | Lens        | Critique (short)                                                        | Verdict                     | Resolution                                                                                          |
+| ---------- | ----------- | ----------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------- |
+| U1-1       | Interaction | 24 open custom items bury the tree at 390px                             | **maintainer-decided (H2)** | Fold above 5; recommended by the spec owner                                                         |
+| U1-2       | Interaction | A family closes under the thumb on an untick                            | **accepted**                | Same fix as C-B2. The same latent bug in `FoldedSection` was confirmed by a probe and fixed in #596 |
+| U1-3       | Interaction | N must include K24's rows                                               | **accepted**                | Same fix as C-S2                                                                                    |
+| U1-4       | Interaction | The interim tree costs two taps per movement                            | **maintainer-decided (H3)** | Auto-open by tree size; recommended by the spec owner                                               |
+| U1-5       | Interaction | K24's order and label                                                   | **accepted**                | `byFoldedName`; "Not sorted yet"                                                                    |
+| U1-6, U1-7 | Interaction | The returning-user risk is moot; no-match fallback                      | **accepted**                | Risk removed; fallback specified                                                                    |
+| U2-1       | a11y/360    | `<details>` + `onToggle` drift; focus loss                              | **accepted**                | Controlled APG button disclosure                                                                    |
+| U2-2       | a11y/360    | Headings inside `<summary>` are unproven on iOS VoiceOver               | **accepted**                | The heading is now the button's parent                                                              |
+| U2-3       | a11y/360    | How to's `h4` sits above its row under an `h5`                          | **accepted**                | The heading level is passed down                                                                    |
+| U2-4       | a11y/360    | Indenting rows costs 19% of the name column; 200% zoom overflows by 7px | **accepted**                | Only the disclosure buttons indent; rows at most `ml-3`; a 200% e2e step                            |
+| U2-5       | a11y/360    | The count is orphaned on wrap; screen-reader wording                    | **accepted**                | `shrink-0` count, `aria-hidden` dot, `sr-only` "N movements"                                        |
+| U2-6       | a11y/360    | State is lost across the panel and the takeover                         | **accepted**                | Same fix as C-B1                                                                                    |
+| U2-7, U2-8 | a11y/360    | Summaries are not measured by the 44px check; keyboard untested         | **accepted**                | A `<button>` is measured; keyboard e2e step                                                         |
+| U3-1       | Trust       | "Other movements" reads as a fifth kind, or as leftovers                | **accepted**                | "Not sorted yet"                                                                                    |
+| U3-2       | Trust       | "Arms, calves and single muscles" names nothing it holds                | **maintainer-decided (H5)** | Contract label; recommended by the spec owner                                                       |
+| U3-3       | Trust       | Conditioning's families scatter                                         | **maintainer-decided (H4)** | The spec owner leans yes                                                                            |
+| U3-4       | Trust       | The evidence is the fixture, not the library                            | **accepted**                | The real tree goes in the PR body; the plan's sentence is corrected                                 |
+| U3-5       | Trust       | A tick must open its kind and K24's section                             | **accepted**                | Same fix as C-B2                                                                                    |
+| U3-6       | Trust       | K23: say both rows log, and steer toward neither                        | **accepted**                | In Risks                                                                                            |
+| U3-7       | Trust       | A note inside K24's section                                             | **rejected**                | Only the maintainer sees it before R2, and each row's second line already says what it lacks        |
+| U3-8       | Trust       | Kind labels                                                             | **accepted (no change)**    | "Conditioning" kept; "Mobility and stretching" passed to the contract owner as an FYI               |
 
 ### Re-review (round 2)
 
