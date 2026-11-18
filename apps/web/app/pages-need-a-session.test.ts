@@ -44,11 +44,12 @@ function routeOf(file: string): string {
 
 const app = (pattern: string) =>
   globSync(pattern, { cwd: APP_DIR })
-    .filter((f) => !/\.test\.tsx?$/.test(f))
+    .filter((f) => !/\.test\.[jt]sx?$/.test(f))
     .map((f) => join(APP_DIR, f));
 
-const pages = app('**/page.tsx');
-const handlers = app('**/route.ts');
+// Every extension Next serves a page or route from, so a `route.tsx` or `page.js` cannot slip past.
+const pages = app('**/page.{tsx,ts,jsx,js}');
+const handlers = app('**/route.{ts,tsx,js,jsx}');
 
 describe('every page requires a session or is deliberately public', () => {
   it('finds the pages (an empty glob would pass everything below)', () => {
