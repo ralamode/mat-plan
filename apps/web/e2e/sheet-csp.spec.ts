@@ -105,23 +105,6 @@ test('an open sheet locks the page behind it under the production CSP', async ({
   });
 });
 
-test('the keyboard cannot scroll the page behind an open sheet', async ({ page }) => {
-  await page.goto(EDITOR);
-  // Both preconditions, or the check below passes whether or not the lock works: the page must be
-  // able to scroll at all, and focus must sit outside the sheet's own scrolling list. On a touch
-  // device the picker focuses the sheet's title (`movement-picker.tsx`, `prefersKeyboardFocus`).
-  const tall = await page.evaluate(
-    () => document.documentElement.scrollHeight > window.innerHeight,
-  );
-  expect(tall, 'the editor is taller than the viewport, so the page could scroll').toBe(true);
-  await openPicker(page);
-  const focusInList = await page.evaluate(
-    () => !!document.activeElement?.closest('[role="dialog"] .overflow-y-auto'),
-  );
-  expect(focusInList, "focus is on the sheet's title, not inside its scrolling list").toBe(false);
-
-  const before = await page.evaluate(() => window.scrollY);
-  await page.keyboard.press('PageDown');
-  await page.keyboard.press('PageDown');
-  expect(await page.evaluate(() => window.scrollY), 'PageDown did not move the page').toBe(before);
-});
+// ⚠️ No keyboard-scroll case. One was written and run RED first: with the lock's style blocked,
+// `PageDown` (focus on the sheet's title) still did not move the page in Chromium, so the case passed
+// on the broken code and proved nothing. It was removed rather than kept as false coverage.
