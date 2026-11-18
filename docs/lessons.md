@@ -1097,6 +1097,9 @@ migration 0019, and the claim correction — all dark` (#308). Keep the `db/` br
   as nominally distinct because of the private field. Read the **full `.pnpm/` paths** in the error: they
   differ only in `_pg@8.22.0` vs `_pg@8.23.0`. That is the whole diagnosis. → **`pnpm update pg --recursive`**,
   then commit the lockfile (−38/+3 lines; repoints the peer and prunes the orphaned entries).
+  ✅ **Since 2026-11-18 `apps/web` declares `pg`, `@types/pg` and `@electric-sql/pglite` itself**, with
+  `packages/db`'s ranges, so Dependabot bumps both workspaces together. If this recurs, first check that
+  the two `package.json`s still name the same ranges.
   **What does NOT work:** `pnpm dedupe` (won't re-resolve an already-pinned peer, zero churn);
   `pnpm.overrides` (same, zero churn); hand-editing the peer refs (leaves duplicate snapshot keys and
   fails `--frozen-lockfile`); `@dependabot recreate` (its lockfile updater is minimal by design, so it
