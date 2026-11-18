@@ -286,6 +286,8 @@ None. **The board answered on 2026-11-17:**
 
 ## Review-response log (adversarial panel)
 
+**Approved** _(maintainer, orchestrator's chat, 2026-11-17)_: "Approve (Recommended)". Implementation starts from this text.
+
 > Panel cost: correctness 128k · 7m48s, db-safety 148k · 7m24s, architecture 158k · 7m10s,
 > reuse 121k · 6m08s, scope 95k · 4m31s, privacy 117k · 3m43s.
 > Models: high-stakes schema and migration · every lens: opus (the Fable cap runs until 2026-11-19).
@@ -335,3 +337,14 @@ R1 is resolved. Every mutation from `310` to `323` reaches its own proof first. 
 | RR1 | The captured def cannot go "into `ctx`": `VerifyContext` is built at `verify.ts:9866`, after V1-1b       | **accepted** | The early function takes no `ctx` and returns the def. The `VerifyContext` field is dropped; harness's docblock names the exception |
 | RR2 | Proof order inside `verifyCatalogTables` decides which `.expect` fires for `313`, `321` and `323`        | **accepted** | The order is fixed in § Test plan                                                                                                   |
 | —   | The `packages/db/scripts/` allowlist entry is dead: the scan reads only `apps/web` and `packages/db/src` | **accepted** | Dropped                                                                                                                             |
+
+### As built (deviations from the text above)
+
+- **`315` and `316` turn each pair-unique into a plain index**, rather than dropping it. The pair-unique
+  is also the covering index for the movement FK, so dropping it would fail the covering-index proof
+  first, and the pair refusal would never be the first failure.
+- **The S4 refusal sets a modality with an `UPDATE`** on B's own movement, which is made through
+  `insertMovementOwnedBy`. A proof module may not read `scope.householdId` (`scope.test.ts`: the scope
+  stays a capability), so it cannot insert a household row directly.
+- **The S2 proof plants its global-movement rows in `verify/catalog.ts`**, not in P7's fixture, as the
+  test plan says. P7's fixture plants only on B's movement.

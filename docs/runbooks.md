@@ -429,7 +429,7 @@ insert into `sessions`, `supersets` or `entries`, so all logging; meanwhile roll
 previous deployment (its code works on either schema), then re-run as below. 0025: no request-path
 statement (the only insert into `prescriptions` is the fixtures seed, and nothing reads or writes
 `prescription_quantities`), so the app keeps serving; re-run as below. 0030 (V1-9b B2-0): as 0024,
-EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run. 0031 (lane A's VALIDATE): no request-path statement (it only scans), so the app keeps serving; a `23514` names the constraint and table, never the row (the read in [its plan](./plans/tdebt-validate-name-and-nan-checks.md) finds it), and its correction must repair the value, since a soft delete of that row is refused too; then re-run as below.
+EVERY insert into `entries` and every hide and restore, so all logging; roll Vercel back, then re-run. 0031 (lane A's VALIDATE): no request-path statement (it only scans), so the app keeps serving; a `23514` names the constraint and table, never the row (the read in [its plan](./plans/tdebt-validate-name-and-nan-checks.md) finds it), and its correction must repair the value, since a soft delete of that row is refused too; then re-run as below. 0032 (CAT-3 A1): EVERY insert into `movements` (a new item, the seed) fails `42703`; reads are unaffected and nothing reads the new tables. Roll Vercel back (old code runs on either schema) and re-dispatch `migrate.yml`: a later push does not fix it by itself. A failed insert's parameters carry `movements.name`, a household's free text, so keep them out of anything shared.
 ⚠️ **Once B2 has shipped, never roll Vercel back past B2-0's deploy:** older code un-hides without
 clearing `hide_reason`, which the CHECK refuses (`23514`) on any row Clear this day hid. ⚠️ Once the migration is
 observed applied, **promote the latest deployment again**: as Vercel documents it, a rollback stops
@@ -1439,6 +1439,13 @@ UNION ALL SELECT 'prescription_quantities', count(*) FROM prescription_quantitie
 -- must SURVIVE. Counted here because the counts are the proof, and step 5 has nothing to compare
 -- against without it.
 UNION ALL SELECT 'movements', count(*) FROM movements WHERE household_id = (SELECT id FROM h)
+-- CAT-3 A1: a movement's equipment and muscles, scoped through H's own movements. Zero today (no
+-- writer makes one for a household movement); a library movement's rows have household_id NULL on
+-- their movement and must SURVIVE.
+UNION ALL SELECT 'movement_equipment', count(*) FROM movement_equipment
+  WHERE movement_id IN (SELECT id FROM movements WHERE household_id = (SELECT id FROM h))
+UNION ALL SELECT 'movement_muscles', count(*) FROM movement_muscles
+  WHERE movement_id IN (SELECT id FROM movements WHERE household_id = (SELECT id FROM h))
 -- AUTH-1 1b: the 19th per-household table. Its FK to `households` is NO ACTION, so a live row here
 -- aborts step 14 and rolls the whole transaction back. Counted for the same reason as `movements` —
 -- the counts are the proof, and 4d has nothing to compare against without it.
@@ -1618,7 +1625,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 19 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 21 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -1628,7 +1635,7 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
 `packages/db/src/schema.ts` by two independent reviews. The same list is code in
 [`packages/db/src/erasure/graph.ts`](../packages/db/src/erasure/graph.ts) (`HOUSEHOLD_GRAPH`, rows
-1-19 in this order), which `db:verify` holds against the catalog:
+1-21 in this order), which `db:verify` holds against the catalog:
 
 | #   | Table                         | Scoped by                                                                                 |
 | --- | ----------------------------- | ----------------------------------------------------------------------------------------- |
@@ -1647,12 +1654,14 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 | 9c  | `program_assignment_weekdays` | `assignment_id` ∈ 9d's set — **FAM-1 5; before 9d**                                       |
 | 9d  | `program_assignments`         | `profile_id` ∈ H **AND** `block_id` ∈ program_blocks of H — **FAM-1 5; before 10 and 12** |
 | 10  | `program_blocks`              | `household_id` = H                                                                        |
+| 10a | `movement_equipment`          | `movement_id` ∈ movements of H — **CAT-3 A1; before 11**                                  |
+| 10b | `movement_muscles`            | `movement_id` ∈ movements of H — **CAT-3 A1; before 11**                                  |
 | 11  | **`movements`**               | `household_id` = H — **TEN-2a; see below**                                                |
 | 12  | `profiles`                    | `household_id` = H                                                                        |
 | 13  | **`household_members`**       | `household_id` = H — **AUTH-1 1b; see below**                                             |
 | 14  | `households`                  | `id` = H                                                                                  |
 
-**Steps 8a, 9a–9d are lettered, not numbered**, so every "step 11" and "step 14" cited across the
+**Steps 8a, 9a–9d, 10a and 10b are lettered, not numbered**, so every "step 11" and "step 14" cited across the
 repo still names the same table. A week slot references its workout through a composite FK, and a
 workout references its block, both `NO ACTION`: out of order, the delete raises `23503` and the
 transaction rolls back (`db:verify` proves both refusals and the order that commits). FAM-1 4b adds

@@ -648,6 +648,10 @@ erDiagram
   metric_definitions ||--o{ ramp_targets : "targets (V1-6b)"
   units ||--o{ activity_types : "default_unit"
   units ||--o{ movements : "unit_default"
+  movements ||--o{ movement_equipment : "required equipment (CAT-3 A1)"
+  equipment ||--o{ movement_equipment : "code"
+  movements ||--o{ movement_muscles : "one primary, any secondaries (CAT-3 A1)"
+  muscles ||--o{ movement_muscles : "code"
   units ||--o{ metric_definitions : "unit"
   units ||--o{ entries : "unit"
 
