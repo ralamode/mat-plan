@@ -142,12 +142,15 @@ describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N",
 
   it('a copy refused limit_reached names both causes, unless only the program can be full', () => {
     const { limit_reached } = PROGRAM_REFUSAL;
-    const either =
-      'This program can’t take another workout, or one of those days is full (50 workouts in a program, 30 on a day).';
-    expect(copyRefusal(limit_reached, { sameProgram: false, dayPicked: false })).toBe(either);
-    expect(copyRefusal(limit_reached, { sameProgram: false, dayPicked: true })).toBe(either);
-    expect(copyRefusal(limit_reached, { sameProgram: true, dayPicked: true })).toBe(either);
-    expect(copyRefusal(limit_reached, { sameProgram: true, dayPicked: false })).toBe(
+    const into = (target: string) =>
+      `${target} can’t take another workout, or one of those days is full (50 workouts in a program, 30 on a day).`;
+    const to = (sameProgram: boolean, dayPicked: boolean) =>
+      copyRefusal(limit_reached, { sameProgram, dayPicked, target: 'Stretching' });
+    // Into another program it is named, never "This program" (the page the parent is on).
+    expect(to(false, false)).toBe(into('Stretching'));
+    expect(to(false, true)).toBe(into('Stretching'));
+    expect(to(true, true)).toBe(into('This program'));
+    expect(to(true, false)).toBe(
       'This program is full: a program holds at most 50 workouts. Nothing was copied. Create another program to copy it into.',
     );
   });

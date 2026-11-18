@@ -68,9 +68,10 @@ export const BUILDER_COPY = {
   noOneOnIt: 'No one yet.',
   /**
    * Under "Who's on it" while the route wires no Put on (7b-i until step 15, which deletes it): the
-   * builder is not a dead end by mistake (7b plan, UX1 #4).
+   * builder is not a dead end by mistake (7b plan, UX1 #4). Says what is true now, not when it comes:
+   * "the next update" would be false once 7b-ii ships first.
    */
-  putOnComing: 'Putting someone on a program comes in the next update.',
+  putOnComing: 'Putting someone on a program isn’t in the app yet.',
   takeOff: 'Take off',
   takingOff: 'Taking off…',
   workouts: 'Workouts',
@@ -680,18 +681,23 @@ export const COPY_COPY = {
  */
 export function copyRefusal(
   reason: ProgramRefusal,
-  copy: { sameProgram: boolean; dayPicked: boolean },
+  copy: { sameProgram: boolean; dayPicked: boolean; target: string },
 ): string {
   if (reason !== PROGRAM_REFUSAL.limit_reached) return COPY_COPY.failed;
-  return copy.sameProgram && !copy.dayPicked
-    ? `${PROGRAM_FULL} Nothing was copied. Create another program to copy it into.`
-    : `This program can’t take another workout, or one of those days is full (${MAX_PROGRAM_WORKOUTS} workouts in a program, ${MAX_DAY_SLOTS} on a day).`;
+  if (copy.sameProgram && !copy.dayPicked) {
+    return `${PROGRAM_FULL} Nothing was copied. Create another program to copy it into.`;
+  }
+  // Into another program, it is named: "This program" would read as the page the parent is on.
+  const which = copy.sameProgram ? 'This program' : copy.target;
+  return `${which} can’t take another workout, or one of those days is full (${MAX_PROGRAM_WORKOUTS} workouts in a program, ${MAX_DAY_SLOTS} on a day).`;
 }
 
 /** The trigger's name: the visible words first (WCAG 2.5.3), then which workout. */
 export const copyToLabel = (workout: string) => `${COPY_COPY.open} a program: ${workout}`;
 export const copyTitle = (workout: string) => `Copy ${workout}`;
 export const thisProgramOption = (program: string) => `This program: ${program}`;
+/** This program in Copy's To, once it holds `MAX_PROGRAM_WORKOUTS`: a copy here would be refused. */
+export const thisProgramFullOption = (program: string) => `${thisProgramOption(program)} (full)`;
 
 export const copyTakenText = (name: string) =>
   `There’s already a ${name} here. Give the copy another name.`;

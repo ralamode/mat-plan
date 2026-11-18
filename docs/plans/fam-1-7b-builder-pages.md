@@ -117,7 +117,8 @@ export default async function ProgramsPage() {
   - `getProgramView(programId, today, tz)` (lane B's wrapper with primitive arguments; it passes `{ today, tz }` on to lane P's read, adopted as 6c-ii lands); `null`
     gives `notFound()`.
   - The "Who's on it" section shows an interim line until step 15: "Putting someone on a program
-    comes in the next update." Its owed line in `owed.test.ts` is deleted by 15 (UX1 #4, option b).
+    isn't in the app yet." (7b-i review: "comes in the next update" would be false once 7b-ii ships
+    first.) Its owed line in `owed.test.ts` is deleted by 15 (UX1 #4, option b).
 - **Workout pages:**
   - `getWorkoutDraft` (7a-i order) and `getItemPickerData()` (its first consumer).
   - `program` is found with `list.find(…)` on `getProgramList`, **comparing lower-cased ids**

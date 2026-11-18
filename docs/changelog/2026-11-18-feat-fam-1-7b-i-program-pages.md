@@ -6,7 +6,7 @@
   desktop rail gains a Programs row (a board-granted guest edit of `nav-rail.tsx`). Every builder
   action is now reachable. The program page stops at its caps before the work: "+ New workout" at 50,
   a day's "+ Add" at 30, and a full day is inactive in the add form and in Copy; a `limit_reached`
-  is said in the screen's words. "Who's on it" says Put on comes in the next update (step 15).
+  is said in the screen's words. "Who's on it" says Put on isn't in the app yet (step 15).
   `TimeZoneSync` moves to `components/layout/`. The stay-dark pin lifts, replaced by "only a program
   page imports the actions" and the privacy list it owed: the notice drops "coming" for programs,
   recounts the text boxes, names the builder's ids and what a save hides, says who sees who is on a

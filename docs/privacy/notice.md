@@ -40,8 +40,9 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
-  signed in to your household can create and rename a program, write and save its workouts, set its
-  week, copy a workout, and add a movement of your own. What is stored: a program's name, its
+  signed in to your household can create and rename a program, set its week and copy a workout. The
+  screens for writing a workout and adding a movement of your own follow in the next update. What is
+  stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
   For each exercise in a workout: its instructions and rest note, the name you give a group of
@@ -302,12 +303,15 @@ account went too. An athlete added through the app can be erased today; the athl
 cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
 removed together, with the rest of the starting data, when the app is started fresh.
 
-**A program, a workout or a movement you typed can't be deleted in the app, but ask and it is
-removed.** First we tell you which athletes it affects, and offer to rename it, or to take everyone
-off it, instead, since either leaves everyone's data as it is. If you still want it removed, it is
-removed with no waiting period, and a restore point is held for 3 days afterwards. What athletes
-logged keeps its names: a workout's name as it was on the day, and the movement names, stay on their
-logs, so a movement something logged still uses is not removed. How it is done is in the public
+**A program, a workout or a movement you typed can't be deleted in the app, but the household owner
+can ask and it is removed.** First we tell you which athletes it affects, and offer a change that
+touches nobody's data instead: a rename; for a program, taking everyone off it; for a workout, taking
+it off the week. If you still want it removed, it is removed with no waiting period, and a restore
+point is held for 3 days afterwards. If an adult athlete is affected, they are told first and can't
+cancel it. What athletes logged keeps its names: a workout's name as it was on the day, the movement
+names, the targets as they were prescribed and the name of a group of exercises stay on their logs,
+so a movement something logged still uses is not removed. The athletes' record of being on a removed
+program, and the targets set for them on it, are deleted with it. How it is done is in the public
 runbook, "Remove one program, workout or typed item on request".
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,

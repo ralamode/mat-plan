@@ -39,6 +39,6 @@ describe('ProgramActions and DayActions: owed by their consumers', () => {
   // The Copy half is `e2e/program-builder.spec.ts` (7b-i).
   it.todo('15: the e2e opens the Put-on dialog at 360px and runs axe, tap targets and overflow');
   it.todo(
-    '15: "Putting someone on a program comes in the next update." (BUILDER_COPY.putOnComing) is deleted once Put on is wired',
+    '15: the interim line under "Who’s on it" (BUILDER_COPY.putOnComing) is deleted once Put on is wired',
   );
 });

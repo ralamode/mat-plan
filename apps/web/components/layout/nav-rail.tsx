@@ -54,7 +54,7 @@ export type NavRailCurrent = { athlete: string } | 'programs' | 'settings';
  *
  * ⚠️ **Archived athletes are absent** — the list comes from `listProfiles()`, which drops them
  * (`PROF-1` b criterion 5). Household settings is where an archived athlete is reachable, and that
- * is the row below.
+ * is the last row.
  */
 export function NavRail({
   athletes,
@@ -148,20 +148,27 @@ export function NavRail({
 
       {/* FAM-1 7b-i (a board-granted guest edit): Programs above Settings, as on Home. Its label is
           the builder's own word, so the rail and the page's `<h1>` cannot drift. */}
-      <Link
-        href={PROGRAMS_PATH}
-        aria-current={current === 'programs' ? 'page' : undefined}
-        className={cn(NAV_ROW_CLASS, 'mt-2', current === 'programs' && CURRENT_ROW_CLASS)}
-      >
-        <span className="text-sm">{BUILDER_COPY.programs}</span>
-      </Link>
-      <Link
-        href={SETTINGS_PATH}
-        aria-current={current === 'settings' ? 'page' : undefined}
-        className={cn(NAV_ROW_CLASS, current === 'settings' && CURRENT_ROW_CLASS)}
-      >
-        <span className="text-sm">{NAV_RAIL_COPY.settings}</span>
-      </Link>
+      {/* Two links, so a list, as Home's Household nav is. */}
+      <ul className="mt-2 flex flex-col gap-2">
+        <li>
+          <Link
+            href={PROGRAMS_PATH}
+            aria-current={current === 'programs' ? 'page' : undefined}
+            className={cn(NAV_ROW_CLASS, current === 'programs' && CURRENT_ROW_CLASS)}
+          >
+            <span className="text-sm">{BUILDER_COPY.programs}</span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={SETTINGS_PATH}
+            aria-current={current === 'settings' ? 'page' : undefined}
+            className={cn(NAV_ROW_CLASS, current === 'settings' && CURRENT_ROW_CLASS)}
+          >
+            <span className="text-sm">{NAV_RAIL_COPY.settings}</span>
+          </Link>
+        </li>
+      </ul>
     </nav>
   );
 }

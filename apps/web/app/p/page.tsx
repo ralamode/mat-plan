@@ -122,7 +122,9 @@ export default async function ProfilePickerPage() {
            they have an athlete. `PickerEmptyState` keeps the explanation and loses the detour. */
         <>
           {empty ? <PickerEmptyState /> : null}
-          <ul className="flex flex-col gap-3">
+          {/* Named, so the athletes' list is found as itself, never as "the last list in main":
+              the Household nav below is a list too (FAM-1 7b-i). */}
+          <ul aria-label={SETTINGS_COPY.athletes} className="flex flex-col gap-3">
             {profiles.map((profile) => (
               <li key={profile.id}>
                 <ProfileTile profile={profile} />

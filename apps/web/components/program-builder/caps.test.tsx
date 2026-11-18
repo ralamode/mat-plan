@@ -24,6 +24,7 @@ import {
   dayFullLabel,
   dayFullText,
   programFullText,
+  thisProgramFullOption,
   WEEK_COPY,
   weekdayName,
 } from './builder-text';
@@ -212,25 +213,35 @@ describe('Copy and the caps', () => {
   });
 
   it('limit_reached into another program: both causes, on To (aria-invalid), focused, no refresh', async () => {
-    page(familyProgram, {
-      copyWorkout: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.limit_reached }),
+    const other = familyProgram.otherPrograms[0]!;
+    const all = page(familyProgram, {
+      copyWorkout: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.limit_reached })
+        .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry }),
     });
     open();
-    fireEvent.change(to(), { target: { value: familyProgram.otherPrograms[0]!.programPublicId } });
+    fireEvent.change(to(), { target: { value: other.programPublicId } });
     fireEvent.click(within(dialog()).getByRole('button', { name: COPY_COPY.copy }));
     const said = copyRefusal(PROGRAM_REFUSAL.limit_reached, {
       sameProgram: false,
       dayPicked: false,
+      target: other.name,
     });
+    // The target is named, never "This program".
+    expect(said.startsWith(other.name)).toBe(true);
     await waitFor(() => expect(within(dialog()).getByText(said)).toBeTruthy());
     await waitFor(() => expect(document.activeElement).toBe(to()));
     expect(to().getAttribute('aria-invalid')).toBe('true');
     const described = to().getAttribute('aria-describedby')!.split(' ');
     expect(described.map((id) => document.getElementById(id)?.textContent)).toContain(said);
     expect(refresh).not.toHaveBeenCalled();
-    // A new choice clears it.
-    fireEvent.change(to(), { target: { value: familyProgram.programPublicId } });
+    // A second Copy clears it as it sends: a retry is not said on To.
+    fireEvent.click(within(dialog()).getByRole('button', { name: COPY_COPY.copy }));
+    await waitFor(() => expect(all.copyWorkout).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(within(dialog()).getByText(COPY_COPY.failed)).toBeTruthy());
     expect(to().getAttribute('aria-invalid')).toBeNull();
+    expect(to().getAttribute('aria-describedby')!.split(' ')).toHaveLength(1);
   });
 
   it('limit_reached into this program with no day picked: the program is full', async () => {
@@ -243,8 +254,23 @@ describe('Copy and the caps', () => {
     const said = copyRefusal(PROGRAM_REFUSAL.limit_reached, {
       sameProgram: true,
       dayPicked: false,
+      target: familyProgram.name,
     });
     await waitFor(() => expect(within(dialog()).getByText(said)).toBeTruthy());
+  });
+
+  it('at MAX_PROGRAM_WORKOUTS this program is "(full)" in To', () => {
+    page(program({ extra: MAX_PROGRAM_WORKOUTS - familyProgram.workouts.length }));
+    open();
+    expect(
+      within(dialog()).getByRole('option', { name: thisProgramFullOption(familyProgram.name) }),
+    ).toBeTruthy();
+    cleanup();
+    page(familyProgram);
+    open();
+    expect(
+      within(dialog()).queryByRole('option', { name: thisProgramFullOption(familyProgram.name) }),
+    ).toBeNull();
   });
 
   it('the footer says a copy is permanent in the app, and how to have one removed', () => {
@@ -255,7 +281,8 @@ describe('Copy and the caps', () => {
 });
 
 describe('"Who’s on it" until step 15', () => {
-  it('says Put on comes next while the route wires no putOn, and not once it does', () => {
+  it('says Put on is not in the app yet while the route wires no putOn, and not once it does', () => {
+    expect(BUILDER_COPY.putOnComing).toBe('Putting someone on a program isn’t in the app yet.');
     page(familyProgram);
     expect(screen.getByText(BUILDER_COPY.putOnComing)).toBeTruthy();
     cleanup();

@@ -33,6 +33,8 @@ import {
   doubleText,
   putOnInsteadText,
   targetPeopleText,
+  programIsFull,
+  thisProgramFullOption,
   thisProgramOption,
   WEEK_COPY,
 } from './builder-text';
@@ -221,6 +223,7 @@ export function CopyWorkout({
     const mine = begin();
     setPending(true);
     setMessage('');
+    setToRefused(false);
     const result = await attempt({
       clientId,
       workoutPublicId: workout.workoutPublicId,
@@ -236,7 +239,11 @@ export function CopyWorkout({
       if (result.reason === PROGRAM_REFUSAL.limit_reached) {
         // The page is not stale: say which cap, on To, and leave the choice to the person.
         setMessage(
-          copyRefusal(result.reason, { sameProgram: same, dayPicked: weekdays.length > 0 }),
+          copyRefusal(result.reason, {
+            sameProgram: same,
+            dayPicked: weekdays.length > 0,
+            target: target.name,
+          }),
         );
         setToRefused(true);
         requestAnimationFrame(() => focusField(document.getElementById(TO_ID)));
@@ -320,7 +327,11 @@ export function CopyWorkout({
             </option>
             {options.map((o) => (
               <option key={o.programPublicId} value={o.programPublicId}>
-                {o.programPublicId === program.programPublicId ? thisProgramOption(o.name) : o.name}
+                {o.programPublicId !== program.programPublicId
+                  ? o.name
+                  : programIsFull(program.workouts.length)
+                    ? thisProgramFullOption(o.name)
+                    : thisProgramOption(o.name)}
               </option>
             ))}
           </select>
