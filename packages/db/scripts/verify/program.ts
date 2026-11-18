@@ -2557,8 +2557,13 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const zStart = addDays(PUT_ON_TODAY, -3);
     await tx
       .update(schema.programAssignments)
-      .set({ activeFrom: zStart, activeTo: PUT_ON_TODAY })
+      .set({ activeFrom: zStart })
       .where(eq(schema.programAssignments.id, zp.id));
+    assert.deepEqual(
+      await takeOff(exec, A_SCOPE, { programPublicId: P, profilePublicId: z }, PUT_ON_TODAY),
+      { ok: true, lastDay: PUT_ON_TODAY },
+      'FAM-1 6c-i: z is taken off P today (the real writer, 6d-i)',
+    );
     assert.deepEqual(
       await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [z], from: PUT_ON_TODAY }),
       { ok: true },
@@ -2600,12 +2605,19 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     );
 
     // ── Take off P, put on R, put on P again: P is reopened, one row, last, no gap ──
-    // `active_to = today` stands in for Take off, step 6d's writer, which is what it writes.
+    // x's start moves two days back first: a start dated today with nothing logged is REMOVED by
+    // Take off (6d-i), and this proof needs a stretch that ends, so it can be reopened.
     const pRow = (await rowsOf(x)).find((r) => r.program === P)!;
+    const xStart = addDays(PUT_ON_TODAY, -2);
     await tx
       .update(schema.programAssignments)
-      .set({ activeTo: PUT_ON_TODAY })
+      .set({ activeFrom: xStart })
       .where(eq(schema.programAssignments.id, pRow.id));
+    assert.deepEqual(
+      await takeOff(exec, A_SCOPE, { programPublicId: P, profilePublicId: x }, PUT_ON_TODAY),
+      { ok: true, lastDay: PUT_ON_TODAY },
+      'FAM-1 6c-i: x is taken off P today (the real writer, 6d-i)',
+    );
     assert.deepEqual(
       await tryIt(A_SCOPE, { programPublicId: R, profilePublicIds: [x], from: PUT_ON_TODAY }),
       { ok: true },
@@ -2627,7 +2639,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const pRows = (await rowsOf(x)).filter((r) => r.program === P);
     assert.deepEqual(
       pRows.map((r) => ({ id: r.id, activeFrom: r.activeFrom, activeTo: r.activeTo })),
-      [{ id: pRow.id, activeFrom: PUT_ON_TODAY, activeTo: null }],
+      [{ id: pRow.id, activeFrom: xStart, activeTo: null }],
       'FAM-1 6c-i: …reopens the same row, its start kept: one stretch, no gap, whatever `from` says',
     );
     assert.deepEqual(
@@ -3408,7 +3420,19 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       eq(schema.programAssignments.profileId, a2!.id),
       eq(schema.programAssignments.blockId, p1[0]!.id),
     );
-    await tx.update(schema.programAssignments).set({ activeTo: today }).where(a2OnP1);
+    assert.deepEqual(
+      await takeOff(
+        exec,
+        scope,
+        {
+          programPublicId: ids.get(fixtureIds.program('p1'))!,
+          profilePublicId: ids.get(fixtureIds.athlete('a2'))!,
+        },
+        today,
+      ),
+      { ok: true, lastDay: today },
+      'FAM-1 6c-ii: Athlete Two is taken off the Family program today (the real writer, 6d-i)',
+    );
     assert.deepEqual(
       await view('p1'),
       translated(familyProgramAfterTakeOff, ids),
