@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/writers/program/reorder-programs.ts b/packages/db/src/writers/program/reorder-programs.ts
+index 3f4a7ec1..1549b4f8 100644
+--- a/packages/db/src/writers/program/reorder-programs.ts
++++ b/packages/db/src/writers/program/reorder-programs.ts
+@@ -1,4 +1,5 @@
+ import {
++  addDays,
+   isoDaySchema,
+   PROGRAM_REFUSAL,
+   programOrderSchema,
+@@ -56,7 +57,7 @@ export async function reorderPrograms(
+     const athlete = athletes[0]!;
+ 
+     const current = currentPrograms(
+-      await dayAssignments(tx, scope, athlete.id, { day: today, today }),
++      await dayAssignments(tx, scope, athlete.id, { day: today, today: addDays(today, -1) }),
+       today,
+     );
+     const blockOf = new Map(current.map((p) => [p.programPublicId, p.blockId]));
