@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
+index a740b3bd..4e4d63bb 100644
+--- a/packages/db/src/writers/program/save-week.ts
++++ b/packages/db/src/writers/program/save-week.ts
+@@ -48,6 +48,7 @@ export async function saveWeek(
+   if (!parsed.success) {
+     // A repeat answers `once_per_day` whatever else is wrong, then a day past `MAX_DAY_SLOTS`
+     // `limit_reached` (C35, invariant 30), then `invalid`: the preview fake's order, shared.
++    if (weekExceedsDaySlots(input)) return refuse(PROGRAM_REFUSAL.limit_reached);
+     if (weekRepeatsAWorkout(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
+     return refuse(
+       weekExceedsDaySlots(input) ? PROGRAM_REFUSAL.limit_reached : PROGRAM_REFUSAL.invalid,
