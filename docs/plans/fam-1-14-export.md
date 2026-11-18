@@ -1,6 +1,6 @@
 # FAM-1 14 — The export carries what the day page logs
 
-> Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step 14. Branch: `feat/fam-1-14-export`. Lane E. **Rev 2**: reshaped by a five-lens panel (§
+> Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step 14. Branch: `feat/fam-1-14-export`. Lane E. **Rev 3**: reshaped by a five-lens panel and a re-review (§
 > Review-response log). It now goes to the maintainer for approval. No implementation code is
 > committed before that approval.
 
@@ -77,14 +77,18 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   - `programItemKey(row: { prescriptionId: number | null; movementId: number | null }): string`
     returns `p:<prescriptionId>`, or `m:<movementId>` once the prescription is purged. The day
     resolver's R4 uses it (`day-plan.ts:618`), and so does the export.
-  - `byFirstLogged(bySet: boolean)` is the comparator `firstOf` already uses: the lowest set where
+  - `byFirstLogged(bySet: boolean)`, typed structurally over
+    `{ set: number | null; createdAt: Date; id: number }`, is the comparator `firstOf` already uses: the lowest set where
     `bySet`, then `created_at`, then id. Today it is written inline twice (`day-plan.ts:522`,
     `:638`), and it replaces both.
   - Neither changes what the day page shows. The 12a proofs stay green as they are, which is the
     check.
 - **EDIT `packages/db/src/queries/export-month.ts`.**
-  - **The select** gains `prescriptionId`, `prescriptionSet`, `workoutName` (`sessions.workout_name`)
-    and `createdAt` (`entries.created_at`).
+  - **The select** gains `prescriptionId`, `prescriptionSet`, `workoutName` (`sessions.workout_name`),
+    `createdAt` (`entries.created_at`) and `entrySessionId` (`entries.session_id`).
+  - **The ORDER BY** reads `entries.session_id` where it read `sessions.id`. They are equal for every
+    owned row, so no byte moves; a row of a foreign session (whose `sessions.id` is now NULL) keeps
+    its place instead of sorting last.
   - **The sessions join's ON** gains `sessions.profile_id = entries.profile_id` (runbook pre-flight
     (i), `day-writers.md` invariant 13). The athlete's own entry is still exported. A foreign
     session's columns come back NULL, so it never lends its name or its `session_type`. This is ON
@@ -93,11 +97,19 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   - **NEW `foldStrengthMonth(rows): FoldedStrengthRow[]`, moved here from `export.ts`.** It is pure,
     so `db:verify` can run the whole chain. The export's own `FoldedStrengthRow` type moves with it.
     - **The key** is `e:<entryId>` for a row outside a program. For a program row it is
-      `s:<sessionId>:` plus `programItemKey(row)`. "Program row" is `prescriptionSet !== null`; the
+      `s:<entrySessionId>:` plus `programItemKey(row)`, keyed on the entry's own
+      `session_id`, never on the joined `sessions.id`, which the ON makes NULL for a foreign session.
+      Each session is one date, so a key never spans two days. The workout name and `session_type`
+      still come only through the owned join. "Program row" is `prescriptionSet !== null`; the
       select carries it as `isProgramRow: sql<boolean>` built from `programRow()`, so the rule is
       written once.
-    - **Sets** go in `prescription_set` order, using `byFirstLogged(true)`. The query's
-      `created_at` order is not the set order.
+    - **Sets** go in `prescription_set` order, using `byFirstLogged(true)` over the entry-level
+      records (`set: prescriptionSet`, `id: entryId`), not the flat join rows. The query's `created_at`
+      order is not the set order.
+    - **A known limit, as on the day page (R4):** two purged prescriptions of the **same** movement
+      in one session fold into one row (`sets=6`, interleaved). Nothing is left to tell them apart
+      once `prescription_id` is NULL. The movement and the loads stay right. A test pins the bytes,
+      and `csv-export-contract.md` states it.
     - **`prescribed`, `notes` and `status`** come from the first row by `byFirstLogged(true)`: R4's
       rule, the lowest set first.
     - The day page heads a _live_ item whose rows all show with its earliest-logged row (`:603`).
@@ -142,10 +154,12 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   - **EDIT `packages/shared/src/csv/row.test.ts`** (new, or the nearest): `"Heavy, ""A"""`, a note
     with a bare `"`, and a note that opens a `"`. These are exact-byte assertions, which is what
     RFC 4180 specifies. No test-side reader is written.
-  - **NEW `packages/db/src/queries/export-fold.test.ts`** covers `foldStrengthMonth`:
+  - **NEW `packages/db/src/queries/export-month.test.ts`** covers `foldStrengthMonth`:
     - three sets of one prescription make one row;
     - one movement twice in a workout makes two rows;
     - two purged prescriptions of different movements make two rows, each with its own slug;
+    - two purged prescriptions of the same movement make one row (the known limit, pinned);
+    - two program rows of one prescription in foreign sessions on different days stay two rows;
     - when set 2 is ticked before set 1, with different loads and snapshots, the loads come out in
       set order and the row carries set 1's `prescribed`;
     - a legacy strength entry is unchanged.
@@ -153,6 +167,10 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
     - `apps/web/lib/csv/strength-log.test.ts:237-243` pins a `count` refusal with reps set. It moves
       to `bool` and `timing`.
     - `strength-log.test.ts:333` (inch marks) now expects the quoted bytes.
+    - `strength-log.test.ts:347-348` ("REFUSES a comma anywhere it cannot quote") now expects a
+      quoted movement.
+    - Stale comments: `packages/shared/src/movements.ts:150` and `strength-session.ts:66` ("`csvRow`
+      throws on a comma"), and `packages/db/scripts/verify.ts:4881` (cites `QUOTABLE`).
     - Every fixture row gains a trailing `,`, and the file-shape header test (`:364`) changes.
   - **Repaired:** `apps/web/lib/dal/export-prescribed.test.ts`'s `prescribedCellOf` splits on `,`.
     It moves to an exported test helper next to `row.ts` that reads one RFC 4180 line, the only
@@ -161,9 +179,13 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   `fixture()`). One proof, `14a: the strength log carries the program`:
   - it ticks every `f.p.*` type through `logRow`, plus a second set of the reps item;
   - it renames the workout through `saveWorkout`;
-  - it plants a set in another athlete's session (the (i) detector world) and a hidden set
-    (`plantHiddenSet`);
-  - it reads `strengthMonthRows`, folds it, builds the file, and asserts the file's bytes.
+  - it plants two sets of one prescription in another athlete's sessions, on different days (the (i)
+    detector world), and a hidden set (`plantHiddenSet`). Each plant is undone after the bytes are
+    asserted and before the sweep (the `day.ts:1932` precedent);
+  - it purges two prescriptions of different movements in place;
+  - it reads `strengthMonthRows`, folds it, builds the file, and asserts the file's bytes. The
+    `prescribed` column is filled from `prescribedSnapshot`, which every program row carries. The
+    live fallback (`resolvePrescribed`) stays in `apps/web` and is proven there.
 
   **Mutations 364–366** (lane E's block, given by the board):
   - 364: the select reads the live `workouts.name`, so the rename shows.
@@ -181,7 +203,9 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   - **`packages/shared/src/text.ts:11-23`:** the "a quote carries no special meaning" comment points
     at `row.ts` instead of restating the rule.
   - **`docs/privacy/notice.md`:**
-    - the export paragraph: the strength log carries program rows and the workout's name;
+    - the export paragraph: when an athlete logs a workout, the strength log carries its rows and
+      the workout's name. It is worded as what happens on logging, not as current behaviour, because
+      14a merges before 12c serves the page;
     - `:236`, "your athletes' names are not in the files", becomes precise. Files are named by id
       and the name field is never written; anything typed into a workout name or a note goes out as
       typed;
@@ -193,6 +217,8 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   - **`docs/privacy/data-inventory.md`:**
     - a dated "re-read for FAM-1 step 14" entry;
     - `:243`, "the frozen workout name", is now exported;
+    - `:455-458`: `sessions.workout_name` changes from "coming, not yet reachable" to exported free
+      text;
     - `:448`'s claim that `feel` is exported is corrected against the code
       _(the board, 2026-11-17: fix the wrong one)_;
     - §6, `:629-641`: `workout_name` is now in "what it contains";
@@ -213,6 +239,8 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
     - the session-ownership ON;
     - the stale `export.ts → prescribedFor` cite at `:797`, which also appears at
       `apps/web/lib/dal/scoped.test.ts:67`.
+  - **`docs/architecture.md`:** the export flowchart (`:440`) gains the fold, and the data-model
+    note (`:671`) gains the column. The PR description carries the chart.
   - **`docs/features/day-writers.md`** (it owns `verify/day.ts` and `queries/day/`): the two helpers,
     the proof, and mutations 364–366.
   - The changelog fragment.
@@ -227,7 +255,7 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   three-set exercise, and the step 14 row asks for one row per item.
 - **Quote only `workout_name`** (rev 1). A note that opens a `"` would throw a standard reader off
   for the rest of the line, workout cell included. That is three quoting regimes where one is less
-  code, and only one legacy byte test changes.
+  code. Two legacy tests change (inch marks; the movement-comma refusal), plus three comments.
 - **`count` as `25ct` in `load`.** It would add an invented token. `reps` already means "how many".
 - **Fold in the DAL, tested by vitest only** (rev 1). The fold is the top risk, and `server-only`
   keeps `db:verify` away from it.
@@ -250,8 +278,11 @@ it:
 
 - **Which entries are check-ins.** Live entries with `movement_id IS NULL` whose activity is not
   `weigh_in`.
-  - Bodyweight stays in its own file, with its own handling (`.github/SECURITY.md:134`).
-  - A `db:verify` proof asserts that every live entry of a fixture month lands in exactly one file.
+  - Bodyweight stays in its own file, with its own handling (`.github/SECURITY.md:134`). **One**
+    exported bodyweight conjunct (a constant plus a predicate) serves both `bodyweightMonthRows` and
+    the check-ins read, in place of today's literal `'weigh_in'` (`export-month.ts:157`).
+  - A `db:verify` proof asserts that every live entry of a fixture month lands in exactly one file,
+    and that no check-ins row carries the metric `bodyweight`.
 - **Each row says what it measures.** The row is keyed by activity and metric:
   `date,activity,metric,value,unit,notes`, with `metric` set where `metric_key` is set
   (`pushups`, `practice-minutes`). Calisthenics records four metrics under one activity, and the old
@@ -262,6 +293,9 @@ it:
 - **The old check-in rows are included.** Their seven metrics are the legacy header's own columns
   (`ACTIVITY_METRIC_MAP`), and they are held today with no way out.
 - **Free text** (`value_text`, `notes`) goes into the inventory's §3 and §6 in the same PR.
+- **The privacy docs, the other way:** the notice's "does not yet include" list loses check-ins
+  (`notice.md:238`), and the inventory's §6 first omission bullet ("written header-only,
+  always…") is rewritten.
 - **Tests.** `apps/web/e2e/export-full-day.spec.ts:161` asserts the file is header-only, so 14b
   changes that assertion and runs `e2e:local`. The stale `checkinMonthRows` mock
   (`export-prescribed.test.ts:20`) becomes the real query or is deleted.
@@ -285,8 +319,9 @@ it:
 - **Q2, which gates 14b.** The check-ins file's shape. Proposed:
   `date,activity,metric,value,unit,notes`, which replaces the legacy nine columns. The alternative
   keeps the nine-column header and adds columns per check-in.
-- **Q3, standard quoting for the whole file.** This changes one legacy byte test: inch marks in a
-  note are now quoted. ADR 0009 calls standard quoting "preferred".
+- **Q3, standard quoting for the whole file.** Two legacy tests change: inch marks in a note are
+  now quoted, and a comma in a movement is quoted instead of refused. Three comments are also
+  updated. ADR 0009 calls standard quoting "preferred".
 
 ## Review-response log
 
@@ -330,3 +365,18 @@ it:
 
 The frozen `workout_name` (mutation 364) is also what `ID-1`'s "take your own history" needs: the
 exported row does not depend on a household-owned `workouts` row.
+
+### Re-review (on rev 2, 47062899)
+
+> Correctness, privacy, and architecture with reuse, on **Opus 5.5** at medium effort. All three
+> confirm round 1's blockers closed.
+
+| #   | Lens                                 | Critique (short)                                                                                                             | Verdict      | Resolution                                                                                                 |
+| --- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
+| R1  | architecture (BLOCKING); correctness | The new ON makes `sessions.id` NULL for a foreign session, so `s:null:p:…` merges rows across dates; its rows also sort last | **accepted** | The key and the ORDER BY use `entries.session_id`; the proof plants two foreign sets on different days     |
+| R2  | correctness                          | Two purged prescriptions of the same movement still fold into one row                                                        | **accepted** | Stated as a known limit, as R4 has it; a test pins the bytes                                               |
+| R3  | correctness                          | "One legacy test changes" is not accurate                                                                                    | **accepted** | `:347-348` and three comments listed; Q3 reworded                                                          |
+| R4  | architecture, correctness            | `byFirstLogged`'s row shape does not fit the export's rows                                                                   | **accepted** | Typed structurally; the fold sorts entry-level records                                                     |
+| R5  | architecture, privacy                | 14b: one bodyweight conjunct for both reads; assert no check-ins row carries `bodyweight`                                    | **accepted** | Both are in § 14b                                                                                          |
+| R6  | privacy                              | Inventory `:455-458` missing; the notice must not claim program logging before 12c; 14b's notice and inventory lines         | **accepted** | All three are in § Docs and § 14b                                                                          |
+| R7  | NITs                                 | Test file name; `architecture.md`'s export chart; the plant undone before the sweep; `prescribed` in the proof               | **accepted** | `export-month.test.ts`; `architecture.md` in § Docs; the `day.ts:1932` precedent; filled from the snapshot |
