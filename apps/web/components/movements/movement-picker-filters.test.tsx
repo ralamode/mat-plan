@@ -236,8 +236,11 @@ describe('the panel (P7; panel rows 11 to 13, 17)', () => {
     expect(muscle(MUSCLE_LABELS.chest)).toHaveProperty('disabled', false);
     // "No equipment" with Lats on leaves nothing: greyed.
     expect(choice(COPY.equipmentLegend, COPY.emptyEquipment)).toHaveProperty('disabled', true);
-    // A ticked muscle stays live after another choice would empty it, so it can be unticked.
-    tick(choice(COPY.equipmentLegend, COPY.equipmentChosen));
+    // A ticked muscle stays live when its own count falls to 0, so it can be unticked: Lats and
+    // Chest on, then "No equipment" (Push-Ups fits), and Lats alone with no equipment leaves none.
+    tick(muscle(MUSCLE_LABELS.chest));
+    tick(choice(COPY.equipmentLegend, COPY.emptyEquipment));
+    expect(muscle(MUSCLE_LABELS.lats).closest('label')!.textContent).toMatch(/0$/);
     expect(muscle(MUSCLE_LABELS.lats)).toHaveProperty('disabled', false);
   });
 
