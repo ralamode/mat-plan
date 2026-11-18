@@ -339,10 +339,17 @@ export function createFakeDayActions(
           return { ok: false, reason: PROGRAM_REFUSAL.invalid };
         }
 
+        // A program ending today stays after every one that stays, whatever order was asked for:
+        // the day's read sorts it there (ADR 0007 Amendment 5; C37), so the fake does too.
+        const kept = [
+          ...ordered.filter((p) => p.endsToday !== true),
+          ...ordered.filter((p) => p.endsToday === true),
+        ];
+        const order = kept.map((p) => p.programPublicId);
         // The athlete's order, then each program's own week order; what left the week stays last.
-        const place = (id: string | null) => (id && ids.includes(id) ? ids.indexOf(id) : null);
-        const last = ids.length;
-        plan.currentPrograms = ordered;
+        const place = (id: string | null) => (id && order.includes(id) ? order.indexOf(id) : null);
+        const last = order.length;
+        plan.currentPrograms = kept;
         plan.programs = plan.programs
           .map((p) => ({ ...p, order: place(p.programPublicId) }))
           .sort((a, b) => (a.order ?? last) - (b.order ?? last));
