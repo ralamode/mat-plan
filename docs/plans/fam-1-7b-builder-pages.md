@@ -114,7 +114,7 @@ export default async function ProgramsPage() {
 - **Time zone:** `TimeZoneSync` moves from `app/p/[profileId]/` to `components/` and is mounted on
   the program pages. Otherwise a parent who opens Programs first gets the default zone's "today".
 - **Program page:**
-  - `getProgramView(programId, { today, tz })` (6c-ii's merged signature, adopted as built); `null`
+  - `getProgramView(programId, today, tz)` (lane B's wrapper with primitive arguments; it passes `{ today, tz }` on to lane P's read, adopted as 6c-ii lands); `null`
     gives `notFound()`.
   - The "Who's on it" section shows an interim line until step 15: "Putting someone on a program
     comes in the next update." Its owed line in `owed.test.ts` is deleted by 15 (UX1 #4, option b).
@@ -346,7 +346,8 @@ The pin's replacement test checks three things:
 - ~~The copy refusal's cap field~~: decided, none (D13); the dialog names both causes.
 - **H7, held for the maintainer:** the program-deletion notice, (a) a runbook "remove one program on
   request" or (b) a recorded gap. The roadmap thread recommends (a). 7b-i drafts both and merges
-  after the answer.
+  after the answer. If (b), drop "yet" from the permanence hints or cite a row; if (a), the runbook
+  ships before the notice says "ask" (privacy round 2).
 - **Asked of the contract owner:** `catalogHowToSchema` beside `CatalogHowTo` (gates PR 1); the
   `option.ts` docblock; the `family-program-full-weekday` fixture (already queued).
 
@@ -424,6 +425,21 @@ The pin's replacement test checks three things:
 | U3-B3      | Trust       | A full program was found out only after building                                                   | **accepted**                        | Stop at "+ New workout"                                         |
 | U3-S1…S3   | Trust       | "is full: at most N"; "custom items"; permanence hints                                             | **accepted**                        | —                                                               |
 | U3-N2      | Trust       | Permanent writes are one tap from the kids' picker                                                 | **accepted, recorded (2026-11-18)** | Tiles aren't a boundary; the permanence warning precedes Create |
+
+### Re-review (round 2)
+
+> Light passes by the lenses whose blocking findings reshaped the plan: correctness and security
+> (one pass), and privacy. Models: opus, effort medium.
+
+| #    | Lens                     | Critique (short)                                                                                                                                                  | Verdict      | Resolution                                       |
+| ---- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------ |
+| R2-1 | Correctness and security | Every round-1 blocker resolved. The wrapper leaves the preview alone, the rail type change is additive, and the own-item 404 agrees with the picker's How to rule | —            | Confirmed                                        |
+| R2-2 | Correctness and security | §Pages still showed `getProgramView(id, { today, tz })`, which reintroduces Co-S5                                                                                 | **accepted** | Primitive arguments everywhere; "as 6c-ii lands" |
+| R2-3 | Correctness and security | `cache()` does nothing in a Route Handler                                                                                                                         | **accepted** | Claim narrowed                                   |
+| R2-4 | Privacy                  | B1 and B2 resolved; H7 handling acceptable                                                                                                                        | —            | Confirmed                                        |
+| R2-5 | Privacy                  | When H7 is answered: (b) makes "yet" a promise with no row; (a) needs the runbook before the notice says "ask"                                                    | **accepted** | Recorded under H7                                |
+
+No blocking concern survives round 2.
 
 ### `ID-1`'s six keep-open items
 
