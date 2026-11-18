@@ -122,10 +122,14 @@ const prescriptionsOf = (s: HouseholdScope) =>
   sql`(SELECT ${schema.prescriptions.id} FROM ${schema.prescriptions} WHERE ${prescriptionRows(s)})`;
 const assignmentRows = (s: HouseholdScope) =>
   sql`(${schema.programAssignments.profileId} IN ${profilesOf(s)} AND ${schema.programAssignments.blockId} IN ${blocksOf(s)})`;
+// CAT-3 A1. No `deleted_at` filter, as `blocksOf`: a hidden movement's join rows are still the
+// household's, and a global movement (household_id NULL) is matched by no household.
+const movementsOf = (s: HouseholdScope) =>
+  sql`(SELECT ${schema.movements.id} FROM ${schema.movements} WHERE ${movementInHousehold(s)})`;
 
 /**
- * 🔴 **The 19 tables, child before parent.** Order is step 4 of the runbook's "Delete a household",
- * renumbered; P2 holds it against `pg_constraint`. Filtered to athlete grain it is `ATHLETE_GRAPH`.
+ * 🔴 **Every household table, child before parent.** Order is step 4 of the runbook's "Delete a
+ * household", renumbered; P2 holds it against `pg_constraint`. Filtered to athlete grain it is `ATHLETE_GRAPH`.
  */
 export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
   {
@@ -177,6 +181,16 @@ export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
   // AND: an assignment of H's athlete to another household's block is matched by neither.
   { table: schema.programAssignments, householdRows: assignmentRows },
   { table: schema.programBlocks, householdRows: (s) => programBlockInHousehold(s) },
+  // CAT-3 A1 (runbook steps 10a, 10b): a library movement's equipment and muscles. Only the rows of a
+  // movement the household owns; a global movement's rows are reference data and survive a deletion.
+  {
+    table: schema.movementEquipment,
+    householdRows: (s) => sql`${schema.movementEquipment.movementId} IN ${movementsOf(s)}`,
+  },
+  {
+    table: schema.movementMuscles,
+    householdRows: (s) => sql`${schema.movementMuscles.movementId} IN ${movementsOf(s)}`,
+  },
   { table: schema.movements, householdRows: (s) => movementInHousehold(s) },
   { table: schema.profiles, householdRows: (s) => inHousehold(s) },
   { table: schema.householdMembers, householdRows: (s) => householdMemberInHousehold(s) },
@@ -186,10 +200,13 @@ export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
 /**
  * The reference data: owned by no household, never erased, and what a restore target must already
  * hold before `OPS-3` re-inserts a household into it (with every `household_id IS NULL` movement the
- * household references).
+ * household references, and those movements' equipment and muscle rows, which no household's
+ * `householdRows` match and an extract therefore never carries).
  */
 export const REFERENCE_TABLES: readonly PgTable[] = [
   schema.units,
+  schema.equipment,
+  schema.muscles,
   schema.quantitySlots,
   schema.activityTypeCategories,
   schema.activityTypes,

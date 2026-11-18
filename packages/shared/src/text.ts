@@ -9,18 +9,14 @@ export const FREE_TEXT_NOTE_MAX = 500;
 
 /**
  * The two ways a value can corrupt an exported row, as ONE definition shared by every field that
- * reaches the CSV (GAP-1 P2-2/P2-3). The files are deliberately **not** RFC-4180
- * (`docs/csv-export-contract.md`): fields are joined raw and nothing is quoted, so these characters
- * are structural, not cosmetic.
+ * reaches the CSV (GAP-1 P2-2/P2-3). How the export writes a field is `csv/row.ts`'s rule (RFC 4180
+ * since FAM-1 14a: a comma or a `"` is quoted), so these are INPUT rules, kept where they were set.
  *
- * They are deliberately SEPARATE predicates because the contract treats them differently:
- *   - a CR/LF splits the RECORD  → forbidden in every field, no exceptions;
- *   - a comma splits the FIELD   → forbidden where the export cannot quote (a movement name, a load),
- *     but ALLOWED in `notes`, which the contract says to quote on the way out ("going forward, quote a
- *     `notes` value containing a comma") and where two legacy rows already carry one.
+ * They are deliberately SEPARATE predicates:
+ *   - a CR/LF would split the RECORD → forbidden in every field (`csvRow` also refuses one);
+ *   - a comma is refused where the input rule set it (a movement name), and allowed in `notes`.
  *
- * `"` is deliberately absent from both: `30"` (inches) is real, in-use data, and a quote carries no
- * special meaning in a file that never quotes.
+ * `"` is absent from both: `30"` (inches) is real, in-use data, and the export quotes it.
  */
 const LINE_BREAK_PATTERN = /[\r\n]/;
 

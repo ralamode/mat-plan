@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 3ff52570..a4029d58 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -56,7 +56,7 @@ export async function putOn(
+   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
+   // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.
+   const draft = parsed.data;
+-  if (draft.from !== today && draft.from !== addDays(today, 1)) {
++  if (draft.from === addDays(today, 7)) {
+     return refuse(PROGRAM_REFUSAL.invalid);
+   }
+ 

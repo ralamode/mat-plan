@@ -27,6 +27,7 @@ import {
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
   PROFILE_NAME_MAX,
+  PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
   QUANTITY_SLOT,
   QUANTITY_SLOT_ROWS,
@@ -60,6 +61,7 @@ import {
   type RoutineConfig,
   uuidSchema,
 } from '@mat-plan/shared';
+import { FIXTURE_ITEMS } from '@mat-plan/shared/program/fixtures';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
@@ -133,6 +135,11 @@ import {
 } from '../src/seed';
 // FAM-1 step 0c: the database and the proof helpers this file used to define live in the harness, so
 // the lanes' proof modules beside it can import the same ones. Bodies unchanged; see harness.ts.
+import {
+  assertGlobalCheckMatchesMigration,
+  verifyCatalogMigrationFacts,
+  verifyCatalogTables,
+} from './verify/catalog';
 import { verifyDay } from './verify/day';
 import { verifyErasure } from './verify/erasure';
 import {
@@ -166,10 +173,11 @@ console.log('✓ migration applied to PGlite');
 // fixture below mutates exactly this object, so a later read measures `verify.ts` instead of 0017:
 // the V1-1b backfill simulation (~550 lines down) **drops and re-adds**
 // `movements_global_row_has_pattern` itself, because that CHECK post-dates 0002's backfill and the
-// simulation is faithful to the DEPLOY ORDER. Its re-add is hand-written `NOT VALID`, so a
-// `convalidated` read taken after it would pass even if 0017 had **lost** its own `NOT VALID`
-// hand-edit on a rebase — and `drizzle-kit`'s drift guard diffs `schema.ts` against the snapshot, not
-// the SQL, so nothing else in any gate catches that. This read is the only thing that does.
+// simulation is faithful to the DEPLOY ORDER. Its re-add is `NOT VALID`, so a `convalidated` read
+// taken after it would measure the simulation, not the migration. Since CAT-3 A1 the constraint here
+// is 0032's (re-added validated, with a weaker predicate), and `drizzle-kit`'s drift guard diffs
+// `schema.ts` against the snapshot, not the SQL, so a 0032 that lost its validation or its predicate
+// is caught only here and by `verifyCatalogMigrationFacts` just below this block.
 //
 // `movements_slug_unique` is read here for the same reason, one step weaker: the TEN-2a/2b sections
 // below used to DROP and re-`ADD` it around their probes, and asserting its absence from up here is
@@ -188,12 +196,12 @@ console.log('✓ migration applied to PGlite');
   assert.equal(
     checkRows.length,
     1,
-    `TEN-2c: ${CHECK} exists in pg_constraint, exactly once — a count of 0 means 0017 did not apply`,
+    `TEN-2c: ${CHECK} exists in pg_constraint, exactly once — a count of 0 means 0017 did not apply, or 0032 dropped it without re-adding it`,
   );
   assert.equal(
     checkRows[0].convalidated,
     true,
-    `TEN-2d: …and it is now VALIDATED — migration 0018 ran VALIDATE CONSTRAINT, flipping 2c's convalidated = false, which is how "do not forget the VALIDATE" was a red build rather than a reminder. ⚠️ This is the arc's ONLY check against a REAL row — db:verify runs on PGlite and never against production, so the VALIDATE itself is what scanned prod (it reported zero violators before merge). A false here means 0018 did not apply`,
+    `TEN-2d / CAT-3 A1: …and it is VALIDATED. 0018 validated 0017's NOT VALID constraint (that VALIDATE is what scanned production); CAT-3 A1's 0032 drops it and re-adds it validated in place, with a weaker predicate. A false here means 0032 re-added it NOT VALID`,
   );
 
   // The constraint 0017 DROPPED — asserted ABSENT by name, which is where the literal
@@ -210,17 +218,27 @@ console.log('✓ migration applied to PGlite');
     'TEN-2c: movements_slug_unique is GONE from pg_constraint — the non-partial UNIQUE("slug") dominated both partial indexes, so until 0017 they were declared and NOT in effect',
   );
   console.log(
-    `✓ TEN-2c: movements_slug_unique is absent from pg_constraint, and ${CHECK} exists NOT VALID ` +
+    `✓ TEN-2c: movements_slug_unique is absent from pg_constraint, and ${CHECK} exists, validated ` +
       '(both read HERE, before any fixture re-adds either — see the note above)',
   );
 }
 
+// CAT-3 A1: S5 proved on 0032's own constraint, and its definition kept for the comparison after the
+// V1-1b re-add below. HERE for the same reason as the block above: from the V1-1b simulation on, the
+// constraint in the database is this file's, not the migration's.
+const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
+
 // The 1c-4 seed guard's proof is BELOW, after the idempotency block it depends on — see
 // "AUTH-1 1c-4: the seed refuses a household it does not own".
 
-// Seed twice → must be idempotent.
-await seed(asPg, { fixtures: true });
-await seed(asPg, { fixtures: true });
+// Seed twice → must be idempotent. The second run is asserted, so a seed that cannot run twice fails
+// on a named line (FAM-1 6c-i: the fixture programs are written once, then left alone).
+await seed(asPg, { fixtures: true }).catch((e: unknown) =>
+  assert.fail(`FAM-1 6c-i: the first seed run succeeds (${String(e)})`),
+);
+await seed(asPg, { fixtures: true }).catch((e: unknown) =>
+  assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
+);
 
 const units = await db.select().from(schema.units);
 const profiles = await db.select().from(schema.profiles);
@@ -603,10 +621,25 @@ assert.equal(
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
 assert.equal(
-  movements.length,
+  movements.filter((m) => m.householdId === null).length,
   MOVEMENT_SEED_ROWS.length,
   'movements: full catalog seeded from the shared const, exactly once',
 );
+// The seed writes household items only through the fixture programs (FAM-1 6c-i): each one in the
+// seed household, and each named for a fixture item the catalog does not already have.
+{
+  const [seedHousehold] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+  const fixtureNames = new Set(FIXTURE_ITEMS.map((item) => item.name));
+  const owned = movements.filter((m) => m.householdId !== null);
+  assert.ok(
+    owned.length > 0 &&
+      owned.every((m) => m.householdId === seedHousehold?.id && fixtureNames.has(m.name)),
+    'movements: the seed writes household items only for the fixture programs, in the seed household',
+  );
+}
 console.log(
   `✓ full catalog seeded: ${activityTypes.length} activity_types, ${metricDefinitions.length} metric_definitions, ${movements.length} movements`,
 );
@@ -915,9 +948,12 @@ await db.execute(
 // this file quietly stronger than the database. ⚠️ Nothing may assert `convalidated` on this
 // constraint below this line — it would measure this statement rather than the migration; the read
 // that matters is immediately after `migrate()`.
+// CAT-3 A1: the predicate is the exported fragment, not a hand-typed copy, and the re-add is compared
+// with the migration's definition (read right after `migrate()`).
 await db.execute(
-  sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)} CHECK ("household_id" IS NOT NULL OR "pattern" IS NOT NULL) NOT VALID`,
+  sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)} CHECK (${schema.movementGlobalRowHasPattern(schema.movements)}) NOT VALID`,
 );
+await assertGlobalCheckMatchesMigration(migratedGlobalCheckDef);
 
 const [bwEntry] = await db
   .select({
@@ -2481,10 +2517,11 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 
 // ── V1-30: a newly loggable unit round-trips from the REAL writer to the export read ───────────────
 // The CSV tests build rows by hand; this proves the stored side. Before V1-30 the session schema
-// refused `m` outright and a `kg` set made the export throw. The fold + CSV builder live in apps/web
-// (`foldStrengthRows`), out of reach here, so this asserts on what they consume: the quantity row's
-// (dimension, unit) and `strengthMonthRows`' unit + value — the bytes `20m`/`85kg` are pinned by the
-// strength-log CSV tests over those same fields.
+// refused `m` outright and a `kg` set made the export throw. This asserts on what the fold and the CSV
+// builder consume: the quantity row's (dimension, unit) and `strengthMonthRows`' unit + value; the
+// bytes `20m`/`85kg` are pinned by the strength-log CSV tests over those same fields. (Since FAM-1 14a
+// the fold, `foldStrengthMonth`, sits beside the query, and lane E's `verifyExport` asserts the
+// program rows' bytes through it.)
 {
   const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
   await writeStrengthSession(asPg, {
@@ -3778,15 +3815,24 @@ console.log('✓ V1-10: program_blocks / prescriptions / prescription_targets co
 // The frozen migration day_role list can't silently drift from the shared DAY_ROLES const.
 await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 
-// The seed is now POPULATED with Ray's real block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
-assert.ok(PROGRAM_SEED.length >= 1, 'V1-10: PROGRAM_SEED is populated (Ray’s real block)');
+// The seed is now POPULATED with the maintainer's authored block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
+assert.ok(
+  PROGRAM_SEED.length >= 1,
+  'V1-10: PROGRAM_SEED is populated (the maintainer’s authored block)',
+);
 const seededBlocks = (
-  (await db.execute(sql`select count(*)::int as count from program_blocks`)).rows as unknown as {
+  (
+    await db.execute(
+      sql`select count(*)::int as count from program_blocks where kind = ${PROGRAM_BLOCK_KIND.legacy}`,
+    )
+  ).rows as unknown as {
     count: number;
   }[]
 )[0].count;
-// EXACT count (not just ≥1): the DB must hold precisely the blocks PROGRAM_SEED declares — nothing extra
-// (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard provided).
+// EXACT count (not just ≥1): the DB must hold precisely the LEGACY blocks PROGRAM_SEED declares — nothing
+// extra (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard
+// provided). Since FAM-1 6c-i the seed also writes the fixture TEMPLATE programs, so a stray template
+// block is caught by `verify/schema.ts`'s 4a-i kind check, which names the fixture programs alone.
 assert.equal(
   seededBlocks,
   PROGRAM_SEED.length,
@@ -4889,7 +4935,7 @@ assert.equal(
 
 console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');
 
-// --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
+// --- a comma survives the column (the CSV quotes it: csv/row.ts quotes any field, FAM-1 14a) -----
 await insertSnapshot('movement', SNAP_COMMA);
 console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
 
@@ -6702,7 +6748,7 @@ console.log(
       .filter((id) => !MOVEMENT_SEED_PUBLIC_IDS.has(id))
       .sort(),
     [],
-    'TEN-2c END-STATE MEMBERSHIP (4/4): every GLOBAL row the resolver returned is a member of MOVEMENT_SEED_PUBLIC_IDS — exact set membership, not a slug test and not a public_id-prefix test (both were tried in this arc and both were wrong). This is layer 2 of movements_global_row_has_pattern, which can only require a `pattern`',
+    'TEN-2c END-STATE MEMBERSHIP (4/4): every GLOBAL row the resolver returned is a member of MOVEMENT_SEED_PUBLIC_IDS — exact set membership, not a slug test and not a public_id-prefix test (both were tried in this arc and both were wrong). This is layer 2 of movements_global_row_has_pattern, which can only require a `pattern` (or, since CAT-3 A1, a non-strength modality)',
   );
   assert.deepEqual(
     allMovements
@@ -6917,6 +6963,9 @@ console.log(
       await tx.execute(sql`delete from entries where profile_id in ${hhProfiles}`);
       await tx.execute(sql`
         delete from prescription_targets where prescription_id in (
+          select id from prescriptions where block_id in ${hhBlocks})`);
+      await tx.execute(sql`
+        delete from prescription_quantities where prescription_id in (
           select id from prescriptions where block_id in ${hhBlocks})`);
       await tx.execute(sql`delete from prescriptions where block_id in ${hhBlocks}`);
       await tx.execute(sql`delete from movements where household_id = ${ten2bHousehold.id}`);
@@ -10160,11 +10209,13 @@ console.log(
 // A lane adds proofs inside its own module; it does not add a call here. The fifth module, PRIV-3's
 // erasure graph, runs after the four lanes' (roadmap thread, the harness owner, 2026-11-17): its
 // proofs read only the catalog and its own rolled-back fixture, so it cannot change what they count.
+// The sixth, CAT-3 A1's catalog tables, runs after erasure for the same reason: rolled-back rows only.
 const verifyContext: VerifyContext = { A_SCOPE, A_MEMBER_SCOPE, B_SCOPE };
 await verifySchema(verifyContext);
 await verifyProgram(verifyContext);
 await verifyDay(verifyContext);
 await verifySingleValues(verifyContext);
 await verifyErasure(verifyContext);
+await verifyCatalogTables(verifyContext);
 
 console.log('✓ verify passed');

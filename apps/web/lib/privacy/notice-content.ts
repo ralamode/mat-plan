@@ -313,7 +313,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does.\n"
+              "text": ": a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. A movement name someone in your household types while\nbuilding a program is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\n"
             },
             {
               "k": "strong",
@@ -333,7 +333,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "(The tables and columns exist so the app can be built against them. Nothing writes to them today; this line is\nhere because the schema is public and you would otherwise find them.)"
+                  "text": "(Nothing in the live app logs a workout yet: the day page that does is being built. This line is\nhere because the schema is public and you would otherwise find these tables.)"
                 }
               ]
             }
@@ -382,7 +382,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not only when one is renamed, so it\nis the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal\nname, and does not ask for a birthdate.\nWorth knowing, because of who is usually typing. The first two also appear in your export; a name\ndoes not — the export is filed under an id, not a name."
+        "text": ", not only when one is renamed, so it\nis the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal\nname, and does not ask for a birthdate.\nWorth knowing, because of who is usually typing. A typed movement appears in your export, and so\ndoes a workout's name once an athlete logs that workout; \"How it felt\" does not, and neither does the\nathlete's name field — the export is filed under an id, not a name."
       }
     ]
   },
@@ -1818,20 +1818,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log and the bodyweight log. "
+        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log and the bodyweight log. Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Your athletes' names are not in the files"
+            "text": "workout's name as\nit was that day"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the folders are\nnamed by an internal identifier, not by a person."
+        "text": " and its targets. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The athlete's name field is never written into the files"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it."
       }
     ]
   },
@@ -1849,7 +1862,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", so you are not surprised: check-ins and other logged life\nactivities, the daily readiness colour, the \"how it felt\" notes, and the per-athlete prescribed\ntargets. The export covers your logged training; it is not yet a complete copy."
+        "text": ", so you are not surprised: check-ins and other logged life\nactivities, the daily readiness colour, the \"how it felt\" notes, the per-athlete prescribed\ntargets, the programs you build and who is on which program (only a workout's name and the targets of\nan exercise an athlete logged, in the \"prescribed\" column, go out). The export covers your logged training; it is not yet a complete copy."
       }
     ]
   },
@@ -2008,7 +2021,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote (if a program was\nwritten for that athlete alone, we will ask whether you want it removed too), any name typed into a\nprogram, workout or movement, including copies of that text kept on other athletes' logs, and every\nsign-in account; an adult athlete can ask for their own account to be deleted as well. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the three athletes the app\nstarted with cannot yet, because setup would put them back."
+        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the three athletes the app\nstarted with cannot yet, because setup would put them back."
       }
     ]
   },

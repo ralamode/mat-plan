@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -189,7 +189,7 @@ export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
+   },
+   {
+     table: schema.movementMuscles,
+-    householdRows: (s) => sql`${schema.movementMuscles.movementId} IN ${movementsOf(s)}`,
++    householdRows: (s) => sql`${schema.movementMuscles.movementId} IN (SELECT ${schema.movements.id} FROM ${schema.movements} WHERE ${movementInHousehold(s)} OR ${schema.movements.householdId} IS NULL)`,
+   },
+   { table: schema.movements, householdRows: (s) => movementInHousehold(s) },
+   { table: schema.profiles, householdRows: (s) => inHousehold(s) },

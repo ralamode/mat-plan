@@ -20,7 +20,7 @@ import {
 } from '@mat-plan/shared';
 
 import { itemCountText } from '@/lib/constants';
-import { formatDayShort } from '@/lib/date';
+import { formatDayShort, onDayText } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural, quote } from '@/lib/i18n/plural';
@@ -428,10 +428,19 @@ export const newItemWarning = (name: string) =>
 export const selectExistingText = (name: string) => `Select ${name}`;
 export const alreadyListedText = (name: string, type: string) =>
   `Already in the list as ${name} (${type}).`;
+/** Made by this Create, or by an earlier one of the same form that got no answer. */
 export const createdText = (name: string) => `${name} created and selected.`;
-/** True for a name that already existed, and for a retry whose first try landed. */
+/** A name that already existed, and is in the screen's list. */
 export const existedText = (name: string, type: string) =>
   `${name} is in the list (${type}). Selected.`;
+/**
+ * The server answered an item the screen's list did not have (`existed`, not listed): another
+ * parent made it first, or, until the catalog's fresh start, a built-in the list was given no row
+ * for. "Is in the list" would be false, and the type the person chose was not used, so this says
+ * what happened (7a-ii trust lens; maintainer, 2026-11-17).
+ */
+export const existedUnlistedText = (name: string, type: string) =>
+  `${name} already exists (${type}), so nothing new was made. Selected.`;
 export const addedText = (n: number) => `${itemCountText(n)} added.`;
 
 /** A row ticked from the search's Enter, where no row has focus to say so. */
@@ -590,8 +599,8 @@ export function startedText(
   from: string,
   today: string,
 ) {
-  const when = from === today ? 'today' : `on ${formatDayShort(from)}`;
-  return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${when}.`;
+  // The day page's own phrase for a day (`onDayText`, #517): one wording on both screens.
+  return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${onDayText(from, today)}.`;
 }
 /** Someone put back on after a Take off: they never left, whatever the start date (C15). */
 export const backOnText = (names: readonly string[], program: string) =>

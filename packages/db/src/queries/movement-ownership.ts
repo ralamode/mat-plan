@@ -10,6 +10,11 @@ import type { Executor } from '../writers/executor';
  * `prescriptions.movement_id` (whose household comes from `prescriptions → program_blocks`).
  * Nothing in the schema stops either from crossing households.
  *
+ * ⚠️ **`CAT-3` A1 added two more FKs into `movements`**: `movement_equipment` and `movement_muscles`.
+ * They describe the movement itself, not a household's use of it, so they are not "references" in
+ * this census's sense and are not counted here. But they are `NO ACTION`: a consumer that deletes a
+ * movement this census calls unreferenced must delete its join rows first, or it fails `23503`.
+ *
  * ⚠️ **Extracted at its SECOND consumer, not speculatively** (`writers/ownership.ts`'s rule). The
  * counts below existed **twice** before TEN-2c — hand-written in `db:verify`'s TEN-2b price proof
  * (which covered `entries` only, one direction) and in prose SQL in

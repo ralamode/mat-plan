@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 3ff52570..f083f9ec 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -13,7 +13,7 @@ import {
+ import { schema } from '../../client';
+ import type { HouseholdScope } from '../../scope';
+ import type { Executor } from '../executor';
+-import { inHousehold, liveTemplateBlockIn } from '../ownership';
++import { inHousehold, templateBlockIn } from '../ownership';
+ import { refuse } from './refuse';
+ import { shiftIntoBand } from './shift-band';
+ 
+@@ -65,7 +65,7 @@ export async function putOn(
+       .select({ id: schema.programBlocks.id })
+       .from(schema.programBlocks)
+       .where(
+-        and(eq(schema.programBlocks.publicId, draft.programPublicId), liveTemplateBlockIn(scope)),
++        and(eq(schema.programBlocks.publicId, draft.programPublicId), templateBlockIn(scope)),
+       )
+       .for('no key update');
+     if (!block) return refuse(PROGRAM_REFUSAL.not_found);

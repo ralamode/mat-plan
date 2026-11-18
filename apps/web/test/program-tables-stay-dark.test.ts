@@ -276,7 +276,8 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   });
 
   /**
-   * FAM-1 7a-i wires the actions, and **no page imports them until 7b**: Next registers a Server
+   * FAM-1 7a-i wires the actions and 7a-ii assembles them as `PROGRAM_ACTIONS` (`actions.contract.ts`),
+   * and **no page imports either until 7b**: Next registers a Server
    * Action only when the module graph reaches it, so until then no request can write a program. The
    * privacy notice and the data inventory still say so, truthfully. The PR that imports this module
    * from a page (7b) lifts this pin and owes, in the same PR (privacy lens, 2026-11-16):
@@ -292,6 +293,12 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   /** The module itself, as a path from the repo root without its extension. */
   const ACTIONS = 'apps/web/app/programs/actions';
   /**
+   * 🔴 **The object that holds every action is the module too** (7a-ii): a page that imports it
+   * reaches every action without naming `actions`, so the pin reads both paths.
+   */
+  const CONTRACT = `${ACTIONS}.contract`;
+  const MODULES = new Set([ACTIONS, CONTRACT]);
+  /**
    * Every module specifier a source names: `from '…'` (an import or a re-export), a bare
    * side-effect `import '…'`, and a dynamic `import('…')` or `require('…')`. Any of them puts the
    * module in the graph, which is what registers its actions.
@@ -300,13 +307,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   /** Does a source at `file` import the actions module, by the `@/` alias or by a relative path? */
   const namesActions = (file: string, source: string) =>
     [...source.matchAll(SPECIFIER)].some(([, spec]) => {
-      if (spec === '@/app/programs/actions') return true;
+      if (spec!.startsWith('@/')) return MODULES.has(`apps/web/${spec!.slice(2)}`);
       if (!spec!.startsWith('.')) return false;
-      return relative(REPO, resolve(dirname(join(REPO, file)), spec!)) === ACTIONS;
+      return MODULES.has(relative(REPO, resolve(dirname(join(REPO, file)), spec!)));
     });
   const importsActions = (file: string) => namesActions(file, code(join(REPO, file)));
   /** The module and its registry are the module, not a page reaching it; tests are skipped below. */
-  const THE_MODULE = new Set([`${ACTIONS}.ts`, `${ACTIONS}.registry.ts`]);
+  const THE_MODULE = new Set([`${ACTIONS}.ts`, `${ACTIONS}.registry.ts`, `${CONTRACT}.ts`]);
 
   it('no page or component imports the program actions until 7b (see OWED_AT_7B)', () => {
     const web = files.filter(
@@ -328,10 +335,60 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
       "import './actions';",
       "const { saveWorkoutAction } = await import('@/app/programs/actions');",
       "const m = require('./actions');",
+      "import { PROGRAM_ACTIONS } from '@/app/programs/actions.contract';",
+      "export { PROGRAM_ACTIONS } from './actions.contract';",
+      "import '../programs/actions.contract';",
+      "const { PROGRAM_ACTIONS } = await import('./actions.contract');",
     ])
       expect(namesActions(page, form), form).toBe(true);
+    expect(namesActions(page, "import { x } from '@/app/programs/actions.registry';")).toBe(false);
     expect(namesActions(page, "import { x } from './actions-copy';")).toBe(false);
     // A sibling of the module is not the module: it is scanned like any page.
     expect(THE_MODULE.has(`${ACTIONS}.form.tsx`)).toBe(false);
+  });
+});
+
+/**
+ * 🔴 **The movement library's tables stay dark until P11-ii** (`CAT-3` A1, spec S6). Migration 0032
+ * creates `equipment`, `muscles`, `movement_equipment` and `movement_muscles`, so any read of one in
+ * a deploy that races `migrate.yml` fails `42P01`. Its own `describe`, not the step-5 list above: the
+ * bare words `equipment` and `muscles` are everyday identifiers (a design token's copy, the picker's
+ * `option.equipment`), so only the schema object, the join tables' names and a raw-SQL table
+ * reference count. `movements.modality` is a column on an existing table, which this scan cannot hold;
+ * 0032's deploy-window header covers it.
+ *
+ * Relaxed by A2 (the seed's catalog writer and `movementIsCatalog`) and P11-ii (the option read in
+ * `queries/program/`), each adding its own entry.
+ */
+describe('the movement library tables stay dark (CAT-3 A1)', () => {
+  const CATALOG_TABLES =
+    /\bschema\.(?:equipment|muscles|movementEquipment|movementMuscles)\b|\b(?:movementEquipment|movementMuscles|movement_equipment|movement_muscles)\b|\b(?:from|join|into|update)\s+"?(?:equipment|muscles)\b/i;
+  const ALLOWED = [
+    'packages/db/src/schema.ts',
+    'packages/db/src/seed.ts',
+    // As above: the household graph names the tables as values, on no request path.
+    'packages/db/src/erasure/graph.ts',
+  ];
+  const files = [
+    ...globSync('apps/web/**/*.{ts,tsx}', { cwd: REPO }),
+    ...globSync('packages/db/src/**/*.ts', { cwd: REPO }),
+  ].filter(
+    (f) => !f.includes('node_modules') && !f.includes('/.next/') && !/\.test\.tsx?$/.test(f),
+  );
+
+  it('no code outside the allowlist names the library tables yet', () => {
+    const hits = files.filter(
+      (f) => CATALOG_TABLES.test(code(join(REPO, f))) && !ALLOWED.some((a) => f.startsWith(a)),
+    );
+    expect(hits, 'a read of a table 0032 creates fails 42P01 in the deploy window').toEqual([]);
+  });
+
+  it('the pattern catches each shape, and not an everyday word', () => {
+    expect(CATALOG_TABLES.test(code(join(REPO, 'packages/db/src/seed.ts')))).toBe(true);
+    expect(CATALOG_TABLES.test('tx.select().from(schema.movementMuscles)')).toBe(true);
+    expect(CATALOG_TABLES.test('SELECT code FROM "equipment"')).toBe(true);
+    expect(CATALOG_TABLES.test('join movement_equipment j on true')).toBe(true);
+    expect(CATALOG_TABLES.test('option.equipment.length')).toBe(false);
+    expect(CATALOG_TABLES.test("'read as equipment'")).toBe(false);
   });
 });

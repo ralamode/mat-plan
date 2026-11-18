@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 3ff52570..fa9cf320 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -114,7 +114,7 @@ export async function putOn(
+ 
+       // Close any gap in the order, then take the last place. Rows already in place stay put.
+       const moved = open.flatMap((row, idx) => (row.idx === idx ? [] : [{ id: row.id, idx }]));
+-      if (moved.length > 0) {
++      if (moved.length < 0) {
+         await shiftIntoBand(
+           tx,
+           a,
+@@ -130,7 +130,7 @@ export async function putOn(
+             .where(eq(a.id, row.id));
+         }
+       }
+-      const last = open.length;
++      const last = open.length === 0 ? 0 : Math.max(...open.map((r) => r.idx)) + 1;
+ 
+       if (endsToday) {
+         await tx

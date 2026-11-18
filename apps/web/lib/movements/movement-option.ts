@@ -1,4 +1,10 @@
-import type { CatalogOption, MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
+import type {
+  CatalogOption,
+  CatalogOptionTaxonomy,
+  MovementPickerGroup,
+  TrackingType,
+  Unit,
+} from '@mat-plan/shared';
 
 /**
  * The DTOs the movement picker renders (PICK-1 Decision 5).
@@ -23,8 +29,8 @@ import type { CatalogOption, MovementPickerGroup, TrackingType, Unit } from '@ma
  * the seven `TRACKING_TYPES`, set once on the item (FAM-1 plan D1, D25). The movement picker shows
  * it on each row's second line (`rowMeta`, CAT-3 P14) and the workout editor reads it to choose a
  * card's fields.
- * ⚠️ **No read fills it yet.** The column arrives in FAM-1 step 3 and the picker's read in step 6a
- * (`packages/db/src/queries/program/movement-options.ts`); until then only fixtures build this DTO.
+ * The item picker's read fills it from the database row (`lib/dal/program/picker.ts`, FAM-1 7a-ii),
+ * never from the library: the row is what a save and a log use.
  */
 type Declaration = {
   readonly unitDefault: Unit | null;
@@ -36,15 +42,17 @@ type Declaration = {
  * One option in the picker — a **discriminated union** on `owner` _(reuse N1)_, so the fields that
  * exist only for a curated row cannot be read off a household row without a narrow.
  *
- * A `catalog` row IS the contract's `CatalogOption` (CAT-3 C0b-2): its aliases and its library
+ * A **library** row IS the contract's `CatalogOption` (CAT-3 C0b-2): its aliases and its library
  * taxonomy (equipment, muscles, modality, pattern, supervision, whether it has instructions), so
  * `catalogOptionOf`'s output is an option by construction, plus the legacy browse `group` where an
- * old built-in has one. A `household` row has none of it: nothing classifies a name somebody typed.
- * The taxonomy is **required**: a library row without it passes no filter (`passesMovementFilters`).
+ * old built-in has one. Its taxonomy is whole, never partial. ⏳ Until CAT-3 chunk R a `catalog` row
+ * may instead be `BuiltInWithoutLibrary`, with none of it (`hasLibraryData` tells them apart; the
+ * rule and its reason are the DAL's, `lib/dal/program/picker.ts`). A `household` row has none of
+ * it: nothing classifies a name somebody typed.
  *
  * 🔴 **Never fill `equipment` with `[]` as a placeholder.** An empty set MEANS "No equipment": a
  * barbell lift mapped that way would say so on its row and pass the "No equipment" filter. A read
- * that has not got the set must not build a library option at all.
+ * that has not got the set builds the taxonomy-less arm, never a library option.
  */
 export type MovementOptionDTO = { readonly publicId: string; readonly name: string } & Declaration &
   (
@@ -56,8 +64,27 @@ export type MovementOptionDTO = { readonly publicId: string; readonly name: stri
          */
         readonly group?: MovementPickerGroup;
       })
+    | BuiltInWithoutLibrary
     | { readonly owner: 'household' }
   );
+
+/**
+ * ⏳ **An old built-in the movement library has no entry for yet** (until CAT-3 chunk R; why, and the
+ * TODO, are in `lib/dal/program/picker.ts`). Every `CatalogOptionTaxonomy` field is absent, never a
+ * placeholder: its row shows only how it is logged, no filter passes it, and it has no "How to".
+ */
+export type BuiltInWithoutLibrary = {
+  readonly owner: 'catalog';
+  readonly aliases: readonly string[];
+  readonly group?: MovementPickerGroup;
+} & { readonly [K in keyof CatalogOptionTaxonomy]?: undefined };
+
+/** Whether an option carries the library's taxonomy: a library entry, never a custom item. */
+export function hasLibraryData(
+  option: MovementOptionDTO,
+): option is Extract<MovementOptionDTO, CatalogOption> {
+  return option.owner === 'catalog' && option.equipment !== undefined;
+}
 
 /**
  * Everything the picker needs to render its lists, as **separate props** rather than one pre-joined
