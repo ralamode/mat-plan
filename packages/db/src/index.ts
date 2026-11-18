@@ -23,6 +23,7 @@ export * from './queries/weekly-adherence';
 // The single-sourced programmed-day query (V1-10 slice 2), run by both the app DAL and db:verify.
 export * from './queries/program-day';
 export * from './queries/export-month';
+export * from './queries/export-prescribed';
 // The single-sourced profile-picker query (TEN-1 1b). Under ADR 0006's session-only addressing `/p`
 // is byte-identical for every household, so this query is the app front door's whole isolation
 // boundary — db:verify must run the DAL's own function, not a lookalike.
