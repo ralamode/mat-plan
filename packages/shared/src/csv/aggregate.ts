@@ -20,13 +20,17 @@ export type ExportMovement = {
  * be refused (`assertExportableUnit`). A set that carries BOTH reps and a count throws: the export
  * never picks one of two numbers the athlete logged.
  */
-function countAsReps(set: ExportSet, context: string): ExportSet {
+function countAsReps(set: ExportSet): ExportSet {
   const counts = set.quantities.filter(
     (q) => q.slot === QUANTITY_SLOT.primary && dimensionOf(q.unit) === UNIT_DIMENSION.count,
   );
   if (counts.length === 0) return set;
-  if (set.reps !== null || counts.length > 1) {
-    throw new Error(`CSV export: ${context} has reps and a count, and only one can be written`);
+  // ⚠️ No value and no movement name in the message (the `csv/row.ts` rule this file's predecessor
+  // documented): a slug can carry what a person typed, and an error's message reaches Sentry.
+  if (counts.length > 1)
+    throw new Error('CSV export: a set has two counts, and only one can be written');
+  if (set.reps !== null) {
+    throw new Error('CSV export: a set has reps and a count, and only one can be written');
   }
   return {
     ...set,
@@ -81,7 +85,7 @@ export function aggregateMovement(movement: ExportMovement, context: string): Ag
 
   const counted = movement.sets
     .filter((s) => s.status !== ENTRY_STATUS.skipped)
-    .map((s, i) => ({ ...countAsReps(s, `${context} set ${i + 1}`), status: s.status }));
+    .map((s) => ({ ...countAsReps(s), status: s.status }));
   if (counted.length === 0) return { sets: '0', reps: '', load: '' };
 
   // One set going to failure makes the whole movement's `reps` read `sub-failure`; the corpus has no

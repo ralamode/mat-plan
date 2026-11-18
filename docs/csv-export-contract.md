@@ -111,25 +111,16 @@ entries into **one row per program item in a session** (`foldStrengthMonth`,
 - **`workout_name`** is the session's frozen name (`sessions.workout_name`), never an id and never the
   live name: a workout renamed after the ✓ exports the old one. It is empty for a row logged outside
   a program, and for a row whose session is not the athlete's.
-- **`session_type`** is `workout` for every program row.
+- **`session_type`** is `workout` for every program row whose session is the athlete's, and empty
+  otherwise.
 - **A Count logged in `count` writes its number in `reps`**, and `load` stays empty
   (`…,plank-taps,1,25,,…`; the maintainer, 2026-11-17). A bare number in `load` is still only ever
   pounds: `count` has no `load` spelling, and a set with both reps and a count is refused.
 
-Each tracking type, in each unit it takes, writes one pinned row
-(`packages/shared/src/csv/strength-log-types.test.ts`). For one set of 20 (and 8 reps where the type
-has reps), after `date,session_type,movement`:
-
-| Type                  | `sets,reps,load,…`                           |
-| --------------------- | -------------------------------------------- |
-| Check                 | `1,,,…`                                      |
-| Count in `count`      | `1,20,,…`                                    |
-| Count in another unit | `1,,20,…` (lb) · `1,,20kg,…` · `1,,20s,…` …  |
-| Reps                  | `1,8,,…`                                     |
-| Weight × reps         | `1,8,20,…` (lb) · `1,8,20kg,…`               |
-| Duration              | `1,,20min,…`                                 |
-| Time per set          | `1,,20s,…` (`reps` empty, not `1`)           |
-| Distance              | `1,,(20yd),…` (the length-only `load` shape) |
+Each tracking type, in each unit it takes, writes one pinned row; the pins, derived from the tracking
+types and their units, are `packages/shared/src/csv/strength-log-types.test.ts`, the one place they
+live. For example a Distance set of 40 yd reads `…,1,,(40yd),…`, the length-only `load` shape, and a
+Time per set leaves `reps` empty.
 
 ### `load` shapes (the complete observed set)
 

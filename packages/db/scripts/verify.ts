@@ -2495,10 +2495,11 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 
 // ── V1-30: a newly loggable unit round-trips from the REAL writer to the export read ───────────────
 // The CSV tests build rows by hand; this proves the stored side. Before V1-30 the session schema
-// refused `m` outright and a `kg` set made the export throw. The fold + CSV builder live in apps/web
-// (`foldStrengthRows`), out of reach here, so this asserts on what they consume: the quantity row's
-// (dimension, unit) and `strengthMonthRows`' unit + value — the bytes `20m`/`85kg` are pinned by the
-// strength-log CSV tests over those same fields.
+// refused `m` outright and a `kg` set made the export throw. This asserts on what the fold and the CSV
+// builder consume: the quantity row's (dimension, unit) and `strengthMonthRows`' unit + value; the
+// bytes `20m`/`85kg` are pinned by the strength-log CSV tests over those same fields. (Since FAM-1 14a
+// the fold, `foldStrengthMonth`, sits beside the query, and lane E's `verifyExport` asserts the
+// program rows' bytes through it.)
 {
   const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
   await writeStrengthSession(asPg, {

@@ -9,6 +9,7 @@ import {
   type StrengthLogRow,
   STRENGTH_LOG_HEADER,
   strengthLogPath,
+  readCsvLine,
 } from '@mat-plan/shared/csv';
 import { ENTRY_STATUS, QUANTITY_SLOT, type QuantitySlot, SET_STATUS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
@@ -248,6 +249,13 @@ describe('the unit tripwire — refuse, never convert', () => {
         }),
       ),
     ).toThrow(/logged in 'timing'[\s\S]*refuses rather than converting/);
+    expect(() =>
+      bodyOf(
+        row({
+          sets: [set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'bool', value: '1' }] })],
+        }),
+      ),
+    ).toThrow(/logged in 'bool'[\s\S]*refuses rather than converting/);
   });
 
   it('writes a Count in `count` in reps, with load empty (the maintainer, 2026-11-17)', () => {
@@ -434,7 +442,7 @@ describe('the assertion a golden diff can never make', () => {
   // The contract: "assert that `sets` equals the element count of any slash-list in reps/load. All
   // eight real files would pass a golden diff while carrying a mismatched list."
   const lists = (r: StrengthLogRow) => {
-    const [, , , sets, reps, load] = bodyOf(r).split(',');
+    const [, , , sets, reps, load] = readCsvLine(bodyOf(r));
     return { sets: Number(sets), reps, load };
   };
 

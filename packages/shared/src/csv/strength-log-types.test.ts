@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ENTRY_STATUS } from '../enums';
+import { ENTRY_STATUS, SET_STATUS } from '../enums';
+import { SESSION_TYPE } from '../sessions';
 import { TRACKING_TYPES } from '../movements';
 import { fillRowValues, TRACKING_TYPE_FIELDS, unitsForTrackingType } from '../program/pieces';
 import { buildStrengthLog } from './strength-log';
@@ -44,8 +45,7 @@ const PINNED: Record<string, string> = {
 
 const cases = TRACKING_TYPES.flatMap((type) => {
   const fields = TRACKING_TYPE_FIELDS[type];
-  const units =
-    fields.slot === null ? [null] : fields.unit ? [fields.unit] : unitsForTrackingType(type);
+  const units = fields.slot === null ? [null] : unitsForTrackingType(type);
   return units.map((unit) => ({ type, unit }));
 });
 
@@ -71,7 +71,7 @@ describe('a program row of each tracking type, in each unit (FAM-1 14a)', () => 
       {
         date: '2026-11-17',
         dayRole: null,
-        sessionType: 'workout',
+        sessionType: SESSION_TYPE.workout,
         movementSlug: 'item',
         status: ENTRY_STATUS.done,
         prescribed: '',
@@ -82,7 +82,7 @@ describe('a program row of each tracking type, in each unit (FAM-1 14a)', () => 
             reps: values!.reps ?? null,
             isBodyweight: false,
             isBand: false,
-            status: ENTRY_STATUS.done,
+            status: SET_STATUS.done,
             quantities: values!.quantities.map((q) => ({ ...q, value: String(q.value) })),
           },
         ],

@@ -24,7 +24,7 @@ import {
   type Unit,
   UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
-import { buildStrengthLog } from '@mat-plan/shared/csv';
+import { buildStrengthLog, STRENGTH_LOG_HEADER } from '@mat-plan/shared/csv';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
@@ -99,6 +99,8 @@ export async function verifyDay(_ctx: VerifyContext): Promise<void> {
 
 /** The proof day, a Monday, and the athlete's today. */
 const DAY = '2026-11-16';
+/** W1's name when its rows are logged; 14a's proof renames it after, and the file keeps this one. */
+const W1_NAME = 'Push day';
 const YESTERDAY = addDays(DAY, -1);
 const MONDAY = 1;
 const SUNDAY = 0;
@@ -287,7 +289,7 @@ async function fixture(tx: VerifyTx) {
   const primary = QUANTITY_SLOT.primary;
 
   const block = await mkTemplateBlock(exec, H_SCOPE, 'verify-11b-h');
-  const w1 = await mkWorkout(H_SCOPE, block, 'Push day');
+  const w1 = await mkWorkout(H_SCOPE, block, W1_NAME);
   const w2 = await mkWorkout(H_SCOPE, block, 'Pull day');
   const wOff = await mkWorkout(H_SCOPE, block, 'Tuesday day');
   const wHidden = await mkWorkout(H_SCOPE, block, 'Hidden day');
@@ -666,20 +668,20 @@ async function verifyExport(): Promise<void> {
       assert.equal(
         file,
         [
-          'date,session_type,movement,sets,reps,load,prescribed,notes,workout_name',
+          STRENGTH_LOG_HEADER.join(','),
           // The day before: the moved set 2, kept apart from set 1 by the date in the key, and with
           // nothing from the sibling's session.
           `${YESTERDAY},,verify-11b-reps,1,9,,3 × 8-12,,`,
-          `${DAY},workout,verify-11b-check,1,,,,,Push day`,
+          `${DAY},workout,verify-11b-check,1,,,,,${W1_NAME}`,
           // A Count in `count`: its number in `reps`, `load` empty.
-          `${DAY},workout,verify-11b-count,1,20,,20,,Push day`,
-          `${DAY},workout,verify-11b-reps,2,10,,3 × 10,,Push day`,
+          `${DAY},workout,verify-11b-count,1,20,,20,,${W1_NAME}`,
+          `${DAY},workout,verify-11b-reps,2,10,,3 × 10,,${W1_NAME}`,
           // Sets in set order (set 2 was ticked first), and no hidden 99 lb set.
-          `${DAY},workout,verify-11b-weight-reps,2,8,25/30,3 × 8 @ 25 lb,,Push day`,
+          `${DAY},workout,verify-11b-weight-reps,2,8,25/30,3 × 8 @ 25 lb,,${W1_NAME}`,
           // Purged: each its own row, under its own movement.
-          `${DAY},workout,verify-11b-duration,1,,5min,5 min,,Push day`,
-          `${DAY},workout,verify-11b-time-sets,1,,30s,3 × 30 s,,Push day`,
-          `${DAY},workout,verify-11b-distance,1,,(40yd),6 × 40 yd,,Push day`,
+          `${DAY},workout,verify-11b-duration,1,,5min,5 min,,${W1_NAME}`,
+          `${DAY},workout,verify-11b-time-sets,1,,30s,3 × 30 s,,${W1_NAME}`,
+          `${DAY},workout,verify-11b-distance,1,,(40yd),6 × 40 yd,,${W1_NAME}`,
           `${DAY},,verify-11b-reps,1,9,,3 × 8-12,,`,
           '',
         ].join('\n'),

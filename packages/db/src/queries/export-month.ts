@@ -5,7 +5,12 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../schema';
 import type { HouseholdScope } from '../scope';
 import { isLiveProfile } from '../writers/ownership';
-import { byFirstLogged, programItemKey, programRow } from './day/program-rows';
+import {
+  byFirstLogged,
+  type FirstLoggedFields,
+  programItemKey,
+  programRow,
+} from './day/program-rows';
 
 /**
  * The month-scoped reads behind the CSV export (V1-13b), single-sourced here so the DAL **and**
@@ -83,7 +88,7 @@ export function strengthMonthRows(
         sessionId: schema.sessions.id,
         // FAM-1 14a: what the fold needs to make one row per program item. `entrySessionId` is the
         // ENTRY's own column: the joined `sessions.id` is NULL for a session that is not this
-        // athlete's (the ON below), and a key built on it would merge rows across dates.
+        // athlete's (the ON below), and a key built on it would merge two such sessions' rows.
         entrySessionId: schema.entries.sessionId,
         createdAt: schema.entries.createdAt,
         prescriptionId: schema.entries.prescriptionId,
@@ -116,6 +121,9 @@ export function strengthMonthRows(
         and(
           eq(schema.sessions.id, schema.entries.sessionId),
           eq(schema.sessions.profileId, schema.entries.profileId),
+          // A hidden session lends nothing either (ADR 0008: a hidden row is out of the export).
+          // No writer hides a session today; this keeps the query's "every level" promise.
+          isNull(schema.sessions.deletedAt),
         ),
       )
       // LEFT, not inner: a SKIPPED movement carries ZERO set rows and still needs its `0,0,SKIPPED` row.
@@ -159,21 +167,15 @@ export function strengthMonthRows(
  * widening that type to carry one is how a column appears by accident. The same holds for the ids the
  * fold keys on (`ID-1`: no household-owned id becomes a column).
  */
-export type FoldedStrengthRow = StrengthLogRow & {
-  /** `null` = never snapshotted; `''` = a real frozen rendering. The distinction is load-bearing. */
-  prescribedSnapshot: string | null;
-  /** Nullable because `entries.movement_id` is; this query inner-joins `movements`, so it is set. */
-  movementId: number | null;
-};
+export type FoldedStrengthRow = StrengthLogRow &
+  // `prescribedSnapshot`: `null` = never snapshotted; `''` = a real frozen rendering.
+  Pick<StrengthMonthRow, 'prescribedSnapshot' | 'movementId'>;
 
 type ExportSetRow = StrengthLogRow['sets'][number];
 type ExportQuantity = ExportSetRow['quantities'][number];
 
 /** One entry of a folded row: the fields the sort reads, its first flat row, and its sets by set id. */
-type FoldedEntry = {
-  set: number | null;
-  createdAt: Date;
-  id: number;
+type FoldedEntry = FirstLoggedFields & {
   head: StrengthMonthRow;
   sets: Map<number, ExportSetRow>;
 };

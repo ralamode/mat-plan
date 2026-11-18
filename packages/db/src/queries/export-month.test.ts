@@ -1,4 +1,4 @@
-import { ENTRY_STATUS, QUANTITY_SLOT, SET_STATUS } from '@mat-plan/shared';
+import { ENTRY_STATUS, QUANTITY_SLOT, SESSION_TYPE, SET_STATUS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import { foldStrengthMonth, type StrengthMonthRow } from './export-month';
@@ -25,7 +25,7 @@ const programRow = (o: Partial<StrengthMonthRow> & { load?: string } = {}): Stre
     movementId: 1,
     prescribedSnapshot: '3 × 8 @ 25 lb',
     dayRole: null,
-    sessionType: 'workout',
+    sessionType: SESSION_TYPE.workout,
     sessionId: 10,
     entrySessionId: 10,
     createdAt: at(id),
@@ -100,6 +100,15 @@ describe('foldStrengthMonth (FAM-1 14a)', () => {
     expect(folded.map((r) => r.workoutName)).toEqual([null, null]);
   });
 
+  it('keys on the ENTRY’s own session, not the joined one, which is NULL for a foreign session', () => {
+    const foreign = { sessionId: null, workoutName: null, sessionType: null };
+    const rows = [
+      programRow({ ...foreign, entrySessionId: 10 }),
+      programRow({ ...foreign, entrySessionId: 11 }),
+    ];
+    expect(foldStrengthMonth(rows)).toHaveLength(2);
+  });
+
   it('orders sets by set number and heads the row with the lowest set, whichever was ticked first', () => {
     const rows = [
       programRow({ prescriptionSet: 2, load: '30', prescribedSnapshot: 'after the edit' }),
@@ -120,7 +129,7 @@ describe('foldStrengthMonth (FAM-1 14a)', () => {
         prescriptionId: null,
         prescriptionSet: null,
         workoutName: null,
-        sessionType: 'strength',
+        sessionType: SESSION_TYPE.strength,
       });
     const folded = foldStrengthMonth([legacy(1, '80'), legacy(2, '85')]);
     expect(folded).toHaveLength(1);

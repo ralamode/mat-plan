@@ -236,16 +236,17 @@ permanent removal is an athlete. Ask, and that is done.
 ## Getting your data out
 
 Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the
-strength log and the bodyweight log. When an athlete logs a workout from a program, the strength log
-has one row per exercise and carries the **workout's name as it was that day**. **The athlete's name
-field is never written into the files**, and the folders are named by an internal identifier, not
-by a person. Anything typed into a workout name, a movement name or a note goes out exactly as typed,
-so a name typed there goes too.
+strength log and the bodyweight log. Once the day page that logs a workout ships, a workout an
+athlete logs from a program has one row per exercise in the strength log, with the **workout's name as
+it was that day** and its targets. **The athlete's name field is never written into the files**, and
+the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
+typed, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a
+name typed into any of them goes with it.
 
 **What the export does not yet include**, so you are not surprised: check-ins and other logged life
 activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
-targets, the programs you build and who is on which program (only a workout's name, on a row an
-athlete logged, goes out). The export covers your logged training; it is not yet a complete copy.
+targets, the programs you build and who is on which program (only a workout's name and the targets of
+an exercise an athlete logged, in the `prescribed` column, go out). The export covers your logged training; it is not yet a complete copy.
 
 **An archived athlete still exports.** Archiving hides an athlete from the picker; it does not hide
 or delete anything they logged. Their export is on the **Household settings** screen, beside their
