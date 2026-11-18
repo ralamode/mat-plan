@@ -3774,6 +3774,7 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
       return row!.publicId;
     };
     const log = async (athlete: string, workoutPublicId: string, day = T) => {
+      // A throw (a writer invariant tripped by a broken key) is turned into this proof's assertion.
       const r = await logRow(asDb(tx), {
         scope,
         today: day,
@@ -3787,7 +3788,7 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
           set: 1,
           values: { quantities: [] },
         },
-      });
+      }).catch((e: unknown) => ({ ok: false as const, reason: `threw: ${String(e)}` }));
       assert.ok(r.ok, `FAM-1 6d-i: the proof logs a row (${r.ok ? '' : r.reason})`);
       return r.entryPublicId;
     };
