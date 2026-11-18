@@ -35,9 +35,10 @@ export async function lockProgram(
 }
 
 /**
- * The athletes an assignment writer works on, locked after the program, in id order so two writers
- * naming the same athletes never wait on each other in turn: live, **not archived** (invariant 31),
- * of this household, `FOR NO KEY UPDATE`. `null` unless every id named is one.
+ * The athletes an assignment writer works on, locked after the program (if the writer takes one),
+ * in id order so two writers naming the same athletes never wait on each other in turn: live,
+ * **not archived** (invariant 31), of this household, `FOR NO KEY UPDATE`. `null` unless every id
+ * named is one.
  */
 export async function lockAthletes(
   tx: Executor,
@@ -61,6 +62,67 @@ export async function lockAthletes(
 }
 
 /**
+ * An athlete's open assignments, in their order (`idx`, then id): exactly the rows
+ * `uq_program_assignments_profile_idx` holds (live, `active_to IS NULL`), **with no block join**,
+ * so an open row of a hidden program is counted too and can never be collided with. A row with a
+ * last day (Take off) has left the order, and is never here.
+ */
+export async function openAssignments(
+  tx: Executor,
+  profileId: number,
+): Promise<Array<{ id: number; blockId: number; idx: number }>> {
+  const a = schema.programAssignments;
+  return tx
+    .select({ id: a.id, blockId: a.blockId, idx: a.idx })
+    .from(a)
+    .where(and(eq(a.profileId, profileId), isNull(a.deletedAt), isNull(a.activeTo)))
+    .orderBy(asc(a.idx), asc(a.id));
+}
+
+/**
+ * **The one band writer of an athlete's program order** (ADR 0007 A2 §7). Places their open rows at
+ * 0, 1, 2…: the rows of `first`'s programs first, in that order, then every other open row in its
+ * current order. Only a row whose place changes is written, through the band (`shiftIntoBand`), so a
+ * row already in place keeps its `ctid`. Answers the number of open rows: the next free place.
+ *
+ * A program with a last day has no open row, so it is never moved (Amendment 5: it reads after the
+ * ones that stay). Call it after `lockAthletes`, in the caller's transaction.
+ */
+export async function placeAssignments(
+  tx: Executor,
+  profileId: number,
+  first: readonly number[],
+): Promise<number> {
+  const a = schema.programAssignments;
+  const open = await openAssignments(tx, profileId);
+  const rank = new Map(first.map((blockId, i) => [blockId, i]));
+  const placed = [
+    ...open
+      .filter((row) => rank.has(row.blockId))
+      .sort((x, y) => rank.get(x.blockId)! - rank.get(y.blockId)!),
+    ...open.filter((row) => !rank.has(row.blockId)),
+  ];
+  const moved = placed.flatMap((row, idx) => (row.idx === idx ? [] : [{ id: row.id, idx }]));
+  if (moved.length > 0) {
+    await shiftIntoBand(
+      tx,
+      a,
+      inArray(
+        a.id,
+        moved.map((row) => row.id),
+      ),
+    );
+    for (const row of moved) {
+      await tx
+        .update(a)
+        .set({ idx: row.idx, updatedAt: sql`now()` })
+        .where(eq(a.id, row.id));
+    }
+  }
+  return open.length;
+}
+
+/**
  * `ProgramActions.putOn`'s writer (FAM-1 step 6c-i). Puts each named athlete on one program, from
  * `from`. `today` is the household's today, which the caller resolves (writers take the day as an
  * argument; only an action reads the clock and the time zone).
@@ -75,7 +137,7 @@ export async function lockAthletes(
  * - **Otherwise**: a new row from `from`, in the last place of their order, due all seven weekdays
  *   (A2 §7: FAM-1's put-on writes all seven rows).
  *
- * **Places go through the band** (`shiftIntoBand`): the athlete's open programs keep their order and
+ * **Places go through the band** (`placeAssignments`): the athlete's open programs keep their order and
  * are numbered 0, 1, 2… with the new ones after, so a gap a Take off left is closed in the same write.
  *
  * Refusals, before anything is written: `invalid` (the schema, or a `from` that is neither today nor
@@ -123,36 +185,14 @@ export async function putOn(
             gte(a.activeTo, today),
           ),
         );
-      const open = await tx
-        .select({ id: a.id, blockId: a.blockId, idx: a.idx })
-        .from(a)
-        .where(and(eq(a.profileId, athlete.id), isNull(a.deletedAt), isNull(a.activeTo)))
-        .orderBy(asc(a.idx), asc(a.id));
-
+      const open = await openAssignments(tx, athlete.id);
       if (open.some((row) => row.blockId === block.id)) continue;
 
       // Take off writes `active_to = today`; a later last day is no writer's, and is reopened too.
       const endsToday = current.find((row) => row.blockId === block.id);
 
       // Close any gap in the order, then take the last place. Rows already in place stay put.
-      const moved = open.flatMap((row, idx) => (row.idx === idx ? [] : [{ id: row.id, idx }]));
-      if (moved.length > 0) {
-        await shiftIntoBand(
-          tx,
-          a,
-          inArray(
-            a.id,
-            moved.map((row) => row.id),
-          ),
-        );
-        for (const row of moved) {
-          await tx
-            .update(a)
-            .set({ idx: row.idx, updatedAt: sql`now()` })
-            .where(eq(a.id, row.id));
-        }
-      }
-      const last = open.length;
+      const last = await placeAssignments(tx, athlete.id, []);
 
       if (endsToday) {
         await tx
