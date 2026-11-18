@@ -1,0 +1,17 @@
+diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
+index 85dac75b..2adf4d24 100644
+--- a/packages/db/src/writers/day/amend-row.ts
++++ b/packages/db/src/writers/day/amend-row.ts
+@@ -76,7 +76,11 @@ export async function amendRow(
+ 
+     // 4 — the workout. A purged one (`ON DELETE SET NULL`) is off the week, as `untickRow` has it.
+     if (entry.workoutId === null) refuse(ROW_REFUSAL.not_scheduled);
+-    const workout = await rowWorkout(tx, profile.id, scope, { id: entry.workoutId });
++    const [w] = await tx
++      .select({ id: schema.workouts.id, blockId: schema.workouts.blockId, name: schema.workouts.name })
++      .from(schema.workouts)
++      .where(eq(schema.workouts.id, entry.workoutId));
++    const workout = w ? { ...w, live: true } : null;
+     if (!workout) refuse(ROW_REFUSAL.not_found);
+     if (!(await isScheduledOn(tx, workout.blockId, workout.id, entry.day))) {
+       refuse(ROW_REFUSAL.not_scheduled);

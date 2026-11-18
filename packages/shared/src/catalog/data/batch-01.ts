@@ -411,7 +411,7 @@ export const CATALOG_BATCH_01: readonly CatalogMovement[] = [
     secondaryMuscles: ['shoulders', 'glutes'],
     supervision: 'coach',
     instructions:
-      'Lie on your back with your feet flat and your hands by your ears, fingers pointing toward your shoulders.\nPress through your hands and feet to lift your hips and chest off the floor.\nStraighten your arms as far as you can and push your chest toward the wall behind you.\nLower yourself slowly, head last.',
+      'With your coach beside you, lie on your back with your feet flat and your hands by your ears, fingers pointing toward your shoulders.\nPress through your hands and feet to lift your hips and chest off the floor, with your coach supporting your back.\nStraighten your arms as far as you can and push your chest toward the wall behind you.\nLower yourself slowly, head last, with your coach guiding you down.',
   },
   {
     slug: 'wall_slide',

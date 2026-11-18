@@ -4,6 +4,8 @@ import {
   addDays,
   DEFAULT_TRACKING_TYPE,
   foldMovementQuery,
+  COPY_NAME_SUFFIX,
+  copyName,
   MAX_REPS_PER_SET,
   MOVEMENT_PATTERNS,
   MOVEMENT_PICKER_ENTRIES,
@@ -18,6 +20,7 @@ import {
   QUANTITY_SLOT,
   SLOT_LABEL_MAX,
   TRACKING_TYPE,
+  WORKOUT_NAME_MAX,
   emptyWeek,
   WEEKDAYS,
   weekDaysSchema,
@@ -30,7 +33,7 @@ import {
   workoutDraft,
 } from '@mat-plan/shared/program/fixtures';
 import type { TrackingType, WeekDraft, WorkoutDraft } from '@mat-plan/shared';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import type { HouseholdScope } from '../../src/scope';
@@ -52,6 +55,7 @@ import {
   seedProgramFixtures,
 } from '../../src/writers/program/seed-fixtures';
 import { createProgram } from '../../src/writers/program/create-program';
+import { copyWorkout } from '../../src/writers/program/copy-workout';
 import { newItem } from '../../src/writers/program/new-item';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
@@ -103,6 +107,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifySaveWeek(ctx);
   await verifyWorkoutInHousehold(ctx);
   await verifyMovementOptionsAndNewItem(ctx);
+  await verifyCopyWorkout(ctx);
   await verifyPutOn(ctx);
   await verifySeedFixtures(ctx);
 }
@@ -1670,10 +1675,15 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
         owner: 'catalog',
         group: MOVEMENT_PICKER_ENTRIES.box_jump.group,
         aliases: MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? [],
+        slug: boxJump.slug,
       },
       "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases",
     );
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
+    assert.ok(
+      options.every((o) => (o.owner === 'catalog') === 'slug' in o),
+      'FAM-1 P11-i: a catalog option carries its slug, and a household option never does',
+    );
     assert.equal(
       options.find((o) => o.publicId === hop)?.trackingType,
       TRACKING_TYPE.distance,
@@ -1833,6 +1843,398 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
   });
   console.log(
     '✓ FAM-1 6a-iii-a: movementOptions and newItem (catalog, own, shadowed, alias, re-spelled, new, refusals)',
+  );
+}
+
+/**
+ * `copyWorkout` (FAM-1 6a-iii-b; contract change C15): an independent copy with frozen provenance,
+ * named by C15's rules, with no second workout of one name in a program; a replay adds nothing.
+ */
+async function verifyCopyWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { programPublicId: home, draft } = await seedHeavyA(tx, A_SCOPE);
+    const saved = await saveWorkout(exec, A_SCOPE, draft);
+    assert.ok(saved.ok, 'FAM-1 6a-iii-b: the source workout saves');
+    const source = saved.workoutPublicId;
+    const away = await mustCreate(tx, A_SCOPE, 'Away program');
+    const copy = (over: Record<string, unknown>) =>
+      copyWorkout(exec, A_SCOPE, {
+        clientId: newId(),
+        workoutPublicId: source,
+        toProgramPublicId: home,
+        weekdays: [],
+        label: null,
+        ...over,
+      }).catch((e: unknown) => ({ threw: String(e) }));
+    const read = (programPublicId: string, workoutPublicId: string) =>
+      readWorkoutDraft(exec, A_SCOPE, { programPublicId, workoutPublicId });
+    const counts = async () => ({
+      workouts: (await tx.select({ id: schema.workouts.id }).from(schema.workouts)).length,
+      items: (await tx.select({ id: schema.prescriptions.id }).from(schema.prescriptions)).length,
+      quantities: (
+        await tx
+          .select({ id: schema.prescriptionQuantities.id })
+          .from(schema.prescriptionQuantities)
+      ).length,
+      slots: (await tx.select({ id: schema.blockDayWorkouts.id }).from(schema.blockDayWorkouts))
+        .length,
+    });
+    /** A workout's items without their card ids: what a copy must carry over unchanged. */
+    const content = (w: Awaited<ReturnType<typeof read>>) =>
+      w!.items.map(({ prescriptionClientId: _id, ...item }) => item);
+
+    // The source as a person leaves it: superset B's two cards removed (hidden, with their
+    // quantities); the lone last card (Time per set) moved first, so stored order differs from write
+    // order, and its target cleared, so a LIVE card has a hidden quantity; one target a range.
+    const live = await read(home, source);
+    const lone = live!.items[4]!;
+    assert.ok(lone.quantities.length > 0, 'FAM-1 6a-iii-b: the lone card has a target to clear');
+    const resaved = await saveWorkout(exec, A_SCOPE, {
+      ...draft,
+      workoutPublicId: source,
+      items: [{ ...lone, quantities: [] }, live!.items[0]!, live!.items[1]!],
+    });
+    assert.ok(resaved.ok, 'FAM-1 6a-iii-b: the source is edited before it is copied');
+    const [ranged] = await tx
+      .select({ id: schema.prescriptionQuantities.id })
+      .from(schema.prescriptionQuantities)
+      .innerJoin(
+        schema.prescriptions,
+        eq(schema.prescriptions.id, schema.prescriptionQuantities.prescriptionId),
+      )
+      .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+      .where(
+        and(
+          eq(schema.workouts.publicId, source),
+          isNull(schema.prescriptions.deletedAt),
+          isNull(schema.prescriptionQuantities.deletedAt),
+          sql`${schema.prescriptionQuantities.valueMin} is not null`,
+        ),
+      )
+      .limit(1);
+    assert.ok(ranged, 'FAM-1 6a-iii-b: the source has a target to make a range');
+    await tx
+      .update(schema.prescriptionQuantities)
+      .set({ valueMax: sql`${schema.prescriptionQuantities.valueMin} + 5` })
+      .where(eq(schema.prescriptionQuantities.id, ranged.id));
+    /** A workout's live quantities as stored, in item order: what `readWorkoutDraft` leaves out. */
+    const storedQuantities = (workoutPublicId: string) =>
+      tx
+        .select({
+          slot: schema.prescriptionQuantities.slot,
+          dimension: schema.prescriptionQuantities.dimension,
+          unit: schema.prescriptionQuantities.unit,
+          valueMin: schema.prescriptionQuantities.valueMin,
+          valueMax: schema.prescriptionQuantities.valueMax,
+        })
+        .from(schema.prescriptionQuantities)
+        .innerJoin(
+          schema.prescriptions,
+          eq(schema.prescriptions.id, schema.prescriptionQuantities.prescriptionId),
+        )
+        .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+        .where(
+          and(
+            eq(schema.workouts.publicId, workoutPublicId),
+            isNull(schema.prescriptions.deletedAt),
+            isNull(schema.prescriptionQuantities.deletedAt),
+          ),
+        )
+        .orderBy(asc(schema.prescriptions.idx), asc(schema.prescriptionQuantities.slot));
+
+    // ── into its own program, with no name: the name and " (copy)" ──
+    const clientId = newId();
+    const mine = await copy({ clientId });
+    assert.ok('ok' in mine && mine.ok, 'FAM-1 6a-iii-b: a copy into its own program succeeds');
+    const copied = await read(home, mine.workoutPublicId);
+    const original = await read(home, source);
+    assert.equal(
+      copied!.name,
+      copyName(original!.name),
+      'FAM-1 6a-iii-b: a copy in its own program is named with " (copy)"',
+    );
+    assert.equal(
+      copied!.description,
+      original!.description,
+      'FAM-1 6a-iii-b: …with its description',
+    );
+    assert.deepEqual(
+      content(copied),
+      content(original),
+      "FAM-1 6a-iii-b: the copy has the source's items, in order, with their numbers",
+    );
+    assert.equal(
+      copied!.items.length,
+      live!.items.length - 2,
+      "FAM-1 6a-iii-b: the source's removed cards are not copied",
+    );
+    assert.deepEqual(
+      await storedQuantities(mine.workoutPublicId),
+      await storedQuantities(source),
+      "FAM-1 6a-iii-b: the copy's quantities are the source's, every column (a range included)",
+    );
+    const sourceCards = new Set(original!.items.map((i) => i.prescriptionClientId));
+    assert.ok(
+      copied!.items.every((i) => !sourceCards.has(i.prescriptionClientId)),
+      'FAM-1 6a-iii-b: every card of the copy is a new row',
+    );
+    const [row] = await tx
+      .select({
+        copiedFromWorkoutId: schema.workouts.copiedFromWorkoutId,
+        copiedFromProgramName: schema.workouts.copiedFromProgramName,
+      })
+      .from(schema.workouts)
+      .where(eq(schema.workouts.publicId, mine.workoutPublicId));
+    const [src] = await tx
+      .select({ id: schema.workouts.id })
+      .from(schema.workouts)
+      .where(eq(schema.workouts.publicId, source));
+    assert.deepEqual(
+      row,
+      { copiedFromWorkoutId: src!.id, copiedFromProgramName: 'Kids program' },
+      "FAM-1 6a-iii-b: the copy records its source and the source program's name",
+    );
+
+    // ── a replay adds nothing ──
+    const before = await counts();
+    assert.deepEqual(
+      await copy({ clientId }),
+      { ok: true, workoutPublicId: mine.workoutPublicId },
+      'FAM-1 6a-iii-b: a replayed copy answers the same workout',
+    );
+    assert.deepEqual(await counts(), before, 'FAM-1 6a-iii-b: a replayed copy adds nothing');
+
+    // ── independent: an edit to the copy leaves the source as it was ──
+    const edited = await saveWorkout(exec, A_SCOPE, {
+      ...copied!,
+      programPublicId: home,
+      workoutClientId: newId(),
+      items: copied!.items.map((item, i) =>
+        i === 0 ? { ...item, notes: 'Changed in the copy' } : item,
+      ),
+    });
+    assert.ok(edited.ok, 'FAM-1 6a-iii-b: the copy can be edited');
+    assert.deepEqual(
+      await read(home, source),
+      original,
+      'FAM-1 6a-iii-b: editing the copy leaves the source unchanged',
+    );
+
+    // ── into another program: its own name; then that name is taken there ──
+    const there = await copy({ toProgramPublicId: away, weekdays: [1, 3], label: 'Evening' });
+    assert.ok('ok' in there && there.ok, 'FAM-1 6a-iii-b: a copy into another program succeeds');
+    assert.equal(
+      (await read(away, there.workoutPublicId))!.name,
+      original!.name,
+      "FAM-1 6a-iii-b: a copy in another program keeps the workout's own name",
+    );
+    const provenance = async (workoutPublicId: string) =>
+      (
+        await tx
+          .select({
+            copiedFromWorkoutId: schema.workouts.copiedFromWorkoutId,
+            copiedFromProgramName: schema.workouts.copiedFromProgramName,
+          })
+          .from(schema.workouts)
+          .where(eq(schema.workouts.publicId, workoutPublicId))
+      )[0];
+    assert.deepEqual(
+      await provenance(there.workoutPublicId),
+      { copiedFromWorkoutId: src!.id, copiedFromProgramName: 'Kids program' },
+      "FAM-1 6a-iii-b: a copy into another program records the SOURCE program's name",
+    );
+    const renamed = await renameProgram(exec, A_SCOPE, {
+      programPublicId: home,
+      name: 'Renamed program',
+    });
+    assert.ok(renamed.ok, 'FAM-1 6a-iii-b: the source program renames');
+    assert.equal(
+      (await provenance(there.workoutPublicId))!.copiedFromProgramName,
+      'Kids program',
+      "FAM-1 6a-iii-b: the source program's name is frozen at copy time",
+    );
+    assert.deepEqual(
+      content(await read(away, there.workoutPublicId)),
+      content(original),
+      "FAM-1 6a-iii-b: a copy into another program has the source's items too",
+    );
+    assert.deepEqual(
+      await storedQuantities(there.workoutPublicId),
+      await storedQuantities(source),
+      'FAM-1 6a-iii-b: …and its quantities',
+    );
+    const week = await readWeek(exec, A_SCOPE, away);
+    assert.deepEqual(
+      [week![1], week![3]],
+      [
+        [{ workoutPublicId: there.workoutPublicId, label: 'Evening' }],
+        [{ workoutPublicId: there.workoutPublicId, label: 'Evening' }],
+      ],
+      'FAM-1 6a-iii-b: the copy goes onto the days named, with the label',
+    );
+    const second = await copy({ toProgramPublicId: away, name: 'Second Copy', weekdays: [1] });
+    assert.ok('ok' in second && second.ok, 'FAM-1 6a-iii-b: a second copy, named, succeeds');
+    assert.deepEqual(
+      (await readWeek(exec, A_SCOPE, away))![1].map((slot) => slot.workoutPublicId),
+      [there.workoutPublicId, second.workoutPublicId],
+      'FAM-1 6a-iii-b: the copy goes last on each day named',
+    );
+
+    // ── a long name: " (copy)" still fits ──
+    const long = 'L'.repeat(WORKOUT_NAME_MAX);
+    const longSave = await saveWorkout(exec, A_SCOPE, {
+      ...draft,
+      workoutPublicId: null,
+      workoutClientId: newId(),
+      name: long,
+      items: [],
+    });
+    assert.ok(longSave.ok, 'FAM-1 6a-iii-b: a workout with the longest name saves');
+    const longCopy = await copy({ workoutPublicId: longSave.workoutPublicId });
+    assert.ok(
+      'ok' in longCopy && longCopy.ok,
+      'FAM-1 6a-iii-b: copying a longest-name workout succeeds',
+    );
+    const longName = (await read(home, longCopy.workoutPublicId))!.name;
+    assert.ok(
+      longName.endsWith(COPY_NAME_SUFFIX) && longName.length === WORKOUT_NAME_MAX,
+      'FAM-1 6a-iii-b: the default name is cut to fit',
+    );
+
+    // ── refusals: typed, and nothing written ──
+    const theirs = await mustCreate(tx, B_SCOPE, 'B program');
+    const theirWorkout = await saveWorkout(exec, B_SCOPE, {
+      programPublicId: theirs,
+      workoutPublicId: null,
+      workoutClientId: newId(),
+      name: 'B workout',
+      description: null,
+      items: [],
+    });
+    assert.ok(theirWorkout.ok, "FAM-1 6a-iii-b: household B's workout saves");
+    const hiddenProgram = await mustCreate(tx, A_SCOPE, 'Hidden target');
+    await hide(tx, hiddenProgram);
+    // A live workout of a program removed since: the program's own liveness keeps it from copying.
+    const shelved = await mustCreate(tx, A_SCOPE, 'Shelved program');
+    const shelvedWorkout = await saveWorkout(exec, A_SCOPE, {
+      programPublicId: shelved,
+      workoutPublicId: null,
+      workoutClientId: newId(),
+      name: 'Shelved workout',
+      description: null,
+      items: [],
+    });
+    assert.ok(shelvedWorkout.ok, 'FAM-1 6a-iii-b: a workout of the program to remove saves');
+    await hide(tx, shelved);
+    const legacy = await seededBlock(tx, A_SCOPE);
+    const gone = await copy({ toProgramPublicId: away, name: 'Gone Copy' });
+    assert.ok('ok' in gone && gone.ok, 'FAM-1 6a-iii-b: a copy to remove later succeeds');
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, gone.workoutPublicId));
+    const goneClient = (
+      await tx
+        .select({ clientId: schema.workouts.clientId })
+        .from(schema.workouts)
+        .where(eq(schema.workouts.publicId, gone.workoutPublicId))
+    )[0]!.clientId;
+    const cases: Array<[string, Record<string, unknown>, string]> = [
+      [
+        'its own name, folded, into a program that has it',
+        { toProgramPublicId: away, name: 'heavy  a' },
+        PROGRAM_REFUSAL.name_taken,
+      ],
+      [
+        'no name, into a program that has its name',
+        { toProgramPublicId: away },
+        PROGRAM_REFUSAL.name_taken,
+      ],
+      ['a blank name', { name: '   ' }, PROGRAM_REFUSAL.invalid],
+      [
+        'a name over WORKOUT_NAME_MAX',
+        { name: 'x'.repeat(WORKOUT_NAME_MAX + 1) },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      ['a weekday twice', { weekdays: [2, 2] }, PROGRAM_REFUSAL.invalid],
+      [
+        "another household's workout",
+        { workoutPublicId: theirWorkout.workoutPublicId },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        "into another household's program",
+        { toProgramPublicId: theirs },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      ['into a hidden program', { toProgramPublicId: hiddenProgram }, PROGRAM_REFUSAL.not_found],
+      [
+        'into the seeded legacy block',
+        { toProgramPublicId: legacy.publicId },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a hidden workout',
+        { workoutPublicId: gone.workoutPublicId, toProgramPublicId: home, name: 'From Gone' },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      ['a workout that does not exist', { workoutPublicId: newId() }, PROGRAM_REFUSAL.not_found],
+      [
+        'a workout of a removed program',
+        { workoutPublicId: shelvedWorkout.workoutPublicId },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'the replay of a copy removed since',
+        { clientId: goneClient, toProgramPublicId: away, name: 'Gone Copy' },
+        PROGRAM_REFUSAL.not_found,
+      ],
+    ];
+    const unchanged = await counts();
+    for (const [what, over, reason] of cases) {
+      assert.deepEqual(
+        await copy(over),
+        { ok: false, reason },
+        `FAM-1 6a-iii-b: copying ${what} is ${reason}`,
+      );
+    }
+    assert.deepEqual(await counts(), unchanged, 'FAM-1 6a-iii-b: a refused copy writes nothing');
+    // The removed "Gone Copy" was in `away`: its name, re-cased, is free there again.
+    const freed = await copy({ toProgramPublicId: away, name: 'gone  copy' });
+    assert.ok(
+      'ok' in freed && freed.ok,
+      'FAM-1 6a-iii-b: a name a removed workout had is free again',
+    );
+
+    // ── a replay still answers after the source is removed (another device, meanwhile) ──
+    const settled = await counts();
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, source));
+    assert.deepEqual(
+      await copy({ clientId }),
+      { ok: true, workoutPublicId: mine.workoutPublicId },
+      'FAM-1 6a-iii-b: a replayed copy answers the same workout after its source is removed',
+    );
+    assert.deepEqual(await counts(), settled, 'FAM-1 6a-iii-b: …and adds nothing');
+
+    // ── household B cannot copy A's workout into its own program ──
+    assert.deepEqual(
+      await copyWorkout(exec, B_SCOPE, {
+        clientId: newId(),
+        workoutPublicId: source,
+        toProgramPublicId: theirs,
+        weekdays: [],
+        label: null,
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.not_found },
+      "FAM-1 6a-iii-b: household B copying A's workout is not_found",
+    );
+  });
+  console.log(
+    '✓ FAM-1 6a-iii-b: copyWorkout (names, independence, provenance, week, replay, refusals)',
   );
 }
 

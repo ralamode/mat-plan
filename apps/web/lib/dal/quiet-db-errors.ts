@@ -4,6 +4,7 @@ import 'server-only';
  * A DAL write's database failure, without the data it was writing. FAM-1 7a-i built it for the
  * program builder; 12b moved it here, shared, for the day page's row writes (the tech-debt row "A
  * failed query's params reach Vercel's runtime logs"). One helper, never a copy per directory.
+ * One read takes it too: `getHouseholdScope`, whose parameter is the Clerk user id (V1-9b B1-2).
  *
  * drizzle's `DrizzleQueryError` carries `Failed query: …\nparams: …` in its message, and its
  * `cause` (the driver's error) carries Postgres's `detail` (the rejected row). Sentry's scrubber

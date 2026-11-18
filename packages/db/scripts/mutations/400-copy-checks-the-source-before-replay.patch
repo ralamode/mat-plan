@@ -1,0 +1,32 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 70189345..33856bbd 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -65,13 +65,6 @@ export async function copyWorkout(
+       })
+       .from(schema.workouts)
+       .where(eq(schema.workouts.blockId, target.id));
+-    const replay = targetWorkouts.find((w) => w.clientId === draft.clientId);
+-    if (replay) {
+-      return replay.deletedAt === null
+-        ? { ok: true as const, workoutPublicId: replay.publicId }
+-        : refuse(PROGRAM_REFUSAL.not_found);
+-    }
+-
+     // The source in ONE statement: its row, its live items in order and their live quantities, so a
+     // save of the source committing meanwhile (another program, not locked here) is seen whole or
+     // not at all. Not `FOR SHARE` on the source's block: a copy P→Q and a copy Q→P would each hold
+@@ -127,6 +120,13 @@ export async function copyWorkout(
+       .orderBy(asc(schema.prescriptions.idx), asc(schema.prescriptionQuantities.slot));
+     const source = sourceRows[0];
+     if (!source) return refuse(PROGRAM_REFUSAL.not_found);
++    const replay = targetWorkouts.find((w) => w.clientId === draft.clientId);
++    if (replay) {
++      return replay.deletedAt === null
++        ? { ok: true as const, workoutPublicId: replay.publicId }
++        : refuse(PROGRAM_REFUSAL.not_found);
++    }
++
+     type Item = NonNullable<(typeof sourceRows)[number]['item']>;
+     type Quantity = NonNullable<(typeof sourceRows)[number]['quantity']>;
+     const items: Array<{ item: Item; quantities: Quantity[] }> = [];

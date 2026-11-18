@@ -24,13 +24,8 @@ import {
   PRACTICE_DAY_UNIQUE_INDEX,
 } from '../../src/schema';
 import { writeCheckinEntries, type CheckinInsertValue } from '../../src/writers/checkin';
-import {
-  clearDay,
-  hiddenAtText,
-  hideEntries,
-  restoreClear,
-  restoreHidden,
-} from '../../src/writers/hide';
+import { clearDay, hideEntries, restoreClear, restoreHidden } from '../../src/writers/hide';
+import { clearEventsForDay, hiddenAtText } from '../../src/queries/clear-events';
 import { hiddenEntriesForDay } from '../../src/queries/hidden-entries';
 import { lastBodyweightBefore } from '../../src/queries/last-bodyweight';
 import { insertBodyweightEntry } from '../../src/writers/bodyweight';
@@ -1210,7 +1205,7 @@ async function verifyClearDay(): Promise<void> {
     assert.deepEqual(
       read,
       { [w3]: HIDE_REASON.clear_day, [p3]: HIDE_REASON.clear_day, [earlier]: null },
-      "B2-0 proof 3: the hidden-entries read reports each row's reason (B1-2's banner reads it)",
+      "B2-0 proof 3: the hidden-entries read reports each row's reason",
     );
 
     // 4 · Every other hide carries NO reason: a blank clear of a weigh-in (proof 3's `earlier`) or a
@@ -1378,10 +1373,108 @@ async function verifyClearDay(): Promise<void> {
     const r9 = await restore(D9, c9.hiddenAt);
     assert.ok('items' in r9 && r9.items.every((i) => i.reason === RESTORE_REASON.ok));
     assert.equal(r9.items.length, 51, 'B2-0 proof 9: Restore all has no cap');
+
+    // ── V1-9b B1-2 — the day's clear events (`clearEventsForDay`, the banner's read) ──
+    const events = (day: string, as = asAthlete) =>
+      orFail(`B1-2: clearEventsForDay ${day}`, () => clearEventsForDay(exec, { ...as, day }));
+
+    // 10 · One clear is one event with its count. A blank clear's hide on the day is not an event, and
+    //      a row under the clear's token without the reason (written by hand) is not counted.
+    const D10 = '2026-11-10';
+    const blank10 = await weighIn(athlete.id, D10, 80);
+    await clearBodyweight(exec, { ...asAthlete, entryId: blank10, unit: 'lb', seenValue: 80 });
+    await backDate(blank10, OLDEST);
+    await weighIn(athlete.id, D10, 81);
+    await practice(athlete.id, D10, 90);
+    await practice(sibling.id, D10, 60);
+    const c10 = tokenOf(await clear(D10));
+    await entry(athlete.id, D10, {
+      deletedAt: sql`${c10.hiddenAt}::timestamptz` as unknown as Date,
+    });
+    assert.deepEqual(
+      await events(D10),
+      [{ hiddenAt: c10.hiddenAt, count: 2 }],
+      "B1-2 proof 10: a day's clear is one event with its count; other hides are not events",
+    );
+
+    // 11 · Two clears of one day: two events, newest first, the older one's six-digit token VERBATIM.
+    //      Restore all by the READ's token brings back exactly that event; the other is left.
+    const D11 = '2026-11-11';
+    const w11 = await weighIn(athlete.id, D11, 82);
+    const p11 = await practice(athlete.id, D11, 45);
+    tokenOf(await clear(D11));
+    await backDate(w11, OLDER);
+    await backDate(p11, OLDER);
+    const w11b = await weighIn(athlete.id, D11, 83);
+    tokenOf(await clear(D11));
+    // Every clear in this one transaction shares one now() (as on any Postgres), and PGlite's is in
+    // milliseconds, so the newer event gets its own six-digit token too.
+    const NEWER = '2026-01-02T00:00:00.000002Z';
+    await backDate(w11b, NEWER);
+    const two = await events(D11);
+    assert.deepEqual(
+      two,
+      [
+        { hiddenAt: NEWER, count: 1 },
+        { hiddenAt: OLDER, count: 2 },
+      ],
+      'B1-2 proof 11: two clears are two events, newest first, each token as hide.ts prints it',
+    );
+    const r11 = await restore(D11, two[1]!.hiddenAt);
+    assert.ok(
+      'items' in r11 &&
+        r11.items.length === 2 &&
+        r11.items.every((i) => i.reason === RESTORE_REASON.ok),
+      "B1-2 proof 11: Restore all by the read's token restores that event's entries",
+    );
+    assert.deepEqual(
+      await events(D11),
+      [{ hiddenAt: NEWER, count: 1 }],
+      'B1-2 proof 11: once restored, only the other event is left',
+    );
+
+    // 12 · The token is tied to its day: the right athlete, another day, this day's token → notFound,
+    //      and the cleared row keeps the clear. The action's window check rests on this.
+    assert.deepEqual(
+      await restore(D10, NEWER),
+      { notFound: true },
+      "B1-2 proof 12: Restore all on another day with this day's token answers notFound",
+    );
+    assert.equal(
+      (await events(D11))[0]?.count,
+      1,
+      "B1-2 proof 12: the other day's clear is untouched by a restore on the wrong day",
+    );
+
+    // 13 · Scope, both directions, on a day both owners have cleared (D8): another household reads
+    //      no events; the owner reads its own.
+    assert.deepEqual(
+      await events(D8),
+      [{ hiddenAt: mineCleared.hiddenAt, count: 1 }],
+      "B1-2 proof 13: the owner reads its own cleared day's event, and only its own entry",
+    );
+    assert.deepEqual(
+      await events(D8, asOther),
+      [{ hiddenAt: theirsCleared.hiddenAt, count: 1 }],
+      'B1-2 proof 13: the other household reads its own, and only its own entry',
+    );
+    assert.deepEqual(
+      await events(D8, { ...asAthlete, scope: other.scope }),
+      [],
+      'B1-2 proof 13: another household reads no clear events for this athlete',
+    );
+    assert.deepEqual(
+      await events(D8, { ...asOther, scope: SCOPE }),
+      [],
+      'B1-2 proof 13: and the reverse',
+    );
   });
 
   console.log(
     "✓ V1-9b B2-0: entries.hide_reason holds only clear_day and never on a live row; a clear hides the day's live entries as one event with the reason (no cap) and replays its own token; every other hide writes none; Restore all brings back exactly the clear, clears the reason, drops it from items left hidden, and answers notFound once done; both are household-scoped",
+  );
+  console.log(
+    "✓ V1-9b B1-2: a day's clear events are one per clear, newest first, counted without other hides, each token restoring exactly its own entries on its own day only; household-scoped both ways",
   );
 }
 

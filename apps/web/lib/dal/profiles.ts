@@ -32,6 +32,7 @@ import {
   reportScopeMiss,
   SCOPE_MISS_ACTION,
 } from './household';
+import { quietDbErrors } from './quiet-db-errors';
 
 /**
  * Profile reads and the routine write (V0-5). Every DAL function returns a minimal DTO — never a raw
@@ -263,11 +264,13 @@ export async function updateProfileRoutine(
   const scope = await getHouseholdScope();
   if (!scope) return null;
 
-  const [row] = await db
-    .update(schema.profiles)
-    .set({ routineConfig: config })
-    .where(isLiveProfile(publicId, scope))
-    .returning({ id: schema.profiles.publicId });
+  const [row] = await quietDbErrors('updateProfileRoutine', () =>
+    db
+      .update(schema.profiles)
+      .set({ routineConfig: config })
+      .where(isLiveProfile(publicId, scope))
+      .returning({ id: schema.profiles.publicId }),
+  );
 
   return row ? { id: row.id } : null;
 }
@@ -310,7 +313,9 @@ export async function renameAthlete(
 
   // The writer's own result, passed through unflattened: `duplicate` carries a match the form
   // renders, and collapsing it into `null` here is exactly what would make the warning unreachable.
-  return await renameProfile(db, scope, publicId, name, options);
+  return await quietDbErrors('renameAthlete', () =>
+    renameProfile(db, scope, publicId, name, options),
+  );
 }
 
 /**
@@ -367,7 +372,7 @@ export async function archiveAthlete(publicId: string): Promise<AthleteWriteResu
     return { ok: false, reason: 'not_owner' };
   }
 
-  const row = await archiveProfile(db, owner, publicId);
+  const row = await quietDbErrors('archiveAthlete', () => archiveProfile(db, owner, publicId));
   // Belt and braces: the predicate can still match 0 rows (a race with a soft-delete). It is
   // `not_found` rather than `not_owner` — we proved ownership a statement ago.
   return row ? { ok: true, id: row.publicId } : { ok: false, reason: 'not_found' };
@@ -387,7 +392,7 @@ export async function restoreAthlete(publicId: string): Promise<AthleteWriteResu
   const scope = await getHouseholdScope();
   if (!scope) return { ok: false, reason: 'not_found' };
 
-  const row = await restoreProfile(db, scope, publicId);
+  const row = await quietDbErrors('restoreAthlete', () => restoreProfile(db, scope, publicId));
   return row ? { ok: true, id: row.publicId } : { ok: false, reason: 'not_found' };
 }
 
@@ -425,7 +430,7 @@ export async function createAthlete(input: AddAthleteInput): Promise<CreateAthle
   const scope = await getHouseholdScope();
   if (!scope) return { ok: false, reason: 'no_scope' };
 
-  const created = await createProfile(db, scope, input);
+  const created = await quietDbErrors('createAthlete', () => createProfile(db, scope, input));
   if (created.ok) return { ok: true, id: created.publicId };
   if (created.reason === 'duplicate') {
     return { ok: false, reason: 'duplicate', match: created.match, atCap: created.atCap };

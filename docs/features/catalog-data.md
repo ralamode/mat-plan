@@ -27,13 +27,15 @@ fills the directory and changes none of them.
 Batch numbers follow the review sheet, so they need not be consecutive here: a batch merges once
 it is approved, one batch PR at a time.
 
-| Batch | Family                            | Entries |
-| ----- | --------------------------------- | ------- |
-| 1     | Mobility and stretching           | 50      |
-| 2     | Core, carries and sleds           | 58      |
-| 3     | Vertical pull and push            | 58      |
-| 4     | Horizontal push and pull          | 57      |
-| 5     | Conditioning machines and running | 54      |
+| Batch | Family                                                                               | Entries |
+| ----- | ------------------------------------------------------------------------------------ | ------- |
+| 1     | Mobility and stretching                                                              | 50      |
+| 2     | Core, carries and sleds                                                              | 58      |
+| 3     | Vertical pull and push                                                               | 58      |
+| 4     | Horizontal push and pull                                                             | 57      |
+| 5     | Conditioning machines and running                                                    | 54      |
+| 6     | Correction: supervised instructions name the coach (K17), 4 edits of shipped entries | 0 new   |
+| 7     | Hinge: deadlifts, hip thrusts and bridges, swings, back extensions, hamstring curls  | 49      |
 
 ## How a batch arrives
 
@@ -41,7 +43,10 @@ it is approved, one batch PR at a time.
    a private sheet (spec K9, K16). Nothing is imported, and no file here names a source or a person
    (D1, D4).
 2. Once the maintainer has approved the batch, one PR, "catalog batch N", adds `batch-NN.ts`, its
-   line in `index.ts`, and its lines in both record files. **The maintainer merges it** (D3).
+   line in `index.ts`, and its lines in both record files. A correction batch adds approval lines
+   only. **It merges only once every row of its sheet tab reads "lgtm"**, and then the lane merges
+   it _(maintainer, 2026-11-17)_. This supersedes D3's "merged only by the maintainer"; the spec
+   is being amended to match.
 3. Each approval line is the entry's `entryHash` (`../approvals.ts`). `approvals.test.ts` fails any
    entry whose current content has no matching hash.
 

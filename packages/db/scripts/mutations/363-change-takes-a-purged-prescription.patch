@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/day/amend-row.ts b/packages/db/src/writers/day/amend-row.ts
+index 85dac75b..0485d797 100644
+--- a/packages/db/src/writers/day/amend-row.ts
++++ b/packages/db/src/writers/day/amend-row.ts
+@@ -85,7 +85,6 @@ export async function amendRow(
+ 
+     // 5 · 6 — the prescription, pinned to that workout, and its movement (`rowItem`, as a ✓).
+     //     A purged one is `program_changed`, as the fake's removed item.
+-    if (entry.prescriptionId === null) refuse(ROW_REFUSAL.program_changed);
+     const { trackingType } = await rowItem(tx, scope, {
+       prescription: { id: entry.prescriptionId },
+       workoutId: workout.id,

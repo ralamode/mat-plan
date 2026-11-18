@@ -3,6 +3,7 @@
  * publishes to the app. **Named exports only**, so the helpers beside them (`programNameTaken`,
  * `freeProgramSlug`, `lostSlugRace`, `shiftIntoBand`) stay inside the package.
  */
+export { copyWorkout } from './copy-workout';
 export { createProgram } from './create-program';
 export { renameProgram } from './rename-program';
 export { newItem } from './new-item';
