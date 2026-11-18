@@ -24,13 +24,17 @@ describe('buildBodyweight — weight_lb holds pounds; kg is converted with the o
     expect(buildBodyweight([row()])).toBe(`${HEADER}2026-09-30,84.5,,\n`);
   });
 
+  it('a note a spreadsheet would run as a formula opens as text (the maintainer, 2026-11-18)', () => {
+    expect(body([row({ notes: '=1+1' })])).toBe("2026-09-30,84.5,,'=1+1\n");
+  });
+
   it('a kg weigh-in writes the pounds equivalent and keeps what was logged in notes', () => {
     expect(body([row({ unit: 'kg' })])).toBe('2026-09-30,186.3,,logged 84.5 kg\n');
   });
 
   it('existing notes are kept, joined with "; "', () => {
     expect(body([row({ unit: 'kg', notes: 'after practice' })])).toBe(
-      '2026-09-30,186.3,,after practice; logged 84.5 kg\n',
+      '2026-09-30,186.3,,"after practice; logged 84.5 kg"\n',
     );
   });
 

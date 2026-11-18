@@ -5,16 +5,34 @@ import { hasLineBreak } from '../text';
  * way (FAM-1 14a; ADR 0009 §3(c), "allowed and preferred"; the maintainer, 2026-11-17).
  *
  * **One rule for every field:** a value holding a `,` or a `"` is wrapped in `"…"` with each inner
- * `"` doubled; any other value is written as it is. A standard reader (a spreadsheet, a CSV library)
- * then reads every cell back exactly, whichever column it sits in.
+ * `"` doubled (and so is one holding `;` or a tab, below); any other value is written as it is. A
+ * standard reader then reads every cell back exactly, whichever column it sits in, except that a
+ * formula-like value carries the leading `'` below.
  *
  * This replaces the byte-faithful rule (write raw; quote only a comma, and only in `notes` and
  * `prescribed`; refuse a comma anywhere else). That rule matched the legacy files, where inch marks
  * (`30" box`) sat unquoted, but it left a note with an opening `"` able to swallow the rest of its
  * line in a standard reader. ADR 0009 retired the byte contract, and §4 lets a PR change those tests.
  */
+/**
+ * **A cell a spreadsheet would run as a formula opens as text** (the maintainer, 2026-11-18): one that
+ * starts with `=`, `+`, `-`, `@` (after any leading spaces, and their full-width forms) or a tab gets a
+ * leading `'`. A workout name, a note or a typed
+ * movement is free text a person wrote, and `=HYPERLINK(…)` in it would otherwise run when the family
+ * opens its own export (the OWASP "CSV injection" rule). A carriage return is already refused as a line
+ * break. No number the export writes starts with one of these: loads, reps and values are never
+ * negative, and a skipped movement is `0`.
+ */
+export const FORMULA_LEAD = /^\s*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^\t/;
+
+function neutralizeFormula(value: string): string {
+  return FORMULA_LEAD.test(value) ? `'${value}` : value;
+}
+
 function quoteIfNeeded(value: string): string {
-  if (!value.includes(',') && !value.includes('"')) return value;
+  // `;` and a tab are quoted too: a spreadsheet whose locale lists with `;` (de-DE, fr-FR) splits on
+  // it, so `ok;=1+1` would open as two cells and run the second. Quoted, it stays one text cell.
+  if (!/[,";\t]/.test(value)) return value;
   return `"${value.replaceAll('"', '""')}"`;
 }
 
@@ -38,7 +56,7 @@ export function csvRow(fields: readonly (string | null | undefined)[], names: re
         if (hasLineBreak(value)) {
           throw new Error(`CSV export: the '${names[i]}' field cannot contain a line break`);
         }
-        return quoteIfNeeded(value);
+        return quoteIfNeeded(neutralizeFormula(value));
       })
       .join(',') + '\n'
   );

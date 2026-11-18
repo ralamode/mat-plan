@@ -241,7 +241,9 @@ athlete logs from a program has one row per exercise in the strength log, with t
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
 typed, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a
-name typed into any of them goes with it.
+name typed into any of them goes with it. One change is made on the way out: a value that starts with
+=, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it
+as a formula.
 
 **What the export does not yet include**, so you are not surprised: check-ins and other logged life
 activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
