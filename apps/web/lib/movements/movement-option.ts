@@ -1,4 +1,4 @@
-import type { MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
+import type { CatalogOption, MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
 
 /**
  * The DTOs the movement picker renders (PICK-1 Decision 5).
@@ -20,8 +20,9 @@ import type { MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
  * movement can never prefill a number.
  *
  * `trackingType` (FAM-1 step 0b) is a declaration in the same sense: how the item is logged, one of
- * the seven `TRACKING_TYPES`, set once on the item (FAM-1 plan D1, D25). The program builder's item
- * picker shows it under each name and the workout editor reads it to choose a card's fields.
+ * the seven `TRACKING_TYPES`, set once on the item (FAM-1 plan D1, D25). The movement picker shows
+ * it on each row's second line (`rowMeta`, CAT-3 P14) and the workout editor reads it to choose a
+ * card's fields.
  * ⚠️ **No read fills it yet.** The column arrives in FAM-1 step 3 and the picker's read in step 6a
  * (`packages/db/src/queries/program/movement-options.ts`); until then only fixtures build this DTO.
  */
@@ -35,18 +36,26 @@ type Declaration = {
  * One option in the picker — a **discriminated union** on `owner` _(reuse N1)_, so the fields that
  * exist only for a curated row cannot be read off a household row without a narrow.
  *
- * A `catalog` row carries its browse `group` and its `aliases`, both from
- * `MOVEMENT_PICKER_ENTRIES`; a `household` row has neither, because nothing groups or nicknames a
- * name somebody typed. Making that a union rather than two optional fields is what stops a renderer
- * writing `option.group` and getting `undefined` for exactly the rows a household cares most about.
+ * A `catalog` row IS the contract's `CatalogOption` (CAT-3 C0b-2): its aliases and its library
+ * taxonomy (equipment, muscles, modality, pattern, supervision, whether it has instructions), so
+ * `catalogOptionOf`'s output is an option by construction, plus the legacy browse `group` where an
+ * old built-in has one. A `household` row has none of it: nothing classifies a name somebody typed.
+ * The taxonomy is **required**: a library row without it passes no filter (`passesMovementFilters`).
+ *
+ * 🔴 **Never fill `equipment` with `[]` as a placeholder.** An empty set MEANS "No equipment": a
+ * barbell lift mapped that way would say so on its row and pass the "No equipment" filter. A read
+ * that has not got the set must not build a library option at all.
  */
 export type MovementOptionDTO = { readonly publicId: string; readonly name: string } & Declaration &
   (
-    | {
-        readonly owner: 'catalog';
-        readonly group: MovementPickerGroup;
-        readonly aliases: readonly string[];
-      }
+    | (CatalogOption & {
+        /**
+         * The legacy browse group, from `MOVEMENT_PICKER_ENTRIES`: only the old built-ins have one.
+         * **Optional** (CAT-3 C0b-2): a library entry has none, is found by search, and is left out
+         * of the legacy groups (invariant 11) until B3's browse tree replaces them.
+         */
+        readonly group?: MovementPickerGroup;
+      })
     | { readonly owner: 'household' }
   );
 
