@@ -15,8 +15,18 @@ export MAT_PLAN_HEAVY_SLOT_PATH="$T/slot.json"
 pass=0
 fail=0
 pids=()
+# Each tracked pid is stored with its start time, and cleanup stops it only while that still matches:
+# a pid reused by another lane's process on this shared machine is never signalled.
+start_of() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//;s/ *$//'; }
+track() { pids+=("$1|$(start_of "$1")"); }
+# SIGKILL <pid> only while it is still the process that started at <start>.
+own_kill() { [ -n "$2" ] && [ "$(start_of "$1")" = "$2" ] && kill -9 "$1" 2>/dev/null; return 0; }
 cleanup() {
-  for p in "${pids[@]:-}"; do [ -n "$p" ] && kill -9 "$p" 2>/dev/null; done
+  for entry in "${pids[@]:-}"; do
+    [ -n "$entry" ] || continue
+    p="${entry%%|*}"
+    [ -n "${entry#*|}" ] && [ "$(start_of "$p")" = "${entry#*|}" ] && kill -9 "$p" 2>/dev/null
+  done
   rm -rf "$T"
 }
 trap cleanup EXIT
@@ -32,21 +42,21 @@ plant() {
   printf '{"pid":%s,"lane":"planted","command":"planted run","startedAt":"then","holders":[{"pid":%s,"start":"%s"}]}' \
     "$1" "$1" "$2" >"$MAT_PLAN_HEAVY_SLOT_PATH"
 }
-start_of() { ps -o lstart= -p "$1" | sed 's/^ *//;s/ *$//'; }
 # Hold the slot in the background with the wrapper; sets HOLDER to the wrapper's pid.
 hold() {
   node "$SLOT" -- sleep 30 >"$T/hold.out" 2>&1 &
   HOLDER=$!
-  pids+=("$HOLDER")
+  track "$HOLDER"
   wait_for '[ -e "$MAT_PLAN_HEAVY_SLOT_PATH" ] && [ "$(field "holders.length" 2>/dev/null)" = 2 ]' ||
     no "the wrapper took the slot and recorded its child"
   CHILD="$(field 'holders[1].pid')"
-  pids+=("$CHILD")
+  CHILD_START="$(field 'holders[1].start')"
+  track "$CHILD"
 }
 stop_holder() {
   kill -TERM "$HOLDER" 2>/dev/null
   wait "$HOLDER" 2>/dev/null
-  kill -9 "$CHILD" 2>/dev/null
+  own_kill "$CHILD" "$CHILD_START"
   rm -f "$MAT_PLAN_HEAVY_SLOT_PATH"
 }
 
@@ -93,6 +103,13 @@ check "under CI it does nothing" '[ "$code" = 0 ]'
 GITHUB_ACTIONS=true node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
 check "under GITHUB_ACTIONS it does nothing" '[ "$code" = 0 ]'
+for off in false 0 FALSE; do
+  CI="$off" node "$SLOT" -- true >"$T/out" 2>&1
+  [ $? = 2 ] || no "CI=$off still takes the slot"
+done
+check "CI=false, 0 or FALSE does not turn the slot off" '[ "$(field pid)" = "$HOLDER" ]'
+CI=1 node "$SLOT" -- true >"$T/out" 2>&1
+check "skipping under CI says so" 'grep -qF "skipped (CI)" "$T/out"'
 check "…and neither touched the holder's lock" '[ "$(field pid)" = "$HOLDER" ]'
 
 # ── A dead wrapper with a live child ────────────────────────────────────────────────────────────
@@ -101,7 +118,7 @@ wait "$HOLDER" 2>/dev/null
 node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
 check "the wrapper killed with -9 while its child runs: still held" '[ "$code" = 2 ]'
-kill -9 "$CHILD"
+own_kill "$CHILD" "$CHILD_START"
 wait_for '! kill -0 "$CHILD" 2>/dev/null'
 node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
@@ -127,7 +144,7 @@ check "MAT_PLAN_HEAVY_SLOTS=2: a second run takes slot 2 while slot 1 is held" '
 check "…and frees slot 2 when it ends, leaving slot 1 alone" '[ ! -e "$SLOT2" ] && [ "$(field pid)" = "$HOLDER" ]'
 MAT_PLAN_HEAVY_SLOTS=2 node "$SLOT" -- sleep 30 >"$T/hold2.out" 2>&1 &
 HOLDER2=$!
-pids+=("$HOLDER2")
+track "$HOLDER2"
 wait_for '[ -e "$SLOT2" ]' || no "the second holder took slot 2"
 MAT_PLAN_HEAVY_SLOTS=2 node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
@@ -160,9 +177,11 @@ code=$?
 check "a live pid with a different start time (reused) counts as dead" '[ "$code" = 0 ] && gone'
 
 plant "$$" "$(start_of $$)"
+node -e 'const fs=require("fs"),p=process.env.MAT_PLAN_HEAVY_SLOT_PATH,l=JSON.parse(fs.readFileSync(p,"utf8"));l.lane="x\u009b31m\u202ey";fs.writeFileSync(p,JSON.stringify(l))'
 node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
-check "a live pid with its recorded start time holds" '[ "$code" = 2 ] && grep -qF "planted" "$T/out"'
+check "a live pid with its recorded start time holds" '[ "$code" = 2 ] && grep -qF "held by x31my (" "$T/out"'
+check "…and the holder's C1 and bidi control characters are stripped" '! LC_ALL=C grep -q "$(printf "\xc2\x9b")" "$T/out"'
 rm -f "$MAT_PLAN_HEAVY_SLOT_PATH"
 
 printf 'not json' >"$MAT_PLAN_HEAVY_SLOT_PATH"
@@ -187,8 +206,8 @@ check "release() leaves a lock that is no longer ours" '[ "$code" = 0 ]'
 rm -f "$MAT_PLAN_HEAVY_SLOT_PATH"
 
 # ── Two takers racing ───────────────────────────────────────────────────────────────────────────
-# Each taker waits for the same start file, then tries once; a winner holds for 1s. Stale locks are
-# planted first in half the trials, so the steal path races too.
+# Each taker waits for the same start file, then tries once; a winner holds for 1s. Even trials plant
+# a stale lock first, so the stale-clear path races too (it found a double hold in the first design).
 cat >"$T/racer.mjs" <<EOF
 import { existsSync } from 'node:fs';
 import { acquire, holder } from '$LOCKLIB';
@@ -199,7 +218,7 @@ console.log(r.held ? 'HELD' : 'BUSY');
 if (r.held) await new Promise((res) => setTimeout(res, 1000));
 EOF
 bad=0
-for trial in $(seq 1 10); do
+for trial in $(seq 1 20); do
   rm -f "$MAT_PLAN_HEAVY_SLOT_PATH" "$T/go"
   [ $((trial % 2)) = 0 ] && plant "$dead" "Mon Jan  1 00:00:00 2024"
   racers=()
@@ -207,14 +226,14 @@ for trial in $(seq 1 10); do
     node "$T/racer.mjs" "$T/go" >"$T/out.race.$n" 2>&1 &
     racers+=("$!")
   done
-  pids+=("${racers[@]}")
+  for r in "${racers[@]}"; do track "$r"; done
   sleep 0.3
   touch "$T/go"
   for r in "${racers[@]}"; do wait "$r" 2>/dev/null; done
   held="$(cat "$T"/out.race.* | grep -c HELD)"
-  [ "$held" = 1 ] || { bad=$((bad + 1)); echo "trial $trial: held=$held"; cat "$T"/out.race.*; }
+  [ "$held" = 1 ] || { bad=$((bad + 1)); echo "  trial $trial: $held holders"; }
 done
-check "three takers racing, 10 trials (half over a stale lock): exactly one holds each time" '[ "$bad" = 0 ]'
+check "three takers racing, 20 trials (half over a stale lock): exactly one holds each time" '[ "$bad" = 0 ]'
 
 echo
 echo "heavy-slot.test.sh: $pass passed, $fail failed"

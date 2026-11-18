@@ -10,18 +10,30 @@
  *   (`ps -o lstart=`) is the one recorded, so a reused pid counts as dead. A `group` holder is a
  *   process group: it is alive while any member is, because a pid is never reused while a group of
  *   that id exists; when its leader is still running, the leader's start time must match too.
- * - **A stale lock is taken over by rename**, then the moved content is re-read: only the dead
- *   holder's content is discarded. Anything else is put back with `link`, never `rename`, so it can
- *   never overwrite a lock taken in the meantime.
+ * - **A stale lock is cleared only under a steal guard** (`<lock>.steal`, taken with the same
+ *   link-from-temp). Under it the lock is re-read, and removed only if it is still dead: no one else
+ *   can replace a lock that exists, and only the guard's holder removes one, so a fresh lock is never
+ *   removed. (The plan's steal-by-rename lost a fresh lock when three takers raced over a stale one;
+ *   the race case in `heavy-slot.test.sh` caught it.) A guard left by a crashed stealer is removed
+ *   when its holder is dead.
  *
  * Best-effort, like the guards: it keeps two runs on one machine from colliding, it is not a
  * security boundary.
  */
 import { execFileSync } from 'node:child_process';
-import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 
-const ATTEMPTS = 5;
+const ATTEMPTS = 200;
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 /** The process's start time as `ps` reports it, or null when it is gone. */
 export function startTime(pid) {
@@ -83,7 +95,10 @@ export function readLock(path) {
 
 function writePrivate(path, payload) {
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(payload), { mode: 0o600 });
+  // Exclusive and fresh: a leftover from a killed run with a reused pid is removed first, and `wx`
+  // (O_EXCL) never follows a symlink planted at the name, so the file really is private.
+  rmSync(tmp, { force: true });
+  writeFileSync(tmp, JSON.stringify(payload), { flag: 'wx', mode: 0o600 });
   return tmp;
 }
 
@@ -92,7 +107,7 @@ function writePrivate(path, payload) {
  * `{ held: false, holder }` with the live lock's parsed content when someone else has it.
  */
 export function acquire(path, payload) {
-  mkdirSync(dirname(path), { recursive: true });
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = writePrivate(path, payload);
   try {
     for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
@@ -106,26 +121,7 @@ export function acquire(path, payload) {
       if (content === null) continue; // released between our link and our read
       const live = liveLock(content);
       if (live) return { held: false, holder: live };
-      // Stale: move it aside, then check that what moved is the dead lock we judged.
-      const moved = `${path}.stale.${process.pid}`;
-      try {
-        renameSync(path, moved);
-      } catch {
-        continue; // another taker moved it first
-      }
-      const movedContent = readLock(moved);
-      if (movedContent !== content && liveLock(movedContent)) {
-        try {
-          linkSync(moved, path); // not ours to break; link, so a newer lock is never overwritten
-        } catch {
-          /* a newer lock is already in place: the moved one is superseded */
-        }
-      }
-      try {
-        unlinkSync(moved);
-      } catch {
-        /* already gone */
-      }
+      clearIfStale(path, payload);
     }
     throw new Error(`could not take the lock at ${path}; delete it if no run is live`);
   } finally {
@@ -134,6 +130,29 @@ export function acquire(path, payload) {
     } catch {
       /* the temp file is only the link's source */
     }
+  }
+}
+
+/** Remove the lock at `path` if it is still dead, holding the steal guard; else wait a moment. */
+function clearIfStale(path, payload) {
+  const guard = `${path}.steal`;
+  const tmp = writePrivate(guard, { pid: process.pid, holders: payload.holders });
+  try {
+    linkSync(tmp, guard);
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    const held = readLock(guard);
+    if (held !== null && !liveLock(held) && readLock(guard) === held) unlinkSync(guard); // crashed
+    sleepSync(10);
+    return;
+  } finally {
+    unlinkSync(tmp);
+  }
+  try {
+    const now = readLock(path);
+    if (now !== null && !liveLock(now)) unlinkSync(path);
+  } finally {
+    unlinkSync(guard);
   }
 }
 

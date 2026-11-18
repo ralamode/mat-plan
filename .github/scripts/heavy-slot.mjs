@@ -25,7 +25,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { cpus, homedir, loadavg } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { acquire, holder, liveLock, readLock, release, rewrite } from './pid-lock.mjs';
@@ -49,15 +49,20 @@ export function slotCount() {
 
 /** Slot k's lock (1-based). Slot 1 is `MAT_PLAN_HEAVY_SLOT_PATH` or `~/.cache/mat-plan/heavy-slot.json`. */
 export function slotPath(k = 1) {
-  const first =
-    process.env.MAT_PLAN_HEAVY_SLOT_PATH ||
-    join(homedir(), '.cache', 'mat-plan', 'heavy-slot.json');
+  const override = process.env.MAT_PLAN_HEAVY_SLOT_PATH;
+  // Resolved, so a relative override cannot quietly make the slot per-directory.
+  const first = override
+    ? isAbsolute(override)
+      ? override
+      : resolve(override)
+    : join(homedir(), '.cache', 'mat-plan', 'heavy-slot.json');
   return k === 1 ? first : first.replace(/(\.json)?$/, `.${k}$1`);
 }
 
 const clean = (text, max) =>
   String(text)
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+    // C0, DEL, C1 (an 8-bit CSI is U+009B) and the bidi overrides: printed into another lane's terminal.
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
     .slice(0, max);
 
 function lane() {
@@ -74,8 +79,14 @@ function lane() {
   }
 }
 
+/** `CI=false` or `CI=0` is a common export on a laptop; it must not silently turn the slot off. */
+const set = (name) => !['', '0', 'false'].includes((process.env[name] ?? '').toLowerCase());
+
 function skipped() {
-  if (process.env.CI || process.env.GITHUB_ACTIONS) return true;
+  if (set('CI') || set('GITHUB_ACTIONS')) {
+    console.error('▸ heavy-run slot: skipped (CI)');
+    return true;
+  }
   if (process.env.MAT_PLAN_HEAVY_SLOT === 'off') {
     console.error('▸ heavy-run slot: skipped (MAT_PLAN_HEAVY_SLOT=off)');
     return true;
@@ -167,8 +178,9 @@ function cli(argv) {
   // Its own process group, so the group can be recorded as a holder and signalled as one; async, so
   // the signal handlers below run while it does (a spawnSync blocks every handler, lessons.md).
   const child = spawn(command[0], command.slice(1), {
-    stdio: ['ignore', 'inherit', 'inherit'],
-    detached: true,
+    // Without the slot (CI, bypass, nested) the wrapper is a plain pass-through.
+    stdio: slot.payload ? ['ignore', 'inherit', 'inherit'] : 'inherit',
+    detached: Boolean(slot.payload),
     env: slot.payload
       ? { ...process.env, MAT_PLAN_HEAVY_SLOT_HELD: String(process.pid) }
       : process.env,
