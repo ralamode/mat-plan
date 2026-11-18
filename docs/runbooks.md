@@ -1982,7 +1982,7 @@ made step 3's numbers stale), then the eleven DELETEs in this order, child befor
 
 **4b. Only if the household chose to remove a program only P was on**, and only for blocks with
 `household_id = :H`. **Before step 10** (after it the report cannot be computed), re-run the report
-inside the transaction and keep only blocks it still lists (a copy's program added by "Remove both", below, is exempt: it is checked by its own query). Lock them first: `SELECT id FROM program_blocks WHERE id = ANY(:B) AND household_id = :H FOR UPDATE`, so a session or assignment the app writes cannot land between this check and the deletes. Then this must read 0, because nobody else
+inside the transaction and keep only blocks it still lists (a copy's program added by "Remove both", below, is exempt: it is checked by its own query). Lock them, and their workouts and prescriptions, first: `SELECT id FROM program_blocks WHERE id = ANY(:B) AND household_id = :H FOR UPDATE`, then the same `FOR UPDATE` on `workouts` and on `prescriptions` with `block_id = ANY(:B)`. An assignment's insert waits on the first, and a logged session's or entry's on the other two (their FK checks take `FOR KEY SHARE`, which `FOR UPDATE` blocks; the row writer locks no program row), so nothing the app writes can land between this check and the deletes. Then this must read 0, because nobody else
 may have logged against those blocks without an assignment (doing someone else's workout creates none):
 
 ```sql
@@ -2157,7 +2157,7 @@ SELECT m.id, m.public_id FROM movements m
 ```
 
 **Apply.** Lock first: `SELECT id FROM program_blocks WHERE id = :B AND household_id = :H AND kind =
-'template' FOR UPDATE;` (one row, or `ROLLBACK`). Then, in the household delete's order (rows 8–10),
+'template' FOR UPDATE;` (one row, or `ROLLBACK`), then `SELECT id FROM workouts WHERE block_id = :B FOR UPDATE;` and `SELECT id FROM prescriptions WHERE block_id = :B FOR UPDATE;`. The first stops an assignment or a program edit; the other two stop a session or entry being logged against it (the row writer locks no program row, but each insert's FK check waits on these). A write that waited fails `23503` once this commits. Then, in the household delete's order (rows 8–10),
 restricted to `:B`. Steps a and g keep the household delete's `AND` (rows 8 and 9d), so a row of another
 household that landed after STOP 1 aborts `23503` instead of being deleted:
 
@@ -2215,7 +2215,8 @@ SELECT m.id, m.public_id FROM movements m
 ```
 
 **Apply.** Lock the program first, as above (the app's writers lock the program, not the workout),
-then:
+then `SELECT id FROM workouts WHERE id = :W FOR UPDATE;` and `SELECT id FROM prescriptions WHERE
+workout_id = :W FOR UPDATE;`, which stop a log against it, then:
 
 | Step | Table                     | Scoped by                                                      |
 | ---- | ------------------------- | -------------------------------------------------------------- |
