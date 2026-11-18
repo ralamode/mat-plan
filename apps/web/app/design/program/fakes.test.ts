@@ -1858,8 +1858,43 @@ describe('the fakes stay on the preview route', () => {
    * A production route passes the real actions it has, never a fake (plan §6). So no module outside
    * the preview route's own directory may import this one. Fixtures are held the same way: they are
    * preview and test data.
+   *
+   * **Tests may read them.** `appSources()` already leaves out the unit tests (`*.test.ts`). The
+   * end-to-end tests are Playwright's `*.spec.ts` and their helpers, all under `apps/web/e2e/`:
+   * they are left out here, by directory, so a spec can read a fixture's names and never re-type
+   * them (12c's `day-page.spec.ts`). ⚠️ Here and not in `appSources()`: the session and secrets
+   * guards share that list, and they must keep seeing `e2e/`.
+   *
+   * 🔴 **That makes `e2e/` a way round this guard**, which reads each file's own imports: a helper
+   * there may import a fixture, and a route importing the helper would look clean (`@/e2e/…`
+   * resolves from anywhere in the app). So the last test here holds the other half: nothing in the
+   * app imports from `e2e/` at all, nor from `scripts/`, whose screenshot script drives the same
+   * steps and so may import `e2e/` itself.
    */
-  const outside = appSources().filter((file) => !file.startsWith(`${WEB_DIR}/app/design/program/`));
+  const mayReadPreviewData = (file: string) =>
+    file.startsWith(`${WEB_DIR}/app/design/program/`) || file.startsWith(`${WEB_DIR}/e2e/`);
+  const outside = appSources().filter((file) => !mayReadPreviewData(file));
+
+  it('leaves out the preview route and the end-to-end tests, and nothing that only looks like them', () => {
+    for (const file of [
+      'app/design/program/preview-harness.tsx',
+      'e2e/day-page.spec.ts',
+      'e2e/steps.ts',
+    ]) {
+      expect(mayReadPreviewData(`${WEB_DIR}/${file}`), file).toBe(true);
+    }
+    for (const file of [
+      'app/e2e/page.tsx',
+      'app/design/tokens/page.tsx',
+      'components/e2e/steps.ts',
+      'lib/e2e.ts',
+      'e2e.ts',
+    ]) {
+      expect(mayReadPreviewData(`${WEB_DIR}/${file}`), file).toBe(false);
+    }
+    // The end-to-end tests are in the list this guard starts from, so leaving them out is a choice.
+    expect(appSources().some((file) => file.startsWith(`${WEB_DIR}/e2e/`))).toBe(true);
+  });
 
   it('finds the sources (an empty glob would pass the scan below)', () => {
     expect(outside.length).toBeGreaterThan(100);
@@ -1896,6 +1931,58 @@ describe('the fakes stay on the preview route', () => {
 
   it('nothing outside app/design/program imports the fakes or the fixtures', () => {
     const importers = outside.filter((file) => IMPORTS_PREVIEW_DATA.test(code(file)));
+    expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
+  });
+
+  /** An import from the end-to-end directory or from `scripts/`: by the alias, or relatively. */
+  const IMPORTS_E2E_OR_SCRIPTS = /['"](?:@\/|(?:\.\.?\/)+)(?:e2e|scripts)\//;
+  /** Test and tooling code, which no route bundles: the specs' directory and the dev scripts'. */
+  const isTestOrTooling = (file: string) =>
+    file.startsWith(`${WEB_DIR}/e2e/`) || file.startsWith(`${WEB_DIR}/scripts/`);
+
+  it('the e2e matcher sees every spelling of the import', () => {
+    for (const source of [
+      `import { signIn } from '@/e2e/steps';`,
+      `import { signIn } from '../../e2e/steps';`,
+      `import { signIn } from "../e2e/steps";`,
+      `const steps = await import('./e2e/steps');`,
+      `import { capture } from '@/scripts/screenshot-ephemeral';`,
+      `import { capture } from '../scripts/screenshot-ephemeral';`,
+    ]) {
+      expect(IMPORTS_E2E_OR_SCRIPTS.test(source), source).toBe(true);
+    }
+    for (const source of [
+      `import { test } from '@playwright/test';`,
+      `import { thing } from '@/lib/e2e';`,
+      `import { thing } from '@/lib/scripts';`,
+      `import { thing } from '@/components/e2e-banner';`,
+      `import { steps } from './steps';`,
+    ]) {
+      expect(IMPORTS_E2E_OR_SCRIPTS.test(source), source).toBe(false);
+    }
+  });
+
+  it('test and tooling code is the two directories, and nothing that only looks like them', () => {
+    for (const file of ['e2e/steps.ts', 'scripts/screenshot-ephemeral.ts']) {
+      expect(isTestOrTooling(`${WEB_DIR}/${file}`), file).toBe(true);
+    }
+    for (const file of [
+      'sentry.server.config.ts',
+      'lib/scripts.ts',
+      'app/scripts/page.tsx',
+      'app/e2e/page.tsx',
+      'proxy.ts',
+    ]) {
+      expect(isTestOrTooling(`${WEB_DIR}/${file}`), file).toBe(false);
+    }
+  });
+
+  it('🔴 nothing in the app imports from e2e/ or scripts/, so neither can carry a fixture into a route', () => {
+    // The screenshot script drives the same steps as the specs, so `scripts/` may import `e2e/`.
+    // The app may import neither: through either one a helper's fixture would reach a route.
+    const app = appSources().filter((file) => !isTestOrTooling(file));
+    expect(app.length).toBeGreaterThan(100);
+    const importers = app.filter((file) => IMPORTS_E2E_OR_SCRIPTS.test(code(file)));
     expect(importers.map((file) => file.slice(WEB_DIR.length + 1))).toEqual([]);
   });
 });
