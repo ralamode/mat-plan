@@ -81,7 +81,7 @@ flowchart LR
 | `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. The program fake's clock is `ProgramView.today`.                                                                                                                                                                                                                                                                                                                                                                                            |
 | `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture: the test library as library rows (`catalogOptionOf` over `CATALOG_FIXTURE`) and the prototype's items as the household's own, one row a name (a name in both is the library's row under the item's id when the two log alike, else the household's item); and `previewHowTo(publicId)`, the preview's "How to" read. Here because its shape is the web's `MovementOptionDTO`.                                                                                                                                                         |
 | `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props. It hands the picker `previewHowTo` as its "How to" loader.                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props. It hands the picker `previewHowTo` as its "How to" loader. It wraps every screen in `<BuilderLinkPrefetch value={false}>`, so no builder link prefetches a fixture id's page (a 404).                                                                                                                                                                                                                                                                |
 | `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `apps/web/e2e/program-preview-a11y.spec.ts`       | Walks every state of the registry: axe, 44px targets, no sideways scroll at 360px.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
@@ -452,6 +452,32 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     Refusing all five keeps each token to one spelling, and `rowRetickSchema` takes that rule whole
     (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
     real action refuses before anything is read, and the fake changes nothing.
+30. **A household's own items, a program's workouts and a weekday's workouts each have a cap, and
+    passing one is `limit_reached`** (contract change C35; maintainer, 2026-11-18: "Approve 500 /
+    50 / 30"). `MAX_HOUSEHOLD_ITEMS` (500: the items a household made, never the library's),
+    `MAX_PROGRAM_WORKOUTS` (50: a saved new workout and a copy alike) and `MAX_DAY_SLOTS` (30: one
+    weekday of one program's week), in `program-shapes.ts`. The refusal is its own word because
+    `invalid` reads as "something typed is wrong" and a screen marks a field for it.
+    - **Never capped:** an edit of a workout that exists; a replay of a create (the same client
+      id answers as the first call did); `newItem` for a name that already names an item, which
+      selects it (invariant 15).
+    - **For a create the cap is judged before the name**, so a full program says so and nobody
+      renames a workout only to be told the program is full.
+    - **The weekday cap is in `weekDaysSchema`**, so a week past it fails the parse.
+      `weekExceedsDaySlots(draft)` tells that from any other failure, as `weekRepeatsAWorkout`
+      does for a repeat, and **a repeat is asked first**: `once_per_day`, then `limit_reached`,
+      then `invalid`. The fake answers this way; lane P's writers and the real actions follow in
+      their own PRs, and until they do the real `saveWeek` answers `invalid` for a long day.
+    - **The workouts cap is the program's the write lands in.** For a copy into another program
+      that is the other program's, never the source's. ⚠️ The fake holds only the program on
+      screen, so it counts that one alone: a copy into another program is never refused by the
+      fake, and a save for a program that is not on screen is not counted either. The real
+      writers count the destination.
+    - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
+      `weekDaysSchema`. That is safe: every writer parses the draft first, and the week's table
+      is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      caps (`ProgramView.workouts` has none), and how many programs a household has is not
+      capped.
 
 ## Traps
 

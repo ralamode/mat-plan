@@ -1020,11 +1020,12 @@ export function MovementPicker({
               />
               {result.outsideFilters > 0 ? (
                 <ListLine
-                  text={
-                    shown > 0
-                      ? COPY.outsideMore(result.outsideFilters)
-                      : COPY.outsideAll(result.outsideFilters, deferredTrimmed)
-                  }
+                  text={COPY.outsideLine(
+                    result.outsideFilters,
+                    result.outsideWithoutData,
+                    deferredTrimmed,
+                    shown > 0,
+                  )}
                 >
                   {/* Its own Clear filters: after a scroll, the line at the top is out of reach. */}
                   <Button
