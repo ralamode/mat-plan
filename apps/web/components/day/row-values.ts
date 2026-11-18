@@ -218,9 +218,12 @@ function readNumber(
 
 /**
  * Whether a logged row's numbers can be changed in place: 🔴 **never when its quantity was logged in
- * another unit than the item's** (13b-ii). A Change is sent in the item's unit (`rowAmendSchema`), so
- * a `27.5 lb` row on an item now in kg would go out as 27.5 kg; even a reps-only change has to send
- * the quantity. The row stays text, and un-tick then a new ✓ is the way to change it.
+ * another unit than the item's** (13b-ii). The writer judges a Change in the unit the row was LOGGED
+ * in (`loggedRowUnit`, contract change C28), but this screen's field shows and sends the item's
+ * current unit, so a `27.5 lb` row on an item now in kg would go out as 27.5 kg; even a reps-only
+ * change has to send the quantity. So the screen is stricter than the writer (contract invariant
+ * 27): the row stays text, and un-tick then a new ✓ is the way to change it. Offering Change in the
+ * logged unit is a follow-up (FAM-1 12d plan, decided 2026-11-18).
  */
 export function canChangeValues(item: DayItem, logged: RowValues): boolean {
   // The amend writer's own rule (`fillRowValues` with no target, C10): the row holds exactly the

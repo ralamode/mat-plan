@@ -1,12 +1,13 @@
 import 'server-only';
 
-import { logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
+import { amendRow, logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
   ROW_REFUSAL,
   isoDaySchema,
   uuidSchema,
   type DayPlan,
+  type RowAmend,
   type RowResult,
   type RowRetick,
   type RowUntick,
@@ -81,6 +82,17 @@ export async function untickDayRow(input: RowUntick, today: string): Promise<Row
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
   return quietDbErrors('untickRow', () => untickRow(db, { scope, today, input }));
+}
+
+/**
+ * Change a logged row's numbers (FAM-1 12d; lane E's writer, 11c-i). Like un-tick it carries only an
+ * entry id, so a `not_found` is answered and not reported. The writer checks the entry in the scope,
+ * its day against `today`'s window, and the numbers in the unit the row was logged in (C28).
+ */
+export async function amendDayRow(input: RowAmend, today: string): Promise<RowResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) return NOT_FOUND;
+  return quietDbErrors('amendRow', () => amendRow(db, { scope, today, input }));
 }
 
 /** Re-tick a row un-ticked in this page visit. Reported as un-tick is: not at all. */

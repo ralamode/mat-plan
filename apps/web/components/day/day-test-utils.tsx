@@ -42,7 +42,7 @@ export function makeMount(createFake: FakeFactory) {
     options: {
       failNext?: boolean;
       wrap?: (actions: Actions) => Partial<DayActions>;
-      /** Hand the screen `amendRow`, as 12d's routes will: Change (13b-ii). */
+      /** Hand the screen `amendRow`, as the day page does since 12d: Change (13b-ii). */
       change?: boolean;
     } = {},
   ) {
