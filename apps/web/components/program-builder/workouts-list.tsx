@@ -1,7 +1,6 @@
 'use client';
 
 import type { ProgramActions, ProgramView } from '@mat-plan/shared';
-import Link from 'next/link';
 import { useRef, useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -18,6 +17,7 @@ import {
 import { CopyWorkout } from './copy-dialog';
 import { GroupList, GroupRowLink } from './group-list';
 import { newWorkoutPath, workoutPath } from './routes';
+import { BuilderLink } from './route-link';
 
 const HEADING_ID = 'program-workouts';
 
@@ -88,7 +88,7 @@ export function WorkoutsList({
       ) : (
         <p className="text-muted-foreground">{BUILDER_COPY.noWorkouts}</p>
       )}
-      <Link
+      <BuilderLink
         href={newWorkoutPath(programPublicId)}
         className={cn(
           buttonVariants({ variant: workouts.length ? 'outline' : 'default' }),
@@ -96,7 +96,7 @@ export function WorkoutsList({
         )}
       >
         {BUILDER_COPY.newWorkout}
-      </Link>
+      </BuilderLink>
       {copyWorkout ? (
         <CopyWorkout
           program={program}

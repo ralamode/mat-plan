@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
-index 91e40e87..14773550 100644
+index f4929de7..e9d52df9 100644
 --- a/packages/db/src/queries/day/day-plan.ts
 +++ b/packages/db/src/queries/day/day-plan.ts
-@@ -615,7 +615,7 @@ function dayWorkout(
+@@ -612,7 +612,7 @@ function dayWorkout(
    const removed = new Map<string, LoggedRow[]>();
    for (const row of draft.rows) {
      if (claimed.has(row.id)) continue;
--    const key = row.prescriptionId !== null ? `p:${row.prescriptionId}` : `m:${row.movementId}`;
+-    const key = programItemKey(row);
 +    const key = `m:${row.movementId}`;
      removed.set(key, [...(removed.get(key) ?? []), row]);
    }

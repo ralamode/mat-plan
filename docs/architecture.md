@@ -458,6 +458,21 @@ inside its transaction, through `prescribedText` (`@mat-plan/shared/program/pres
 renderer the day page and the export share; its `''` (a Check) is the same real value as above. The
 export's NULL fallback reaches only the first path's rows: a program row is never written NULL.
 
+**Since FAM-1 14a the export folds a program row's entries first** ([plan](./plans/fam-1-14-export.md)):
+a ✓ writes one entry per set, so `foldStrengthMonth` (beside the query, `queries/export-month.ts`)
+makes one strength-log row per program item in a session, and the row carries the session's frozen
+`workout_name` in a ninth column.
+
+```mermaid
+flowchart LR
+  Q["strengthMonthRows<br/>sessions join: the athlete's own"] --> K{program row?}
+  K -- yes --> P["one row per item<br/>key: date · entry's session · programItemKey"]
+  K -- no --> E[one row per entry]
+  P --> B["buildStrengthLog<br/>+ workout_name · RFC 4180"]
+  E --> B
+  style P fill:#fde68a,stroke:#b45309
+```
+
 ## 2i. Logging a program row — `logRow` (FAM-1 11b)
 
 ```mermaid
