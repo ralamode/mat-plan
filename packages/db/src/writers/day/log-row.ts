@@ -361,8 +361,9 @@ export async function logRow(
         .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
     let [entry] = await insertEntry();
 
-    if (!entry) {
-      // Nothing inserted. The `client_id` is held (a concurrent first call), or the set is.
+    // Nothing inserted: the `client_id` is held (a concurrent first call), or the set is. Asked
+    // after each miss, so a refusal is always answered, never thrown.
+    const explainMiss = async (): Promise<RowResult | null> => {
       const holder = await classifyRowHolder(tx, profileId, write);
       if (holder.held) return answerHolder(tx, holder);
       const [taken] = await tx
@@ -376,12 +377,23 @@ export async function logRow(
         )
         .limit(1);
       if (taken) refuse(ROW_REFUSAL.slot_taken);
+      return null;
+    };
+    if (!entry) {
+      const answered = await explainMiss();
+      if (answered) return answered;
       // 🔴 **Neither held nor taken: retried ONCE** (lane S's #578 pattern). The insert and these
       // reads are separate statements, so the entry that held the set can be un-ticked or cleared by
       // another phone between them: nothing holds the set by the time it is read, and the same ✓
-      // inserts on a second try. Every other cause of this miss conflicts again, and still throws.
+      // inserts on a second try.
+      // ⚠️ **11b-interim:** the retry inserts a NEW entry. 11c-ii's revive (D35) sends it back through
+      // R2/R3 instead, so the un-ticked entry is brought back (plan 11c, § Proofs 11b's rewrite).
       [entry] = await insertEntry();
       if (!entry) {
+        // A second miss is explained the same way (a duplicate request that won the retry, or a third
+        // phone's ✓ in between) before anything throws.
+        const again = await explainMiss();
+        if (again) return again;
         throw new Error(
           `row client_id ${write.clientId} neither inserted nor held, and its set is free`,
         );

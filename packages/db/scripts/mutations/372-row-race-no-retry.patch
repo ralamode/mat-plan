@@ -1,14 +1,12 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index ca0cd9b4..6a9ccf0f 100644
+index a98f3597..37b6a075 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -380,8 +380,7 @@ export async function logRow(
-       // reads are separate statements, so the entry that held the set can be un-ticked or cleared by
-       // another phone between them: nothing holds the set by the time it is read, and the same ✓
-       // inserts on a second try. Every other cause of this miss conflicts again, and still throws.
+@@ -388,7 +388,6 @@ export async function logRow(
+       // inserts on a second try.
+       // ⚠️ **11b-interim:** the retry inserts a NEW entry. 11c-ii's revive (D35) sends it back through
+       // R2/R3 instead, so the un-ticked entry is brought back (plan 11c, § Proofs 11b's rewrite).
 -      [entry] = await insertEntry();
--      if (!entry) {
-+      {
-         throw new Error(
-           `row client_id ${write.clientId} neither inserted nor held, and its set is free`,
-         );
+       if (!entry) {
+         // A second miss is explained the same way (a duplicate request that won the retry, or a third
+         // phone's ✓ in between) before anything throws.

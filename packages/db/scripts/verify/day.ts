@@ -735,10 +735,27 @@ async function verifyRowRace(): Promise<void> {
       await tx.execute(sql`drop trigger row_race_hide on entries`);
       await tx.execute(sql`drop function verify_row_race_hide()`);
       const saved = expectOk(second, 'FAM-1 11b race: a ✓ on a set un-ticked mid-insert saves');
-      assert.notEqual(
-        saved.entryPublicId,
-        holder.entryPublicId,
-        'FAM-1 11b race: and it is a new entry, the un-ticked one stays hidden',
+      // ⚠️ 11b-interim: a NEW entry, the un-ticked one hidden. 11c-ii's revive flips this to "the same
+      // entry, brought back" (plan 11c, § Proofs 11b's rewrite).
+      const live = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.entries)
+        .where(
+          and(
+            eq(schema.entries.prescriptionId, f.p.reps.id),
+            eq(schema.entries.prescriptionSet, 1),
+            isNull(schema.entries.deletedAt),
+          ),
+        );
+      assert.deepEqual(
+        [
+          saved.entryPublicId !== holder.entryPublicId,
+          (await f.entryRow(holder.entryPublicId)).deletedAt !== null,
+          live[0].n,
+          saved.values,
+        ],
+        [true, true, 1, holder.values],
+        'FAM-1 11b race: and it is one new live entry with the ✓’s numbers, the un-ticked one hidden (11b-interim)',
       );
     },
     '11b',
