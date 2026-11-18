@@ -105,3 +105,70 @@ describe('the row tags', () => {
     expect(COPY.groupLabel('legs')).toBe('Legs');
   });
 });
+
+describe('the filters (CAT-3 B2-ii) — every counted sentence, both ways', () => {
+  it('the control and its name say how many are on', () => {
+    expect(COPY.filters(0)).toBe('Filters');
+    expect(COPY.filters(3)).toBe('Filters · 3');
+    expect(COPY.filtersName(0)).toBe('Filters, none on');
+    expect(COPY.filtersName(2)).toBe('Filters, 2 on');
+  });
+
+  it('a choice is named "label, count"', () => {
+    expect(COPY.choiceName('Lats', 1)).toBe('Lats, 1 movement');
+    expect(COPY.choiceName('Lats', 12)).toBe('Lats, 12 movements');
+  });
+
+  it('the panel counts movements when browsing and results under a query, in one noun', () => {
+    expect(COPY.showResults(1, false)).toBe('Show 1 movement');
+    expect(COPY.showResults(12, false)).toBe('Show 12 movements');
+    expect(COPY.showResults(1, true)).toBe('Show 1 result');
+    expect(COPY.showResults(3, true)).toBe('Show 3 results');
+    expect(COPY.panelCount(1, false)).toBe('1 movement.');
+    expect(COPY.panelCount(3, true)).toBe('3 results.');
+  });
+
+  it('each change is said once, without a doubled stop after an ellipsis', () => {
+    expect(COPY.panelStatus('Lats', true, 2, false)).toBe('Lats on. 2 movements.');
+    expect(COPY.panelStatus('Lats', false, 1, true)).toBe('Lats off. 1 result.');
+    expect(COPY.panelStatusChoice('No equipment', 1, false)).toBe('No equipment. 1 movement.');
+    expect(COPY.panelStatusChoice('Uses at least one of…', 120, false)).toBe(
+      'Uses at least one of… 120 movements.',
+    );
+    expect(COPY.panelStatusChoice(COPY.filtersCleared, 5, false)).toBe(
+      'Filters cleared. 5 movements.',
+    );
+  });
+
+  it('the list lines', () => {
+    expect(COPY.filtersOnLine(1)).toBe('1 filter on.');
+    expect(COPY.filtersOnLine(2)).toBe('2 filters on.');
+    expect(COPY.statusFiltersKept(1)).toBe('1 filter still on.');
+    expect(COPY.statusFiltersKept(2)).toBe('2 filters still on.');
+    expect(COPY.outsideMore(1)).toBe('1 more is not in your filters.');
+    expect(COPY.outsideMore(3)).toBe('3 more are not in your filters.');
+    expect(COPY.outsideAll(1, 'chin')).toBe('1 movement for "chin" is not in your filters.');
+    expect(COPY.outsideAll(4, 'chin')).toBe('4 movements for "chin" are not in your filters.');
+    expect(COPY.statusOutsideOnly(4)).toBe('Nothing in your filters. 4 outside them.');
+  });
+
+  it("the custom section keeps the maintainer's words and adds to them (P9)", () => {
+    expect(COPY.household).toBe('Your custom items');
+    expect(COPY.householdNotFiltered).toBe('Your custom items (not filtered)');
+    expect(COPY.foldedCount(COPY.householdNotFiltered, 2)).toBe(
+      'Your custom items (not filtered) · 2',
+    );
+  });
+
+  it('a hidden near miss is said to be hidden, with what to do, never "listed"', () => {
+    expect(COPY.similarOutside('Goblet squat')).toBe(
+      '"Goblet squat" already exists, but your filters hide it. Clear filters to see it.',
+    );
+    expect(COPY.asTypedHintOutside('Goblet squat', 'gobet')).toBe(
+      `${COPY.similarOutside('Goblet squat')} ${COPY.asTypedHint('gobet')}`,
+    );
+    expect(COPY.statusAlreadyListedOutside('Push-Ups')).toBe(
+      'Already in the list as Push-Ups, which is not in your filters.',
+    );
+  });
+});

@@ -8,6 +8,8 @@ const asTypedHintText = (name: string) =>
   `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
 
 const statusNoMatches = 'No matches.';
+/** "12 movements": a filter choice's count, and the panel's. */
+const movementCount = (n: number) => plural(n, { one: `${n} movement`, other: `${n} movements` });
 /** Between the parts of a row's second line, and before its tag. */
 const ROW_META_JOIN = ' · ';
 /** A FRAGMENT of `statusNone`'s sentence, not a sentence: it has no terminal period. */
@@ -25,6 +27,20 @@ const statusNear = (n: number) =>
  * do, without claiming a typo. `where` is where the list sits from the button: above the footer in
  * single mode, below the top in multi.
  */
+/** The household's section, in the maintainer's words (P9); the filtered form adds to it. */
+const HOUSEHOLD = 'Your custom items';
+const FILTERS = 'Filters';
+/** Between a filter choice's label and its count, in its accessible name ("Lats, 12 movements"). */
+const CHOICE_JOIN = ', ';
+/**
+ * The near miss a person may mean, when the filters hide it (panel row 9; reworded at B2-ii's
+ * review: the row is NOT on screen, so "is listed" sent people looking for it).
+ */
+const similarHidden = (name: string) =>
+  `${quote(name)} already exists, but your filters hide it. Clear filters to see it.`;
+/** Rows on screen, in the panel's one noun for the case: results under a query, else movements. */
+const shownCount = (n: number, searching: boolean) =>
+  searching ? plural(n, { one: `${n} result`, other: `${n} results` }) : movementCount(n);
 const similarListed = (name: string, where: 'above' | 'below') =>
   `${quote(name)} is ${where}. Tap it if that's the one.`;
 
@@ -57,7 +73,7 @@ export const MOVEMENT_PICKER_COPY = {
   /** ⚠️ "added", not "on your form" — "form" is our word for it, not a twelve-year-old's. */
   todaysProgramAllOnForm: "Today's program (already added)",
   /** A household's own items (CAT-3 P9: "Your custom items", the maintainer's words). */
-  household: 'Your custom items',
+  household: HOUSEHOLD,
   matches: 'Matches',
   someWords: 'Has some of your words',
   /** Near misses (CAT-3 spec P5 as amended at the prototype's sign-off, 2026-11-17). */
@@ -99,6 +115,94 @@ export const MOVEMENT_PICKER_COPY = {
   /** Said once when the steps fail to load: the box's text is not a live region. */
   statusHowToFailed: (name: string) => `Couldn't load the steps for ${name}.`,
 
+  // ── Filters (CAT-3 P7 to P10, B2-ii) ────────────────────────────────────────────────────────────
+  // ⚠️ `filters`, `filtersName`, `showAllEquipment` and `statusOutsideOnly` show a number with no
+  // counted noun beside it, so they need no `plural()` (invariant 10 is about counted nouns).
+  /** The control's visible text: "Filters", or "Filters · 3" while three are on. */
+  filters: (on: number) => (on === 0 ? FILTERS : `${FILTERS} · ${on}`),
+  /** Its accessible name carries how many are on (P15). */
+  filtersName: (on: number) => (on === 0 ? `${FILTERS}, none on` : `${FILTERS}, ${on} on`),
+  filtersHeading: FILTERS,
+  filtersBack: 'Back to the list',
+  equipmentLegend: 'Equipment',
+  equipmentAny: 'Any equipment',
+  /** The "No equipment" radio's hint. The radio's label is `emptyEquipment`, a row's same words. */
+  equipmentNoneHint: 'Just you and the floor. A wall, a towel or a partner counts as equipment.',
+  equipmentChosen: 'Uses at least one of…',
+  equipmentChosenHint:
+    'A movement may need more than the one you tick. Each row lists what it needs.',
+  /** The items' own fieldset, under "Uses at least one of…". */
+  equipmentItemsLegend: 'Equipment to use',
+  showAllEquipment: (n: number) => `Show all equipment (${n})`,
+  showFewerEquipment: 'Show fewer',
+  musclesLegend: 'Main muscle',
+  /** A choice's accessible name: its label, then its count said ("Lats, 12 movements"). */
+  choiceName: (label: string, n: number) => `${label}${CHOICE_JOIN}${movementCount(n)}`,
+  choiceJoin: CHOICE_JOIN,
+  clearFilters: 'Clear filters',
+  /** What the panel says after Clear filters: "Filters cleared. 120 movements." */
+  filtersCleared: `${FILTERS} cleared`,
+  /** The panel's button that shows the list: "Show 12 movements", or "Show 3 results" under a query. */
+  showResults: (n: number, searching: boolean) => `Show ${shownCount(n, searching)}`,
+  nothingFits: 'Nothing fits',
+  /** The panel's visible count (plain text), in the same noun as its button. */
+  panelCount: (n: number, searching: boolean) => `${shownCount(n, searching)}.`,
+  /** Said once per change, in the sheet's one region while the panel is open (P15). */
+  panelStatus: (choice: string, on: boolean, n: number, searching: boolean) =>
+    `${choice} ${on ? 'on' : 'off'}. ${shownCount(n, searching)}.`,
+  /**
+   * Said for a radio or Clear filters: the choice, then the count. A label that already ends in
+   * an ellipsis ("Uses at least one of…") takes no second stop.
+   */
+  panelStatusChoice: (choice: string, n: number, searching: boolean) =>
+    `${choice}${choice.endsWith('…') ? '' : '.'} ${shownCount(n, searching)}.`,
+  /** The line at the top of the list while filters are on (panel row 10). */
+  filtersOnLine: (on: number) =>
+    plural(on, { one: `${on} filter on.`, other: `${on} filters on.` }),
+  /** Under a query, after the rows that pass (P10). */
+  outsideMore: (n: number) =>
+    plural(n, {
+      one: `${n} more is not in your filters.`,
+      other: `${n} more are not in your filters.`,
+    }),
+  /** Under a query, when nothing found passes (P10). */
+  outsideAll: (n: number, query: string) =>
+    plural(n, {
+      one: `${n} movement for ${quote(query)} is not in your filters.`,
+      other: `${n} movements for ${quote(query)} are not in your filters.`,
+    }),
+  /** Browsing with nothing that fits (P10). */
+  noneFit: 'No movements fit your filters.',
+  /** Browsing with a filter on, until B3's tree (P12's heading). */
+  fitHeading: 'Movements that fit your filters',
+  /** The household's items under a filter: a filter cannot judge them (P9). */
+  householdNotFiltered: `${HOUSEHOLD} (not filtered)`,
+  /** A folded section's summary carries its count, so a person can tell whether to open it. */
+  foldedCount: (heading: string, n: number) => `${heading} · ${n}`,
+  /** After a headingless hit (panel row 15): the hit is a match too. */
+  moreMatches: 'More matches',
+  tagNotInFilters: 'not in your filters',
+  /**
+   * ⏳ The same place, for an old built-in the library has no data for yet: no filter can judge it,
+   * so "not in your filters" would claim its equipment is known and does not fit. Never starts
+   * "No equipment", which is a library row's equipment line (7a-ii / B2-ii UX lens; board call,
+   * 2026-11-17). TODO(CAT-3 chunk R): goes with `BuiltInWithoutLibrary`.
+   */
+  tagNoLibraryData: 'equipment and muscles not known yet',
+  /** The create hint (multi mode) when the filters hide the similar name (row 9). */
+  similarOutside: similarHidden,
+  /** Single mode's footer hint in the same case: that, then the warning. */
+  asTypedHintOutside: (similar: string, typed: string) =>
+    `${similarHidden(similar)} ${asTypedHintText(typed)}`,
+  /** The status with nothing in the filters and some outside them (the prototype's words). */
+  statusOutsideOnly: (n: number) => `Nothing in your filters. ${n} outside them.`,
+  /** Said once after the picker opens with filters still on (panel row 10). */
+  statusFiltersKept: (on: number) =>
+    plural(on, {
+      one: `${on} filter still on.`,
+      other: `${on} filters still on.`,
+    }),
+
   // ── The status region (criterion 46), as ONE shape: `{count}. {reason}` ─────────────────────────
   /**
    * 🔴 **The empty query announces NOTHING**, and that is a requirement rather than a choice:
@@ -138,6 +242,12 @@ export const MOVEMENT_PICKER_COPY = {
   },
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
+  /** The same, for a hit the filters would hide (P8; the prototype's words). */
+  statusAlreadyListedOutside: (name: string) =>
+    `Already in the list as ${name}, which is not in your filters.`,
+  /** ⏳ The same, for a built-in with no library data yet (see `tagNoLibraryData`). */
+  statusAlreadyListedNoData: (name: string) =>
+    `Already in the list as ${name}, whose equipment and muscles aren’t known yet.`,
 
   // ── The footer ──────────────────────────────────────────────────────────────────────────────────
   /**
