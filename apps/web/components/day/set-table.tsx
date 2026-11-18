@@ -15,7 +15,7 @@ import { useDay } from './day-context';
 import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, fieldText, valueParts, type RowField } from './row-values';
-import { rowIdProps, useChange } from './use-change';
+import { changeRowProps, useChange } from './use-change';
 import { rowAccess, rowName, useRow } from './use-row';
 import {
   CARD_CLASS,
@@ -228,7 +228,7 @@ function SetRow({
   const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
   const rowId = useId();
-  const change = useChange(r, item, row, rowId);
+  const change = useChange(r, item, row, rowId, tickRef);
   const name = rowName(item, row);
   useFocusRefusedField(r, inputs, fields[0]);
   const hasMessage = r.error !== null;
@@ -244,7 +244,7 @@ function SetRow({
 
   return (
     <>
-      <tr {...rowIdProps(rowId)}>
+      <tr {...changeRowProps(rowId, change)}>
         <th scope="row" className="py-1 text-left font-normal tabular-nums">
           {row.set}
         </th>
@@ -325,7 +325,7 @@ function SetRow({
         </td>
       </tr>
       {status ? (
-        <tr {...rowIdProps(rowId)}>
+        <tr {...changeRowProps(rowId, change)}>
           <td
             colSpan={fields.length + (showPrevious ? 3 : 2)}
             // Typed over, the ✕ sits under this row's ✓: twice the room below it as above, so a

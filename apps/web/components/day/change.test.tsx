@@ -914,3 +914,157 @@ describe('Change: second-pass fixes', () => {
     expect(set3().value).toBe('40');
   });
 });
+
+describe('Change: Escape from any control, and a ✕ press that ends elsewhere', () => {
+  /** Where a pointer is released: jsdom has no layout, so `elementFromPoint` is stubbed. */
+  function releaseOver(el: Element) {
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => el,
+    });
+  }
+  afterEach(() => {
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: undefined });
+  });
+
+  it('Escape from the ✓ while typed over puts the number back, and focus stays on the ✓', () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => benchTick().focus());
+    fireEvent.keyDown(benchTick(), { key: 'Escape' });
+    expect(load().value).toBe('27.5');
+    expect(document.activeElement).toBe(benchTick());
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Escape from the ✕ puts the number back, and focus moves to the ✓ before the ✕ goes', () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => cancelX().focus());
+    fireEvent.keyDown(cancelX(), { key: 'Escape' });
+    expect(load().value).toBe('27.5');
+    expect(document.activeElement).toBe(benchTick());
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Escape on a row that is not being changed is left alone', () => {
+    mount(yesterdayHalfDone, { change: true });
+    act(() => benchTick().focus());
+    // `fireEvent` answers false when the event was prevented.
+    expect(fireEvent.keyDown(benchTick(), { key: 'Escape' })).toBe(true);
+  });
+
+  it.each([
+    ['the ✓', () => benchTick()],
+    ['the ✕', () => cancelX()],
+  ])('the window losing focus from %s sends nothing', async (_label, control) => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => control().focus());
+    // A window blur: the control is still the page's active element.
+    await act(async () => {
+      fireEvent.blur(control());
+    });
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('leaving the row from the ✓ sends the Change once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    act(() => benchTick().focus());
+    await act(async () => benchTick().blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a tap on the ✕ in a phone’s order cancels, and nothing is sent', async () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    const x = cancelX();
+    releaseOver(x);
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      fireEvent.pointerUp(x, { pointerId: 1 }); // captured to the ✕, and over it
+      load().blur(); // focus moves at the compat mousedown, after pointerup
+    });
+    await act(async () => {
+      fireEvent.click(x);
+    });
+    expect(load().value).toBe('27.5');
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('a ✕ press released over the page, with focus already out of the row, sends once (pending the maintainer)', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    const x = cancelX();
+    releaseOver(document.body);
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      load().blur(); // Safari: the field blurs at pointer-down, and the ✕ takes no focus
+      // A touch pointer is captured to the ✕, so its pointerup targets the ✕ wherever it lifts.
+      fireEvent.pointerUp(x, { pointerId: 1 });
+    });
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    // A later, unrelated release sends nothing more: the watch was one-shot.
+    await act(async () => {
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ✕ press that becomes a scroll, with focus already out of the row, sends once (pending the maintainer)', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      load().blur();
+      fireEvent.pointerCancel(cancelX(), { pointerId: 1 });
+    });
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('Chrome: a ✕ press released elsewhere with focus on the ✕ keeps the row open, then leaving it sends once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    const x = cancelX();
+    releaseOver(document.body);
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      x.focus(); // Chrome focuses a button on mousedown
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+    await act(async () => x.blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed save, then leaving the row from the ✓, sends exactly once more', async () => {
+    let calls = 0;
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async (input) =>
+          (calls += 1) === 1 ? { ok: false, reason: ROW_REFUSAL.retry } : amendOk(input),
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    act(() => benchTick().focus());
+    await act(async () => benchTick().blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(2);
+  });
+});

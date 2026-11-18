@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, formatRowValues, unitSuffix, type RowField } from './row-values';
-import { rowIdProps, useChange } from './use-change';
+import { changeRowProps, useChange } from './use-change';
 import { useRow } from './use-row';
 import {
   CARD_CLASS,
@@ -89,7 +89,7 @@ function SingleItem({
   const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
   const rowId = useId();
-  const change = useChange(r, item, row, rowId);
+  const change = useChange(r, item, row, rowId, tickRef);
   const status = hasRowStatus(r, change);
   const isCheck = item.trackingType === TRACKING_TYPE.check;
   const previous = row.previous ? slotQuantity(item, row.previous.quantities) : null;
@@ -104,7 +104,7 @@ function SingleItem({
 
   return (
     <li
-      {...rowIdProps(rowId)}
+      {...changeRowProps(rowId, change)}
       className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}
     >
       <ItemHeading item={item} label={label} onTint={onTint} />
