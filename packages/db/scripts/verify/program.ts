@@ -46,6 +46,7 @@ import {
 import { putOn } from '../../src/writers/program/assign';
 import {
   SEED_FIXTURE_ATHLETES,
+  SEED_FIXTURE_PROGRAM_CLIENT_IDS,
   seedFixtureProgramClientId,
   seedProgramFixtures,
 } from '../../src/writers/program/seed-fixtures';
@@ -64,7 +65,7 @@ import {
 import { saveWeek } from '../../src/writers/program/save-week';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
-import { asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import { asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
 /**
@@ -2106,6 +2107,57 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6c-i: …and every refusal writes nothing',
     );
 
+    // ── Taken off by mistake and straight back on: the order closes up, the program goes last ──
+    const z = await mustAddAthlete(tx, A_SCOPE, 'Put-on Athlete Z');
+    for (const program of [P, Q]) {
+      assert.deepEqual(
+        await tryIt(A_SCOPE, {
+          programPublicId: program,
+          profilePublicIds: [z],
+          from: PUT_ON_TODAY,
+        }),
+        { ok: true },
+        'FAM-1 6c-i: z goes on P, then Q',
+      );
+    }
+    const zp = (await rowsOf(z)).find((r) => r.program === P)!;
+    await tx
+      .update(schema.programAssignments)
+      .set({ activeTo: PUT_ON_TODAY })
+      .where(eq(schema.programAssignments.id, zp.id));
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [z], from: PUT_ON_TODAY }),
+      { ok: true },
+      'FAM-1 6c-i: taken off and straight back on answers ok',
+    );
+    assert.deepEqual(
+      await openOrder(z),
+      [
+        { program: Q, idx: 0 },
+        { program: P, idx: 1 },
+      ],
+      'FAM-1 6c-i: …the order closed up, the reopened program last',
+    );
+
+    // ── One call, one athlete already on and one new: only the new one is written ──
+    const w = await mustAddAthlete(tx, A_SCOPE, 'Put-on Athlete W');
+    const zBefore = await rowsOf(z);
+    assert.deepEqual(
+      await tryIt(A_SCOPE, { programPublicId: Q, profilePublicIds: [z, w], from: PUT_ON_TODAY }),
+      { ok: true },
+      'FAM-1 6c-i: put on one athlete already on and one new answers ok',
+    );
+    assert.deepEqual(
+      await rowsOf(z),
+      zBefore,
+      'FAM-1 6c-i: …leaves the one already on as they were',
+    );
+    assert.deepEqual(
+      await openOrder(w),
+      [{ program: Q, idx: 0 }],
+      'FAM-1 6c-i: …and puts the new one on',
+    );
+
     // ── Take off P, put on R, put on P again: P is reopened, one row, last, no gap ──
     // `active_to = today` stands in for Take off, step 6d's writer, which is what it writes.
     const pRow = (await rowsOf(x)).find((r) => r.program === P)!;
@@ -2201,7 +2253,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
  * fixture's week, and the assignment rows against the world's. 6c-ii's `program-view` and
  * `program-list` deep-equals finish it.
  */
-async function verifySeedFixtures({ A_SCOPE }: VerifyContext): Promise<void> {
+async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
@@ -2334,6 +2386,87 @@ async function verifySeedFixtures({ A_SCOPE }: VerifyContext): Promise<void> {
       await snapshotOf(),
       before,
       'FAM-1 6c-i: the seed run again writes nothing, and leaves a changed fixture program as it is',
+    );
+  });
+
+  // State a person can make through the app is skipped, never a throw: the preview database keeps
+  // it, and a throw would fail every preview seed until the database is reset.
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    // Retire the fixture programs (a fresh client id, removed), so the seed makes them again.
+    for (const id of SEED_FIXTURE_PROGRAM_CLIENT_IDS) {
+      const block = await programBlockByClientId(exec, A_SCOPE, id);
+      if (block) {
+        await tx
+          .update(schema.programBlocks)
+          .set({ clientId: newId(), deletedAt: sql`now()` })
+          .where(eq(schema.programBlocks.id, block.id));
+      }
+    }
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, SEED_FIXTURE_ATHLETES.a2!));
+    await orFail('FAM-1 6c-i: the seed succeeds with a seed athlete archived', () =>
+      seedProgramFixtures(exec, A_SCOPE),
+    );
+    const made = new Set<string>();
+    for (const id of SEED_FIXTURE_PROGRAM_CLIENT_IDS) {
+      const block = await programBlockByClientId(exec, A_SCOPE, id);
+      assert.ok(block && !block.deleted, 'FAM-1 6c-i: …and writes every fixture program');
+      made.add(block.publicId);
+    }
+    const onMade = (profile: string) =>
+      assignmentRows(tx).then(({ assignments }) =>
+        assignments.filter(
+          (r) => r.profile === profile && r.deletedAt === null && made.has(r.program),
+        ),
+      );
+    assert.equal(
+      (await onMade(SEED_FIXTURE_ATHLETES.a2!)).length,
+      0,
+      'FAM-1 6c-i: …and puts the archived athlete on nothing',
+    );
+    assert.equal(
+      (await onMade(SEED_FIXTURE_ATHLETES.a1!)).length,
+      2,
+      'FAM-1 6c-i: …and the other seed athlete on their two programs',
+    );
+  });
+
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    // Household B already has an item under a fixture item's name, with another type.
+    const grip = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world.catalog.grip;
+    const planted = await newItem(exec, B_SCOPE, {
+      name: grip.name,
+      trackingType: TRACKING_TYPE.reps,
+    });
+    assert.ok(planted.ok && !planted.existed, 'FAM-1 6c-i: B makes its own item named like grip');
+    await orFail('FAM-1 6c-i: the seed succeeds when an item has another type', () =>
+      seedProgramFixtures(exec, B_SCOPE),
+    );
+    const written = [];
+    for (const program of world.programs) {
+      const block = await programBlockByClientId(
+        exec,
+        B_SCOPE,
+        seedFixtureProgramClientId(program.id),
+      );
+      if (block) written.push(program.id);
+    }
+    assert.deepEqual(
+      written,
+      ['p2', 'p3'],
+      'FAM-1 6c-i: …and leaves out only the program that holds that item',
+    );
+    assert.equal(
+      (await assignmentRows(tx)).assignments.filter(
+        (r) => r.deletedAt === null && Object.values(SEED_FIXTURE_ATHLETES).includes(r.profile),
+      ).length,
+      // Household A's seeded stretches only: A's seed athletes are not B's, so B puts none on.
+      3,
+      'FAM-1 6c-i: …and puts no athlete of another household on its programs',
     );
   });
   console.log(

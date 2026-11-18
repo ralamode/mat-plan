@@ -32,10 +32,13 @@ import {
   TRACKING_TYPES,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNull, notExists, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, notExists, notInArray, or, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
-import { SEED_FIXTURE_PROGRAM_CLIENT_IDS } from '../../src/writers/program/seed-fixtures';
+import {
+  SEED_FIXTURE_COUNTS,
+  SEED_FIXTURE_PROGRAM_CLIENT_IDS,
+} from '../../src/writers/program/seed-fixtures';
 import {
   assignmentCurrentAsOf,
   assignmentDueOn,
@@ -491,12 +494,16 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
   const kinds = await db
     .selectDistinct({ kind: schema.programBlocks.kind })
     .from(schema.programBlocks)
-    // Every block but the seed's fixture programs (FAM-1 6c-i), which are templates by design and are
-    // named here by their fixed client ids, so any other template block still fails this.
+    // Every block but the seed's fixture programs (FAM-1 6c-i), which are templates by design: named
+    // by their fixed client ids IN the seed household, so any other template block still fails this.
     .where(
       or(
         isNull(schema.programBlocks.clientId),
         notInArray(schema.programBlocks.clientId, [...SEED_FIXTURE_PROGRAM_CLIENT_IDS]),
+        ne(
+          schema.programBlocks.householdId,
+          sql`(select ${schema.households.id} from ${schema.households} where ${schema.households.publicId} = ${SEED_HOUSEHOLD_PUBLIC_ID})`,
+        ),
       ),
     );
   assert.deepEqual(
@@ -1050,23 +1057,35 @@ async function verifyStep1(): Promise<void> {
     );
 
     const seedDb = asDb(tx);
+    // Household-owned items: the fixture programs make some (`newItem`); production's seed must not.
+    const householdItems = async () =>
+      (
+        await tx
+          .select({ id: schema.movements.id })
+          .from(schema.movements)
+          .where(eq(schema.movements.householdId, household.id))
+      ).length;
+    const itemsBefore = await householdItems();
     await seed(seedDb, { fixtures: false });
     assert.deepEqual(
       await program(),
       { blocks: [], prescriptions: 0, targets: 0, ...none },
       'FAM-1 1: seed({ fixtures: false }) writes no program, which is how production seeds',
     );
+    assert.equal(
+      await householdItems(),
+      itemsBefore,
+      'FAM-1 1: seed({ fixtures: false }) writes no household item either',
+    );
 
     await seed(seedDb, { fixtures: true });
     assert.deepEqual(
       await program(),
-      // The fixture world's three programs, six workouts, and three stretches on them: a1 on two,
-      // a2 on one (Adult One has no seed profile; `seed-fixtures.ts`).
+      // The fixture world's programs, their workouts, and the seed athletes' stretches on them.
       {
         ...expected,
         fixturePrograms: SEED_FIXTURE_PROGRAM_CLIENT_IDS.length,
-        workouts: 6,
-        assignments: 3,
+        ...SEED_FIXTURE_COUNTS,
       },
       'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
     );

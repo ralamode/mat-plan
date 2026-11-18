@@ -15,9 +15,12 @@ import {
   type World,
 } from '@mat-plan/shared/program/fixtures';
 
+import { and, isNull } from 'drizzle-orm';
+
+import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
-import { programBlockByClientId } from '../ownership';
+import { isLiveProfile, programBlockByClientId } from '../ownership';
 import { putOn } from './assign';
 import { createProgram } from './create-program';
 import { newItem } from './new-item';
@@ -47,15 +50,38 @@ export const SEED_FIXTURE_ATHLETES: Readonly<Record<string, string>> = {
  */
 export const seedFixtureProgramClientId = (programId: string) => fixtureIds.program(programId);
 
+/**
+ * What a seed run writes into an empty household whose seed athletes are live: workouts, and stretches
+ * on programs. For a proof's expected counts, so they follow the fixture world.
+ */
+export const SEED_FIXTURE_COUNTS = {
+  workouts: FIXTURE_WORLD.programs.flatMap((p) => p.workouts).length,
+  assignments: Object.keys(SEED_FIXTURE_ATHLETES).reduce(
+    (n, athlete) => n + (FIXTURE_WORLD.assign[athlete]?.length ?? 0),
+    0,
+  ),
+} as const;
+
 /** Every fixture program's `client_id`, for a proof that must tell the seed's programs from others. */
 export const SEED_FIXTURE_PROGRAM_CLIENT_IDS: readonly string[] = FIXTURE_WORLD.programs.map((p) =>
   seedFixtureProgramClientId(p.id),
 );
 
+/**
+ * For a refusal that can only be a bug in this module or a writer. State a person can make through
+ * the app (an archived seed athlete, an item renamed to a fixture's name) is skipped with {@link skip}
+ * instead: the preview database keeps what reviewers do, and `migrate-preview.yml` seeds it on every
+ * push to `main`, where a throw would fail every run until the database is reset.
+ */
 function must<T extends object>(result: ProgramResult<T>, what: string): { ok: true } & T {
   // Fixed text: it names the fixture step, never a value from the database.
   if (!result.ok) throw new Error(`seedProgramFixtures: ${what} refused (${result.reason})`);
   return result;
+}
+
+/** Fixed text: a fixture key and the reason, never a name or a value from the database. */
+function skip(what: string, why: string): void {
+  console.warn(`seedProgramFixtures: skipped ${what}: ${why}`);
 }
 
 /**
@@ -78,8 +104,10 @@ function must<T extends object>(result: ProgramResult<T>, what: string): { ok: t
  *              one, and must not take a household id.
  *
  * **Idempotent: a program the household already has (by its fixed `client_id`, live or removed) is
- * left as it is**, with its workouts, week and athletes, whatever was done to it since. A run that
- * fails writes nothing: it is one transaction.
+ * left as it is**, with its workouts, week and athletes, whatever was done to it since. A seed
+ * athlete who is archived or removed is put on nothing, and a program one of whose items the
+ * household already has under another type is not written; each is a warning, not a failure. A run
+ * that fails writes nothing: it is one transaction.
  */
 export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): Promise<void> {
   await db.transaction(async (tx) => {
@@ -90,9 +118,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
       const { name, type } = FIXTURE_WORLD.catalog[key];
       const made = must(await newItem(tx, scope, { name, trackingType: type }), `item ${key}`);
       // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
-      if (made.trackingType !== type) {
-        throw new Error(`seedProgramFixtures: item ${key} exists with another tracking type`);
-      }
+      if (made.trackingType !== type) return null;
       const found = { itemPublicId: made.itemPublicId, name: made.name };
       items.set(key, found);
       return found;
@@ -102,6 +128,20 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
     for (const program of FIXTURE_WORLD.programs) {
       const clientId = seedFixtureProgramClientId(program.id);
       if (await programBlockByClientId(tx, scope, clientId)) continue;
+
+      // Every item first, so a program whose item cannot be used writes no program at all.
+      const real = new Map<string, { itemPublicId: string; name: string }>();
+      for (const workout of program.workouts) {
+        for (const item of workout.items) {
+          const found = await itemFor(item.iid);
+          if (found) real.set(item.iid, found);
+        }
+      }
+      const unusable = program.workouts.flatMap((w) => w.items).find((item) => !real.has(item.iid));
+      if (unusable) {
+        skip(`program ${program.id}`, `item ${unusable.iid} exists with another tracking type`);
+        continue;
+      }
 
       const { programPublicId } = must(
         await createProgram(tx, scope, { clientId, name: program.name }),
@@ -114,12 +154,12 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
         // One statement at a time: a transaction is one connection.
         const itemsOf = [];
         for (const [i, item] of workout.items.entries()) {
-          const real = await itemFor(item.iid);
+          const { itemPublicId, name } = real.get(item.iid)!;
           itemsOf.push({
             ...draft.items[i]!,
             prescriptionClientId: newId(),
-            itemPublicId: real.itemPublicId,
-            itemName: real.name,
+            itemPublicId,
+            itemName: name,
           });
         }
         const { workoutPublicId } = must(
@@ -152,6 +192,15 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
     for (const [athlete, assigned] of Object.entries(FIXTURE_WORLD.assign)) {
       const profilePublicId = SEED_FIXTURE_ATHLETES[athlete];
       if (!profilePublicId) continue;
+      // A seed athlete a person archived or removed is not put back on anything.
+      const [live] = await tx
+        .select({ id: schema.profiles.id })
+        .from(schema.profiles)
+        .where(and(isLiveProfile(profilePublicId, scope), isNull(schema.profiles.archivedAt)));
+      if (!live) {
+        skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
+        continue;
+      }
       for (const stretch of assigned) {
         const programPublicId = made.get(stretch.prog);
         if (!programPublicId) continue;

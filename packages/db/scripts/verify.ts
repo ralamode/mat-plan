@@ -26,6 +26,7 @@ import {
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
   PROFILE_NAME_MAX,
+  PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
   QUANTITY_SLOT,
   QUANTITY_SLOT_ROWS,
@@ -211,9 +212,12 @@ console.log('✓ migration applied to PGlite');
 // The 1c-4 seed guard's proof is BELOW, after the idempotency block it depends on — see
 // "AUTH-1 1c-4: the seed refuses a household it does not own".
 
-// Seed twice → must be idempotent.
+// Seed twice → must be idempotent. The second run is asserted, so a seed that cannot run twice fails
+// on a named line (FAM-1 6c-i: the fixture programs are written once, then left alone).
 await seed(asPg, { fixtures: true });
-await seed(asPg, { fixtures: true });
+await seed(asPg, { fixtures: true }).catch((e: unknown) =>
+  assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
+);
 
 const units = await db.select().from(schema.units);
 const profiles = await db.select().from(schema.profiles);
@@ -3773,13 +3777,18 @@ assert.ok(
   'V1-10: PROGRAM_SEED is populated (the maintainer’s authored block)',
 );
 const seededBlocks = (
-  (await db.execute(sql`select count(*)::int as count from program_blocks where kind = 'legacy'`))
-    .rows as unknown as {
+  (
+    await db.execute(
+      sql`select count(*)::int as count from program_blocks where kind = ${PROGRAM_BLOCK_KIND.legacy}`,
+    )
+  ).rows as unknown as {
     count: number;
   }[]
 )[0].count;
-// EXACT count (not just ≥1): the DB must hold precisely the blocks PROGRAM_SEED declares — nothing extra
-// (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard provided).
+// EXACT count (not just ≥1): the DB must hold precisely the LEGACY blocks PROGRAM_SEED declares — nothing
+// extra (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard
+// provided). Since FAM-1 6c-i the seed also writes the fixture TEMPLATE programs, so a stray template
+// block is caught by `verify/schema.ts`'s 4a-i kind check, which names the fixture programs alone.
 assert.equal(
   seededBlocks,
   PROGRAM_SEED.length,
