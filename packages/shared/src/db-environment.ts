@@ -80,7 +80,18 @@ export function databaseNameOf(connectionString: string): string | null {
   // A Postgres URL has exactly one path segment: `postgres://user:pass@host:port/<database>`.
   // Both `postgres://u:p@h` and `postgres://u:p@h/` parse fine and yield '' — a string with no
   // database selected at all, which must fail rather than quietly satisfy a `production` check.
-  const name = pathname.replace(/^\//, '');
+  const raw = pathname.replace(/^\//, '');
+  // 🔴 **DECODED, as the driver decodes it** (`PRIV-3` RC review). `pg-connection-string` 2.14.1
+  // connects to `decodeURI(pathname)`, so `mat_plan_%70review` IS the preview database to `pg`
+  // while the raw path reads `mat_plan_%70review` here. The `hasHostOverride` rule below, applied to
+  // the path: a guard that inspects a different representation than the consumer is not a guard.
+  // A malformed escape makes `decodeURI` throw; that is not a name we can vouch for, so fail closed.
+  let name: string;
+  try {
+    name = decodeURI(raw);
+  } catch {
+    return null;
+  }
   return name.length > 0 ? name : null;
 }
 

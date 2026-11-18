@@ -1,0 +1,24 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 9ec3f099..a1f74ff5 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -910,19 +910,6 @@ const createHousehold: Correction = {
+       return await db.transaction(async (tx) => {
+         const live = await liveMembershipsOf(tx, ids);
+         const bound = new Set(live.map((m) => m.clerkUserId));
+-        if (bound.size > 0) {
+-          // "This step is done" only when it plausibly IS: every account bound, all in ONE household.
+-          // A partial overlap, or accounts spread over households, is an operator error, and the
+-          // hint would tell them to stop when they should look.
+-          const households = new Set(live.map((m) => m.householdId)).size;
+-          throw new CorrectionRefusal(
+-            bound.size === n && households === 1
+-              ? `${n} of ${n} accounts already have a live membership; nothing written. If an ` +
+-                  'earlier --apply of this correction succeeded, this step is done.'
+-              : `${bound.size} of ${n} accounts already have a live membership (in ${households} ` +
+-                  'household(s)); nothing written',
+-          );
+-        }
+         const line = (verb: string) =>
+           `${verb} 1 household with ${n} account(s), each as ${HOUSEHOLD_ROLE.owner}`;
+         if (!apply) return [line('would create')];

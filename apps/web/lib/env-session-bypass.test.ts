@@ -101,6 +101,16 @@ describe('the test session bypass arms only in a local throwaway harness (AUTH-1
   it('🔴 an unbounded id is refused', async () => {
     // `'user_' + 'a'.repeat(100_000)` satisfied the old regex and would have become a 100KB Redis
     // key, and from 1c-4 a membership lookup argument. Equality bounds the length for free.
+    //
+    // ⚠️ Since `PRIV-3` RC the zod schema uses the shared, BOUNDED `CLERK_USER_ID_PATTERN`, so with
+    // validation on, zod refuses this first. Both layers are pinned: zod's here, and equality's with
+    // validation skipped, so the control that does not depend on zod is still proven to bound it.
+    vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', `user_${'a'.repeat(100_000)}`);
+    await expect(importEnv()).rejects.toThrow(/Invalid environment variables/i);
+  });
+
+  it('🔴 an unbounded id is refused by the equality check even with SKIP_ENV_VALIDATION', async () => {
+    vi.stubEnv('SKIP_ENV_VALIDATION', '1');
     vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', `user_${'a'.repeat(100_000)}`);
     await expect(importEnv()).rejects.toThrow(/committed fixture principal/i);
   });

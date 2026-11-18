@@ -169,9 +169,12 @@ export async function migrateAndSeed(
  *  - `insertHouseholdMember` is deliberately **not** idempotent (`writers/ownership.ts` says so in
  *    capitals: a collision there is an operator error, not a replay). The correction is, by
  *    read-then-branch — already bound here is a no-op, bound elsewhere is a refusal.
- *  - `verify.ts`'s assertion reads _"the seed writes NO household_members row — **the claim
- *    correction is the only writer**"_. A second writer would make its second clause false while
- *    keeping its first one true, which is the kind of half-true a gate should never be reduced to.
+ *  - `verify.ts`'s assertion reads _"the seed writes NO household_members row — **the two account
+ *    corrections are the only writers**"_. A harness writer of its own would make that second clause
+ *    false while keeping the first one true, which is the kind of half-true a gate should never be
+ *    reduced to. ⚠️ The second writer that does exist, `create-household-…` (`PRIV-3` RC), is no
+ *    substitute here: it mints a NEW household and refuses an account that already has one, so it
+ *    can neither bind the seeded household the specs read nor run twice against one cluster.
  *  - The correction is dry-run by default and prints the target host, so a mis-run is visible.
  *
  * 🔴 **NOT folded into `migrateAndSeed`, and this is load-bearing.** That function has THREE callers
