@@ -50,7 +50,7 @@ describe.each([
  * shown without focus, not a focus indicator, so they are not this rule's.
  */
 const FOCUS_ALPHA =
-  /(?:focus-visible|focus-within|focus|has-\[:focus-visible\]|group-focus-visible|peer-focus-visible):(?:ring|outline)-[a-z-]+\/\d+/g;
+  /(?:[a-z-]*focus[a-z-]*|[a-z-]*\[[^\]]*focus[^\]]*\]):(?:ring|outline)-(?:[a-z0-9-]+|\[[^\]]+\])\/(?:\d+|\[[^\]]+\])/g;
 
 describe('no focus ring is drawn translucent', () => {
   // The temporary `/design` harness is left out: it demonstrates candidate palettes, not the app.
@@ -68,7 +68,29 @@ describe('no focus ring is drawn translucent', () => {
     expect(hits).toEqual([]);
   });
 
-  it("…nor the base layer's default outline", () => {
+  it("…nor the base layer's default outline, nor any focus ring in globals.css", () => {
     expect(globals).not.toMatch(/outline-ring\/\d+/);
+    expect([...globals.matchAll(FOCUS_ALPHA)].map((m) => m[0])).toEqual([]);
   });
+
+  // The pattern itself, so a narrowing edit cannot quietly blind it (an arbitrary colour, a token
+  // with a digit, a bracketed variant are each a way to draw a translucent focus ring).
+  it.each([
+    'focus-visible:ring-ring/50',
+    'focus-visible:ring-chart-1/50',
+    'focus-within:outline-ring/40',
+    'has-[:focus-visible]:ring-ring/50',
+    '[&:focus-visible]:ring-ring/50',
+    'focus-visible:ring-[color:var(--ring)]/50',
+    'focus-visible:ring-ring/[.5]',
+  ])('the scan catches %s', (cls) => {
+    expect(cls.match(FOCUS_ALPHA)).not.toBeNull();
+  });
+
+  it.each(['focus-visible:ring-ring', 'focus-visible:ring-3', 'hover:ring-foreground/20'])(
+    'the scan passes %s',
+    (cls) => {
+      expect(cls.match(FOCUS_ALPHA)).toBeNull();
+    },
+  );
 });
