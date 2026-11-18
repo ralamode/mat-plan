@@ -23,8 +23,8 @@ import type { CatalogOption, MovementPickerGroup, TrackingType, Unit } from '@ma
  * the seven `TRACKING_TYPES`, set once on the item (FAM-1 plan D1, D25). The movement picker shows
  * it on each row's second line (`rowMeta`, CAT-3 P14) and the workout editor reads it to choose a
  * card's fields.
- * ⚠️ **No read fills it yet.** The column arrives in FAM-1 step 3 and the picker's read in step 6a
- * (`packages/db/src/queries/program/movement-options.ts`); until then only fixtures build this DTO.
+ * The item picker's read fills it from the database row (`lib/dal/program/picker.ts`, FAM-1 7a-ii),
+ * never from the library: the row is what a save and a log use.
  */
 type Declaration = {
   readonly unitDefault: Unit | null;

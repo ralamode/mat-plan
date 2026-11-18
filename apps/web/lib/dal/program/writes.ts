@@ -1,22 +1,33 @@
 import 'server-only';
 
-import { createProgram, renameProgram, saveWorkout, type HouseholdScope } from '@mat-plan/db';
+import {
+  copyWorkout,
+  createProgram,
+  newItem,
+  renameProgram,
+  saveWeek,
+  saveWorkout,
+  type HouseholdScope,
+} from '@mat-plan/db';
 import {
   PROGRAM_REFUSAL,
+  type CopyDraft,
   type CreateProgram,
+  type NewItem,
   type ProgramActions,
   type ProgramResult,
   type RenameProgram,
+  type WeekDraft,
   type WorkoutDraft,
 } from '@mat-plan/shared';
 
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from '../quiet-db-errors';
-import { reportProgramMiss } from './report-miss';
+import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
 
 /**
- * The program builder's writes, each through the caller's household (FAM-1 step 7a-i). The actions
+ * The program builder's writes, each through the caller's household (FAM-1 steps 7a-i and 7a-ii). The actions
  * in `app/programs/actions.ts` stay thin: entry, parse, one call here, revalidate.
  *
  * - **One exported function per operation**, named apart from lane P's writers they wrap: the
@@ -28,8 +39,9 @@ import { reportProgramMiss } from './report-miss';
  * - **A thrown database error carries no data out** (`quietDbErrors`): the runtime log must never
  *   hold a prescription's notes.
  *
- * - **A `not_found` for an id the input carries is reported** (`reportProgramMiss`: which program
- *   or workout id missed, once), on that path only. Create carries no id, so nothing is reported.
+ * - **A `not_found` for an id the input carries is reported** (`report-miss.ts`: which program or
+ *   workout id missed, once), on that path only. Create and a new item carry no id, so nothing is
+ *   reported for them.
  */
 
 /** What a member of the contract answers, read from `ProgramActions` rather than typed again. */
@@ -75,4 +87,42 @@ export async function saveHouseholdWorkout(
   if (!scope) return missed(scope, draft);
   const result = await quietDbErrors('saveWorkout', () => saveWorkout(db, scope, draft));
   return isNotFound(result) ? missed(scope, draft) : result;
+}
+
+/** A week's workouts, every day's, in the draft's order: what `reportWeekMiss` walks. */
+const weekWorkoutIds = (draft: WeekDraft) =>
+  Object.values(draft.days).flatMap((slots) => (slots ?? []).map((slot) => slot.workoutPublicId));
+
+export async function saveHouseholdWeek(draft: WeekDraft): Promise<ProgramAnswer<'saveWeek'>> {
+  const scope = await getHouseholdScope();
+  const week = { programPublicId: draft.programPublicId, workoutPublicIds: weekWorkoutIds(draft) };
+  if (!scope) {
+    await reportWeekMiss(scope, week);
+    return NOT_FOUND;
+  }
+  const result = await quietDbErrors('saveWeek', () => saveWeek(db, scope, draft));
+  if (!isNotFound(result)) return result;
+  await reportWeekMiss(scope, week);
+  return NOT_FOUND;
+}
+
+export async function copyHouseholdWorkout(
+  draft: CopyDraft,
+): Promise<ProgramAnswer<'copyWorkout'>> {
+  const scope = await getHouseholdScope();
+  if (!scope) {
+    await reportCopyMiss(scope, draft);
+    return NOT_FOUND;
+  }
+  const result = await quietDbErrors('copyWorkout', () => copyWorkout(db, scope, draft));
+  if (!isNotFound(result)) return result;
+  await reportCopyMiss(scope, draft);
+  return NOT_FOUND;
+}
+
+/** A new item carries no id: nothing to report (as create). */
+export async function newHouseholdItem(input: NewItem): Promise<ProgramAnswer<'newItem'>> {
+  const scope = await getHouseholdScope();
+  if (!scope) return NOT_FOUND;
+  return quietDbErrors('newItem', () => newItem(db, scope, input));
 }

@@ -115,8 +115,11 @@ describe('the action registry is one kind of entry or the other', () => {
     // the array onto one. Both sides are sorted, so the order modules are scanned in is not pinned.
     expect(household.sort()).toEqual([
       'addAthleteAction', // PROF-1 a-1w, `app/p/profile-actions.ts`
+      'copyWorkoutAction', // FAM-1 7a-ii, `app/programs/actions.ts`
       'createProgramAction', // FAM-1 7a-i, `app/programs/actions.ts`
+      'newItemAction', // FAM-1 7a-ii, `app/programs/actions.ts`
       'renameProgramAction', // FAM-1 7a-i, `app/programs/actions.ts`
+      'saveWeekAction', // FAM-1 7a-ii, `app/programs/actions.ts`
       'saveWorkoutAction', // FAM-1 7a-i, `app/programs/actions.ts`
     ]);
   });

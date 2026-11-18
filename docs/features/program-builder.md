@@ -294,8 +294,25 @@ flowchart LR
     - A miss is reported only after a writer or read has said "not here", never on a success, and
       once per request: the program first, then the workout; an item's miss reports nothing. A
       failed check reports nothing and never changes the answer.
-    - No page or component imports `app/programs/actions.ts` until 7b, which owes the notice and
-      inventory sentences that test lists (`OWED_AT_7B`).
+    - No page or component imports `app/programs/actions.ts` or `actions.contract.ts` until 7b,
+      which owes the notice and inventory sentences that test lists (`OWED_AT_7B`). The pin reads
+      both paths: the object holds every action.
+    - **The real `ProgramActions` is `PROGRAM_ACTIONS`** (`actions.contract.ts`, 7a-ii), the six
+      required members; `putOn` and `takeOff` are left out until step 15, so their controls stay
+      hidden. Not in `actions.ts`: a `'use server'` module exports only async functions.
+    - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
+      DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
+      editor reads it as a stale page.
+    - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
+      helper): a week's program, then each workout it names (distinct, at most
+      `WEEK_PROBE_LIMIT`); a copy's TARGET program, then its source workout by id alone
+      (`workoutInHousehold`).
+    - **The item picker's data** (`lib/dal/program/picker.ts`, CAT-3 P11-i): the household's own
+      items, and an old built-in only when the movement library has an entry on its slug
+      (maintainer, 2026-11-17). A listed built-in is the library's taxonomy on the DATABASE ROW's
+      name, tracking type, unit and bodyweight flag, since the row is what a save and a log use
+      (board, 2026-11-17); its aliases are the row's joined with the library's, so the client
+      withholds at least what the server selects. The slug never leaves the DAL (a keys test).
 
 ## Traps
 

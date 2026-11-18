@@ -70,11 +70,12 @@ path and **creating** the deliberate one.
 
    **`trackingType`** (FAM-1 step 0b) is one of the seven `TRACKING_TYPES`: how the item is logged,
    set once on the item ([FAM-1 plan](../plans/fam-1-family-program.md) D1, D25). The
-   movement picker shows it on each row's second line (invariant 14). ⚠️ **No read fills it yet.** The column
-   arrives in step 3 and the picker's read in step 6a, homed in `packages/db/src/queries/program/`
-   ([program-writers.md](./program-writers.md)), not in the `queries/movement-options.ts` this
-   guide's frontmatter note expects. Until then only fixtures build the DTO: the tests here, and
-   the contract's `picker-options` ([program-contract.md](./program-contract.md)).
+   movement picker shows it on each row's second line (invariant 14). **The program builder's read
+   fills it** (FAM-1 7a-ii, `apps/web/lib/dal/program/picker.ts`, over lane P's
+   `packages/db/src/queries/program/movement-options.ts`; [program-builder.md](./program-builder.md)
+   invariant 19): from the DATABASE ROW, never from the library, since the row is what a save and a
+   log use. The preview's fixtures still build it there (`picker-options`,
+   [program-contract.md](./program-contract.md)).
 
 4. **"Use as typed" is withheld when the text already names a movement**, and that is the whole
    point. Typing `rdl` must offer Romanian Deadlift, never mint a household movement called "rdl".

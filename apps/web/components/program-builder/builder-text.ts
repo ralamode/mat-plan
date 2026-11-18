@@ -20,7 +20,7 @@ import {
 } from '@mat-plan/shared';
 
 import { itemCountText } from '@/lib/constants';
-import { formatDayShort } from '@/lib/date';
+import { formatDayShort, onDayText } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural, quote } from '@/lib/i18n/plural';
@@ -590,8 +590,8 @@ export function startedText(
   from: string,
   today: string,
 ) {
-  const when = from === today ? 'today' : `on ${formatDayShort(from)}`;
-  return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${when}.`;
+  // The day page's own phrase for a day (`onDayText`, #517): one wording on both screens.
+  return `${formatList(names)} ${names.length > 1 ? 'start' : 'starts'} ${program} ${onDayText(from, today)}.`;
 }
 /** Someone put back on after a Take off: they never left, whatever the start date (C15). */
 export const backOnText = (names: readonly string[], program: string) =>
