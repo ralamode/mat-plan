@@ -283,7 +283,7 @@ gantt
   5                            :crit, done, a5, 5, 6
 
   section P · program data
-  6a (6a-i, 6a-ii merged)      :active, p1, 5, 6
+  6a (6a-i, 6a-ii, 6a-iii-a merged) :active, p1, 5, 6
   6b                           :done, p2, 6, 7
   6c                           :p3, 7, 8
   6d                           :p4, 8, 9
@@ -336,10 +336,10 @@ gantt
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
-  real ✓, the day page, and the two steps the switch waits on (12d, then 15: since 2026-11-17 step 15 waits for 12d). Nothing shortens it:
+  real ✓, the day page, and the two steps the switch waits on (12d, then 15: plan decision D39). Nothing shortens it:
   only one migration may be unapplied at a time, and each must be seen applied before the next
   merges. A delay on a red bar moves the end; a delay on a blue bar usually does not.
-- **Lane B has slack** (waves 7 to 9), and lanes B, C and S do their first six waves before any
+- **Lane B has slack** (waves 7 to 10), and lanes B, C and S do their first six waves before any
   program data exists.
 - **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
   critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a
