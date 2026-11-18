@@ -66,7 +66,8 @@ export type HideEntriesInput = z.infer<typeof hideEntriesSchema>;
  * or second 60 match the pattern but fail Postgres' `::timestamptz` cast (22008), which would reach
  * `error.tsx` from a public endpoint instead of answering `bad_value`. JS parsing is lenient (30
  * February becomes 2 March), so the check is that the parsed instant prints back to the token's own
- * first 23 characters. The value itself is never replaced: the six digits stay as typed.
+ * first 23 characters. Year 0000 prints back too but Postgres has no year 0, so the year must be 1
+ * or later. The value itself is never replaced: the six digits stay as typed.
  */
 export const hiddenAtSchema = z
   .string()
@@ -78,7 +79,11 @@ export const hiddenAtSchema = z
 
 function isRealInstant(token: string): boolean {
   const ms = Date.parse(token);
-  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 23) === token.slice(0, 23);
+  return (
+    !Number.isNaN(ms) &&
+    !token.startsWith('0000') &&
+    new Date(ms).toISOString().slice(0, 23) === token.slice(0, 23)
+  );
 }
 
 /**

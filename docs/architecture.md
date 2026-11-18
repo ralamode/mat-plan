@@ -381,8 +381,8 @@ leaves with the tombstone, and a CHECK refuses a live row that kept one. **B1-2:
 (`clearEventOn`, `queries/clear-events.ts`) serves `clearDay`'s replay, `restoreClear` and the
 banner's read `clearEventsForDay` (every clear of a day, newest first, as a token and a count), so the
 banner offers exactly what Restore all restores. Restore all's action answers counts, counted in the
-DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. The diagram below gains
-the banner when B2 renders it.
+DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. The diagram's last block
+is Restore all's server half; B2 adds the banner that calls it.
 
 ```mermaid
 sequenceDiagram
@@ -413,6 +413,15 @@ sequenceDiagram
       W->>DB: restore the item (guarded by the token)
       W-->>P: ok — or ROLLBACK TO SAVEPOINT
     end
+  end
+
+  P->>W: Restore all (profile, day, token) — today or yesterday, not archived
+  W->>DB: restoreClear — the clear's ids (clearEventOn, scoped)
+  alt the clear has nothing left under it
+    W-->>P: ok · 0 restored · 0 kept hidden
+  else
+    W->>DB: restoreHidden(ids, token) — the per-item loop above
+    W-->>P: ok · restored and kept-hidden counts (the DAL counts; no held value)
   end
 ```
 

@@ -183,6 +183,23 @@ const WRITES: [string, () => Promise<unknown>][] = [
   ['createAthlete', () => profiles.createAthlete({ name: 'New', kind: 'kid' } as never)],
 ];
 
+/**
+ * Every other export of the two modules, with why it is not a write. Its parameters are ids, a day
+ * or a household's own scope, never a logged value, so its failure has nothing to leak.
+ */
+const READS: Record<string, string> = {
+  listEntriesForDay: "a day's rows: a profile id and a day",
+  ownedBodyweightValue: "an entry's value: ids only",
+  bodyweightRowDay: "an entry's day: ids only",
+  practiceRowDay: "an entry's day: ids only",
+  ownedPracticeMinutes: "an entry's minutes: ids only",
+  lastBodyweight: 'the last weigh-in: a profile id and a day',
+  dayClearEvents: "a day's clears: a profile id and a day",
+  listProfiles: "the household's athletes: the scope only",
+  listHouseholdAthletes: "the household's athletes: the scope only",
+  getProfileByPublicId: 'one athlete: a profile id',
+};
+
 beforeEach(() => {
   state.scope = { householdId: 1 };
   for (const fn of Object.values(writers)) fn.mockReset().mockRejectedValue(dbFailure());
@@ -198,6 +215,16 @@ describe('a failed write carries no data out (V1-9b B1-2)', () => {
     expect(error.message).toBe(`${operation} failed (DrizzleQueryError, SQLSTATE 23505)`);
     expect(String(error.stack)).not.toContain(LEAK);
     expect(error.cause).toBeUndefined();
+  });
+
+  // A new export fails here until it is classified: wrapped and in WRITES, or a read in READS.
+  it('every function either module exports is a write in WRITES or a read in READS', () => {
+    const exported = [...Object.entries(entries), ...Object.entries(profiles)]
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name)
+      .sort();
+    const classified = [...WRITES.map(([name]) => name), ...Object.keys(READS)].sort();
+    expect(exported).toEqual(classified);
   });
 
   it("a typed name's find-or-create INSERT rethrows under its own name, before the session", async () => {

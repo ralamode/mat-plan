@@ -95,6 +95,7 @@ describe('restoreClearAction (V1-9b B1-2)', () => {
       'a token naming no real instant (30 February)',
       input({ hiddenAt: '2026-02-30T00:00:00.000000Z' }),
     ],
+    ['a token in year 0000', input({ hiddenAt: '0000-01-01T00:00:00.000000Z' })],
     ['an athlete id that is not a uuid', input({ profilePublicId: 'x' })],
     ['not an object at all', 'a string' as unknown as RestoreClearInput],
   ])('%s is bad_value, before the profile and the DAL', async (_label, body) => {

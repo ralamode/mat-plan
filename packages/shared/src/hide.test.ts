@@ -20,6 +20,7 @@ describe('hiddenAtSchema (the hide token)', () => {
     ['month 13', '2026-13-01T00:00:00.000000Z'],
     ['hour 24', '2026-11-17T24:00:00.000000Z'],
     ['second 60', '2026-11-17T18:04:60.000000Z'],
+    ['year 0000', '0000-01-01T00:00:00.000000Z'],
   ])('refuses %s', (_label, token) => {
     expect(hiddenAtSchema.safeParse(token).success).toBe(false);
   });
@@ -27,5 +28,6 @@ describe('hiddenAtSchema (the hide token)', () => {
   it('takes the last instant of a leap day and of a year', () => {
     expect(hiddenAtSchema.safeParse('2028-02-29T23:59:59.999999Z').success).toBe(true);
     expect(hiddenAtSchema.safeParse('2026-12-31T23:59:59.999999Z').success).toBe(true);
+    expect(hiddenAtSchema.safeParse('0001-01-01T00:00:00.000000Z').success).toBe(true);
   });
 });
