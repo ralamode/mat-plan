@@ -38,7 +38,10 @@ import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
  * 6. One DAL call. On success only, the athlete's day page is revalidated, and the answer is built
  *    field by field: never the writer's object as it stands.
  *
- * Until 12c mounts the day screen, no page imports this module, so no action id is served.
+ * 🔴 **Every one of these is a public endpoint** (AGENTS.md → Server conventions). Since 12c the day
+ * page imports this module, which puts the action ids in the build's manifest; from then on Next
+ * 16 forwards a POST naming one to it from ANY App Router path, not only the day page's. The
+ * checks above, in each action, are the boundary.
  */
 
 const BAD_VALUE = { ok: false, reason: ROW_REFUSAL.bad_value } as const;

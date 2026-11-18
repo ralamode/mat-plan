@@ -187,6 +187,32 @@ export const saveWorkoutSchema = workoutDraftSchema
     });
   });
 
+/**
+ * **How much one household may make** (contract change C35; maintainer, 2026-11-18: "Approve 500 /
+ * 50 / 30"). Generous for any family; they stop a runaway script or a bug from filling the
+ * database. A write that would pass one answers `limit_reached` and writes nothing.
+ *
+ * - `MAX_HOUSEHOLD_ITEMS`: the household's own items (movements it made with "+ New item"). The
+ *   library's movements do not count.
+ * - `MAX_PROGRAM_WORKOUTS`: the workouts of one program, a saved new one and a copy alike.
+ * - `MAX_DAY_SLOTS`: the workouts on one weekday of one program's week. `weekDaysSchema` holds it,
+ *   so a week past it fails the parse: `weekExceedsDaySlots` tells that from any other failure.
+ *   ⚠️ `ProgramView.week` is the same schema, so a READ is held to it too. That is safe because
+ *   every writer parses the draft first and the week's table is new with FAM-1: no stored week is
+ *   longer. No other read shape has a `.max` for these caps.
+ *
+ * **The workouts cap is the program's the write lands in**: for a copy into another program, that
+ * program's, never the source's.
+ *
+ * **What a cap never refuses:** an edit of a workout that exists, a replay of a create (the same
+ * client id answers as the first call did), and `newItem` for a name that already names an item
+ * (it selects that item, C8). **For a create the cap is judged before the name**, so a full
+ * program says so and nobody renames a workout only to be told the program is full.
+ */
+export const MAX_HOUSEHOLD_ITEMS = 500;
+export const MAX_PROGRAM_WORKOUTS = 50;
+export const MAX_DAY_SLOTS = 30;
+
 /** One slot of a weekday: a workout and its optional label. */
 const weekSlotSchema = z.object({
   workoutPublicId: lowerCaseUuidSchema,
@@ -202,9 +228,12 @@ const weekSlotSchema = z.object({
  */
 export const weekDaysSchema = z.record(
   weekdaySchema,
-  z.array(weekSlotSchema).refine((slots) => distinct(slots.map((slot) => slot.workoutPublicId)), {
-    message: 'a workout runs at most once a day',
-  }),
+  z
+    .array(weekSlotSchema)
+    .max(MAX_DAY_SLOTS)
+    .refine((slots) => distinct(slots.map((slot) => slot.workoutPublicId)), {
+      message: 'a workout runs at most once a day',
+    }),
 );
 
 /** The week editor → `saveWeek`. The full state, in order. */
@@ -253,13 +282,31 @@ export function weekRepeatsAWorkout(draft: unknown): boolean {
   });
 }
 
+/**
+ * Whether a week draft has a weekday with more than `MAX_DAY_SLOTS` workouts, which is why its
+ * parse failed and why the write answers `limit_reached` and not `invalid` (C35). It reads the raw
+ * input, as `weekRepeatsAWorkout` does and for the same reason. **A repeat wins**: a week that
+ * names a workout twice on a day is `once_per_day` whatever else is wrong, so ask that first.
+ *
+ * One definition for the fake, the writer and the action, so the three answer alike.
+ */
+export function weekExceedsDaySlots(draft: unknown): boolean {
+  const days: unknown = (draft as { days?: unknown } | null | undefined)?.days;
+  if (!days || typeof days !== 'object') return false;
+  return Object.values(days).some((slots) => Array.isArray(slots) && slots.length > MAX_DAY_SLOTS);
+}
+
 /** A program, by id and name: one entry of a list a person picks from. */
 export const programRefSchema = z.object({
   programPublicId: lowerCaseUuidSchema,
   name: programNameSchema,
 });
 
-/** The Programs list: each program, in the household's order, and the athletes on it. */
+/**
+ * The Programs list: each program, in the household's order, and the athletes on it. **An archived
+ * athlete is not named** (C36): as every list of a household. A program with only an archived
+ * athlete on it still has its entry, with no names.
+ */
 export const programListSchema = z.array(
   programRefSchema.extend({
     athletes: z.array(athleteLabelSchema).max(MAX_HOUSEHOLD_ATHLETES),
@@ -281,8 +328,10 @@ export const programViewSchema = z
      */
     today: isoDaySchema,
     /**
-     * Who's on it. `since` is the day they start, which may be after today. `lastDay` is set once
-     * they were taken off: the last day they are on it. `alsoOn` names their other programs.
+     * Who's on it, of the athletes who are not archived (C36). `since` is the day they start,
+     * which may be after today. `lastDay` is set once they were taken off: the last day they are
+     * on it. `alsoOn` names their other programs. **An archived athlete is not listed**, though
+     * their assignment stays: they are back here when restored.
      */
     athletes: z.array(
       z.object({
@@ -294,8 +343,10 @@ export const programViewSchema = z
       }),
     ),
     /**
-     * "Put someone on": every athlete in the household. `on` is whether they are on this program
-     * already; `keeps` names the programs they are on now, in their own order, this one included.
+     * "Put someone on": every athlete in the household who is not archived (C36: Put on refuses
+     * an archived athlete with `not_found`, so one here would be a choice that always fails).
+     * `on` is whether they are on this program already; `keeps` names the programs they are on
+     * now, in their own order, this one included.
      */
     candidates: z.array(
       z.object({

@@ -4,7 +4,9 @@ import type { ProgramList, ProgramView } from '@mat-plan/shared';
 import {
   DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
+  PROGRAM_LIST_FIXTURE_SOURCES,
   PROGRAM_LIST_FIXTURES,
+  PROGRAM_VIEW_FIXTURE_SOURCES,
   PROGRAM_VIEW_FIXTURES,
   programsList,
   familyProgram,
@@ -18,6 +20,7 @@ import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
 import { ProgramScreen } from '@/components/program-builder/program-screen';
 import { ProgramsListScreen } from '@/components/program-builder/programs-list-screen';
+import { BuilderLinkPrefetch } from '@/components/program-builder/route-link';
 import { WorkoutEditorScreen } from '@/components/program-builder/workout-editor-screen';
 import { NAME_WRAP_CLASS, NOTICE_CLASS, SETTINGS_COPY } from '@/lib/constants';
 
@@ -41,8 +44,22 @@ import { dayPreviewHrefFor, type PreviewSelection } from './preview-registry';
  * **The data is state.** A fake changes its copy of the fixture and hands it back; this passes it
  * to the screen again as props. That is the preview's stand-in for the re-render a real action
  * causes, so a screen needs no code that exists only for the preview.
+ *
+ * **No builder link prefetches here.** The screens hold fixture ids, so every `/programs/<id>` a
+ * Next `<Link>` would prefetch is a page that answers 404: in a production build, one for each
+ * link on each page load. The builder's
+ * links read `BuilderLinkPrefetch` (lane B's `route-link.tsx`); this is the one place that says
+ * `false`. A real page provides nothing and prefetches as Next does.
  */
-export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) {
+export function PreviewHarness(selection: PreviewSelection) {
+  return (
+    <BuilderLinkPrefetch value={false}>
+      <PreviewScreen {...selection} />
+    </BuilderLinkPrefetch>
+  );
+}
+
+function PreviewScreen({ screen, fixture, failNext }: PreviewSelection) {
   switch (screen) {
     case 'programs-list':
       return (
@@ -57,7 +74,7 @@ export function PreviewHarness({ screen, fixture, failNext }: PreviewSelection) 
       const program = named(PROGRAM_VIEW_FIXTURES, fixture);
       return (
         <ProgramsPreview
-          seed={{ ...BUILDER, programs: householdOf(program), program }}
+          seed={{ ...BUILDER, programs: previewHouseholdOf(fixture, program), program }}
           failNext={failNext}
         >
           {(state, actions) =>
@@ -116,16 +133,21 @@ const BUILDER: FakeProgramState = {
   items: [...pickerOptions],
 };
 
-/** The Programs list a program's page belongs to: the fixture household's, plus a new program. */
-function householdOf(program: ProgramView): ProgramList {
+/**
+ * The Programs list a program's page belongs to: the list fixture built from the SAME world as the
+ * page's fixture where there is one (so a page that leaves an archived athlete out sits beside a
+ * list that does too, C36), else the seeded household's; plus the program itself when it is new.
+ */
+export function previewHouseholdOf(fixture: string, program: ProgramView): ProgramList {
+  const views: Record<string, { world: unknown }> = PROGRAM_VIEW_FIXTURE_SOURCES;
+  const world = views[fixture]?.world;
+  const sameWorld = Object.entries(PROGRAM_LIST_FIXTURE_SOURCES).find(
+    ([, source]) => source.world === world,
+  )?.[0] as keyof typeof PROGRAM_LIST_FIXTURES | undefined;
+  const list: ProgramList = sameWorld ? PROGRAM_LIST_FIXTURES[sameWorld] : programsList;
   const { programPublicId, name } = program;
-  if (programsList.some((listed) => listed.programPublicId === programPublicId)) {
-    return [...programsList];
-  }
-  return [
-    ...programsList,
-    { programPublicId, name, athletes: program.athletes.map((a) => a.name) },
-  ];
+  if (list.some((listed) => listed.programPublicId === programPublicId)) return [...list];
+  return [...list, { programPublicId, name, athletes: program.athletes.map((a) => a.name) }];
 }
 
 function ProgramsPreview({

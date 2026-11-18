@@ -51,6 +51,9 @@ import {
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
+import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
+import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
+import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
 import {
   freePort,
   isLocalDbUrl,
@@ -435,6 +438,9 @@ const STATES = {
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
   'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
+  // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
+  // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
+  'day-look-ahead': null,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
   'bodyweight-rejected': null,
@@ -458,6 +464,12 @@ const STATES = {
   // cell shows two buttons and nothing of the component under review.
   'sheet-open': null,
   'sheet-dialog-open': null,
+  // CAT-3 B2-ii — the movement picker's filters, on the preview's workout editor. Interaction-only:
+  // each exists after opening the picker and the panel and ticking "Quads" (the e2e spec's steps).
+  'picker-filter-panel': null,
+  'picker-filter-browse': null,
+  'picker-filter-search': null,
+  'picker-filter-none': null,
   // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
   // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
   'rename-duplicate': null,
@@ -580,6 +592,35 @@ async function seedLengthSession(dbUrl: string): Promise<void> {
   }
 }
 
+/** CAT-3 B2-ii: open the workout editor's item picker, then its filter panel. */
+async function openPickerFilters(page: Page) {
+  // Loaded, not idle (`waitUntil: 'load'`), so the first tap may land before hydration and do
+  // nothing: tap until the sheet opens, a bounded number of times.
+  const open = page.getByRole('button', { name: ITEM_PICKER_COPY.open, exact: true });
+  for (let tries = 0; ; tries++) {
+    // A sheet that opened late hides the button behind it: look before tapping again.
+    if (await page.getByRole('dialog').isVisible()) break;
+    await open.click();
+    try {
+      await page.getByRole('dialog').waitFor({ timeout: 2_000 });
+      break;
+    } catch (error) {
+      if (tries >= 10) throw error;
+    }
+  }
+  await page.getByRole('button', { name: PICKER_COPY.filtersName(0), exact: true }).click();
+  await page.getByRole('heading', { name: PICKER_COPY.filtersHeading, exact: true }).waitFor();
+}
+/** Tick "Quads" and go back to the list (the e2e spec's filter). */
+async function quadsOnThenBack(page: Page) {
+  const quads = MUSCLE_LABELS[MUSCLE.quadriceps];
+  await page
+    .getByRole('checkbox', { name: new RegExp(`^${quads}${PICKER_COPY.choiceJoin}`) })
+    .check();
+  await page.getByRole('button', { name: PICKER_COPY.filtersBack, exact: true }).click();
+  await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
+}
+
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
   'form-partial-sets': async (page) => {
     const { reps, weight } = await scaffoldOpenCard(page);
@@ -616,6 +657,27 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     // The callout's focus target — waiting on it means the capture cannot race the round trip.
     await page.getByRole('group').waitFor();
   },
+  'picker-filter-panel': async (page) => {
+    await openPickerFilters(page);
+  },
+  'picker-filter-browse': async (page) => {
+    await openPickerFilters(page);
+    await quadsOnThenBack(page);
+  },
+  'picker-filter-search': async (page) => {
+    await openPickerFilters(page);
+    await quadsOnThenBack(page);
+    await page.getByRole('searchbox').fill('squat');
+    await page
+      .getByRole('heading', { name: PICKER_COPY.householdNotFiltered, exact: true })
+      .waitFor();
+  },
+  'picker-filter-none': async (page) => {
+    await openPickerFilters(page);
+    await quadsOnThenBack(page);
+    await page.getByRole('searchbox').fill('chin');
+    await page.getByText(PICKER_COPY.outsideAll(4, 'chin'), { exact: true }).waitFor();
+  },
   'sheet-open': async (page) => {
     await page.getByRole('button', { name: 'Open sheet' }).first().click();
     await page.getByRole('dialog').waitFor();
@@ -643,6 +705,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   // Retry-safe: the three widths share one database, and only the first finds the button.
   'practice-logged': (page) => logPractice(page),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
+  // The page's own Next arrow, not `gotoDaysAgo(-1)`: that counts from the app's default zone, which
+  // can be a day behind the zone the page renders in, and then "tomorrow" is the page's today.
+  'day-look-ahead': async (page) => {
+    await page
+      .getByRole('navigation', { name: 'Change day' })
+      .getByRole('link', { name: /^Next day/ })
+      .click();
+    await page.getByText(/^Tomorrow ·/).waitFor();
+  },
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });
     await section.getByLabel('Unit').selectOption('kg');
@@ -1332,8 +1403,10 @@ async function runEphemeral(
       colorScheme,
       interact: INTERACTIONS[state],
       allowConsole,
-      // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver.
-      viewportOnly: state.startsWith('sheet-'),
+      // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver. The picker's
+      // filter states are in its sheet too.
+      viewportOnly: state.startsWith('sheet-') || state.startsWith('picker-filter-'),
+      waitUntil: state.startsWith('picker-filter-') ? 'load' : undefined,
     });
   } finally {
     if (server) await stopChildProcess(server);
