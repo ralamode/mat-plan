@@ -91,24 +91,35 @@ as not production:
   fallback to `DATABASE_URL`), so the guard and the runner resolve the same string (`target-url.ts:9-22`,
   2b's panel row 2S12). The gate refuses on that URL when:
   - it is unset;
-  - it is local, or its database is the preview's: one exported `targetIsLocalOrPreview()` in
-    `target-url.ts`, which `seedHouseholdClaimIsAllowed` also calls;
-  - **its database name is missing.** A no-path URL makes `pg` connect to `$PGDATABASE` or the user's
-    name. The security lens confirmed this on the installed `pg-connection-string@2.14.1`.
+  - it is local, or its database is the preview's (`correctionTargetIsLocal()`,
+    `correctionTargetIsPreview()`; an unknown target is neither, as today);
+  - **its database name is missing:** a separate predicate, `correctionTargetDatabaseIsUnnamed()`. A
+    no-path URL makes `pg` connect to `$PGDATABASE` or the user's name; the security lens confirmed this
+    on the installed `pg-connection-string@2.14.1`. **Each caller refuses on it in its own direction**,
+    and it is not folded into a shared local-or-preview helper. `seedHouseholdClaimIsAllowed` must not
+    treat it as local or preview, or a no-path URL would let a seed-household claim bind remotely.
   - it carries a host override: `hasHostOverride`, exported here from `db-environment.ts`.
 - **The database, inside the transaction.** It reads `current_database()` on the connection that writes.
   It refuses unless that equals the URL's name and does not name the preview. This also closes the
   socket and no-path cases.
 - **Pure, with a unit test.** The gate, `seededHouseholdErasureIssue(target, observed)`, takes those
   two values. Its colocated test drives every branch.
-- **The same gap in RC.** `create-household`'s preview refusal (#546) accepts a no-path URL. The same
-  helper closes it, with a `db:verify` case.
+- **The same gap in RC.** `create-household`'s preview refusal (#546, `registry.ts:886`) accepts a
+  no-path URL, so it also refuses on the unnamed predicate. `target-url.test.ts` gains two cases:
+  `create-household` refuses `postgres://u:p@ep-x.invalid`, and a seed-household claim against it is
+  refused too.
 
 **Tied to this sitting's dry run.** Under `--apply` the entry requires `EXPECT_ERASED_ROWS`:
 
 - That is the total the dry run printed, a number with no personal data.
-- The entry compares it inside the core's transaction, after the core's counts. A mismatch rolls back,
-  and so does an unset or malformed value, which is parsed as an integer ≥ 0.
+- **The mechanism:** the entry opens the transaction and passes its `tx` to 2a's core as `exec` (the core
+  runs inside it, its own transaction a savepoint), then compares the core's deleted total with the
+  expected one and throws on a mismatch, which rolls back everything. An unset or malformed value, parsed
+  as an integer ≥ 0, refuses before the core is called. 2a's signature needs no change. If 2a's core
+  turns out to commit on its own, this becomes a delta to 2a (an `expectedTotal` checked before its first
+  `DELETE`), raised before R0 is cut.
+- `db:verify` asserts that after a mismatched `--apply` **every graph table's rows are unchanged**, so a
+  compare that ran after a commit would also go red.
 - So a bare `--apply`, or one run with an earlier sitting's number, refuses. This is the interlock D2
   already had, on the more harmful of the two.
 
@@ -137,14 +148,15 @@ as not production:
 binds the same accounts: its in-transaction check finds no live membership, because the core removed it.
 
 **Another household found.** The dry run also prints `households not in SEED_PUBLIC_IDS: live N,
-hidden M`. Both must be 0 before step 1 (D4, step 0). If not, the fresh start stops: no tool here
+hidden M`. It is **printed, never a refusal**: after R2 the family's own household is outside the set,
+and this entry must stay usable as R4's remedy. Both must read 0 at step 0 (D4). If not, the fresh start stops: no tool here
 removes another household, and 2b comes after R2.
 
 **Constants.** `EXPECT_ERASED_ROWS` and step 5's three `EXPECT_*` names are exported from
 `erasure-gates.ts`, as `CREATE_HOUSEHOLD_ACCOUNTS_ENV` is from `accounts.ts:24`. The `ERASE_*` refusal is
 dropped: nothing reads those variables until 2b.
 
-**Applied** is a dated entry, `issue: 'PRIV-3 · CAT-3 R0'`. Its departures from K15 are named:
+**Applied** is a dated entry, `issue: 'PRIV-3 · CAT-3 R0'`. K15's departures are named:
 
 - no waiting period;
 - accounts kept;
@@ -160,7 +172,9 @@ in the ledger, not the Applied row.
 
 **What it deletes:** the **old** global movements only:
 
-- `household_id IS NULL AND NOT movementIsCatalog()`, the spec's one predicate, imported from A2;
+- `household_id IS NULL AND movementIsCatalog() IS NOT TRUE`, the spec's one predicate, imported from A2
+  (NULL-safe: a predicate that can be NULL for an old row would otherwise select nothing and report
+  "nothing to do"; the success case plants a legacy row with `modality` NULL);
 - with their `movement_equipment` and `movement_muscles` rows first.
 
 Catalog rows are never touched.
@@ -189,7 +203,11 @@ household is back, so the reference refusal below is the guard.
 **The transaction:**
 
 1. `SET LOCAL lock_timeout`/`statement_timeout`, as every writing correction (`registry.ts:434-435`).
-2. `SELECT id … FOR UPDATE` on the legacy rows.
+2. `SELECT id … FOR UPDATE` on the legacy rows, then **re-run the reference count under the lock** and
+   refuse if it is non-zero. The gate also refuses any FK into `movements` whose `confdeltype` is not
+   `a` or `r` (NO ACTION or RESTRICT): a `SET NULL` or `CASCADE` edge would let the delete change
+   household rows silently, which is the household graph's `NON_ABORTING_EDGES` lesson (`graph.ts:228`).
+   Today every such FK is NO ACTION.
 3. Delete the join rows and the movements by `id = ANY(<the locked ids>)`, so a row committed after the
    lock is never swept up.
 4. Require each deleted count (`count()::int`) to equal the same-transaction count **and** the dry run's:
@@ -200,6 +218,9 @@ household is back, so the reference refusal below is the guard.
 **The dry run always prints every count** (references per table, legacy movements, both join tables) and
 any "would refuse: …" reason, and exits 0. Only `--apply` refuses. So the dry run against production
 before R2 shows numbers, not a refusal.
+
+**Not limited to production, on purpose.** The reference refusal is D2's only guard. Against a local or
+preview database it deletes unreferenced legacy rows, which the seed puts back.
 
 **Errors** go through `redactedFailure` inside the entry, as RC's do. The gate,
 `legacyMovementDeletionIssue({ references, compositeFks, expected, found })`, is pure and has a
@@ -248,10 +269,13 @@ command. The steps:
 
 - **Step 0:**
   - the households check from D1's dry run (only the seeded household exists);
-  - the household takes each athlete's export, or the go records that it declined;
+  - the household takes each athlete's in-app export, and is offered the full copy, hidden rows included
+    (the household delete's step 1: the in-app export is partial). Either is taken, or the go records
+    that it was declined;
   - the close-out notice PR is open as a draft (D5).
 - **Steps 1–9:** the spec's, each with a **"Second run:"** line. The branches:
-  - **Step 4 is D2's dry run.** A household found there stops the fresh start.
+  - **Step 4 re-runs D1's dry run:** it must print "the seeded household is not here" and other
+    households live 0, hidden 0. A household found there stops the fresh start.
   - If step 6's log shows a skipped entry, re-run step 5, then step 6.
   - **If the run stops after step 3,** the close-out's athlete and household sentences still land: they
     became true at step 3, whatever happens later.
@@ -269,16 +293,16 @@ command. The steps:
 **The ledger entry** is added to the ledger's field table (`runbooks.md:1813-1820`), not restated
 elsewhere:
 
-| Field                  | Value                                               |
-| ---------------------- | --------------------------------------------------- |
-| Grain                  | household                                           |
-| Household `public_id`  | the seed household's constant                       |
-| Verifying channel      | "the maintainer's go (K15)", with its date and role |
-| Clerk ids              | none (K15)                                          |
-| Export                 | taken, or declined (the go)                         |
-| Apply date             |                                                     |
-| Branch name and expiry |                                                     |
-| Branch-deleted date    |                                                     |
+| Field                  | Value                                                         |
+| ---------------------- | ------------------------------------------------------------- |
+| Grain                  | household                                                     |
+| Household `public_id`  | the seed household's constant                                 |
+| Verifying channel      | "the maintainer's go (K15)", with its date and role           |
+| Clerk ids              | none (K15)                                                    |
+| Export                 | in-app export and full copy: each taken, or declined (the go) |
+| Apply date             |                                                               |
+| Branch name and expiry |                                                               |
+| Branch-deleted date    |                                                               |
 
 ### D5. The notice and inventory sentences
 
@@ -373,21 +397,19 @@ Each path exists from its own merge.
 
 ### R0's code PR: `db/priv-3-r0-erase-seeded-household` (after 2a and #592; about 300 lines, half proofs)
 
-| Path                                                            | Change | What                                                                                                                                                                                                     |
-| --------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/scripts/corrections/registry.ts`                   | EDIT   | `householdScopeByPublicId`; the dated entry (D1)                                                                                                                                                         |
-| `packages/db/scripts/corrections/erasure-gates.ts` + `.test.ts` | NEW    | `seededHouseholdErasureIssue`; the `EXPECT_*` names                                                                                                                                                      |
-| `packages/db/scripts/corrections/target-url.ts` + `.test.ts`    | EDIT   | `correctionTargetUrl({ kind })`; `targetIsLocalOrPreview()`; a missing database name is not production; RC's claim uses it                                                                               |
-| `packages/shared/src/db-environment.ts` + `.test.ts`            | EDIT   | Export `hasHostOverride` (so `db:mutations` runs locally: `packages/shared`)                                                                                                                             |
-| `packages/db/scripts/verify/harness.ts`                         | EDIT   | `withEnv`, `NO_TARGET` and the console sink lifted from `verify.ts:7614-7644`                                                                                                                            |
-| `packages/db/scripts/verify/erasure.ts`                         | EDIT   | Inside `rolledBack`, with a remote-looking target (`ep-x.invalid/mat_plan`, as (6l)): the erasure, its output scan, the expected-total refusal, the second run's throw, the preview and no-path refusals |
-| `packages/db/scripts/verify.ts`                                 | EDIT   | RC's claim refuses a no-path preview URL                                                                                                                                                                 |
-| `packages/db/scripts/mutations/NN-*`                            | NEW    | The gate stops refusing a preview; a no-path URL passes; the expected total is ignored; an account id is printed; not-found under `--apply` returns instead of throwing                                  |
-| `packages/db/scripts/corrections/README.md`                     | EDIT   | The Applied row; the rule-8 departure                                                                                                                                                                    |
-| `docs/features/erasure.md`                                      | EDIT   | `owns:` `erasure-gates.ts`; the third caller of the core                                                                                                                                                 |
-| `docs/architecture.md`                                          | EDIT   | §8a: a node for the one-shot entry                                                                                                                                                                       |
-| `docs/privacy/data-inventory.md`                                | EDIT   | §5: the one-shot erasure                                                                                                                                                                                 |
-| `docs/plans/ops-2-split-the-seed.md`, `docs/plan.md`            | EDIT   | § Applied by R0's code PR                                                                                                                                                                                |
+| Path                                                            | Change | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/db/scripts/corrections/registry.ts`                   | EDIT   | `householdScopeByPublicId`; the dated entry (D1)                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `packages/db/scripts/corrections/erasure-gates.ts` + `.test.ts` | NEW    | `seededHouseholdErasureIssue`; the `EXPECT_*` names                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `packages/db/scripts/corrections/target-url.ts` + `.test.ts`    | EDIT   | `correctionTargetUrl({ kind })`; `targetIsLocalOrPreview()`; a missing database name is not production; RC's claim uses it                                                                                                                                                                                                                                                                                                                                                                 |
+| `packages/shared/src/db-environment.ts` + `.test.ts`            | EDIT   | Export `hasHostOverride` (so `db:mutations` runs locally: `packages/shared`)                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `packages/db/scripts/verify/erasure.ts`                         | EDIT   | Its own `withEnv` and console sink (verify.ts and harness.ts are PR 1's only, fam-1-family-program.md:716). Inside `rolledBack`, with a remote-looking target whose path is `/postgres` (PGlite's `current_database()`): the erasure, its output scan, the expected-total refusal with every graph table unchanged after it, the second run's throw, the preview and no-path refusals; a `…/mat_plan` target as the name-mismatch refusal. RC's no-path claim and `create-household` cases |
+| `packages/db/scripts/mutations/NN-*`                            | NEW    | The gate stops refusing a preview; a no-path URL passes; the expected total is ignored; an account id is printed; not-found under `--apply` returns instead of throwing                                                                                                                                                                                                                                                                                                                    |
+| `packages/db/scripts/corrections/README.md`                     | EDIT   | The Applied row; the rule-8 departure                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/features/erasure.md`                                      | EDIT   | `owns:` `erasure-gates.ts`; the third caller of the core                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `docs/architecture.md`                                          | EDIT   | §8a: a node for the one-shot entry                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `docs/privacy/data-inventory.md`                                | EDIT   | §5: the one-shot erasure                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `docs/plans/ops-2-split-the-seed.md`, `docs/plan.md`            | EDIT   | § Applied by R0's code PR                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ### R1's PR: `db/priv-3-r1-fresh-start-runbook` (after R0 and A2; about 380 lines with the runbook)
 
@@ -469,6 +491,7 @@ program) also wait for the drill? The options:
   movement", and has no household refusal. R3's wording follows.
 - **Step 0 and K15:** a fourth departure, "no export offered by the system", for K15's row.
 - **F1:** it keeps R4's seed-namespace count working, or lands after R4's second run.
+- **R5:** the go is recorded in the ledger, not the Applied entry, because of corrections rule 8.
 
 ## Review-response log (adversarial panel)
 
@@ -515,3 +538,22 @@ program) also wait for the drill? The options:
 
 NITs batched: D2's `kind` and strings (none: entry-level, as RC); step 4 is D2's dry run; the
 `household_members` row is named, not numbered; RC's stale status in `plan.md`; `count()::int`.
+
+### Engineering panel (round 2, light re-review, 2026-11-18)
+
+Privacy, security, architecture and DB safety closed every round-1 finding of theirs and raised nothing
+BLOCKING. (DB safety withdrew D-S7 against the rejection above.) Their new findings, all **accepted**:
+
+| #           | Lens         | Critique (short)                                                                    | Resolution                                                                               |
+| ----------- | ------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| P2-1        | Privacy      | Step 0 offers only the partial in-app export                                        | The full copy is offered too; the ledger row says which                                  |
+| P2-2        | Privacy      | Recording the go in the ledger changes spec R5                                      | Asked of the spec's owner                                                                |
+| X2-1, D2-N2 | Security, DB | No mechanism for comparing the expected total inside the core's transaction         | The entry's `tx` is passed to the core; graph tables asserted unchanged after a mismatch |
+| X2-2        | Security     | One local-or-preview helper with the missing name folded in fails open in the claim | A separate predicate, refused by each caller in its own direction; two test cases        |
+| X2-N        | Security     | D2 has no database gate                                                             | Stated as deliberate                                                                     |
+| D2-1        | DB safety    | D2 no longer re-counts references under the lock; a non-aborting FK would be silent | The re-count, the `confdeltype` refusal and two mutations                                |
+| D2-2        | DB safety    | Step 4 names a tool that does not print households                                  | Step 4 re-runs D1's dry run                                                              |
+| D2-N1       | DB safety    | The predicate must be NULL-safe                                                     | `IS NOT TRUE`; the case plants a NULL-`modality` row                                     |
+| A2-1        | Architecture | D1's name check refuses PGlite's `postgres` database in the success cases           | A `/postgres` target for those; `/mat_plan` as the mismatch case, with its mutation      |
+| A2-2        | Architecture | R0 edits `verify.ts` and `harness.ts`, which are PR 1's only                        | Helpers kept local to `verify/erasure.ts`; RC's cases move there                         |
+| A2-N        | Architecture | Say that the other-households count never refuses                                   | Stated                                                                                   |
