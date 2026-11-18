@@ -49,8 +49,11 @@ export function monthRange(month: string): { from: string; to: string } {
  *
  * Returns one row per (entry, set, quantity) and lets the caller fold — the alternative is three
  * round-trips or a JSON aggregate, and at a month's scale (tens of rows) the flat join is both
- * simpler and cheaper. `deleted_at IS NULL` at every level: a soft-deleted parent must not drag live
- * children into the export (`ON DELETE CASCADE` is hard-delete only).
+ * simpler and cheaper. `deleted_at IS NULL` on the entry, its sets and their quantities: a soft-deleted
+ * parent must not drag live children into the export (`ON DELETE CASCADE` is hard-delete only). The
+ * SESSION is different by choice: it only lends its columns, so a hidden or foreign session blanks
+ * them and the athlete's entry is still exported. A writer that hides a session must hide its
+ * entries too.
  */
 /**
  * One flat (entry × set × quantity) row. Derived, not hand-typed — the `ProgramDayRow` precedent —
@@ -121,8 +124,8 @@ export function strengthMonthRows(
         and(
           eq(schema.sessions.id, schema.entries.sessionId),
           eq(schema.sessions.profileId, schema.entries.profileId),
-          // A hidden session lends nothing either (ADR 0008: a hidden row is out of the export).
-          // No writer hides a session today; this keeps the query's "every level" promise.
+          // A hidden session lends nothing either: its columns are NULL, and its entries are kept
+          // unless they are hidden themselves. No writer hides a session today.
           isNull(schema.sessions.deletedAt),
         ),
       )
