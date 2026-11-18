@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 4f96cfb1..58e70c63 100644
+index a98f3597..2ef5e336 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -534,7 +534,7 @@ export async function logRow(
+@@ -376,7 +376,7 @@ export async function logRow(
            ),
          )
          .limit(1);
 -      if (taken) refuse(ROW_REFUSAL.slot_taken);
 +      if (taken) return { ok: false, reason: ROW_REFUSAL.slot_taken };
-       throw new Error(
-         `row client_id ${write.clientId} neither inserted nor held, and its set is free`,
-       );
+       return null;
+     };
+     if (!entry) {

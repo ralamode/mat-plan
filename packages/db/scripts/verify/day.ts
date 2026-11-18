@@ -92,6 +92,7 @@ export async function verifyDay(_ctx: VerifyContext): Promise<void> {
   // 14a's export proof runs before 12a's: mutation 366 changes the item key the resolver shares, and
   // must fail on the export's own assertion first.
   await verifyExport();
+  await verifyRowRace();
   // 12a-i's proofs run after 11b's, so an 11b patch still fails on its own assertion first.
   await verifyDayPlan();
 }
@@ -699,6 +700,65 @@ async function verifyExport(): Promise<void> {
       }
     },
     '14a',
+  );
+}
+
+// ── The ✓ that races an un-tick (lane S's #578 review, defaulted to fix) ─────────────────────────────
+
+/**
+ * A ✓ on a set another phone un-ticks in the same instant. The insert skips (the set is held), and the
+ * holder is hidden before the re-reads, so they find no insert, no holder and no taken set. Staged on
+ * one connection as #578 does: a statement-level `AFTER INSERT` trigger hides the one named holder
+ * INSIDE the skipped insert. Before the retry `logRow` threw ("neither inserted nor held") to
+ * `error.tsx`; now the same ✓ inserts on its second try. Mutation 372 removes the retry.
+ */
+async function verifyRowRace(): Promise<void> {
+  await proof(
+    'the ✓ that races an un-tick saves',
+    async (f, tx) => {
+      const holder = expectOk(
+        await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
+        'FAM-1 11b race: the holder ✓',
+      );
+      await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
+      await tx.execute(sql`insert into race_target values (${holder.entryPublicId}::uuid)`);
+      await tx.execute(sql`create function verify_row_race_hide() returns trigger language plpgsql as $$
+        begin
+          update entries set deleted_at = now()
+            where public_id in (select public_id from race_target) and deleted_at is null;
+          return null;
+        end $$`);
+      await tx.execute(
+        sql`create trigger row_race_hide after insert on entries for each statement execute function verify_row_race_hide()`,
+      );
+      const second = await f.tick({ prescriptionPublicId: f.p.reps.publicId });
+      await tx.execute(sql`drop trigger row_race_hide on entries`);
+      await tx.execute(sql`drop function verify_row_race_hide()`);
+      const saved = expectOk(second, 'FAM-1 11b race: a ✓ on a set un-ticked mid-insert saves');
+      // ⚠️ 11b-interim: a NEW entry, the un-ticked one hidden. 11c-ii's revive flips this to "the same
+      // entry, brought back" (plan 11c, § Proofs 11b's rewrite).
+      const live = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.entries)
+        .where(
+          and(
+            eq(schema.entries.prescriptionId, f.p.reps.id),
+            eq(schema.entries.prescriptionSet, 1),
+            isNull(schema.entries.deletedAt),
+          ),
+        );
+      assert.deepEqual(
+        [
+          saved.entryPublicId !== holder.entryPublicId,
+          (await f.entryRow(holder.entryPublicId)).deletedAt !== null,
+          live[0].n,
+          saved.values,
+        ],
+        [true, true, 1, holder.values],
+        'FAM-1 11b race: and it is one new live entry with the ✓’s numbers, the un-ticked one hidden (11b-interim)',
+      );
+    },
+    '11b',
   );
 }
 
