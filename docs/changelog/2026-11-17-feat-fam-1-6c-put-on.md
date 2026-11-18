@@ -11,9 +11,9 @@ FAM-1 step 6c-i, lane P: the database side of "Put someone on". Nothing in the a
   writers, and puts Athlete One and Athlete Two on them from the fixtures' days. A program the
   database already has is left alone on a later seed. Items the catalog already has are the
   catalog's (the fixture's "DB bench press" is seeded as the catalog's Dumbbell Bench Press).
-- Ten new `db:mutations` patches (402–411) show the proofs fail when `putOn` takes a wrong day, an
+- Fifteen new `db:mutations` patches (402–416) show the proofs fail when `putOn` takes a wrong day, an
   archived or another household's athlete or a legacy program, skips the same-day reopen, leaves a gap
-  in the order or writes six days, and when the seed reorders or rewrites its programs.
+  in the order or writes six days, and when the seed reorders or rewrites its programs, puts an archived athlete on, or uses an item of the wrong type. The seed skips an archived seed athlete, or a program whose item the household has under another type, with a warning rather than failing the preview seed.
 - Four `db:verify` assertions elsewhere, which assumed the seed writes no template program, now say
   what they meant: the catalog count counts catalog rows, the seeded-program count counts the
   authored block, the household-delete rehearsal deletes quantities before prescriptions, and the

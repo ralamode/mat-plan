@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
-index f4b71f31..b54c9115 100644
+index 5bbcadd0..bcba8d11 100644
 --- a/packages/db/src/writers/program/seed-fixtures.ts
 +++ b/packages/db/src/writers/program/seed-fixtures.ts
-@@ -152,7 +152,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
-     for (const [athlete, assigned] of Object.entries(FIXTURE_WORLD.assign)) {
-       const profilePublicId = SEED_FIXTURE_ATHLETES[athlete];
-       if (!profilePublicId) continue;
+@@ -201,7 +201,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
+         skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
+         continue;
+       }
 -      for (const stretch of assigned) {
 +      for (const stretch of [...assigned].reverse()) {
          const programPublicId = made.get(stretch.prog);
