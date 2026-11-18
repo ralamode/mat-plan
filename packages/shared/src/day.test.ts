@@ -138,7 +138,8 @@ describe('dayOpenFor: the writable window, and never for an archived athlete (C3
   });
 
   it('takes the day before today, in that order: yesterday is open and tomorrow is not', () => {
-    // Swapping the two days turns yesterday into tomorrow, so this fails if a caller's order does.
+    // Swapping the two days turns yesterday into tomorrow, so this fails if the function's
+    // parameters are swapped.
     expect(dayOpenFor({ archived: false }, '2026-09-29', TODAY)).toBe(true);
     expect(dayOpenFor({ archived: false }, TODAY, '2026-09-29')).toBe(false);
   });
