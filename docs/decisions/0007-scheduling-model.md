@@ -340,7 +340,7 @@ frees the `idx` on the program's last day, so Today orders by `(idx, id)`".
 - **Why:** a Put on compacts the OPEN rows' `idx` (Amendment 4's "another Put on may have taken it
   since"), and a row closing today keeps its number, so the two can tie. Under `(idx, id)` an unrelated
   Put on could then swap two programs on the day page. Ranked first, the order no longer depends on the
-  ids that compaction can reorder. Found in lane P's review of FAM-1 6c-i (#588).
+  way ids compare with the compacted `idx`. Found in lane P's review of FAM-1 6c-i (#588).
 - **Visible effect:** a program taken off today goes after every program that stays, in the list for
   today and for any day viewed today (the page orders by today's `currentPrograms`).
 - **Unchanged:** Amendment 4's compaction; the order of programs since left (`(idx, id)` among
