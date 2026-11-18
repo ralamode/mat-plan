@@ -38,6 +38,8 @@ describe('the builder’s links and the preview’s prefetch switch (FAM-1 7a-ii
     const dir = join(WEB_DIR, 'components/program-builder/');
     const screens = appSources().filter((f) => f.startsWith(dir));
     expect(screens.length).toBeGreaterThan(5);
+    // The matcher can see an import: the one file allowed to name next/link does.
+    expect(/from ['"]next\/link['"]/.test(code(join(dir, 'route-link.tsx')))).toBe(true);
     const sources = screens
       .filter((f) => f !== join(dir, 'route-link.tsx'))
       .filter((f) => /from ['"]next\/link['"]/.test(code(f)));

@@ -43,8 +43,6 @@ import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
 import { getWorkoutDraft } from './reads';
 import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
-
-const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
@@ -53,6 +51,8 @@ import {
   saveHouseholdWeek,
   saveHouseholdWorkout,
 } from './writes';
+
+const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';

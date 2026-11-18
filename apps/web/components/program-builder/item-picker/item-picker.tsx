@@ -278,7 +278,7 @@ export function ItemPicker({
             pending: false,
             error: refusal.field,
             tried: true,
-            unanswered: refusal.field ? undefined : { name: cleaned, type: trackingType },
+            unanswered: refusal.field ? now.unanswered : { name: cleaned, type: trackingType },
           },
       );
       // A name refusal is the name's; a failure to reach the server is not, so it is not marked
@@ -291,9 +291,15 @@ export function ItemPicker({
     }
     const option = known ?? made(result);
     if (!known) onCreated(option);
-    // A retry whose first try landed: this person made it, with the type they chose.
+    // A retry whose first try landed: this person made it, with the type they chose. The ANSWER must
+    // be that item too (its stored name and type are the item's own, contract C8): an item another
+    // device made meanwhile, under another type or spelling, is someone else's.
     const ownRetry =
-      form.unanswered?.name === cleaned && form.unanswered.type === trackingType && !known;
+      !known &&
+      form.unanswered?.name === cleaned &&
+      form.unanswered.type === trackingType &&
+      result.name === cleaned &&
+      result.trackingType === trackingType;
     setNotice(said(select(option), option, result.existed && !ownRetry, !!known));
     closeForm(at, option.publicId);
   }
