@@ -252,6 +252,22 @@ describe('the panel (P7; panel rows 11 to 13, 17)', () => {
     expect(document.activeElement).toBe(lats);
   });
 
+  it('nothing fits: the panel says so and the list says so, with Clear filters (P10)', () => {
+    render(<Harness />);
+    open();
+    openPanel();
+    // Lats and Chest with "No equipment" leaves Push-Ups; unticking Chest leaves Lats alone, none.
+    tick(muscle(MUSCLE_LABELS.lats));
+    tick(muscle(MUSCLE_LABELS.chest));
+    tick(radio(COPY.emptyEquipment));
+    tick(muscle(MUSCLE_LABELS.chest));
+    const none = screen.getByRole('button', { name: COPY.nothingFits });
+    expect(none).toHaveProperty('disabled', true);
+    back();
+    expect(screen.getByText(COPY.noneFit)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: COPY.fitHeading })).toBeNull();
+  });
+
   it('the radio hints are described, not crammed into the name', () => {
     render(<Harness />);
     open();
