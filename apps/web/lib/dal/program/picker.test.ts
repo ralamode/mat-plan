@@ -1,4 +1,9 @@
-import { TRACKING_TYPE, type CatalogOptionTaxonomy, type Unit } from '@mat-plan/shared';
+import {
+  catalogHowToOf,
+  TRACKING_TYPE,
+  type CatalogOptionTaxonomy,
+  type Unit,
+} from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +19,7 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
-import { getItemPickerData, pickerOptionOf } from './picker';
+import { getHowTo, getItemPickerData, pickerOptionOf } from './picker';
 
 /**
  * The item picker's data (FAM-1 7a-ii; CAT-3 P11-i): which rows are listed, and what a listed
@@ -206,4 +211,56 @@ it('the option types: a whole taxonomy or none, never half (compile-time pins)',
   expect(
     [own, withTaxonomy, withoutTaxonomy, halfFilled].every((f) => typeof f === 'function'),
   ).toBe(true);
+});
+
+describe('getHowTo: one option’s steps, resolved among the caller’s own options (FAM-1 7b)', () => {
+  const WITH_STEPS = CATALOG_MOVEMENTS.find((e) => e.instructions !== undefined)!;
+  const ID = '019826b4-0000-7000-8000-00000000e001';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getHouseholdScope).mockResolvedValue(SCOPE);
+  });
+
+  it('a library row with steps: its name, steps and label, nothing else (the strict schema)', async () => {
+    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: WITH_STEPS.slug })]);
+    const howTo = await getHowTo(ID);
+    expect(howTo).toEqual(catalogHowToOf(CATALOG_MOVEMENTS, WITH_STEPS.slug));
+    expect(Object.keys(howTo!).sort()).toEqual(['instructions', 'name', 'supervision']);
+  });
+
+  it('an id in capitals is the same option (ids compare lower-case)', async () => {
+    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: WITH_STEPS.slug })]);
+    expect(await getHowTo(ID.toUpperCase())).not.toBeNull();
+  });
+
+  it('🔴 a household item is null, even one whose stored slug is a library slug', async () => {
+    vi.mocked(movementOptions).mockResolvedValueOnce([
+      { ...own, publicId: ID, slug: WITH_STEPS.slug } as never,
+    ]);
+    expect(await getHowTo(ID)).toBeNull();
+  });
+
+  it('a built-in with no library entry (K22) is null', async () => {
+    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: 'no_such_entry' })]);
+    expect(await getHowTo(ID)).toBeNull();
+  });
+
+  it('🔴 an id that is not among the caller’s options is null: another household’s id looks unknown', async () => {
+    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: WITH_STEPS.slug })]);
+    expect(await getHowTo('019826b4-0000-7000-8000-0000000000ff')).toBeNull();
+  });
+
+  it('a non-uuid id is null before any query; no household is null', async () => {
+    expect(await getHowTo('not-a-uuid')).toBeNull();
+    expect(movementOptions).not.toHaveBeenCalled();
+    vi.mocked(getHouseholdScope).mockResolvedValueOnce(null);
+    expect(await getHowTo(ID)).toBeNull();
+  });
+
+  it('the option list still carries no instructions (rule 11, P16)', async () => {
+    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: WITH_STEPS.slug })]);
+    const data = await getItemPickerData();
+    expect(data!.options.every((o) => !('instructions' in o))).toBe(true);
+  });
 });
