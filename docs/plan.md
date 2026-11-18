@@ -2391,8 +2391,8 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   📐 **This row also hosts the fresh start's household creation** (the
   [CAT-3 spec](./specs/cat-3-movement-library.md)'s chunk RC, given to `PRIV-3`'s owner): a guarded
   `create-household` correction that takes no household id, binds the household's accounts and
-  prints counts only ([plan](./plans/priv-3-rc-create-household.md); a seven-lens panel).
-  **Implemented 2026-11-17, in review:** `create-household-2026-11-17`, the shared account checks
+  prints counts only ([plan](./plans/priv-3-rc-create-household.md); a seven-lens panel). 📐 **The fresh start's preparation, CAT-3 R0 and R1: [plan](./plans/priv-3-fresh-start-prep.md)** (2026-11-18).
+  **Merged 2026-11-18 (#546):** `create-household-2026-11-17`, the shared account checks
   (`corrections/accounts.ts`), the redacted catch `PRIV-3` 2b adopts (`corrections/redact.ts`),
   `SEED_PUBLIC_IDS`, and the claim's refusal of a seed household outside a local or preview database.
   Not applied anywhere; production waits for `OPS-2` PR 1 (the plan's D10).
