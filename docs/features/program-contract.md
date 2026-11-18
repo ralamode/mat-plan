@@ -659,7 +659,10 @@ under its own CAT-3 heading).
     for strength the lift pattern under a plain label, for the other kinds the body area of the
     primary muscle. Kinds in `BROWSE_KINDS`' order; families biggest first, then by label;
     movements by name; nothing empty is listed. A new muscle code does not compile without a
-    body area, and a new lift pattern not without a label.
+    body area, and a new lift pattern not without a label. **A kind in `BROWSE_FLAT_KINDS`
+    (Conditioning) has no family level** (spec K27): `browseTree` gives it one family whose
+    `family` and `label` are `null`, its movements by name, and a screen lists them straight
+    under the kind. `BROWSE_OPEN_AT_MOST` applies with a filter on or not (K26).
 
 ## Changing it
 

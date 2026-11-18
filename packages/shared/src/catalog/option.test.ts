@@ -7,6 +7,7 @@ import {
   BODY_AREAS,
   BROWSE_KINDS,
   BROWSE_OPEN_AT_MOST,
+  BROWSE_FLAT_KINDS,
   browseTree,
   byFoldedName,
   MOVEMENT_FAMILIES,
@@ -163,7 +164,7 @@ describe('the browse families (P12)', () => {
       lunge: 'Lunges',
       jump: 'Jumps',
       carry: 'Carries and sleds',
-      isolation: 'Arms, calves and single muscles',
+      isolation: 'Curls, raises and single muscles',
       neck_shoulders: 'Neck and shoulders',
       chest_arms: 'Chest and arms',
       back: 'Back',
@@ -251,6 +252,30 @@ describe('catalogHowToSchema: what the "How to" read answers, and nothing else (
   });
 });
 
+describe('a kind with no family level (K27): Conditioning lists its movements by name', () => {
+  it('🔴 gives Conditioning one family with no heading, every movement in it by name', () => {
+    expect(BROWSE_FLAT_KINDS).toEqual(['conditioning']);
+    for (const library of [CATALOG_FIXTURE_OPTIONS, optionsOf(CATALOG_MOVEMENTS)]) {
+      const kind = browseTree(library).find((k) => k.kind === 'conditioning')!;
+      const conditioning = library.filter((option) => option.modality === 'conditioning');
+      expect(conditioning.length).toBeGreaterThan(0);
+      expect(kind.families).toHaveLength(1);
+      expect(kind.families[0]).toMatchObject({ family: null, label: null });
+      expect(kind.families[0]!.options).toEqual([...conditioning].sort(byFoldedName));
+      expect(kind.count).toBe(conditioning.length);
+    }
+  });
+
+  it('leaves every other kind grouped by family', () => {
+    for (const kind of browseTree(optionsOf(CATALOG_MOVEMENTS))) {
+      if (kind.kind === 'conditioning') continue;
+      expect(kind.families.every((family) => family.family !== null && family.label !== null)).toBe(
+        true,
+      );
+    }
+  });
+});
+
 describe('byFoldedName: the order a list of movements is read in (K24)', () => {
   const named = (...names: string[]) => names.map((name) => ({ name }));
   const sorted = (...names: string[]) =>
@@ -306,10 +331,18 @@ describe('browseTree (P12)', () => {
     for (const kind of tree) {
       expect(kind.count).toBe(kind.families.reduce((n, family) => n + family.options.length, 0));
       for (const family of kind.families) {
-        expect(family.label).toBe(MOVEMENT_FAMILY_LABELS[family.family]);
+        // A kind with no family level has one family, with no name and no label (K27).
+        if (family.family === null) {
+          expect(BROWSE_FLAT_KINDS).toContain(kind.kind);
+          expect(family.label).toBeNull();
+          expect(kind.families).toHaveLength(1);
+        } else {
+          expect(BROWSE_FLAT_KINDS).not.toContain(kind.kind);
+          expect(family.label).toBe(MOVEMENT_FAMILY_LABELS[family.family]);
+        }
         for (const option of family.options) {
           expect(option.modality).toBe(kind.kind);
-          expect(movementFamilyOf(option)).toBe(family.family);
+          if (family.family !== null) expect(movementFamilyOf(option)).toBe(family.family);
         }
       }
     }
@@ -320,7 +353,10 @@ describe('browseTree (P12)', () => {
     expect(kinds).toEqual(BROWSE_KINDS.filter((kind) => kinds.includes(kind)));
     expect(kinds.length).toBeGreaterThan(1);
     for (const kind of tree) {
-      const sizes = kind.families.map((family) => [-family.options.length, family.label] as const);
+      // A kind with no family level has one family and no label: '' sorts it like any single one.
+      const sizes = kind.families.map(
+        (family) => [-family.options.length, family.label ?? ''] as const,
+      );
       expect(sizes).toEqual(
         [...sizes].sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)),
       );
