@@ -22,7 +22,7 @@
  *   the patched bytes gets the snapshot written back and re-hashed; ANY other content (someone edited
  *   it meanwhile) is never touched: the run fails and the journal stays, with the recovery command.
  *   Never from `HEAD`, so uncommitted work in a patched file survives.
- * - **Signals:** the gate is an async, detached child, so SIGINT/SIGTERM/SIGHUP are handled while it
+ * - **Signals:** the gate is an async, detached child, so SIGINT/SIGTERM/SIGHUP/SIGQUIT are handled while it
  *   runs: restore first, then end the gate's whole process group, then die by the same signal.
  * - **SIGKILL** cannot be trapped: the next run (or `--recover`) restores from the journal, by the
  *   same three-state rule, and ends the orphaned gate.
@@ -309,7 +309,8 @@ function stop(reason) {
     process.kill(process.pid, reason); // die by the same signal, so the shell sees 128+n
   }
 }
-for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => stop(sig));
+// SIGQUIT too: Node does not handle it, so untrapped it ends the run like SIGKILL, patch applied.
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT']) process.on(sig, () => stop(sig));
 for (const event of ['uncaughtException', 'unhandledRejection']) {
   process.on(event, (error) => {
     stop();

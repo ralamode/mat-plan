@@ -158,7 +158,7 @@ check "a patch that creates a file: refused, exit 1, nothing created" \
   '[ "$(code)" = 1 ] && out_has "03-creates-a-file.patch: creates, deletes" && [ ! -e "$R/packages/db/src/c.ts" ]'
 
 # ── Signals: restore, end the gate's whole group, die by the signal ─────────────────────────────
-for pair in SIGTERM:143 SIGINT:130 SIGHUP:129; do
+for pair in SIGTERM:143 SIGINT:130 SIGHUP:129 SIGQUIT:131; do
   sig="${pair%%:*}"; want="${pair##*:}"
   setup; start_hanging || continue
   kill -s "${sig#SIG}" "$RUNNER"; wait "$RUNNER" 2>/dev/null; got=$?

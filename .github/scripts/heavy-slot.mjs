@@ -186,14 +186,19 @@ function cli(argv) {
       : process.env,
   });
   if (slot.payload && child.pid) {
-    slot.payload.holders.push(holder(child.pid, { group: true }));
-    rewrite(slot.path, slot.payload);
+    try {
+      slot.payload.holders.push(holder(child.pid, { group: true }));
+      rewrite(slot.path, slot.payload);
+    } catch {
+      /* ps could not read the child: the wrapper stays the only holder, and the run is not orphaned */
+    }
   }
   const forward = (signal) => {
     try {
       // A detached child leads its own group; a plain pass-through child is not a group leader.
       if (slot.payload) process.kill(-child.pid, signal);
-      else child.kill(signal);
+      // A pass-through child shares the terminal's group and already got Ctrl-C / Ctrl-\ from it.
+      else if (signal !== 'SIGINT' && signal !== 'SIGQUIT') child.kill(signal);
     } catch {
       /* the child has already gone */
     }

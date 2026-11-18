@@ -148,7 +148,6 @@ export function acquire(path, payload) {
   }
 }
 
-/** Remove the lock at `path` if it is still dead, holding the steal guard; else wait a moment. */
 const unlinkQuiet = (p) => {
   try {
     unlinkSync(p);
@@ -157,6 +156,7 @@ const unlinkQuiet = (p) => {
   }
 };
 
+/** Remove the lock at `path` if it is still dead, holding the steal guard; else wait a moment. */
 function clearIfStale(path, payload) {
   const guard = `${path}.steal`;
   const mine = { pid: process.pid, holders: payload.holders };
