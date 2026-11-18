@@ -5,6 +5,9 @@ import { todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
 import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
 
+import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
+
 import { bodyweightSection, isoDaysAgo, SEED_PROFILE_2_ROUTE, SEED_PROFILE_ROUTE } from './steps';
 
 /**
@@ -186,4 +189,127 @@ test('more than the look-ahead ahead renders today', async ({ page }) => {
   // The last day it does show is still Coming up.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${addDays(today(), LOOK_AHEAD_DAYS)}`);
   await expect(page.getByText(COMING_UP)).toBeVisible();
+});
+
+// ── Change (FAM-1 12d) ─────────────────────────────────────────────────────────────────────────
+//
+// On Athlete Two, whose program rows no other spec writes. The workout is found by its superset
+// list ("Superset A"), not by name: the page shows the movement library's names ("Inverted Rows"), not the
+// fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
+// Saturday, so today or yesterday always has one.
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The superset itself: its own list, named "Superset A" (`workout-card.tsx`), holding its two items. */
+const supersetWorkout = (page: Page) =>
+  page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
+
+/** Today, or yesterday when today has no superset workout. */
+async function openSupersetDay(page: Page): Promise<void> {
+  await page.goto(SEED_PROFILE_2_ROUTE);
+  await expect(page.getByText(/^Today ·/)).toBeVisible();
+  if ((await supersetWorkout(page).count()) === 0) {
+    await page.goto(`${SEED_PROFILE_2_ROUTE}?d=${isoDaysAgo(1)}`);
+    await expect(page.getByText(/^Yesterday ·/)).toBeVisible();
+  }
+  await expect(supersetWorkout(page)).toBeVisible();
+}
+
+/** The superset's two items, by their headings ("A1 Push press" → "Push press"). */
+async function supersetItems(page: Page): Promise<[string, string]> {
+  const headings = await supersetWorkout(page).getByRole('heading', { level: 4 }).allTextContents();
+  const names = headings.map((h) => h.replace(/^[A-Z]+\d+\s*/, '').trim());
+  return [names[0]!, names[1]!];
+}
+
+/** Set 1 of an item: its ✓, and its number field (the load, or reps). */
+const setOne = (item: string) => DAY_COPY.setLabel(item, 1);
+const setTick = (page: Page, item: string) =>
+  page.getByRole('button', { name: DAY_COPY.logLabel(setOne(item)), exact: true });
+const loadField = (page: Page, item: string) =>
+  page.getByRole('textbox', { name: new RegExp(`^${escape(setOne(item))}, in (?!reps$)`) });
+const repsField = (page: Page, item: string) =>
+  page.getByRole('textbox', { name: `${setOne(item)}, in reps`, exact: true });
+
+/** Focus leaves the row: a Change is sent when focus leaves the row from one of its fields. */
+const leaveRow = (page: Page) => page.getByRole('heading', { level: 1 }).click();
+
+/** Set 1 logged, whatever a retry left. */
+async function ensureLogged(page: Page, item: string): Promise<void> {
+  const button = setTick(page, item);
+  if ((await button.getAttribute('aria-pressed')) !== 'true') {
+    await button.click();
+    await settled(button, true);
+  }
+}
+
+test.describe('Change on real data', () => {
+  test.describe.configure({ mode: 'serial' });
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  test('a weight × reps set and its superset partner change, Undo puts it back, and a reload keeps it', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await openSupersetDay(page);
+    const [loaded, partner] = await supersetItems(page);
+
+    // The load: change it, Undo, change it again, then reload.
+    await ensureLogged(page, loaded);
+    const was = await loadField(page, loaded).inputValue();
+    const next = String(Number(was) + 5);
+    await loadField(page, loaded).fill(next);
+    // Typed over: "Not saved. Was …" until focus leaves the row.
+    await expect(supersetWorkout(page).getByText(/^Not saved\. Was /)).toBeVisible();
+    await expectNoAxeViolations(page, 'Change, typed over, 360px');
+    await expectTapTargets(page, 'Change, typed over, 360px');
+    await expectNoHorizontalOverflow(page, 'Change, typed over');
+
+    await leaveRow(page);
+    await expect(supersetWorkout(page).getByText(/^Changed .* → /)).toBeVisible();
+    await expectNoAxeViolations(page, 'Change, changed with Undo, 360px');
+    await expectTapTargets(page, 'Change, changed with Undo, 360px');
+    await expectNoHorizontalOverflow(page, 'Change, changed with Undo');
+
+    // Undo's baseline lasts one page visit, so it is checked before any reload.
+    await supersetWorkout(page).getByRole('button', { name: DAY_COPY.change.undo }).first().click();
+    await expect(loadField(page, loaded)).toHaveValue(was);
+    await expect(supersetWorkout(page).getByText(/^Changed back to /)).toBeVisible();
+
+    await loadField(page, loaded).fill(next);
+    await leaveRow(page);
+    await expect(supersetWorkout(page).getByText(/^Changed .* → /)).toBeVisible();
+    await page.reload();
+    await expect(loadField(page, loaded), `${loaded}: the Change was saved`).toHaveValue(next);
+
+    // The superset partner's reps, the same way.
+    await ensureLogged(page, partner);
+    const reps = await repsField(page, partner).inputValue();
+    const moreReps = String(Number(reps) + 1);
+    await repsField(page, partner).fill(moreReps);
+    await leaveRow(page);
+    await expect(supersetWorkout(page).getByText(/^Changed .* → /)).toBeVisible();
+    await page.reload();
+    await expect(repsField(page, partner), `${partner}: the Change was saved`).toHaveValue(
+      moreReps,
+    );
+  });
+
+  test('a blank keeps the old number and says so (plan §8)', async ({ page }) => {
+    await openSupersetDay(page);
+    const [, partner] = await supersetItems(page);
+    await ensureLogged(page, partner);
+    const reps = await repsField(page, partner).inputValue();
+    await repsField(page, partner).fill('');
+    await leaveRow(page);
+    await expect(
+      supersetWorkout(page).getByText(/^Kept .*: enter a number to change it\.$/),
+    ).toBeVisible();
+    await expect(repsField(page, partner)).toHaveValue(reps);
+    await expectNoAxeViolations(page, 'Change, kept, 360px');
+    await expectTapTargets(page, 'Change, kept, 360px');
+    await expectNoHorizontalOverflow(page, 'Change, kept');
+    // What was stored, not only what the field shows: nothing was sent.
+    await page.reload();
+    await expect(repsField(page, partner), `${partner}: a blank changed nothing`).toHaveValue(reps);
+  });
 });

@@ -2,7 +2,7 @@ import { E2E_SESSION_BYPASS_USER, ROW_REFUSAL, type DayActions } from '@mat-plan
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The day page's row writes (FAM-1 step 12b): the shared boundary matrices, then what they cannot
+ * The day page's row writes (FAM-1 steps 12b and 12d, Change): the shared boundary matrices, then what they cannot
  * express: what the contract's schema refuses before anything is read, where `today` comes from,
  * what a success answers and revalidates, and that a refusal passes through with nothing
  * revalidated.
@@ -38,18 +38,19 @@ vi.mock('@/lib/dal/day/day', () => ({
   logDayRow: vi.fn(async () => LOGGED),
   untickDayRow: vi.fn(async () => ({ ...LOGGED, hiddenAt: HIDDEN_AT })),
   retickDayRow: vi.fn(async () => LOGGED),
+  amendDayRow: vi.fn(async () => LOGGED),
 }));
 
 import { revalidatePath } from 'next/cache';
 
 import { getActiveLocalDay } from '@/lib/active-timezone';
 import { athletePath } from '@/lib/constants';
-import { logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
+import { amendDayRow, logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 import { describeActionMatrices } from '@/test/action-matrix';
 
-import { logRowAction, retickRowAction, untickRowAction } from './row-actions';
+import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
 import { ACTION_REGISTRY } from './row-actions.registry';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
@@ -77,15 +78,22 @@ const untickInput = () => ({
   entryPublicId: ENTRY_ID,
 });
 const retickInput = () => ({ ...untickInput(), hiddenAt: HIDDEN_AT });
+// A Change names the entry, not the day: the writer reads the day from the entry (11c-i).
+const amendInput = () => ({
+  profilePublicId: PROFILE_ID,
+  entryPublicId: ENTRY_ID,
+  values: { reps: 6, quantities: [] },
+});
 
 beforeEach(() => vi.clearAllMocks());
 
-/** The three actions are the contract's members: each accepts the member's input and answers it. */
+/** The four actions are the contract's members: each accepts the member's input and answers it. */
 ({
   logRow: logRowAction,
   untickRow: untickRowAction,
   retickRow: retickRowAction,
-}) satisfies Pick<DayActions, 'logRow' | 'untickRow' | 'retickRow'>;
+  amendRow: amendRowAction,
+}) satisfies Pick<DayActions, 'logRow' | 'untickRow' | 'retickRow' | 'amendRow'>;
 
 /**
  * 🔴 **The boundary matrices** (AGENTS.md → Backend / API PR rules): unauthenticated, rate-limited
@@ -101,15 +109,17 @@ describeActionMatrices({
     logRowAction: { fn: logRowAction, writers: [logDayRow], limit: ROW_WRITE_RATE_LIMIT },
     untickRowAction: { fn: untickRowAction, writers: [untickDayRow], limit: ROW_WRITE_RATE_LIMIT },
     retickRowAction: { fn: retickRowAction, writers: [retickDayRow], limit: ROW_WRITE_RATE_LIMIT },
+    amendRowAction: { fn: amendRowAction, writers: [amendDayRow], limit: ROW_WRITE_RATE_LIMIT },
   },
   validBody: {
     logRowAction: writeInput,
     untickRowAction: untickInput,
     retickRowAction: retickInput,
+    amendRowAction: amendInput,
   },
 });
 
-const DAL = [logDayRow, untickDayRow, retickDayRow];
+const DAL = [logDayRow, untickDayRow, retickDayRow, amendDayRow];
 
 describe('the row actions (FAM-1 12b)', () => {
   it.each([
@@ -128,6 +138,15 @@ describe('the row actions (FAM-1 12b)', () => {
       () => untickRowAction({ ...untickInput(), entryPublicId: 'x' }),
     ],
     ['a re-tick with no token', () => retickRowAction(untickInput())],
+    [
+      'a Change of an entry id that is not a uuid',
+      () => amendRowAction({ ...amendInput(), entryPublicId: 'x' }),
+    ],
+    [
+      'a Change with a negative number',
+      () => amendRowAction({ ...amendInput(), values: { reps: -1, quantities: [] } }),
+    ],
+    ['a Change with no values', () => amendRowAction({ ...amendInput(), values: undefined })],
     ['not an object at all', () => logRowAction('a string')],
   ])('%s is bad_value, and nothing is read or written', async (_label, call) => {
     expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
@@ -140,10 +159,12 @@ describe('the row actions (FAM-1 12b)', () => {
     await logRowAction(writeInput());
     await untickRowAction(untickInput());
     await retickRowAction(retickInput());
-    expect(getActiveLocalDay).toHaveBeenCalledTimes(3);
+    await amendRowAction(amendInput());
+    expect(getActiveLocalDay).toHaveBeenCalledTimes(4);
     expect(vi.mocked(logDayRow).mock.calls[0]).toEqual([writeInput(), TODAY]);
     expect(vi.mocked(untickDayRow).mock.calls[0]).toEqual([untickInput(), TODAY]);
     expect(vi.mocked(retickDayRow).mock.calls[0]).toEqual([retickInput(), TODAY]);
+    expect(vi.mocked(amendDayRow).mock.calls[0]).toEqual([amendInput(), TODAY]);
   });
 
   it('a success answers field by field and revalidates the athlete’s day page', async () => {
@@ -151,7 +172,9 @@ describe('the row actions (FAM-1 12b)', () => {
     expect(await logRowAction(writeInput())).toEqual(LOGGED);
     expect(await untickRowAction(untickInput())).toEqual({ ...LOGGED, hiddenAt: HIDDEN_AT });
     expect(await retickRowAction(retickInput())).toEqual(LOGGED);
+    expect(await amendRowAction(amendInput())).toEqual(LOGGED);
     expect(vi.mocked(revalidatePath).mock.calls).toEqual([
+      [athletePath(PROFILE_ID)],
       [athletePath(PROFILE_ID)],
       [athletePath(PROFILE_ID)],
       [athletePath(PROFILE_ID)],
@@ -170,9 +193,22 @@ describe('the row actions (FAM-1 12b)', () => {
     vi.mocked(logDayRow).mockResolvedValueOnce(refused);
     vi.mocked(untickDayRow).mockResolvedValueOnce(refused);
     vi.mocked(retickDayRow).mockResolvedValueOnce(refused);
+    vi.mocked(amendDayRow).mockResolvedValueOnce(refused);
     expect(await logRowAction(writeInput())).toEqual(refused);
     expect(await untickRowAction(untickInput())).toEqual(refused);
     expect(await retickRowAction(retickInput())).toEqual(refused);
+    expect(await amendRowAction(amendInput())).toEqual(refused);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('a Change the writer refuses as bad_value (a number its type has no field for) is passed through, unrevalidated', async () => {
+    // The schema cannot judge which fields a type has (`rowAmendSchema`'s docblock): the writer does,
+    // and its answer reaches the screen unchanged.
+    vi.mocked(amendDayRow).mockResolvedValueOnce({ ok: false, reason: ROW_REFUSAL.bad_value });
+    expect(await amendRowAction(amendInput())).toEqual({
+      ok: false,
+      reason: ROW_REFUSAL.bad_value,
+    });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

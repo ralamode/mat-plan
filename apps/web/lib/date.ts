@@ -90,11 +90,26 @@ export function minutesToClock(minutes: number): string {
   );
 }
 
-/** True iff `tz` is a resolvable IANA zone. Dependency-free: the Intl constructor throws
- *  `RangeError` on an unknown zone (more portable than `Intl.supportedValuesOf`). Used to
- *  validate the client-supplied `tz` cookie before it's ever fed to date math. */
+/**
+ * True iff `tz` is a resolvable IANA zone NAME. Dependency-free: the Intl constructor throws
+ * `RangeError` on an unknown zone (more portable than `Intl.supportedValuesOf`). Used to validate
+ * the client-supplied `tz` cookie before it's ever fed to date math.
+ *
+ * ⚠️ **A name, not a signed offset.** Intl also accepts a bare offset (`+05:00`, `-0500`).
+ * Postgres reads a bare offset with the sign REVERSED (POSIX: `+05` is five hours WEST), so the same
+ * cookie would name two different days on the two sides the moment a query does zone math with it.
+ * So this passes an `Area/Location` name (which includes `Etc/GMT+5`, whose sign both sides read the
+ * same way), exactly `UTC`, or a ZERO offset: a device set to GMT reports `+00:00`
+ * (`resolvedOptions().timeZone`), and a zero offset has no sign to reverse. Abbreviations without a
+ * `/` (`EST`, `GMT`) are refused too, not because their sign is reversed but because a real device
+ * reports the canonical name instead. What a refusal means is the caller's: `active-timezone.ts`
+ * falls back to the default zone, `screenshot-ephemeral.ts` exits.
+ */
+const ZERO_OFFSET = /^[+-]00(?::?00)?$/;
+
 export function isIanaTimeZone(tz: string | null | undefined): tz is string {
   if (!tz) return false;
+  if (tz !== 'UTC' && !ZERO_OFFSET.test(tz) && !tz.includes('/')) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
     return true;
