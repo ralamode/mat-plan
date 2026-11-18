@@ -71,6 +71,19 @@ describe('isIanaTimeZone', () => {
   it.each(['Not/AZone', 'foo', '', null, undefined])('rejects a bad value (%s)', (tz) =>
     expect(isIanaTimeZone(tz)).toBe(false),
   );
+
+  // Postgres reads a bare offset with the sign reversed, so Intl's acceptance is not enough.
+  it.each(['+05:00', '-0500', '+05', 'GMT', 'EST'])(
+    'rejects an offset or abbreviation Intl accepts (%s)',
+    (tz) => {
+      expect(() => new Intl.DateTimeFormat('en-US', { timeZone: tz })).not.toThrow();
+      expect(isIanaTimeZone(tz)).toBe(false);
+    },
+  );
+
+  it.each(['Etc/UTC', 'Etc/GMT+5'])('accepts an Etc/ name (%s)', (tz) =>
+    expect(isIanaTimeZone(tz)).toBe(true),
+  );
 });
 
 describe('localWeekStartIso (ISO-week Monday)', () => {

@@ -90,11 +90,20 @@ export function minutesToClock(minutes: number): string {
   );
 }
 
-/** True iff `tz` is a resolvable IANA zone. Dependency-free: the Intl constructor throws
- *  `RangeError` on an unknown zone (more portable than `Intl.supportedValuesOf`). Used to
- *  validate the client-supplied `tz` cookie before it's ever fed to date math. */
+/**
+ * True iff `tz` is a resolvable IANA zone NAME. Dependency-free: the Intl constructor throws
+ * `RangeError` on an unknown zone (more portable than `Intl.supportedValuesOf`). Used to validate
+ * the client-supplied `tz` cookie before it's ever fed to date math.
+ *
+ * ⚠️ **A name, not an offset.** Intl also accepts a bare offset (`+05:00`, `-0500`) and legacy
+ * abbreviations (`EST`, `GMT`). Postgres reads a bare offset with the sign REVERSED (POSIX: `+05`
+ * is five hours WEST), so the same cookie would name two different days on the two sides the moment
+ * a query does zone math with it. So only an `Area/Location` name (which includes `Etc/GMT+5`, whose
+ * sign both sides read the same way) or exactly `UTC` passes; anything else falls back to the default.
+ */
 export function isIanaTimeZone(tz: string | null | undefined): tz is string {
   if (!tz) return false;
+  if (tz !== 'UTC' && !tz.includes('/')) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
     return true;
