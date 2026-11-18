@@ -1,5 +1,7 @@
-- **2026-11-18** — **FAM-1 12a: two programs tied on order keep their places after a put-on.** A put-on
-  compacts the order of an athlete's open programs (`writers/program/assign.ts`, 6c-i) and leaves a
-  program ending today at the number it had, so the two can share one. The day page broke that tie by
-  row id, so an unrelated put-on could swap them. `currentPrograms` now puts the program that stays
-  first, then breaks any tie left by id. Found in lane P's review of #588. Mutation 367.
+- **2026-11-18** — **FAM-1 12a: a program ending today is listed after the ones that stay** (ADR 0007
+  Amendment 5, the maintainer, 2026-11-18). A put-on compacts the order of an athlete's open programs
+  (`writers/program/assign.ts`, 6c-i). A program ending today keeps its number, so the two can share
+  one. The day page ordered `(idx, id)`, so an unrelated put-on could swap two programs. `currentPrograms`
+  now orders `(rank, idx, id)`: every program that stays first, in its own order, then the ones ending
+  today. It also returns each program's placing row's days, for lane P's program view. Found in lane P's
+  review of #588. Mutation 367.
