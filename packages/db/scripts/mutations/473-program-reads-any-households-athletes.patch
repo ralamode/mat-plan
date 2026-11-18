@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program/athletes.ts b/packages/db/src/queries/program/athletes.ts
+index 56ea86f1..3c0b3188 100644
+--- a/packages/db/src/queries/program/athletes.ts
++++ b/packages/db/src/queries/program/athletes.ts
+@@ -45,7 +45,6 @@ export async function athletesOnPrograms(
+       and(
+         isNull(schema.profiles.deletedAt),
+         isNull(schema.profiles.archivedAt),
+-        inHousehold(scope),
+       ),
+     )
+     .orderBy(asc(schema.profiles.id));

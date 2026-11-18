@@ -40,7 +40,7 @@ import {
 import { BodyweightSection } from './bodyweight-section';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
-import { logRowAction, retickRowAction, untickRowAction } from './row-actions';
+import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
 
@@ -129,12 +129,13 @@ export default async function TodayPage({
   // `day-notices.test.ts`).
   const view = dayPageView(plan, { future, showClosedNotice, archived: profile.archived });
 
-  // The day screen's writes (FAM-1 12b's Server Actions). Change (`amendRow`) arrives at 12d and
-  // Program order (`reorderPrograms`) at 15c: an action left out hides its control (plan §6).
+  // The day screen's writes (FAM-1 12b's Server Actions, and 12d's Change). Program order
+  // (`reorderPrograms`) arrives at 15c: an action left out hides its control (plan §6).
   const dayActions = {
     logRow: logRowAction,
     untickRow: untickRowAction,
     retickRow: retickRowAction,
+    amendRow: amendRowAction,
   };
 
   return (
