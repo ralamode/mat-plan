@@ -65,6 +65,16 @@ export type HouseholdRole = (typeof HOUSEHOLD_ROLES)[number];
 export const householdRoleSchema = z.enum(HOUSEHOLD_ROLES);
 export const HOUSEHOLD_ROLE = keyBySelf(HOUSEHOLD_ROLES);
 
+/**
+ * The name every household-creating writer gives a household (`PRIV-3` RC, D8).
+ *
+ * `households.name` is `NOT NULL` and nothing in the app reads it, so a fixed, neutral value is the
+ * whole answer: no name is asked for, so no personal data is typed in. Here beside `HOUSEHOLD_ROLE`
+ * rather than in `seed-ids.ts` because it names REAL households, not seed rows.
+ * ⚠️ `seed.ts` still types the literal; `OPS-2` PR 1 rewrites that insert and adopts this then.
+ */
+export const HOUSEHOLD_DEFAULT_NAME = 'Home';
+
 /** v0 entry discriminator — the thin-slice stand-in for the activity_type catalog (V1-1). */
 export const ENTRY_KINDS = ['bodyweight', 'strength'] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];

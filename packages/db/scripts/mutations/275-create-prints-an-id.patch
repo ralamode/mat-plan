@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index d60703f7..358c9b35 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -912,7 +912,7 @@ const createHousehold: Correction = {
+           );
+         }
+         const line = (verb: string) =>
+-          `${verb} 1 household with ${n} account(s), each as ${HOUSEHOLD_ROLE.owner}`;
++          `${verb} 1 household with ${n} account(s), each as ${HOUSEHOLD_ROLE.owner} (${ids[0]})`;
+         if (!apply) return [line('would create')];
+ 
+         const [household] = await tx
