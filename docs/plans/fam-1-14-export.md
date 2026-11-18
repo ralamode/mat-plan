@@ -97,10 +97,12 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   - **NEW `foldStrengthMonth(rows): FoldedStrengthRow[]`, moved here from `export.ts`.** It is pure,
     so `db:verify` can run the whole chain. The export's own `FoldedStrengthRow` type moves with it.
     - **The key** is `e:<entryId>` for a row outside a program. For a program row it is
-      `s:<entrySessionId>:` plus `programItemKey(row)`, keyed on the entry's own
-      `session_id`, never on the joined `sessions.id`, which the ON makes NULL for a foreign session.
-      Each session is one date, so a key never spans two days. The workout name and `session_type`
-      still come only through the owned join. "Program row" is `prescriptionSet !== null`; the
+      `s:<date>:<entrySessionId>:` plus `programItemKey(row)`, keyed on the entry's own
+      `activity_date` and `session_id`, never on the joined `sessions.id`, which the ON makes NULL for
+      a foreign session. The date is in the key because nothing in the schema ties an entry's date
+      to its session's, or forces a purged program row to keep a session; with it, a key never spans
+      two days even on hand-corrected data. The workout name and `session_type` still come only
+      through the owned join. "Program row" is `prescriptionSet !== null`; the
       select carries it as `isProgramRow: sql<boolean>` built from `programRow()`, so the rule is
       written once.
     - **Sets** go in `prescription_set` order, using `byFirstLogged(true)` over the entry-level
@@ -179,8 +181,8 @@ Size estimate: about 300 lines of code and tests, plus the docs. That is under t
   `fixture()`). One proof, `14a: the strength log carries the program`:
   - it ticks every `f.p.*` type through `logRow`, plus a second set of the reps item;
   - it renames the workout through `saveWorkout`;
-  - it plants two sets of one prescription in another athlete's sessions, on different days (the (i)
-    detector world), and a hidden set (`plantHiddenSet`). Each plant is undone after the bytes are
+  - it plants two sets of one prescription in **one** session of another athlete, with different
+    entry dates (the (i) detector world), and a hidden set (`plantHiddenSet`). Each plant is undone after the bytes are
     asserted and before the sweep (the `day.ts:1932` precedent);
   - it purges two prescriptions of different movements in place;
   - it reads `strengthMonthRows`, folds it, builds the file, and asserts the file's bytes. The
@@ -371,12 +373,13 @@ exported row does not depend on a household-owned `workouts` row.
 > Correctness, privacy, and architecture with reuse, on **Opus 5.5** at medium effort. All three
 > confirm round 1's blockers closed.
 
-| #   | Lens                                 | Critique (short)                                                                                                             | Verdict      | Resolution                                                                                                 |
-| --- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
-| R1  | architecture (BLOCKING); correctness | The new ON makes `sessions.id` NULL for a foreign session, so `s:null:p:…` merges rows across dates; its rows also sort last | **accepted** | The key and the ORDER BY use `entries.session_id`; the proof plants two foreign sets on different days     |
-| R2  | correctness                          | Two purged prescriptions of the same movement still fold into one row                                                        | **accepted** | Stated as a known limit, as R4 has it; a test pins the bytes                                               |
-| R3  | correctness                          | "One legacy test changes" is not accurate                                                                                    | **accepted** | `:347-348` and three comments listed; Q3 reworded                                                          |
-| R4  | architecture, correctness            | `byFirstLogged`'s row shape does not fit the export's rows                                                                   | **accepted** | Typed structurally; the fold sorts entry-level records                                                     |
-| R5  | architecture, privacy                | 14b: one bodyweight conjunct for both reads; assert no check-ins row carries `bodyweight`                                    | **accepted** | Both are in § 14b                                                                                          |
-| R6  | privacy                              | Inventory `:455-458` missing; the notice must not claim program logging before 12c; 14b's notice and inventory lines         | **accepted** | All three are in § Docs and § 14b                                                                          |
-| R7  | NITs                                 | Test file name; `architecture.md`'s export chart; the plant undone before the sweep; `prescribed` in the proof               | **accepted** | `export-month.test.ts`; `architecture.md` in § Docs; the `day.ts:1932` precedent; filled from the snapshot |
+| #   | Lens                                 | Critique (short)                                                                                                                        | Verdict      | Resolution                                                                                                 |
+| --- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
+| R1  | architecture (BLOCKING); correctness | The new ON makes `sessions.id` NULL for a foreign session, so `s:null:p:…` merges rows across dates; its rows also sort last            | **accepted** | The key and the ORDER BY use `entries.session_id`; the proof plants two foreign sets on different days     |
+| R2  | correctness                          | Two purged prescriptions of the same movement still fold into one row                                                                   | **accepted** | Stated as a known limit, as R4 has it; a test pins the bytes                                               |
+| R3  | correctness                          | "One legacy test changes" is not accurate                                                                                               | **accepted** | `:347-348` and three comments listed; Q3 reworded                                                          |
+| R4  | architecture, correctness            | `byFirstLogged`'s row shape does not fit the export's rows                                                                              | **accepted** | Typed structurally; the fold sorts entry-level records                                                     |
+| R5  | architecture, privacy                | 14b: one bodyweight conjunct for both reads; assert no check-ins row carries `bodyweight`                                               | **accepted** | Both are in § 14b                                                                                          |
+| R6  | privacy                              | Inventory `:455-458` missing; the notice must not claim program logging before 12c; 14b's notice and inventory lines                    | **accepted** | All three are in § Docs and § 14b                                                                          |
+| R8  | architecture (P2)                    | A key on `session_id` alone still merges dates on data the schema allows (a purged row with no session; an entry dated off its session) | **accepted** | The date joins the program key; the proof plants both foreign sets on one session with two dates           |
+| R7  | NITs                                 | Test file name; `architecture.md`'s export chart; the plant undone before the sweep; `prescribed` in the proof                          | **accepted** | `export-month.test.ts`; `architecture.md` in § Docs; the `day.ts:1932` precedent; filled from the snapshot |
