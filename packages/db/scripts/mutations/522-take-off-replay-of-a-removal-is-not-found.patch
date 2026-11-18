@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
-index ea4474a9..1546e5ac 100644
+index 6028767d..339d1c47 100644
 --- a/packages/db/src/writers/program/take-off.ts
 +++ b/packages/db/src/writers/program/take-off.ts
-@@ -84,7 +84,7 @@ export async function takeOff(
+@@ -87,7 +87,7 @@ export async function takeOff(
          .from(a)
          .where(and(ofThisProgram, sql`${a.deletedAt} is not null`, gte(a.activeFrom, today)))
          .limit(1);
 -      return removed ? { ok: true as const, lastDay: null } : refuse(PROGRAM_REFUSAL.not_found);
 +      return removed && false ? { ok: true as const, lastDay: null } : refuse(PROGRAM_REFUSAL.not_found);
      }
-     if (row.activeTo !== null) return { ok: true as const, lastDay: today };
- 
+     // A Take off ended it today already: the same answer again. (A later last day is no writer's;
+     // it is closed to today below like an open row.)
