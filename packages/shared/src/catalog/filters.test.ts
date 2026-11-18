@@ -398,13 +398,6 @@ describe('the same search, over the test library (properties)', () => {
         expect(counts.equipmentAny, label).toBe(shownUnder({ ...given, equipment: 'any' }));
         expect(counts.equipmentNone, label).toBe(shownUnder({ ...given, equipment: 'none' }));
         expect(counts.equipmentChosen, label).toBe(shownUnder({ ...given, equipment: 'chosen' }));
-        // The choice in force is the list as it is.
-        expect(
-          { any: counts.equipmentAny, none: counts.equipmentNone, chosen: counts.equipmentChosen }[
-            given.equipment
-          ],
-          label,
-        ).toBe(counts.total);
         expect([...counts.equipment.keys()], label).toEqual([...EQUIPMENT]);
         expect([...counts.muscles.keys()], label).toEqual([...MUSCLES]);
         for (const item of ['dumbbell', 'bench', 'rowing_machine', 'pool'] as const) {

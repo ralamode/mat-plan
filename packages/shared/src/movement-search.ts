@@ -691,7 +691,8 @@ export type MovementFilterCounts = {
   readonly equipmentNone: number;
   /**
    * If the equipment choice were "Uses at least one of…", with the items already ticked
-   * (`chosenEquipment`, kept while another choice is on) and the muscles as they are.
+   * (`chosenEquipment`, kept while another choice is on) and the muscles as they are. With
+   * nothing ticked it filters nothing, so it equals `equipmentAny`.
    */
   readonly equipmentChosen: number;
   /** For each item: if it alone were ticked under "chosen", with the muscles as they are. */
@@ -717,7 +718,7 @@ export type MovementFilterCounts = {
  * entry, in the vocabulary's order; `equipmentFilterOrder` gives the order the panel lists them.
  *
  * **The three equipment choices each have their number here** (`equipmentAny`, `equipmentNone`,
- * `equipmentChosen`), so a panel showing a number beside each calls this once, never once a
+ * `equipmentChosen`), so a panel showing a number beside each calls this once, not once per
  * choice _(maintainer, 2026-11-17, from the filter panel's review)_. The one that is the choice
  * in force equals `total`.
  */

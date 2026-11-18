@@ -579,7 +579,7 @@ under its own CAT-3 heading).
     ticked. `equipmentFilterOrder` lists the items most first, the zero ones last. The three
     equipment choices each have their number in the same answer (`equipmentAny`, `equipmentNone`,
     `equipmentChosen`: the last counts the items already ticked, which stay ticked while another
-    choice is on), so the panel calls `movementFilterCounts` once, never once a choice
+    choice is on), so the panel calls `movementFilterCounts` once, not once per choice
     _(maintainer, 2026-11-17)_.
 18. **Enter picks a hit, or the only match when it was found by its own name or through a short
     form** (`enterTarget` on the result, spec P5). Never a row found by another name, a near
