@@ -244,7 +244,7 @@ flowchart TD
     `program-view-copy-day-in-utc`, `program-view-drops-the-last-day`,
     `program-view-lists-removed-workouts`, `program-workout-ids-keep-removed`,
     `program-view-also-on-includes-itself`, `program-reads-drop-upcoming-starts`,
-    `program-reads-list-removed-athletes`). A copy's day is computed in JS with `Intl`, as the app's
+    `program-reads-list-removed-athletes`, `programs-by-athlete-drops-the-unassigned`). A copy's day is computed in JS with `Intl.formatToParts`, as the app's
     `localDayIso` is, not with Postgres's `at time zone`, which reads a bare offset with the sign
     reversed.
 
