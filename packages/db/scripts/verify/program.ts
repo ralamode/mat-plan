@@ -2978,7 +2978,7 @@ async function verifyCaps(): Promise<void> {
       await newItem(exec, goneScope, {
         name: 'Caps Orphan Drill',
         trackingType: TRACKING_TYPE.reps,
-      }),
+      }).catch((e: unknown) => ({ threw: String(e).slice(0, 80) })),
       { ok: false, reason: PROGRAM_REFUSAL.not_found },
       'FAM-1 caps: newItem for a household that is gone is not_found, never counted unlocked',
     );
