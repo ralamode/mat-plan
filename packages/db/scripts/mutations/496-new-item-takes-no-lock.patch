@@ -1,0 +1,17 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index f9a1e2f0..247fb5cd 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -76,12 +76,6 @@ async function addOrSelect(
+ ): Promise<NewItemResult> {
+   // Held until the transaction ends. Reached through the household row, so the tenant id is never
+   // unwrapped here; no row (a household that is gone) takes no lock, and the add then fails as before.
+-  await exec
+-    .select({
+-      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
+-    })
+-    .from(schema.households)
+-    .where(householdRowIs(scope));
+ 
+   const options = await movementOptions(exec, scope);
+   const hit = existingItem(

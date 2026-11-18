@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
-index 0394abea..481ea789 100644
+index e370afd6..481ea789 100644
 --- a/packages/db/src/writers/program/copy-workout.ts
 +++ b/packages/db/src/writers/program/copy-workout.ts
-@@ -148,22 +148,6 @@ export async function copyWorkout(
+@@ -148,30 +148,6 @@ export async function copyWorkout(
      if (targetWorkouts.filter((w) => w.deletedAt === null).length >= MAX_PROGRAM_WORKOUTS) {
        return refuse(PROGRAM_REFUSAL.limit_reached);
      }
@@ -12,6 +12,14 @@ index 0394abea..481ea789 100644
 -      const full = await tx
 -        .select({ weekday: schema.blockDayWorkouts.weekday, n: count() })
 -        .from(schema.blockDayWorkouts)
+-        // The slots the week shows: a live workout's (`readWeek`'s join), so the cap matches the page.
+-        .innerJoin(
+-          schema.workouts,
+-          and(
+-            eq(schema.workouts.id, schema.blockDayWorkouts.workoutId),
+-            isNull(schema.workouts.deletedAt),
+-          ),
+-        )
 -        .where(
 -          and(
 -            eq(schema.blockDayWorkouts.blockId, target.id),

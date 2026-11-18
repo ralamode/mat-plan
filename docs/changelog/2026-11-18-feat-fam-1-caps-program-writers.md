@@ -10,5 +10,5 @@ change C35). A write past one answers "limit reached" and saves nothing.
   goes into. Editing a workout, or a save that is retried, is never refused.
 - A day of a program's week holds at most 30 workouts, whether set in the week editor or added by a
   copy onto that day.
-- Ten new `db:mutations` patches (483–492) show the proofs fail when a limit is skipped, counted
+- Fifteen new `db:mutations` patches (483–497) show the proofs fail when a limit is skipped, counted
   wrongly, or asked in the wrong order.

@@ -243,7 +243,9 @@ flowchart TD
     `new-item-counts-every-household`, `save-workout-caps-a-replay`,
     `save-workout-counts-removed-workouts`, `save-workout-cap-off-by-one`, `copy-uncapped`,
     `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`, `copy-onto-a-full-weekday`,
-    `copy-cap-after-the-name`).
+    `copy-cap-after-the-name`, `save-workout-cap-before-not-found`,
+    `copy-cap-before-the-source`, `copy-weekday-cap-after-the-name`, `new-item-takes-no-lock`,
+    `new-item-counts-shadowed-items`).
 
 ## Changing it
 
