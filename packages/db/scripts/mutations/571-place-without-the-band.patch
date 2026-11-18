@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 1b443276..6a285577 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -102,7 +102,7 @@ export async function placeAssignments(
+     ...open.filter((row) => !rank.has(row.blockId)),
+   ];
+   const moved = placed.flatMap((row, idx) => (row.idx === idx ? [] : [{ id: row.id, idx }]));
+-  if (moved.length > 0) {
++  if (moved.length < 0) {
+     await shiftIntoBand(
+       tx,
+       a,
