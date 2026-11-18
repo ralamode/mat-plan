@@ -76,7 +76,13 @@ export function ProgramScreen({ program, actions, workoutPagesWired = true }: Pr
         workoutPagesWired={workoutPagesWired}
         onStatus={report}
       />
-      <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />
+      <WeekEditor
+        program={program}
+        saveWeek={actions.saveWeek}
+        onStatus={report}
+        barRef={barRef}
+        workoutPagesWired={workoutPagesWired}
+      />
       {/* The page's one status bar, in view wherever the change was made. */}
       <div
         ref={barRef}

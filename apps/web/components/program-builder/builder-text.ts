@@ -439,6 +439,11 @@ export const dayIsFull = (slots: number) => slots >= MAX_DAY_SLOTS;
 /** Under a full day's header, and what its "+ Add" says when tapped. */
 export const dayFullText = (day: number) =>
   `${weekdayName(day)} is full: a day holds at most ${MAX_DAY_SLOTS} workouts.`;
+/** Days ticked for a copy that filled while the dialog was open, so were left out; '' for none. */
+export const skippedFullText = (days: readonly number[]) =>
+  days.length
+    ? `${formatList(days.map((day) => weekdayName(day)))} ${days.length > 1 ? 'were' : 'was'} full, so skipped.`
+    : '';
 /** A full day's checkbox, as "has it" is named. */
 export const dayFullLabel = (day: number) => `${weekdayName(day)}, ${WEEK_COPY.full}`;
 
@@ -516,6 +521,8 @@ export const WEEK_COPY = {
   addLabel: '+ Label',
   editLabel: 'Edit label',
   noWorkouts: 'Make a workout first, then add it to days.',
+  /** `noWorkouts` while the workout pages don't exist (7b-i): the one way to get a workout is Copy. */
+  noWorkoutsCopyOnly: 'Copy a workout in from another program; writing one isn’t in the app yet.',
   stale:
     'This week was changed somewhere else. It now shows the latest; your last change wasn’t saved.',
   labelPlaceholder: 'e.g. Morning',

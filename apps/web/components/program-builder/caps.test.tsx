@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  emptyWeek,
   MAX_DAY_SLOTS,
   MAX_PROGRAM_WORKOUTS,
   PROGRAM_REFUSAL,
@@ -24,6 +25,7 @@ import {
   dayFullLabel,
   dayFullText,
   programFullText,
+  skippedFullText,
   thisProgramFullOption,
   WEEK_COPY,
   weekdayName,
@@ -324,6 +326,9 @@ describe('a day that fills while a form is open is not sent', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: COPY_COPY.copy }));
     await waitFor(() => expect(all.copyWorkout).toHaveBeenCalledTimes(1));
     expect(vi.mocked(all.copyWorkout).mock.calls[0]![0].weekdays).toEqual([WEDNESDAY]);
+    // And says so, once the dialog has closed.
+    await waitFor(() => expect(status()).toContain(skippedFullText([TUESDAY])));
+    expect(skippedFullText([TUESDAY])).toBe('Tuesday was full, so skipped.');
   });
 });
 
@@ -353,6 +358,17 @@ describe('until 7b-ii the real program page links to no workout page', () => {
       />,
     );
     expect(screen.queryByText(programFullText)).toBeNull();
+  });
+
+  it('an empty program’s week says Copy is the way in, not "make a workout first"', () => {
+    const empty = { ...familyProgram, workouts: [], week: emptyWeek() };
+    const all = { saveWeek: vi.fn(), copyWorkout: vi.fn() } as unknown as ProgramActions;
+    render(<ProgramScreen program={empty} actions={all} workoutPagesWired={false} />);
+    expect(screen.getByText(WEEK_COPY.noWorkoutsCopyOnly)).toBeTruthy();
+    expect(screen.queryByText(WEEK_COPY.noWorkouts)).toBeNull();
+    cleanup();
+    render(<ProgramScreen program={empty} actions={all} />);
+    expect(screen.getByText(WEEK_COPY.noWorkouts)).toBeTruthy();
   });
 
   it('by default (the preview) the rows and "+ New workout" are links', () => {

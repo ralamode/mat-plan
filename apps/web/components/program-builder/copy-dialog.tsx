@@ -34,6 +34,7 @@ import {
   putOnInsteadText,
   targetPeopleText,
   programIsFull,
+  skippedFullText,
   thisProgramFullOption,
   thisProgramOption,
   WEEK_COPY,
@@ -221,6 +222,7 @@ export function CopyWorkout({
     }
     // A day of this program that filled while the dialog was open is not sent.
     const weekdays = MONDAY_FIRST.filter((d) => days.has(d) && !full.has(d));
+    const skipped = MONDAY_FIRST.filter((d) => days.has(d) && full.has(d));
     const mine = begin();
     setPending(true);
     setMessage('');
@@ -263,7 +265,9 @@ export function CopyWorkout({
       return;
     }
     said.current = {
-      text: copiedText(copyAs, target.name, weekdays, same),
+      text: [copiedText(copyAs, target.name, weekdays, same), skippedFullText(skipped)]
+        .filter(Boolean)
+        .join(' '),
       focus: same ? workoutPath(program.programPublicId, result.workoutPublicId) : null,
     };
     onClose();
