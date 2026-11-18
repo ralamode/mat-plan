@@ -3,7 +3,6 @@ import {
   emptyWeek,
   PROGRAM_REFUSAL,
   TRACKING_TYPE,
-  type ProgramActions,
 } from '@mat-plan/shared';
 import { heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -111,7 +110,6 @@ beforeEach(() => vi.clearAllMocks());
  * and the answers match. `actions.contract.ts` assembles them (its own `satisfies` is the compile
  * check); this pins that it holds exactly these, with `putOn` and `takeOff` left out (step 15).
  */
-PROGRAM_ACTIONS satisfies ProgramActions;
 it('the real ProgramActions holds the six actions, and no putOn or takeOff yet', () => {
   expect(PROGRAM_ACTIONS).toEqual({
     createProgram: createProgramAction,
@@ -238,6 +236,14 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  it('a week hands the DAL the PARSED draft: the ids its scope-miss report walks are lowercased', async () => {
+    const upper = weekInput();
+    upper.programPublicId = PROGRAM_ID.toUpperCase();
+    upper.days[1] = [{ workoutPublicId: WORKOUT_ID.toUpperCase(), label: null }];
+    await saveWeekAction(upper);
+    expect(vi.mocked(saveHouseholdWeek).mock.calls[0]![0]).toEqual(weekInput());
+  });
+
   it('copy and new item hand the DAL the client’s ids and text verbatim', async () => {
     await copyWorkoutAction(copyInput());
     expect(vi.mocked(copyHouseholdWorkout).mock.calls[0]![0]).toMatchObject({
@@ -305,6 +311,13 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
       dal: newHouseholdItem,
       answer: { ok: true, ...ITEM },
     },
+    {
+      // `existed: true` too, so an action that wrote `existed: false` itself would fail here.
+      name: 'new item that existed',
+      call: () => newItemAction(newItemInput()),
+      dal: newHouseholdItem,
+      answer: { ok: true, ...ITEM, existed: true },
+    },
   ] as const;
 
   it.each(SUCCESSES)(
@@ -328,6 +341,24 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
     async (reason) => {
       vi.mocked(renameHouseholdProgram).mockResolvedValueOnce({ ok: false, reason });
       expect(await renameProgramAction(renameInput())).toEqual({ ok: false, reason });
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['week', PROGRAM_REFUSAL.once_per_day, saveHouseholdWeek, () => saveWeekAction(weekInput())],
+    [
+      'copy',
+      PROGRAM_REFUSAL.name_taken,
+      copyHouseholdWorkout,
+      () => copyWorkoutAction(copyInput()),
+    ],
+    ['new item', PROGRAM_REFUSAL.retry, newHouseholdItem, () => newItemAction(newItemInput())],
+  ] as const)(
+    '%s: the writer’s %s passes through, with nothing revalidated (7a-ii)',
+    async (_name, reason, dal, call) => {
+      vi.mocked(dal).mockResolvedValueOnce({ ok: false, reason } as never);
+      expect(await call()).toEqual({ ok: false, reason });
       expect(revalidatePath).not.toHaveBeenCalled();
     },
   );

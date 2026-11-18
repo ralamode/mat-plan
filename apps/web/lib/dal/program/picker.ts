@@ -30,7 +30,7 @@ import { quietDbErrors } from '../quiet-db-errors';
  *   gives what P11-i names: the taxonomy, the supervision label, whether it has instructions, and
  *   its aliases, joined with the row's own.
  * - 🔴 **The slug stops here**: it is how the entry is found, and no option carries it
- *   (`program-dal.test.ts` pins the keys).
+ *   (`picker.test.ts` pins the keys).
  *
  * Its own module, so a page that reads only a workout does not load the library. `cache()`d, as
  * `getWorkoutDraft` is.
@@ -57,10 +57,7 @@ function joinAliases(...lists: readonly (readonly string[])[]): string[] {
  * field by field, so a field `catalogOptionOf` or the read gains later does not reach the client
  * by accident.
  */
-export function pickerOptionOf(
-  row: MovementOption,
-  library: ReadonlyMap<string, CatalogMovement> = LIBRARY,
-): MovementOptionDTO {
+export function pickerOptionOf(row: MovementOption): MovementOptionDTO {
   const identity = {
     publicId: row.publicId,
     name: row.name,
@@ -69,7 +66,7 @@ export function pickerOptionOf(
     isBodyweight: row.isBodyweight,
   };
   if (row.owner === 'household') return { ...identity, owner: 'household' };
-  const entry = library.get(row.slug);
+  const entry = LIBRARY.get(row.slug);
   // ⏳ Until the fresh start: the row as it is, with no taxonomy (never a placeholder one).
   if (!entry) return { ...identity, owner: 'catalog', group: row.group, aliases: [...row.aliases] };
   const fromLibrary = catalogOptionOf(entry, row.publicId);

@@ -26,8 +26,11 @@ type Probe = { readonly found: () => Promise<boolean>; readonly miss: ScopeMiss 
 
 /**
  * A week names its workouts by id, and the schema puts no cap on how many. The report checks this
- * many distinct ids at most: it runs only on the `not_found` path and under the limiter, and a
- * probe that names more has already been reported by then.
+ * many distinct ids at most, one query each, on the `not_found` path and under the limiter.
+ * ⚠️ **A known gap:** ids the program does have still use up the cap, so a foreign id after 50 of
+ * the program's own is answered `not_found` and NOT reported. The answer is right either way; only
+ * the telemetry misses it. The fix is one scoped query for the program's live workout ids (a lane P
+ * read in `packages/db`), which needs no cap; raised with the FAM-1 board on #586.
  */
 export const WEEK_PROBE_LIMIT = 50;
 

@@ -42,15 +42,17 @@ type Declaration = {
  * One option in the picker — a **discriminated union** on `owner` _(reuse N1)_, so the fields that
  * exist only for a curated row cannot be read off a household row without a narrow.
  *
- * A `catalog` row IS the contract's `CatalogOption` (CAT-3 C0b-2): its aliases and its library
+ * A **library** row IS the contract's `CatalogOption` (CAT-3 C0b-2): its aliases and its library
  * taxonomy (equipment, muscles, modality, pattern, supervision, whether it has instructions), so
  * `catalogOptionOf`'s output is an option by construction, plus the legacy browse `group` where an
- * old built-in has one. A `household` row has none of it: nothing classifies a name somebody typed.
- * The taxonomy is **required**: a library row without it passes no filter (`passesMovementFilters`).
+ * old built-in has one. Its taxonomy is whole, never partial. ⏳ Until CAT-3 chunk R a `catalog` row
+ * may instead be `BuiltInWithoutLibrary`, with none of it (`hasLibraryData` tells them apart; the
+ * rule and its reason are the DAL's, `lib/dal/program/picker.ts`). A `household` row has none of
+ * it: nothing classifies a name somebody typed.
  *
  * 🔴 **Never fill `equipment` with `[]` as a placeholder.** An empty set MEANS "No equipment": a
  * barbell lift mapped that way would say so on its row and pass the "No equipment" filter. A read
- * that has not got the set must not build a library option at all.
+ * that has not got the set builds the taxonomy-less arm, never a library option.
  */
 export type MovementOptionDTO = { readonly publicId: string; readonly name: string } & Declaration &
   (
@@ -67,15 +69,9 @@ export type MovementOptionDTO = { readonly publicId: string; readonly name: stri
   );
 
 /**
- * ⏳ **An old built-in the movement library has no entry for yet: shown until the catalog's fresh
- * start** _(maintainer, 2026-11-17: "Show all 35 until reset")_. It is a catalog row, so search,
- * "already listed" and the server's `newItem` agree on it, but it has NO taxonomy: every
- * `CatalogOptionTaxonomy` field is absent, never filled with a placeholder. So its row shows only how
- * it is logged, no filter passes it, and it has no "How to".
- *
- * TODO(CAT-3 chunk R, the fresh start): the library replaces the old catalog, every built-in has an
- * entry, and this arm goes with the DAL's interim branch (`lib/dal/program/picker.ts`). CAT-3 spec
- * P11-i ("no third, taxonomy-less shape of option") holds again from then.
+ * ⏳ **An old built-in the movement library has no entry for yet** (until CAT-3 chunk R; why, and the
+ * TODO, are in `lib/dal/program/picker.ts`). Every `CatalogOptionTaxonomy` field is absent, never a
+ * placeholder: its row shows only how it is logged, no filter passes it, and it has no "How to".
  */
 export type BuiltInWithoutLibrary = {
   readonly owner: 'catalog';

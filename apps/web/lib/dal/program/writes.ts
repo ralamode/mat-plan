@@ -7,7 +7,6 @@ import {
   renameProgram,
   saveWeek,
   saveWorkout,
-  type HouseholdScope,
 } from '@mat-plan/db';
 import {
   PROGRAM_REFUSAL,
@@ -55,11 +54,8 @@ const isNotFound = (result: ProgramResult<object>) =>
   !result.ok && result.reason === PROGRAM_REFUSAL.not_found;
 
 /** The miss, reported for the ids the input carries, and the contract's one answer for it. */
-async function missed(
-  scope: HouseholdScope | null,
-  ids: Parameters<typeof reportProgramMiss>[1],
-): Promise<typeof NOT_FOUND> {
-  await reportProgramMiss(scope, ids);
+async function missed(report: () => Promise<void>): Promise<typeof NOT_FOUND> {
+  await report();
   return NOT_FOUND;
 }
 
@@ -75,18 +71,18 @@ export async function renameHouseholdProgram(
   input: RenameProgram,
 ): Promise<ProgramAnswer<'renameProgram'>> {
   const scope = await getHouseholdScope();
-  if (!scope) return missed(scope, input);
+  if (!scope) return missed(() => reportProgramMiss(scope, input));
   const result = await quietDbErrors('renameProgram', () => renameProgram(db, scope, input));
-  return isNotFound(result) ? missed(scope, input) : result;
+  return isNotFound(result) ? missed(() => reportProgramMiss(scope, input)) : result;
 }
 
 export async function saveHouseholdWorkout(
   draft: WorkoutDraft,
 ): Promise<ProgramAnswer<'saveWorkout'>> {
   const scope = await getHouseholdScope();
-  if (!scope) return missed(scope, draft);
+  if (!scope) return missed(() => reportProgramMiss(scope, draft));
   const result = await quietDbErrors('saveWorkout', () => saveWorkout(db, scope, draft));
-  return isNotFound(result) ? missed(scope, draft) : result;
+  return isNotFound(result) ? missed(() => reportProgramMiss(scope, draft)) : result;
 }
 
 /** A week's workouts, every day's, in the draft's order: what `reportWeekMiss` walks. */
@@ -96,28 +92,18 @@ const weekWorkoutIds = (draft: WeekDraft) =>
 export async function saveHouseholdWeek(draft: WeekDraft): Promise<ProgramAnswer<'saveWeek'>> {
   const scope = await getHouseholdScope();
   const week = { programPublicId: draft.programPublicId, workoutPublicIds: weekWorkoutIds(draft) };
-  if (!scope) {
-    await reportWeekMiss(scope, week);
-    return NOT_FOUND;
-  }
+  if (!scope) return missed(() => reportWeekMiss(scope, week));
   const result = await quietDbErrors('saveWeek', () => saveWeek(db, scope, draft));
-  if (!isNotFound(result)) return result;
-  await reportWeekMiss(scope, week);
-  return NOT_FOUND;
+  return isNotFound(result) ? missed(() => reportWeekMiss(scope, week)) : result;
 }
 
 export async function copyHouseholdWorkout(
   draft: CopyDraft,
 ): Promise<ProgramAnswer<'copyWorkout'>> {
   const scope = await getHouseholdScope();
-  if (!scope) {
-    await reportCopyMiss(scope, draft);
-    return NOT_FOUND;
-  }
+  if (!scope) return missed(() => reportCopyMiss(scope, draft));
   const result = await quietDbErrors('copyWorkout', () => copyWorkout(db, scope, draft));
-  if (!isNotFound(result)) return result;
-  await reportCopyMiss(scope, draft);
-  return NOT_FOUND;
+  return isNotFound(result) ? missed(() => reportCopyMiss(scope, draft)) : result;
 }
 
 /** A new item carries no id: nothing to report (as create). */

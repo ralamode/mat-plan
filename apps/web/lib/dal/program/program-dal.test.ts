@@ -16,7 +16,7 @@ vi.mock('@mat-plan/db', () => ({
     ok: true,
     itemPublicId: WORKOUT_ID,
     name: 'Bear crawl',
-    trackingType: 'reps',
+    trackingType: TRACKING_TYPE.reps,
     existed: false,
   })),
 }));
@@ -43,6 +43,8 @@ import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
 import { getWorkoutDraft } from './reads';
 import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+
+const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
@@ -101,12 +103,11 @@ describe('the program DAL (FAM-1 7a-i)', () => {
   });
 
   it('a writer’s not_found reports which id missed, once, and is still not_found', async () => {
-    const notFound = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
-    vi.mocked(saveWorkout).mockResolvedValueOnce(notFound);
-    expect(await saveHouseholdWorkout(heavyADraft)).toEqual(notFound);
-    vi.mocked(renameProgram).mockResolvedValueOnce(notFound);
+    vi.mocked(saveWorkout).mockResolvedValueOnce(NOT_FOUND);
+    expect(await saveHouseholdWorkout(heavyADraft)).toEqual(NOT_FOUND);
+    vi.mocked(renameProgram).mockResolvedValueOnce(NOT_FOUND);
     const rename = { programPublicId: PROGRAM_ID, name: 'A' };
-    expect(await renameHouseholdProgram(rename)).toEqual(notFound);
+    expect(await renameHouseholdProgram(rename)).toEqual(NOT_FOUND);
     expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
       [SCOPE, heavyADraft],
       [SCOPE, rename],
@@ -200,7 +201,6 @@ describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
     weekdays: [],
     label: null,
   });
-  const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 
   it('each goes through the caller’s scope, with the parsed input', async () => {
     await saveHouseholdWeek(week());

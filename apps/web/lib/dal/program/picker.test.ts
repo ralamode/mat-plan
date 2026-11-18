@@ -137,10 +137,19 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
       }),
     )!;
     if (option.owner !== 'catalog') throw new Error('expected a catalog option');
-    expect(option.aliases).toEqual(expect.arrayContaining(['Anti-rotation press', 'Pallof']));
-    expect(option.aliases).toEqual(expect.arrayContaining([...library.aliases]));
-    const keys = option.aliases.map((a) => a.toLowerCase());
-    expect(new Set(keys).size).toBe(keys.length);
+    // The row's first, in its order; then the library's it does not already have.
+    expect(library.aliases).toEqual(['Cable Pallof press', 'Anti-rotation press']);
+    expect(option.aliases).toEqual(['Anti-rotation press', 'Pallof', 'Cable Pallof press']);
+  });
+
+  it('🔴 two spellings of one alias are one (the "same name" key), and the ROW’s spelling is kept', () => {
+    const option = pickerOptionOf(
+      builtIn({ slug: 'pallof_press', name: 'Pallof Press', aliases: ['anti rotation press'] }),
+    )!;
+    expect(option.owner === 'catalog' && option.aliases).toEqual([
+      'anti rotation press',
+      'Cable Pallof press',
+    ]);
   });
 
   it('⏳ a built-in the library has no entry for: the row with NO taxonomy, never a placeholder one', () => {
@@ -177,23 +186,24 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
  * household row IS an option as it stands; a built-in is one with the library's whole taxonomy,
  * or, until the fresh start, with none of it; never with part of it.
  */
-export const pins = {
-  own: (x: Extract<MovementOption, { owner: 'household' }>): MovementOptionDTO => x,
-  withTaxonomy: (
-    x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & CatalogOptionTaxonomy,
-  ): MovementOptionDTO => x,
-  // ⏳ Until the fresh start, a built-in with no library entry is an option with NO taxonomy.
-  withoutTaxonomy: (
-    x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'>,
-  ): MovementOptionDTO => x,
-  halfFilled,
-};
 /** Equipment without the rest of the taxonomy: neither a library option nor a bare built-in. */
 type HalfFilled = Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & {
   equipment: CatalogOptionTaxonomy['equipment'];
 };
-function halfFilled(x: HalfFilled): MovementOptionDTO {
-  // Justified: a NEGATIVE type pin. The test IS that this does not compile; if it ever does, tsc fails here.
-  // @ts-expect-error never a HALF-filled taxonomy
-  return x;
-}
+it('the option types: a whole taxonomy or none, never half (compile-time pins)', () => {
+  const own = (x: Extract<MovementOption, { owner: 'household' }>): MovementOptionDTO => x;
+  const withTaxonomy = (
+    x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & CatalogOptionTaxonomy,
+  ): MovementOptionDTO => x;
+  // ⏳ Until the fresh start, a built-in with no library entry is an option with NO taxonomy.
+  const withoutTaxonomy = (
+    x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'>,
+  ): MovementOptionDTO => x;
+  const halfFilled = (x: HalfFilled): MovementOptionDTO =>
+    // Justified: a NEGATIVE type pin. The test IS that this does not compile; if it ever does, tsc fails here.
+    // @ts-expect-error never a HALF-filled taxonomy
+    x;
+  expect(
+    [own, withTaxonomy, withoutTaxonomy, halfFilled].every((f) => typeof f === 'function'),
+  ).toBe(true);
+});

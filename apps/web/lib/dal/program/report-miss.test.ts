@@ -27,10 +27,11 @@ const programMiss = {
   action: SCOPE_MISS_ACTION.resolveProgram,
   resource: { kind: SCOPE_MISS_KIND.program, publicId: PROGRAM_ID },
 };
-const workoutMiss = {
+const missOf = (publicId: string) => ({
   action: SCOPE_MISS_ACTION.resolveWorkout,
-  resource: { kind: SCOPE_MISS_KIND.workout, publicId: WORKOUT_ID },
-};
+  resource: { kind: SCOPE_MISS_KIND.workout, publicId },
+});
+const workoutMiss = missOf(WORKOUT_ID);
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -78,10 +79,6 @@ describe('which program id missed the household (FAM-1 7a-i, C11)', () => {
 });
 
 const OTHER_WORKOUT = '019826b4-0000-7000-8000-0000000000b2';
-const missOf = (publicId: string) => ({
-  action: SCOPE_MISS_ACTION.resolveWorkout,
-  resource: { kind: SCOPE_MISS_KIND.workout, publicId },
-});
 
 describe('a week (FAM-1 7a-ii): its program, then the first workout it names that is not the program’s', () => {
   it('the program missing is reported, and no workout is read', async () => {
@@ -104,13 +101,17 @@ describe('a week (FAM-1 7a-ii): its program, then the first workout it names tha
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[missOf(OTHER_WORKOUT)]]);
   });
 
-  it(`reads at most ${WEEK_PROBE_LIMIT} workout ids`, async () => {
+  it(`reads at most ${WEEK_PROBE_LIMIT} DISTINCT workout ids: a repeat does not use up the cap`, async () => {
     const ids = Array.from(
       { length: WEEK_PROBE_LIMIT + 5 },
       (_, i) => `019826b4-0000-7000-8000-${String(i).padStart(12, '0')}`,
     );
-    await reportWeekMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: ids });
-    expect(workoutIn).toHaveBeenCalledTimes(WEEK_PROBE_LIMIT);
+    // Every id twice, side by side: deduplicating AFTER the cut would read only half the cap.
+    const twice = ids.flatMap((id) => [id, id]);
+    await reportWeekMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: twice });
+    expect(vi.mocked(workoutIn).mock.calls.map((call) => call[3])).toEqual(
+      ids.slice(0, WEEK_PROBE_LIMIT),
+    );
     expect(reportScopeMiss).not.toHaveBeenCalled();
   });
 });

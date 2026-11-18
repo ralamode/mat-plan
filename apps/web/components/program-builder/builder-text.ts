@@ -428,8 +428,9 @@ export const newItemWarning = (name: string) =>
 export const selectExistingText = (name: string) => `Select ${name}`;
 export const alreadyListedText = (name: string, type: string) =>
   `Already in the list as ${name} (${type}).`;
+/** Made by this Create, or by an earlier one of the same form that got no answer. */
 export const createdText = (name: string) => `${name} created and selected.`;
-/** True for a name that already existed, and for a retry whose first try landed. */
+/** A name that already existed, and is in the screen's list. */
 export const existedText = (name: string, type: string) =>
   `${name} is in the list (${type}). Selected.`;
 /**

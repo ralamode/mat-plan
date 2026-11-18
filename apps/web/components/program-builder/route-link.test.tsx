@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
-import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +12,8 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
+
+import { appSources, code, WEB_DIR } from '@/test/source-scan';
 
 import { BuilderLink, BuilderLinkPrefetch } from './route-link';
 
@@ -33,10 +35,12 @@ describe('the builder’s links and the preview’s prefetch switch (FAM-1 7a-ii
   });
 
   it('🔴 every builder screen links through BuilderLink, never next/link itself', () => {
-    const dir = 'components/program-builder';
-    const sources = readdirSync(dir, { recursive: true, encoding: 'utf8' })
-      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) && f !== 'route-link.tsx')
-      .filter((f) => /from ['"]next\/link['"]/.test(readFileSync(`${dir}/${f}`, 'utf8')));
+    const dir = join(WEB_DIR, 'components/program-builder/');
+    const screens = appSources().filter((f) => f.startsWith(dir));
+    expect(screens.length).toBeGreaterThan(5);
+    const sources = screens
+      .filter((f) => f !== join(dir, 'route-link.tsx'))
+      .filter((f) => /from ['"]next\/link['"]/.test(code(f)));
     expect(sources).toEqual([]);
   });
 });

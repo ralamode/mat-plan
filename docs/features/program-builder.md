@@ -201,10 +201,16 @@ flowchart LR
       the list does not have (another parent got there first), the item it names is added under its
       stored name, and the status line says what happened: "… already exists (Reps), so nothing new
       was made. Selected." (`existedUnlistedText`, 7a-ii; "is in the list" would be false, and the
-      type chosen was not used). The name is the answer's `name` (contract C8).
+      type chosen was not used). **Except a retry whose first try landed**: when the last Create on
+      the form got no answer (a failure that is not the name's) and this one, for the same name and
+      type, answers `existed`, the first try made it, so it says "created" (`unanswered`, 7a-ii
+      review). The status text is chosen in one place, `said`. The name is the answer's `name`
+      (contract C8).
     - **Every link a screen draws is `BuilderLink`** (`route-link.tsx`, 7a-ii), never `next/link`
       itself (a scan): it prefetches as Next does, unless the `BuilderLinkPrefetch` context says
-      `false`, which the design preview's harness provides, since its fixture ids prefetch 404s.
+      `false`. ⏳ **Not provided yet:** the design preview's harness will wrap the builder in
+      `<BuilderLinkPrefetch value={false}>` (its fixture ids prefetch 404s); the roadmap thread owns
+      that file and wires it after 7a-ii merges. Until then the preview still prefetches.
     - **A workout stops at `MAX_WORKOUT_ITEMS`**; a tap past it says why.
     - **It is mounted outside the editor's `<form>`**: a portal's React events bubble to React
       ancestors, so a form in the sheet would also submit the workout.

@@ -222,6 +222,41 @@ describe('the item picker (FAM-1 9)', () => {
     ).toBeNull();
   });
 
+  it('🔴 a retry whose first try landed says created, not "nothing new was made" (7a-ii review)', async () => {
+    const newItem = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry })
+      .mockResolvedValueOnce({
+        ok: true,
+        itemPublicId: NEW_ID,
+        name: 'Bear crawl',
+        trackingType: TRACKING_TYPE.reps,
+        existed: true,
+      });
+    editor({ newItem });
+    openPicker();
+    search('Bear crawl');
+    fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
+    fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+      target: { value: TRACKING_TYPE.reps },
+    });
+    const create = () =>
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create }));
+    create();
+    await waitFor(() => expect(newItem).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create })).toBeTruthy(),
+    );
+    create();
+    await waitFor(() => expect(row('Bear crawl').getAttribute('aria-checked')).toBe('true'));
+    await waitFor(() =>
+      expect(within(sheet()).getAllByText(createdText('Bear crawl')).length).toBeGreaterThan(0),
+    );
+    expect(
+      within(sheet()).queryAllByText(existedUnlistedText('Bear crawl', TRACKING_TYPE_LABELS.reps)),
+    ).toEqual([]);
+  });
+
   it('with nothing ticked, Add says so and does nothing', () => {
     editor();
     openPicker();
