@@ -323,6 +323,49 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(await actions.untickRow(input)).toEqual(first);
   });
 
+  it('🔴 un-tick and re-tick answer bad_value for input the schema refuses, and change nothing (C31)', async () => {
+    const { actions, plan } = day(everyTypeOnce);
+    const { entryPublicId, values } = loggedBench();
+    const badValue = { ok: false, reason: ROW_REFUSAL.bad_value };
+    // The real entry, with a day the schema refuses: `bad_value`, where the fake said `not_found`.
+    expect(
+      await actions.untickRow({ profilePublicId, day: on.slice(0, -1), entryPublicId }),
+    ).toEqual(badValue);
+    // An id that is not a UUID is refused the same way.
+    expect(
+      await actions.untickRow({ profilePublicId, day: on, entryPublicId: 'not-an-id' }),
+    ).toEqual(badValue);
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged?.entryPublicId).toBe(
+      entryPublicId,
+    );
+
+    const unticked = succeeded(
+      await actions.untickRow({ profilePublicId, day: on, entryPublicId }),
+    );
+    const retick = { profilePublicId, day: on, entryPublicId };
+    // The right shape, but not a token the app writes: 30 February and month 13 fail the
+    // database's cast, and hour 24 and second 60 are a second spelling of the next midnight or minute.
+    for (const hiddenAt of [
+      '2026-02-30T00:00:00.000000Z',
+      '2026-13-01T00:00:00.000000Z',
+      '2026-11-17T24:00:00.000000Z',
+      '2026-11-17T18:04:60.000000Z',
+    ]) {
+      expect(await actions.retickRow({ ...retick, hiddenAt }), hiddenAt).toEqual(badValue);
+    }
+    // Three fractional digits, as a token that went through a `Date`: the same answer.
+    expect(await actions.retickRow({ ...retick, hiddenAt: '2026-11-14T15:04:05.123Z' })).toEqual(
+      badValue,
+    );
+    // Nothing came back, and the true token still brings the entry back.
+    expect(itemOf(plan(), 'DB bench press').item.rows[0]?.logged).toBeNull();
+    expect(await actions.retickRow({ ...retick, hiddenAt: unticked.hiddenAt! })).toEqual({
+      ok: true,
+      entryPublicId,
+      values,
+    });
+  });
+
   it('re-tick refuses another token; after a new ✓ the entry is already back, and it answers with it', async () => {
     const { actions } = day(everyTypeOnce);
     const { entryPublicId } = loggedBench();
