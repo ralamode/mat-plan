@@ -7,6 +7,7 @@ import {
   foldName,
   hasStarted,
   MAX_HOUSEHOLD_ITEMS,
+  MAX_DAY_SLOTS,
   MAX_PROGRAM_WORKOUTS,
   MONDAY_FIRST,
   existingItem,
@@ -423,6 +424,8 @@ export function createFakeProgramActions(
   const minted = new Map<string, string>();
   /** The names of the workouts this fake has copied into each OTHER program. */
   const copiedInto = new Map<string, string[]>();
+  // The starts a Take off removed, as `program:profile`: a repeat of that call answers the same.
+  const removedStarts = new Set<string>();
 
   const refuse = (reason: ProgramRefusal) => ({ ok: false, reason }) as const;
   const changed = () => onChange?.(structuredClone(state));
@@ -550,6 +553,10 @@ export function createFakeProgramActions(
           if (view.workouts.length >= MAX_PROGRAM_WORKOUTS) {
             return refuse(PROGRAM_REFUSAL.limit_reached);
           }
+          // So does a weekday it would go on that is already full: the whole copy, nothing written.
+          if (copy.weekdays.some((k) => view.week[k].length >= MAX_DAY_SLOTS)) {
+            return refuse(PROGRAM_REFUSAL.limit_reached);
+          }
           const name = copy.name ?? copyName(source.name);
           if (view.workouts.some((w) => sameName(w.name, name))) {
             return refuse(PROGRAM_REFUSAL.name_taken);
@@ -668,6 +675,9 @@ export function createFakeProgramActions(
         const { programPublicId, profilePublicId } = parsed.data;
         const view = shown(programPublicId);
         const athlete = view?.athletes.find((a) => a.profilePublicId === profilePublicId);
+        // A repeat of a Take off that removed the start answers as the first did (`takeOffSchema`).
+        const startKey = `${programPublicId}:${profilePublicId}`;
+        if (view && !athlete && removedStarts.has(startKey)) return { ok: true, lastDay: null };
         if (!view || !athlete) return refuse(PROGRAM_REFUSAL.not_found);
 
         // A start that has not begun, or that begins today, is removed: nothing says they were ever
@@ -676,6 +686,7 @@ export function createFakeProgramActions(
         // any.
         const removed = !hasStarted(athlete, view.today) || athlete.since === view.today;
         if (removed) {
+          removedStarts.add(startKey);
           view.athletes = view.athletes.filter((a) => a !== athlete);
           const candidate = view.candidates.find((c) => c.profilePublicId === profilePublicId);
           if (candidate) {

@@ -1,6 +1,6 @@
 import { addDays } from '../../day';
 import type { DayPlan } from '../day-shapes';
-import { emptyWeek } from '../program-shapes';
+import { emptyWeek, MAX_DAY_SLOTS } from '../program-shapes';
 import type { ProgramList, ProgramView, WorkoutDraft } from '../program-shapes';
 import {
   dayPlan,
@@ -554,6 +554,21 @@ const withCopyWorld = edit(seeded, (world) => {
   adult.week[1].push({ label: 'Evening', wid: copy.wid });
 });
 /** Athlete Two archived while still on the Family program: the assignment is untouched. */
+const fullWeekdayWorld = edit(seeded, (world) => {
+  const family = programOf(world, 'p1');
+  const monday = family.week[1];
+  for (let n = 1; monday.length < MAX_DAY_SLOTS; n += 1) {
+    const wid = `w${3000 + n}`;
+    family.workouts.push({
+      wid,
+      name: `Extra ${n}`,
+      desc: '',
+      rests: {},
+      items: [{ iid: 'pushups', note: '', ss: null, sets: 1, reps: 10 }],
+    });
+    monday.push({ label: '', wid });
+  }
+});
 const archivedAthleteWorld = edit(seeded, (world) => {
   for (const athlete of world.athletes) if (athlete.id === 'a2') athlete.archived = true;
 });
@@ -573,6 +588,7 @@ export const PROGRAM_VIEW_FIXTURE_SOURCES = deepFreeze({
     program: 'p1',
     before: seeded,
   },
+  'family-program-full-weekday': { world: fullWeekdayWorld, program: 'p1', before: seeded },
 } satisfies Record<string, ProgramViewFixtureSource>);
 
 const listOf = (name: keyof typeof PROGRAM_LIST_FIXTURE_SOURCES): ProgramList =>
@@ -620,6 +636,14 @@ export const adultProgramWithCopy: ProgramView = viewOf('adult-program-with-copy
  */
 export const familyProgramArchivedAthlete: ProgramView = viewOf('family-program-archived-athlete');
 
+/**
+ * The Family program's page with Monday holding `MAX_DAY_SLOTS` workouts. NOT a prototype state
+ * (C35): the state where a copy onto Monday, or one more workout on Monday in the week dialog, is
+ * refused with `limit_reached`. Monday keeps its own workouts and gains one-item workouts
+ * ("Extra 1", "Extra 2", …) up to the cap; every other day is the prototype's.
+ */
+export const familyProgramFullWeekday: ProgramView = viewOf('family-program-full-weekday');
+
 /** The Programs list of that same household: the Family program names Athlete One alone (C36). */
 export const programsListArchivedAthlete: ProgramList = listOf('programs-list-archived-athlete');
 
@@ -662,4 +686,5 @@ export const PROGRAM_VIEW_FIXTURES = {
   'new-program-empty': newProgramEmpty,
   'adult-program-with-copy': adultProgramWithCopy,
   'family-program-archived-athlete': familyProgramArchivedAthlete,
+  'family-program-full-weekday': familyProgramFullWeekday,
 } as const satisfies Record<keyof typeof PROGRAM_VIEW_FIXTURE_SOURCES, ProgramView>;

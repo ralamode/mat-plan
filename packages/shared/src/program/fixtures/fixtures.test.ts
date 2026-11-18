@@ -7,6 +7,8 @@ import { dayPlanSchema, showsOnlyLogged, type DayPlan } from '../day-shapes';
 import { hasSetRows } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import {
+  MAX_DAY_SLOTS,
+  MAX_PROGRAM_WORKOUTS,
   programListSchema,
   programViewSchema,
   weekDraftSchema,
@@ -27,6 +29,7 @@ import {
   familyProgram,
   familyProgramAfterTakeOff,
   familyProgramArchivedAthlete,
+  familyProgramFullWeekday,
   FIXTURE_ITEM_KEYS,
   FIXTURE_ITEMS,
   FIXTURE_SWITCH_DAY,
@@ -138,6 +141,8 @@ describe('every fixture round-trips through its own schema', () => {
       'adult-program-with-copy',
       // C36, not a prototype state.
       'family-program-archived-athlete',
+      // C35, not a prototype state: a weekday at its cap.
+      'family-program-full-weekday',
     ]);
   });
 
@@ -1485,6 +1490,31 @@ describe('programView, exported for a proof that saves a week (C27)', () => {
     );
     expect(is[5]).not.toEqual(was[5]);
     expect({ ...is, 5: was[5] }).toEqual(was);
+  });
+});
+
+describe('family-program-full-weekday (C35)', () => {
+  const view = familyProgramFullWeekday;
+
+  it('🔴 holds exactly the cap on Monday, and the Family program’s week on every other day', () => {
+    expect(view.week[1]).toHaveLength(MAX_DAY_SLOTS);
+    expect(view.week[1].slice(0, familyProgram.week[1].length)).toEqual(familyProgram.week[1]);
+    for (const day of [0, 2, 3, 4, 5, 6] as const)
+      expect(view.week[day]).toEqual(familyProgram.week[day]);
+    // A workout once a day, and the program still under its own cap.
+    const monday = view.week[1].map((slot) => slot.workoutPublicId);
+    expect(new Set(monday).size).toBe(MAX_DAY_SLOTS);
+    expect(view.workouts.length).toBeLessThan(MAX_PROGRAM_WORKOUTS);
+  });
+
+  it('is the Family program in every other field, and was built from the seed', () => {
+    const { week: _week, workouts, ...rest } = view;
+    const { week: _base, workouts: baseWorkouts, ...base } = familyProgram;
+    expect(rest).toEqual(base);
+    expect(workouts.slice(0, baseWorkouts.length).map((w) => w.name)).toEqual(
+      baseWorkouts.map((w) => w.name),
+    );
+    expect(PROGRAM_VIEW_FIXTURE_SOURCES['family-program-full-weekday'].before).not.toBeNull();
   });
 });
 

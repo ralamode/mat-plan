@@ -198,8 +198,10 @@ export const saveWorkoutSchema = workoutDraftSchema
  * - `MAX_DAY_SLOTS`: the workouts on one weekday of one program's week. `weekDaysSchema` holds it,
  *   so a week past it fails the parse: `weekExceedsDaySlots` tells that from any other failure.
  *   ⚠️ `ProgramView.week` is the same schema, so a READ is held to it too. That is safe because
- *   every writer parses the draft first and the week's table is new with FAM-1: no stored week is
- *   longer. No other read shape has a `.max` for these caps.
+ *   every writer that adds a slot holds the cap and the week's table is new with FAM-1, so no
+ *   stored week is longer: `saveWeek` parses the draft, and **`copyWorkout`, which writes slots
+ *   with no week draft, refuses the whole copy when a weekday it names is already full**. No
+ *   other read shape has a `.max` for these caps.
  *
  * **The workouts cap is the program's the write lands in**: for a copy into another program, that
  * program's, never the source's.
@@ -480,6 +482,11 @@ export type AssignDraft = z.infer<typeof assignDraftSchema>;
  * - **Otherwise**: they stay on through today, and today is their last day.
  *
  * The answer says which: `lastDay` is today, or `null` when the start was removed.
+ *
+ * **A repeat answers as the first call did.** After a Take off that removed the start, the same
+ * call again (a double tap, a retry) answers `{ ok: true, lastDay: null }`, not `not_found`: the
+ * start is gone and nothing else is on in its place. An athlete who was never on the program, an
+ * archived athlete and another household's ids are `not_found`, as before.
  */
 export const takeOffSchema = z.object({
   programPublicId: lowerCaseUuidSchema,
