@@ -50,9 +50,9 @@ and so does the writer:
 
 ## For step 15c (lane C)
 
-- **The route:** the day DAL may import one lane P name (`program-tables-stay-dark.test.ts`,
-  `DAY_DAL_MAY_IMPORT`; `lib/dal/day/importers.test.ts`), so 15c calls it either through a program
-  DAL function (`lib/dal/program/`) or after a board seam turn adding `reorderPrograms` to both pins.
+- **The route (the board, 2026-11-18):** a program-DAL function in `lib/dal/program/` that lane
+  C's day actions call. NOT by widening `DAY_DAL_MAY_IMPORT` (`program-tables-stay-dark.test.ts`)
+  or `lib/dal/day/importers.test.ts`: the day DAL keeps its single lane P import.
 - **The signature:** `(exec, scope, input: unknown, today): Promise<ProgramResult>`, one
   transaction, throwing on a `today` that is not an ISO day, as its siblings.
 - **The words** are `ProgramResult`'s, not `RowResult`'s. **`invalid` also means "the list is
@@ -66,8 +66,11 @@ and so does the writer:
 - N `packages/db/src/writers/program/reorder-programs.ts`: `reorderPrograms`.
 - E `packages/db/src/writers/program/assign.ts`: `placeAssignments`, taken out of `putOn` (its
   compaction, reopen and insert); the files row lists `lockProgram`, `lockAthletes` and it.
-- E `packages/db/src/queries/day/day-plan.ts`'s rank exported (a seam turn on lane E's file, asked
-  of the board).
+- `currentPrograms`' rank is exported by lane E, in its C37 change to `day-plan.ts` (the board,
+  2026-11-18: one lane in that file); 6d-ii imports it.
+- E `packages/db/src/schema.ts`, the `programAssignments` docblock: a **board-granted, comment-only
+  guest edit** (lane A is paused; lane E made one in the same docblock in #601). "A reorder writes
+  the place onto that row" becomes Amendment 5's rule: a row with a last day is never moved.
 - E mutation patches whose context moves with the extraction: 402–409, 412–414, 417, re-cut after
   rebasing on #617, each still red on its own proof; 407 and 412 then break `placeAssignments`.
 - E `shift-band.ts`'s and `lockAthletes`' docblocks (the program order is now; the reorder locks the
@@ -111,9 +114,6 @@ rule, the hidden-row rule and the unchanged rule.
   `reorderPrograms` sets `plan.currentPrograms = ordered`), while the writer and #601's read put it
   last: `[C, A, B]` reads back C, A, B from the fake and A, B, C from the database. It goes to the
   contract owner with C37 (the fake sorts a program ending today last).
-- **`schema.ts`'s `programAssignments` docblock** says "a reorder writes the place onto that row"
-  (the closed row's); under Amendment 5 it does not. That is lane A's file, so a rewording is asked of
-  lane A.
 - **Lane E's 12a-ii stand-in** replays its `order` change by a direct `idx` update
   (`verify/day-plan.ts`); once this lands, lane E swaps it for `reorderPrograms`.
 
