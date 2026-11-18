@@ -246,7 +246,7 @@ name typed into any of them goes with it.
 **What the export does not yet include**, so you are not surprised: check-ins and other logged life
 activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
 targets, the programs you build and who is on which program (only a workout's name and the targets of
-an exercise an athlete logged, in the `prescribed` column, go out). The export covers your logged training; it is not yet a complete copy.
+an exercise an athlete logged, in the "prescribed" column, go out). The export covers your logged training; it is not yet a complete copy.
 
 **An archived athlete still exports.** Archiving hides an athlete from the picker; it does not hide
 or delete anything they logged. Their export is on the **Household settings** screen, beside their

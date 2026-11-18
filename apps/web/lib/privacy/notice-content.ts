@@ -333,7 +333,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "(The tables and columns exist so the app can be built against them. Nothing writes to them today; this line is\nhere because the schema is public and you would otherwise find them.)"
+                  "text": "(Nothing in the live app logs a workout yet: the day page that does is being built. This line is\nhere because the schema is public and you would otherwise find these tables.)"
                 }
               ]
             }
@@ -382,7 +382,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not only when one is renamed, so it\nis the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal\nname, and does not ask for a birthdate.\nWorth knowing, because of who is usually typing. The first two also appear in your export; a name\ndoes not — the export is filed under an id, not a name."
+        "text": ", not only when one is renamed, so it\nis the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal\nname, and does not ask for a birthdate.\nWorth knowing, because of who is usually typing. A typed movement appears in your export, and so\ndoes a workout's name once an athlete logs that workout; \"How it felt\" does not, and neither does the\nathlete's name field — the export is filed under an id, not a name."
       }
     ]
   },
@@ -1818,20 +1818,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log and the bodyweight log. "
+        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log and the bodyweight log. Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Your athletes' names are not in the files"
+            "text": "workout's name as\nit was that day"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the folders are\nnamed by an internal identifier, not by a person."
+        "text": " and its targets. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The athlete's name field is never written into the files"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it."
       }
     ]
   },
@@ -1849,7 +1862,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", so you are not surprised: check-ins and other logged life\nactivities, the daily readiness colour, the \"how it felt\" notes, and the per-athlete prescribed\ntargets. The export covers your logged training; it is not yet a complete copy."
+        "text": ", so you are not surprised: check-ins and other logged life\nactivities, the daily readiness colour, the \"how it felt\" notes, the per-athlete prescribed\ntargets, the programs you build and who is on which program (only a workout's name and the targets of\nan exercise an athlete logged, in the \"prescribed\" column, go out). The export covers your logged training; it is not yet a complete copy."
       }
     ]
   },
