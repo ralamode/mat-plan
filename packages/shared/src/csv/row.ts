@@ -1,59 +1,27 @@
 import { hasLineBreak } from '../text';
 
 /**
- * Join fields into one CSV row — **by hand, never with a CSV library** (V1-13).
+ * Join fields into one CSV row, **by hand, never with a CSV library** (V1-13), quoted the **RFC 4180**
+ * way (FAM-1 14a; ADR 0009 §3(c), "allowed and preferred"; the maintainer, 2026-11-17).
  *
- * The contract ([docs/csv-export-contract.md](../../../../docs/csv-export-contract.md)) is emphatic,
- * and it has two reasons that a general-purpose writer cannot be talked out of:
+ * **One rule for every field:** a value holding a `,` or a `"` is wrapped in `"…"` with each inner
+ * `"` doubled; any other value is written as it is. A standard reader (a spreadsheet, a CSV library)
+ * then reads every cell back exactly, whichever column it sits in.
  *
- * 1. **Bare double-quotes are real data.** A row in the legacy evidence set
- *    (`docs/samples/legacy-csv/strength-log/athlete-a/2020-06.csv`) reads `Athlete A at 30" box (Athlete B did 36")` —
- *    those are INCH MARKS in an unquoted field. Any RFC-4180 writer re-emits them as
- *    `"Athlete One at 30"" box (Athlete Two did 36"")"` and the diff fails.
- * 2. **Zero quoted fields exist across all eight real files**, and one legacy row carries an
- *    unescaped comma that splits it into 9 fields against an 8-field header. The files are not valid
- *    CSV and are not trying to be.
- *
- * So: join with `,` and write raw. The ONE forward-looking exception the contract grants is a NEW
- * value containing a comma — quote that, and leave the legacy rows alone.
+ * This replaces the byte-faithful rule (write raw; quote only a comma, and only in `notes` and
+ * `prescribed`; refuse a comma anywhere else). That rule matched the legacy files, where inch marks
+ * (`30" box`) sat unquoted, but it left a note with an opening `"` able to swallow the rest of its
+ * line in a standard reader. ADR 0009 retired the byte contract, and §4 lets a PR change those tests.
  */
-
-/** Fields that may legitimately contain a comma, and must therefore be quoted when they do. */
-const QUOTABLE = new Set(['notes', 'prescribed']);
-
-/**
- * Quote a field only if it must be, and only if it is allowed to be.
- *
- * `prescribed` is in the quotable set because **8 of the 21 seeded prescriptions contain a comma** —
- * `5, last set to failure`, `3 (top triple, then 2 back-offs)`, `40 yd, to grip failure`. Unquoted,
- * each one splits the row into 9 fields. That is ~38% of the program, so it is the common case, not
- * an edge case. (Found by the engineering panel; the draft plan quoted only `notes`.)
- */
-function quoteIfNeeded(value: string, field: string): string {
-  if (!value.includes(',')) return value;
-  if (!QUOTABLE.has(field)) {
-    // A comma in a movement name or a load would silently shift every later column. `text.ts`'s
-    // `hasCommaOrLineBreak` already rejects these at the INPUT boundary; this is the export-side
-    // backstop, because `/api/sync` and the seed can write rows the form never saw.
-    //
-    // ⚠️ **The VALUE is deliberately not in the message** (PICK-1 PR 2's security review). It used to
-    // be, as `got ${JSON.stringify(value)}` — and for the `movement` field that value is derived from
-    // the one free-text box `docs/privacy/notice.md` warns people may put a person's name into, while
-    // `apps/web/lib/sentry-scrub.ts` passes `exception.value` through verbatim. That is the same rule
-    // `findOrCreateMovement`'s docblock states for its own throws, and this module was outside it.
-    // The field NAME is enough to find the row; the operator has the database.
-    throw new Error(
-      `CSV export: the '${field}' field cannot contain a comma. ` +
-        `Only ${[...QUOTABLE].join('/')} may be quoted; anything else would shift the row.`,
-    );
-  }
+function quoteIfNeeded(value: string): string {
+  if (!value.includes(',') && !value.includes('"')) return value;
   return `"${value.replaceAll('"', '""')}"`;
 }
 
 /**
  * One CSV row, terminated with LF.
  *
- * `fields` is ordered to match the header; `names` labels them so a comma violation names the column
+ * `fields` is ordered to match the header; `names` labels them so a line-break violation names the column
  * rather than an index. Trailing empty fields are WRITTEN, not dropped — `2020-07-09,92.3,morning,`
  * keeps its trailing comma, which falls out of joining rather than needing a rule.
  */
@@ -70,7 +38,7 @@ export function csvRow(fields: readonly (string | null | undefined)[], names: re
         if (hasLineBreak(value)) {
           throw new Error(`CSV export: the '${names[i]}' field cannot contain a line break`);
         }
-        return quoteIfNeeded(value, names[i]);
+        return quoteIfNeeded(value);
       })
       .join(',') + '\n'
   );
