@@ -73,7 +73,8 @@ describe('isIanaTimeZone', () => {
   );
 
   // Postgres reads a bare offset with the sign reversed, so Intl's acceptance is not enough.
-  it.each(['+05:00', '-0500', '+05', 'GMT', 'EST'])(
+  // `+00:30`, `+0030` and `-00:01` pin the zero-offset regex's end anchor: Intl accepts all three.
+  it.each(['+05:00', '-0500', '+05', 'GMT', 'EST', '+00:30', '+0030', '-00:01'])(
     'rejects an offset or abbreviation Intl accepts (%s)',
     (tz) => {
       expect(() => new Intl.DateTimeFormat('en-US', { timeZone: tz })).not.toThrow();
