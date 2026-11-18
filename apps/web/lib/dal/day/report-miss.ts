@@ -19,8 +19,7 @@ import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../househol
  *   foreign held `clientId`): nothing is reported, since the id named nothing outside the household.
  *   `reportScopeMiss` itself tells `cross_household` from `unknown_resource`.
  * - The profile is not checked here: the action resolved it with `getProfileByPublicId`, which
- *   reports its own miss. Un-tick and re-tick carry only an entry id, which is not a scope-miss
- *   kind, so they never call this.
+ *   reports its own miss. Un-tick, re-tick and Change (12d) carry only an entry id, which is not a *   scope-miss kind, so they never call this.
  * - **It never throws.** A failed check reports nothing, and the caller still answers `not_found`.
  */
 export async function reportRowMiss(

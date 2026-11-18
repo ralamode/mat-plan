@@ -308,5 +308,8 @@ test.describe('Change on real data', () => {
     await expectNoAxeViolations(page, 'Change, kept, 360px');
     await expectTapTargets(page, 'Change, kept, 360px');
     await expectNoHorizontalOverflow(page, 'Change, kept');
+    // What was stored, not only what the field shows: nothing was sent.
+    await page.reload();
+    await expect(repsField(page, partner), `${partner}: a blank changed nothing`).toHaveValue(reps);
   });
 });

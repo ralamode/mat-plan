@@ -22,8 +22,8 @@ import { quietDbErrors } from '../quiet-db-errors';
 import { reportRowMiss } from './report-miss';
 
 /**
- * The day page's data access (FAM-1 step 12b; [guide](../../../../../docs/features/day-page.md)):
- * the athlete's `DayPlan`, and the three row writes the day screen makes.
+ * The day page's data access (FAM-1 steps 12b and 12d; [guide](../../../../../docs/features/day-page.md)):
+ * the athlete's `DayPlan`, and the four row writes the day screen makes.
  *
  * - 🔴 **`today` is an argument, never read here.** The action (or, at 12c, the page) reads the
  *   time zone and passes its active-zone day. Nothing at or below this file reads a cookie or a
