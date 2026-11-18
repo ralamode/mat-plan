@@ -313,7 +313,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " screen, opened from the home screen): anyone\nsigned in to your household can create and rename a program, write and save its workouts, set its\nweek, copy a workout, and add a movement of your own. What is stored: a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. A movement name someone in your household types while\nbuilding a program is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\n"
+              "text": " screen, opened from the home screen): anyone\nsigned in to your household can create and rename a program, write and save its workouts, set its\nweek, copy a workout, and add a movement of your own. What is stored: a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. A movement name someone in your household types while\nbuilding a program is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\nIn the builder, an exercise you remove from a workout or swap for another, a target you clear, a\nworkout you save with nothing in it, and a workout taken off a day of the week or moved to another\nday (with its label) are hidden, not erased, and they pile up: nothing in the app can show,\nrestore, export or erase them, and they stay until the program or the household is removed.\n"
             },
             {
               "k": "strong",
@@ -1644,7 +1644,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " The app has no Delete button yet. In the program\nbuilder, an exercise you remove from a workout or swap for another, a target you clear, a workout you\nsave with nothing in it, and a workout taken off a day of the week or moved to another day (with its\nlabel) are hidden, not erased, and they pile up: nothing in the app can show, restore, export or\nerase them, and they stay until the program or the household is removed. You can "
+        "text": " The app has no Delete button yet. You can "
       },
       {
         "k": "strong",
@@ -1814,31 +1814,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "no way to permanently remove one single logged item on demand"
+            "text": "no way to permanently remove one single item on demand"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the finest grain\nfor a permanent removal of anything logged is an athlete. Ask, and that is done."
-      }
-    ]
-  },
-  {
-    "k": "p",
-    "children": [
-      {
-        "k": "strong",
-        "children": [
-          {
-            "k": "text",
-            "text": "A program, a workout or a movement you typed can't be deleted in the app, but ask and it is\nremoved."
-          }
-        ]
-      },
-      {
-        "k": "text",
-        "text": " First we tell you which athletes it affects, and offer to rename it, or to take everyone\noff it, instead, since either leaves everyone's data as it is. If you still want it removed, it is\nremoved with no waiting period, and a restore point is held for 3 days afterwards. What athletes\nlogged keeps its names: a workout's name as it was on the day, and the movement names, stay on their\nlogs, so a movement something logged still uses is not removed. How it is done is in the public\nrunbook, \"Remove one program, workout or typed item on request\"."
+        "text": " — the finest grain for a\npermanent removal is an athlete. Ask, and that is done."
       }
     ]
   },
@@ -2060,6 +2042,24 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "k": "text",
         "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs you built, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the athletes the app started with\ncannot be erased one at a time yet, because an older copy of the setup could put them back; they are\nremoved together, with the rest of the starting data, when the app is started fresh."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "A program, a workout or a movement you typed can't be deleted in the app, but ask and it is\nremoved."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " First we tell you which athletes it affects, and offer to rename it, or to take everyone\noff it, instead, since either leaves everyone's data as it is. If you still want it removed, it is\nremoved with no waiting period, and a restore point is held for 3 days afterwards. What athletes\nlogged keeps its names: a workout's name as it was on the day, and the movement names, stay on their\nlogs, so a movement something logged still uses is not removed. How it is done is in the public\nrunbook, \"Remove one program, workout or typed item on request\"."
       }
     ]
   },

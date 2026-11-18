@@ -569,11 +569,12 @@ export const isStaleWeek = (reason: ProgramRefusal) =>
 
 /**
  * What a refused week says: a stale page (the editor never sends a repeat), a full day, or a
- * failure. `limit_reached` names the days of the sent week over `MAX_DAY_SLOTS`, Monday first.
+ * failure. `limit_reached` names the days of the sent week at or over `MAX_DAY_SLOTS`, Monday
+ * first: the editor stops at the cap, so a day at it is the one a race could have pushed past.
  */
 export function weekRefusal(reason: ProgramRefusal, sent?: ProgramView['week']): string {
   if (reason === PROGRAM_REFUSAL.limit_reached) {
-    const full = sent ? MONDAY_FIRST.filter((day) => sent[day].length > MAX_DAY_SLOTS) : [];
+    const full = sent ? MONDAY_FIRST.filter((day) => dayIsFull(sent[day].length)) : [];
     const days = full.length ? formatList(full.map((day) => weekdayName(day))) : 'A day';
     return `${days} ${full.length > 1 ? 'are' : 'is'} full: a day holds at most ${MAX_DAY_SLOTS} workouts. Nothing was added; the week is back as it was.`;
   }

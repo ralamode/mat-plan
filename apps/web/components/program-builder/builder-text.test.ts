@@ -106,7 +106,7 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
 });
 
 describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N", from the consts', () => {
-  const [SUNDAY, MONDAY, TUESDAY] = WEEKDAYS;
+  const [SUNDAY, MONDAY, TUESDAY, WEDNESDAY] = WEEKDAYS;
   it('a program stops at MAX_PROGRAM_WORKOUTS, a day at MAX_DAY_SLOTS, not one before', () => {
     expect(programIsFull(MAX_PROGRAM_WORKOUTS - 1)).toBe(false);
     expect(programIsFull(MAX_PROGRAM_WORKOUTS)).toBe(true);
@@ -122,7 +122,7 @@ describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N",
     expect(dayFullLabel(TUESDAY)).toBe('Tuesday, full');
   });
 
-  it('a week refused limit_reached names the full days of the week it sent, Monday first', () => {
+  it('a week refused limit_reached names the days at the cap in the week it sent, Monday first', () => {
     const slots = (n: number) =>
       Array.from({ length: n }, (_, i) => ({ workoutPublicId: `w${i}`, label: null }));
     const week = {
@@ -130,13 +130,14 @@ describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N",
       [SUNDAY]: slots(MAX_DAY_SLOTS + 1),
       [TUESDAY]: slots(MAX_DAY_SLOTS + 1),
       [MONDAY]: slots(MAX_DAY_SLOTS),
+      [WEDNESDAY]: slots(MAX_DAY_SLOTS - 1),
     };
     expect(weekRefusal(PROGRAM_REFUSAL.limit_reached, week)).toBe(
-      'Tuesday and Sunday are full: a day holds at most 30 workouts. Nothing was added; the week is back as it was.',
+      'Monday, Tuesday, and Sunday are full: a day holds at most 30 workouts. Nothing was added; the week is back as it was.',
     );
-    expect(weekRefusal(PROGRAM_REFUSAL.limit_reached, { ...week, [SUNDAY]: [] })).toMatch(
-      /^Tuesday is full: /,
-    );
+    expect(
+      weekRefusal(PROGRAM_REFUSAL.limit_reached, { ...week, [SUNDAY]: [], [MONDAY]: [] }),
+    ).toMatch(/^Tuesday is full: /);
   });
 
   it('a copy refused limit_reached names both causes, unless only the program can be full', () => {

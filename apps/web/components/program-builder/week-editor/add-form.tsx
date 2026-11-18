@@ -54,10 +54,10 @@ export function AddForm({
   const [workoutError, setWorkoutError] = useState<string | null>(null);
   const [labelError, setLabelError] = useState<string | null>(null);
   const hasIt = workout ? daysWith(week, workout) : new Set<Weekday>();
-  // A full day can't be ticked (7b-i); one ticked before it filled is dropped, not sent.
+  // A full day can't be ticked (7b-i).
   const full = new Set(MONDAY_FIRST.filter((d) => dayIsFull(week[d].length)));
   // Every ticked day, the "has it" ones included: they are skipped and the message says so.
-  const ticked = [...new Set([...days, ...hasIt])].filter((d) => hasIt.has(d) || !full.has(d));
+  const ticked = [...new Set([...days, ...hasIt])];
   const fresh = ticked.filter((d) => !hasIt.has(d));
   const prefix = addFormId(day);
   const workoutErrorId = `${addWorkoutId(day)}-error`;

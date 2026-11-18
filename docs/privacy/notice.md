@@ -51,6 +51,10 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   building a program is added to the list that anyone signed in to your household picks from, and it
   stays in that list whether or not any program still uses it. It can't be renamed or removed in the
   app. Please type only the name of an exercise, never a person's name or anything about a child.
+  In the builder, an exercise you remove from a workout or swap for another, a target you clear, a
+  workout you save with nothing in it, and a workout taken off a day of the week or moved to another
+  day (with its label) are hidden, not erased, and they pile up: nothing in the app can show,
+  restore, export or erase them, and they stay until the program or the household is removed.
   **Who is on which program**: which athlete is on it, from which day and through which day, and on
   which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
   an athlete off a program keeps the record that they were on it. If the program only started that day
@@ -214,11 +218,7 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | An export you have downloaded                                | Yours — we cannot keep or delete it                                                                                                                                    |
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
-⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. In the program
-builder, an exercise you remove from a workout or swap for another, a target you clear, a workout you
-save with nothing in it, and a workout taken off a day of the week or moved to another day (with its
-label) are hidden, not erased, and they pile up: nothing in the app can show, restore, export or
-erase them, and they stay until the program or the household is removed. You can **clear a
+⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
 weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap Clear): that
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
@@ -243,16 +243,8 @@ field, as above. Two things are worth saying plainly about every clear:
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
   until a removal that runs a set number of days later is built.
 
-There is still **no way to permanently remove one single logged item on demand** — the finest grain
-for a permanent removal of anything logged is an athlete. Ask, and that is done.
-
-**A program, a workout or a movement you typed can't be deleted in the app, but ask and it is
-removed.** First we tell you which athletes it affects, and offer to rename it, or to take everyone
-off it, instead, since either leaves everyone's data as it is. If you still want it removed, it is
-removed with no waiting period, and a restore point is held for 3 days afterwards. What athletes
-logged keeps its names: a workout's name as it was on the day, and the movement names, stay on their
-logs, so a movement something logged still uses is not removed. How it is done is in the public
-runbook, "Remove one program, workout or typed item on request".
+There is still **no way to permanently remove one single item on demand** — the finest grain for a
+permanent removal is an athlete. Ask, and that is done.
 
 ## Getting your data out
 
@@ -309,6 +301,14 @@ the record of the deletion holds the athlete's internal identifier and no login 
 account went too. An athlete added through the app can be erased today; the athletes the app started with
 cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
 removed together, with the rest of the starting data, when the app is started fresh.
+
+**A program, a workout or a movement you typed can't be deleted in the app, but ask and it is
+removed.** First we tell you which athletes it affects, and offer to rename it, or to take everyone
+off it, instead, since either leaves everyone's data as it is. If you still want it removed, it is
+removed with no waiting period, and a restore point is held for 3 days afterwards. What athletes
+logged keeps its names: a workout's name as it was on the day, and the movement names, stay on their
+logs, so a movement something logged still uses is not removed. How it is done is in the public
+runbook, "Remove one program, workout or typed item on request".
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your

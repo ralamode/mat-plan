@@ -26,7 +26,6 @@ import {
   programFullText,
   WEEK_COPY,
   weekdayName,
-  weekRefusal,
 } from './builder-text';
 import { ProgramScreen } from './program-screen';
 import { newWorkoutPath } from './routes';
@@ -175,8 +174,8 @@ describe('a day’s "+ Add" stops at MAX_DAY_SLOTS', () => {
     });
     fireEvent.click(within(form).getByRole('button', { name: WEEK_COPY.addButton }));
     await waitFor(() => expect(alerts()).toHaveLength(1));
-    const days = vi.mocked(all.saveWeek).mock.calls[0]![0].days;
-    expect(alerts()[0]).toBe(weekRefusal(PROGRAM_REFUSAL.limit_reached, days));
+    expect(vi.mocked(all.saveWeek).mock.calls[0]![0].days[TUESDAY]).toHaveLength(MAX_DAY_SLOTS);
+    expect(alerts()[0]).toMatch(/^Tuesday is full: /);
     expect(refresh).not.toHaveBeenCalled();
   });
 });
