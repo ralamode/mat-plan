@@ -197,6 +197,12 @@ export const saveWorkoutSchema = workoutDraftSchema
  * - `MAX_PROGRAM_WORKOUTS`: the workouts of one program, a saved new one and a copy alike.
  * - `MAX_DAY_SLOTS`: the workouts on one weekday of one program's week. `weekDaysSchema` holds it,
  *   so a week past it fails the parse: `weekExceedsDaySlots` tells that from any other failure.
+ *   ⚠️ `ProgramView.week` is the same schema, so a READ is held to it too. That is safe because
+ *   every writer parses the draft first and the week's table is new with FAM-1: no stored week is
+ *   longer. No other read shape has a `.max` for these caps.
+ *
+ * **The workouts cap is the program's the write lands in**: for a copy into another program, that
+ * program's, never the source's.
  *
  * **What a cap never refuses:** an edit of a workout that exists, a replay of a create (the same
  * client id answers as the first call did), and `newItem` for a name that already names an item
@@ -261,20 +267,6 @@ export function emptyWeek<Slot = WeekDraft['days'][Weekday][number]>(): Record<W
  *
  * One definition for the fake and for 6b's writer, so the two answer the same refusal.
  */
-/**
- * Whether a week draft has a weekday with more than `MAX_DAY_SLOTS` workouts, which is why its
- * parse failed and why the write answers `limit_reached` and not `invalid` (C35). It reads the raw
- * input, as `weekRepeatsAWorkout` does and for the same reason. **A repeat wins**: a week that
- * names a workout twice on a day is `once_per_day` whatever else is wrong, so ask that first.
- *
- * One definition for the fake, the writer and the action, so the three answer alike.
- */
-export function weekExceedsDaySlots(draft: unknown): boolean {
-  const days: unknown = (draft as { days?: unknown } | null | undefined)?.days;
-  if (!days || typeof days !== 'object') return false;
-  return Object.values(days).some((slots) => Array.isArray(slots) && slots.length > MAX_DAY_SLOTS);
-}
-
 export function weekRepeatsAWorkout(draft: unknown): boolean {
   const days: unknown = (draft as { days?: unknown } | null | undefined)?.days;
   if (!days || typeof days !== 'object') return false;
@@ -288,6 +280,20 @@ export function weekRepeatsAWorkout(draft: unknown): boolean {
     });
     return !distinct(ids);
   });
+}
+
+/**
+ * Whether a week draft has a weekday with more than `MAX_DAY_SLOTS` workouts, which is why its
+ * parse failed and why the write answers `limit_reached` and not `invalid` (C35). It reads the raw
+ * input, as `weekRepeatsAWorkout` does and for the same reason. **A repeat wins**: a week that
+ * names a workout twice on a day is `once_per_day` whatever else is wrong, so ask that first.
+ *
+ * One definition for the fake, the writer and the action, so the three answer alike.
+ */
+export function weekExceedsDaySlots(draft: unknown): boolean {
+  const days: unknown = (draft as { days?: unknown } | null | undefined)?.days;
+  if (!days || typeof days !== 'object') return false;
+  return Object.values(days).some((slots) => Array.isArray(slots) && slots.length > MAX_DAY_SLOTS);
 }
 
 /** A program, by id and name: one entry of a list a person picks from. */

@@ -468,8 +468,16 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       does for a repeat, and **a repeat is asked first**: `once_per_day`, then `limit_reached`,
       then `invalid`. The fake answers this way; lane P's writers and the real actions follow in
       their own PRs, and until they do the real `saveWeek` answers `invalid` for a long day.
-    - **Not capped by the contract:** how many programs a household has, and the read shapes
-      (`ProgramView.workouts` has no `.max`, so a read never fails on a count).
+    - **The workouts cap is the program's the write lands in.** For a copy into another program
+      that is the other program's, never the source's. ⚠️ The fake holds only the program on
+      screen, so it counts that one alone: a copy into another program is never refused by the
+      fake, and a save for a program that is not on screen is not counted either. The real
+      writers count the destination.
+    - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
+      `weekDaysSchema`. That is safe: every writer parses the draft first, and the week's table
+      is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      caps (`ProgramView.workouts` has none), and how many programs a household has is not
+      capped.
 
 ## Traps
 

@@ -29,9 +29,9 @@ import type {
 /**
  * Why a program write did not happen.
  *
- * `limit_reached` (contract change C35): the household already has as many as it may of the thing
- * the write would add (`MAX_HOUSEHOLD_ITEMS`, `MAX_PROGRAM_WORKOUTS`, `MAX_DAY_SLOTS` in
- * `./program-shapes`). Its own word, because `invalid` reads as "something you typed is wrong" and
+ * `limit_reached` (contract change C35): the write would take the household's own items, a
+ * program's workouts or a weekday's workouts past its cap (`MAX_HOUSEHOLD_ITEMS`,
+ * `MAX_PROGRAM_WORKOUTS`, `MAX_DAY_SLOTS` in `./program-shapes`). Its own word, because `invalid` reads as "something you typed is wrong" and
  * a screen marks a field for it.
  */
 export const PROGRAM_REFUSALS = [

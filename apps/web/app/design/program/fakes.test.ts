@@ -1078,6 +1078,34 @@ describe('the fake ProgramActions: workouts and the week', () => {
       );
     });
 
+    it('a copy is capped as a new workout is: one short takes it, a replay of it still answers', async () => {
+      const { actions, view } = builder({ program: programOf(MAX_PROGRAM_WORKOUTS - 1) });
+      const copy = copyOf('The last copy');
+      const copied = await actions.copyWorkout(copy);
+      expect(copied.ok).toBe(true);
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+      // The program is full now. The same client id is not a new workout; another one is.
+      expect(await actions.copyWorkout(copy)).toEqual(copied);
+      expect(await actions.copyWorkout(copyOf('One too many'))).toEqual(refusal('limit_reached'));
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+    });
+
+    it('the cap is the program’s the copy lands in: a full program can still be copied FROM', async () => {
+      const { actions, view, state } = builder({ program: programOf(MAX_PROGRAM_WORKOUTS) });
+      const other = state().programs.find((p) => p.programPublicId !== view().programPublicId)!;
+      // ⚠️ The fake holds only the program on screen, so it cannot count the other one's workouts:
+      // it never refuses this. The real writer counts the program the copy lands in.
+      expect(
+        (
+          await actions.copyWorkout({
+            ...copyOf('Into another'),
+            toProgramPublicId: other.programPublicId,
+          })
+        ).ok,
+      ).toBe(true);
+      expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+    });
+
     it('a full program still takes an edit of a workout it has', async () => {
       const { actions, view } = builder({ program: programOf(MAX_PROGRAM_WORKOUTS) });
       expect((await actions.saveWorkout({ ...heavyADraft, name: 'Heavy A, renamed' })).ok).toBe(
