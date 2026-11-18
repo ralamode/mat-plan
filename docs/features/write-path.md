@@ -518,6 +518,9 @@ The shapes those lanes agree on, the fakes and the preview route are
    is worth knowing before B1-2 unifies them:
    - **strength** → `reselectLiveByClientId` throws `no live row for client_id`, which reaches
      `error.tsx` and loses the form. `db:verify`'s B0 case asserts it; mutation `39` proves it fails.
+     The same throw answers a row held by **someone else** (another athlete's session, another
+     session's entry or superset): the re-select carries an owner conjunct, same message on purpose
+     ([strength-logging.md](./strength-logging.md) invariant 6; mutations `440`–`443`).
    - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
      branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
      now names this case. Also asserted in the B0 block.

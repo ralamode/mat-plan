@@ -15,7 +15,7 @@ import {
   movementFamilyOf,
 } from './families';
 import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS, CATALOG_FIXTURE_OPTIONS } from './fixture';
-import { catalogHowToOf, catalogOptionOf, type CatalogOption } from './option';
+import { catalogHowToOf, catalogHowToSchema, catalogOptionOf, type CatalogOption } from './option';
 import { MODALITIES, MUSCLES } from './vocabulary';
 
 const entryWith = (slug: string): CatalogMovement => {
@@ -226,6 +226,28 @@ describe('the browse families (P12)', () => {
     for (const entry of [...CATALOG_FIXTURE, ...CATALOG_MOVEMENTS]) {
       expect(MOVEMENT_FAMILY_LABELS[movementFamilyOf(entry)], entry.slug).toBeTruthy();
     }
+  });
+});
+
+describe('catalogHowToSchema: what the "How to" read answers, and nothing else (P16)', () => {
+  const withSteps = CATALOG_FIXTURE.find((entry) => entry.instructions !== undefined)!;
+  const answer = catalogHowToOf(CATALOG_FIXTURE, withSteps.slug)!;
+
+  it('takes what catalogHowToOf answers, unchanged', () => {
+    expect(catalogHowToSchema.parse(answer)).toEqual(answer);
+    expect(Object.keys(answer).sort()).toEqual(['instructions', 'name', 'supervision']);
+  });
+
+  it('🔴 is strict: a slug, an id or any other key is refused, so none can ride along', () => {
+    expect(catalogHowToSchema.safeParse({ ...answer, slug: withSteps.slug }).success).toBe(false);
+    expect(catalogHowToSchema.safeParse({ ...answer, publicId: 'x' }).success).toBe(false);
+  });
+
+  it('needs all three: the label is null when there is none, never absent', () => {
+    const { supervision: _s, ...noLabel } = answer;
+    expect(catalogHowToSchema.safeParse(noLabel).success).toBe(false);
+    expect(catalogHowToSchema.safeParse({ ...answer, supervision: null }).success).toBe(true);
+    expect(catalogHowToSchema.safeParse({ ...answer, instructions: '' }).success).toBe(false);
   });
 });
 

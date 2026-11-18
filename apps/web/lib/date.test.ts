@@ -71,6 +71,25 @@ describe('isIanaTimeZone', () => {
   it.each(['Not/AZone', 'foo', '', null, undefined])('rejects a bad value (%s)', (tz) =>
     expect(isIanaTimeZone(tz)).toBe(false),
   );
+
+  // Postgres reads a bare offset with the sign reversed, so Intl's acceptance is not enough.
+  // `+00:30`, `+0030` and `-00:01` pin the zero-offset regex's end anchor: Intl accepts all three.
+  it.each(['+05:00', '-0500', '+05', 'GMT', 'EST', '+00:30', '+0030', '-00:01'])(
+    'rejects an offset or abbreviation Intl accepts (%s)',
+    (tz) => {
+      expect(() => new Intl.DateTimeFormat('en-US', { timeZone: tz })).not.toThrow();
+      expect(isIanaTimeZone(tz)).toBe(false);
+    },
+  );
+
+  it.each(['Etc/UTC', 'Etc/GMT+5'])('accepts an Etc/ name (%s)', (tz) =>
+    expect(isIanaTimeZone(tz)).toBe(true),
+  );
+
+  // A device set to GMT reports `+00:00` from `resolvedOptions()`, and zero has no sign to reverse.
+  it.each(['+00:00', '-00:00', '+00', '+0000'])('accepts a zero offset (%s)', (tz) =>
+    expect(isIanaTimeZone(tz)).toBe(true),
+  );
 });
 
 describe('localWeekStartIso (ISO-week Monday)', () => {
