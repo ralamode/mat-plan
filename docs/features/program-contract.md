@@ -325,9 +325,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
     program fake holds no logged rows, so in the preview a start dated today is always removed.
     **A repeat of a Take off that removed the start answers `{ ok: true, lastDay: null }` again**,
-    not `not_found` (a double tap, a retry: a replay answers as the first call did; decided under
-    the maintainer's overnight delegation, 2026-11-18). An athlete who was never on the program
-    is still `not_found`. The fake remembers the starts it removed.
+    not `not_found` (a double tap, a retry: a replay answers as the first call did; plan review
+    log L51). It holds while the removed start's day is today or later; after that day the call
+    is `not_found`, as it is for an athlete who was never on the program. The fake remembers the
+    starts it removed, and its today never moves.
 20. **A copy may carry its own name, and no program ever holds two workouts with one name**
     (`CopyDraft.name`, optional; maintainer, 2026-11-16). Without a name, a copy into the workout's
     own program is named with " (copy)" and a copy into another program keeps the name. A name
@@ -518,15 +519,18 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       throws when the world's name or tracking type is not the entry's. A data lane's proof seeds
       such an item as a library row with that slug and resolves the label from the library it is
       handed, never from the world. The item's id is `fixtureIds.item(key)` like any other.
-    - `coach-label-program-ending-today` holds all three cases: a labelled library movement, an
+    - `coach-label-program-ending-today` holds all four cases: a labelled library movement, an
       unlabelled one, the household's own item, and a labelled movement whose prescription left.
 33. **A program the athlete comes off after today is last in `currentPrograms`, and says so**
     (contract change C37; ADR 0007 Amendment 5, maintainer 2026-11-18). Each entry may carry
     `endsToday: true`, present exactly on a program whose last day is today and absent on one
-    that stays; the schema refuses `false`. Such a program sorts after every program that
+    that stays; the schema refuses `false`. The day's read ranks a row "has an end and has
+    started", which is the same set: Take off is the only writer of an end and it ends on
+    today. A fixture world with a started program ending later is refused by the builder. Such a program sorts after every program that
     stays, whatever the athlete's order says, and the day's `programs` and `workouts` follow.
-    - **The Reorder dialog cannot move it**, so it lists it with no arrows (plan §8; decided
-      under the maintainer's overnight delegation, 2026-11-18).
+    - **The Reorder dialog cannot move it**, so it lists it with no arrows (plan §8 and review
+      log L49). ⚠️ Until lane C's dialog reads the flag, it still shows arrows there, and the
+      fake ignores that move as the real order would.
     - **`reorderPrograms` still takes the full list**, the program ending today included, and the
       fake puts it last whatever place it was given, as the day's read does.
     - ⚠️ **A known gap in the fake:** it accepts a reorder for an archived athlete, where the real

@@ -485,8 +485,10 @@ export type AssignDraft = z.infer<typeof assignDraftSchema>;
  *
  * **A repeat answers as the first call did.** After a Take off that removed the start, the same
  * call again (a double tap, a retry) answers `{ ok: true, lastDay: null }`, not `not_found`: the
- * start is gone and nothing else is on in its place. An athlete who was never on the program, an
- * archived athlete and another household's ids are `not_found`, as before.
+ * start is gone and nothing else is on in its place. **That holds while the removed start's day
+ * is today or later**; once that day has passed, the call is `not_found` like any other for an
+ * athlete who is not on the program. An athlete who was never on it, an archived athlete and
+ * another household's ids are `not_found`, as before.
  */
 export const takeOffSchema = z.object({
   programPublicId: lowerCaseUuidSchema,

@@ -1196,6 +1196,59 @@ describe('coach-label-program-ending-today (C32, C37)', () => {
     expect(flagged).toBe(1);
   });
 
+  describe('the builder’s rules, on worlds no fixture holds', () => {
+    const { world, athlete, day } = DAY_PLAN_FIXTURE_SOURCES['coach-label-program-ending-today'];
+    const tomorrow = '2026-11-15';
+    const current = (changed: typeof world) =>
+      dayPlan(changed, athlete, day).currentPrograms.map((p) => [p.name, p.endsToday]);
+
+    it('🔴 two programs ending today keep the athlete’s order between them', () => {
+      const both = edit(world, (draft) => {
+        for (const a of draft.assign[athlete]!) a.to = tomorrow;
+      });
+      expect(current(both)).toEqual([
+        ['Camp week', true],
+        ['Barbell club', true],
+      ]);
+    });
+
+    it('🔴 a program that starts later is not ending today, whatever end it carries', () => {
+      const upcoming = edit(world, (draft) => {
+        Object.assign(draft.assign[athlete]![0]!, { from: tomorrow, to: '2026-11-18' });
+      });
+      // Camp week is first in the athlete's order and stays there: it has not started.
+      expect(current(upcoming)).toEqual([
+        ['Camp week', undefined],
+        ['Barbell club', undefined],
+      ]);
+    });
+
+    it('🔴 refuses a started program that ends after today: no writer makes one', () => {
+      const later = edit(world, (draft) => {
+        draft.assign[athlete]![0]!.to = '2026-11-18';
+      });
+      expect(() => dayPlan(later, athlete, day)).toThrow(/ends after today/);
+    });
+
+    it('🔴 refuses a library item that is not the library’s entry, by slug, name or type', () => {
+      const withClean = (change: object) =>
+        edit(world, (draft) => {
+          Object.assign(draft.catalog.pushpress, change);
+        });
+      for (const change of [
+        { library: 'no_such_movement' },
+        { library: 'goblet_squat' },
+        { name: 'Power clean' },
+        { type: 'reps' },
+      ]) {
+        expect(() => dayPlan(withClean(change), athlete, day), JSON.stringify(change)).toThrow(
+          /is not the test library’s|is not the test library's/,
+        );
+      }
+      expect(() => dayPlan(withClean({}), athlete, day)).not.toThrow();
+    });
+  });
+
   it('🔴 the shape refuses a null label and a false flag: both are absent or set', () => {
     const [item] = barbellDay!.items;
     const withItem = (change: object) => ({

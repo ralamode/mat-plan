@@ -192,17 +192,30 @@ function onPrograms(world: World, athlete: string, day: string) {
  * ending today after every one that stays** (ADR 0007 Amendment 5; contract change C37): the sort
  * is stable, so each group keeps the athlete's order. `to` is the first day OFF the program, so a
  * program ending today has `to` = tomorrow and has started.
+ *
+ * **A started program with a later end is not a state**: Take off is the only writer of an end, and
+ * it ends on today. A world that holds one is refused here, so "has an end and has started", which
+ * is how the day's read ranks a row, always means "ends today".
  */
 function currentPrograms(world: World, athlete: string) {
   const current = (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
+  const tomorrow = addDays(world.today, 1);
+  for (const a of current) {
+    if (a.to !== undefined && a.to !== tomorrow && a.from <= world.today) {
+      throw new Error(
+        `fixture world: ${a.prog} has started and ends after today, which no writer makes`,
+      );
+    }
+  }
   return [
     ...current.filter((a) => !endsToday(world, a)),
     ...current.filter((a) => endsToday(world, a)),
   ];
 }
 
+/** Its last day is today: `to`, the first day off, is tomorrow, and it has started. */
 function endsToday(world: World, a: { from: string; to?: string }): boolean {
-  return a.to !== undefined && a.from <= world.today;
+  return a.to === addDays(world.today, 1) && a.from <= world.today;
 }
 
 function programRef(world: World, programId: string) {

@@ -244,10 +244,14 @@ export const dayPlanSchema = z.object({
    * `ProgramOrder` must be a permutation of.
    */
   /**
-   * `endsToday` (contract change C37) is present, and `true`, exactly on a program the athlete comes
-   * off after today: the ones ADR 0007 Amendment 5 sorts after every program that stays, so they are
-   * last here. Absent on a program that stays. The Reorder dialog lists such a program with no
+   * `endsToday` (contract change C37) is present, and `true`, exactly on a program whose last day
+   * is today: the athlete has started it and comes off it after today. Those are the ones ADR 0007
+   * Amendment 5 sorts after every program that stays, so they are last here. Absent on a program
+   * that stays, one that starts later included. The Reorder dialog lists such a program with no
    * arrows, since no order can move it up.
+   *
+   * The day's read ranks a row "has an end and has started"; that is the same set, because Take
+   * off is the only writer of an end and it ends on today.
    */
   currentPrograms: z.array(programRefSchema.extend({ endsToday: z.literal(true).optional() })),
   /**
