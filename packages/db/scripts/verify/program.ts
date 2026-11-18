@@ -30,6 +30,10 @@ import {
   DAY_PLAN_FIXTURE_SOURCES,
   familyProgram,
   familyProgramAfterTakeOff,
+  familyProgramArchivedAthlete,
+  PROGRAM_LIST_FIXTURE_SOURCES,
+  PROGRAM_VIEW_FIXTURE_SOURCES,
+  programsListArchivedAthlete,
   fixtureIds,
   heavyADraft,
   newProgramEmpty,
@@ -73,6 +77,7 @@ import {
   programIn,
   programWorkoutIds,
   readProgramList,
+  readProgramsByAthlete,
   readProgramView,
   readWeek,
   readWorkoutDraft,
@@ -3266,6 +3271,49 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         (p) => !(ids.get(fixtureIds.program('p1')) === p.programPublicId),
       ),
       'FAM-1 6c-ii: the program-list read lists no other household’s program',
+    );
+  });
+
+  // ── C36: an archived athlete, deep-equal both sides (seed `before`, then archive Athlete Two) ──
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const listSource = PROGRAM_LIST_FIXTURE_SOURCES['programs-list-archived-athlete'];
+    const viewSource = PROGRAM_VIEW_FIXTURE_SOURCES['family-program-archived-athlete'];
+    const { scope, ids } = await seedViewWorld(tx, viewSource.before ?? viewSource.world);
+    // Programs by athlete, before the archive: every athlete, their programs in their own order.
+    const byAthlete = await readProgramsByAthlete(exec, scope, today);
+    assert.deepEqual(
+      [...byAthlete.entries()],
+      world.athletes.map((a) => [
+        ids.get(fixtureIds.athlete(a.id)),
+        (world.assign[a.id] ?? []).map((s) => ({
+          programPublicId: ids.get(fixtureIds.program(s.prog)),
+          name: world.programs.find((p) => p.id === s.prog)!.name,
+        })),
+      ]),
+      'FAM-1 6c-ii: readProgramsByAthlete answers each athlete’s current programs, in their order',
+    );
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, ids.get(fixtureIds.athlete('a2'))!));
+    assert.deepEqual(
+      await readProgramList(exec, scope, listSource.world.today),
+      translated(programsListArchivedAthlete, ids),
+      'FAM-1 6c-ii: the program-list read deep-equals programs-list-archived-athlete',
+    );
+    assert.deepEqual(
+      await readProgramView(exec, scope, ids.get(fixtureIds.program(viewSource.program))!, {
+        today: viewSource.world.today,
+        tz: VIEW_TZ,
+      }),
+      translated(familyProgramArchivedAthlete, ids),
+      'FAM-1 6c-ii: the program-view read deep-equals family-program-archived-athlete',
+    );
+    assert.equal(
+      (await readProgramsByAthlete(exec, scope, today)).has(ids.get(fixtureIds.athlete('a2'))!),
+      false,
+      'FAM-1 6c-ii: …and readProgramsByAthlete leaves the archived athlete out',
     );
   });
   console.log(

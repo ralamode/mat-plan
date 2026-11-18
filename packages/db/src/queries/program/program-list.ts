@@ -1,6 +1,13 @@
 import { asc } from 'drizzle-orm';
 
-import { isoDaySchema, programListSchema, type ProgramList } from '@mat-plan/shared';
+import {
+  isoDaySchema,
+  programListSchema,
+  programRefSchema,
+  type ProgramList,
+} from '@mat-plan/shared';
+
+type ProgramRef = { programPublicId: string; name: string };
 
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
@@ -50,5 +57,29 @@ export async function readProgramList(
       name: program.name,
       athletes: on.get(program.id) ?? [],
     })),
+  );
+}
+
+/**
+ * Each athlete's current programs, keyed by their public id (for the Home tiles, step 7b): every
+ * live, not archived athlete of the household is a key, in the order they were made; the value is
+ * the programs they are on as of `today` (on it now or starting later), in their own order, by the
+ * day page's own rule (`athletesOnPrograms`). An athlete on no program maps to `[]`.
+ */
+export async function readProgramsByAthlete(
+  exec: Executor,
+  scope: HouseholdScope,
+  today: string,
+): Promise<Map<string, ProgramRef[]>> {
+  if (!isoDaySchema.safeParse(today).success) {
+    throw new Error('readProgramsByAthlete needs today as an ISO day');
+  }
+  return new Map(
+    (await athletesOnPrograms(exec, scope, today)).map((athlete) => [
+      athlete.publicId,
+      athlete.current.map((p) =>
+        programRefSchema.parse({ programPublicId: p.programPublicId, name: p.name }),
+      ),
+    ]),
   );
 }

@@ -7,5 +7,5 @@ export { programIn, programWorkoutIds, workoutIn, workoutInHousehold } from './e
 export { readWorkoutDraft } from './workout';
 export { readWeek } from './week';
 export { movementOptions, type MovementOption } from './movement-options';
-export { readProgramList } from './program-list';
+export { readProgramList, readProgramsByAthlete } from './program-list';
 export { readProgramView } from './program-view';
