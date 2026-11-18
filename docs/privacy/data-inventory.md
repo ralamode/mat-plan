@@ -924,8 +924,8 @@ athlete") holds the profile `public_id`, the verifying channel and the dates, an
 the adult athlete also asked for their sign-in account to go. **An item entry** ("Remove one program, workout or typed item on request") holds the removed
 program's, workout's or item's `public_id`, the household's keep-or-remove answers by the `public_id` of
 each copy or item they were asked about, whether the alternative was offered and the removal accepted,
-a count of adult athletes told, the verifying channel and the dates (deleted at once if the household
-picks the alternative); never which athletes were
+a count of adult athletes told, the verifying channel and the dates (deleted at once if nothing is
+removed: an alternative, a refusal or a withdrawal); never which athletes were
 on it, and no Clerk ids. It exists only because `OPS-3` cannot
 make a deletion survive a database restore without it, it lives **outside git and outside the restorable database**,
 and it is deleted once the restore windows have passed.

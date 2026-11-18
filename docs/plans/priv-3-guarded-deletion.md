@@ -713,7 +713,10 @@ kept from the first draft.
 9. **Q9. An adult athlete on a removed program is told first, on their own channel, and cannot cancel**
    _(2026-11-18)_; before the apply they are sent their own full copy (their assignment rows and targets on
    it, which the in-app export does not hold; privacy lens on #632). How long "told first" lasts before
-   the apply is asked of the maintainer.
+   the apply is asked of the maintainer (Q11). Also asked: whether the principle's "unless they are ok
+   with changing the data" allows scrubbing a typed item's frozen name from the household's own logs, with
+   the requester's acceptance; today a name a log holds is removed only by erasing each athlete who
+   logged it (Q12).
 10. **Q10. A typed item a log still names is refused, and the household is told which athletes**
     _(2026-11-18)_.
 11. **The principle, for every removal, in the runbook now and in the app later** _(2026-11-18,

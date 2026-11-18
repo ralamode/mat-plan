@@ -2187,9 +2187,9 @@ principle that also binds any later in-app removal:
 
 **0. Record the request** in the ledger (below).
 
-**1. Offer the export first** (`/p/<profileId>/export`, for each athlete who trained on it), and the full
-copy on request. The in-app export holds no program, no targets and no record of who was on which
-program, which is what a removal deletes.
+**1. The export is offered at step 3**, once its list says who trained on it: the in-app export
+(`/p/<profileId>/export`) for each of them, and the full copy on request. The in-app export holds no
+program, no targets and no record of who was on which program, which is what a removal deletes.
 
 **2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**
 household, never from the target row, and the target must carry it:
@@ -2217,6 +2217,8 @@ targets apply step 1 deletes), and what changes for them:
   per-program report**: a session's link to its workout, and an entry's to its prescription, is cleared;
 - their record of being on the program, and their targets on it, are deleted.
 
+Offer the export (step 1) to each athlete listed.
+
 Then offer, as the default, the change that touches nobody's data:
 
 | Target    | The alternative, offered first                                                                                                                                            |
@@ -2226,7 +2228,8 @@ Then offer, as the default, the change that touches nobody's data:
 | An item   | Rename it. No correction does this yet; one is written when first asked for. A rename, like a refused removal, leaves the name as logged on every log and in every export |
 
 **Remove only if the requester, told who, explicitly accepts changing those athletes' data.** If they
-pick the alternative, nothing is removed, and **the ledger entry is deleted then**. An **adult** athlete
+pick the alternative, a stop refuses, or they withdraw, nothing is removed, and **the ledger entry is
+deleted then**. An **adult** athlete
 among those affected is told first, on their own channel, and cannot cancel it (Q9). **Before the apply
 they are sent their own full copy**: their assignment rows and their targets on it, which the in-app
 export does not hold. There is no in-app archive for a program, a workout or an item yet; when one is
@@ -2340,10 +2343,12 @@ UNION ALL SELECT 'session', s.id FROM sessions s JOIN profiles p ON p.id = s.pro
  WHERE s.workout_id = :W AND p.household_id <> :H;
 
 -- REPORT (2): who trained on it, and what stays on their logs (as the program case's (2)).
-SELECT 'sessions' k, s.profile_id, count(*) FROM sessions s WHERE s.workout_id = :W GROUP BY s.profile_id
+SELECT 'sessions' k, s.profile_id, count(*) FROM sessions s JOIN profiles p ON p.id = s.profile_id
+ WHERE s.workout_id = :W AND p.household_id = :H GROUP BY s.profile_id
 UNION ALL
 SELECT 'entries', e.profile_id, count(*) FROM entries e JOIN prescriptions x ON x.id = e.prescription_id
- WHERE x.workout_id = :W GROUP BY e.profile_id;
+  JOIN profiles p ON p.id = e.profile_id
+ WHERE x.workout_id = :W AND p.household_id = :H GROUP BY e.profile_id;
 -- REPORT (3): every copy of it, in this program or another (as the program case's (3)).
 SELECT c.id, c.block_id FROM workouts c WHERE c.copied_from_workout_id = :W;
 -- REPORT (4): the household's own items only this workout used. A legacy prescription's workout_id
