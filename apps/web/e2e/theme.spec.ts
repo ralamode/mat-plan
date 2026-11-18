@@ -211,13 +211,11 @@ test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egre
   });
 
   for (const path of ['/', SIGN_IN_PATH]) {
-    await recordFirstClassMutation(page);
+    await recordCspViolations(page);
     const response = await page.goto(path, { waitUntil: 'networkidle' });
     expect(response?.status(), `${path} did not render`).toBe(200);
 
-    const violations = await page.evaluate(
-      () => (window as unknown as { __cspViolations: string[] }).__cspViolations,
-    );
+    const violations = await cspViolations(page);
     // Same narrowing as above: zod's JIT feature probe raises one pre-existing `script-src eval`
     // report on every page in this app. An un-nonced inline script reports `inline`.
     expect(
