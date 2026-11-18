@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index ea4474a9..72615eff 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -120,6 +120,10 @@ export async function takeOff(
+       .update(a)
+       .set({ activeTo: today, updatedAt: sql`now()` })
+       .where(eq(a.id, row.id));
++    await tx
++      .update(schema.programAssignmentWeekdays)
++      .set({ deletedAt: sql`now()` })
++      .where(eq(schema.programAssignmentWeekdays.assignmentId, row.id));
+     return { ok: true as const, lastDay: today };
+   });
+ }

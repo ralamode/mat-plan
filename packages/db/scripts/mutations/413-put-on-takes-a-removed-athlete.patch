@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 3ff52570..fccd6d9e 100644
+index 58457d24..bfa1ae90 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -76,7 +76,6 @@ export async function putOn(
-       .where(
-         and(
-           inArray(schema.profiles.publicId, draft.profilePublicIds),
--          isNull(schema.profiles.deletedAt),
-           isNull(schema.profiles.archivedAt),
-           inHousehold(scope),
-         ),
+@@ -50,7 +50,6 @@ export async function lockAthletes(
+     .where(
+       and(
+         inArray(schema.profiles.publicId, [...profilePublicIds]),
+-        isNull(schema.profiles.deletedAt),
+         isNull(schema.profiles.archivedAt),
+         inHousehold(scope),
+       ),

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index ea4474a9..b8a39eab 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -104,7 +104,7 @@ export async function takeOff(
+           schema.sessions,
+           and(eq(schema.sessions.id, schema.entries.sessionId), isNull(schema.sessions.deletedAt)),
+         )
+-        .innerJoin(schema.workouts, eq(schema.workouts.id, schema.sessions.workoutId))
++        .innerJoin(schema.workouts, and(eq(schema.workouts.id, schema.sessions.workoutId), isNull(schema.workouts.deletedAt)))
+         .where(
+           and(
+             programRowOf(athlete.id, today),

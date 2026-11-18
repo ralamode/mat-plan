@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index 6028767d..8c104193 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -85,7 +85,7 @@ export async function takeOff(
+       const [removed] = await tx
+         .select({ id: a.id })
+         .from(a)
+-        .where(and(ofThisProgram, sql`${a.deletedAt} is not null`, gte(a.activeFrom, today)))
++        .where(and(eq(a.profileId, athlete.id), sql`${a.deletedAt} is not null`, gte(a.activeFrom, today)))
+         .limit(1);
+       return removed ? { ok: true as const, lastDay: null } : refuse(PROGRAM_REFUSAL.not_found);
+     }
