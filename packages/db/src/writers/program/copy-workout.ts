@@ -154,6 +154,14 @@ export async function copyWorkout(
       const full = await tx
         .select({ weekday: schema.blockDayWorkouts.weekday, n: count() })
         .from(schema.blockDayWorkouts)
+        // The slots the week shows: a live workout's (`readWeek`'s join), so the cap matches the page.
+        .innerJoin(
+          schema.workouts,
+          and(
+            eq(schema.workouts.id, schema.blockDayWorkouts.workoutId),
+            isNull(schema.workouts.deletedAt),
+          ),
+        )
         .where(
           and(
             eq(schema.blockDayWorkouts.blockId, target.id),

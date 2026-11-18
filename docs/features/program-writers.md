@@ -166,8 +166,8 @@ flowchart TD
     those, go through the band (`week-skips-the-band`, `week-band-moves-unmoved-slots`); added slots are inserted after that, so a slot can go in front of a kept one (`week-inserts-before-the-band`). A moved or relabelled slot is stamped with `updated_at` (`week-move-skips-the-stamp`).
     **Refusals, in the preview fake's order:** `once_per_day` when a day names a workout twice,
     whatever else is wrong with the draft and also when the ids differ only in case (after a refused
-    parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `invalid` (the
-    schema); then `not_found` (the program, or a workout that is not one of its live workouts:
+    parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `limit_reached` for a day past
+    `MAX_DAY_SLOTS` (`weekExceedsDaySlots`, C35, invariant 21); then `invalid` (the schema); then `not_found` (the program, or a workout that is not one of its live workouts:
     `week-takes-any-programs-workout`, `week-takes-a-hidden-workout`). `readWeek` leaves out a hidden
     workout's slot (`week-read-shows-a-hidden-workout`), and saving the week as read hides it.
     ⚠️ **An accepted race:** a ✓ checks `isScheduledOn` unlocked, so a `saveWeek` that takes the
@@ -238,7 +238,8 @@ flowchart TD
     go on that already holds `MAX_DAY_SLOTS`, since it writes slots without a week to parse. `saveWeek` answers a weekday past
     `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`. Each answers
     before the name check, so a full program says so even for a taken name, and none writes
-    anything. No gate proves a lock (PGlite has one connection) (mutations `new-item-uncapped`,
+    anything. A proof checks the lock is taken under its namespace and key; no gate proves the waiting
+    (PGlite has one connection) (mutations `new-item-uncapped`,
     `new-item-counts-every-household`, `save-workout-caps-a-replay`,
     `save-workout-counts-removed-workouts`, `save-workout-cap-off-by-one`, `copy-uncapped`,
     `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`, `copy-onto-a-full-weekday`,

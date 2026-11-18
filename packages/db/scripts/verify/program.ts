@@ -40,6 +40,7 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import { ADVISORY_LOCK } from '../../src/writers/locks';
 import type { HouseholdScope } from '../../src/scope';
 import {
   insertMovementOwnedBy,
@@ -2898,7 +2899,7 @@ async function capsHousehold(tx: VerifyTx) {
     .insert(schema.households)
     .values({ publicId: newId(), name: 'Verify caps' })
     .returning({ id: schema.households.id });
-  return householdScopeForScript(household!.id);
+  return Object.assign(householdScopeForScript(household!.id), { proofId: household!.id });
 }
 
 async function verifyCaps(): Promise<void> {
@@ -2915,6 +2916,15 @@ async function verifyCaps(): Promise<void> {
         trackingType: TRACKING_TYPE.reps,
       });
     }
+    // An item a catalog row shadows (its slug is a catalog slug): the picker does not list it, so it
+    // never counts toward the cap.
+    await insertMovementOwnedBy(exec, scope, {
+      publicId: newId(),
+      slug: MOVEMENT_SEED_ROWS[0]!.slug,
+      name: 'Caps shadowed item',
+      isBodyweight: false,
+      trackingType: TRACKING_TYPE.reps,
+    });
     const own = async () =>
       (
         await tx
@@ -2926,13 +2936,34 @@ async function verifyCaps(): Promise<void> {
 
     const last = await add('Caps Last Drill');
     assert.ok(last.ok && !last.existed, 'FAM-1 caps: the item that reaches the cap is made');
-    assert.equal(await own(), MAX_HOUSEHOLD_ITEMS, 'FAM-1 caps: …and the household holds the cap');
+    assert.equal(
+      await own(),
+      MAX_HOUSEHOLD_ITEMS + 1,
+      'FAM-1 caps: …and the household holds the cap, plus the shadowed item it does not count',
+    );
+    // The lock was taken under its namespace, keyed by the household (waiting is unprovable on
+    // PGlite's one connection; the key is not).
+    const [key] = (await tx.execute(sql`select hashint8(${scope.proofId}::bigint) as k`))
+      .rows as Array<{ k: number }>;
+    const locks = (
+      await tx.execute(
+        sql`select classid::bigint as c, objid::bigint as o from pg_locks where locktype = 'advisory' and objsubid = 2`,
+      )
+    ).rows as Array<{ c: string | number; o: string | number }>;
+    assert.ok(
+      locks.some(
+        (l) =>
+          Number(l.c) === ADVISORY_LOCK.householdItems &&
+          Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
+      ),
+      'FAM-1 caps: newItem holds the household-items advisory lock, keyed by its household',
+    );
     assert.deepEqual(
       await add('Caps One Too Many'),
       { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
       'FAM-1 caps: a new item past the household’s cap is limit_reached',
     );
-    assert.equal(await own(), MAX_HOUSEHOLD_ITEMS, 'FAM-1 caps: …and writes nothing');
+    assert.equal(await own(), MAX_HOUSEHOLD_ITEMS + 1, 'FAM-1 caps: …and writes nothing');
     const again = await add('caps last drill');
     assert.ok(
       again.ok && again.existed && again.itemPublicId === (last.ok ? last.itemPublicId : ''),
@@ -2994,6 +3025,18 @@ async function verifyCaps(): Promise<void> {
       { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
       'FAM-1 caps: …judged before the name: a full program says so, even for a taken name',
     );
+    assert.deepEqual(
+      await saveWorkout(exec, scope, {
+        programPublicId: full,
+        workoutPublicId: newId(),
+        workoutClientId: newId(),
+        name: 'Caps workout stale',
+        description: null,
+        items: [],
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.not_found },
+      'FAM-1 caps: …but a stale workout id in a full program is not_found, asked first',
+    );
     assert.equal(await count(full), MAX_PROGRAM_WORKOUTS, 'FAM-1 caps: …and writes nothing');
     assert.deepEqual(
       await fresh(full, 'Caps workout last', lastClient),
@@ -3035,6 +3078,17 @@ async function verifyCaps(): Promise<void> {
       }),
       { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
       'FAM-1 caps: …judged before the name: a copy named like a workout of the full program says it is full',
+    );
+    assert.deepEqual(
+      await copyWorkout(exec, scope, {
+        clientId: newId(),
+        workoutPublicId: newId(),
+        toProgramPublicId: full,
+        weekdays: [],
+        label: null,
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.not_found },
+      'FAM-1 caps: …but a copy of an unknown workout into a full program is not_found, asked first',
     );
     const copyClient = newId();
     const intoRoomy = await copy(roomy, copyClient);
@@ -3113,6 +3167,18 @@ async function verifyCaps(): Promise<void> {
       }),
       { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
       'FAM-1 caps: a copy onto a full weekday is limit_reached',
+    );
+    assert.deepEqual(
+      await copyWorkout(exec, scope, {
+        clientId: newId(),
+        workoutPublicId: dayWorkouts[0]!,
+        toProgramPublicId: spare,
+        name: 'Caps day 1',
+        weekdays: [1],
+        label: null,
+      }),
+      { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
+      'FAM-1 caps: …judged before the name: a copy onto a full weekday named like a workout there says it is full',
     );
     assert.deepEqual(
       [await count(spare), await slotRows(tx)],
