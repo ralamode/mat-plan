@@ -94,6 +94,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ### A failed query's params reach Vercel's runtime logs (found 2026-11-16, #447 privacy review)
 
+- ✅ **CLOSED 2026-11-17 (`V1-9b` B1-2):** every DAL write now rethrows through
+  `apps/web/lib/dal/quiet-db-errors.ts`. The row stays because code comments cite it by name.
+
 - **What & why it's debt:** drizzle wraps a failed statement in a `DrizzleQueryError` whose message
   is `Failed query: …\nparams: …`. `apps/web/lib/sentry-scrub.ts` strips it before Sentry, but Next
   writes the error with `console.error` to Vercel's runtime logs (24 hours), so the row's values (a
@@ -103,7 +106,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   logging, and the inventory (§8, Vercel row) and runbook say so.
 - **Fix:** strip `params` (and a 23514's `detail`, the CHECK-violation row) from errors before Next
   logs them, at the one place they are thrown up to `error.tsx`; with a test.
-- **Severity:** medium.
+- **Severity:** medium (closed).
 - **Gate (added at FAM-1 4b):** fixed before the step that makes save-workout reachable (6a's writer
   behind a screen). 0025 adds `prescriptions.notes` (up to `FREE_TEXT_NOTE_MAX` characters an adult types per exercise, which
   can hold health detail about a child), so the first failed save would put that text in the log.
@@ -111,8 +114,11 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   since 12b a day row write's (log, un-tick, re-tick), is rethrown by
   `apps/web/lib/dal/quiet-db-errors.ts` (shared since 12b, moved out of `lib/dal/program/`) with only
   the operation, the error's type, the SQLSTATE and the stack's frame lines, so the gate above is
-  met. **Still open:** `lib/dal/entries.ts` and `lib/dal/profiles.ts`, which follow in `V1-9b` B1-2
-  _(FAM-1 board, 2026-11-17)_.
+  met. **Closed by `V1-9b` B1-2:** every write in `lib/dal/entries.ts` and `lib/dal/profiles.ts`
+  (fourteen functions, fifteen calls: `logStrengthSession`'s movement find-or-create has its own,
+  `logStrengthSession.resolveMovements`), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
+  read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
+  (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
