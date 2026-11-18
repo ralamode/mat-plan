@@ -119,3 +119,17 @@ lock's style blocked, `PageDown` with focus on the sheet's title did not move th
 The case proved nothing and was removed; the "keyboard can scroll the page behind" effect is struck
 from the Goal, the changelog and the PR. Recorded as the finding the security and UX lenses
 predicted (their P1 on this check).
+
+### Mid-build check: the after-refresh case could not be observed (2026-11-18)
+
+The second-pass security review (PR #613, P2-1) found the after-refresh e2e case could not fail: its
+wait matched Link prefetches, and nothing proved a refresh had delivered a new nonce. Hardened (the
+editor's own non-prefetch RSC response, then a poll for a fresh `script[nonce]` in the DOM), it was
+run with the fix and against a prop-fed `StyleNonce`: the poll failed both times. No refreshed nonce
+ever reached the DOM, so from the page the two cannot be told apart. The case was removed rather
+than kept. "Set once, from the loaded document" is pinned by `style-nonce.test.tsx`'s second-mount
+case, and the design is safe whether or not a refresh changes the nonce. Whether it does is left
+_unverified_.
+
+Same review: the shared CSP recorder moved to `e2e/csp.ts` (`theme.spec.ts` uses it), the spec
+imports `MOBILE_VIEWPORT`, and `package.json`'s unrelated escape rewrite is reverted.

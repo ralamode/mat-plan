@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { APP_HOME_PATH, SIGN_IN_PATH, THEME_COPY, THEME_STORAGE_KEY } from '../lib/constants';
+import { cspViolations, headerNonce, recordCspViolations } from './csp';
 
 /**
  * UI-4 — the theme switch, proven at the only level that can prove it.
@@ -62,15 +63,8 @@ async function recordFirstClassMutation(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const w = window as unknown as {
       __firstClass?: { className: string; readyState: string } | null;
-      __cspViolations?: string[];
     };
     w.__firstClass = null;
-    w.__cspViolations = [];
-    document.addEventListener('securitypolicyviolation', (e) => {
-      w.__cspViolations!.push(
-        `${e.violatedDirective} ${e.blockedURI || 'inline'} @${e.sourceFile || '?'}:${e.lineNumber} ${(e.sample || '').slice(0, 40)}`,
-      );
-    });
     // Observe `document`, with `subtree`, NOT `document.documentElement`. An init script runs at
     // document-start, where `documentElement` can still be null — `.observe(null)` throws, the rest of
     // the init script never runs, and the recorder silently stays `null` forever while looking like
@@ -94,12 +88,15 @@ test('the theme script is nonced with the response’s own nonce, and nothing is
   page,
 }) => {
   await recordFirstClassMutation(page);
+  await recordCspViolations(page);
   const response = await page.goto(APP_HOME_PATH, { waitUntil: 'domcontentloaded' });
   expect(response, 'no response for the picker').not.toBeNull();
 
-  const csp = response!.headers()['content-security-policy'] ?? '';
-  const headerNonce = /'nonce-([^']+)'/.exec(csp)?.[1];
-  expect(headerNonce, `no nonce in the CSP header: ${csp}`).toBeTruthy();
+  const nonce = headerNonce(response);
+  expect(
+    nonce,
+    `no nonce in the CSP header: ${response!.headers()['content-security-policy']}`,
+  ).toBeTruthy();
 
   // The RAW HTML, not the DOM: Chrome blanks the `nonce` attribute after parsing, so `page.content()`
   // would report an empty nonce for a perfectly nonced tag. The theme script is identified by OUR
@@ -112,18 +109,12 @@ test('the theme script is nonced with the response’s own nonce, and nothing is
     themeScript![1],
     'the theme script is not carrying the request nonce — it will be CSP-blocked in production, ' +
       'and the theme will only apply after hydration (a flash on every load)',
-  ).toContain(`nonce="${headerNonce}"`);
+  ).toContain(`nonce="${nonce}"`);
 
-  const violations = await page.evaluate(
-    () => (window as unknown as { __cspViolations: string[] }).__cspViolations,
-  );
-  // INLINE only, and the narrowing is a finding rather than a convenience: this app ALREADY raises one
-  // `script-src eval` violation on every page load, in production, with nothing to do with the theme.
-  // It is zod v4's JIT feature probe — `try { Function(""); return true } catch { return false }` in
-  // `_next/static/chunks/*` — which is caught by zod and falls back to its non-JIT parsers, so it is
-  // harmless, pre-existing, and not this PR's to fix (`zod.config({ jitless: true })` would silence the
-  // report; it needs its own row). An un-nonced inline script reports `blockedURI: 'inline'`, which is
-  // the failure this assertion exists to catch, and the full list is printed either way.
+  const violations = await cspViolations(page);
+  // INLINE only: the app already raises zod's `script-src eval` probe on every page (`e2e/csp.ts`).
+  // An un-nonced inline script reports `blockedURI: 'inline'`, which is the failure this assertion
+  // exists to catch, and the full list is printed either way.
   expect(
     violations.filter((v) => v.startsWith('script-src inline')),
     `inline script blocked by CSP — the theme script is not nonced. All violations: ${violations.join(' | ')}`,

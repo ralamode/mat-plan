@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { previewHref } from '../app/design/program/preview-registry';
 import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
+import { MOBILE_VIEWPORT } from './contexts';
+import { cspViolations, headerNonce, recordCspViolations } from './csp';
 
 /**
  * An open sheet's scroll lock survives the production CSP (plan: docs/plans/td-sheet-style-nonce.md).
@@ -14,28 +16,13 @@ import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
  * which the lock always worked, which is why nothing caught the defect. The viewport is a phone's, with
  * touch, so the scrollbar-gap code path a phone never reaches is not the one measured.
  */
-test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+test.use({ viewport: MOBILE_VIEWPORT, isMobile: true, hasTouch: true });
 
 const EDITOR = previewHref({ screen: 'workout-editor', fixture: 'heavy-a-draft', failNext: false });
 
-type Recorded = { violations: string[] };
-
-/** Every `securitypolicyviolation`, from before any page script runs (the `theme.spec.ts` recorder). */
-async function recordViolations(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const w = window as unknown as Recorded;
-    w.violations = [];
-    document.addEventListener('securitypolicyviolation', (e) => {
-      w.violations.push(
-        `${e.violatedDirective} ${e.blockedURI || 'inline'} ${(e.sample || '').slice(0, 60)}`,
-      );
-    });
-  });
-}
-
-/** `style-src*` violations only: zod's JIT probe raises a `script-src` one on every page today. */
+/** `style-src*` violations only (`e2e/csp.ts` says why never "none at all"); prints the full list. */
 async function styleViolations(page: Page): Promise<string[]> {
-  const all = await page.evaluate(() => (window as unknown as Recorded).violations);
+  const all = await cspViolations(page);
   console.log(`[sheet-csp] all CSP violations: ${JSON.stringify(all)}`);
   return all.filter((v) => v.startsWith('style-src'));
 }
@@ -60,16 +47,11 @@ async function openPicker(page: Page) {
   await expect(page.getByRole('dialog')).toBeVisible();
 }
 
-async function closePicker(page: Page) {
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
-}
-
 test('an open sheet locks the page behind it under the production CSP', async ({ page }) => {
-  await recordViolations(page);
+  await recordCspViolations(page);
   const response = await page.goto(EDITOR);
   const csp = response?.headers()['content-security-policy'] ?? '';
-  const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+  const nonce = headerNonce(response);
   expect(nonce, `a nonce in the document's CSP: ${csp}`).toBeTruthy();
   expect(csp, 'the policy itself is unchanged: no unsafe-inline styles').not.toMatch(
     /style-src[^;]*'unsafe-inline'/,
@@ -83,26 +65,11 @@ test('an open sheet locks the page behind it under the production CSP', async ({
     overscroll: 'contain',
   });
 
-  // The day page refreshes on every log (`router.refresh()`, `revalidatePath`), and each refresh
-  // re-renders the root layout with a NEW `x-nonce` while the page keeps its first CSP. A sheet opened
-  // after one must still be allowed.
-  await closePicker(page);
-  // Wait for the refresh's own RSC response, never `networkidle`,
-  // which waits on every open connection rather than on the one request this needs.
-  const refreshed = page.waitForResponse((r) => r.request().headers()['rsc'] === '1');
-  await page.evaluate(() =>
-    (window as unknown as { next: { router: { refresh(): void } } }).next.router.refresh(),
-  );
-  await refreshed;
-  await openPicker(page);
-  expect(
-    await styleViolations(page),
-    'no style-src violation on a sheet opened after a refresh',
-  ).toEqual([]);
-  expect(await bodyLock(page), '…and the lock still applies').toEqual({
-    overflow: 'hidden',
-    overscroll: 'contain',
-  });
+  // ⚠️ No after-refresh case. One was written, as the plan's security P0 asked: refresh, wait for
+  // a fresh nonce in the DOM, open again. Run with the fix AND against a prop-fed `StyleNonce`, the
+  // poll failed both times: no refreshed nonce ever reached the DOM, so the case could not tell the
+  // two apart and was removed. "Set once from the loaded document" is pinned by the unit test
+  // (`style-nonce.test.tsx`, the second-mount case) instead.
 });
 
 // ⚠️ No keyboard-scroll case. One was written and run RED first: with the lock's style blocked,

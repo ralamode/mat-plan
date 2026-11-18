@@ -59,9 +59,11 @@ describe('get-nonce has one copy', () => {
   // injector never reads, and nothing would fail until production.
   it('the app and react-style-singleton resolve the same file', () => {
     const web = join(dirname(fileURLToPath(import.meta.url)), '../..');
+    const resolveFrom = (dir: string, pkg: string) =>
+      realpathSync(createRequire(join(dir, 'x.js')).resolve(pkg));
     // Each package's own directory, from its entry point (not every package exports package.json).
     const step = (from: string, pkg: string) => {
-      const entry = realpathSync(createRequire(join(from, 'x.js')).resolve(pkg));
+      const entry = resolveFrom(from, pkg);
       const marker = `/node_modules/${pkg}/`;
       return entry.slice(0, entry.lastIndexOf(marker) + marker.length - 1);
     };
@@ -71,8 +73,8 @@ describe('get-nonce has one copy', () => {
       'react-remove-scroll',
       'react-style-singleton',
     ].reduce(step, web);
-    const fromApp = realpathSync(createRequire(join(web, 'x.js')).resolve('get-nonce'));
-    const fromInjector = realpathSync(createRequire(join(singleton, 'x.js')).resolve('get-nonce'));
+    const fromApp = resolveFrom(web, 'get-nonce');
+    const fromInjector = resolveFrom(singleton, 'get-nonce');
     expect(fromInjector).toBe(fromApp);
   });
 });
