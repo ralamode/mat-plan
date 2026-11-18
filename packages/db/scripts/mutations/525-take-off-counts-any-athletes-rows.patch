@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index ea4474a9..a71bab68 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -107,7 +107,7 @@ export async function takeOff(
+         .innerJoin(schema.workouts, eq(schema.workouts.id, schema.sessions.workoutId))
+         .where(
+           and(
+-            programRowOf(athlete.id, today),
++            sql`${schema.entries.activityDate} = ${today} and ${schema.entries.prescriptionSet} is not null`,
+             isNull(schema.entries.deletedAt),
+             eq(schema.workouts.blockId, block.id),
+           ),

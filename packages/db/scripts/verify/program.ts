@@ -3821,28 +3821,6 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6d-i: put on after a removal makes a new row, the old one kept hidden',
     );
 
-    // ── Started today, one live row logged: ends today; a replay answers the same ──
-    const n2 = await athlete('Take-off Logged');
-    await on(n2, p1, T);
-    await log(n2, w1);
-    assert.deepEqual(
-      await off(n2),
-      { ok: true, lastDay: T },
-      'FAM-1 6d-i: with a live row logged today, the stretch ends today (lastDay today)',
-    );
-    assert.deepEqual(
-      (await live(n2)).map((r) => r.activeTo),
-      [T],
-      'FAM-1 6d-i: …its last day is today',
-    );
-    const afterEnd = await assignmentRows(tx);
-    assert.deepEqual(
-      await off(n2),
-      { ok: true, lastDay: T },
-      'FAM-1 6d-i: a replay of an end answers lastDay today',
-    );
-    assert.deepEqual(await assignmentRows(tx), afterEnd, 'FAM-1 6d-i: …and writes nothing');
-
     // ── Ticked and un-ticked: the start does not stay ──
     const n3 = await athlete('Take-off Unticked');
     await on(n3, p1, T);
@@ -3874,6 +3852,28 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6d-i: the accepted limit: a re-tick after the removal leaves a live row on a day no live assignment covers',
     );
 
+    // ── Started today, one live row logged: ends today; a replay answers the same ──
+    const n2 = await athlete('Take-off Logged');
+    await on(n2, p1, T);
+    await log(n2, w1);
+    assert.deepEqual(
+      await off(n2),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: with a live row logged today, the stretch ends today (lastDay today)',
+    );
+    assert.deepEqual(
+      (await live(n2)).map((r) => r.activeTo),
+      [T],
+      'FAM-1 6d-i: …its last day is today',
+    );
+    const afterEnd = await assignmentRows(tx);
+    assert.deepEqual(
+      await off(n2),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: a replay of an end answers lastDay today',
+    );
+    assert.deepEqual(await assignmentRows(tx), afterEnd, 'FAM-1 6d-i: …and writes nothing');
+
     // ── Not started yet: removed ──
     const n4 = await athlete('Take-off Tomorrow');
     await on(n4, p1, addDays(T, 1), T);
@@ -3886,7 +3886,7 @@ async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
     // ── "Logged" is this athlete's, today's, and this program's ──
     const n5 = await athlete('Take-off Sibling');
     await on(n5, p1, T);
-    // n2 logged in w1 today: a sibling's row.
+    // n2 logged in w1 today: a sibling's row (n3's, re-ticked, is one too).
     assert.deepEqual(
       await off(n5),
       { ok: true, lastDay: null },

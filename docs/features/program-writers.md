@@ -296,7 +296,7 @@ flowchart TD
     other programs. ⚠️ **An accepted limit:** "nothing logged" is read without a lock against the row
     writers, so a ✓ racing it, or a re-tick or Restore all of a row hidden before it (no race needed),
     leaves a logged row under a removed start: contract change C24's state, which the day page shows as
-    a workout that left the week (mutations `take-off-*`, see the README).
+    a workout that left the week (mutations 521–531, `take-off-*`).
 
 ## Changing it
 

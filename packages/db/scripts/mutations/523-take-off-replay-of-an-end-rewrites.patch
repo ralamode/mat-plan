@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index ea4474a9..04462c62 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -86,7 +86,6 @@ export async function takeOff(
+         .limit(1);
+       return removed ? { ok: true as const, lastDay: null } : refuse(PROGRAM_REFUSAL.not_found);
+     }
+-    if (row.activeTo !== null) return { ok: true as const, lastDay: today };
+ 
+     const remove = async () => {
+       await tx
