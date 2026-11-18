@@ -4,7 +4,7 @@ import { NextRequest, type NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLERK_IMG_ORIGIN } from '@/lib/clerk';
-import { APP_HOME_PATH, PRIVACY_PATH, SIGN_IN_PATH } from '@/lib/constants';
+import { APP_HOME_PATH, NONCE_HEADER, PRIVACY_PATH, SIGN_IN_PATH } from '@/lib/constants';
 
 import { buildCsp, config, proxy } from './proxy';
 
@@ -128,6 +128,14 @@ async function run(
 function forwarded(res: { headers: Headers }, name: string): string | null {
   return res.headers.get(`x-middleware-request-${name}`);
 }
+
+describe('the nonce header', () => {
+  // A contract pin, so the literal sits on the assertion side once: Clerk's `DynamicClerkScripts`
+  // reads this header by its own literal name, so the constant's value is not this app's to change.
+  it('is the name Clerk reads', () => {
+    expect(NONCE_HEADER).toBe('x-nonce');
+  });
+});
 
 describe('the proxy redirects nothing (AUTH-1 1d)', () => {
   // 🔴 One assertion where there were ~24, because there is one behaviour where there were two.
