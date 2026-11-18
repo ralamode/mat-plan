@@ -39,7 +39,9 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **How a session felt** — a free-text box.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
-- **Programs you build yourself** _(coming; the app cannot save one yet)_: a program's name, its
+- **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
+  signed in to your household can create and rename a program, write and save its workouts, set its
+  week, copy a workout, and add a movement of your own. What is stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
   For each exercise in a workout: its instructions and rest note, the name you give a group of
@@ -60,18 +62,22 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   _(Nothing in the live app logs a workout yet: the day page that does is being built. This line is
   here because the schema is public and you would otherwise find these tables.)_
 
-**Three text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
-and, since the rename and add screens, an **athlete's name**. Whatever goes in is stored exactly as
-typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
+**The text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
+an **athlete's name**; and, in the program builder, a program's name, a workout's name and
+description, each exercise's instructions and rest note, the name of a group of exercises, the label
+of a workout on a day (in the week and when copying), and the name of a movement you add with
+"+ New item". Whatever goes in is stored exactly as typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
 is the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal
 name, and does not ask for a birthdate.
-Worth knowing, because of who is usually typing. A typed movement appears in your export, and so
-does a workout's name once an athlete logs that workout; "How it felt" does not, and neither does the
-athlete's name field — the export is filed under an id, not a name.
+Worth knowing, because of who is usually typing. A typed movement appears in your export only
+through something logged with it, and a workout's name only once an athlete logs that workout; "How
+it felt" does not, the athlete's name field does not (the export is filed under an id, not a name),
+and nothing else typed into the program builder does.
 
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
-browser, and an identifier each device generates per logged item — and now per athlete added — so the
-same entry, or the same athlete, is not saved twice.
+browser, and an identifier each device generates per logged item, per athlete added, and, in the
+program builder, per program, per workout, per copy and per exercise in a workout, so the same thing
+is not saved twice. Each is a random-looking code that also shows when it was made.
 
 **What we never ask for**: no phone number, no address, no payment details, no location, and no date
 of birth. **This app never asks you to type an email address, and no athlete's record contains one.**
@@ -114,6 +120,9 @@ still works.
 - **Your household**, through the shared login.
 - **The maintainer.** The person who runs the app has direct access to the database and can see
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
+- **Everyone signed in to your household sees every program**: who is on each one, from which day
+  and through which day, and, for each athlete, which programs they are on. That includes an adult
+  athlete's own programs. It is the same group of people who can already open every athlete's page.
 - **Nobody else** — no page shows your data to anyone outside your household, there is no advertising,
   no analytics about you, and your data is never sold or shared for anyone else's purposes. Three
   pages can be opened without signing in — the landing page, this notice, and the sign-in screen — and
@@ -205,7 +214,11 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | An export you have downloaded                                | Yours — we cannot keep or delete it                                                                                                                                    |
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
-⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
+⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. In the program
+builder, an exercise you remove from a workout or swap for another, a target you clear, a workout you
+save with nothing in it, and a workout taken off a day of the week or moved to another day (with its
+label) are hidden, not erased, and they pile up: nothing in the app can show, restore, export or
+erase them, and they stay until the program or the household is removed. You can **clear a
 weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap Clear): that
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
@@ -230,8 +243,16 @@ field, as above. Two things are worth saying plainly about every clear:
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
   until a removal that runs a set number of days later is built.
 
-There is still **no way to permanently remove one single item on demand** — the finest grain for a
-permanent removal is an athlete. Ask, and that is done.
+There is still **no way to permanently remove one single logged item on demand** — the finest grain
+for a permanent removal of anything logged is an athlete. Ask, and that is done.
+
+**A program, a workout or a movement you typed can't be deleted in the app, but ask and it is
+removed.** First we tell you which athletes it affects, and offer to rename it, or to take everyone
+off it, instead, since either leaves everyone's data as it is. If you still want it removed, it is
+removed with no waiting period, and a restore point is held for 3 days afterwards. What athletes
+logged keeps its names: a workout's name as it was on the day, and the movement names, stay on their
+logs, so a movement something logged still uses is not removed. How it is done is in the public
+runbook, "Remove one program, workout or typed item on request".
 
 ## Getting your data out
 
@@ -275,7 +296,7 @@ from the database**. The household owner asks; or an adult athlete may ask about
 which case the owner is told first but **cannot cancel it**: only the adult can, because it is their
 data. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is
 confirmed on their own invitation channel, and their full copy goes to them), and "What remains
-afterwards" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or
+afterwards" below applies too. What stays is the household's: the programs you built, any name typed into a program, workout or
 movement, including copies of that text kept on other athletes' logs, and every sign-in account; an
 adult athlete can ask for their own account to be deleted as well. Before anything is removed we ask
 you about three things, and remove each only if you say so: a program only that athlete was ever on;
