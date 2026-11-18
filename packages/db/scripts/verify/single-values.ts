@@ -1633,7 +1633,9 @@ async function verifyDayTakenRace(): Promise<void> {
       ).map((r) => r.clientId);
 
     // (a) A practice: the day's live practice skips the insert and is cleared inside it. The new one
-    //     lands, once, and a habit in the same submit is inserted once (the retry is per item).
+    //     lands, and the answer keeps submit order with the retried item FIRST, so a writer that
+    //     appended retried results would fail. (A habit inserted once is `uq_entries_client_id`'s
+    //     doing, not the retry's, so it is not asserted here.)
     const holder = {
       publicId: newId(),
       clientId: newId(),
@@ -1661,13 +1663,13 @@ async function verifyDayTakenRace(): Promise<void> {
     } satisfies CheckinInsertValue;
     const raced = await writeCheckinEntries(exec, {
       profileId: athlete.id,
-      values: [habit, practice],
+      values: [practice, habit],
     }).catch((error: unknown) => ({ threw: (error as Error).message }));
     assert.deepEqual(
       Array.isArray(raced) ? raced.map((r) => [r.clientId, r.outcome]) : raced,
       [
-        [habit.clientId, 'created'],
         [practice.clientId, 'created'],
+        [habit.clientId, 'created'],
       ],
       'race: a practice whose day is cleared during its insert is created, in submit order, never a throw',
     );
@@ -1675,15 +1677,6 @@ async function verifyDayTakenRace(): Promise<void> {
       await liveOnDay(METRIC_KEYS.practice_minutes),
       [practice.clientId],
       'race: the day holds the new practice only',
-    );
-    const habits = await tx
-      .select({ id: schema.entries.id })
-      .from(schema.entries)
-      .where(eq(schema.entries.clientId, habit.clientId));
-    assert.equal(
-      habits.length,
-      1,
-      'race: the habit beside it is inserted once, not again by the retry',
     );
 
     // (b) A weigh-in: the same race on the bodyweight day slot answers the new weigh-in's id.

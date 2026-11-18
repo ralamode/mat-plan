@@ -239,7 +239,7 @@ export async function insertBodyweightEntry(
   // hidden row was outside the partial index and the insert simply **inserted a twin** — which is
   // the defect B0 exists to close, arriving through the one writer that infers no target.
   //
-  // ⚠️ It is still a throw, not a typed envelope (the plan's Decision 7 cut a typed replay-of-hidden).
+  // ⚠️ It is still a throw, not a typed envelope (`docs/plans/v1-9b-delete-and-restore.md` Decision 7 cut a typed replay-of-hidden).
   // `db:verify`'s B0 block asserts this case; the two 1e cases that also reach (c) (a foreign metric's
   // `client_id`, an evening-only day) are unaffected and still match the first half of this message.
   throw new Error(
