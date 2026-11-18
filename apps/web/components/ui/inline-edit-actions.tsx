@@ -26,7 +26,9 @@ export type InlineEditCancelHandlers = Pick<
  *   kept so nothing shifts), and `pointer-events-none` + `transition-none` make that immediate: the
  *   base `transition-all` would otherwise keep it painted and clickable for ~150ms. A Cancel could
  *   not stop the write in flight. The caller still guards its own cancel on `pending` too.
- * - **Without `confirm`, the ✕ renders alone**, for a row whose own ✓ is already the save.
+ * - **Without `confirm`, the ✕ renders alone**, for a row whose own ✓ is already the save. The
+ *   ✕-alone form may sit on the line under that row, directly under its ✓ (day page, maintainer
+ *   2026-11-17).
  * - Both are 44×44 (`icon-lg` + the base `min-h-11`); `focusClassName` swaps the focus ring on a
  *   tinted surface, where the default ring is under 3:1.
  */

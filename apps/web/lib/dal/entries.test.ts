@@ -125,8 +125,9 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
  *
  * ⚠️ It also decides **what a failure says.** Probed: with PICK-1's two phases swapped, this shape
  * reddens the `INSERT INTO "movements"` assertion — the thing that test is for — whereas a stub whose
- * slug lookups always miss reddens `rejects.toThrow` first, with a message about a failed upsert,
- * telling the next reader the wrong cause.
+ * slug lookups always miss reddens `rejects.toThrow` first, as `logStrengthSession.resolveMovements
+ * failed (Error)` (the find-or-create's own operation name since V1-9b B1-2), telling the next reader
+ * the wrong cause.
  *
  * Shared by both describes rather than typed twice, per this file's header.
  */
@@ -185,7 +186,9 @@ describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
           },
         ],
       }),
-    ).rejects.toThrow('Profile not found');
+      // The writer's in-transaction `Profile not found`, rethrown by `quietDbErrors` (V1-9b B1-2)
+      // with only the operation and the error's type: the refusal still throws to error.tsx.
+    ).rejects.toThrow('logStrengthSession failed (Error)');
 
     const texts = rows.queries.map((q) => q.text.toLowerCase());
     const insertMovement = texts.findIndex((t) => t.startsWith('insert into "movements"'));
@@ -222,8 +225,6 @@ describe('logStrengthSession — ids resolve before any insert (PICK-1 PR 2)', (
     vi.doMock('./db', () => ({ db: rows.db }));
     vi.resetModules();
     const { logStrengthSession: write } = await import('./entries');
-    const { MOVEMENT_NOT_AVAILABLE } = await import('@mat-plan/db');
-
     await expect(
       write({
         profilePublicId: PROFILE,
@@ -245,7 +246,8 @@ describe('logStrengthSession — ids resolve before any insert (PICK-1 PR 2)', (
           },
         ],
       }),
-    ).rejects.toThrow(MOVEMENT_NOT_AVAILABLE);
+      // `MovementNotAvailableError`, rethrown by `quietDbErrors` (V1-9b B1-2) under its class name.
+    ).rejects.toThrow('logStrengthSession.resolveMovements failed (MovementNotAvailableError)');
 
     const texts = rows.queries.map((q) => q.text.toLowerCase());
     expect(

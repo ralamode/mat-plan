@@ -3,6 +3,7 @@ import 'server-only';
 import {
   bodyweightRowForAmend,
   clearBodyweight,
+  clearEventsForDay,
   clearPractice,
   type ClearSingleValueResult,
   findAmendableBodyweight,
@@ -12,6 +13,7 @@ import {
   lastBodyweightBefore,
   isLiveProfile,
   resolveSessionMovements,
+  restoreClear,
   schema,
   updateBodyweightEntryById,
   updatePracticeEntryById,
@@ -21,8 +23,11 @@ import {
   writeStrengthSession,
 } from '@mat-plan/db';
 import {
+  type ClearEvent,
   ENTRY_KIND,
   ENTRY_STATUS,
+  RESTORE_REASON,
+  uuidSchema,
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
@@ -47,6 +52,7 @@ import {
 } from './catalog';
 import { db } from './db';
 import { getHouseholdScope } from './household';
+import { quietDbErrors } from './quiet-db-errors';
 
 /**
  * Entry reads and writes for the Today view (V0-7). Scoped by the profile's `public_id` — never a raw
@@ -343,17 +349,19 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodywei
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
   await assertMetricKeyExists(SEED_METRIC_KEYS.bodyweight);
 
-  return insertBodyweightEntry(db, {
-    profileId: profile.id,
-    publicId: newId(),
-    clientId: args.clientId,
-    day: args.day,
-    unit: args.unit,
-    value: args.value,
-    notes: args.notes ?? null,
-    activityTypeId,
-    kind: ENTRY_KIND.bodyweight,
-  });
+  return quietDbErrors('logBodyweight', () =>
+    insertBodyweightEntry(db, {
+      profileId: profile.id,
+      publicId: newId(),
+      clientId: args.clientId,
+      day: args.day,
+      unit: args.unit,
+      value: args.value,
+      notes: args.notes ?? null,
+      activityTypeId,
+      kind: ENTRY_KIND.bodyweight,
+    }),
+  );
 }
 
 export type CheckinItemInput = {
@@ -456,7 +464,9 @@ export async function logCheckinEntries(args: {
   // real statement against a real database instead of an emitted-SQL assertion about its shape.
   // Everything above stays here for the reason `logStrengthSession` keeps its own resolution: the
   // catalog reads are cached reference data, and the profile resolve is household-scoped.
-  const written = await writeCheckinEntries(db, { profileId: profile.id, values });
+  const written = await quietDbErrors('logCheckinEntries', () =>
+    writeCheckinEntries(db, { profileId: profile.id, values }),
+  );
 
   // ✅ **`B1-2`: the outcome is carried through.** B1-1a collapsed the four into `{ created, id }`
   // so nothing above it had to change; the caller that needed the distinction has arrived.
@@ -514,20 +524,26 @@ export async function logStrengthSession(
   // PICK-1 PR 2: ids before inserts, in `packages/db` so `db:verify` runs this exact function rather
   // than a lookalike (write-path invariant 3) — which is the only way the cross-household refusal is
   // PROVED. This DAL is now a pass-through: it holds no resolution logic of its own.
-  const movements = await resolveSessionMovements(db, scope, args.movements);
+  // A typed name's find-or-create is a write too (its own INSERT, before the session's transaction).
+  // Its own operation name, so a log line tells a catalog failure from the session's.
+  const movements = await quietDbErrors('logStrengthSession.resolveMovements', () =>
+    resolveSessionMovements(db, scope, args.movements),
+  );
 
-  return writeStrengthSession(db, {
-    profilePublicId: args.profilePublicId,
-    scope,
-    day: args.day,
-    sessionType: args.sessionType,
-    sessionClientId: args.clientId,
-    dayRole: args.dayRole,
-    activityTypeId,
-    feel: args.feel,
-    supersets: args.supersets,
-    movements,
-  });
+  return quietDbErrors('logStrengthSession', () =>
+    writeStrengthSession(db, {
+      profilePublicId: args.profilePublicId,
+      scope,
+      day: args.day,
+      sessionType: args.sessionType,
+      sessionClientId: args.clientId,
+      dayRole: args.dayRole,
+      activityTypeId,
+      feel: args.feel,
+      supersets: args.supersets,
+      movements,
+    }),
+  );
 }
 
 /**
@@ -550,7 +566,9 @@ export async function editBodyweight(args: {
   const scope = await getHouseholdScope();
   if (!scope) return null;
 
-  const updated = await updateBodyweightEntryById(db, { ...args, scope });
+  const updated = await quietDbErrors('editBodyweight', () =>
+    updateBodyweightEntryById(db, { ...args, scope }),
+  );
   return updated ? { entryId: updated.publicId } : null;
 }
 
@@ -599,7 +617,7 @@ export async function clearBodyweightEntry(args: {
   const scope = await getHouseholdScope();
   if (!scope) return { notFound: true };
 
-  return clearBodyweight(db, { ...args, scope });
+  return quietDbErrors('clearBodyweightEntry', () => clearBodyweight(db, { ...args, scope }));
 }
 
 /**
@@ -623,7 +641,7 @@ export async function clearPracticeEntry(args: {
 }): Promise<ClearSingleValueResult> {
   const scope = await getHouseholdScope();
   if (!scope) return { notFound: true };
-  return clearPractice(db, { ...args, scope });
+  return quietDbErrors('clearPracticeEntry', () => clearPractice(db, { ...args, scope }));
 }
 
 export async function editPractice(args: {
@@ -634,7 +652,9 @@ export async function editPractice(args: {
 }): Promise<{ entryId: string } | null> {
   const scope = await getHouseholdScope();
   if (!scope) return null;
-  const updated = await updatePracticeEntryById(db, { ...args, scope });
+  const updated = await quietDbErrors('editPractice', () =>
+    updatePracticeEntryById(db, { ...args, scope }),
+  );
   return updated ? { entryId: updated.publicId } : null;
 }
 
@@ -683,6 +703,63 @@ export async function editStrengthSet(args: {
   const scope = await getHouseholdScope();
   if (!scope) return null;
 
-  const updated = await updateStrengthSetById(db, { ...args, scope });
+  const updated = await quietDbErrors('editStrengthSet', () =>
+    updateStrengthSetById(db, { ...args, scope }),
+  );
   return updated ? { setId: updated.publicId } : null;
+}
+
+// ── Clear this day: the banner's read and Restore all (V1-9b B1-2) ─────────────────────────────────
+
+/**
+ * Every clear of one athlete's day, newest first, each with how many entries it still holds hidden.
+ * The banner (B2) draws from it; no caller until then.
+ *
+ * ⚠️ `hiddenAt` is an opaque key the banner echoes back to Restore all. It is never rendered. A read,
+ * so it is not wrapped in `quietDbErrors` (the helper wraps writes; its parameters are ids and a day).
+ */
+export async function dayClearEvents(profilePublicId: string, day: string): Promise<ClearEvent[]> {
+  // A non-uuid id would make Postgres throw on the uuid comparison; it holds no events either way.
+  if (!uuidSchema.safeParse(profilePublicId).success) return [];
+  const scope = await getHouseholdScope();
+  if (!scope) return [];
+  return clearEventsForDay(db, { profilePublicId, scope, day });
+}
+
+/** What Restore all did, as counts: the DTO the action maps, with no entry's value in it. */
+export type RestoreClearedDayResult = { restored: number; keptHidden: number };
+
+/**
+ * Restore all for one clear (`restoreClear`, which finds the clear's entries itself).
+ *
+ * 🔴 **Counted here, so nothing but two numbers leaves the DAL.** A `slot_taken` item carries
+ * `heldBy.value`, the live weigh-in that took its place; that never reaches the action.
+ *
+ * - `restored`: items answered `ok`.
+ * - `keptHidden`: items answered `slot_taken` (a newer entry holds their place).
+ * - `changed` and `not_found` come only from another phone acting on the same row mid-restore, so they
+ *   count in neither; the revalidated page shows what is true.
+ * - `restoreClear`'s `notFound` is 0 and 0, "nothing left to restore" (the action's docblock says why).
+ *
+ * A null scope THROWS, as `logBodyweight` does: the action resolved the profile in this scope first,
+ * so reaching here without one is a caller bug, never a quiet "nothing to restore".
+ */
+export async function restoreClearedDay(args: {
+  profilePublicId: string;
+  day: string;
+  hiddenAt: string;
+}): Promise<RestoreClearedDayResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) throw new Error('Profile not found');
+  const result = await quietDbErrors('restoreClearedDay', () =>
+    restoreClear(db, { ...args, scope }),
+  );
+  if ('notFound' in result) return { restored: 0, keptHidden: 0 };
+  let restored = 0;
+  let keptHidden = 0;
+  for (const item of result.items) {
+    if (item.reason === RESTORE_REASON.ok) restored += 1;
+    else if (item.reason === RESTORE_REASON.slot_taken) keptHidden += 1;
+  }
+  return { restored, keptHidden };
 }
