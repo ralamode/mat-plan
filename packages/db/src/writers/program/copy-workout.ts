@@ -1,9 +1,11 @@
-import { and, asc, eq, isNull, max } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, max } from 'drizzle-orm';
 
 import {
   copyDraftSchema,
   copyName,
   foldName,
+  MAX_DAY_SLOTS,
+  MAX_PROGRAM_WORKOUTS,
   newId,
   PROGRAM_REFUSAL,
   type ProgramResult,
@@ -32,9 +34,10 @@ import { refuse } from './refuse';
  *   name, so it still answers after the source was removed; a replay of a copy removed since, or
  *   into a program removed since, is `not_found`.
  * - **Weekdays**: the copy goes last on each day named, with `label`. It is new, so no day holds it.
- * - Refusals, before anything is written: `invalid` (the schema; a blank `name` is refused, not
- *   defaulted), `not_found` (the target program, or the source workout, is not the household's live
- *   one), `name_taken`.
+ * - Refusals, before anything is written, in this order: `invalid` (the schema; a blank `name` is
+ *   refused, not defaulted), `not_found` (the target program, or the source workout, is not the
+ *   household's live one), `limit_reached` (the target program holds `MAX_PROGRAM_WORKOUTS` live
+ *   workouts, or a weekday named holds `MAX_DAY_SLOTS`; C35, judged before the name), `name_taken`.
  * - One transaction, locking the target program's block first, as every writer of a program does
  *   (lane guide invariant 12), so a copy and a save of the target cannot interleave. The source is
  *   read in one statement (not locked), so a save of the source in another program is seen whole.
@@ -138,6 +141,36 @@ export async function copyWorkout(
       const entry = last?.item.id === row.item.id ? last : { item: row.item, quantities: [] };
       if (entry !== last) items.push(entry);
       if (row.quantity) entry.quantities.push(row.quantity);
+    }
+
+    // The program it lands in is full (C35, invariant 30): its own count, never the source's, and
+    // judged before the name. A replay answered above, so it is never capped.
+    if (targetWorkouts.filter((w) => w.deletedAt === null).length >= MAX_PROGRAM_WORKOUTS) {
+      return refuse(PROGRAM_REFUSAL.limit_reached);
+    }
+    // So is a weekday it would go on: no day may hold more than `MAX_DAY_SLOTS` (the read parses the
+    // week with that cap), and a copy writes its slots without a week draft to parse.
+    if (draft.weekdays.length > 0) {
+      const full = await tx
+        .select({ weekday: schema.blockDayWorkouts.weekday, n: count() })
+        .from(schema.blockDayWorkouts)
+        // The slots the week shows: a live workout's (`readWeek`'s join), so the cap matches the page.
+        .innerJoin(
+          schema.workouts,
+          and(
+            eq(schema.workouts.id, schema.blockDayWorkouts.workoutId),
+            isNull(schema.workouts.deletedAt),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.blockDayWorkouts.blockId, target.id),
+            inArray(schema.blockDayWorkouts.weekday, [...draft.weekdays]),
+            isNull(schema.blockDayWorkouts.deletedAt),
+          ),
+        )
+        .groupBy(schema.blockDayWorkouts.weekday);
+      if (full.some((day) => day.n >= MAX_DAY_SLOTS)) return refuse(PROGRAM_REFUSAL.limit_reached);
     }
 
     const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);

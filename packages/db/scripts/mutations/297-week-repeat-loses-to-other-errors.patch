@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/save-week.ts b/packages/db/src/writers/program/save-week.ts
-index 61e60d91..cda345d5 100644
+index a09a2efd..6ff7aeb3 100644
 --- a/packages/db/src/writers/program/save-week.ts
 +++ b/packages/db/src/writers/program/save-week.ts
-@@ -47,7 +47,7 @@ export async function saveWeek(
+@@ -49,7 +49,7 @@ export async function saveWeek(
    if (!parsed.success) {
-     // A repeat answers `once_per_day` whatever else is wrong: the preview fake's rule, shared.
+     // A repeat answers `once_per_day` whatever else is wrong, then a day past `MAX_DAY_SLOTS`
+     // `limit_reached` (C35, invariant 30), then `invalid`: the preview fake's order, shared.
+-    if (weekRepeatsAWorkout(input)) return refuse(PROGRAM_REFUSAL.once_per_day);
++    if (weekRepeatsAWorkout(input) && parsed.error.issues.length === 1) return refuse(PROGRAM_REFUSAL.once_per_day);
      return refuse(
--      weekRepeatsAWorkout(input) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
-+      weekRepeatsAWorkout(input) && parsed.error.issues.length === 1 ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+       weekExceedsDaySlots(input) ? PROGRAM_REFUSAL.limit_reached : PROGRAM_REFUSAL.invalid,
      );
-   }
-   // The parse hands every id back in lower case (C25; lane guide invariant 15): read them from it.

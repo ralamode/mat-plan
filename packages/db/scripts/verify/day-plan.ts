@@ -41,7 +41,11 @@ import {
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
-import { resolveDayPlan, type ResolvedDayPlan } from '../../src/queries/day/day-plan';
+import {
+  currentPrograms,
+  resolveDayPlan,
+  type ResolvedDayPlan,
+} from '../../src/queries/day/day-plan';
 import { prescriptionLiveIn } from '../../src/queries/day/prescription-live-in';
 import type { HouseholdScope } from '../../src/scope';
 import { logRow, untickRow } from '../../src/writers/day/log-row';
@@ -605,6 +609,63 @@ async function plantSession(
 }
 
 async function verifyRules(): Promise<void> {
+  // R7, ADR 0007 Amendment 5 (the maintainer, 2026-11-18): the programs that stay come first, in
+  // their own `idx` order, then the ones ending today. A put-on compacts the OPEN rows' `idx`
+  // (`writers/program/assign.ts`) and leaves a row closing today where it was; the order must not move
+  // under an unrelated put-on, whatever the ids. The rows are the states assign.ts writes.
+  {
+    const row = (id: number, blockId: number, idx: number, activeTo: string | null) => ({
+      id,
+      blockId,
+      programPublicId: `program-${blockId}`,
+      programName: `Program ${blockId}`,
+      idx,
+      activeFrom: '2026-11-01',
+      activeTo,
+      current: true,
+    });
+    const order = (rows: ReturnType<typeof row>[]) =>
+      currentPrograms(rows, FIXTURE_TODAY).map((p) => p.blockId);
+    // Put on A (10) then B (11); take A off today; then put on C (12): B compacts onto A's 0.
+    assert.deepEqual(
+      [
+        order([row(1, 10, 0, FIXTURE_TODAY), row(2, 11, 1, null)]),
+        order([row(1, 10, 0, FIXTURE_TODAY), row(2, 11, 0, null), row(3, 12, 1, null)]),
+      ],
+      [
+        [11, 10],
+        [11, 12, 10],
+      ],
+      'FAM-1 12a R7: a program ending today goes after the ones that stay, before and after a put-on',
+    );
+    // A reopen (the ids run against the order): X (20, row 8) is taken off and put back on, which
+    // reopens its OLDER row at the last place, after Y (21, row 9); Y is then taken off today and Z
+    // (22, row 10, the newest) put on, so X compacts onto Y's 0.
+    assert.deepEqual(
+      [
+        order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 1, null)]),
+        order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 0, null), row(10, 22, 1, null)]),
+      ],
+      [
+        [20, 21],
+        [20, 22, 21],
+      ],
+      'FAM-1 12a R7: the order holds when the ids run against it (a reopen)',
+    );
+    // The PLACING row's days ride with each program (lane P's program view reads them): one program
+    // with a row ending today at 0 and an upcoming row at 2 is placed by the upcoming one.
+    assert.deepEqual(
+      currentPrograms(
+        [
+          row(1, 10, 0, FIXTURE_TODAY),
+          { ...row(2, 10, 2, null), activeFrom: addDays(FIXTURE_TODAY, 1) },
+        ],
+        FIXTURE_TODAY,
+      ).map((p) => [p.activeFrom, p.activeTo]),
+      [[addDays(FIXTURE_TODAY, 1), null]],
+      'FAM-1 12a R7: each current program carries its placing row’s days',
+    );
+  }
   await rolledBack(async (tx) => {
     const activityTypeId = await workoutItemTypeId(tx);
     // H: the prototype's household (the seeded world). F: another household, on the every-type

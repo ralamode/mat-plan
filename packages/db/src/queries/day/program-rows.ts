@@ -86,3 +86,14 @@ export function byFirstLogged(bySet = false) {
     x.createdAt.getTime() - y.createdAt.getTime() ||
     x.id - y.id;
 }
+
+/**
+ * **The entry's session is its own athlete's** (runbook pre-flight (i); `day-writers.md` invariant 13):
+ * `sessions.profile_id = entries.profile_id`, for a read that joins `entries` to `sessions`. Change's
+ * locked read (`writers/day/amend-row.ts`) puts it in the WHERE, refusing a row in another athlete's
+ * session; the export (`queries/export-month.ts`) puts it in the sessions join's ON, keeping the
+ * athlete's entry and lending it nothing. Mutations 351 and 365 drop it at each site.
+ */
+export function entrySessionIsItsAthletes() {
+  return eq(schema.sessions.profileId, schema.entries.profileId);
+}

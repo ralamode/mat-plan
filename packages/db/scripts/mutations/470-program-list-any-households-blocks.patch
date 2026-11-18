@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/queries/program/program-list.ts b/packages/db/src/queries/program/program-list.ts
+index 0e156b76..c20d5689 100644
+--- a/packages/db/src/queries/program/program-list.ts
++++ b/packages/db/src/queries/program/program-list.ts
+@@ -1,4 +1,4 @@
+-import { asc } from 'drizzle-orm';
++import { asc, isNull } from 'drizzle-orm';
+ 
+ import {
+   isoDaySchema,
+@@ -41,7 +41,7 @@ export async function readProgramList(
+       name: schema.programBlocks.name,
+     })
+     .from(schema.programBlocks)
+-    .where(liveTemplateBlockIn(scope))
++    .where(isNull(schema.programBlocks.deletedAt))
+     .orderBy(asc(schema.programBlocks.id));
+ 
+   const on = new Map<number, string[]>();
