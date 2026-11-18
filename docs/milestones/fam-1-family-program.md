@@ -208,6 +208,8 @@ column in the schema, and requests already insert into `movements` and `sessions
 on either table is not dark (see the [A4 plan](../plans/v1-22-a4-create-program.md), Staging).
 Step 4a also takes over A4-1's source-scan check for `program_blocks`.
 
+**Who merges a PR** _(maintainer, orchestrator's chat, 2026-11-17: "Lanes can mark ready for review, review (unless trivial), ship then merge")_. The lane that wrote a PR merges it, in this order: mark it ready for review; an independent review ([review-pr](../../.claude/skills/review-pr/SKILL.md)), unless the change is trivial; fix what the review finds; the reviewer's shipit; merge. Two conditions: CI is green, and the branch is current with `main` or behind only by unrelated commits ([AGENTS.md](../../AGENTS.md), "Keep the branch up to date with `main` before merge"). **Nothing merges with a P0 or P1 finding open** _(maintainer, the same day: "ensure after they're reviewed that there are no outstanding p0/p1 items. P2 you can report back to this thread and ask me if I want to add to tech-debt backlog")_: a P2 the lane does not fix goes to the board (the orchestrator's chat, the thread the maintainer means), and the maintainer decides whether it joins [tech-debt.md](../tech-debt.md). The lane then tells the board what merged (the board's own condition). The contract owner merges contract and plan PRs the same way _(maintainer, the roadmap thread's chat, 2026-11-17: "You can self merge so long as the change has been reviewed, issues were fixed, ci is green and you have shipit (like the other threads)")_. The rule is about who merges: a question that was the maintainer's to decide still goes to them, through the board. A movement-library batch has its own form of the review: its lane merges it once every row of its review tab carries the maintainer's `lgtm` ([CAT-3 spec](../specs/cat-3-movement-library.md), K21 and D3).
+
 | Step    | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Plan                                                                                                                             | Gate                                                                                                                                                     | ~PRs · lines             |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | **d1**  | **ADR 0007 signed with Amendments 1 and 2**, plus A4-0's authorization re-scoped: `workouts`, the block's week template, a block-kind marker (legacy or template), `prescriptions.workout_id` with typed prescribed values (expand only), `program_blocks.client_id`, and SCHED-1's two tables. **Narrows decision 4**: a template block is reached only through an assignment and never by a legacy read (step 5b), so no exported cell moves                                                                                                                                                                                        | [ADR 0007 Amendment 2](../decisions/0007-scheduling-model.md#amendment-2-2026-11-14-what-fam-1-needs-authorized), replacing A4-0 | the maintainer's signature                                                                                                                               | 1 docs · ~80             |
@@ -250,7 +252,7 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## The schedule: in a row, and in lanes
 
-The same 52 PRs drawn twice: one after another, and in the lanes of
+The same 53 PRs drawn twice: one after another, and in the lanes of
 [the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
 PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
 Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
@@ -265,12 +267,12 @@ gantt
   section In a row
   The contract, 5 PRs          :done, r0, 0, 5
   Lane A's 7 PRs (merged)      :done, r1, 5, 12
-  Lane P's 7 PRs               :r2, 12, 19
-  Lane E's 7 PRs               :r3, 19, 26
-  Lane B's 10 PRs              :r4, 26, 36
-  Lane C's 9 PRs               :r5, 36, 45
-  Lane S's 7 PRs               :r6, 45, 52
-  All 52 PRs merged            :milestone, rm, 52, 52
+  Lane P's 8 PRs               :r2, 12, 20
+  Lane E's 7 PRs               :r3, 20, 27
+  Lane B's 10 PRs              :r4, 27, 37
+  Lane C's 9 PRs               :r5, 37, 46
+  Lane S's 7 PRs               :r6, 46, 53
+  All 53 PRs merged            :milestone, rm, 53, 53
 
   section Contract
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
@@ -283,17 +285,18 @@ gantt
   5                            :crit, done, a5, 5, 6
 
   section P · program data
-  6a (6a-i, 6a-ii, 6a-iii-a merged) :active, p1, 5, 6
+  6a (four PRs, merged)        :done, p1, 5, 6
   6b                           :done, p2, 6, 7
-  6c                           :p3, 7, 8
-  6d                           :p4, 8, 9
+  6c-i put on, test data       :p3, 7, 8
+  6c-ii the two reads          :p3b, 8, 9
+  6d                           :p4, 9, 10
 
   section E · day data
   11a                          :done, e1, 4, 5
   11b row writer               :crit, done, e2, 5, 7
   12a-i the day's read         :crit, done, e3, 7, 8
-  14, 11c (11c-i, 11c-ii)      :e4, 8, 9
-  12a-ii replayed fixtures     :e5, 9, 10
+  14, 11c (11c-i merged)       :active, e4, 8, 9
+  12a-ii replayed fixtures     :done, e5, 9, 10
 
   section B · builder
   8a lists and program page    :done, b1, 1, 2
@@ -303,7 +306,7 @@ gantt
   10 week editor               :done, b5, 5, 6
   10b dialogs                  :done, b6, 6, 7
   7a (7a-i merged)             :active, b7, 7, 8
-  7b pages                     :b8, 8, 9
+  7b pages                     :b8, 9, 10
   15 put on, take off          :crit, b9, 11, 12
 
   section C · day page
@@ -321,7 +324,7 @@ gantt
   3b-bw                        :done, s2, 2, 3
   3b-0                         :done, s3, 6, 7
   3b-life, B2-0 (merged)       :done, s4, 7, 8
-  B1-2                         :s5, 8, 9
+  B1-2                         :done, s5, 8, 9
   B2                           :s6, 10, 11
 
   section Slices
@@ -332,31 +335,31 @@ gantt
 
 **What it shows**
 
-- **In a row, 52 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
+- **In a row, 53 PR-lengths; in lanes, about 12.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
   real ✓, the day page, and the two steps the switch waits on (12d, then 15: plan decision D39). Nothing shortens it:
   only one migration may be unapplied at a time, and each must be seen applied before the next
   merges. A delay on a red bar moves the end; a delay on a blue bar usually does not.
-- **Lane B has slack** (waves 7 to 10), and lanes B, C and S do their first six waves before any
+- **Lane B has slack** (7a and 7b are its only PRs across waves 7 to 10), and lanes B, C and S do their first six waves before any
   program data exists.
 - **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
-  critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a
-  change after logging; it waits for lane P's writers and gates 15, not the day page (12c).
+  critical path and gates the first real ✓ (12b). 12a-ii replays the fixtures that describe a change after logging; it gates 15, not the day page (12c). It merged on 2026-11-17 (#525), before 6c-i and 6d: its reorder case is seeded by a direct band shift until 6d's writer exists.
+- **6c is two PRs since 2026-11-17**, the maintainer's decision (6c-i, Put on and the test data;
+  6c-ii, the program list and program view reads). The day page (12c) waits for 6c-i only. The pages (7b)
+  wait for 6c-ii, so 7b is drawn a wave later, inside lane B's slack.
 - **11c is two PRs since 2026-11-17** (11c-i, Change; 11c-ii, the D35 revive), in 11c's one slot.
   12d's Change action waits for 11c-i only.
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
-  one slot: 7a-i needs only 6a-i and 6a-ii. If each of 6a's four takes a full PR-length, 7a-ii
-  (which needs 6b and 6a-iii-b) starts later than drawn and the lanes' end moves from about 12 to about 13. Slice 1's measured
-  PR-length will say which.
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 36 of the 52). The
+  one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, so 7a-ii (which needed 6b and 6a-iii-b) can start; it is not open yet.
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-17, 40 of the 53). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
-  themselves. Since then: all of lane A's chain; lane E's 11a, 11b and 12a-i (#505); lane B's six screen steps
-  (8a to 10b) and 7a-i; lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life and B2-0 (#514).
-  6a-i, 6a-ii, 6a-iii-a (#557) and 6b (#522) are merged and 6a-iii-b is not, so 6a's bar is part merged; so are 7a's bar
-  (7a-i is merged, 7a-ii is not). A bar is marked here when its PRs are on `main`.
+  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525) and 11c-i (#539); lane B's six screen steps
+  (8a to 10b) and 7a-i; lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
+  All four of 6a's PRs (6a-iii-b, copying a workout, is #571) and 6b (#522) are merged. 7a's bar is part merged (7a-i is merged, 7a-ii is not), and so
+  is 11c's (11c-i is merged, 11c-ii is not). A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone
