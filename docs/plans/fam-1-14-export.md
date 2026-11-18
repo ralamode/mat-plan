@@ -1,8 +1,8 @@
 # FAM-1 14 — The export carries what the day page logs
 
-> Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step 14. Branch: `feat/fam-1-14-export`. Lane E. **Rev 3**: reshaped by a five-lens panel and a re-review (§
-> Review-response log). It now goes to the maintainer for approval. No implementation code is
-> committed before that approval.
+> Backlog: [plan.md](../plan.md) row `FAM-1`, the [FAM-1 plan](./fam-1-family-program.md) §5 step 14. Branch: `feat/fam-1-14-export`. Lane E. **Rev 3, approved** by the maintainer
+> (2026-11-17, relayed by the board), after a five-lens panel and a re-review (§ Review-response
+> log). Q1–Q3 are answered below. 14a is built in this PR; 14b follows in its own.
 
 ## Goal
 
@@ -313,17 +313,23 @@ it:
 - The readiness colour, "how it felt" and per-athlete targets stay on the notice's "not yet" list.
 - The zip export's rate limit and empty-export behaviour stay as tech-debt rows, unchanged.
 
-## Questions for the maintainer
+## Questions for the maintainer — answered _(maintainer, 2026-11-17, relayed by the board)_
 
-- **Q1, which gates 14a.** Where does a Count logged in `count` go? Proposed: its number goes in
-  `reps` and `load` stays empty (`…,plank-taps,1,25,,…`). The alternative is a suffix in `load`
-  (`25ct`).
-- **Q2, which gates 14b.** The check-ins file's shape. Proposed:
-  `date,activity,metric,value,unit,notes`, which replaces the legacy nine columns. The alternative
-  keeps the nine-column header and adds columns per check-in.
-- **Q3, standard quoting for the whole file.** Two legacy tests change: inch marks in a note are
-  now quoted, and a comma in a movement is quoted instead of refused. Three comments are also
-  updated. ADR 0009 calls standard quoting "preferred".
+- **Q1 (gates 14a): the number goes in `reps` and `load` stays empty**
+  (`…,plank-taps,1,25,,…`). The alternative, `25ct` in `load`, was declined.
+- **Q2 (gates 14b): the new long format**: `date,activity,metric,value,unit,notes`, one row per
+  check-in, with the old rows included.
+- **Q3: standard quoting** (RFC 4180) for the whole file.
+
+**Two follow-ups the maintainer decided, each its own small PR after 14a** (lane E, as the export's
+owner):
+
+- **Bodyweight download, operator only.** The code is made to match `.github/SECURITY.md:134`, with
+  a boundary test that a non-operator member is refused. The privacy lens reviews it, and the
+  inventory and notice change in the same PR.
+- **Spreadsheet formula injection, fixed.** Any cell starting with `=`, `+`, `-`, `@`, a tab or a
+  carriage return is prefixed with `'`, so it opens as text. This applies across the whole export,
+  with byte tests.
 
 ## Review-response log
 
