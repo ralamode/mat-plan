@@ -148,7 +148,7 @@ as not production:
 binds the same accounts: its in-transaction check finds no live membership, because the core removed it.
 
 **Another household found.** The dry run also prints `households not in SEED_PUBLIC_IDS: live N,
-hidden M`. It is **printed, never a refusal**: after R2 the family's own household is outside the set,
+hidden M`, **on the found and the not-found path alike**, so step 4 can read it after step 3. It is **printed, never a refusal**: after R2 the family's own household is outside the set,
 and this entry must stay usable as R4's remedy. Both must read 0 at step 0 (D4). If not, the fresh start stops: no tool here
 removes another household, and 2b comes after R2.
 
@@ -174,7 +174,9 @@ in the ledger, not the Applied row.
 
 - `household_id IS NULL AND movementIsCatalog() IS NOT TRUE`, the spec's one predicate, imported from A2
   (NULL-safe: a predicate that can be NULL for an old row would otherwise select nothing and report
-  "nothing to do"; the success case plants a legacy row with `modality` NULL);
+  "nothing to do"; the success case plants a legacy row with `modality` NULL), **or** `public_id` in
+  `MOVEMENT_SEED_PUBLIC_IDS`, so an old row hand-`UPDATE`d to carry a `modality` (R4's count (2)) is also
+  removed, the reference refusal still applying;
 - with their `movement_equipment` and `movement_muscles` rows first.
 
 Catalog rows are never touched.
@@ -209,7 +211,8 @@ household is back, so the reference refusal below is the guard.
    household rows silently, which is the household graph's `NON_ABORTING_EDGES` lesson (`graph.ts:228`).
    Today every such FK is NO ACTION.
 3. Delete the join rows and the movements by `id = ANY(<the locked ids>)`, so a row committed after the
-   lock is never swept up.
+   lock is never swept up. PGlite has one connection and cannot show that race, so this and the
+   `FOR UPDATE` are held by a **source pin**, as 2a's lock mode is, not by a behavioural mutation.
 4. Require each deleted count (`count()::int`) to equal the same-transaction count **and** the dry run's:
    three expected values, `EXPECT_LEGACY_MOVEMENTS`, `EXPECT_LEGACY_EQUIPMENT` and
    `EXPECT_LEGACY_MUSCLES`, each parsed as an integer ≥ 0.
@@ -419,7 +422,7 @@ Each path exists from its own merge.
 | `packages/db/scripts/corrections/registry.ts`                    | EDIT   | `delete-legacy-movements-<date>` (D2); the report's counts (D3)                                                                                                                                                                                                                                           |
 | `packages/db/scripts/corrections/movement-gates.ts` + `.test.ts` | NEW    | `legacyMovementDeletionIssue`                                                                                                                                                                                                                                                                             |
 | `packages/db/scripts/verify/erasure.ts`                          | EDIT   | The reader equals the census plus the join tables; inside `rolledBack`, a scratch table with an FK into `movements` and one row refuses by name; a composite FK refuses; the counts equal the expected ones; catalog rows survive; a second run deletes nothing; the report's four counts on planted rows |
-| `packages/db/scripts/mutations/NN-*`                             | NEW    | The reader reads a hand list; a composite FK is skipped; a hidden reference is filtered; the expected counts are ignored; the delete keys on the predicate, not the locked ids; a catalog row is deleted; count (4) reads a log instead of the table                                                      |
+| `packages/db/scripts/mutations/NN-*`                             | NEW    | The reader reads a hand list; a composite FK is skipped; a hidden reference is filtered; the expected counts are ignored; a catalog row is deleted; count (4) reads a log instead of the table                                                                                                            |
 | `packages/db/src/erasure/graph.ts`                               | EDIT   | The `REFERENCE_TABLES` docblock: the fresh start's one exception                                                                                                                                                                                                                                          |
 | `docs/features/erasure.md`                                       | EDIT   | The global catalog survives every erasure except D2's legacy rows; never restore a pre-R2 extract                                                                                                                                                                                                         |
 | `docs/runbooks.md`                                               | EDIT   | D4's two sections; the household delete's "cut a restore branch" points at the first                                                                                                                                                                                                                      |
@@ -557,3 +560,8 @@ BLOCKING. (DB safety withdrew D-S7 against the rejection above.) Their new findi
 | A2-1        | Architecture | D1's name check refuses PGlite's `postgres` database in the success cases           | A `/postgres` target for those; `/mat_plan` as the mismatch case, with its mutation      |
 | A2-2        | Architecture | R0 edits `verify.ts` and `harness.ts`, which are PR 1's only                        | Helpers kept local to `verify/erasure.ts`; RC's cases move there                         |
 | A2-N        | Architecture | Say that the other-households count never refuses                                   | Stated                                                                                   |
+
+Correctness's re-review: N1, N4 and N6 were closed by the round above. **N2** (D1's not-found dry run
+prints the households line), **N3** (the locked-ids delete is held by a source pin, since PGlite cannot
+race), **N5** (`priv-3-guarded-deletion.md` D8 no longer says R0 adds a `kind`) and the hand-`UPDATE`
+NIT (D2 also deletes a seed-namespace id) are **accepted**.

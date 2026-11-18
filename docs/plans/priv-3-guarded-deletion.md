@@ -469,9 +469,7 @@ The seeded household is erased once, at the fresh start, by a dated entry with *
 `erase-seeded-household-<date>`, through 2a's core. It refuses outside production and once the
 household is gone, and its gate is pure and unit-tested. `erase-household`'s seed-id refusal (D4) and its
 proof are **unchanged**: the one-shot entry does not call that gate, and no re-key runs first (K7
-deletes the household, so a re-key would buy nothing). It brings `kind: 'erasure'`, its three strings
-and the redacted catch forward from 2b. **2b adopts RC's `corrections/redact.ts`** rather than writing
-its own (RC's plan). The design, its runbook (R1) and step 5's correction are in
+deletes the household, so a re-key would buy nothing). It redacts inside the entry, as RC's `create-household` does, adds no `kind` and leaves `correct.ts` untouched; 2b keeps `kind: 'erasure'` as planned here. **2b adopts RC's `corrections/redact.ts`** rather than writing its own (RC's plan). The design, its runbook (R1) and step 5's correction are in
 [priv-3-fresh-start-prep.md](./priv-3-fresh-start-prep.md).
 
 ## File-by-file changes
