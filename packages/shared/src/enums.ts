@@ -65,6 +65,23 @@ export type HouseholdRole = (typeof HOUSEHOLD_ROLES)[number];
 export const householdRoleSchema = z.enum(HOUSEHOLD_ROLES);
 export const HOUSEHOLD_ROLE = keyBySelf(HOUSEHOLD_ROLES);
 
+/**
+ * A muscle's role on a library movement (`CAT-3` A1, `movement_muscles.role`): one optional primary
+ * and any number of secondaries (spec rule 9). The catalog entry says the same thing as two fields
+ * (`primaryMuscle`, `secondaryMuscles` in `./catalog/entry`), so today only the database's storage
+ * names a role. It lives here for the reason `HOUSEHOLD_ROLES` does: the zod/TS/DB triple stays
+ * whole, and A2's seed maps the two fields onto it.
+ *
+ * The DB mirrors it as `movement_muscles_role_check`, whose literals are inlined and bound back to
+ * this array by `assertCheckCoversConst` in `db:verify`. The partial unique index that allows one
+ * primary per movement (`uq_movement_muscles_one_primary`) repeats `'primary'`, which the proof that
+ * inserts `MUSCLE_ROLE.primary` twice pins.
+ */
+export const MUSCLE_ROLES = ['primary', 'secondary'] as const;
+export type MuscleRole = (typeof MUSCLE_ROLES)[number];
+export const muscleRoleSchema = z.enum(MUSCLE_ROLES);
+export const MUSCLE_ROLE = keyBySelf(MUSCLE_ROLES);
+
 /** v0 entry discriminator — the thin-slice stand-in for the activity_type catalog (V1-1). */
 export const ENTRY_KINDS = ['bodyweight', 'strength'] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];

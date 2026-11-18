@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -176,7 +176,7 @@
+@@ -180,7 +180,7 @@ export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
    },
    // AND: an assignment of H's athlete to another household's block is matched by neither.
    { table: schema.programAssignments, householdRows: assignmentRows },
 -  { table: schema.programBlocks, householdRows: (s) => programBlockInHousehold(s) },
 +  { table: schema.programBlocks, householdRows: () => sql`true` },
-   { table: schema.movements, householdRows: (s) => movementInHousehold(s) },
-   { table: schema.profiles, householdRows: (s) => inHousehold(s) },
-   { table: schema.householdMembers, householdRows: (s) => householdMemberInHousehold(s) },
+   // CAT-3 A1 (runbook steps 10a, 10b): a library movement's equipment and muscles. Only the rows of a
+   // movement the household owns; a global movement's rows are reference data and survive a deletion.
+   {

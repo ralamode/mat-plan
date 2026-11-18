@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+--- a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
++++ b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+@@ -76,7 +76,7 @@ CREATE TABLE "movement_muscles" (
+ 	"muscle_code" text NOT NULL,
+ 	"role" text NOT NULL,
+ 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+-	CONSTRAINT "movement_muscles_role_check" CHECK ("movement_muscles"."role" in ('primary', 'secondary'))
++	CONSTRAINT "movement_muscles_role_check" CHECK ("movement_muscles"."role" in ('primary', 'secondary', 'tertiary'))
+ );--> statement-breakpoint
+ ALTER TABLE "movement_equipment" ADD CONSTRAINT "movement_equipment_movement_id_movements_id_fk" FOREIGN KEY ("movement_id") REFERENCES "public"."movements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ ALTER TABLE "movement_equipment" ADD CONSTRAINT "movement_equipment_equipment_code_equipment_code_fk" FOREIGN KEY ("equipment_code") REFERENCES "public"."equipment"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

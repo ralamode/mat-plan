@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+--- a/packages/db/src/erasure/graph.ts
++++ b/packages/db/src/erasure/graph.ts
+@@ -185,7 +185,7 @@ export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
+   // movement the household owns; a global movement's rows are reference data and survive a deletion.
+   {
+     table: schema.movementEquipment,
+-    householdRows: (s) => sql`${schema.movementEquipment.movementId} IN ${movementsOf(s)}`,
++    householdRows: (s) => sql`${schema.movementEquipment.movementId} IN (SELECT ${schema.movements.id} FROM ${schema.movements} WHERE ${movementInHousehold(s)} OR ${schema.movements.householdId} IS NULL)`,
+   },
+   {
+     table: schema.movementMuscles,

@@ -120,6 +120,25 @@ export const activityTypeCategories = pgTable('activity_type_categories', {
 });
 
 /**
+ * `CAT-3` A1: the library's two vocabularies as reference tables of **codes only**, seeded from
+ * `EQUIPMENT` and `MUSCLES` (`packages/shared/src/catalog/vocabulary.ts`) and pinned to them by
+ * `db:verify`. The labels stay in shared (spec S1), so a relabel is never a migration.
+ *
+ * ⚠️ **Adding a word reaches a database through the seed alone** (`onConflictDoNothing`); removing
+ * or renaming one needs a migration, because `movement_equipment` / `movement_muscles` reference the
+ * code. Both are reference data (`erasure/graph.ts` → `REFERENCE_TABLES`), never erased.
+ */
+export const equipment = pgTable('equipment', {
+  code: text('code').primaryKey(),
+  createdAt: timestamps.createdAt,
+});
+
+export const muscles = pgTable('muscles', {
+  code: text('code').primaryKey(),
+  createdAt: timestamps.createdAt,
+});
+
+/**
  * Households — the authz root (spec.md §4): a Clerk operator owns one household and
  * every profile/log row is household-scoped for DAL ownership checks. Written now so
  * `profiles.household_id` has a target; Clerk landed at Beta 0 (`AUTH-1`) and the
@@ -699,7 +718,9 @@ export const activityTypes = pgTable(
  * runtime (an `ON CONFLICT` target, an `expectRejectedBy` assertion, `pg_indexes`), so a typo is a
  * silent miss that a const turns into a compile error. Hoisting a predicate into a const would hide
  * the invariant one indirection away from the index that states it, and still not stop a drifting
- * copy in a migration nobody may edit.
+ * copy in a migration nobody may edit. **The one exception is `movementGlobalRowHasPattern`**
+ * (`CAT-3` A1): `verify.ts` drops and re-adds that CHECK at runtime, so its predicate had a second
+ * hand-typed copy there, and `db:verify` compares the re-add with the migration's.
  *
  * 🔴 **TEN-2b corrected the reason this docblock used to give.** It said *"a predicate is not matched
  * by anything: it is read by the planner from the catalog"* — **false** as of TEN-2b. An
@@ -724,11 +745,13 @@ export const MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX = 'uq_movements_household_slug
  * database enforces seededness and deletes `db:verify`'s exact set-membership proof as redundant. The
  * intent, and that gap, live in 0017's header and in `docs/plans/ten-2c-drop-global-slug-unique.md`.
  *
- * ⚠️ **Shipped `NOT VALID`; the `VALIDATE` is `TEN-2d`.** drizzle's `check()` emits a VALIDATED
- * constraint, so the `NOT VALID` is a **hand-edit of 0017** — the same hand-edit class as 0015's FK.
- * `db:verify` captures `convalidated` **immediately after `migrate()`** because nothing else catches
- * the hand-edit being lost on a rebase, and because `verify.ts` itself drops and re-adds this
- * constraint around the V1-1b backfill simulation (a later read would measure that re-add).
+ * **History.** 0017 shipped it `NOT VALID` (a hand-edit) and 0018 validated it. `CAT-3` A1's 0032
+ * drops it and re-adds it, validated in place, with a weaker predicate: a global **non-strength
+ * catalog** row may have no pattern (`movementGlobalRowHasPattern` below). The name stays
+ * `…_has_pattern` although the predicate now has a third arm: proofs and runbooks cite it, and
+ * a rename is a contract change for no reader's benefit. `db:verify` reads
+ * this constraint **immediately after `migrate()`**, because `verify.ts` itself drops and re-adds it
+ * around the V1-1b backfill simulation (a later read would measure that re-add).
  *
  * 🔴 **`MOVEMENT_SLUG_UNIQUE_CONSTRAINT` used to live here and TEN-2c DELETED it**, as the const's own
  * docblock promised it would. Migration `0017` drops the constraint, so a const in the module that
@@ -737,6 +760,36 @@ export const MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX = 'uq_movements_household_slug
  * historical literal module-privately and says why.
  */
 export const MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK = 'movements_global_row_has_pattern';
+
+/**
+ * The predicate of `movements_global_row_has_pattern`, once (`CAT-3` A1, spec S5): a household row,
+ * or a global row with a pattern, or a global **catalog** row whose modality is not strength.
+ *
+ * 🔴 **The `modality IS NOT NULL` is load-bearing.** Without it a global row with no pattern and no
+ * modality makes the last arm `NULL <> 'strength'`, i.e. NULL, and a CHECK passes on NULL. `'strength'`
+ * is a literal in the template, never an interpolated value: in a runtime query an interpolated
+ * value becomes a bind parameter, which DDL cannot take (and `sql.raw` is not allowed).
+ *
+ * Used by the `check()` below and by `verify.ts`'s V1-1b re-add; `db:verify` compares that re-add's
+ * `pg_get_constraintdef` with the migration's.
+ */
+export const movementGlobalRowHasPattern = (t: {
+  householdId: AnyPgColumn;
+  pattern: AnyPgColumn;
+  modality: AnyPgColumn;
+}) =>
+  sql`${t.householdId} is not null or ${t.pattern} is not null or (${t.modality} is not null and ${t.modality} <> 'strength')`;
+
+/** `CAT-3` A1: the two CHECKs on `movements.modality`, named for `db:verify`'s matchers. */
+export const MOVEMENT_MODALITY_CHECK = 'movements_modality_check';
+export const MOVEMENT_HOUSEHOLD_ROW_HAS_NO_MODALITY_CHECK =
+  'movements_household_row_has_no_modality';
+
+/** `CAT-3` A1: the names `db:verify` matches on the two join tables. */
+export const MOVEMENT_EQUIPMENT_PAIR_UNIQUE_INDEX = 'uq_movement_equipment_pair';
+export const MOVEMENT_MUSCLES_PAIR_UNIQUE_INDEX = 'uq_movement_muscles_pair';
+export const MOVEMENT_MUSCLES_ONE_PRIMARY_UNIQUE_INDEX = 'uq_movement_muscles_one_primary';
+export const MOVEMENT_MUSCLES_ROLE_CHECK = 'movement_muscles_role_check';
 
 /**
  * movement — the exercise catalog (spec.md §4): slug/name + optional movement pattern,
@@ -751,8 +804,15 @@ export const MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK = 'movements_global_row_has_p
  * column is **nullable FOREVER**: TEN-2c did NOT contract it to `NOT NULL` (that would assert some
  * household owns `Box Jump`, and inventing a sentinel household to satisfy the constraint would put
  * a fiction in the table every scoped query then has to exclude). What 2c contracted to instead is
- * `movements_global_row_has_pattern` — `CHECK (household_id IS NOT NULL OR pattern IS NOT NULL)`,
- * `NOT VALID`, at the foot of this table.
+ * `movements_global_row_has_pattern`, at the foot of this table (its predicate:
+ * `movementGlobalRowHasPattern`, widened at `CAT-3` A1 for non-strength catalog rows).
+ *
+ * ── `CAT-3` A1: `modality`, and the library's taxonomy ─────────────────────────────────────────
+ *
+ * **`modality` marks a catalog row** (spec rule 2): only the catalog seed writes it (A2), and the
+ * database refuses it on a household row. Its equipment and muscles are rows of
+ * `movement_equipment` and `movement_muscles`, which a household row never has in Beta 0 (held by
+ * proof). A row with a modality can never be moved into a household without clearing it first.
  *
  * The resolution rule the two namespaces depend on is **GLOBAL-FIRST**, and it is TEN-2b's to
  * implement: resolve `slug` against `household_id IS NULL` first, and only then `(scope, slug)`.
@@ -824,6 +884,9 @@ export const movements = pgTable(
     // (`findOrCreateTypedMovement`). Nothing retypes a row. The default is what an item made in the old
     // strength form gets.
     trackingType: text('tracking_type').notNull().default(DEFAULT_TRACKING_TYPE),
+    // CAT-3 A1: mirrors shared MODALITIES (pinned by db:verify). NULL on every household row and on
+    // the 35 legacy rows; only the catalog seed (A2) sets it. No default, on purpose.
+    modality: text('modality'),
     videoUrl: text('video_url'),
     cues: text('cues'),
     ...timestamps,
@@ -838,17 +901,21 @@ export const movements = pgTable(
       'movements_tracking_type_check',
       sql`${t.trackingType} in ('check', 'count', 'reps', 'weight_reps', 'duration', 'time_sets', 'distance')`,
     ),
-    // TEN-2c: a GLOBAL row must carry a `pattern` — i.e. it must be the kind of row only a human
-    // curating `MOVEMENT_SEED_ROWS` can author, because `findOrCreateMovement` writes neither
-    // `pattern` nor `unit_default` and never can. It blocks the realistic way into the forbidden
-    // state: an operator hand-running `UPDATE movements SET household_id = NULL` to unwedge a
-    // household delete the FK aborted. Shipped `NOT VALID` (0017, hand-edited); the `VALIDATE` is
-    // `TEN-2d`. Layer 2 of the same invariant — exact set membership in `MOVEMENT_SEED_PUBLIC_IDS` —
-    // lives in `db:verify`, because `db:verify` never runs against production and this does.
     check(
-      MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK,
-      sql`${t.householdId} is not null or ${t.pattern} is not null`,
+      MOVEMENT_MODALITY_CHECK,
+      sql`${t.modality} in ('strength', 'conditioning', 'mobility', 'skill')`,
     ),
+    check(
+      MOVEMENT_HOUSEHOLD_ROW_HAS_NO_MODALITY_CHECK,
+      sql`${t.householdId} is null or ${t.modality} is null`,
+    ),
+    // TEN-2c: a GLOBAL row must be one a human curated: a legacy seed row with a `pattern`, or (from
+    // CAT-3 A1) a non-strength catalog row with a `modality`. `findOrCreateMovement` writes none of
+    // the three. It blocks the realistic way into the forbidden state: an operator hand-running
+    // `UPDATE movements SET household_id = NULL` to unwedge a household delete the FK aborted.
+    // Validated since 0018; re-added validated by 0032. Layer 2 of the same invariant (exact set
+    // membership) lives in `db:verify`, because `db:verify` never runs against production and this does.
+    check(MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK, movementGlobalRowHasPattern(t)),
     // The global reference namespace: one row per slug among rows owned by no household. Declared at
     // TEN-2a, in effect from TEN-2c: until 0017 dropped the non-partial `movements_slug_unique`, the
     // broader constraint already forbade everything this narrower one does.
@@ -859,6 +926,75 @@ export const movements = pgTable(
     uniqueIndex(MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX)
       .on(t.householdId, t.slug)
       .where(sql`${t.householdId} is not null`),
+  ],
+);
+
+/**
+ * `CAT-3` A1: a library movement's required equipment set (spec rule 8) and its muscles (rule 9).
+ * Both are empty until A2's seed writes them, and nothing in `apps/` reads them until P11-ii.
+ *
+ * 🔴 **No `household_id`.** A row belongs to whoever owns its movement, so ownership is derived
+ * through `movement_id` (`erasure/graph.ts` → `movementsOf`). That is what lets a household's own
+ * taxonomy, when there is one, travel with its movement. Never denormalise it here. A row is read only
+ * through a movement the scope may see, never selected by code alone, or a code filter would cross
+ * households once they have taxonomy.
+ *
+ * ⚠️ **A household row has none of these in Beta 0.** No writer makes one, and `db:verify` holds
+ * it. `NO ACTION` on every FK, as `movements.household_id`: a delete that a row blocks is answered
+ * by deleting the row (`docs/runbooks.md`, "Delete a household", steps 10a and 10b).
+ *
+ * `created_at` only, not `...timestamps`: A3 writes these rows by difference and hard-deletes them,
+ * and `/api/sync` never reaches them. The `id` is what `HOUSEHOLD_GRAPH` and its proofs select.
+ */
+export const movementEquipment = pgTable(
+  'movement_equipment',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    movementId: bigint('movement_id', { mode: 'number' })
+      .notNull()
+      .references(() => movements.id),
+    equipmentCode: text('equipment_code')
+      .notNull()
+      .references(() => equipment.code),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    // Also the covering index for the movement FK (it leads on movement_id).
+    uniqueIndex(MOVEMENT_EQUIPMENT_PAIR_UNIQUE_INDEX).on(t.movementId, t.equipmentCode),
+    index('idx_movement_equipment_equipment_code').on(t.equipmentCode),
+  ],
+);
+
+/**
+ * One optional primary muscle and any number of secondaries (`MUSCLE_ROLES`).
+ *
+ * ⚠️ **A role swap demotes first, then promotes, in one transaction.** The one-primary index is
+ * partial, so it cannot be `DEFERRABLE`, and Postgres checks it row by row: one statement that
+ * makes X secondary and Y primary can raise `23505` depending on row order. This binds A3's
+ * by-difference write and any `CAT-4` editor.
+ */
+export const movementMuscles = pgTable(
+  'movement_muscles',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    movementId: bigint('movement_id', { mode: 'number' })
+      .notNull()
+      .references(() => movements.id),
+    muscleCode: text('muscle_code')
+      .notNull()
+      .references(() => muscles.code),
+    role: text('role').notNull(), // mirrors shared MUSCLE_ROLES (pinned by db:verify)
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    check(MOVEMENT_MUSCLES_ROLE_CHECK, sql`${t.role} in ('primary', 'secondary')`),
+    // Also the covering index for the movement FK (it leads on movement_id). One muscle appears once
+    // per movement, so it cannot be both primary and secondary.
+    uniqueIndex(MOVEMENT_MUSCLES_PAIR_UNIQUE_INDEX).on(t.movementId, t.muscleCode),
+    uniqueIndex(MOVEMENT_MUSCLES_ONE_PRIMARY_UNIQUE_INDEX)
+      .on(t.movementId)
+      .where(sql`${t.role} = 'primary'`),
+    index('idx_movement_muscles_muscle_code').on(t.muscleCode),
   ],
 );
 

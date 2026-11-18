@@ -127,6 +127,11 @@ import {
 } from '../src/seed';
 // FAM-1 step 0c: the database and the proof helpers this file used to define live in the harness, so
 // the lanes' proof modules beside it can import the same ones. Bodies unchanged; see harness.ts.
+import {
+  assertGlobalCheckMatchesMigration,
+  verifyCatalogMigrationFacts,
+  verifyCatalogTables,
+} from './verify/catalog';
 import { verifyDay } from './verify/day';
 import { verifyErasure } from './verify/erasure';
 import {
@@ -159,10 +164,11 @@ console.log('✓ migration applied to PGlite');
 // fixture below mutates exactly this object, so a later read measures `verify.ts` instead of 0017:
 // the V1-1b backfill simulation (~550 lines down) **drops and re-adds**
 // `movements_global_row_has_pattern` itself, because that CHECK post-dates 0002's backfill and the
-// simulation is faithful to the DEPLOY ORDER. Its re-add is hand-written `NOT VALID`, so a
-// `convalidated` read taken after it would pass even if 0017 had **lost** its own `NOT VALID`
-// hand-edit on a rebase — and `drizzle-kit`'s drift guard diffs `schema.ts` against the snapshot, not
-// the SQL, so nothing else in any gate catches that. This read is the only thing that does.
+// simulation is faithful to the DEPLOY ORDER. Its re-add is `NOT VALID`, so a `convalidated` read
+// taken after it would measure the simulation, not the migration. Since CAT-3 A1 the constraint here
+// is 0032's (re-added validated, with a weaker predicate), and `drizzle-kit`'s drift guard diffs
+// `schema.ts` against the snapshot, not the SQL, so a 0032 that lost its validation or its predicate
+// is caught only here and by `verifyCatalogMigrationFacts` just below this block.
 //
 // `movements_slug_unique` is read here for the same reason, one step weaker: the TEN-2a/2b sections
 // below used to DROP and re-`ADD` it around their probes, and asserting its absence from up here is
@@ -186,7 +192,7 @@ console.log('✓ migration applied to PGlite');
   assert.equal(
     checkRows[0].convalidated,
     true,
-    `TEN-2d: …and it is now VALIDATED — migration 0018 ran VALIDATE CONSTRAINT, flipping 2c's convalidated = false, which is how "do not forget the VALIDATE" was a red build rather than a reminder. ⚠️ This is the arc's ONLY check against a REAL row — db:verify runs on PGlite and never against production, so the VALIDATE itself is what scanned prod (it reported zero violators before merge). A false here means 0018 did not apply`,
+    `TEN-2d / CAT-3 A1: …and it is VALIDATED. 0018 validated 0017's NOT VALID constraint (that VALIDATE is what scanned production); CAT-3 A1's 0032 drops it and re-adds it validated in place, with a weaker predicate. A false here means 0032 re-added it NOT VALID`,
   );
 
   // The constraint 0017 DROPPED — asserted ABSENT by name, which is where the literal
@@ -203,10 +209,15 @@ console.log('✓ migration applied to PGlite');
     'TEN-2c: movements_slug_unique is GONE from pg_constraint — the non-partial UNIQUE("slug") dominated both partial indexes, so until 0017 they were declared and NOT in effect',
   );
   console.log(
-    `✓ TEN-2c: movements_slug_unique is absent from pg_constraint, and ${CHECK} exists NOT VALID ` +
+    `✓ TEN-2c: movements_slug_unique is absent from pg_constraint, and ${CHECK} exists, validated ` +
       '(both read HERE, before any fixture re-adds either — see the note above)',
   );
 }
+
+// CAT-3 A1: S5 proved on 0032's own constraint, and its definition kept for the comparison after the
+// V1-1b re-add below. HERE for the same reason as the block above: from the V1-1b simulation on, the
+// constraint in the database is this file's, not the migration's.
+const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
 
 // The 1c-4 seed guard's proof is BELOW, after the idempotency block it depends on — see
 // "AUTH-1 1c-4: the seed refuses a household it does not own".
@@ -904,9 +915,12 @@ await db.execute(
 // this file quietly stronger than the database. ⚠️ Nothing may assert `convalidated` on this
 // constraint below this line — it would measure this statement rather than the migration; the read
 // that matters is immediately after `migrate()`.
+// CAT-3 A1: the predicate is the exported fragment, not a hand-typed copy, and the re-add is compared
+// with the migration's definition (read right after `migrate()`).
 await db.execute(
-  sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)} CHECK ("household_id" IS NOT NULL OR "pattern" IS NOT NULL) NOT VALID`,
+  sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)} CHECK (${schema.movementGlobalRowHasPattern(schema.movements)}) NOT VALID`,
 );
+await assertGlobalCheckMatchesMigration(migratedGlobalCheckDef);
 
 const [bwEntry] = await db
   .select({
@@ -9863,11 +9877,13 @@ console.log(
 // A lane adds proofs inside its own module; it does not add a call here. The fifth module, PRIV-3's
 // erasure graph, runs after the four lanes' (roadmap thread, the harness owner, 2026-11-17): its
 // proofs read only the catalog and its own rolled-back fixture, so it cannot change what they count.
+// The sixth, CAT-3 A1's catalog tables, runs after erasure for the same reason: rolled-back rows only.
 const verifyContext: VerifyContext = { A_SCOPE, A_MEMBER_SCOPE, B_SCOPE };
 await verifySchema(verifyContext);
 await verifyProgram(verifyContext);
 await verifyDay(verifyContext);
 await verifySingleValues(verifyContext);
 await verifyErasure(verifyContext);
+await verifyCatalogTables(verifyContext);
 
 console.log('✓ verify passed');
