@@ -7,12 +7,12 @@
 - **This plan:** the last two chunks to build before R2, the fresh start itself.
   - **R0** is three things:
     - the deltas to `PRIV-3`'s own plan, applied in this PR;
-    - the deltas to `OPS-2`'s plan and the `SEC-6` row, which R0's code PR applies after #592;
+    - the deltas to `OPS-2`'s plan and the `SEC-6` row, which R0's code PR applies (#592 merged 2026-11-18);
     - the dated one-shot correction that erases the seeded household, built in R0's code PR.
   - **R1** is step 5's correction, R4's report, and the runbook section.
 - **Built already:** RC, `create-household` (#546), and `PRIV-3` PR 1, the graph (#520).
 - **Gates:**
-  - R0's code PR waits for `PRIV-3` PR 2a (the core) and #592 (`OPS-2` PR 1).
+  - R0's code PR waits for `PRIV-3` PR 2a (the core); #592 (`OPS-2` PR 1) merged on 2026-11-18.
   - R1's PR waits for R0 and for CAT-3 **A2** on `main`. A2 rewrites the report R1 extends and exports
     `movementIsCatalog()`; both of A2's PRs are needed, the mechanism (A2-i) and the switch (A2-ii).
   - R2 waits for the spec's preconditions: A2-ii deployed, and the maintainer's go.
@@ -325,7 +325,7 @@ They describe production after R2.
   as a draft at step 0 and merged at step 8's unfreeze.
 - If the sitting stops after step 3, its athlete and household sentences merge anyway.
 
-**What the close-out changes.** The list is drafted against `main` once #592 has merged. The known
+**What the close-out changes.** The list is drafted against `main`, where #592 now is. The known
 passages:
 
 - the notice:
@@ -374,7 +374,7 @@ Each path exists from its own merge.
 - **D8** points at this plan.
 - **Q7** is narrowed to the maintainer's own family, citing #628's rule.
 
-### Applied by R0's code PR, after #592: `OPS-2`'s plan and `plan.md`'s `SEC-6` row
+### Applied by R0's code PR: `OPS-2`'s plan and `plan.md`'s `SEC-6` row
 
 - **`OPS-2` Q2 and D8:**
   - After R2 no production row carries a seed id, so Q2's re-key has nothing left to act on.
@@ -398,7 +398,7 @@ Each path exists from its own merge.
 | `docs/plans/priv-3-guarded-deletion.md` | EDIT   | § Applied in this PR                                                        |
 | `docs/plan.md`                          | EDIT   | `PRIV-3`'s row: links this plan; RC is "merged 2026-11-18", not "in review" |
 
-### R0's code PR: `db/priv-3-r0-erase-seeded-household` (after 2a and #592; about 300 lines, half proofs)
+### R0's code PR: `db/priv-3-r0-erase-seeded-household` (after 2a; about 300 lines, half proofs)
 
 | Path                                                            | Change | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
