@@ -1,12 +1,19 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { AthleteSwitcher } from '@/components/day/athlete-switcher';
+import { PROGRAM_COPY } from '@/components/day/day-copy';
+import { DayScreen } from '@/components/day/day-screen';
+import { dayPageView, lookAheadFallsBack } from '@/components/day/day-notices';
+import { NotOnAProgram } from '@/components/day/not-on-a-program';
+import { ProgramLine } from '@/components/day/program-line';
 import { AppShell } from '@/components/layout/app-shell';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import { localDayIso, localWeekStartIso } from '@/lib/date';
 import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
+import { getDayPlan } from '@/lib/dal/day/day';
 import { lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
@@ -22,6 +29,7 @@ import {
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
   NOTHING_TO_EXPORT,
+  NOTICE_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
@@ -32,6 +40,7 @@ import {
 import { BodyweightSection } from './bodyweight-section';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
+import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
 
@@ -69,14 +78,30 @@ export default async function TodayPage({
   // same `day`, so date & weekday can't disagree.
   const timeZone = await getActiveTimeZone();
   const today = localDayIso(timeZone);
-  // V1-15: the VIEWED day — today, or a validated `?d=`. Clamped forward to today and floored at the
-  // profile's first day; a malformed value renders today rather than 404ing, because every date is a
-  // legal day and a stale URL should land somewhere usable.
+  // V1-15: the VIEWED day — today, or a validated `?d=`. Floored at the profile's first day; a
+  // malformed value renders today rather than 404ing, because every date is a legal day and a stale
+  // URL should land somewhere usable.
   const { d } = await searchParams;
-  const day = resolveViewedDay(typeof d === 'string' ? d : undefined, today, profile.firstDay);
-  // 🔴 **TWO reasons a day is read-only, and they must not be conflated** — the day (before
-  // yesterday) and archive. `dayPageFlags` keeps them apart and is unit-tested; see its docblock.
-  const { writable, amendable, showClosedNotice } = dayPageFlags(day, today, profile.archived);
+  let day = resolveViewedDay(typeof d === 'string' ? d : undefined, today, profile.firstDay);
+  // FAM-1 12c: the athlete's programs on that day, which the day screen and its placed parts read.
+  // `today` is read here, never below (day-page invariant 17).
+  let plan = await getDayPlan({ profilePublicId: profile.id, day, today });
+  // Look-ahead goes forward only while the athlete is on a program (plan §9): any other future day
+  // renders today, as every future day did before 12c.
+  if (plan && lookAheadFallsBack(plan)) {
+    day = today;
+    plan = await getDayPlan({ profilePublicId: profile.id, day, today });
+  }
+  // The athlete resolved above, so the plan can only be missing if the household did meanwhile.
+  if (!plan) notFound();
+  // 🔴 **THREE reasons a day is read-only, and they must not be conflated** — the day (before
+  // yesterday, or after today) and archive. `dayPageFlags` keeps them apart and is unit-tested; see
+  // its docblock.
+  const { writable, amendable, future, showClosedNotice } = dayPageFlags(
+    day,
+    today,
+    profile.archived,
+  );
   const weekStart = localWeekStartIso(day);
   // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
   // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
@@ -99,6 +124,19 @@ export default async function TodayPage({
   const lifeKeys = buildRoutineBlocks(profile.routine.order).flatMap((block) =>
     block.kind === 'life' ? block.keys : [],
   );
+
+  // What shows around the screen: the one state notice, the sections, the screen itself (tested in
+  // `day-notices.test.ts`).
+  const view = dayPageView(plan, { future, showClosedNotice, archived: profile.archived });
+
+  // The day screen's writes (FAM-1 12b's Server Actions, and 12d's Change). Program order
+  // (`reorderPrograms`) arrives at 15c: an action left out hides its control (plan §6).
+  const dayActions = {
+    logRow: logRowAction,
+    untickRow: untickRowAction,
+    retickRow: retickRowAction,
+    amendRow: amendRowAction,
+  };
 
   return (
     <AppShell athletes={await listProfiles()} current={{ athlete: profile.id }}>
@@ -134,75 +172,84 @@ export default async function TodayPage({
         <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>
           {profile.name}
         </h1>
+        {/* FAM-1 12c (D34; the 13d decision): the household's athletes, UNDER the `<h1>` in their
+            own row, never beside it, where a 40-character name would be squeezed to a few letters a
+            line at 360px. `lg:hidden`: from `lg` the nav rail lists them. */}
+        <AthleteSwitcher plan={plan} hrefFor={athletePath} className="lg:hidden" />
         {/* V1-15: DayNav REPLACES a date line rather than sitting beside one — the date has exactly
-            one home. Its day-role label left with the program card it described (V1-24 3b-page);
-            the prop stays on `DayNav` for FAM-1. */}
-        <DayNav profileId={profileId} day={day} today={today} floor={profile.firstDay} />
-        {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
-            not a <Link>: this is a file download, and Next's client router would try to navigate to
-            a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
-        {profile.hasHistory ? (
-          <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
-            {EXPORT_CSV_LABEL}
-          </a>
-        ) : (
-          // 🔴 **Maintainer decision N3 applies to BOTH surfaces.** The first version gated only the
-          // settings row, so the same athlete whose settings row said "nothing to export" still had a
-          // live link here — handing back the EOCD-only zip N3 exists to eliminate. The privacy and
-          // UX lenses found it independently, and the notice had already been written to claim "the
-          // app says so", which made it a false published sentence rather than a gap.
-          <p className={`${NAV_LINK_CLASS} flex items-center`}>{NOTHING_TO_EXPORT}</p>
-        )}
+            one home. FAM-1 12c: it looks ahead while the athlete is on a program the next day. */}
+        <DayNav
+          profileId={profileId}
+          day={day}
+          today={today}
+          floor={profile.firstDay}
+          canGoForward={plan.canGoForward}
+        />
       </header>
 
-      {/* V1-15: ONE notice, above the sections, on a day before yesterday: an unexplained absence
-          reads as a bug — the finding that explains the 2026-09-28 incident.
-          Not for an archived athlete (V1-24 3b-page): the sentence says today and yesterday can be
-          logged, which is false there, and the archived notice below gives the real reason. */}
-      {showClosedNotice ? (
-        <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
-          {CLOSED_DAY_NOTICE}
-        </p>
-      ) : null}
+      {/* 🔴 **ONE state notice, never a stack** (FAM-1 12c; maintainer, 2026-11-17): archived, else
+          coming up, else closed. Each explains why everything below is inert, so it sits ABOVE the
+          program line (a recorded difference from v12, which puts its read-only notice after it).
 
-      {/* PROF-1 b. ⚠️ **ONE copy for every member, with no "ask the owner" branch** — restore is
-          any-member (decision M1), so sending a member off to find the owner would be sending them
-          away from a control one tap below. The plan carried that branch until a UX lens caught it.
-          🔴 **"Household settings" is a LINK.** Unlinked it is three taps from here (← All athletes →
-          Household settings › → Restore); linked it is two. The back link above calls itself "the
-          recovery path on a phone" and carries `min-h-11` for exactly this reason, and `a11y.spec.ts`
-          excludes <a> from its tap scan, so nothing in CI would notice. */}
-      {profile.archived ? (
-        <p
-          className={`border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm ${NAME_WRAP_CLASS}`}
-        >
+          PROF-1 b, the archived notice. ⚠️ **ONE copy for every member, with no "ask the owner"
+          branch** — restore is any-member (decision M1). 🔴 **"Household settings" is a LINK**: two
+          taps from here instead of three, and `a11y.spec.ts` excludes <a> from its tap scan.
+          "Nothing new can be logged" covers every day, a future one included, so it stands alone.
+
+          Coming up (look-ahead): v12's words, never the closed-day sentence, which reads as a
+          missed day. Only reached while on a program that day (the resolve above).
+
+          V1-15, the closed day: an unexplained absence reads as a bug — the finding that explains
+          the 2026-09-28 incident. Not for an archived athlete, where it is false. */}
+      {view.notice === 'archived' ? (
+        <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
           {SETTINGS_COPY.archivedNotice(profile.name)}{' '}
           <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
             {SETTINGS_COPY.heading}
           </Link>
           .
         </p>
+      ) : view.notice === 'comingUp' ? (
+        <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
+          {PROGRAM_COPY.comingUp(profile.name, day)}
+        </p>
+      ) : view.notice === 'closed' ? (
+        <p className={NOTICE_CLASS}>{CLOSED_DAY_NOTICE}</p>
       ) : null}
 
-      <div className="flex flex-col gap-6">
-        {/* V1-24 PR 1a — the day's state, not an empty form over a record. See the section. */}
-        <BodyweightSection
-          profileId={profile.id}
-          day={day}
-          writable={writable}
-          amendable={amendable}
-          logged={bodyweight}
-          last={lastWeight}
-        />
-        <LifeSection
-          profileId={profile.id}
-          day={day}
-          writable={writable}
-          amendable={amendable}
-          activityKeys={lifeKeys}
-          logged={loggedLifeActivities(entries, lifeKeys)}
-        />
-      </div>
+      {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
+          program yet", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
+      <ProgramLine plan={plan} actions={dayActions} />
+      <NotOnAProgram plan={plan} />
+
+      {/* Not on a future day (maintainer, 2026-11-17, v12): nothing has happened there to show, and
+          "Nothing logged." under each would read as a missed day. */}
+      {view.sections ? (
+        <div className="flex flex-col gap-6">
+          {/* V1-24 PR 1a — the day's state, not an empty form over a record. See the section. */}
+          <BodyweightSection
+            profileId={profile.id}
+            day={day}
+            writable={writable}
+            amendable={amendable}
+            logged={bodyweight}
+            last={lastWeight}
+          />
+          <LifeSection
+            profileId={profile.id}
+            day={day}
+            writable={writable}
+            amendable={amendable}
+            activityKeys={lifeKeys}
+            logged={loggedLifeActivities(entries, lifeKeys)}
+          />
+        </div>
+      ) : null}
+
+      {/* FAM-1 12c: the workouts, below Life (D34; the maintainer kept the order, 2026-11-17: "chosen
+          by person who programmed the workout / day"). Not mounted for an athlete on no program
+          with no rows to show: it would be an empty landmark under a hidden heading, every day. */}
+      {view.screen ? <DayScreen plan={plan} actions={dayActions} /> : null}
 
       {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
 
@@ -222,6 +269,19 @@ export default async function TodayPage({
           min-content, and only `anywhere` lets a break count toward min-content. The previous copy,
           "→ Edit {name}'s routine", measured 322–384px against 328px of usable width at 360px for an
           average 40-character name: it overflowed, and had done since V1-23. */}
+      {/* V1-13b — the CSV tree families take with them. At the foot since FAM-1 12c, beside rename:
+          a parent's action, where parents scroll and kids do not, so the header above the day's work
+          is one row shorter on a phone. A plain <a>, not a <Link>: a file download, which Next's
+          client router would try to navigate to; `download` names it, `min-h-11` keeps the bar.
+          🔴 Maintainer decision N3 applies to BOTH surfaces: no history → no link (the EOCD-only zip
+          N3 exists to eliminate), the same sentence the settings row shows. */}
+      {profile.hasHistory ? (
+        <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
+          {EXPORT_CSV_LABEL}
+        </a>
+      ) : (
+        <p className={`${NAV_LINK_CLASS} flex items-center`}>{NOTHING_TO_EXPORT}</p>
+      )}
       <Link
         href={`${athleteEditPath(profile.id)}?from=${encodeURIComponent(athletePath(profile.id))}`}
         className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}

@@ -21,25 +21,14 @@ describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () =>
 });
 
 describe('DayPlan: owed by its consumers', () => {
-  it.todo('12c: an older day and a future day are read-only (e2e)');
-});
-
-describe('RowWrite, RowUntick, RowRetick and RowResult: owed by their consumers', () => {
-  it.todo('12c: ✓, un-tick and re-tick on Check, Duration and Count (e2e)');
   it.todo(
-    '12c: a ✓ on today’s bare path pins the day (?d=), so the refresh after a ✓ past midnight stays on the day the rows were logged to',
+    '12c: a day before yesterday is read-only, and a Change there refuses (e2e; needs a profile created before yesterday)',
   );
-  it.todo(
-    '12c: a ✓ after an un-tick that answers with a NEW entry id shows that entry (the fake revives the same id)',
-  );
-  it.todo('12c: a ✓ queued before an athlete switch is logged when the parent comes back (e2e)');
 });
 
 describe('RowAmend: owed by its consumers', () => {
-  it.todo('12d: amendRow passes the inherited action matrix');
-  it.todo('12d: a weight × reps set and a superset on real data; change a number (e2e)');
   it.todo(
-    '12d: Change’s typed states (typed over, changed with Undo, kept, failed) pass axe, 44px and 360px (e2e)',
+    '12d: Change’s failed state passes axe, 44px and 360px (e2e; a failed write cannot be provoked against the real server, change.test.tsx covers its copy and focus)',
   );
   it.todo(
     '12c: an un-tick or a Change, then the page’s data arriving in several refreshes, shows what was stored',

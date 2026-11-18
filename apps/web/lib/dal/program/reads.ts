@@ -7,6 +7,7 @@ import { uuidSchema, type WorkoutDraft } from '@mat-plan/shared';
 
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
+import { quietDbErrors } from '../quiet-db-errors';
 import { reportProgramMiss } from './report-miss';
 
 /**
@@ -19,6 +20,8 @@ import { reportProgramMiss } from './report-miss';
  * miss, once per request.
  *
  * A uuid that names nothing in the household is reported, once (`reportProgramMiss`), and is `null`.
+ * The read goes through `quietDbErrors`, as the writes do: a failed query's parameters stay out of
+ * the runtime log (plan row 7a-i).
  */
 export const getWorkoutDraft = cache(async function getWorkoutDraft(
   programPublicId: string,
@@ -27,7 +30,11 @@ export const getWorkoutDraft = cache(async function getWorkoutDraft(
   if (!uuidSchema.safeParse(programPublicId).success) return null;
   if (!uuidSchema.safeParse(workoutPublicId).success) return null;
   const scope = await getHouseholdScope();
-  const draft = scope && (await readWorkoutDraft(db, scope, { programPublicId, workoutPublicId }));
+  const draft =
+    scope &&
+    (await quietDbErrors('readWorkoutDraft', () =>
+      readWorkoutDraft(db, scope, { programPublicId, workoutPublicId }),
+    ));
   if (!draft) await reportProgramMiss(scope, { programPublicId, workoutPublicId });
   return draft ?? null;
 });
