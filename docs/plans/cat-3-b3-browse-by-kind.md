@@ -16,11 +16,12 @@
 - **Before it:** B2-ii (#575, merged 2026-11-18). The C0b-2 contract (`browseTree`,
   `MOVEMENT_FAMILY_LABELS`, `BROWSE_OPEN_AT_MOST` in `packages/shared/src/catalog/families.ts`) is
   already on `main`.
-- **Build gates:** the spec's B3 row reads "After B2-ii and **P11-ii**", and P11-ii comes "After
-  P11-i and **A2**". Neither P11-ii nor A2 is on `main` on 2026-11-18. This plan is written now,
-  plan only, on the board's sequencing call. Whether B3 may build before P11-ii is a question put to
-  the spec owner (Open questions, Q1). §Assumptions lists what this plan takes from P11-ii's text
-  as #587 left it.
+- **Build gate: after B2-ii only** _(spec owner, under the maintainer's overnight delegation,
+  2026-11-18: option A)_. P11-ii is **not** a gate for B3. It stays where the option payload is
+  measured and where the taxonomy's source moves to the tables. B3 builds on the preview and on the
+  const-backed real read (`apps/web/lib/dal/program/picker.ts`, `catalogOptionOf` since #586). The
+  spec's B3 cell changes to "After B2-ii" in the roadmap thread's docs PR. §Compatibility with
+  P11-ii lists what B3 relies on staying true when P11-ii lands.
 - **After it:** F1 (fixtures), then R (the fresh start), which deletes K24's section and the legacy
   `group` with its constants.
 - _Roadmap alignment (2026-11-18): advances `CAT-3` (chunk B3). It touches the movement catalog's
@@ -93,7 +94,7 @@ Done when:
   tree auto-opened, and K24's section open (the last on a fixture that has bare rows; see
   §File-by-file, `picker-options.ts`).
 
-## Assumptions taken from P11-ii's text (to re-check when P11-ii lands)
+## Compatibility with P11-ii (to re-check when it lands)
 
 1. **The option shape does not change.** A library option keeps `modality`, `pattern` and
    `primaryMuscle` (`CatalogOptionTaxonomy`). P11-ii changes their source, from the const to the
@@ -104,7 +105,12 @@ Done when:
 3. **`hasLibraryData`** (`apps/web/lib/movements/movement-option.ts`) stays the one test for "has a
    kind". B3 adds no second rule.
 
-If any of these is false when P11-ii merges, this plan is re-panelled before code.
+If P11-ii breaks any of these, B3's tree needs a follow-up in the PR that breaks it.
+
+**Until A2 seeds the library, the real picker's browse list is small, and that is by design**
+_(spec owner, 2026-11-18)_. It shows the few old built-ins the library covers, grouped by kind
+and family, and the rest of the 35 in K24's section. That is K22 to K24 working as decided, not a
+defect. The preview's test library shows the full tree.
 
 ## File-by-file changes
 
@@ -198,8 +204,7 @@ the sheet opens on a phone. The prototype renders a group's inside only when it 
 
 ## Open questions
 
-- **Q1 (spec owner, asked 2026-11-18):** may B3 **build** before P11-ii? Its grouping reads only
-  fields every library option already has from the const. Until answered, the gate is as written.
+- ~~Q1~~ **Resolved (spec owner, 2026-11-18):** B3 builds after B2-ii; P11-ii is not a gate.
 - **Q2 (roadmap thread):** may the preview's test library (`picker-options.ts`, F1's file) gain two
   or three bare built-ins, so K24's section can be seen and captured on the preview? If not, it is
   unit-tested and described in the PR.
