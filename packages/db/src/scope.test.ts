@@ -435,10 +435,10 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     // every mint is a named `const`, never an argument. (No `MINTED_SCOPES` entry is asked for: a
     // list here that every lane must edit would undo the split.)
     //
-    // Recursive, so a sub-directory a lane adds is read too. And the five modules are asserted BY
+    // Recursive, so a sub-directory a lane adds is read too. And the six modules are asserted BY
     // NAME: a count would still pass if one were renamed out from under its lane.
     const modules = sources('packages/db/scripts/verify/**/*.ts');
-    for (const name of ['schema', 'program', 'day', 'single-values', 'erasure']) {
+    for (const name of ['schema', 'program', 'day', 'single-values', 'erasure', 'catalog']) {
       expect(modules, `the ${name} proof module was found`).toContain(
         `packages/db/scripts/verify/${name}.ts`,
       );

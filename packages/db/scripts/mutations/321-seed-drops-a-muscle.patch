@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -236,7 +236,7 @@ export async function seed(
+     .onConflictDoNothing({ target: schema.equipment.code });
+   await db
+     .insert(schema.muscles)
+-    .values(MUSCLES.map((code) => ({ code })))
++    .values(MUSCLES.slice(1).map((code) => ({ code })))
+     .onConflictDoNothing({ target: schema.muscles.code });
+ 
+   // 🔴 **CONDITIONAL ON NO LIVE HOUSEHOLD EXISTING — `AUTH-1` 1c-4.**

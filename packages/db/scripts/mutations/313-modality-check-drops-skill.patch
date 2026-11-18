@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+--- a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
++++ b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+@@ -56,7 +56,7 @@ CREATE TABLE "muscles" (
+ ALTER TABLE "movements" ADD COLUMN "modality" text;--> statement-breakpoint
+ -- Small table, locked above; modality is NULL on every row, which the CHECK accepts.
+ -- squawk-ignore constraint-missing-not-valid
+-ALTER TABLE "movements" ADD CONSTRAINT "movements_modality_check" CHECK ("movements"."modality" in ('strength', 'conditioning', 'mobility', 'skill'));--> statement-breakpoint
++ALTER TABLE "movements" ADD CONSTRAINT "movements_modality_check" CHECK ("movements"."modality" in ('strength', 'conditioning', 'mobility'));--> statement-breakpoint
+ -- Small table, locked above; modality is NULL on every row, so every row passes.
+ -- squawk-ignore constraint-missing-not-valid
+ ALTER TABLE "movements" ADD CONSTRAINT "movements_household_row_has_no_modality" CHECK ("movements"."household_id" is null or "movements"."modality" is null);--> statement-breakpoint

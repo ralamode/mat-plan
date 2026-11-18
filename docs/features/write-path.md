@@ -127,12 +127,13 @@ FAM-1's lanes each have their own guide, which owns the directory that lane's ne
 paths owes **its lane's guide, not this one**, though this guide's invariants still apply to it; each
 lane guide says which.
 
-| Path                                                                              | Guide                                      |
-| --------------------------------------------------------------------------------- | ------------------------------------------ |
-| `packages/db/src/writers/program/` (`seed-fixtures.ts` above), `queries/program/` | [program-writers.md](./program-writers.md) |
-| `packages/db/src/writers/day/`, `queries/day/`                                    | [day-writers.md](./day-writers.md)         |
-| `apps/web/lib/dal/program/`, `apps/web/app/programs/` (its actions)               | [program-builder.md](./program-builder.md) |
-| `apps/web/lib/dal/day/`                                                           | [day-page.md](./day-page.md)               |
+| Path                                                                              | Guide                                        |
+| --------------------------------------------------------------------------------- | -------------------------------------------- |
+| `packages/db/src/writers/program/` (`seed-fixtures.ts` above), `queries/program/` | [program-writers.md](./program-writers.md)   |
+| `packages/db/src/writers/day/`, `queries/day/`                                    | [day-writers.md](./day-writers.md)           |
+| `apps/web/lib/dal/program/`, `apps/web/app/programs/` (its actions)               | [program-builder.md](./program-builder.md)   |
+| `apps/web/lib/dal/day/`                                                           | [day-page.md](./day-page.md)                 |
+| `seed.ts`'s `equipment` and `muscles` inserts, the library's tables (`CAT-3` A1)  | [movement-catalog.md](./movement-catalog.md) |
 
 The shapes those lanes agree on, the fakes and the preview route are
 [program-contract.md](./program-contract.md).
