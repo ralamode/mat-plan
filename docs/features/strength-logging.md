@@ -243,7 +243,7 @@ all derived from the one unit, so none can disagree with it:
    required `owner` conjunct: the session by the profile resolved in the transaction and the day, a superset
    and an entry by that session. Any other holder gets the same `no live row for client_id` refusal
    as a hidden row, and the transaction rolls back. `db:verify`'s replay-owner block; mutations
-   `440`–`442` ([plan](../plans/td-strength-replay-scope.md)).
+   `440`–`443` ([plan](../plans/td-strength-replay-scope.md)).
 
 7. **The profile is resolved by `public_id` INSIDE the transaction.** Never a raw internal id from the
    request. That is the BOLA seam.

@@ -72,11 +72,11 @@ that ignores ownership.
 | Path                                                                  | Change | What & why                                                                                                                                                                                                                                                                                                                 |
 | --------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/db/src/writers/strength-session.ts`                         | EDIT   | `reselectLiveByClientId` takes an `owner: SQL` conjunct; each caller passes its own (below). Docblock: the owner conjunct is load-bearing, and why. ~25 lines.                                                                                                                                                             |
-| `packages/db/scripts/verify.ts`                                       | EDIT   | One new block after V1-9b B0 (both scopes exist there): four refusal cases plus the same-athlete replay control. ~110 lines.                                                                                                                                                                                               |
+| `packages/db/scripts/verify.ts`                                       | EDIT   | One new block after V1-9b B0 (both scopes exist there): five refusal cases plus the same-athlete replay control (case 6 added mid-build). ~110 lines.                                                                                                                                                                      |
 | `packages/db/scripts/mutations/440-session-replay-ignores-profile.*`  | NEW    | Drops the session's `profile_id` conjunct. Expect: the same-household other-athlete refusal.                                                                                                                                                                                                                               |
 | `packages/db/scripts/mutations/441-entry-replay-ignores-session.*`    | NEW    | Drops the entry's `session_id` conjunct. Expect: case 4, the same athlete's other session.                                                                                                                                                                                                                                 |
 | `packages/db/scripts/mutations/442-superset-replay-ignores-session.*` | NEW    | Drops the superset's `session_id` conjunct. Expect: the superset refusal.                                                                                                                                                                                                                                                  |
-| `packages/db/scripts/mutations/README.md`                             | EDIT   | Three rows.                                                                                                                                                                                                                                                                                                                |
+| `packages/db/scripts/mutations/README.md`                             | EDIT   | Four rows (443 added mid-build).                                                                                                                                                                                                                                                                                           |
 | `docs/features/strength-logging.md`, `docs/features/write-path.md`    | EDIT   | Both own `writers/strength-session.ts` (`guides:check`; write-path.md through the `writers/` prefix). One invariant line in strength-logging.md, "a replay is answered only by a row the request owns". Widen `write-path.md:516` and `strength-logging.md:236`, which describe this throw as the hidden-row outcome only. |
 | `docs/tech-debt.md`                                                   | EDIT   | Delete the entry.                                                                                                                                                                                                                                                                                                          |
 | `docs/changelog/<date>-fix-td-strength-reselect-scope.md`             | NEW    | Fragment.                                                                                                                                                                                                                                                                                                                  |
@@ -148,8 +148,10 @@ after V1-9b B0 so `A_SCOPE`, `B_SCOPE`, `sessionProfileA/B` and `VERIFY_PROFILE_
    the mutated write succeeds silently instead of tripping `uq_entries_superset_order`. Refused.
    Afterwards U does not exist and `…e8510` still has exactly W's two members. **Mutation 442's
    expect.**
+6. **Same athlete, another day** (added mid-build, below): A sends S's `sessionClientId` with day
+   2026-06-06. Refused; the new entry is not written. **Mutation 443's expect.**
 
-Local: `pnpm --filter @mat-plan/db db:verify` (PGlite), then `db:mutations` for 440–442, each only
+Local: `pnpm --filter @mat-plan/db db:verify` (PGlite), then `db:mutations` for 440–443, each only
 with the board's heavy-run slot. Otherwise CI. `pnpm verify` before the PR.
 
 ## Pre-merge production read
@@ -164,6 +166,9 @@ SELECT count(*) FROM entries e JOIN sessions s ON s.id = e.session_id
 -- entries stamped with a superset of a different session
 SELECT count(*) FROM entries e JOIN supersets ss ON ss.id = e.superset_id
  WHERE ss.session_id IS DISTINCT FROM e.session_id;
+-- entries dated differently from their session (the day conjunct, added mid-build)
+SELECT count(*) FROM entries e JOIN sessions s ON s.id = e.session_id
+ WHERE e.activity_date <> s.activity_date;
 ```
 
 Result: _pending the maintainer's go._ Production data predates a planned fresh-start reset, so the
@@ -172,7 +177,8 @@ count confirms rather than gates; the fix is forward-safe either way.
 ## Risks / rollback
 
 - **A legitimate replay starts refusing.** Only if the owner conjunct is wrong for a real retry. A
-  real retry is the same profile and the same session `client_id`, so the session re-select returns
+  real retry is the same profile, the same session `client_id` and the same `day` (the mid-build
+  section has why the day cannot change on a retry), so the session re-select returns
   the same row and every child carries that session id. Case 1 pins it, and V1-8-2 and V1-8-3c's
   replays are a second witness.
 - **Supersets: does a retry always reach the same session?** Yes. The session row is resolved before
@@ -219,7 +225,9 @@ None.
 
 - `db:verify` green, with the new block (2026-11-17).
 - `db:mutations`: 306 mutations, all RED; `440`, `441` and `442` each fail on their own case's
-  message (2026-11-17).
+  message (2026-11-17). Re-run after merging #582: 343, all RED (2026-11-18).
+- After the day conjunct (`443`, regenerated `440`): `git apply --check` passes for 440–443;
+  `db:verify` and `db:mutations` re-run when the board grants the next heavy slot. Result: _pending_.
 
 ## Review-response log (adversarial panel)
 
@@ -273,4 +281,12 @@ the profile half; case 2 sends the same day, so it still reddens there).
 
 Risk weighed: a legitimate retry is refused only if it sends a different `day` under the same
 session id. The day is fixed when the form renders (the page's `?d=`), not at submit, so a retry
-repeats it. A fresh review of this delta is logged below.
+repeats it.
+
+| Lens (fresh, opus) | Sev | Finding                                                                                                                                                                                              | Response                                    |
+| ------------------ | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| correctness        | —   | No legitimate replay is refused: the form mints the session id per `day` (`strength-form.tsx:273,307`); every earlier verify replay sends the same day. 440 and 443 each redden only their own case. | —                                           |
+| correctness        | P2  | Both guides still said mutations 440–442.                                                                                                                                                            | **Fixed.** 440–443.                         |
+| correctness        | P2  | No production count for the day defect, which the changelog now names.                                                                                                                               | **Fixed.** A third count is in the read.    |
+| correctness        | P2  | The plan's file table, case list and gate results stopped at case 5 / 442.                                                                                                                           | **Fixed.** Case 6, 443 and its pending run. |
+| correctness        | P2  | The "legitimate replay" risk did not mention the day.                                                                                                                                                | **Fixed.**                                  |
