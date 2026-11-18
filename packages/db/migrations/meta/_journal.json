@@ -225,6 +225,13 @@
       "when": 1794927332673,
       "tag": "0031_tdebt_validate_name_and_nan_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794966124473,
+      "tag": "0032_cat3_a1_catalog_tables",
+      "breakpoints": true
     }
   ]
 }

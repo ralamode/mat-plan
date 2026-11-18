@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+--- a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
++++ b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+@@ -63,7 +63,7 @@ ALTER TABLE "movements" ADD CONSTRAINT "movements_household_row_has_no_modality"
+ ALTER TABLE "movements" DROP CONSTRAINT "movements_global_row_has_pattern";--> statement-breakpoint
+ -- Small table, locked above; strictly weaker than the CHECK 0018 validated, so every row passes.
+ -- squawk-ignore constraint-missing-not-valid
+-ALTER TABLE "movements" ADD CONSTRAINT "movements_global_row_has_pattern" CHECK ("movements"."household_id" is not null or "movements"."pattern" is not null or ("movements"."modality" is not null and "movements"."modality" <> 'strength'));--> statement-breakpoint
++ALTER TABLE "movements" ADD CONSTRAINT "movements_global_row_has_pattern" CHECK ("movements"."household_id" is not null or "movements"."pattern" is not null or ("movements"."modality" is not null and "movements"."modality" <> 'strength')) NOT VALID;--> statement-breakpoint
+ CREATE TABLE "movement_equipment" (
+ 	"id" bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "movement_equipment_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1),
+ 	"movement_id" bigint NOT NULL,

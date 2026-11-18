@@ -14,7 +14,7 @@ import {
 
 import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
 
-import { takeSlot } from '../../../.github/scripts/heavy-slot.mjs';
+import { runUnderSlot } from '../../../.github/scripts/heavy-slot.mjs';
 
 /**
  * Run the Playwright smoke LOCALLY against a throwaway database (`pnpm e2e:local`).
@@ -57,8 +57,9 @@ import { takeSlot } from '../../../.github/scripts/heavy-slot.mjs';
 const EPHEMERAL_DB_PASSWORD = 'e2e-local';
 
 async function main(): Promise<void> {
-  // One heavy local run machine-wide (DX-18 D3): exits 2 while another run holds the slot.
-  takeSlot('e2e:local');
+  // One heavy local run machine-wide (DX-18 D3): re-runs itself under the slot wrapper, which holds
+  // the slot until this run's whole process group (Playwright, next, Postgres) has exited.
+  if (runUnderSlot('e2e:local')) return;
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-e2e-pg-'));
   const pgPort = await freePort();
 
@@ -87,6 +88,8 @@ async function main(): Promise<void> {
   // Ctrl-C mid-run must not leave a stray postgres holding the temp dir.
   process.on('SIGINT', () => void teardown().then(() => process.exit(130)));
   process.on('SIGTERM', () => void teardown().then(() => process.exit(143)));
+  // A closed terminal: tear down too, or the cluster outlives the run (and holds the heavy-run slot).
+  process.on('SIGHUP', () => void teardown().then(() => process.exit(129)));
 
   try {
     // Migrate + seed via the EXISTING packages/db scripts — exactly what CI's e2e job

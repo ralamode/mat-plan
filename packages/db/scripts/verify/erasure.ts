@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 
 import {
+  EQUIPMENT,
   GATE_COLORS,
   HOUSEHOLD_ROLE,
+  MUSCLE_ROLE,
+  MUSCLES,
   newId,
   QUANTITY_SLOT,
   SESSION_TYPES,
@@ -216,6 +219,19 @@ async function populateEveryGraphTable(
     .from(schema.movements)
     .where(eq(schema.movements.publicId, movementPublicId));
   plant(schema.movements, movement.id);
+  // CAT-3 A1: one row in each join table, on this household's own movement (no writer makes one; the
+  // planted rows exist only inside this rolled-back fixture). `.at(-1)`: mutation 321 drops the FIRST
+  // muscle from the seed, and this fixture must not fail before its proof does.
+  const [equipmentRow] = await tx
+    .insert(schema.movementEquipment)
+    .values({ movementId: movement.id, equipmentCode: EQUIPMENT.at(-1)! })
+    .returning({ id: schema.movementEquipment.id });
+  plant(schema.movementEquipment, equipmentRow.id);
+  const [muscleRow] = await tx
+    .insert(schema.movementMuscles)
+    .values({ movementId: movement.id, muscleCode: MUSCLES.at(-1)!, role: MUSCLE_ROLE.primary })
+    .returning({ id: schema.movementMuscles.id });
+  plant(schema.movementMuscles, muscleRow.id);
 
   const kid = await mkKid(tx, householdId, `${label} athlete`);
   plant(schema.profiles, kid);
