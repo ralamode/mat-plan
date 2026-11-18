@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
+  HOUSEHOLD_DEFAULT_NAME,
   HOUSEHOLD_ROLE,
   MOVEMENT_SEED_PUBLIC_IDS,
   newId,
@@ -23,7 +24,14 @@ import {
 import type { HouseholdScope } from '../../src/scope';
 import * as schema from '../../src/schema';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
-import { fixtureBindIsAllowed } from './target-url';
+import {
+  accountIssue,
+  CREATE_HOUSEHOLD_ACCOUNTS_ENV,
+  liveMembershipsOf,
+  parseAccountList,
+} from './accounts';
+import { CorrectionRefusal, redactedFailure } from './redact';
+import { correctionTargetIsPreview, seedHouseholdClaimIsAllowed } from './target-url';
 import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
 
 /**
@@ -679,7 +687,8 @@ const movementsOwnershipReport: Correction = {
 
 /**
  * AUTH-1 1b — bind the maintainer's Clerk account to their household, so 1c's resolver has something
- * to resolve. **This is the only writer of `household_members`.**
+ * to resolve. **One of the two writers of `household_members`**; the other is `createHousehold`
+ * below (`PRIV-3` RC), and both are operator-run corrections.
  *
  * ```
  * HOUSEHOLD_PUBLIC_ID=<uuid> CLERK_USER_ID=user_… \
@@ -701,8 +710,13 @@ const movementsOwnershipReport: Correction = {
  * visible via `ps`, while its environment is readable only by its owner**, and the value here is a
  * stable third-party account id for a named adult (`data-inventory.md` §1a). So env is the quieter
  * channel, not merely the cheaper one.
- * 🔴 **`PRIV-3` converts this entry when it lands the flag**, so the repo does not keep two input
- * channels. Named here because that obligation is invisible from `PRIV-3`'s own row.
+ * ✅ **Amended 2026-11-17 (`PRIV-3` RC):** this used to promise that `PRIV-3` would convert this entry
+ * to flags. `PRIV-3` Q1 settled the environment as the channel for every operator-input correction
+ * _(maintainer, 2026-11-17)_, so there is nothing to convert, and the repo keeps one channel.
+ *
+ * ⚠️ **A SEED household is refused outside a local or preview database** (`PRIV-3` RC, D6;
+ * `seedHouseholdClaimIsAllowed`), so after the fresh start no account can be bound to a
+ * seed-namespace household in production again.
  *
  * **The guard is a READ-THEN-BRANCH, not `INSERT … WHERE NOT EXISTS`.** The single statement cannot
  * tell the two cases apart: "already claimed by me" (the idempotent re-run rule 2 wants) and "already
@@ -738,7 +752,11 @@ const householdClaim: Correction = {
     // connects with — because `DATABASE_URL=localhost` beside a production `DATABASE_URL_UNPOOLED`
     // is a real environment, not a hypothetical one: the runbook's own procedure creates it.
     // A guard reading the other variable would pass and then watch the write land on Neon.
-    if (!fixtureBindIsAllowed(clerkUserId)) {
+    //
+    // `accountIssue` (`accounts.ts`) is the shape check and this one, shared with `createHousehold`.
+    // The fixture principal always fits the shape, so for it the fixture refusal is the one it gets.
+    const issue = accountIssue(clerkUserId);
+    if (issue === 'fixture-remote') {
       throw new Error(
         `refusing to bind the committed e2e fixture principal to a non-local database. ` +
           `CLERK_USER_ID is '${E2E_SESSION_BYPASS_USER}', which exists only to let a throwaway ` +
@@ -750,27 +768,29 @@ const householdClaim: Correction = {
     // ⚠️ Clerk instances are SEPARATE user pools: a development `user_…` is NOT the production id for
     // the same Google account. Claiming production with a dev id lands the maintainer in state C at
     // 1c — locked out of their own household by the chunk meant to bind them to it.
-    assert.ok(
-      clerkUserId.startsWith('user_'),
-      `CLERK_USER_ID should look like 'user_…'; got '${clerkUserId}'. Read it from the dashboard of ` +
-        'the instance that will be LIVE when the resolver reads it.',
-    );
+    // The value is NOT echoed (`PRIV-3` RC): a value that fails the shape is most likely a pasted
+    // email address, and the runner prints this message.
+    if (issue === 'shape') {
+      throw new Error(
+        "CLERK_USER_ID should look like 'user_' followed by 1 to 64 letters or digits. Read it " +
+          'from the dashboard of the instance that will be LIVE when the resolver reads it.',
+      );
+    }
+
+    // 🔴 **A SEED household only where the seed's fixtures may live (`PRIV-3` RC, D6).** Before the
+    // household lookup and the membership read, beside the fixture check. The message names no id.
+    if (!seedHouseholdClaimIsAllowed(householdPublicId)) {
+      throw new Error(
+        'refusing to bind an account to a household whose public_id is one the seed writes ' +
+          '(SEED_PUBLIC_IDS) on a database that is neither local nor the preview. Production ' +
+          'households are created by create-household-…, never claimed from the seed namespace.',
+      );
+    }
 
     const scope = await requireLiveHouseholdScope(db, householdPublicId);
 
     // ── the read, before any branch ──────────────────────────────────────────────────────────────
-    const [existing] = await db
-      .select({
-        householdId: schema.householdMembers.householdId,
-        publicId: schema.householdMembers.publicId,
-      })
-      .from(schema.householdMembers)
-      .where(
-        and(
-          eq(schema.householdMembers.clerkUserId, clerkUserId),
-          isNull(schema.householdMembers.deletedAt),
-        ),
-      );
+    const [existing] = await liveMembershipsOf(db, [clerkUserId]);
 
     if (existing) {
       // Already bound HERE → idempotent no-op (rule 2). Already bound ELSEWHERE → refuse; this is an
@@ -815,10 +835,123 @@ const householdClaim: Correction = {
   },
 };
 
+/** The household-creating correction's selector (`PRIV-3` RC). `db:verify` finds it by this. */
+export const CREATE_HOUSEHOLD_NAME = 'create-household-2026-11-17';
+
+/**
+ * `PRIV-3` RC — create ONE new household and bind one or more sign-in accounts to it, as `owner`, in
+ * one run and one transaction. The fresh start's step 7: after the seeded household is erased, this
+ * is how the household's adult accounts get a household to sign in to. The app cannot create one.
+ *
+ * ```
+ * read -rs ids        # paste EVERY id on ONE line, separated by spaces, then Enter
+ * CREATE_HOUSEHOLD_CLERK_USER_IDS="$ids" pnpm --filter @mat-plan/db db:correct create-household-2026-11-17
+ * CREATE_HOUSEHOLD_CLERK_USER_IDS="$ids" pnpm --filter @mat-plan/db db:correct create-household-2026-11-17 --apply
+ * unset ids
+ * ```
+ *
+ * ⚠️ **One line.** `read` takes a single line: ids pasted on separate lines leave all but the first
+ * in the terminal's input, where the shell runs each as a command and saves it to its history. The
+ * ids come from the PRODUCTION instance's Clerk dashboard (a development id is another user pool).
+ *
+ * 🔴 **Not in production before `OPS-2` PR 1 is deployed** (D10). Until then `seed.ts` throws
+ * _"refusing to seed into a household this seed does not own"_ whenever a live household exists, so
+ * after this runs every `migrate.yml` seed would fail before the movement catalog is written.
+ *
+ * - **Input: the environment only** (D1), from `CREATE_HOUSEHOLD_ACCOUNTS_ENV`, passed inline on the
+ *   one command and never exported. ⚠️ Never `VAR=user_… cmd` with the value typed in: that lands in
+ *   the shell's history. There is **no household input at all**, so it cannot be pointed at the wrong
+ *   household: the household and every membership get freshly minted `public_id`s.
+ * - **Refuses, writing nothing** (D4, D5): an empty list; a repeated account; a malformed account;
+ *   the e2e fixture principal on a non-local target; the preview database as the target; and ANY
+ *   account that already has a live membership. That last is also what makes a second run safe (README
+ *   rule 2): there is nothing this corrects FROM, so the accounts are the guard, and a finished run
+ *   looks exactly like that refusal.
+ * - **Output: counts and positions only, on every path** (D2, D3). The whole body sits in one `try`
+ *   whose `catch` is `redactedFailure`, so a database error reaches the runner as a SQLSTATE and a
+ *   constraint name, never with its parameters, `detail` or `cause`.
+ * - **One transaction** (README rule 7, D3): the membership read, the household insert and every
+ *   member insert. Two overlapping runs on one account both pass the read; the second then fails on
+ *   `uq_household_members_clerk_user` and rolls back whole, household row included.
+ *
+ * ⚠️ `synthetic` is NOT named: the column defaults to `false`, and
+ * `apps/web/lib/household-synthetic-is-dark.test.ts` fails any script that names it.
+ */
+const createHousehold: Correction = {
+  name: CREATE_HOUSEHOLD_NAME,
+  what: 'the fresh start erases the seeded household, and the app cannot create one for the household’s accounts',
+  issue: 'PRIV-3',
+  async run(db, apply) {
+    try {
+      if (correctionTargetIsPreview()) {
+        throw new CorrectionRefusal(
+          'the target is the preview database, which is seed-only and must never hold a production ' +
+            'account; nothing written',
+        );
+      }
+      const ids = parseAccountList(process.env[CREATE_HOUSEHOLD_ACCOUNTS_ENV]);
+      const n = ids.length;
+      ids.forEach((id, i) => {
+        const issue = accountIssue(id);
+        if (issue === 'shape') {
+          throw new CorrectionRefusal(
+            `account ${i + 1} of ${n} is not shaped like a Clerk user id ('user_' followed by 1 to ` +
+              '64 letters or digits); nothing written',
+          );
+        }
+        if (issue === 'fixture-remote') {
+          throw new CorrectionRefusal(
+            `account ${i + 1} of ${n} is the committed e2e fixture principal, which may only be ` +
+              'bound on a local database; nothing written',
+          );
+        }
+      });
+
+      return await db.transaction(async (tx) => {
+        const live = await liveMembershipsOf(tx, ids);
+        const bound = new Set(live.map((m) => m.clerkUserId));
+        if (bound.size > 0) {
+          // "This step is done" only when it plausibly IS: every account bound, all in ONE household.
+          // A partial overlap, or accounts spread over households, is an operator error, and the
+          // hint would tell them to stop when they should look.
+          const households = new Set(live.map((m) => m.householdId)).size;
+          throw new CorrectionRefusal(
+            bound.size === n && households === 1
+              ? `${n} of ${n} accounts already have a live membership; nothing written. If an ` +
+                  'earlier --apply of this correction succeeded, this step is done.'
+              : `${bound.size} of ${n} accounts already have a live membership (in ${households} ` +
+                  'household(s)); nothing written',
+          );
+        }
+        const line = (verb: string) =>
+          `${verb} 1 household with ${n} account(s), each as ${HOUSEHOLD_ROLE.owner}`;
+        if (!apply) return [line('would create')];
+
+        const [household] = await tx
+          .insert(schema.households)
+          .values({ publicId: newId(), name: HOUSEHOLD_DEFAULT_NAME })
+          .returning({ id: schema.households.id });
+        const scope = householdScopeForScript(household!.id);
+        for (const clerkUserId of ids) {
+          await insertHouseholdMember(tx, scope, {
+            publicId: newId(),
+            clerkUserId,
+            role: HOUSEHOLD_ROLE.owner,
+          });
+        }
+        return [line('created')];
+      });
+    } catch (err) {
+      throw redactedFailure(CREATE_HOUSEHOLD_NAME, err);
+    }
+  },
+};
+
 export const CORRECTIONS: readonly Correction[] = [
   kbSwingsLoadRepsSwap,
   bodyweightDuplicates,
   nullRoutineToFull,
   movementsOwnershipReport,
   householdClaim,
+  createHousehold,
 ];

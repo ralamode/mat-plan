@@ -194,6 +194,12 @@ export function bodyweightSlot(profileId: number, day: string) {
  * - **(c) it swallows a violation of ANY unique index**, including a future one — so a no-op that is
  *   neither a replay nor the day slot THROWS rather than returning something plausible.
  *
+ * 🔴 **(c) is retried once before it throws** (the tech-debt row "A day-taken insert can throw when
+ * the day is cleared in the same instant"). The insert and the two reads are separate statements, so
+ * the weigh-in that skipped the insert can be cleared before (b) reads the slot: nothing holds the day
+ * by then, and the same submit inserts on a second try. Every other cause of (c) misses again (the
+ * same `client_id` or index still conflicts), so it still throws, once.
+ *
  * The replay lookup is scoped to the PROFILE as well as the `client_id` (the pre-1e fallback filtered on
  * `client_id` alone, so a crafted `client_id` equal to another profile's entry returned THAT entry's
  * public id). `client_id` is client-supplied; ownership is not.
@@ -203,21 +209,51 @@ export function bodyweightSlot(profileId: number, day: string) {
  * row in the same month's CSV. The slot write, its values CHECK and the CSV `context` column land
  * together with V1-32.
  */
+type BodyweightInsertArgs = {
+  /** INTERNAL id of a profile the caller has already resolved as LIVE and owned. */
+  profileId: number;
+  publicId: string;
+  clientId: string;
+  day: string;
+  unit: string;
+  value: number;
+  notes: string | null;
+  activityTypeId: number;
+  kind: string;
+};
+
 export async function insertBodyweightEntry(
   exec: Executor,
-  args: {
-    /** INTERNAL id of a profile the caller has already resolved as LIVE and owned. */
-    profileId: number;
-    publicId: string;
-    clientId: string;
-    day: string;
-    unit: string;
-    value: number;
-    notes: string | null;
-    activityTypeId: number;
-    kind: string;
-  },
+  args: BodyweightInsertArgs,
 ): Promise<{ id: string } | { dayTaken: true }> {
+  const result =
+    (await attemptBodyweightEntry(exec, args)) ?? (await attemptBodyweightEntry(exec, args));
+  if (result !== null) return result;
+
+  // (c), twice: DO NOTHING suppressed a conflict that is neither — never answer with something plausible.
+  //
+  // 🔴 **Since V1-9b B0 this is REACHABLE with a known cause, so it no longer says "unexpected" and
+  // stops there.** `uq_entries_client_id` is non-partial now, so a HIDDEN weigh-in still holds its
+  // `client_id`: a replay of one whose day slot has since been freed conflicts here, misses (a)
+  // (`deleted_at IS NULL`) and misses (b) (the day is free), and lands on this throw. Before B0 the
+  // hidden row was outside the partial index and the insert simply **inserted a twin** — which is
+  // the defect B0 exists to close, arriving through the one writer that infers no target.
+  //
+  // ⚠️ It is still a throw, not a typed envelope (`docs/plans/v1-9b-delete-and-restore.md` Decision 7 cut a typed replay-of-hidden).
+  // `db:verify`'s B0 block asserts this case; the two 1e cases that also reach (c) (a foreign metric's
+  // `client_id`, an evening-only day) are unaffected and still match the first half of this message.
+  throw new Error(
+    'insertBodyweightEntry: the insert was a no-op, but it is neither a replay of this submit nor ' +
+      "the day's weigh-in — so it is a replay of a HIDDEN weigh-in whose day is now free " +
+      '(V1-9b B0), or an unexpected unique conflict.',
+  );
+}
+
+/** One insert and its re-reads; `null` is (c), which `insertBodyweightEntry` retries once. */
+async function attemptBodyweightEntry(
+  exec: Executor,
+  args: BodyweightInsertArgs,
+): Promise<{ id: string } | { dayTaken: true } | null> {
   const [inserted] = await exec
     .insert(schema.entries)
     .values({
@@ -264,22 +300,6 @@ export async function insertBodyweightEntry(
     .limit(1);
   if (taken) return { dayTaken: true };
 
-  // (c): DO NOTHING suppressed a conflict that is neither — never answer with something plausible.
-  //
-  // 🔴 **Since V1-9b B0 this is REACHABLE with a known cause, so it no longer says "unexpected" and
-  // stops there.** `uq_entries_client_id` is non-partial now, so a HIDDEN weigh-in still holds its
-  // `client_id`: a replay of one whose day slot has since been freed conflicts here, misses (a)
-  // (`deleted_at IS NULL`) and misses (b) (the day is free), and lands on this throw. Before B0 the
-  // hidden row was outside the partial index and the insert simply **inserted a twin** — which is
-  // the defect B0 exists to close, arriving through the one writer that infers no target.
-  //
-  // ⚠️ It is still a throw, not a typed envelope: `V1-9b` B1-2 owns that for every writer at once,
-  // and inventing one here would be a second answer to the same question. `db:verify`'s B0 block
-  // asserts this case; the two 1e cases that also reach (c) (a foreign metric's `client_id`, an
-  // evening-only day) are unaffected and still match the first half of this message.
-  throw new Error(
-    'insertBodyweightEntry: the insert was a no-op, but it is neither a replay of this submit nor ' +
-      "the day's weigh-in — so it is a replay of a HIDDEN weigh-in whose day is now free " +
-      '(V1-9b B0), or an unexpected unique conflict.',
-  );
+  // (c): neither a replay nor the day's weigh-in.
+  return null;
 }

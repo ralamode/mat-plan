@@ -1,0 +1,19 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index d60703f7..07e8a3aa 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -779,14 +779,6 @@ const householdClaim: Correction = {
+ 
+     // 🔴 **A SEED household only where the seed's fixtures may live (`PRIV-3` RC, D6).** Before the
+     // household lookup and the membership read, beside the fixture check. The message names no id.
+-    if (!seedHouseholdClaimIsAllowed(householdPublicId)) {
+-      throw new Error(
+-        'refusing to bind an account to a household whose public_id is one the seed writes ' +
+-          '(SEED_PUBLIC_IDS) on a database that is neither local nor the preview. Production ' +
+-          'households are created by create-household-…, never claimed from the seed namespace.',
+-      );
+-    }
+-
+     const scope = await requireLiveHouseholdScope(db, householdPublicId);
+ 
+     // ── the read, before any branch ──────────────────────────────────────────────────────────────

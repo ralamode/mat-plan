@@ -1,0 +1,12 @@
+diff --git a/packages/shared/src/seed-ids.ts b/packages/shared/src/seed-ids.ts
+index 5f959aa4..e5b27c90 100644
+--- a/packages/shared/src/seed-ids.ts
++++ b/packages/shared/src/seed-ids.ts
+@@ -41,7 +41,6 @@ export const SEED_PUBLIC_IDS: ReadonlySet<string> = new Set([
+   SEED_HOUSEHOLD_PUBLIC_ID,
+   SEED_PROFILE_PUBLIC_ID,
+   SEED_PROFILE_2_PUBLIC_ID,
+-  SEED_PROFILE_3_PUBLIC_ID,
+ ]);
+ 
+ /**

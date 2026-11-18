@@ -236,6 +236,99 @@ node "$SLOT" -- true >"$T/out" 2>&1
 code=$?
 check "a guard left by a dead stealer is broken, and the stale lock taken" '[ "$code" = 0 ] && gone && [ ! -e "$MAT_PLAN_HEAVY_SLOT_PATH.steal" ]'
 
+# ── A runner under the slot (runUnderSlot: e2e:local, screenshot:ephemeral) ─────────────────────
+cat >"$T/runner.mjs" <<EOF
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { runUnderSlot } from '$SLOT';
+if (!runUnderSlot('test runner')) {
+  const c = spawn('sleep', ['30'], { stdio: 'ignore' });
+  writeFileSync(process.env.RUNNER_OUT, process.pid + ' ' + c.pid);
+  c.on('close', () => process.exit(0));
+}
+EOF
+RUNNER_OUT="$T/runner.out" node "$T/runner.mjs" >"$T/runner.log" 2>&1 &
+outer=$!
+track "$outer"
+wait_for '[ -s "$T/runner.out" ] && [ "$(field "holders.length" 2>/dev/null)" = 2 ]' || no "the runner re-ran under the wrapper"
+read -r inner kid <"$T/runner.out"
+inner_start="$(start_of "$inner")"
+kid_start="$(start_of "$kid")"
+track "$inner"
+track "$kid"
+check "a runner re-runs itself under the wrapper, labelled with its command" '[ "$(field command)" = "test runner" ] && [ "$(field "holders[1].pid")" = "$inner" ]'
+RUNNER_OUT="$T/r2.out" node "$T/runner.mjs" >"$T/out" 2>&1
+code=$?
+check "a second runner while the slot is held: exit 2" '[ "$code" = 2 ] && [ ! -e "$T/r2.out" ]'
+own_kill "$inner" "$inner_start"
+sleep 0.5
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "the runner killed with -9 while its child runs: the slot stays held" '[ "$code" = 2 ]'
+own_kill "$kid" "$kid_start"
+wait "$outer" 2>/dev/null
+check "…and is freed once the child has exited too" 'wait_for gone'
+
+# runUnderSlot passes arguments and the exit code through, and a SIGTERM to the outer pid ends it.
+cat >"$T/runner2.mjs" <<EOF
+import { runUnderSlot } from '$SLOT';
+if (!runUnderSlot('test runner 2')) {
+  console.log(JSON.stringify(process.argv.slice(2)));
+  if (process.argv[2] === 'hang') setTimeout(() => {}, 30000);
+  else process.exit(Number(process.argv[2]));
+}
+EOF
+node "$T/runner2.mjs" 7 "a b" -- --x >"$T/out" 2>&1
+code=$?
+check "a runner's arguments and exit code pass through the re-run" '[ "$code" = 7 ] && grep -qF '"'"'["7","a b","--","--x"]'"'"' "$T/out" && gone'
+node "$T/runner2.mjs" hang >"$T/out" 2>&1 &
+outer2=$!
+track "$outer2"
+wait_for '[ -e "$MAT_PLAN_HEAVY_SLOT_PATH" ] && [ "$(field "holders.length" 2>/dev/null)" = 2 ]'
+kill -TERM "$outer2"
+wait "$outer2" 2>/dev/null
+code=$?
+check "SIGTERM to the runner's own pid ends the run and frees the slot" '[ "$code" = 143 ] && wait_for gone'
+
+# A leftover that ignores TERM: the busy message names its group, and a Ctrl-C to the waiting wrapper ends it.
+cat >"$T/runner3.mjs" <<EOF
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { runUnderSlot } from '$SLOT';
+if (!runUnderSlot('test runner 3')) {
+  const c = spawn('sh', ['-c', "trap '' TERM INT HUP; sleep 300"], { stdio: 'ignore' });
+  writeFileSync(process.env.RUNNER_OUT, process.pid + ' ' + c.pid);
+  setTimeout(() => {}, 30000);
+}
+EOF
+rm -f "$T/runner3.out"
+RUNNER_OUT="$T/runner3.out" node "$T/runner3.mjs" >"$T/runner3.log" 2>&1 &
+outer3=$!
+track "$outer3"
+wait_for '[ -s "$T/runner3.out" ] && [ "$(field "holders.length" 2>/dev/null)" = 2 ]'
+read -r inner3 kid3 <"$T/runner3.out"
+wrapper3="$(field pid)"
+group3="$(field 'holders[1].pid')"
+track "$inner3"
+track "$kid3"
+own_kill "$inner3" "$(start_of "$inner3")"
+wait_for 'grep -qF "waiting for the run" "$T/runner3.log"'
+node "$SLOT" -- true >"$T/out" 2>&1
+code=$?
+check "a busy slot held only by leftovers names their group and how to end it" '[ "$code" = 2 ] && grep -qF "kill -TERM -- -$group3" "$T/out"'
+check "…and the waiting wrapper says which group it waits for" 'grep -qF "(group $group3)" "$T/runner3.log"'
+kill -INT "$wrapper3"
+# Checked BEFORE waiting on the run, and bounded (wait_for, ~5s): the leftover would otherwise end on
+# its own and pass this without the escalation.
+check "Ctrl-C to a waiting wrapper ends the leftovers and frees the slot" 'wait_for gone && wait_for "! kill -0 $kid3 2>/dev/null"'
+wait "$outer3" 2>/dev/null
+
+hold
+kill -TSTP "$HOLDER"
+sleep 0.3
+check "Ctrl-Z (SIGTSTP) to a wrapper holding the slot: it is not stopped" '! ps -o stat= -p "$HOLDER" | grep -q T && grep -qF "Ctrl-Z is held" "$T/hold.out"'
+stop_holder
+
 # ── Stale and reused pids ───────────────────────────────────────────────────────────────────────
 sh -c 'exit 0' &
 dead=$!
