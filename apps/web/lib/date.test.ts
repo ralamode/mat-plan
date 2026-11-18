@@ -84,6 +84,11 @@ describe('isIanaTimeZone', () => {
   it.each(['Etc/UTC', 'Etc/GMT+5'])('accepts an Etc/ name (%s)', (tz) =>
     expect(isIanaTimeZone(tz)).toBe(true),
   );
+
+  // A device set to GMT reports `+00:00` from `resolvedOptions()`, and zero has no sign to reverse.
+  it.each(['+00:00', '-00:00', '+00', '+0000'])('accepts a zero offset (%s)', (tz) =>
+    expect(isIanaTimeZone(tz)).toBe(true),
+  );
 });
 
 describe('localWeekStartIso (ISO-week Monday)', () => {
