@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 
 import {
+  ACTIVITY_TYPE_KEYS,
   addDays,
+  localWeekday,
+  weekdaySchema,
   DEFAULT_TRACKING_TYPE,
   MAX_DAY_SLOTS,
   MAX_HOUSEHOLD_ITEMS,
@@ -64,6 +67,10 @@ import {
   programBlockIsLegacy,
 } from '../../src/writers/ownership';
 import { putOn } from '../../src/writers/program/assign';
+import { takeOff } from '../../src/writers/program/take-off';
+import { logRow, retickRow, untickRow } from '../../src/writers/day/log-row';
+import { assignmentDueOn } from '../../src/queries/program-assignments';
+import { activityTypeIdOf } from './day';
 import {
   SEED_FIXTURE_ATHLETES,
   SEED_FIXTURE_COUNTS,
@@ -91,7 +98,7 @@ import {
 import { saveWeek } from '../../src/writers/program/save-week';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
-import { asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import { asDb, asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
 /**
@@ -132,6 +139,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyPutOn(ctx);
   await verifySeedFixtures(ctx);
   await verifyProgramReads(ctx);
+  await verifyTakeOff(ctx);
   await verifyCaps();
 }
 
@@ -3694,5 +3702,341 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
   });
   console.log(
     '✓ FAM-1 6c-ii: the program-list and program-view reads deep-equal programs-list, family-program, family-program-after-take-off, adult-program-with-copy and new-program-empty, ids exact',
+  );
+}
+
+// ── FAM-1 6d-i: Take off ───────────────────────────────────────────────────────────────────────────
+
+async function verifyTakeOff({ B_SCOPE }: VerifyContext): Promise<void> {
+  const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+  const T = world.today;
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { scope, ids } = await seedViewWorld(tx, world);
+    const activityTypeId = await activityTypeIdOf(tx, ACTIVITY_TYPE_KEYS.workout_item);
+    const p1 = ids.get(fixtureIds.program('p1'))!;
+    const p2 = ids.get(fixtureIds.program('p2'))!;
+    const p3 = ids.get(fixtureIds.program('p3'))!;
+    const w1 = ids.get(fixtureIds.workout('w1'))!;
+    const off = (profilePublicId: string, programPublicId = p1, today = T) =>
+      takeOff(exec, scope, { programPublicId, profilePublicId }, today).catch((e: unknown) => ({
+        threw: String(e).slice(0, 80),
+      }));
+    const on = async (athlete: string, program: string, from: string, today = from) =>
+      assert.deepEqual(
+        await putOn(
+          exec,
+          scope,
+          { programPublicId: program, profilePublicIds: [athlete], from },
+          today,
+        ),
+        { ok: true },
+        'FAM-1 6d-i: the proof puts an athlete on',
+      );
+    const gripOf = async (workoutPublicId: string) => {
+      const [row] = await tx
+        .select({ publicId: schema.prescriptions.publicId })
+        .from(schema.prescriptions)
+        .innerJoin(schema.workouts, eq(schema.workouts.id, schema.prescriptions.workoutId))
+        .innerJoin(schema.movements, eq(schema.movements.id, schema.prescriptions.movementId))
+        .where(
+          and(
+            eq(schema.workouts.publicId, workoutPublicId),
+            isNull(schema.prescriptions.deletedAt),
+            eq(schema.movements.trackingType, TRACKING_TYPE.check),
+          ),
+        )
+        .limit(1);
+      return row!.publicId;
+    };
+    const log = async (athlete: string, workoutPublicId: string, day = T) => {
+      const r = await logRow(asDb(tx), {
+        scope,
+        today: day,
+        activityTypeId,
+        write: {
+          clientId: newId(),
+          profilePublicId: athlete,
+          day,
+          workoutPublicId,
+          prescriptionPublicId: await gripOf(workoutPublicId),
+          set: 1,
+          values: { quantities: [] },
+        },
+      });
+      assert.ok(r.ok, `FAM-1 6d-i: the proof logs a row (${r.ok ? '' : r.reason})`);
+      return r.entryPublicId;
+    };
+    const rowsOf = async (athlete: string) =>
+      (await assignmentRows(tx)).assignments.filter((r) => r.profile === athlete);
+    const live = async (athlete: string, program = p1) =>
+      (await rowsOf(athlete)).filter((r) => r.program === program && r.deletedAt === null);
+    const athlete = (name: string) => mustAddAthlete(tx, scope, name);
+
+    // ── Started today, nothing logged: removed; a replay answers the same ──
+    const n1 = await athlete('Take-off None');
+    await on(n1, p1, T);
+    assert.deepEqual(
+      await off(n1),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a start dated today with nothing logged is removed (lastDay null)',
+    );
+    assert.deepEqual(await live(n1), [], 'FAM-1 6d-i: …and the row is hidden');
+    const afterRemove = await assignmentRows(tx);
+    assert.deepEqual(
+      await off(n1),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a replay of a removal answers lastDay null (D15)',
+    );
+    assert.deepEqual(await assignmentRows(tx), afterRemove, 'FAM-1 6d-i: …and writes nothing');
+    // The contrast to a reopen: back on after a removal is a new row, the old one stays hidden.
+    await on(n1, p1, T);
+    assert.equal(
+      (await rowsOf(n1)).filter((r) => r.program === p1).length,
+      2,
+      'FAM-1 6d-i: put on after a removal makes a new row, the old one kept hidden',
+    );
+
+    // ── Started today, one live row logged: ends today; a replay answers the same ──
+    const n2 = await athlete('Take-off Logged');
+    await on(n2, p1, T);
+    await log(n2, w1);
+    assert.deepEqual(
+      await off(n2),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: with a live row logged today, the stretch ends today (lastDay today)',
+    );
+    assert.deepEqual(
+      (await live(n2)).map((r) => r.activeTo),
+      [T],
+      'FAM-1 6d-i: …its last day is today',
+    );
+    const afterEnd = await assignmentRows(tx);
+    assert.deepEqual(
+      await off(n2),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: a replay of an end answers lastDay today',
+    );
+    assert.deepEqual(await assignmentRows(tx), afterEnd, 'FAM-1 6d-i: …and writes nothing');
+
+    // ── Ticked and un-ticked: the start does not stay ──
+    const n3 = await athlete('Take-off Unticked');
+    await on(n3, p1, T);
+    const entry = await log(n3, w1);
+    const untick = await untickRow(asDb(tx), {
+      scope,
+      today: T,
+      input: { profilePublicId: n3, day: T, entryPublicId: entry },
+    });
+    assert.ok(untick.ok, 'FAM-1 6d-i: the proof un-ticks');
+    assert.deepEqual(
+      await off(n3),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a row ticked and un-ticked does not keep the start',
+    );
+    // The accepted limit: re-ticking it now brings a row back under the removed start (C24).
+    const retick = await retickRow(asDb(tx), {
+      scope,
+      today: T,
+      input: {
+        profilePublicId: n3,
+        day: T,
+        entryPublicId: entry,
+        hiddenAt: untick.ok ? untick.hiddenAt! : '',
+      },
+    });
+    assert.ok(
+      retick.ok && (await live(n3)).length === 0,
+      'FAM-1 6d-i: the accepted limit: a re-tick after the removal leaves a live row on a day no live assignment covers',
+    );
+
+    // ── Not started yet: removed ──
+    const n4 = await athlete('Take-off Tomorrow');
+    await on(n4, p1, addDays(T, 1), T);
+    assert.deepEqual(
+      await off(n4),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a start still to come is removed',
+    );
+
+    // ── "Logged" is this athlete's, today's, and this program's ──
+    const n5 = await athlete('Take-off Sibling');
+    await on(n5, p1, T);
+    // n2 logged in w1 today: a sibling's row.
+    assert.deepEqual(
+      await off(n5),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a sibling’s row today does not keep the start',
+    );
+    const n6 = await athlete('Take-off Yesterday');
+    await on(n6, p1, addDays(T, -3));
+    await log(n6, w1, addDays(T, -1));
+    assert.deepEqual(
+      await off(n6, p1, addDays(T, -1)),
+      { ok: true, lastDay: addDays(T, -1) },
+      'FAM-1 6d-i: the proof ends n6 yesterday',
+    );
+    await on(n6, p1, T);
+    assert.deepEqual(
+      await off(n6),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a row logged yesterday does not keep a start dated today',
+    );
+    const copy = await copyWorkout(exec, scope, {
+      clientId: newId(),
+      workoutPublicId: w1,
+      toProgramPublicId: p2,
+      weekdays: [weekdaySchema.parse(localWeekday(T))],
+      label: null,
+    });
+    assert.ok(copy.ok, 'FAM-1 6d-i: the proof copies Morning habits into Stretching');
+    const n7 = await athlete('Take-off Elsewhere');
+    await on(n7, p1, T);
+    await on(n7, p2, T);
+    await log(n7, copy.ok ? copy.workoutPublicId : '');
+    assert.deepEqual(
+      await off(n7),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a row logged today in another program does not keep the start',
+    );
+
+    // ── Take off never moves the athlete's other programs ──
+    const n9 = await athlete('Take-off Three');
+    for (const program of [p1, p2, p3]) await on(n9, program, addDays(T, -3));
+    const others = async () =>
+      (await rowsOf(n9)).filter((r) => r.program !== p1).map((r) => r.ctid);
+    const beforeOthers = await others();
+    assert.deepEqual(
+      await off(n9),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: a stretch started earlier ends today',
+    );
+    assert.deepEqual(
+      await others(),
+      beforeOthers,
+      'FAM-1 6d-i: …and the athlete’s other programs are untouched',
+    );
+
+    // ── Put on after a real Take off today reopens the row, due today ──
+    const n12 = await athlete('Take-off Reopen');
+    await on(n12, p1, addDays(T, -3));
+    const [stretch] = await live(n12);
+    assert.deepEqual(
+      await off(n12),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: the proof takes n12 off',
+    );
+    await on(n12, p1, T);
+    const reopened = await live(n12);
+    assert.deepEqual(
+      reopened.map((r) => ({ id: r.id, activeFrom: r.activeFrom, activeTo: r.activeTo })),
+      [{ id: stretch!.id, activeFrom: addDays(T, -3), activeTo: null }],
+      'FAM-1 6d-i: put on after a real take off reopens the row',
+    );
+    const [due] = await tx
+      .select({ id: schema.programAssignments.id })
+      .from(schema.programAssignments)
+      .where(and(eq(schema.programAssignments.id, stretch!.id), assignmentDueOn(T)));
+    assert.ok(due, 'FAM-1 6d-i: …and the athlete is due today (the weekday rows stayed live)');
+
+    // ── Refusals write nothing ──
+    const n10 = await athlete('Take-off Never');
+    const n11 = await athlete('Take-off Archived');
+    await on(n11, p1, addDays(T, -3));
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, n11));
+    const n13 = await athlete('Take-off Past');
+    await on(n13, p1, addDays(T, -3));
+    await tx
+      .update(schema.programAssignments)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.programAssignments.id, (await live(n13))[0]!.id));
+    const gone = await mustCreate(tx, scope, 'Take-off removed program');
+    await hide(tx, gone);
+    const bAthlete = await mustAddAthlete(tx, B_SCOPE, 'Take-off B Athlete');
+    const bProgram = await mustCreate(tx, B_SCOPE, 'Take-off B Program');
+    const before = await assignmentRows(tx);
+    for (const [what, input, reason] of [
+      [
+        'a program id that is not a uuid',
+        { programPublicId: 'p1', profilePublicId: n10 },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'an athlete id that is not a uuid',
+        { programPublicId: p1, profilePublicId: 'a1' },
+        PROGRAM_REFUSAL.invalid,
+      ],
+      [
+        'an athlete never on it',
+        { programPublicId: p1, profilePublicId: n10 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a start removed in the past',
+        { programPublicId: p1, profilePublicId: n13 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an archived athlete',
+        { programPublicId: p1, profilePublicId: n11 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'another household’s athlete',
+        { programPublicId: p1, profilePublicId: bAthlete },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'another household’s program',
+        { programPublicId: bProgram, profilePublicId: n2 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'a removed program',
+        { programPublicId: gone, profilePublicId: n2 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+      [
+        'an unknown program',
+        { programPublicId: newId(), profilePublicId: n2 },
+        PROGRAM_REFUSAL.not_found,
+      ],
+    ] as const) {
+      assert.deepEqual(
+        await takeOff(exec, scope, input, T),
+        { ok: false, reason },
+        `FAM-1 6d-i: take off refuses ${what}`,
+      );
+    }
+    assert.deepEqual(
+      await assignmentRows(tx),
+      before,
+      'FAM-1 6d-i: …and every refusal writes nothing',
+    );
+    assert.deepEqual(
+      (await live(n11)).map((r) => r.activeTo),
+      [null],
+      'FAM-1 6d-i: …an archived athlete’s assignment is not ended (invariant 31)',
+    );
+
+    // ── A row logged under a removed workout of this program still keeps the start ──
+    const n8 = await athlete('Take-off Removed Workout');
+    await on(n8, p1, T);
+    await log(n8, w1);
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, w1));
+    assert.deepEqual(
+      await off(n8),
+      { ok: true, lastDay: T },
+      'FAM-1 6d-i: a row logged today under a since-removed workout of this program keeps the start',
+    );
+  });
+  console.log(
+    '✓ FAM-1 6d-i: take off removes a start not begun or begun today with nothing logged, ends it otherwise, answers a replay the same, refuses without writing, and leaves the weekday rows live',
   );
 }
