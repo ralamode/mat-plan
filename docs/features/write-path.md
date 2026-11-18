@@ -542,6 +542,11 @@ The shapes those lanes agree on, the fakes and the preview route are
      submit's row → `{ dayTaken: true }`, the typed "already logged" envelope.
    - **(c) it swallows a violation of ANY unique**, including future ones → a no-op that is neither
      THROWS. Adding a unique index to `entries` means deciding how this writer answers it.
+     🔴 **(c) is retried once first**, in this writer and in `writeCheckinEntries` (per item there): the
+     insert and the re-reads are separate statements, so a day holder cleared between them leaves
+     nothing to explain the skip, and the day is free by then. Only a second miss throws.
+     `verify/single-values.ts` stages it with a statement-level `AFTER INSERT` trigger that hides the
+     holder inside the skipped insert (mutations 420, 421).
      The replay lookup is scoped to the profile (the pre-1e fallback looked up `client_id` alone and could
      hand back another profile's public id). `db:verify` ("V1-24 1e") drives the app's own statement for
      insert, replay, other-device, soft-delete, the foreign-`client_id` throw, a soft-deleted submit's
@@ -555,7 +560,8 @@ The shapes those lanes agree on, the fakes and the preview route are
      fixed order, proved in `verify/single-values.ts`, with a mutation patch on each pin and on the order: **replay** (this
      profile's live row holds the id, same metric and day) → **`day_taken`** (a practice, and a live
      practice holds `practiceSlot`) → **`own_hidden`** (this profile's hidden row holds the id; the day
-     is free) → **`conflict`** (any other holder) → the throw. The day decides before `own_hidden`, as
+     is free) → **`conflict`** (any other holder) → one retry of the items nothing explains (a holder
+     cleared mid-write) → the throw. The day decides before `own_hidden`, as
      bodyweight's slot does. The bodyweight and strength inserts cannot hit this index (their metric
      is never `practice_minutes`). Since 3b-life-b, `logLifeActivitiesAction` (typed minutes, practice only)
      refuses `day_taken`, `conflict` and `own_hidden`, each with its own copy, and the form mints a new

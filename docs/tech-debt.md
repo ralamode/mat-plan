@@ -78,7 +78,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Severity:** low today, high the moment the schedule has a row. Owner: lane A (`seed.ts` is its
   file), with step 12f.
 
-### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel)
+### A day-taken insert can throw when the day is cleared in the same instant (found 2026-11-16, V1-24 3b-life panel) — ✅ CLOSED 2026-11-17
+
+- **Closed:** `writeCheckinEntries` and `insertBodyweightEntry` re-run the insert once, for exactly
+  the items no outcome explains, before they throw. `db:verify` stages the race on PGlite with a
+  statement-level `AFTER INSERT` trigger that hides the holder inside the skipped insert
+  (`verify/single-values.ts` → `verifyDayTakenRace`); mutations 420 and 421 remove each retry.
+  A second miss still throws: for a check-in, a reused `public_id`; for a weigh-in, a replay of a
+  hidden one, a `client_id` already used by another metric or profile, or an evening-only day.
 
 - **What & why it's debt:** `writeCheckinEntries` (a practice) and `insertBodyweightEntry` (a
   weigh-in) are skipped by their day index when another live row holds the day, then re-read to say
