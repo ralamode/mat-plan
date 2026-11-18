@@ -21,7 +21,7 @@ describe('WorkoutDraft: owed by its consumers', () => {
     '7b: the workout pages pass program; the editor names it and says who a change applies to',
   );
   it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
-  it.todo('7b: every path in routes.ts has its page.tsx under app/programs/');
+  it.todo('7b: every path in routes.ts has its page.tsx or route.ts under app/programs/');
 });
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 58457d24..1aece1a3 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -29,7 +29,7 @@ export async function lockProgram(
+   const [block] = await tx
+     .select({ id: schema.programBlocks.id })
+     .from(schema.programBlocks)
+-    .where(and(eq(schema.programBlocks.publicId, programPublicId), liveTemplateBlockIn(scope)))
++    .where(eq(schema.programBlocks.publicId, programPublicId))
+     .for('no key update');
+   return block ?? null;
+ }

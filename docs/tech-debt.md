@@ -15,6 +15,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
+
+- **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
+  HELPERS and erasure pins) finds lane P's imports by matching specifier text. #552 tried to harden
+  it, and its security review found that each fix met another spelling: a comment inside an import, a
+  backtick specifier, `require (` with a space, a `../node_modules` path, or an `@/` alias walking out
+  of `apps/web`.
+- **Impact:** an import written that way into a page or the day DAL would not be refused by the
+  guard. Code written in good faith uses the plain forms, which the guard catches.
+- **The fix:** a parser-based check, ESLint `no-restricted-imports` with path patterns per directory
+  (or the TypeScript import graph), so every specifier form, comment and alias resolves in one place.
+  Then the regex guard's directory rules move into it.
+- **Severity:** low. Maintainer, 2026-11-18: "Close; lint check as tech debt".
+
 ### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
 
 - **What & why it's debt:** `apps/web/app/p/[profileId]/loading.tsx` reserves the athlete
@@ -77,7 +91,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
 - **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
 
-### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
+### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff) — ✅ CLOSED 2026-11-18
+
+- **Closed by `OPS-2` PR 1:** the expansion and `CALISTHENICS_RAMP_SCHEDULE` are deleted (plan D4, the maintainer's Q6), so no seed writes `ramp_targets`; `verify/seed.ts`'s Proof A counts the table after a production seed.
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
   `ramp_targets` rows for every profile with `kind = 'kid'`, with no household predicate and no
@@ -975,7 +991,7 @@ success.` Harmless there — nothing referenced the files yet.
   | **Squawk** migration lint                                       | ✅ wired — `ci.yml` `quality`, added migrations only (#135)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
   | **`pnpm audit`** (fail high/critical)                           | ✅ **wired — SEC-5** ([plan](./plans/sec-5-verify-in-ci.md)): `pnpm audit:check` runs in `ci.yml`'s `quality` job on **every PR and every push to `main`**, after the install, and its self-test runs before it. The rule is stated once, in [SECURITY.md](../.github/SECURITY.md) → Supply chain. It was local-only for the two weeks after this audit, and in that window **four** advisories reached `main` with CI green — `next` RCE (GHSA-vcvr-r3jv-pc5j, #182), `source-map-js` DoS (GHSA-68fv-2mgg-jv7q, #222), `fast-uri` + a critical `proxy-addr` (#227), `sharp` → librsvg (GHSA-wq5f-xc86-pv6w, #235) — **every one found by accident** during unrelated work, never by a gate. The gap was the gate, not the advisories |
   | **CodeQL**                                                      | ✅ wired — `codeql.yml`, but **not a PR check** (see below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-  | **Neon-branch apply** on PRs                                    | ❌ **still absent** — `migrate.yml` runs only on merge to `main`, and warns-and-skips if `DATABASE_URL_UNPOOLED` is unset                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+  | **Neon-branch apply** on PRs                                    | ❌ **still absent** — `migrate.yml` runs only on merge to `main`, and (since `OPS-2` PR 1) fails if `PROD_DATABASE_URL_UNPOOLED` is unset                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 - **What CodeQL being "wired" does and does not mean.** `codeql.yml` runs `javascript-typescript` over the
   whole workspace on **push to `main`, weekly (Mon 06:17 UTC), and `workflow_dispatch`** — deliberately
