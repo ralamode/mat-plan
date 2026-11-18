@@ -166,7 +166,8 @@ SELECT count(*) FROM entries e JOIN supersets ss ON ss.id = e.superset_id
  WHERE ss.session_id IS DISTINCT FROM e.session_id;
 ```
 
-Result: _pending_.
+Result: _pending the maintainer's go._ Production data predates a planned fresh-start reset, so the
+count confirms rather than gates; the fix is forward-safe either way.
 
 ## Risks / rollback
 
@@ -197,10 +198,10 @@ Result: _pending_.
 
 ## Out-of-scope / deferred
 
-- **Ownership on the two read joins** (`entries.ts:168-186`, `export-month.ts:97`): adding
-  `sessions.profile_id = entries.profile_id` as defence in depth, which `queries/day/day-plan.ts:376`
-  already does. Those files are lanes S and E's, so it goes to the board as a follow-up. It matters
-  only if the pre-merge read is non-zero.
+- **Ownership on the day read's join** (`apps/web/lib/dal/entries.ts:168-186`): defence in depth,
+  `sessions.profile_id = entries.profile_id`, which `queries/day/day-plan.ts:376` already does. Lane
+  S's file, so it is queued with that lane. The month export's join already carries the conjunct
+  (FAM-1 14a, #582: a `verifyExport` proof and mutation 365) and has no superset join.
 - `isNull(sessions.workout_id)` on the session re-select: unreachable today, because day-page sessions
   get server-minted ids (`writers/day/log-row.ts:288,315`).
 - The other graph writers: `insertBodyweightEntry` already pins profile and metric;
@@ -213,6 +214,12 @@ Result: _pending_.
 ## Open questions
 
 None.
+
+## Gate results
+
+- `db:verify` green, with the new block (2026-11-17).
+- `db:mutations`: 306 mutations, all RED; `440`, `441` and `442` each fail on their own case's
+  message (2026-11-17).
 
 ## Review-response log (adversarial panel)
 
