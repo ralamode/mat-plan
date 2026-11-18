@@ -22,17 +22,17 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 
 ## The map
 
-| Step     | Adds                                                                                            |
-| -------- | ----------------------------------------------------------------------------------------------- |
-| 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                            |
-| 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅           |
-| 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅    |
-| 6a-iii-b | `writers/program/copy-workout.ts` (`copyWorkout`, C15) ✅                                       |
-| 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                    |
-| 6c-i     | `writers/program/assign.ts` (put on, C15's reopen); fills in `writers/program/seed-fixtures.ts` |
-| 6c-ii    | `queries/program/{program-view,program-list,athletes}.ts`; `programWorkoutIds` in `exists.ts`   |
-| 6d-i     | `writers/program/take-off.ts` (Take off); `lockProgram`, `lockAthletes` shared in `assign.ts`   |
-| 6d-ii    | `reorderPrograms` (an athlete's program order), after #601                                      |
+| Step     | Adds                                                                                                  |
+| -------- | ----------------------------------------------------------------------------------------------------- |
+| 6a-i     | `writers/program/{create-program,rename-program,program-name}.ts` ✅                                  |
+| 6a-ii    | `writers/program/{save-workout,shift-band,index}.ts`; `queries/program/workout.ts` ✅                 |
+| 6a-iii-a | `queries/program/movement-options.ts`; `writers/program/new-item.ts` (contract change C8) ✅          |
+| 6a-iii-b | `writers/program/copy-workout.ts` (`copyWorkout`, C15) ✅                                             |
+| 6b       | `writers/program/save-week.ts`; `queries/program/week.ts` ✅                                          |
+| 6c-i     | `writers/program/assign.ts` (put on, C15's reopen); fills in `writers/program/seed-fixtures.ts`       |
+| 6c-ii    | `queries/program/{program-view,program-list,athletes}.ts`; `programWorkoutIds` in `exists.ts`         |
+| 6d-i     | `writers/program/take-off.ts` (Take off); `lockProgram`, `lockAthletes` shared in `assign.ts`         |
+| 6d-ii    | `writers/program/reorder-programs.ts` (an athlete's program order); `placeAssignments` in `assign.ts` |
 
 ## Files
 
@@ -58,7 +58,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: the test seed's fixture programs (`SEED_FIXTURES=1` only), built with the real writers, and the seed's athletes on them. A program the household already has, by its fixed `client_id`, is left as it is.                                                                                                                                                                                                                                       |
 | `packages/db/src/writers/program/assign.ts`           | `putOn`: athletes onto a template program from today or tomorrow, one row last in their order and all seven weekday rows; already on is skipped; a last day of today is reopened on the same row.                                                                                                                                                                                                                                                                      |
 | `packages/db/src/writers/program/take-off.ts`         | `takeOff`: removes a start not begun, or begun today with nothing logged under it (`lastDay: null`); otherwise ends the stretch today (`lastDay: today`). A replay answers the same (decided 2026-11-18).                                                                                                                                                                                                                                                              |
-| `packages/db/src/writers/program/owed.test.ts`        | The lane's `it.todo` list: the tests steps 6a to 6d still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                                                              |
+| `packages/db/src/writers/program/reorder-programs.ts` | `reorderPrograms`: the athlete's full order, a permutation of their `currentPrograms` (else `invalid`, which also means stale), written by `placeAssignments`; a program ending today keeps its row; an unchanged order writes nothing.                                                                                                                                                                                                                                |
 | `packages/db/src/queries/program/index.ts`            | The lane's reads, by name: what `packages/db/src/index.ts` publishes.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `packages/db/scripts/verify/program.ts`               | The lane's `db:verify` proofs. Its header lists what each step owes and how to compare a read with a fixture.                                                                                                                                                                                                                                                                                                                                                          |
 
@@ -113,7 +113,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
     `quantities-replaced-every-save`).
 11. 🔴 **Places go through the band** (`shift-band.ts`; mutation `save-skips-the-band`):
     `uq_prescriptions_workout_idx` is checked row by row, so two cards swapping places collide
-    unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week and 6c's program order use the same helper. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
+    unless every placed row first moves to `idx + SHIFT_BAND`. 6b's week uses the same helper, and an athlete's program order goes through ONE writer on top of it, `placeAssignments` (`assign.ts`), shared by `putOn` and 6d-ii's `reorderPrograms`: it reads the athlete's open rows with the order index's own predicate (no block join, so a hidden program's open row is placed too) and writes only rows whose place changes. Its `where` is required (an unscoped one would move every household's rows), and ⚠️ a table placed through it must not CHECK an upper bound on `idx`.
 12. **Every refusal comes before the first write**, and the whole save is one transaction (a
     savepoint inside the caller's). 🔴 **Its locks, the order every writer touching a program keeps:** the block `FOR NO KEY UPDATE`, then the program's workouts `FOR NO KEY UPDATE` in id order, then prescriptions, then quantities, then the week's slots (`block_day_workouts`). `saveWeek` takes the block lock alone: it writes no workout row. `putOn` takes the block, then the athletes' `profiles` rows `FOR NO KEY UPDATE` in id order, so two put-ons of one athlete number their order one after the other (6d-i's take off takes the same two, through the shared `lockProgram` and `lockAthletes`; 6d-ii's reorder takes the profile alone, since it writes no program's rows; reviewed, not proven: PGlite has one connection). The block lock serialises every save of one program, creates included, so a double tap of a new workout is a replay and two new workouts cannot both take one name; `NO KEY UPDATE` still lets a foreign-key check (`FOR KEY SHARE`, a ✓ naming the workout) through. No gate proves a lock: PGlite has one connection. Items must be available to the household (mutation
     `save-takes-any-households-item`) and of the type the draft says; a type's fields are
