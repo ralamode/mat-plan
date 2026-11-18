@@ -193,6 +193,10 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
     write them. It runs before `verifyDayPlan` because 366 changes the key R4 shares. The file keeps
     the workout's frozen name after a rename (364); a session of another athlete lends nothing (365);
     two purged prescriptions of different movements stay two rows (366).
+25. **R7's program order breaks a tie on `idx` by "stays" before "ends today", then the id**
+    (`currentPrograms`; lane P's #588 review). A put-on compacts the open rows' order and leaves a
+    row closing today at its number, so the two can tie; by id alone, an unrelated put-on could swap
+    them on the page (mutation 367).
 
 ### The read path
 

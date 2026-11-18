@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index daceddf1..8de4feaf 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -273,7 +273,7 @@ export function currentPrograms(
+   // row closing today where it was, so the two can share a number (lane P's #588 review). The tie
+   // goes to the program that stays, then to the row id, so an unrelated put-on never swaps them.
+   return [...placing.values()]
+-    .sort((x, y) => x.idx - y.idx || rank(x) - rank(y) || x.id - y.id)
++    .sort((x, y) => x.idx - y.idx || x.id - y.id)
+     .map((a) => ({ blockId: a.blockId, programPublicId: a.programPublicId, name: a.programName }));
+ }
+ 
