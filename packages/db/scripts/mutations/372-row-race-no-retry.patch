@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index ca0cd9b4..6a9ccf0f 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -380,8 +380,7 @@ export async function logRow(
+       // reads are separate statements, so the entry that held the set can be un-ticked or cleared by
+       // another phone between them: nothing holds the set by the time it is read, and the same ✓
+       // inserts on a second try. Every other cause of this miss conflicts again, and still throws.
+-      [entry] = await insertEntry();
+-      if (!entry) {
++      {
+         throw new Error(
+           `row client_id ${write.clientId} neither inserted nor held, and its set is free`,
+         );
