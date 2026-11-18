@@ -202,7 +202,8 @@ flowchart TD
     `put-on-takes-an-archived-athlete`, `put-on-athletes-unscoped`, `put-on-takes-a-legacy-block`,
     `put-on-never-reopens`, `put-on-leaves-the-gap`, `put-on-six-weekdays`,
     `put-on-reopens-an-ended-stretch`, `put-on-reopens-before-closing-the-gap`,
-    `put-on-takes-a-removed-athlete`, `put-on-takes-a-removed-program`). ⚠️ **A reopen writes no
+    `put-on-takes-a-removed-athlete`, `put-on-takes-a-removed-program`,
+    `put-on-reopens-only-a-start-today`). ⚠️ **A reopen writes no
     weekday rows: it trusts take off to leave them live.** 6d's take off must not hide them, or a
     reopened program is on but never due (`assignmentDueOn`), and 6d proves a reopen after a real
     take off is due today. The seed passes each start day as `today`, so its past

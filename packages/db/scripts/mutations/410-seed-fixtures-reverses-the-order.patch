@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
-index 5bbcadd0..bcba8d11 100644
+index 4d83d424..eb750f96 100644
 --- a/packages/db/src/writers/program/seed-fixtures.ts
 +++ b/packages/db/src/writers/program/seed-fixtures.ts
-@@ -201,7 +201,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
+@@ -205,7 +205,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
          skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
          continue;
        }
