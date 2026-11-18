@@ -87,7 +87,13 @@ function Harness({
           {...common}
           multiple={{
             selected,
-            onToggle: (option) => setSelected((all) => [...all, option.publicId]),
+            // A real toggle: a second tap unticks, as the item picker's does.
+            onToggle: (option) =>
+              setSelected((all) =>
+                all.includes(option.publicId)
+                  ? all.filter((id) => id !== option.publicId)
+                  : [...all, option.publicId],
+              ),
             onCreate: vi.fn(),
             createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
             noMatchHint: 'No item matches.',
@@ -510,6 +516,66 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(hit.textContent).not.toContain(COPY.tagNotInFilters);
     expect(status()).toContain(COPY.statusAlreadyListedNoData(FRONT.name));
     expect(status()).not.toContain(COPY.statusAlreadyListedOutside(FRONT.name));
+  });
+
+  it('🔴 a folded section held open by a tick stays open when the tick is undone', async () => {
+    render(<Harness multi />);
+    open();
+    withLats();
+    const details = screen
+      .getByRole('heading', { name: COPY.foldedCount(COPY.householdNotFiltered, 2) })
+      .closest('details')!;
+    act(() => {
+      details.open = true;
+    });
+    const row = () => screen.getByRole('checkbox', { name: new RegExp(`^${CIRCUIT.name}`) });
+    tick(row());
+    tick(row());
+    await act(async () => {});
+    // Only `open` is checkable here: jsdom lets focus sit inside a closed <details>, so the focus
+    // half of the bug shows in a browser only.
+    expect(details.open).toBe(true);
+  });
+
+  it('after the latch, a tap on the summary still closes it, and a re-render does not reopen it', () => {
+    render(<Harness multi />);
+    open();
+    withLats();
+    const details = screen
+      .getByRole('heading', { name: COPY.foldedCount(COPY.householdNotFiltered, 2) })
+      .closest('details')!;
+    tick(screen.getByRole('checkbox', { name: new RegExp(`^${CIRCUIT.name}`) }));
+    act(() => {
+      details.open = false;
+    });
+    const fit = screen.getByRole('region', { name: COPY.fitHeading });
+    tick(within(fit).getAllByRole('checkbox')[0]!);
+    expect(details.open).toBe(false);
+  });
+
+  it('⏳ a search that only finds rows with no library data says why the filters hide them', () => {
+    const bare = Object.fromEntries(
+      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
+    ) as MovementOptionDTO;
+    render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
+    open();
+    withLats();
+    type('squat');
+    expect(screen.getByText(COPY.outsideLine(1, 1, 'squat', false), { exact: true })).toBeTruthy();
+    expect(screen.queryByText(COPY.outsideAll(1, 'squat'), { exact: true })).toBeNull();
+  });
+
+  it('⏳ both kinds hidden: the judged count first, then the bare one, never swapped', () => {
+    const bare = Object.fromEntries(
+      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
+    ) as MovementOptionDTO;
+    const BACK = catalogOption('Back Squat', { primaryMuscle: MUSCLE.quadriceps });
+    render(<Harness options={[...OPTIONS.map((o) => (o === FRONT ? bare : o)), BACK]} />);
+    open();
+    withLats();
+    type('squat');
+    // 2 hidden, 1 of them bare: "1 movement … is not in your filters. Your filters also hide 1 more: …"
+    expect(screen.getByText(COPY.outsideLine(2, 1, 'squat', false), { exact: true })).toBeTruthy();
   });
 
   it('after a hit the rest are "More matches" (row 15)', () => {
