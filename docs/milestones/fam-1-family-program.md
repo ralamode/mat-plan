@@ -252,7 +252,7 @@ one PR in review at a time ([PROG-1 → gate run](./prog-1-programs-and-scheduli
 
 ## The schedule: in a row, and in lanes
 
-The same 60 PRs drawn twice: one after another, and in the lanes of
+The same 61 PRs drawn twice: one after another, and in the lanes of
 [the plan's wave table](../plans/fam-1-family-program.md#7-waves-and-slices). **One unit is one
 PR-length**: the time one PR takes from its first commit to merged, reviews included. It is not a day.
 Slice 1 will measure a PR-length; until then the chart shows shape, not dates.
@@ -270,9 +270,9 @@ gantt
   Lane P's 10 PRs              :r2, 12, 22
   Lane E's 8 PRs               :r3, 22, 30
   Lane B's 11 PRs              :r4, 30, 41
-  Lane C's 12 PRs              :r5, 41, 53
-  Lane S's 7 PRs               :r6, 53, 60
-  All 60 PRs merged            :milestone, rm, 60, 60
+  Lane C's 13 PRs              :r5, 41, 54
+  Lane S's 7 PRs               :r6, 54, 61
+  All 61 PRs merged            :milestone, rm, 61, 61
 
   section Contract
   2, 0a, 0b-i, 0b-ii, 0c (merged) :done, c0, 0, 1
@@ -323,6 +323,7 @@ gantt
   12d-ii blank weight          :crit, c6b, 11, 12
   12d-iii, 12c-ii              :c6c, 12, 13
   15c, 12f                     :c7, 13, 14
+  12c-iii collapse when done   :c8, 13, 14
 
   section S · single values
   3b-page (merged)             :done, s1, 1, 2
@@ -338,9 +339,16 @@ gantt
   3 · order, Clear this day, clean-up         :milestone, m3, 14, 14
 ```
 
+**What is not fully planned** _(maintainer, 2026-11-18: a timeline says what in it still needs planning, because an estimate over unplanned work is not a true estimate)_
+
+The end of this chart is firm only for the steps planned in detail. Of the 14 PRs left:
+
+- **Nine are planned in detail**, each with a merged plan or a file-by-file row: 6d-ii, 14b, 11c-ii, 7b-i, 7b-ii, 12d-ii, 12d-iii, 12c-ii and B2.
+- **Five have only a row in the plan** (what the step does, its proof and what it waits for) and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path, 6d-iii, 15c, 12f and 12c-iii.
+
 **What it shows**
 
-- **In a row, 60 PR-lengths; in lanes, about 14.** The lanes do the same work. They finish sooner
+- **In a row, 61 PR-lengths; in lanes, about 14.** The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
@@ -361,7 +369,7 @@ gantt
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, and so is 7a-ii, which needed 6b and 6a-iii-b (#586).
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-18, 47 of the 60, Take off (6d-i, #617) the latest; the count was 54 until the plan's review log L52 gave 6d its second and third PRs, 7b its second, and three decided follow-ups their rows). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-18, 47 of the 61, Take off (6d-i, #617) the latest; the count was 54 until the plan's review log L52 gave 6d its second and third PRs, 7b its second, three decided follow-ups their rows, and the collapse of finished workouts its row once its prototype was accepted). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
   themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525), 11c-i (#539) and 14a (#582); lane B's six screen steps (8a to 10b) and both of 7a's (7a-i, 7a-ii); lane C's seven (13, 13b, 13b-ii, 13d, 12b, the first real ✓, #528, 12c, the workouts on the day page, #567, and 12d, Change on the page, #607); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
   All four of 6a's PRs (6a-iii-b, copying a workout, is #571), 6b (#522), 6c-i (#588) and 6c-ii (#612) are merged. Both of 7a's PRs are merged (7a-ii is #586). The bar for 14 and 11c is part merged: 14a and 11c-i are merged, 14b and 11c-ii are not. A bar is marked here when its PRs are on `main`.

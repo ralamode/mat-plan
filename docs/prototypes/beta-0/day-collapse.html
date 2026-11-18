@@ -1,0 +1,4661 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Day Collapse Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+/>
+<style>
+  /* Layout: a thin review bar, then the app at phone width on a quiet stage. Tokens mirror apps/web. */
+  :root {
+    --bg: oklch(1 0 0);
+    --fg: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-fg: oklch(0.985 0 0);
+    --muted: oklch(0.965 0.003 250);
+    --muted-fg: oklch(0.52 0.01 250);
+    --border: oklch(0.915 0.004 250);
+    --ring: oklch(0.6 0.12 250);
+    --destructive: oklch(0.56 0.22 27);
+    --done: oklch(0.6 0.15 150);
+    --done-bg: oklch(0.96 0.04 150);
+    --stage: oklch(0.955 0.005 250);
+    --note: oklch(0.97 0.035 85);
+    --note-fg: oklch(0.4 0.07 70);
+    --chip: oklch(0.93 0.05 300);
+    --chip-fg: oklch(0.42 0.14 300);
+    --radius: 10px;
+    --font: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: oklch(0.17 0.005 250);
+      --fg: oklch(0.97 0 0);
+      --card: oklch(0.21 0.006 250);
+      --primary: oklch(0.93 0 0);
+      --primary-fg: oklch(0.2 0 0);
+      --muted: oklch(0.26 0.006 250);
+      --muted-fg: oklch(0.72 0.01 250);
+      --border: oklch(1 0 0 / 12%);
+      --ring: oklch(0.7 0.12 250);
+      --destructive: oklch(0.7 0.19 22);
+      --done: oklch(0.75 0.15 150);
+      --done-bg: oklch(0.3 0.05 150);
+      --stage: oklch(0.12 0.004 250);
+      --note: oklch(0.28 0.035 85);
+      --note-fg: oklch(0.88 0.06 85);
+      --chip: oklch(0.32 0.07 300);
+      --chip-fg: oklch(0.86 0.08 300);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: oklch(0.17 0.005 250);
+    --fg: oklch(0.97 0 0);
+    --card: oklch(0.21 0.006 250);
+    --primary: oklch(0.93 0 0);
+    --primary-fg: oklch(0.2 0 0);
+    --muted: oklch(0.26 0.006 250);
+    --muted-fg: oklch(0.72 0.01 250);
+    --border: oklch(1 0 0 / 12%);
+    --ring: oklch(0.7 0.12 250);
+    --destructive: oklch(0.7 0.19 22);
+    --done: oklch(0.75 0.15 150);
+    --done-bg: oklch(0.3 0.05 150);
+    --stage: oklch(0.12 0.004 250);
+    --note: oklch(0.28 0.035 85);
+    --note-fg: oklch(0.88 0.06 85);
+    --chip: oklch(0.32 0.07 300);
+    --chip-fg: oklch(0.86 0.08 300);
+    color-scheme: dark;
+  }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  body {
+    background: var(--stage);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 10;
+    background: var(--card);
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .review {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .review-in {
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+    font-size: 14px;
+  }
+  .review strong {
+    font-weight: 600;
+  }
+  .review select {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    max-width: 100%;
+  }
+  .review label {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--muted-fg);
+  }
+  .review .grow {
+    flex: 1 1 auto;
+  }
+  .linkbtn {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--muted-fg);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .stage {
+    padding-block: 20px 60px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .phone {
+    max-width: 420px;
+    margin: 0 auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    min-height: 640px;
+    overflow: hidden;
+  }
+  .app {
+    padding: 18px 18px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  h1 {
+    font-size: 24px;
+    line-height: 1.2;
+    margin: 0;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 17px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  p {
+    margin: 0;
+  }
+  .hint {
+    color: var(--muted-fg);
+    font-size: 14px;
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .between {
+    justify-content: space-between;
+  }
+  .back {
+    color: var(--muted-fg);
+    font-size: 14px;
+    text-decoration: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    min-height: 44px;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+
+  .btn {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border: 0;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 40px;
+  }
+  .btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--border);
+  }
+  .btn.danger {
+    background: var(--destructive);
+    color: oklch(0.99 0 0);
+  }
+  .btn.wide {
+    width: 100%;
+  }
+  .txt {
+    background: none;
+    border: 0;
+    padding: 6px 4px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--fg);
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .txt.del {
+    color: var(--destructive);
+  }
+  input[type='text'],
+  input[type='number'],
+  input[type='time'],
+  select.field {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--bg);
+    min-height: 40px;
+    width: 100%;
+  }
+  input[type='number'] {
+    font-variant-numeric: tabular-nums;
+  }
+  input.w-num {
+    width: 96px;
+    flex: 0 0 auto;
+  }
+  input.w-sm {
+    width: 76px;
+    flex: 0 0 auto;
+  }
+
+  .item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+  }
+  .item .what {
+    min-width: 0;
+  }
+  .item .val {
+    font-variant-numeric: tabular-nums;
+  }
+  .item.logged {
+    background: var(--done-bg);
+    border-color: transparent;
+  }
+  .tick {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: var(--done);
+    color: var(--bg);
+    font-size: 13px;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .tomb {
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted-fg);
+    font-size: 14px;
+  }
+  .refusal {
+    background: var(--note);
+    color: var(--note-fg);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .banner {
+    background: var(--muted);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    font-size: 14px;
+    flex-wrap: wrap;
+  }
+  .notice {
+    background: var(--muted);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .check input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--done);
+  }
+  .mv {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mv-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .mv-head b {
+    font-weight: 600;
+  }
+  .setrow {
+    display: grid;
+    grid-template-columns: 26px 1fr 1fr;
+    gap: 8px;
+    align-items: center;
+  }
+  .setrow span {
+    color: var(--muted-fg);
+    font-size: 13px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .sofar {
+    font-size: 14px;
+    color: var(--muted-fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .daynav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px;
+  }
+  .daynav button {
+    width: 40px;
+    height: 36px;
+    border: 0;
+    background: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 20px;
+  }
+  .daynav button[disabled] {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .daynav span {
+    font-weight: 500;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .tile {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 14px;
+    text-align: left;
+    background: var(--card);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 96px;
+  }
+  .tile b {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .tile.add {
+    border-style: dashed;
+    color: var(--muted-fg);
+    justify-content: center;
+    align-items: center;
+  }
+  .menu {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .menu button {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--card);
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+  }
+  .menu button:last-child {
+    border-bottom: 0;
+  }
+
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .switch .lbl {
+    font-size: 15px;
+    color: var(--muted-fg);
+  }
+  .switch .lbl.on {
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .track {
+    position: relative;
+    width: 52px;
+    height: 30px;
+    border-radius: 999px;
+    border: 0;
+    background: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .track::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--primary);
+  }
+  .track[aria-checked='true']::after {
+    left: 25px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .track::after {
+      transition: left 0.18s ease;
+    }
+  }
+  .chip {
+    display: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--chip);
+    color: var(--chip-fg);
+    border-radius: 6px;
+    padding: 1px 6px;
+    letter-spacing: 0.02em;
+  }
+  .show-ids .chip {
+    display: inline-block;
+  }
+  .sec {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* A read-only day shows its numbers as text, not as fields (maintainer, 2026-11-15). */
+  input[readonly] {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: oklch(0 0 0 / 45%);
+    display: grid;
+    /* Top-anchored (maintainer, 2026-11-15): the phone keyboard never covers the buttons. */
+    place-items: start center;
+    z-index: 20;
+    padding: 16px;
+  }
+  .dialog {
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 18px;
+    max-width: 380px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .item.logged {
+      transition: background 0.25s;
+    }
+  }
+  /* --- v6: FAM-1, the family program --- */
+  .phone {
+    position: relative;
+  }
+  textarea {
+    font: inherit;
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--bg);
+    width: 100%;
+    min-height: 64px;
+    resize: vertical;
+  }
+  .review .ver {
+    font-size: 13px;
+  }
+  .progline {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .slotlbl {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-fg);
+  }
+  .wk {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  .wk-h {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .wk-h h2 {
+    font-size: 18px;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .card-h {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .card-h b {
+    font-weight: 600;
+  }
+  .card-h .hint {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+  .card.all-done {
+    border-color: transparent;
+    background: var(--done-bg);
+  }
+  .letter {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--chip-fg);
+    background: var(--chip);
+    border-radius: 6px;
+    padding: 0 6px;
+  }
+  .inst {
+    font-size: 13px;
+  }
+  .ss {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-left: 3px solid var(--chip-fg);
+    padding-left: 10px;
+  }
+  .ss-h {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--chip-fg);
+  }
+  .rest {
+    font-size: 13px;
+    color: var(--muted-fg);
+  }
+  .sg {
+    display: grid;
+    gap: 6px;
+    align-items: center;
+  }
+  .sg .hd {
+    font-size: 12px;
+    color: var(--muted-fg);
+    text-align: center;
+  }
+  .sg .n {
+    font-size: 13px;
+    color: var(--muted-fg);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .sg .pv {
+    font-size: 13px;
+    color: var(--muted-fg);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .err {
+    color: var(--destructive);
+    font-size: 14px;
+    margin: 2px 0 0;
+  }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    max-width: 340px;
+    background: var(--fg);
+    color: var(--bg);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .toast.show {
+    opacity: 1;
+  }
+  .sg input {
+    min-height: 36px;
+    padding: 6px 8px;
+    text-align: center;
+    width: 100%;
+  }
+  .sg .done-bg {
+    grid-column: 1 / -1;
+  }
+  .ck {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--muted-fg);
+    background: var(--muted);
+    color: var(--muted-fg);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .ck[aria-pressed='true'] {
+    background: var(--done);
+    border-color: var(--done);
+    color: var(--bg);
+  }
+  .sg .on {
+    background: var(--done-bg);
+    border-color: transparent;
+  }
+  .addset {
+    align-self: flex-start;
+  }
+  .one {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .pastset {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-height: 32px;
+  }
+  .pastset .n {
+    width: 20px;
+    color: var(--muted-fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .card-h .grow,
+  .pastset .grow {
+    flex: 1 1 auto;
+  }
+  .item.edit {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .one .grow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ed-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ed-f {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .ed-f label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--muted-fg);
+  }
+  .ed-f input {
+    min-height: 36px;
+    padding: 6px 8px;
+    color: var(--fg);
+    font-size: 15px;
+  }
+  .ed-tools {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .count {
+    font-size: 12px;
+    color: var(--muted-fg);
+    text-align: right;
+  }
+  .savebar {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    margin: 0 -18px -28px;
+    padding: 12px 18px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+  }
+  .overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100%, 420px);
+    background: var(--bg);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    border-inline: 1px solid var(--border);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .ov-h {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+  .ov-b {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ov-f {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+  }
+  .pick {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .pick[aria-checked='true'] {
+    background: var(--done-bg);
+    border-color: var(--done);
+  }
+  .pick .box {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .pick[aria-checked='true'] .box {
+    background: var(--done);
+    border-color: var(--done);
+    color: var(--bg);
+  }
+  .day-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .day-row:last-child {
+    border-bottom: 0;
+  }
+  .slotline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: space-between;
+    font-size: 15px;
+  }
+  .slotline .ttl {
+    min-width: 0;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted-fg);
+    opacity: 0.55;
+  }
+  .ini {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ini[aria-current='true'] {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-color: var(--primary);
+  }
+  .menu .wrow {
+    display: flex;
+    align-items: center;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+  }
+  .menu .wrow:last-child {
+    border-bottom: 0;
+  }
+  .menu .wrow > button {
+    border-bottom: 0;
+  }
+  .menu .wrow > button.cp {
+    width: auto;
+    flex: none;
+    white-space: nowrap;
+    color: var(--muted-fg);
+    font-size: 14px;
+    text-decoration: underline;
+    padding: 12px 14px 12px 4px;
+  }
+  .prov {
+    font-size: 13px;
+    color: var(--muted-fg);
+    font-style: italic;
+  }
+  .from {
+    font-size: 13px;
+    padding: 0;
+  }
+  .ask {
+    background: var(--note);
+    color: var(--note-fg);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  /* D38 draft: a finished workout (or a logged section) folds to one line. */
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--done-bg);
+    color: var(--fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .fold:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .fold-tick {
+    color: var(--done);
+    font-weight: 700;
+  }
+  .fold-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
+  .fold-sum {
+    color: var(--muted-fg);
+    font-size: 14px;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .fold-chev {
+    color: var(--muted-fg);
+  }
+  .wk.folded,
+  .sec.folded {
+    gap: 0;
+  }
+  .foldh {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .review .opts {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border);
+  }
+</style>
+
+<div class="review" role="region" aria-label="Prototype controls">
+  <div class="review-in">
+    <strong>Day collapse prototype</strong>
+    <span class="hint"
+      >v12 + finished workouts collapse to one line · accepted 2026-11-18 (FAM-1 plan D38)</span
+    >
+    <select id="jump" aria-label="Jump to a screen">
+      <option value="">Jump to…</option>
+      <optgroup label="Logging on the family program">
+        <option value="folded">Athlete One · today, Morning habits finished (it collapses)</option>
+        <option value="foldedall">Athlete One · today, everything finished</option>
+        <option value="today">Athlete One · today, on two programs</option>
+        <option value="yesterday">Athlete One · yesterday, half done (add sets later)</option>
+        <option value="closed">Athlete One · Nov 11 (closed day)</option>
+        <option value="tomorrow">Athlete One · look ahead to Monday (preview)</option>
+        <option value="sunday">
+          Athlete One · Sunday: family rest day, stretching still on (pretend Nov 15)
+        </option>
+        <option value="order">Athlete One · the order of their programs</option>
+        <option value="edited">Athlete One · yesterday, after the program was edited</option>
+        <option value="failed">Athlete One · a ✓ that fails</option>
+      </optgroup>
+      <optgroup label="Building the program">
+        <option value="programs">Programs: the list, with who’s on each</option>
+        <option value="program">One program: workouts, week, who’s on it</option>
+        <option value="workout">Edit a workout: Heavy A, with supersets</option>
+        <option value="picker2">Add items: the full-screen picker</option>
+        <option value="nomatch">Add items: no item matches</option>
+        <option value="scratch">Build a new program from scratch</option>
+        <option value="start">Put someone on this program</option>
+        <option value="copy">Copy a workout to another program</option>
+        <option value="copied">A copied workout, showing where it came from</option>
+      </optgroup>
+      <optgroup label="Without a program, and clearing a day">
+        <option value="noprog">A new athlete, not on a program yet (test family)</option>
+        <option value="clear">Clear a day: bodyweight, workouts and practice</option>
+      </optgroup>
+      <optgroup label="Family and sign-in">
+        <option value="signin">Sign in</option>
+        <option value="welcome">A new test family’s first screen</option>
+        <option value="picker">Who’s training?</option>
+        <option value="settings">Family settings</option>
+        <option value="privacy">Privacy notice</option>
+      </optgroup>
+    </select>
+    <label><input type="checkbox" id="ids" /> Show plan IDs</label>
+    <span class="grow"></span>
+    <button class="linkbtn" id="reset" type="button">Reset data</button>
+    <div class="opts">
+      <strong>The accepted choices are the defaults:</strong>
+      <label
+        >A finished workout
+        <select id="foldmode" aria-label="When a finished workout folds">
+          <option value="visit">collapses when you come back to the day (chosen)</option>
+          <option value="now">collapses as soon as its last ✓</option>
+          <option value="off">never collapses (the app today)</option>
+        </select>
+      </label>
+      <label
+        ><input type="checkbox" id="foldsec" checked /> Bodyweight and Life collapse too, once
+        logged</label
+      >
+    </div>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="phone">
+    <div class="app" id="app" aria-live="off"></div>
+    <div id="ov"></div>
+  </div>
+</div>
+<div class="live" aria-live="polite" id="live"></div>
+<div class="toast" id="toast" aria-hidden="true"></div>
+<div id="modal"></div>
+
+<script>
+  (function () {
+    var TODAY = '2026-11-14',
+      REAL_TODAY = TODAY;
+    var WRITABLE_RADIUS = 1;
+    // --- dates ---
+    function d(s) {
+      var p = s.split('-');
+      return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    }
+    function iso(dt) {
+      return dt.toISOString().slice(0, 10);
+    }
+    function addDays(s, n) {
+      var x = d(s);
+      x.setUTCDate(x.getUTCDate() + n);
+      return iso(x);
+    }
+    function diff(a, b) {
+      return Math.round((d(a) - d(b)) / 86400000);
+    }
+    function long(s) {
+      return d(s).toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
+    function short(s) {
+      return d(s).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
+    function dayLabel(s) {
+      var n = diff(TODAY, s);
+      return n === 0
+        ? 'Today · ' + long(s)
+        : n === 1
+          ? 'Yesterday · ' + long(s)
+          : n === -1
+            ? 'Tomorrow · ' + long(s)
+            : long(s);
+    }
+    function writable(s) {
+      var n = diff(TODAY, s);
+      return n >= 0 && n <= WRITABLE_RADIUS;
+    }
+    function future(s) {
+      return s > TODAY;
+    }
+    function nowTime() {
+      return '6:' + String(30 + Math.floor(Math.random() * 25)).padStart(2, '0') + ' AM';
+    }
+
+    // --- catalog ---
+    var FIELDS = {
+      rice_bucket: { label: 'Rice bucket', type: 'habit' },
+      brain_rep: { label: 'Brain rep', type: 'habit' },
+      splits: { label: 'Splits', type: 'habit' },
+      stance: { label: 'Stance', type: 'rating', group: 'Brush teeth' },
+      pressure: { label: 'Pressure', type: 'rating', group: 'Brush teeth' },
+      shot: { label: 'Shot', type: 'rating', group: 'Brush teeth' },
+      pushups: { label: 'Push-ups', type: 'count', group: 'Calisthenics' },
+      pullups: { label: 'Pull-ups', type: 'count', group: 'Calisthenics' },
+      wake: { label: 'Wake', type: 'wake' },
+      wrestling_practice: { label: 'Wrestling practice', type: 'minutes' },
+    };
+    var LIFE = { wake: 1, wrestling_practice: 1 };
+    // --- FAM-1: item catalog with tracking types (step 3). A made-up program shaped like a real one. ---
+    var TYPES = {
+      check: 'Check',
+      count: 'Count',
+      reps: 'Reps',
+      weight: 'Weight × reps',
+      duration: 'Duration',
+      timeset: 'Time per set',
+      distance: 'Distance',
+    };
+    var SET_TYPES = { reps: 1, weight: 1, timeset: 1, distance: 1 };
+    function baseCatalog() {
+      return {
+        grip: { name: 'Grip: rice bucket', type: 'check' },
+        film: { name: 'Watch one technique clip', type: 'check' },
+        stance: { name: 'Stance-motion drill', type: 'check' },
+        neck: { name: 'Neck bridge', type: 'timeset' },
+        splits: { name: 'Splits stretch', type: 'duration' },
+        pushups: { name: 'Push-ups', type: 'reps' },
+        vest: { name: 'Vest weight', type: 'count' },
+        dbbench: { name: 'DB bench press', type: 'weight' },
+        pullup: { name: 'Pull-up', type: 'reps' },
+        goblet: { name: 'Goblet squat', type: 'weight' },
+        sprawl: { name: 'Sprawls', type: 'reps' },
+        hollow: { name: 'Hollow-body hold', type: 'timeset' },
+        pushpress: { name: 'Push press', type: 'weight' },
+        invrow: { name: 'Inverted row', type: 'reps' },
+        splitsq: { name: 'Split squat', type: 'weight' },
+        wallsit: { name: 'Wall sit', type: 'timeset' },
+        rope: { name: 'Jump rope', type: 'duration' },
+        sprint: { name: 'Sprints', type: 'distance' },
+        burpee: { name: 'Burpees', type: 'reps' },
+        kbswing: { name: 'KB swings', type: 'weight' },
+        boxjump: { name: 'Box jump', type: 'reps' },
+        plank: { name: 'Side plank', type: 'timeset' },
+        squat: { name: 'Bodyweight squat', type: 'reps' },
+        run: { name: 'Easy run', type: 'distance' },
+        hamstring: { name: 'Hamstring stretch', type: 'duration' },
+        hipflex: { name: 'Hip-flexor stretch', type: 'duration' },
+      };
+    }
+    function defaults(type) {
+      return {
+        check: {},
+        count: { n: 1, unit: 'lb' },
+        reps: { sets: 3, reps: 10 },
+        weight: { sets: 3, reps: 8, load: 20 },
+        duration: { min: 5 },
+        timeset: { sets: 3, sec: 30 },
+        distance: { sets: 1, dist: 400, unit: 'm' },
+      }[type];
+    }
+    function mk(cat, p, note, ss) {
+      var o = { iid: cat, cat: cat, note: note || '', ss: ss || null };
+      for (var k in p) o[k] = p[k];
+      return o;
+    }
+    function baseProgram() {
+      return {
+        id: 'p1',
+        name: 'Family program',
+        workouts: [
+          {
+            wid: 'w1',
+            name: 'Morning habits',
+            desc: 'Before school. About 15 minutes.',
+            rests: {},
+            items: [
+              mk('grip', {}, 'Two minutes each hand.'),
+              mk('film', {}, 'One clip from this week. Say out loud what you noticed.'),
+              mk('neck', { sets: 3, sec: 30 }, 'Front and back. Stop if anything pinches.'),
+              mk('splits', { min: 5 }),
+              mk('pushups', { sets: 3, reps: 15 }),
+              mk('vest', { n: 10, unit: 'lb' }, 'Worn for the push-ups.'),
+            ],
+          },
+          {
+            wid: 'w2',
+            name: 'Heavy A',
+            desc: 'A1 then A2, rest, repeat. Then B. About 40 minutes.',
+            rests: { a: '90 s after each round', b: '60 s after each round' },
+            items: [
+              mk('dbbench', { sets: 4, reps: 8, load: 25 }, 'Feet flat. Two seconds down.', 'a'),
+              mk('pullup', { sets: 4, reps: 5 }, 'Full hang at the bottom.', 'a'),
+              mk('goblet', { sets: 3, reps: 10, load: 30 }, '', 'b'),
+              mk('sprawl', { sets: 3, reps: 10 }, 'Hips to the mat, then back to stance.', 'b'),
+              mk('hollow', { sets: 3, sec: 20 }),
+            ],
+          },
+          {
+            wid: 'w3',
+            name: 'Heavy B',
+            desc: 'A1 then A2, rest, repeat. About 35 minutes.',
+            rests: { a: '90 s after each round' },
+            items: [
+              mk('pushpress', { sets: 4, reps: 6, load: 20 }, '', 'a'),
+              mk('invrow', { sets: 4, reps: 8 }, 'Body straight like a plank.', 'a'),
+              mk('splitsq', { sets: 3, reps: 8, load: 15 }, 'Each side.'),
+              mk('wallsit', { sets: 3, sec: 45 }),
+            ],
+          },
+          {
+            wid: 'w4',
+            name: 'Conditioning',
+            desc: 'Easy pace: you can still talk.',
+            rests: {},
+            items: [
+              mk('rope', { min: 10 }),
+              mk('sprint', { sets: 6, dist: 40, unit: 'yd' }, 'Walk back between each.'),
+              mk('burpee', { sets: 3, reps: 10 }),
+            ],
+          },
+        ],
+        // 0 = Sunday … 6 = Saturday. An empty day is a rest day.
+        week: {
+          0: [],
+          1: [
+            { label: 'Morning', wid: 'w1' },
+            { label: 'After school', wid: 'w2' },
+          ],
+          2: [
+            { label: 'Morning', wid: 'w1' },
+            { label: 'After school', wid: 'w4' },
+          ],
+          3: [
+            { label: 'Morning', wid: 'w1' },
+            { label: 'After school', wid: 'w3' },
+          ],
+          4: [
+            { label: 'Morning', wid: 'w1' },
+            { label: 'After school', wid: 'w4' },
+          ],
+          5: [
+            { label: 'Morning', wid: 'w1' },
+            { label: 'After school', wid: 'w2' },
+          ],
+          6: [
+            { label: 'Morning', wid: 'w1' },
+            { label: 'After lunch', wid: 'w3' },
+            { label: 'Evening', wid: 'w4' },
+          ],
+        },
+      };
+    }
+    var SWITCH = '2026-11-09';
+    function every(label, wid) {
+      var w = {};
+      for (var k = 0; k < 7; k++) w[k] = [{ label: label, wid: wid }];
+      return w;
+    }
+    function stretchProgram() {
+      return {
+        id: 'p2',
+        name: 'Stretching',
+        workouts: [
+          {
+            wid: 'w5',
+            name: 'Evening stretch',
+            desc: 'Ten minutes, any time after dinner.',
+            rests: {},
+            items: [
+              mk('hamstring', { min: 3 }),
+              mk('hipflex', { min: 3 }, 'Each side.'),
+              mk('splits', { min: 4 }),
+            ],
+          },
+        ],
+        week: every('Evening', 'w5'),
+      };
+    }
+    function adultProgram() {
+      return {
+        id: 'p3',
+        name: 'Adult One’s program',
+        workouts: [
+          {
+            wid: 'w6',
+            name: 'Run and core',
+            desc: '',
+            rests: {},
+            items: [
+              mk('run', { sets: 1, dist: 2, unit: 'mi' }),
+              mk('plank', { sets: 3, sec: 30 }, 'Each side.'),
+            ],
+          },
+        ],
+        week: {
+          0: [],
+          1: [],
+          2: [{ label: 'Morning', wid: 'w6' }],
+          3: [],
+          4: [{ label: 'Morning', wid: 'w6' }],
+          5: [],
+          6: [{ label: 'Morning', wid: 'w6' }],
+        },
+      };
+    }
+
+    // --- state ---
+    function seed() {
+      var n = 0;
+      function id() {
+        return 'e' + ++n;
+      }
+      var E = [];
+      function L(e) {
+        e.id = id();
+        E.push(e);
+      }
+      function row(ath, day, slot, wid, iid, set, v) {
+        L({
+          ath: ath,
+          day: day,
+          cat: 'row',
+          // A logged workout is keyed by program and workout, never its position (ADR 0007 A2 §6).
+          slot: (typeof slot === 'number' ? 'p1' : slot.split('_')[0]) + '_' + wid,
+          wid: wid,
+          iid: iid,
+          set: set,
+          v: v,
+        });
+      }
+      function sets(ath, day, slot, wid, iid, list) {
+        list.forEach(function (v, i) {
+          row(ath, day, slot, wid, iid, i + 1, v);
+        });
+      }
+      function morning(ath, day, upTo) {
+        var all = [
+          function () {
+            row(ath, day, 0, 'w1', 'grip', 1, {});
+          },
+          function () {
+            row(ath, day, 0, 'w1', 'film', 1, {});
+          },
+          function () {
+            sets(ath, day, 0, 'w1', 'neck', [{ sec: 30 }, { sec: 30 }, { sec: 25 }]);
+          },
+          function () {
+            row(ath, day, 0, 'w1', 'splits', 1, { min: 5 });
+          },
+          function () {
+            sets(ath, day, 0, 'w1', 'pushups', [{ reps: 15 }, { reps: 15 }, { reps: 12 }]);
+          },
+          function () {
+            row(ath, day, 0, 'w1', 'vest', 1, { n: 10 });
+          },
+        ];
+        all.slice(0, upTo).forEach(function (f) {
+          f();
+        });
+      }
+      // On the family program since Monday Nov 9.
+      morning('a1', '2026-11-09', 6);
+      sets('a1', '2026-11-09', 1, 'w2', 'dbbench', [
+        { load: 25, reps: 8 },
+        { load: 25, reps: 8 },
+        { load: 25, reps: 8 },
+        { load: 25, reps: 7 },
+      ]);
+      sets('a1', '2026-11-09', 1, 'w2', 'pullup', [
+        { reps: 5 },
+        { reps: 5 },
+        { reps: 4 },
+        { reps: 4 },
+      ]);
+      sets('a1', '2026-11-09', 1, 'w2', 'goblet', [
+        { load: 30, reps: 10 },
+        { load: 30, reps: 10 },
+        { load: 30, reps: 10 },
+      ]);
+      sets('a1', '2026-11-09', 1, 'w2', 'sprawl', [{ reps: 10 }, { reps: 10 }, { reps: 10 }]);
+      sets('a1', '2026-11-09', 1, 'w2', 'hollow', [{ sec: 20 }, { sec: 20 }, { sec: 15 }]);
+      morning('a1', '2026-11-11', 4);
+      sets('a1', '2026-11-11', 1, 'w3', 'pushpress', [
+        { load: 20, reps: 6 },
+        { load: 20, reps: 6 },
+        { load: 20, reps: 6 },
+        { load: 20, reps: 5 },
+      ]);
+      sets('a1', '2026-11-11', 1, 'w3', 'invrow', [
+        { reps: 8 },
+        { reps: 8 },
+        { reps: 7 },
+        { reps: 6 },
+      ]);
+      sets('a1', '2026-11-11', 1, 'w3', 'splitsq', [
+        { load: 15, reps: 8 },
+        { load: 15, reps: 8 },
+        { load: 15, reps: 8 },
+      ]);
+      sets('a1', '2026-11-11', 1, 'w3', 'wallsit', [{ sec: 45 }, { sec: 40 }, { sec: 40 }]);
+      L({ ath: 'a1', day: '2026-11-13', cat: 'bw', value: 112.8, at: '6:50 AM' });
+      morning('a1', '2026-11-13', 6);
+      sets('a1', '2026-11-13', 1, 'w2', 'dbbench', [
+        { load: 27.5, reps: 8 },
+        { load: 27.5, reps: 8 },
+      ]);
+      sets('a1', '2026-11-13', 1, 'w2', 'pullup', [{ reps: 5 }, { reps: 5 }]);
+      L({ ath: 'a1', day: '2026-11-13', cat: 'life', key: 'wrestling_practice', value: 90 });
+      morning('a1', '2026-11-14', 2);
+      morning('a2', '2026-11-12', 3);
+      // Stretching since Thursday Nov 12; Adult One on their own program.
+      ['2026-11-12', '2026-11-13'].forEach(function (dd) {
+        row('a1', dd, 'p2_0', 'w5', 'hamstring', 1, { min: 3 });
+        row('a1', dd, 'p2_0', 'w5', 'hipflex', 1, { min: 3 });
+        row('a1', dd, 'p2_0', 'w5', 'splits', 1, { min: 4 });
+      });
+      row('a3', '2026-11-12', 'p3_0', 'w6', 'run', 1, { dist: 2 });
+      sets('a3', '2026-11-12', 'p3_0', 'w6', 'plank', [{ sec: 30 }, { sec: 30 }, { sec: 25 }]);
+      return {
+        screen: 'picker',
+        ath: 'a1',
+        day: TODAY,
+        family: 'existing',
+        signedIn: true,
+        seq: 1000,
+        ev: 0,
+        athletes: [
+          {
+            id: 'a1',
+            name: 'Athlete One',
+            kind: 'Child',
+            archived: false,
+            program: 'family',
+            checkins: [
+              'rice_bucket',
+              'brain_rep',
+              'splits',
+              'stance',
+              'pressure',
+              'shot',
+              'pushups',
+              'pullups',
+            ],
+            life: ['wrestling_practice'],
+            strength: true,
+          },
+          {
+            id: 'a2',
+            name: 'Athlete Two',
+            kind: 'Child',
+            archived: false,
+            program: 'family',
+            checkins: ['rice_bucket', 'pushups'],
+            life: [],
+            strength: true,
+          },
+          {
+            id: 'a3',
+            name: 'Adult One',
+            kind: 'Adult',
+            archived: false,
+            program: null,
+            checkins: [],
+            life: [],
+            strength: true,
+          },
+        ],
+        entries: E,
+        catalog: baseCatalog(),
+        programs: [baseProgram(), stretchProgram(), adultProgram()],
+        // Each person's programs, in their own order (FAM-1 15c).
+        assign: {
+          a1: [
+            { prog: 'p1', from: SWITCH },
+            { prog: 'p2', from: '2026-11-12' },
+          ],
+          a2: [{ prog: 'p1', from: SWITCH }],
+          a3: [{ prog: 'p3', from: SWITCH }],
+        },
+        prog: 'p1',
+        extra: {},
+        draft: null,
+        picker: null,
+        weekAdd: null,
+        editing: null,
+        refusal: null,
+        flash: null,
+      };
+    }
+    var KEY = 'matplan-beta0-proto-v12';
+    var S;
+    try {
+      S = JSON.parse(localStorage.getItem(KEY)) || seed();
+    } catch (e) {
+      S = seed();
+    }
+    if (S.today) TODAY = S.today;
+
+    function save() {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(S));
+      } catch (e) {}
+    }
+    var toastT;
+    function say(msg) {
+      // Screen readers hear it; everyone sees it near the bottom edge (usability panel, d3 round 1).
+      var t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastT);
+      toastT = setTimeout(function () {
+        t.classList.remove('show');
+      }, 2500);
+      var l = document.getElementById('live');
+      l.textContent = '';
+      setTimeout(function () {
+        l.textContent = msg;
+      }, 30);
+    }
+
+    function ath(id) {
+      return S.athletes.filter(function (a) {
+        return a.id === id;
+      })[0];
+    }
+    function dayEntries(a, day) {
+      return S.entries.filter(function (e) {
+        return e.ath === a && e.day === day;
+      });
+    }
+    function live(list) {
+      return list.filter(function (e) {
+        return !e.hidden;
+      });
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+    function chip(t) {
+      return '<span class="chip">' + esc(t) + '</span>';
+    }
+    function label(e) {
+      if (e.cat === 'bw') return 'Bodyweight';
+      if (e.cat === 'strength') return e.mv;
+      if (e.cat === 'row') return (S.catalog[e.iid] || { name: e.iid }).name;
+      return FIELDS[e.key].label;
+    }
+
+    // --- rendering helpers ---
+    function tombOrRow(e, rowHtml) {
+      if (e.hidden && e.event) return '';
+      if (e.hidden) {
+        var ref =
+          S.refusal === e.id
+            ? '<div class="refusal" role="alert">Can’t restore this: ' +
+              esc(label(e)) +
+              ' already has a newer entry on this day. Delete that one first, then restore.</div>'
+            : '';
+        return (
+          '<div class="tomb"><span>' +
+          esc(label(e)) +
+          (e.cat === 'checkin' && FIELDS[e.key].type === 'count' ? ' · ' + e.value : '') +
+          ' deleted</span><button class="txt" data-act="undo" data-id="' +
+          e.id +
+          '">Undo</button></div>' +
+          ref
+        );
+      }
+      return rowHtml;
+    }
+    function setsText(e) {
+      return e.sets
+        .map(function (s) {
+          return s.r + (s.l != null ? ' × ' + s.l + ' ' + e.unit : '');
+        })
+        .join(' · ');
+    }
+
+    function bwOk(raw) {
+      var v = +raw;
+      if (raw === '' || isNaN(v) || v < 20 || v > 500) {
+        S.err = {
+          at: 'bw',
+          msg:
+            raw === ''
+              ? 'Enter your bodyweight, then ✓.'
+              : 'Enter a bodyweight between 20 and 500 lb.',
+        };
+        return null;
+      }
+      return v;
+    }
+    function minOk(raw, at) {
+      var m = +raw;
+      if (raw === '' || isNaN(m) || m < 1 || m > 300 || m !== Math.round(m)) {
+        S.err = {
+          at: at,
+          msg: raw === '' ? 'Enter the minutes, then ✓.' : 'Enter whole minutes, 1 to 300.',
+        };
+        return null;
+      }
+      return m;
+    }
+    function lastBw(day) {
+      var b = null;
+      S.entries.forEach(function (e) {
+        if (e.cat === 'bw' && e.ath === S.ath && !e.hidden && e.day < day && (!b || e.day > b.day))
+          b = e;
+      });
+      return b;
+    }
+    function renderBodyweight(sec, day, w) {
+      var html = '',
+        logged = live(sec.entries)[0];
+      sec.entries.forEach(function (e) {
+        // Edit-only: a hidden bodyweight (cleared, or a restore refused) never shows a tomb.
+        if (e.hidden) return;
+        if (S.editing === e.id) {
+          html +=
+            '<div class="item edit"><div class="one"><span class="grow">Bodyweight</span><input id="bw-edit" type="text" inputmode="decimal" style="width:72px" value="' +
+            e.value +
+            '" aria-label="Bodyweight in pounds"' +
+            (S.err && S.err.at === 'bw' ? ' aria-invalid="true" aria-describedby="err-bw"' : '') +
+            '><span class="hint">lb</span></div>' +
+            '<div class="row" style="justify-content:flex-end"><button class="txt" data-act="cancel">Cancel</button><button class="btn" data-act="bw-save" data-id="' +
+            e.id +
+            '">Save</button></div></div>' +
+            errLine('bw');
+          return;
+        }
+        html += tombOrRow(
+          e,
+          '<div class="item logged"><div class="row"><span class="tick" aria-hidden="true">✓</span><span class="val">' +
+            e.value.toFixed(1) +
+            ' lb</span><span class="hint">' +
+            e.at +
+            '</span></div>' +
+            // Edit-only (maintainer, 2026-11-15): Change, never Delete, so there is one per day.
+            // Days before yesterday are read-only (maintainer, 2026-11-15): no Change there.
+            (w
+              ? '<div class="row"><button class="txt" data-act="edit" data-id="' +
+                e.id +
+                '" aria-label="Change bodyweight">Change</button></div>'
+              : '') +
+            '</div>',
+        );
+      });
+      if (!logged && w) {
+        html +=
+          '<div class="one"><span class="grow hint">' +
+          (lastBw(day) ? 'Last time ' + lastBw(day).value.toFixed(1) + ' lb' : '') +
+          '</span><input id="bw-in" type="text" inputmode="decimal" style="width:72px" data-pend="1" value="' +
+          esc(S.pending['bw-in'] || '') +
+          '" aria-label="Bodyweight in pounds"' +
+          (S.err && S.err.at === 'bw' ? ' aria-invalid="true" aria-describedby="err-bw"' : '') +
+          '><span class="hint">lb</span>' +
+          '<button class="ck" data-act="bw-log" aria-pressed="false" aria-label="Log bodyweight">✓</button></div>' +
+          errLine('bw');
+      }
+      return html;
+    }
+
+    function renderLife(sec, day, w, keys) {
+      var html = '',
+        byKey = {};
+      sec.entries.forEach(function (e) {
+        (byKey[e.key] = byKey[e.key] || []).push(e);
+      });
+      keys.forEach(function (k) {
+        var f = FIELDS[k],
+          es = byKey[k] || [],
+          liveEs = live(es);
+        es.forEach(function (e) {
+          // One value per day: Change only, no Delete, no tomb (maintainer, 2026-11-15).
+          if (e.hidden) return;
+          if (S.editing === e.id) {
+            html +=
+              '<div class="item edit"><div class="one"><span class="grow">' +
+              f.label +
+              '</span><input id="min-edit" type="text" inputmode="numeric" style="width:72px" value="' +
+              e.value +
+              '" aria-label="' +
+              f.label +
+              ' minutes"' +
+              (S.err && S.err.at === 'min-edit'
+                ? ' aria-invalid="true" aria-describedby="err-min-edit"'
+                : '') +
+              '><span class="hint">min</span></div><div class="row" style="justify-content:flex-end"><button class="txt" data-act="cancel">Cancel</button><button class="btn" data-act="min-save" data-id="' +
+              e.id +
+              '">Save</button></div></div>' +
+              errLine('min-edit');
+            return;
+          }
+          html += tombOrRow(
+            e,
+            '<div class="item logged"><div class="row"><span class="tick" aria-hidden="true">✓</span><span>' +
+              (k === 'wake' ? 'Woke' : f.label) +
+              '</span></div><div class="row"><span class="val hint">' +
+              (k === 'wake' ? e.at : e.value + ' min') +
+              '</span>' +
+              (w
+                ? '<button class="txt" data-act="edit" data-id="' +
+                  e.id +
+                  '" aria-label="Change ' +
+                  f.label +
+                  '">Change</button>'
+                : '') +
+              '</div></div>',
+          );
+        });
+        if (liveEs.length || !w) return;
+        if (k === 'wake') return;
+        // Empty: practices differ in length (maintainer, 2026-11-15).
+        html +=
+          '<div class="one"><span class="grow">' +
+          f.label +
+          '</span><input type="text" inputmode="numeric" style="width:72px" data-pend="1" id="min-' +
+          k +
+          '" value="' +
+          esc(S.pending['min-' + k] || '') +
+          '"' +
+          (S.err && S.err.at === 'min-' + k
+            ? ' aria-invalid="true" aria-describedby="err-min-' + k + '"'
+            : '') +
+          ' aria-label="' +
+          f.label +
+          ' minutes"><span class="hint">min</span><button class="ck" data-act="min-log" data-key="' +
+          k +
+          '" aria-pressed="false" aria-label="Log ' +
+          f.label +
+          '">✓</button></div>' +
+          errLine('min-' + k);
+      });
+      return html;
+    }
+
+    // --- screens ---
+    function vSignin() {
+      return (
+        '<div class="stack" style="gap:18px;padding-top:60px">' +
+        chip('AUTH-1') +
+        '<h1>Mat Plan</h1><p class="hint">Training log for your family’s athletes.</p>' +
+        '<button class="btn wide" data-act="signin">Sign in with Google</button>' +
+        '<p class="hint">Invite only. Ask the family that invited you to add your Google account.</p>' +
+        '<button class="back" data-go="privacy">Privacy notice</button></div>'
+      );
+    }
+    // Child or adult: a switch, defaulting to child (maintainer, 2026-11-14).
+    function kindSwitch() {
+      return (
+        '<div class="switch"><span class="lbl on" id="kind-child">Child</span>' +
+        '<button type="button" class="track" role="switch" id="new-kind" aria-checked="false" aria-label="Adult" data-act="kind"></button>' +
+        '<span class="lbl" id="kind-adult">Adult</span></div>'
+      );
+    }
+    function vWelcome() {
+      return (
+        '<div class="stack" style="gap:16px">' +
+        chip('ONB-0 · PROF-1') +
+        '<h1>Welcome. Add an athlete to begin logging.</h1>' +
+        '<p class="hint">You can add more later.</p>' +
+        '<label class="stack" style="gap:4px"><span>Name</span><input type="text" id="new-name" placeholder="First name"></label>' +
+        kindSwitch() +
+        '<div class="notice">At Beta 0 only our family uses the app, so this screen is for the phone run-through on a test family. A new athlete has no program yet. You can build one, or put them on yours, from Programs. The first invited family comes in Beta 1.</div>' +
+        '<button class="btn wide" data-act="first-athlete">Add athlete</button></div>'
+      );
+    }
+    function vPicker() {
+      var tiles = S.athletes
+        .filter(function (a) {
+          return !a.archived;
+        })
+        .map(function (a) {
+          var n = live(dayEntries(a.id, TODAY)).length;
+          var ps = progsOf(a.id).map(function (p) {
+            return p.name;
+          });
+          return (
+            '<button class="tile" data-act="open" data-id="' +
+            a.id +
+            '"><b>' +
+            esc(a.name) +
+            '</b><span class="hint">' +
+            (ps.length ? esc(ps.join(' · ')) : 'No program yet') +
+            '</span><span class="hint">' +
+            (n ? n + ' logged today' : 'Nothing logged today') +
+            '</span></button>'
+          );
+        })
+        .join('');
+      return (
+        '<div class="row between"><h1 tabindex="-1">Who’s training?</h1>' +
+        chip('PROF-1') +
+        '</div>' +
+        '<div class="tiles">' +
+        tiles +
+        '<button class="tile add" data-go="add">+ Add athlete</button></div>' +
+        '<div class="menu"><button data-go="programs"><span>Programs</span><span aria-hidden="true">›</span></button><button data-go="settings"><span>Family settings</span><span aria-hidden="true">›</span></button><button data-go="privacy"><span>Privacy notice</span><span aria-hidden="true">›</span></button></div>'
+      );
+    }
+    // Who's selected (2026-11-14 research): pattern A. People and programs link both ways; nothing is hidden.
+    // Several programs per person (2026-11-14): each person keeps their own order.
+    function plans(aid) {
+      return S.assign[aid] || [];
+    }
+    function current(a) {
+      return !a.to || a.to > TODAY;
+    }
+    function liveOn(a, day) {
+      return day >= a.from && (!a.to || day < a.to);
+    }
+    function onPrograms(aid, day) {
+      return plans(aid).filter(function (a) {
+        return liveOn(a, day) && prog(a.prog);
+      });
+    }
+    function progsOf(aid) {
+      return plans(aid)
+        .filter(current)
+        .map(function (a) {
+          return prog(a.prog);
+        })
+        .filter(Boolean);
+    }
+    function asgOf(aid, pid) {
+      return plans(aid).filter(function (a) {
+        return a.prog === pid && current(a);
+      })[0];
+    }
+    function whoOn(pid) {
+      return S.athletes.filter(function (x) {
+        return !x.archived && asgOf(x.id, pid);
+      });
+    }
+    function andList(xs) {
+      return xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+    }
+    function usedBy(pid) {
+      var on = whoOn(pid).map(function (a) {
+        return a.name;
+      });
+      if (!on.length) return 'No one is on this yet. Changes affect no one.';
+      return (
+        'Used by ' +
+        andList(on) +
+        '. Changes apply to ' +
+        (on.length === 1 ? on[0] : on.length === 2 ? 'both' : 'all ' + on.length) +
+        '.'
+      );
+    }
+    function inits(n) {
+      return n
+        .split(/\s+/)
+        .map(function (w) {
+          return w[0];
+        })
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+    }
+    function switcher() {
+      var as = S.athletes.filter(function (a) {
+        return !a.archived;
+      });
+      if (as.length < 2) return '';
+      return (
+        '<nav class="row" aria-label="Switch athlete" style="gap:6px">' +
+        as
+          .map(function (a) {
+            var ini = inits(a.name),
+              cur = a.id === S.ath;
+            // Two people with the same initials get their first two letters instead.
+            if (
+              as.some(function (b) {
+                return b !== a && inits(b.name) === ini;
+              })
+            )
+              ini = a.name.slice(0, 2);
+            return (
+              '<button class="ini" data-act="open" data-id="' +
+              a.id +
+              '" aria-label="' +
+              esc(a.name) +
+              '"' +
+              (cur ? ' aria-current="true"' : '') +
+              ' title="' +
+              esc(a.name) +
+              '">' +
+              esc(ini) +
+              '</button>'
+            );
+          })
+          .join('') +
+        '</nav>'
+      );
+    }
+    function vPrograms() {
+      var rows = S.programs
+        .map(function (p) {
+          var on = whoOn(p.id).map(function (a) {
+            return a.name;
+          });
+          return (
+            '<button data-act="open-prog" data-pid="' +
+            p.id +
+            '"><span><b style="font-weight:600">' +
+            esc(p.name) +
+            '</b><br><span class="hint">' +
+            (on.length ? esc(andList(on)) : 'No one yet') +
+            '</span></span><span aria-hidden="true">›</span></button>'
+          );
+        })
+        .join('');
+      return (
+        '<button class="back" data-go="picker">← Home</button><div class="row between"><h1 tabindex="-1">Programs</h1>' +
+        chip('FAM-1 · PROGS-1 thin') +
+        '</div>' +
+        (rows ? '<div class="menu">' + rows + '</div>' : '<p class="hint">No programs yet.</p>') +
+        '<button class="btn ghost wide" data-act="new-prog">+ Create a program</button>' +
+        '<p class="hint">A person can be on several programs. To reuse a workout, open its program and choose “Copy to…”. Copying and archiving whole programs come in Beta 1.</p>'
+      );
+    }
+    function vAdd() {
+      return (
+        '<button class="back" data-go="picker">← All athletes</button><h1>Add an athlete</h1>' +
+        chip('PROF-1') +
+        '<label class="stack" style="gap:4px"><span>Name</span><input type="text" id="new-name" placeholder="First name"></label>' +
+        kindSwitch() +
+        '<p class="hint">New athletes start with no program. Put them on one or more from Programs.</p>' +
+        '<button class="btn wide" data-act="add-athlete">Add athlete</button>'
+      );
+    }
+    function vSettings() {
+      var act = S.athletes.filter(function (a) {
+          return !a.archived;
+        }),
+        arc = S.athletes.filter(function (a) {
+          return a.archived;
+        });
+      var rows = act
+        .map(function (a) {
+          if (S.editing === 'name-' + a.id)
+            return (
+              '<div class="item"><input type="text" id="rename" value="' +
+              esc(a.name) +
+              '" aria-label="Name"><div class="row" style="flex-wrap:nowrap"><button class="txt" data-act="cancel">Cancel</button><button class="btn" data-act="rename" data-id="' +
+              a.id +
+              '">Save</button></div></div>'
+            );
+          return (
+            '<div class="item"><div class="what"><b style="font-weight:600">' +
+            esc(a.name) +
+            '</b><div class="hint">' +
+            a.kind +
+            '</div></div><div class="row" style="flex-wrap:nowrap"><button class="txt" data-act="edit-name" data-id="' +
+            a.id +
+            '">Rename</button><button class="txt" data-act="archive" data-id="' +
+            a.id +
+            '">Archive</button></div></div>'
+          );
+        })
+        .join('');
+      var arch = arc
+        .map(function (a) {
+          return (
+            '<div class="tomb"><span>' +
+            esc(a.name) +
+            ' · archived. Their history is kept.</span><button class="txt" data-act="unarchive" data-id="' +
+            a.id +
+            '">Restore</button></div>'
+          );
+        })
+        .join('');
+      return (
+        '<button class="back" data-go="picker">← All athletes</button><div class="row between"><h1>Family settings</h1>' +
+        chip('PROF-1 · PRIV-3') +
+        '</div>' +
+        '<section class="sec"><h2>Athletes</h2>' +
+        rows +
+        arch +
+        '</section>' +
+        '<section class="sec"><h2>Your data ' +
+        chip('PRIV-1 · PRIV-3') +
+        '</h2>' +
+        '<p class="hint">You can ask us to delete one athlete’s data, or your whole family’s, including anything you deleted in the app. Write to the contact address in the privacy notice. We confirm the request through your invitation before deleting.</p>' +
+        '<div class="menu"><button data-go="privacy"><span>Privacy notice</span><span aria-hidden="true">›</span></button></div></section>' +
+        '<button class="btn ghost wide" data-act="signout">Sign out</button>'
+      );
+    }
+    function vPrivacy() {
+      return (
+        '<button class="back" data-go="' +
+        (S.signedIn ? 'picker' : 'signin') +
+        '">← Back</button><div class="row between"><h1>Privacy notice</h1>' +
+        chip('PRIV-1 · PRIV-2') +
+        '</div>' +
+        '<p class="hint">Prototype summary. The real notice is the reviewed text in the repo.</p>' +
+        '<div class="stack"><p><b>What we keep:</b> your athletes’ names, what they log (bodyweight, training, check-ins) and who in your family can see it.</p>' +
+        '<p><b>Who sees it:</b> only the people in your family who were invited. No other family can see your data.</p>' +
+        '<p><b>Deleting:</b> a deleted entry is hidden and can be restored; it is permanently removed after 30 days. You can ask for one athlete or your whole family to be deleted.</p>' +
+        '<p><b>Export:</b> you can ask for a copy of everything we hold.</p></div>'
+      );
+    }
+
+    // ===================== FAM-1: the family program =====================
+    function prog(id) {
+      return S.programs.filter(function (p) {
+        return p.id === id;
+      })[0];
+    }
+    function wk(p, wid) {
+      return p.workouts.filter(function (w) {
+        return w.wid === wid;
+      })[0];
+    }
+    function dow(day) {
+      return d(day).getUTCDay();
+    }
+    var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    var WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+    function onProgram(aid, day) {
+      var l = onPrograms(aid, day);
+      return l.length ? l : null;
+    }
+    function itemName(it) {
+      return (S.catalog[it.cat] || { name: it.cat }).name;
+    }
+    function itemType(it) {
+      return (S.catalog[it.cat] || { type: 'check' }).type;
+    }
+    function nf(x) {
+      return x == null || x === '' ? '' : String(x);
+    }
+    function presc(it) {
+      var t = itemType(it);
+      if (t === 'weight')
+        return it.sets + ' × ' + it.reps + (it.load ? ' @ ' + it.load + ' lb' : '');
+      if (t === 'reps') return it.sets + ' × ' + it.reps;
+      if (t === 'timeset') return it.sets + ' × ' + it.sec + ' s';
+      if (t === 'distance') return (it.sets > 1 ? it.sets + ' × ' : '') + it.dist + ' ' + it.unit;
+      if (t === 'duration') return it.min + ' min';
+      if (t === 'count') return it.n + ' ' + it.unit;
+      return '';
+    }
+    function fieldsOf(it) {
+      var t = itemType(it);
+      if (t === 'weight')
+        return [
+          { f: 'load', hd: 'lb', p: it.load },
+          { f: 'reps', hd: 'Reps', p: it.reps },
+        ];
+      if (t === 'reps') return [{ f: 'reps', hd: 'Reps', p: it.reps }];
+      if (t === 'timeset') return [{ f: 'sec', hd: 'Sec', p: it.sec }];
+      if (t === 'distance') return [{ f: 'dist', hd: it.unit, p: it.dist }];
+      if (t === 'duration') return [{ f: 'min', hd: 'min', p: it.min }];
+      if (t === 'count') return [{ f: 'n', hd: it.unit, p: it.n }];
+      return [];
+    }
+    function fmt(it, v) {
+      var t = itemType(it);
+      if (t === 'weight') return v.load + ' lb × ' + v.reps;
+      if (t === 'reps') return String(v.reps);
+      if (t === 'timeset') return v.sec + ' s';
+      if (t === 'distance') return v.dist + ' ' + it.unit;
+      if (t === 'duration') return v.min + ' min';
+      if (t === 'count') return v.n + ' ' + it.unit;
+      return 'Done';
+    }
+    function rowsOf(day, slot, iid) {
+      return S.entries.filter(function (e) {
+        return (
+          e.cat === 'row' && e.ath === S.ath && e.day === day && e.slot === slot && e.iid === iid
+        );
+      });
+    }
+    function rowEntry(day, slot, iid, set) {
+      var es = rowsOf(day, slot, iid).filter(function (e) {
+        return e.set === set && !(e.hidden && e.event);
+      });
+      return (
+        es.filter(function (e) {
+          return !e.hidden;
+        })[0] ||
+        es[es.length - 1] ||
+        null
+      );
+    }
+    // PREVIOUS: the same item and set number, the last time it was logged.
+    function previous(iid, set, day) {
+      var best = null;
+      S.entries.forEach(function (e) {
+        if (
+          e.cat === 'row' &&
+          e.ath === S.ath &&
+          e.iid === iid &&
+          e.set === set &&
+          !e.hidden &&
+          e.day < day &&
+          (!best || e.day > best.day)
+        )
+          best = e;
+      });
+      return best;
+    }
+    function letters(items) {
+      var map = {},
+        out = [],
+        next = 0,
+        pos = {};
+      items.forEach(function (it) {
+        if (!it.ss) {
+          out.push(null);
+          return;
+        }
+        if (!(it.ss in map)) map[it.ss] = String.fromCharCode(65 + next++);
+        pos[it.ss] = (pos[it.ss] || 0) + 1;
+        out.push(map[it.ss] + pos[it.ss]);
+      });
+      return out;
+    }
+    function groupsOf(items) {
+      // Consecutive runs: [{ ss, idx: [..] }]
+      var out = [];
+      items.forEach(function (it, i) {
+        var last = out[out.length - 1];
+        if (it.ss && last && last.ss === it.ss) last.idx.push(i);
+        else out.push({ ss: it.ss, idx: [i] });
+      });
+      return out;
+    }
+
+    // --- Today: the day's workouts, logged per row (steps 11a–13b) ---
+    function nRows(day, slot, it) {
+      if (!SET_TYPES[itemType(it)]) return 1;
+      var k = day + '|' + slot + '|' + it.iid,
+        max = (it.sets || 1) + (S.extra[k] || 0);
+      rowsOf(day, slot, it.iid).forEach(function (e) {
+        if (e.set > max) max = e.set;
+      });
+      return max;
+    }
+    function errLine(at) {
+      return S.err && S.err.at === at
+        ? '<p class="err" id="err-' + at + '">' + esc(S.err.msg) + '</p>'
+        : '';
+    }
+    function previewCard(it, letter) {
+      return (
+        '<div class="card"><div class="card-h">' +
+        (letter ? '<span class="letter">' + letter + '</span>' : '') +
+        '<b>' +
+        esc(itemName(it)) +
+        '</b><span class="hint">' +
+        esc(presc(it)) +
+        '</span></div>' +
+        (it.note ? '<p class="hint inst">' + esc(it.note) + '</p>' : '') +
+        '</div>'
+      );
+    }
+    function renderCard(day, slot, w, it, letter, wr) {
+      if (future(day)) return previewCard(it, letter);
+      var t = itemType(it),
+        name = itemName(it),
+        fs = fieldsOf(it),
+        n = nRows(day, slot, it);
+      var done = 0,
+        shown = 0,
+        rows = '',
+        setBased = !!SET_TYPES[t];
+      var cols = setBased
+        ? '28px minmax(0,1fr) ' +
+          fs
+            .map(function () {
+              return '58px';
+            })
+            .join(' ') +
+          ' 44px'
+        : '';
+      for (var s = 1; s <= n; s++) {
+        var e = rowEntry(day, slot, it.iid, s),
+          on = e && !e.hidden;
+        if (on) done++;
+        // Days before yesterday are read-only (maintainer, 2026-11-15): only what was logged shows.
+        if (!wr && !on) continue;
+        shown++;
+        var base = 'r-' + slot + '-' + it.iid + '-' + s;
+        var lbl = name + (setBased ? ' set ' + s : '');
+        var ck = !wr
+          ? '<span class="tick" aria-label="Logged">✓</span>'
+          : '<button class="ck" data-act="row" data-slot="' +
+            slot +
+            '" data-iid="' +
+            it.iid +
+            '" data-set="' +
+            s +
+            '" aria-pressed="' +
+            (on ? 'true' : 'false') +
+            '" aria-label="' +
+            esc((on ? 'Logged: ' : 'Log ') + lbl) +
+            '">✓</button>';
+        var inputs = fs
+          .map(function (f) {
+            var pid0 = base + '-' + f.f,
+              v = on ? nf(e.v[f.f]) : pid0 in S.pending ? S.pending[pid0] : e ? nf(e.v[f.f]) : '';
+            return (
+              '<input type="text" inputmode="decimal" id="' +
+              base +
+              '-' +
+              f.f +
+              '" class="' +
+              (on ? 'on' : '') +
+              '" value="' +
+              esc(v) +
+              '" placeholder="' +
+              esc(nf(f.p)) +
+              '" aria-label="' +
+              esc(lbl + ' ' + f.hd) +
+              '" data-row="' +
+              (on ? e.id : '') +
+              '"' +
+              (on ? '' : ' data-pend="1"') +
+              (S.err && S.err.at === base
+                ? ' aria-invalid="true" aria-describedby="err-' + base + '"'
+                : '') +
+              ' data-f="' +
+              f.f +
+              '"' +
+              (wr ? '' : ' readonly') +
+              '>'
+            );
+          })
+          .join('');
+        if (setBased) {
+          var pv = previous(it.iid, s, day);
+          rows +=
+            '<div class="sg" style="grid-template-columns:' +
+            cols +
+            '"><span class="n">' +
+            s +
+            '</span><span class="pv">' +
+            (pv ? esc(fmt(it, pv.v)) : '—') +
+            '</span>' +
+            inputs +
+            ck +
+            '</div>' +
+            errLine(base);
+        } else {
+          var pv1 = previous(it.iid, 1, day);
+          rows +=
+            '<div class="one"><span class="grow hint">' +
+            (t === 'check'
+              ? on
+                ? 'Done'
+                : ''
+              : pv1 && wr
+                ? 'Last time ' + esc(fmt(it, pv1.v))
+                : '') +
+            '</span>' +
+            (inputs
+              ? inputs.replace('<input ', '<input style="width:72px" ') +
+                '<span class="hint">' +
+                esc(fs[0].hd) +
+                '</span>'
+              : '') +
+            ck +
+            '</div>' +
+            errLine(base);
+        }
+      }
+      if (!wr && !shown) return '';
+      var all = done && done >= (setBased ? Math.max(n, it.sets || 1) : 1);
+      var was = rowsOf(day, slot, it.iid).filter(function (x) {
+        return !x.hidden && x.pt && x.pt !== presc(it);
+      })[0];
+      var head =
+        '<div class="card-h">' +
+        (letter ? '<span class="letter">' + letter + '</span>' : '') +
+        '<b>' +
+        esc(name) +
+        '</b><span class="hint">' +
+        esc(!wr && was ? was.pt : presc(it)) +
+        '</span></div>' +
+        (it.note ? '<p class="hint inst">' + esc(it.note) + '</p>' : '') +
+        (wr && was ? '<p class="hint inst">Logged rows were against ' + esc(was.pt) + '.</p>' : '');
+      var colHd =
+        setBased && rows
+          ? '<div class="sg" style="grid-template-columns:' +
+            cols +
+            '"><span class="hd">Set</span><span class="hd" style="text-align:left">Previous</span>' +
+            fs
+              .map(function (f) {
+                return '<span class="hd">' + esc(f.hd) + '</span>';
+              })
+              .join('') +
+            '<span class="hd">✓</span></div>'
+          : '';
+      var add =
+        setBased && wr
+          ? '<button class="txt addset" data-act="addset" data-slot="' +
+            slot +
+            '" data-iid="' +
+            it.iid +
+            '">+ Add set</button>'
+          : '';
+      return (
+        '<div class="card' + (all ? ' all-done' : '') + '">' + head + colHd + rows + add + '</div>'
+      );
+    }
+    // A logged row keeps its own prescription; nothing else is frozen (FAM-1 plan D7, ADR 0007
+    // Amendment 3). Each row entry carries what it was logged against: the prescription's text, the
+    // item's name, and the workout's name and label.
+    function stamp(e) {
+      var pid = e.slot.split('_')[0],
+        p = prog(pid),
+        w = p && wk(p, e.wid),
+        it =
+          w &&
+          w.items.filter(function (x) {
+            return x.iid === e.iid;
+          })[0],
+        hit =
+          p &&
+          (p.week[dow(e.day)] || []).filter(function (x) {
+            return x.wid === e.wid;
+          })[0];
+      if (e.pt == null) e.pt = it ? presc(it) : '';
+      if (e.nm == null) e.nm = it ? itemName(it) : e.iid;
+      if (e.wn == null) e.wn = w ? w.name : 'A workout';
+      if (e.lb == null) e.lb = hit ? hit.label : '';
+    }
+    function ensureState() {
+      if (!S.pending) S.pending = {};
+      S.entries.forEach(function (e) {
+        if (e.cat === 'row' && e.pt == null) stamp(e);
+      });
+    }
+    // Rows logged against an item that has since left the workout: shown from the entry alone, with
+    // no instructions (a removed instruction never reappears).
+    function removedCards(day, slot, w, wr) {
+      var liveIds = w
+          ? w.items.map(function (x) {
+              return x.iid;
+            })
+          : [],
+        byItem = {},
+        order = [];
+      S.entries.forEach(function (e) {
+        if (e.cat !== 'row' || e.ath !== S.ath || e.day !== day || e.slot !== slot) return;
+        if ((e.hidden && (e.event || !wr)) || liveIds.indexOf(e.iid) >= 0) return;
+        if (!byItem[e.iid]) {
+          byItem[e.iid] = [];
+          order.push(e.iid);
+        }
+        byItem[e.iid].push(e);
+      });
+      return order
+        .map(function (iid) {
+          var es = byItem[iid].sort(function (a, b) {
+            return a.set - b.set;
+          });
+          var rows = es
+            .map(function (e) {
+              var vals = Object.keys(e.v)
+                .map(function (k) {
+                  return e.v[k];
+                })
+                .join(' × ');
+              return (
+                '<div class="one"><span class="grow">' +
+                (es.length > 1 ? 'Set ' + e.set + (vals ? ' · ' : '') : '') +
+                esc(vals || 'Done') +
+                '</span>' +
+                // Days before yesterday are read-only (maintainer, 2026-11-15, #412).
+                (wr
+                  ? '<button class="ck" data-act="row-old" data-id="' +
+                    e.id +
+                    '" aria-pressed="' +
+                    (e.hidden ? 'false' : 'true') +
+                    '" aria-label="' +
+                    esc((e.hidden ? 'Log ' : 'Logged: ') + e.nm + ' set ' + e.set) +
+                    '">✓</button>'
+                  : '<span class="tick" aria-label="Logged">✓</span>') +
+                '</div>'
+              );
+            })
+            .join('');
+          return (
+            '<div class="card"><div class="card-h"><b>' +
+            esc(es[0].nm) +
+            '</b><span class="hint">' +
+            esc(es[0].pt) +
+            '</span></div><p class="hint inst">No longer in this workout. What was logged stays.</p>' +
+            rows +
+            '</div>'
+          );
+        })
+        .join('');
+    }
+    // D38 draft. Not part of S, so never saved: which finished workouts were opened by hand, which
+    // were seen unfinished during this visit to the day, and the two options in the review bar.
+    var FOLD = { mode: 'visit', sections: true, open: {}, seenOpen: {}, visit: '', focus: null };
+    function foldVisit() {
+      var v = S.ath + '|' + S.day;
+      if (FOLD.visit !== v) {
+        FOLD.visit = v;
+        FOLD.open = {};
+        FOLD.seenOpen = {};
+      }
+    }
+    // Whether a finished thing shows folded. It folds on arrival. In "when you come back" mode,
+    // something finished during this visit stays open, so nothing moves under a thumb.
+    function isFolded(key, finished) {
+      if (!finished) {
+        FOLD.seenOpen[key] = true;
+        delete FOLD.open[key];
+        return false;
+      }
+      if (FOLD.open[key]) return false;
+      if (FOLD.seenOpen[key]) {
+        if (FOLD.mode === 'visit') return false;
+        // "As soon as its last ✓": it folds now, and focus goes to the folded line.
+        delete FOLD.seenOpen[key];
+        FOLD.focus = 'fold-' + key.split('|')[1];
+      }
+      return true;
+    }
+    function foldLine(id, key, name, extra, sum) {
+      return (
+        '<button class="fold" id="fold-' +
+        id +
+        '" data-act="fold-open" data-key="' +
+        key +
+        '" aria-expanded="false"><span class="fold-tick" aria-hidden="true">✓</span><span class="fold-name">' +
+        esc(name) +
+        (extra ? ' <span class="fold-sum">· ' + esc(extra) + '</span>' : '') +
+        '</span><span class="fold-sum">' +
+        esc(sum) +
+        '</span><span class="fold-chev" aria-hidden="true">▸</span></button>'
+      );
+    }
+    function foldAgain(id, key) {
+      return (
+        ' <button class="txt" style="padding:0" id="unfold-' +
+        id +
+        '" data-act="fold-close" data-key="' +
+        key +
+        '" aria-expanded="true">Collapse</button>'
+      );
+    }
+    // Finish a workout for a jump state: an empty ✓ on every row not logged yet.
+    function finishWorkout(day, slot) {
+      var p = prog(slot.split('_')[0]),
+        w = p && wk(p, slot.split('_')[1]);
+      if (!w) return;
+      w.items.forEach(function (it) {
+        var n = SET_TYPES[itemType(it)] ? nRows(day, slot, it) : 1;
+        for (var set = 1; set <= n; set++) {
+          var ex = rowEntry(day, slot, it.iid, set);
+          if (ex && !ex.hidden) continue;
+          var v = {};
+          fieldsOf(it).forEach(function (f) {
+            v[f.f] = f.p;
+          });
+          if (ex) {
+            ex.hidden = false;
+            ex.event = null;
+          } else
+            stamp(
+              add({
+                ath: S.ath,
+                day: day,
+                cat: 'row',
+                slot: slot,
+                wid: w.wid,
+                iid: it.iid,
+                set: set,
+                v: v,
+                at: nowTime(),
+              }),
+            );
+        }
+      });
+    }
+    function renderWorkout(day, slot, sl, p, wr, many) {
+      var w = wk(p, sl.wid);
+      if (!w) return '';
+      var L = letters(w.items),
+        body = '',
+        total = 0,
+        done = 0;
+      w.items.forEach(function (it) {
+        var n = SET_TYPES[itemType(it)] ? nRows(day, slot, it) : 1;
+        total += n;
+        for (var s = 1; s <= n; s++) {
+          var e = rowEntry(day, slot, it.iid, s);
+          if (e && !e.hidden) done++;
+        }
+      });
+      var fkey = day + '|' + slot,
+        finished = wr && FOLD.mode !== 'off' && total > 0 && done >= total,
+        folded = wr && FOLD.mode !== 'off' ? isFolded(fkey, finished) : false;
+      if (folded)
+        return (
+          '<section class="wk folded" aria-labelledby="wk-' +
+          slot +
+          '"><h2 class="foldh" id="wk-' +
+          slot +
+          '">' +
+          foldLine(slot, fkey, w.name, sl.label || (many ? p.name : ''), done + ' of ' + total) +
+          '</h2></section>'
+        );
+      groupsOf(w.items).forEach(function (g) {
+        var cards = g.idx
+          .map(function (i) {
+            return renderCard(day, slot, w, w.items[i], L[i], wr);
+          })
+          .join('');
+        if (!cards) return;
+        if (g.ss && g.idx.length > 1) {
+          body +=
+            '<div class="ss"><span class="ss-h">Superset ' +
+            chip('FAM-1 8b · 13b') +
+            '</span>' +
+            cards +
+            (w.rests[g.ss] ? '<p class="rest">Rest ' + esc(w.rests[g.ss]) + '</p>' : '') +
+            '</div>';
+        } else body += cards;
+      });
+      body += removedCards(day, slot, w, wr);
+      if (!body) body = '<p class="hint">Nothing logged.</p>';
+      return (
+        '<section class="wk" aria-labelledby="wk-' +
+        slot +
+        '"><div class="row between" style="flex-wrap:nowrap"><span class="slotlbl">' +
+        esc(sl.label || '') +
+        '</span>' +
+        (many
+          ? '<button class="txt from" data-act="open-prog" data-pid="' +
+            p.id +
+            '">' +
+            esc(p.name) +
+            ' <span aria-hidden="true">›</span></button>'
+          : '') +
+        '</div>' +
+        '<div class="wk-h"><h2 id="wk-' +
+        slot +
+        '">' +
+        esc(w.name) +
+        ' ' +
+        chip('FAM-1 12') +
+        '</h2><span class="hint">' +
+        (future(day)
+          ? w.items.length + ' items'
+          : done >= total
+            ? 'Done ✓' + (finished ? foldAgain(slot, fkey) : '')
+            : done + ' of ' + total) +
+        '</span></div>' +
+        (w.desc ? '<p class="hint">' + esc(w.desc) + '</p>' : '') +
+        body +
+        '</section>'
+      );
+    }
+    // The day's workouts from all of a person's programs: in the person's program order, then each
+    // program's own week order (maintainer, 2026-11-15). A label is a heading; it never sorts.
+    function daySlots(list, day) {
+      var out = [];
+      list.forEach(function (asg, pi) {
+        var p = prog(asg.prog);
+        (p.week[dow(day)] || []).forEach(function (sl, i) {
+          out.push({
+            p: p,
+            sl: sl,
+            key: p.id + '_' + sl.wid,
+            pi: pi,
+            i: i,
+          });
+        });
+      });
+      return out.sort(function (a, b) {
+        return a.pi - b.pi || a.i - b.i;
+      });
+    }
+    function vDayProgram(list) {
+      foldVisit();
+      var A = ath(S.ath),
+        day = S.day,
+        wr = writable(day),
+        many = list.length > 1;
+      var all = dayEntries(A.id, day),
+        liveN = live(all).length;
+      var cleared = all.filter(function (e) {
+        return e.hidden && e.event;
+      });
+      var names = andList(
+        list.map(function (a) {
+          return prog(a.prog).name;
+        }),
+      );
+      var none = !list.length,
+        canNext = !(day >= TODAY && !onPrograms(A.id, addDays(day, 1)).length);
+      var html =
+        '<button class="back" data-go="picker">← All athletes</button>' +
+        '<div class="row between"><h1 tabindex="-1">' +
+        esc(A.name) +
+        '</h1>' +
+        switcher() +
+        '</div>' +
+        '<nav class="daynav" aria-label="Day"><button data-act="prev" aria-label="Previous day">‹</button><span>' +
+        dayLabel(day) +
+        '</span><button data-act="next" aria-label="Next day"' +
+        (canNext ? '' : ' disabled') +
+        '>›</button></nav>' +
+        (none
+          ? progsOf(A.id).length
+            ? '<p class="hint">Not on a program on this day.</p>'
+            : '<div class="notice"><b>Not on a program yet.</b> Bodyweight and practice log here. Put ' +
+              esc(A.name) +
+              ' on a program to see their workouts. <button class="txt" style="padding:0" data-act="choose-prog">Programs ›</button> ' +
+              chip('FAM-1 12 · 15') +
+              '</div>'
+          : '') +
+        (none ? '' : '<p class="row" style="gap:4px 10px"><span class="hint">') +
+        (none ? '' : (many ? 'Programs:' : 'Program:') + '</span>') +
+        (none ? [] : list)
+          .map(function (a) {
+            return (
+              '<button class="txt" style="padding:0" data-act="open-prog" data-pid="' +
+              a.prog +
+              '" title="Since ' +
+              short(a.from) +
+              '">' +
+              esc(prog(a.prog).name) +
+              ' <span aria-hidden="true">›</span></button>'
+            );
+          })
+          .join('') +
+        (none
+          ? ''
+          : (many
+              ? '<button class="txt" style="padding:0" data-act="order">Program order</button>'
+              : '') +
+            chip('FAM-1 15 · 15c') +
+            '</p>');
+      if (S.flash)
+        html += '<div class="banner" role="status"><span>' + esc(S.flash) + '</span></div>';
+      if (cleared.length)
+        html +=
+          '<div class="banner" role="status"><span>Day cleared · ' +
+          cleared.length +
+          ' entr' +
+          (cleared.length > 1 ? 'ies' : 'y') +
+          ' hidden</span>' +
+          // Restore all is a change, so it follows the read-only rule (maintainer, 2026-11-15).
+          (wr
+            ? '<button class="txt" data-act="restore-day" data-ev="' +
+              cleared[0].event +
+              '">Restore all</button>'
+            : '') +
+          chip('V1-9b B2') +
+          '</div>';
+      var fut = future(day);
+      if (fut)
+        html +=
+          '<div class="notice"><b>Coming up.</b> This is what ' +
+          esc(names) +
+          (many ? ' have' : ' has') +
+          ' on ' +
+          DAYS[dow(day)] +
+          's. You can log it on the day. ' +
+          chip('FAM-1 12') +
+          '</div>';
+      if (!wr && !fut)
+        html +=
+          '<div class="notice">This day is read-only. Only today and yesterday can be logged or changed. ' +
+          chip('V1-24 3b') +
+          '</div>';
+      var lifeAll = all.filter(function (e) {
+        return e.cat === 'life';
+      });
+      // Bodyweight stays its own section.
+      var bw = {
+        key: 'bw',
+        entries: all.filter(function (e) {
+          return e.cat === 'bw';
+        }),
+      };
+      var bwBody = renderBodyweight(bw, day, wr) || '<p class="hint">Nothing logged.</p>';
+      var bwLive = live(bw.entries)[0],
+        bwKey = day + '|bw',
+        bwDone = !!bwLive && wr && FOLD.sections && S.editing !== bwLive.id,
+        bwFolded = wr && FOLD.sections ? isFolded(bwKey, bwDone) : false;
+      if (!fut && bwFolded)
+        html +=
+          '<section class="sec folded"><h2 class="foldh">' +
+          foldLine('bw', bwKey, 'Bodyweight', '', bwLive.value.toFixed(1) + ' lb') +
+          '</h2></section>';
+      else if (!fut)
+        html +=
+          '<section class="sec"><h2>Bodyweight ' +
+          chip('V1-24 1b') +
+          (bwDone ? foldAgain('bw', bwKey) : '') +
+          '</h2>' +
+          bwBody +
+          '</section>';
+      // Life sits under Bodyweight, near the top (usability panel, d3 round 1).
+      // Wake is gone from the day (maintainer, 2026-11-14): the tap time isn't the wake time. "Up on time"
+      // is a Check item a program can add. Wake times logged before stay, read-only.
+      var lifeKeys = A.life.filter(function (k) {
+        return k !== 'wake';
+      });
+      var oldWake = [];
+      if ((lifeKeys.length || oldWake.length) && !fut) {
+        var life = {
+          entries: lifeAll.filter(function (e) {
+            return e.key !== 'wake';
+          }),
+        };
+        var lifeLive = live(life.entries),
+          lifeKey = day + '|life',
+          lifeDone =
+            wr &&
+            FOLD.sections &&
+            lifeKeys.length > 0 &&
+            lifeKeys.every(function (k) {
+              return lifeLive.some(function (e) {
+                return e.key === k;
+              });
+            }) &&
+            !lifeLive.some(function (e) {
+              return S.editing === e.id;
+            }),
+          lifeFolded = wr && FOLD.sections ? isFolded(lifeKey, lifeDone) : false;
+        if (lifeFolded)
+          html +=
+            '<section class="sec folded"><h2 class="foldh">' +
+            foldLine(
+              'life',
+              lifeKey,
+              'Life',
+              '',
+              lifeLive
+                .map(function (e) {
+                  return (
+                    FIELDS[e.key].label +
+                    (FIELDS[e.key].type === 'minutes' ? ' ' + e.value + ' min' : '')
+                  );
+                })
+                .join(', '),
+            ) +
+            '</h2></section>';
+        else
+          html +=
+            '<section class="sec"><h2>Life ' +
+            chip('V1-24 3b-life') +
+            (lifeDone ? foldAgain('life', lifeKey) : '') +
+            '</h2>' +
+            (renderLife(life, day, wr, lifeKeys) ||
+              (oldWake.length ? '' : '<p class="hint">Nothing logged.</p>')) +
+            '</section>';
+      }
+      var slots = daySlots(list, day);
+      // A workout logged on this day but no longer on the week still shows, with its logged rows only.
+      var offWeek = {};
+      if (!fut) {
+        var have = slots.map(function (x) {
+          return x.key;
+        });
+        all.forEach(function (e) {
+          if (e.cat !== 'row' || (e.hidden && e.event) || have.indexOf(e.slot) >= 0) return;
+          if (offWeek[e.slot]) return;
+          offWeek[e.slot] = 1;
+          var p0 = prog(e.slot.split('_')[0]);
+          if (p0) slots.push({ p: p0, sl: { label: e.lb, wid: e.wid }, key: e.slot, pi: 99, i: 0 });
+        });
+      }
+      if (!slots.length && !none)
+        html +=
+          '<div class="notice"><b>Rest day.</b> Nothing is scheduled on ' +
+          DAYS[dow(day)] +
+          's. ' +
+          chip('FAM-1 gap: optional workouts') +
+          '</div>';
+      else if (many) {
+        var resting = list
+          .filter(function (a) {
+            return !(prog(a.prog).week[dow(day)] || []).length;
+          })
+          .map(function (a) {
+            return prog(a.prog).name;
+          });
+        if (resting.length)
+          html +=
+            '<p class="hint">Rest day on ' +
+            esc(andList(resting)) +
+            '. ' +
+            chip('streak note: what counts') +
+            '</p>';
+      }
+      slots.forEach(function (x) {
+        html += renderWorkout(day, x.key, x.sl, x.p, wr && !offWeek[x.key], many);
+      });
+      if (liveN && wr) html += '<button class="back" data-act="clear">Clear this day…</button>';
+      return html;
+    }
+
+    // --- The program: workouts, the week, who is on it (steps 6–10, 15) ---
+    function usedOn(p, wid) {
+      var ds = WEEK_ORDER.filter(function (k) {
+        return (p.week[k] || []).some(function (s) {
+          return s.wid === wid;
+        });
+      });
+      return ds.length
+        ? 'Used ' +
+            ds
+              .map(function (k) {
+                return DAYS[k].slice(0, 3);
+              })
+              .join(', ')
+        : 'Not on any day yet';
+    }
+    // A workout runs at most once per weekday (maintainer, 2026-11-14; ADR 0007 Amendment 2).
+    function freeOn(p, k) {
+      var used = (p.week[k] || []).map(function (s) {
+        return s.wid;
+      });
+      return p.workouts.filter(function (w) {
+        return used.indexOf(w.wid) < 0;
+      });
+    }
+    function vProgram() {
+      var p = prog(S.prog);
+      var html = '<button class="back" data-go="programs">← Programs</button>';
+      if (S.editing === 'pname')
+        html +=
+          '<div class="row" style="flex-wrap:nowrap"><input type="text" id="pname" maxlength="60" placeholder="e.g. Family program" value="' +
+          esc(p.fresh ? '' : p.name) +
+          '" aria-label="Program name"><button class="btn" data-act="pname-save">Save</button></div>';
+      else
+        html +=
+          '<div class="row between"><h1 tabindex="-1">' +
+          esc(p.name) +
+          '</h1><button class="txt" data-act="pname">Rename</button></div>';
+      html += '<p class="hint">' + esc(usedBy(p.id)) + '</p>' + chip('FAM-1 6–10');
+      if (S.flash)
+        html += '<div class="banner" role="status"><span>' + esc(S.flash) + '</span></div>';
+      var on = whoOn(p.id);
+      html +=
+        '<section class="sec"><h2>Who’s on it ' +
+        chip('FAM-1 15 · 15b') +
+        '</h2>' +
+        (on.length
+          ? on
+              .map(function (a) {
+                var g = asgOf(a.id, p.id),
+                  others = progsOf(a.id)
+                    .filter(function (x) {
+                      return x.id !== p.id;
+                    })
+                    .map(function (x) {
+                      return x.name;
+                    });
+                return (
+                  '<div class="item"><div class="what"><span>' +
+                  esc(a.name) +
+                  '</span><div class="hint">' +
+                  (g.from > TODAY ? 'starts ' : 'since ') +
+                  short(g.from) +
+                  (g.to ? ' · last day ' + short(addDays(g.to, -1)) : '') +
+                  (others.length ? ' · also on ' + esc(others.join(', ')) : '') +
+                  '</div></div>' +
+                  (g.to
+                    ? ''
+                    : '<button class="txt" data-act="takeoff" data-aid="' +
+                      a.id +
+                      '">Take off</button>') +
+                  '</div>'
+                );
+              })
+              .join('')
+          : '<p class="hint">No one yet.</p>') +
+        '<button class="btn ' +
+        (p.workouts.length ? '' : 'ghost ') +
+        'wide" data-act="start">Put someone on this program…</button></section>';
+      html +=
+        '<section class="sec"><h2>Workouts ' +
+        chip('FAM-1 8–9') +
+        '</h2>' +
+        (p.workouts.length
+          ? '<div class="menu">' +
+            p.workouts
+              .map(function (w) {
+                return (
+                  '<div class="wrow"><button data-act="edit-wk" data-wid="' +
+                  w.wid +
+                  '"><span><b style="font-weight:600">' +
+                  esc(w.name) +
+                  '</b><br><span class="hint">' +
+                  w.items.length +
+                  ' item' +
+                  (w.items.length === 1 ? '' : 's') +
+                  ' · ' +
+                  usedOn(p, w.wid) +
+                  '</span>' +
+                  (w.from ? '<br><span class="prov">' + esc(provText(w)) + '</span>' : '') +
+                  '</span><span aria-hidden="true">›</span></button>' +
+                  '<button class="cp" data-act="copy-wk" data-wid="' +
+                  w.wid +
+                  '" aria-label="Copy ' +
+                  esc(w.name) +
+                  ' to a program">Copy to…</button></div>'
+                );
+              })
+              .join('') +
+            '</div>'
+          : '<p class="hint">No workouts yet.</p>') +
+        '<button class="btn ' +
+        (p.workouts.length ? 'ghost ' : '') +
+        'wide" data-act="new-wk">+ New workout</button></section>';
+      html +=
+        '<section class="sec"><h2>Week ' +
+        chip('FAM-1 10') +
+        '</h2><p class="hint">Each day runs its workouts in this order. A day with none is a rest day.</p><div>';
+      WEEK_ORDER.forEach(function (k) {
+        var slots = p.week[k] || [];
+        html +=
+          '<div class="day-row"><div class="row between"><b style="font-weight:600">' +
+          DAYS[k] +
+          '</b>' +
+          (S.weekAdd === k
+            ? ''
+            : '<button class="txt" data-act="wadd" data-day="' + k + '">+ Add</button>') +
+          '</div>';
+        if (!slots.length && S.weekAdd !== k) html += '<span class="hint">Rest day</span>';
+        slots.forEach(function (sl, i) {
+          var w = wk(p, sl.wid);
+          html +=
+            '<div class="slotline"><span class="ttl">' +
+            (sl.label ? '<span class="slotlbl">' + esc(sl.label) + '</span> · ' : '') +
+            esc(w ? w.name : '?') +
+            '</span><span class="row" style="flex-wrap:nowrap;gap:0">' +
+            '<button class="txt" data-act="wmove" data-day="' +
+            k +
+            '" data-i="' +
+            i +
+            '" data-dir="-1" aria-label="Move ' +
+            esc(w ? w.name : '') +
+            ' up on ' +
+            DAYS[k] +
+            '"' +
+            (i ? '' : ' disabled') +
+            '>↑</button>' +
+            '<button class="txt" data-act="wmove" data-day="' +
+            k +
+            '" data-i="' +
+            i +
+            '" data-dir="1" aria-label="Move ' +
+            esc(w ? w.name : '') +
+            ' down on ' +
+            DAYS[k] +
+            '"' +
+            (i < slots.length - 1 ? '' : ' disabled') +
+            '>↓</button>' +
+            '<button class="txt del" data-act="wdel" data-day="' +
+            k +
+            '" data-i="' +
+            i +
+            '" aria-label="Remove ' +
+            esc(w ? w.name : '') +
+            ' from ' +
+            DAYS[k] +
+            '">✕</button></span></div>';
+        });
+        if (S.weekAdd === k) {
+          html += p.workouts.length
+            ? '<div class="stack" style="gap:6px"><div class="row" style="flex-wrap:nowrap"><select class="field" id="wa-wid" aria-label="Workout">' +
+              p.workouts
+                .map(function (w) {
+                  return '<option value="' + w.wid + '">' + esc(w.name) + '</option>';
+                })
+                .join('') +
+              '</select><input type="text" id="wa-label" list="labels" maxlength="30" placeholder="Label (optional)" aria-label="Label, optional, for example Morning"></div>' +
+              '<fieldset class="stack" style="gap:6px;border:0;padding:0;margin:0"><legend class="hint" style="padding:0;margin-bottom:6px">On</legend><div class="row" style="gap:6px">' +
+              WEEK_ORDER.map(function (d2) {
+                return (
+                  '<label class="check" style="padding:6px 10px"><input type="checkbox" name="wa-day" value="' +
+                  d2 +
+                  '"' +
+                  (d2 === k ? ' checked' : '') +
+                  '> ' +
+                  DAYS[d2].slice(0, 3) +
+                  '</label>'
+                );
+              }).join('') +
+              '</div></fieldset>' +
+              '<p class="hint">A workout runs at most once a day; days that already have it are skipped. ' +
+              chip('ADR 0007 A2') +
+              '</p>' +
+              '<div class="row" style="justify-content:flex-end"><button class="txt" data-act="wadd-cancel">Cancel</button><button class="btn" data-act="wadd-save" data-day="' +
+              k +
+              '">Add</button></div></div>'
+            : '<p class="hint">Make a workout first, then add it to days.</p>';
+        }
+        html += '</div>';
+      });
+      html +=
+        '</div><datalist id="labels"><option value="Morning"><option value="After school"><option value="After lunch"><option value="Evening"></datalist></section>';
+      return html;
+    }
+
+    // --- The workout editor: one screen, one Save (steps 8, 8b, 9) ---
+    function hasLogs(cat) {
+      return S.entries.some(function (e) {
+        return e.cat === 'row' && e.iid === cat;
+      });
+    }
+    function edField(i, it, f, lbl, cls) {
+      return (
+        '<label>' +
+        lbl +
+        '<input type="text" inputmode="' +
+        (f === 'unit' ? 'text' : 'decimal') +
+        '" data-d="' +
+        i +
+        '.' +
+        f +
+        '" value="' +
+        esc(nf(it[f])) +
+        '"' +
+        (cls ? ' class="' + cls + '"' : '') +
+        '></label>'
+      );
+    }
+    var UNITS_ANY = ['lb', 'kg', 'count', 'min', 'sec', 'in', 'cm', 'ft', 'm', 'yd', 'mi'],
+      UNITS_LENGTH = ['m', 'yd', 'mi', 'ft'];
+    function edUnit(i, it, list) {
+      return (
+        '<label>Unit<select class="field" data-d="' +
+        i +
+        '.unit">' +
+        list
+          .map(function (u) {
+            return '<option' + (it.unit === u ? ' selected' : '') + '>' + u + '</option>';
+          })
+          .join('') +
+        '</select></label>'
+      );
+    }
+    function edFields(i, it) {
+      var t = itemType(it);
+      if (t === 'weight')
+        return (
+          edField(i, it, 'sets', 'Sets') +
+          edField(i, it, 'reps', 'Reps') +
+          edField(i, it, 'load', 'lb')
+        );
+      if (t === 'reps') return edField(i, it, 'sets', 'Sets') + edField(i, it, 'reps', 'Reps');
+      if (t === 'timeset') return edField(i, it, 'sets', 'Sets') + edField(i, it, 'sec', 'Seconds');
+      if (t === 'distance')
+        return (
+          edField(i, it, 'sets', 'Sets') +
+          edField(i, it, 'dist', 'Distance') +
+          edUnit(i, it, UNITS_LENGTH)
+        );
+      if (t === 'duration') return edField(i, it, 'min', 'Minutes');
+      if (t === 'count') return edField(i, it, 'n', 'Target') + edUnit(i, it, UNITS_ANY);
+      return '';
+    }
+    function vWorkout() {
+      var w = S.draft,
+        L = letters(w.items),
+        groups = groupsOf(w.items);
+      var lastOf = {};
+      groups.forEach(function (g) {
+        if (g.ss && g.idx.length > 1) lastOf[g.idx[g.idx.length - 1]] = g.ss;
+      });
+      var html =
+        '<button class="back" data-act="wk-cancel">← ' +
+        esc(prog(S.prog).name) +
+        '</button>' +
+        '<div class="row between"><h1>' +
+        (w.isNew ? 'New workout' : 'Edit workout') +
+        '</h1>' +
+        chip('FAM-1 8 · 8b · 9') +
+        '</div>' +
+        (w.from
+          ? '<p class="prov">' +
+            esc(provText(w)) +
+            '. Editing this copy doesn’t change the original. ' +
+            chip('FAM-1 10b') +
+            '</p>'
+          : '') +
+        '<label class="stack" style="gap:4px"><span>Name</span><input type="text" data-d="name" maxlength="30" placeholder="e.g. Heavy A" value="' +
+        esc(w.name) +
+        '"><span class="count" id="cnt-name">' +
+        w.name.length +
+        ' / 30</span></label>' +
+        '<label class="stack" style="gap:4px"><span>Description <span class="hint">(optional)</span></span><textarea data-d="desc" rows="2">' +
+        esc(w.desc) +
+        '</textarea></label>';
+      if (S.flash)
+        html += '<div class="banner" role="alert"><span>' + esc(S.flash) + '</span></div>';
+      html += '<section class="sec"><h2>Items</h2>';
+      if (!w.items.length) html += '<p class="hint">No items yet. Add some below.</p>';
+      w.items.forEach(function (it, i) {
+        var t = itemType(it),
+          locked = hasLogs(it.cat);
+        var linkedNext = i < w.items.length - 1 && it.ss && w.items[i + 1].ss === it.ss;
+        html +=
+          '<div class="ed-card"' +
+          (it.ss && L[i] ? ' style="border-left:3px solid var(--chip-fg)"' : '') +
+          '>' +
+          '<div class="card-h">' +
+          (L[i] ? '<span class="letter">' + L[i] + '</span>' : '') +
+          '<b>' +
+          esc(itemName(it)) +
+          '</b><span class="hint">' +
+          TYPES[t] +
+          (locked ? ' · type locked, it has logs' : '') +
+          '</span></div>' +
+          (edFields(i, it)
+            ? '<div class="ed-f">' + edFields(i, it) + '</div>'
+            : '<p class="hint">Checked off in one tap.</p>') +
+          '<label class="stack" style="gap:2px"><span class="hint">Instructions</span><textarea data-d="' +
+          i +
+          '.note" maxlength="500" rows="2" placeholder="Shown with the item, every time">' +
+          esc(it.note) +
+          '</textarea><span class="count" id="cnt-' +
+          i +
+          '">' +
+          it.note.length +
+          ' / 500</span></label>' +
+          '<div class="ed-tools">' +
+          '<button class="txt" data-act="it-move" data-i="' +
+          i +
+          '" data-dir="-1"' +
+          (i ? '' : ' disabled') +
+          ' aria-label="Move ' +
+          esc(itemName(it)) +
+          ' up">↑ Up</button>' +
+          '<button class="txt" data-act="it-move" data-i="' +
+          i +
+          '" data-dir="1"' +
+          (i < w.items.length - 1 ? '' : ' disabled') +
+          ' aria-label="Move ' +
+          esc(itemName(it)) +
+          ' down">↓ Down</button>' +
+          (i < w.items.length - 1
+            ? '<button class="txt" data-act="' +
+              (linkedNext ? 'ss-unlink' : 'ss-link') +
+              '" data-i="' +
+              i +
+              '">' +
+              (linkedNext ? 'Unlink from next' : 'Superset with next') +
+              '</button>'
+            : '') +
+          '<span style="flex:1"></span><button class="txt del" data-act="it-del" data-i="' +
+          i +
+          '">Remove</button></div></div>';
+        if (lastOf[i])
+          html +=
+            '<label class="row" style="flex-wrap:nowrap;padding-left:13px"><span class="hint" style="white-space:nowrap">Rest after each round</span><input type="text" data-d="rest.' +
+            lastOf[i] +
+            '" value="' +
+            esc(w.rests[lastOf[i]] || '') +
+            '" placeholder="e.g. 90 s"></label>';
+      });
+      html += '<button class="btn ghost wide" data-act="pick-open">+ Add items</button></section>';
+      html +=
+        '<p class="hint">A superset can link any number of items in a row: link a third to make A1, A2, A3. ' +
+        chip('FAM-1 8b') +
+        '</p>';
+      html +=
+        '<div class="savebar"><button class="txt" data-act="wk-cancel">Cancel</button><button class="btn" data-act="wk-save">Save workout</button></div>';
+      return html;
+    }
+    function normalize(items) {
+      var seen = {},
+        prev = null,
+        n = 0;
+      items.forEach(function (it) {
+        if (it.ss && it.ss !== prev && seen[it.ss]) it.ss = it.ss + '_' + ++n;
+        if (it.ss) seen[it.ss] = 1;
+        prev = it.ss;
+      });
+      var count = {};
+      items.forEach(function (it) {
+        if (it.ss) count[it.ss] = (count[it.ss] || 0) + 1;
+      });
+      items.forEach(function (it) {
+        if (it.ss && count[it.ss] < 2) it.ss = null;
+      });
+    }
+
+    // --- The full-screen picker: multi-select, and "new item" with its type (step 9) ---
+    function vPicker2() {
+      var P = S.picker,
+        keys = Object.keys(S.catalog).sort(function (a, b) {
+          return S.catalog[a].name.localeCompare(S.catalog[b].name);
+        });
+      var n = Object.keys(P.sel).length;
+      var list = keys
+        .map(function (k) {
+          var c = S.catalog[k],
+            on = !!P.sel[k];
+          return (
+            '<button class="pick" role="checkbox" aria-checked="' +
+            on +
+            '" data-act="pick" data-k="' +
+            k +
+            '" data-name="' +
+            esc(c.name.toLowerCase()) +
+            '"><span><b style="font-weight:500">' +
+            esc(c.name) +
+            '</b><br><span class="hint">' +
+            TYPES[c.type] +
+            '</span></span><span class="box" aria-hidden="true">' +
+            (on ? '✓' : '') +
+            '</span></button>'
+          );
+        })
+        .join('');
+      var nw = P.newOpen
+        ? '<div class="card"><b style="font-weight:600">New item ' +
+          chip('FAM-1 3 · 9') +
+          '</b>' +
+          '<label class="stack" style="gap:4px"><span>Name</span><input type="text" id="ni-name" maxlength="40" placeholder="e.g. Bear crawl"></label>' +
+          '<label class="stack" style="gap:4px"><span>What it tracks</span><select class="field" id="ni-type">' +
+          Object.keys(TYPES)
+            .map(function (t) {
+              return '<option value="' + t + '">' + TYPES[t] + '</option>';
+            })
+            .join('') +
+          '</select></label>' +
+          '<p class="hint">You can’t change this once the item has logs.</p>' +
+          '<div class="row" style="justify-content:flex-end"><button class="txt" data-act="ni-cancel">Cancel</button><button class="btn" data-act="ni-save">Create</button></div></div>'
+        : '<button class="btn ghost wide" data-act="ni-open">+ New item</button>';
+      return (
+        '<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="pk-t"><div class="ov-h"><h2 id="pk-t">Add items</h2><button class="txt" data-act="pick-close">Close</button></div>' +
+        '<div class="ov-b"><input type="text" id="pk-q" placeholder="Search" aria-label="Search items" autocomplete="off">' +
+        nw +
+        '<div class="stack" id="pk-list" style="gap:8px">' +
+        list +
+        '</div><p class="hint" id="pk-none" hidden>No item matches. Make it with “+ New item”.</p></div>' +
+        '<div class="ov-f"><button class="btn wide" data-act="pick-add"' +
+        (n ? '' : ' disabled') +
+        '>' +
+        (n ? 'Add ' + n + ' item' + (n > 1 ? 's' : '') : 'Pick items to add') +
+        '</button></div></div>'
+      );
+    }
+
+    function openStart() {
+      OPENER = OPENER || document.activeElement;
+      var p = prog(S.prog);
+      var boxes = S.athletes
+        .filter(function (a) {
+          return !a.archived;
+        })
+        .map(function (a) {
+          var already = !!asgOf(a.id, p.id),
+            keeps = progsOf(a.id).map(function (x) {
+              return x.name;
+            });
+          return (
+            '<label class="check"><input type="checkbox" name="st-ath" value="' +
+            a.id +
+            '"' +
+            (already ? ' checked disabled' : '') +
+            '> ' +
+            esc(a.name) +
+            '<span class="hint" style="margin-left:auto;text-align:right">' +
+            (already
+              ? 'on it'
+              : keeps.length
+                ? 'keeps ' + esc(keeps.join(', '))
+                : 'no program yet') +
+            '</span></label>'
+          );
+        })
+        .join('');
+      document.getElementById('modal').innerHTML =
+        '<div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="st-t">' +
+        '<h2 id="st-t">Put someone on ' +
+        esc(p.name) +
+        ' ' +
+        chip('FAM-1 15 · 15c') +
+        '</h2>' +
+        '<p class="hint">This adds a program; their other programs stay. Days before the start date keep what they had.</p>' +
+        '<div class="stack" style="gap:8px">' +
+        boxes +
+        '</div>' +
+        '<label class="stack" style="gap:4px"><span>Starting</span><select class="field" id="st-from"><option value="' +
+        TODAY +
+        '">Today, ' +
+        short(TODAY) +
+        '</option><option value="' +
+        addDays(TODAY, 1) +
+        '">Tomorrow, ' +
+        short(addDays(TODAY, 1)) +
+        '</option></select></label>' +
+        '<p class="hint">It goes where it sits in the Programs list. Each person can change their order from their day page. Choosing days per person and Undo come in Beta 1.</p>' +
+        '<div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="modal-close">Cancel</button><button class="btn" data-act="start-go" id="start-go" disabled>Start</button></div></div></div>';
+      // Start stays off until someone is picked (usability panel).
+      Array.prototype.forEach.call(document.querySelectorAll('input[name=st-ath]'), function (b) {
+        b.addEventListener('change', function () {
+          document.getElementById('start-go').disabled = !document.querySelector(
+            'input[name=st-ath]:checked:not(:disabled)',
+          );
+        });
+      });
+      opened('input[name=st-ath]:not(:disabled)');
+    }
+    function provText(w) {
+      return 'Copied from ' + w.from.prog + ' · ' + short(w.from.on);
+    }
+    // Copy to program (FAM-1 10b): an independent copy, with where it came from.
+    function openCopy(wid) {
+      OPENER = document.activeElement;
+      var src = prog(S.prog),
+        w = wk(src, wid),
+        others = S.programs.filter(function (x) {
+          return x.id !== src.id;
+        });
+      var lbl = (function () {
+        for (var k = 0; k < 7; k++) {
+          var hit = (src.week[k] || []).filter(function (x) {
+            return x.wid === wid;
+          })[0];
+          if (hit) return hit.label;
+        }
+        return '';
+      })();
+      var opts = others
+        .concat([src])
+        .map(function (x) {
+          return (
+            '<option value="' +
+            x.id +
+            '">' +
+            esc(x.name) +
+            (x.id === src.id ? ' (this program)' : '') +
+            '</option>'
+          );
+        })
+        .join('');
+      var days = WEEK_ORDER.map(function (k) {
+        return (
+          '<label class="check" style="padding:6px 10px"><input type="checkbox" name="cp-day" value="' +
+          k +
+          '"> ' +
+          DAYS[k].slice(0, 3) +
+          '</label>'
+        );
+      }).join('');
+      document.getElementById('modal').innerHTML =
+        '<div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cp-t">' +
+        '<h2 id="cp-t">Copy ' +
+        esc(w.name) +
+        ' ' +
+        chip('FAM-1 10b') +
+        '</h2>' +
+        '<label class="stack" style="gap:4px"><span>To</span><select class="field" id="cp-to">' +
+        opts +
+        '</select></label>' +
+        '<fieldset class="stack" style="gap:6px;border:0;padding:0;margin:0"><legend style="padding:0;margin-bottom:6px">On which days <span class="hint">(optional)</span></legend><div class="row" style="gap:6px">' +
+        days +
+        '</div></fieldset>' +
+        '<label class="stack" style="gap:4px"><span>Label</span><input type="text" id="cp-label" list="cp-labels" maxlength="30" value="' +
+        esc(lbl) +
+        '"></label>' +
+        '<datalist id="cp-labels"><option value="Morning"><option value="After school"><option value="After lunch"><option value="Evening"></datalist>' +
+        '<p class="hint">The copy is separate: editing one never changes the other. If you want someone to get every change to ' +
+        esc(src.name) +
+        ', put them on it instead. They can be on several programs.</p>' +
+        '<div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="modal-close">Cancel</button><button class="btn" data-act="copy-go" data-wid="' +
+        wid +
+        '">Copy</button></div></div></div>';
+      document.getElementById('cp-to').focus();
+    }
+    function openOrder() {
+      OPENER = OPENER || document.activeElement;
+      var A = ath(S.ath),
+        cur = plans(A.id).filter(current);
+      var rows = cur
+        .map(function (a, i) {
+          return (
+            '<div class="item"><span>' +
+            (i + 1) +
+            '. ' +
+            esc(prog(a.prog).name) +
+            '</span><span class="row" style="flex-wrap:nowrap;gap:0">' +
+            '<button class="txt" data-act="ord-move" data-i="' +
+            i +
+            '" data-dir="-1" aria-label="Move ' +
+            esc(prog(a.prog).name) +
+            ' up"' +
+            (i ? '' : ' disabled') +
+            '>↑</button>' +
+            '<button class="txt" data-act="ord-move" data-i="' +
+            i +
+            '" data-dir="1" aria-label="Move ' +
+            esc(prog(a.prog).name) +
+            ' down"' +
+            (i < cur.length - 1 ? '' : ' disabled') +
+            '>↓</button></span></div>'
+          );
+        })
+        .join('');
+      document.getElementById('modal').innerHTML =
+        '<div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ord-t">' +
+        '<h2 id="ord-t">' +
+        esc(A.name) +
+        '’s programs ' +
+        chip('FAM-1 15c') +
+        '</h2>' +
+        '<p class="hint">The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week. A program added later goes where it sits in the Programs list.</p>' +
+        '<div class="stack" style="gap:6px">' +
+        rows +
+        '</div>' +
+        '<div class="row" style="justify-content:flex-end"><button class="btn" data-act="modal-close">Done</button></div></div></div>';
+      opened('[data-act=ord-move]:not([disabled])');
+    }
+    // A newly added program goes where it sits in the household's Programs list.
+    function addPlan(aid, pid, from) {
+      var l = plans(aid).slice(),
+        rank = function (id) {
+          return S.programs
+            .map(function (x) {
+              return x.id;
+            })
+            .indexOf(id);
+        };
+      var at = l.length;
+      for (var i = 0; i < l.length; i++)
+        if (current(l[i]) && rank(l[i].prog) > rank(pid)) {
+          at = i;
+          break;
+        }
+      l.splice(at, 0, { prog: pid, from: from });
+      S.assign[aid] = l;
+    }
+
+    function render() {
+      if (S.screen !== 'day') FOLD.visit = '';
+      renderPage();
+      if (FOLD.focus) {
+        var target = document.getElementById(FOLD.focus);
+        FOLD.focus = null;
+        if (target) target.focus();
+      }
+    }
+    function renderPage() {
+      ensureState();
+      var app = document.getElementById('app'),
+        v;
+      switch (S.screen) {
+        case 'signin':
+          v = vSignin();
+          break;
+        case 'welcome':
+          v = vWelcome();
+          break;
+        case 'add':
+          v = vAdd();
+          break;
+        case 'settings':
+          v = vSettings();
+          break;
+        case 'privacy':
+          v = vPrivacy();
+          break;
+        case 'programs':
+          v = vPrograms();
+          break;
+        case 'program':
+          v = S.prog && prog(S.prog) ? vProgram() : vPrograms();
+          break;
+        case 'workout':
+          v = S.draft ? vWorkout() : vProgram();
+          break;
+        case 'day': {
+          // One day page for every day, on a program or not (maintainer, 2026-11-15).
+          v = vDayProgram(onPrograms(S.ath, S.day));
+          break;
+        }
+        default:
+          v = vPicker();
+      }
+      app.innerHTML = v;
+      document.title = titleFor() + ' · Mat Plan';
+      document.getElementById('ov').innerHTML =
+        S.picker && S.screen === 'workout' ? vPicker2() : '';
+      if (S.picker) {
+        var q = document.getElementById('pk-q');
+        if (q) {
+          q.value = S.picker.q || '';
+          filterPicker();
+        }
+      }
+      save();
+    }
+
+    // --- actions ---
+    function go(screen) {
+      S.screen = screen;
+      S.editing = null;
+      S.weekAdd = null;
+      S.picker = null;
+      S.refusal = null;
+      S.flash = null;
+      render();
+      window.scrollTo(0, 0);
+      var h = document.querySelector('#app h1');
+      if (h) {
+        h.setAttribute('tabindex', '-1');
+        h.focus({ preventScroll: true });
+      }
+    }
+    function titleFor() {
+      var A = ath(S.ath);
+      if (S.screen === 'day' && A) return A.name + ' · ' + short(S.day);
+      if (S.screen === 'program' && prog(S.prog)) return prog(S.prog).name + ' (program)';
+      if (S.screen === 'workout' && S.draft) return S.draft.name + ' (workout)';
+      return (
+        {
+          programs: 'Programs',
+          settings: 'Family settings',
+          privacy: 'Privacy notice',
+          signin: 'Sign in',
+          welcome: 'Welcome',
+          add: 'Add an athlete',
+        }[S.screen] || 'Home'
+      );
+    }
+    function add(e) {
+      e.id = 'e' + ++S.seq;
+      S.entries.push(e);
+      return e;
+    }
+    function val(id) {
+      var el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    }
+    function slotTaken(e) {
+      return S.entries.some(function (x) {
+        if (x === e || x.hidden || x.ath !== e.ath || x.day !== e.day || x.cat !== e.cat)
+          return false;
+        if (e.cat === 'bw') return true;
+        if (e.cat === 'strength') return x.mv === e.mv;
+        if (e.cat === 'row') return x.slot === e.slot && x.iid === e.iid && x.set === e.set;
+        if (FIELDS[e.key].type === 'count') return false;
+        return x.key === e.key;
+      });
+    }
+
+    document.addEventListener('click', function (ev) {
+      var t = ev.target.closest('[data-act],[data-go]');
+      if (!t) return;
+      if (t.dataset.go) return go(t.dataset.go);
+      var a = t.dataset.act,
+        id = t.dataset.id;
+      var e =
+        id &&
+        S.entries.filter(function (x) {
+          return x.id === id;
+        })[0];
+      S.flash = null;
+      S.err = null;
+      var nextFocus = null;
+      switch (a) {
+        case 'signin':
+          S.signedIn = true;
+          go(S.family === 'new' && !S.athletes.length ? 'welcome' : 'picker');
+          return;
+        case 'signout':
+          S.signedIn = false;
+          go('signin');
+          return;
+        case 'open':
+          S.ath = id;
+          S.day = TODAY;
+          go('day');
+          return;
+        case 'prev':
+          S.day = addDays(S.day, -1);
+          S.editing = null;
+          S.refusal = null;
+          break;
+        case 'next':
+          if (S.day < TODAY || onProgram(S.ath, addDays(S.day, 1))) S.day = addDays(S.day, 1);
+          S.editing = null;
+          S.refusal = null;
+          break;
+        case 'first-athlete':
+        case 'add-athlete': {
+          var ks = document.getElementById('new-kind');
+          var nm = val('new-name') || 'New athlete',
+            kind = ks && ks.getAttribute('aria-checked') === 'true' ? 'Adult' : 'Child';
+          var isNew = S.family === 'new';
+          var na = {
+            id: 'a' + ++S.seq,
+            name: nm,
+            kind: kind,
+            archived: false,
+            program: null,
+            checkins: [],
+            life: [],
+            strength: true,
+          };
+          S.athletes.push(na);
+          S.ath = na.id;
+          S.day = TODAY;
+          say(nm + ' added');
+          go('day');
+          return;
+        }
+        case 'kind': {
+          var on = t.getAttribute('aria-checked') !== 'true';
+          t.setAttribute('aria-checked', on ? 'true' : 'false');
+          document.getElementById('kind-adult').classList.toggle('on', on);
+          document.getElementById('kind-child').classList.toggle('on', !on);
+          return;
+        }
+        case 'edit-name':
+          S.editing = 'name-' + id;
+          break;
+        case 'rename':
+          ath(id).name = val('rename') || ath(id).name;
+          S.editing = null;
+          say('Renamed');
+          break;
+        case 'archive':
+          ath(id).archived = true;
+          say('Archived');
+          break;
+        case 'unarchive':
+          ath(id).archived = false;
+          say('Restored');
+          break;
+        case 'edit':
+          S.editing = id;
+          nextFocus = '#bw-edit, #min-edit';
+          break;
+        case 'cancel':
+          nextFocus = '[data-act=edit][data-id="' + S.editing + '"]';
+          S.editing = null;
+          break;
+        case 'bw-log': {
+          var v = bwOk(val('bw-in'));
+          if (v == null) break;
+          delete S.pending['bw-in'];
+          add({ ath: S.ath, day: S.day, cat: 'bw', value: v, at: nowTime() });
+          say('Bodyweight logged');
+          break;
+        }
+        case 'bw-save': {
+          if (val('bw-edit') === '') {
+            e.hidden = true;
+            e.event = null;
+            S.editing = null;
+            nextFocus = '#bw-in';
+            say('Bodyweight cleared');
+            break;
+          }
+          var v2 = bwOk(val('bw-edit'));
+          if (v2 == null) break;
+          e.value = v2;
+          nextFocus = '[data-act=edit][data-id="' + e.id + '"]';
+          S.editing = null;
+          say('Bodyweight changed to ' + v2.toFixed(1) + ' lb');
+          break;
+        }
+        case 'min-log': {
+          var k2 = t.dataset.key,
+            m = minOk(val('min-' + k2), 'min-' + k2);
+          if (m == null) break;
+          delete S.pending['min-' + k2];
+          add({ ath: S.ath, day: S.day, cat: 'life', key: k2, value: m });
+          say(FIELDS[k2].label + ' logged');
+          break;
+        }
+        case 'min-save': {
+          if (val('min-edit') === '') {
+            e.hidden = true;
+            e.event = null;
+            S.editing = null;
+            nextFocus = '#min-' + e.key;
+            say(FIELDS[e.key].label + ' cleared');
+            break;
+          }
+          var m3 = minOk(val('min-edit'), 'min-edit');
+          if (m3 == null) break;
+          e.value = m3;
+          S.editing = null;
+          say(FIELDS[e.key].label + ' changed to ' + m3 + ' min');
+          nextFocus = '[data-act=edit][data-id="' + e.id + '"]';
+          break;
+        }
+        case 'del':
+          nextFocus = '[data-act=undo][data-id="' + id + '"]';
+          e.hidden = true;
+          e.event = null;
+          S.refusal = null;
+          say(label(e) + ' deleted. Undo is in its place.');
+          break;
+        case 'undo':
+          if (slotTaken(e)) {
+            S.refusal = e.id;
+            say('Can’t restore: a newer entry is logged');
+            break;
+          }
+          e.hidden = false;
+          S.refusal = null;
+          nextFocus = '[data-act=del][data-id="' + id + '"]';
+          say(label(e) + ' restored');
+          break;
+        case 'clear':
+          return openClear();
+        case 'restore-day': {
+          var evId = +t.dataset.ev,
+            blocked = 0;
+          S.entries.forEach(function (x) {
+            if (x.event === evId) {
+              if (slotTaken(x)) {
+                blocked++;
+              } else {
+                x.hidden = false;
+                x.event = null;
+              }
+            }
+          });
+          S.entries.forEach(function (x) {
+            if (x.event === evId) x.event = null;
+          });
+          S.flash = blocked
+            ? 'Restored. ' +
+              blocked +
+              ' entr' +
+              (blocked > 1 ? 'ies were' : 'y was') +
+              ' logged again since, so ' +
+              (blocked > 1 ? 'they stay' : 'it stays') +
+              ' deleted.'
+            : null;
+          say('Day restored');
+          break;
+        }
+        case 'clear-confirm': {
+          var evn = ++S.ev,
+            cnt = 0;
+          live(dayEntries(S.ath, S.day)).forEach(function (x) {
+            x.hidden = true;
+            x.event = evn;
+            cnt++;
+          });
+          closeModal(true);
+          window.scrollTo(0, 0);
+          nextFocus = '[data-act=restore-day]';
+          say('Day cleared. Restore all is at the top.');
+          break;
+        }
+        // --- FAM-1 ---
+        case 'choose-prog':
+          return go('programs');
+        case 'order':
+          return openOrder();
+        case 'ord-move': {
+          var cl = plans(S.ath).filter(current),
+            oi = +t.dataset.i,
+            oj = oi + +t.dataset.dir,
+            rest = plans(S.ath).filter(function (x) {
+              return !current(x);
+            });
+          var tmp0 = cl[oi];
+          cl[oi] = cl[oj];
+          cl[oj] = tmp0;
+          S.assign[S.ath] = cl.concat(rest);
+          var keepOpener = OPENER;
+          render();
+          OPENER = keepOpener;
+          openOrder();
+          say(prog(tmp0.prog).name + ' moved to ' + (oj + 1));
+          var fb =
+            document.querySelector(
+              '[data-act=ord-move][data-i="' +
+                oj +
+                '"][data-dir="' +
+                t.dataset.dir +
+                '"]:not([disabled])',
+            ) || document.querySelector('[data-act=ord-move]:not([disabled])');
+          if (fb) fb.focus();
+          return;
+        }
+        case 'takeoff': {
+          var ta = asgOf(t.dataset.aid, S.prog),
+            tn = ath(t.dataset.aid).name,
+            tp = prog(S.prog).name;
+          if (ta.from > TODAY)
+            S.assign[t.dataset.aid] = plans(t.dataset.aid).filter(function (x) {
+              return x !== ta;
+            });
+          else ta.to = addDays(TODAY, 1);
+          S.flash =
+            tn + ' comes off ' + tp + ' after today. Days already logged keep what they had.';
+          say(S.flash);
+          break;
+        }
+        case 'copy-wk':
+          return openCopy(t.dataset.wid);
+        case 'copy-go': {
+          var sp = prog(S.prog),
+            sw = wk(sp, t.dataset.wid),
+            tp2 = prog(document.getElementById('cp-to').value);
+          var cw = JSON.parse(JSON.stringify(sw));
+          cw.wid = 'w' + ++S.seq;
+          cw.from = { prog: sp.name, on: TODAY };
+          // The name stays within 30 characters; the provenance is always the program's name, frozen.
+          if (tp2.id === sp.id) cw.name = sw.name.slice(0, 23) + ' (copy)';
+          tp2.workouts.push(cw);
+          var lb = val('cp-label'),
+            ds = [];
+          Array.prototype.forEach.call(
+            document.querySelectorAll('input[name=cp-day]:checked'),
+            function (b) {
+              (tp2.week[+b.value] = tp2.week[+b.value] || []).push({ label: lb, wid: cw.wid });
+              ds.push(DAYS[+b.value].slice(0, 3));
+            },
+          );
+          closeModal();
+          S.prog = tp2.id;
+          go('program');
+          S.flash =
+            sw.name +
+            ' copied to ' +
+            tp2.name +
+            (ds.length ? ', on ' + andList(ds) : '') +
+            '. Editing one won’t change the other.';
+          render();
+          say(S.flash);
+          return;
+        }
+        case 'new-prog':
+          newProgram();
+          window.scrollTo(0, 0);
+          nextFocus = '#pname';
+          break;
+        case 'fold-open':
+          FOLD.open[t.dataset.key] = true;
+          FOLD.focus = 'unfold-' + t.id.replace('fold-', '');
+          say('Opened');
+          break;
+        case 'fold-close':
+          delete FOLD.open[t.dataset.key];
+          delete FOLD.seenOpen[t.dataset.key];
+          FOLD.focus = 'fold-' + t.id.replace('unfold-', '');
+          say('Collapsed');
+          break;
+        case 'open-prog':
+          S.prog = t.dataset.pid;
+          return go('program');
+        case 'pname':
+          S.editing = 'pname';
+          break;
+        case 'pname-save':
+          if (!val('pname')) {
+            S.flash = 'Give the program a name, then Save.';
+            nextFocus = '#pname';
+            break;
+          }
+          prog(S.prog).name = val('pname');
+          delete prog(S.prog).fresh;
+          S.editing = null;
+          say('Program renamed');
+          break;
+        case 'start':
+          return openStart();
+        case 'start-go': {
+          var from = document.getElementById('st-from').value,
+            names = [];
+          Array.prototype.forEach.call(
+            document.querySelectorAll('input[name=st-ath]:checked:not(:disabled)'),
+            function (b) {
+              addPlan(b.value, S.prog, from);
+              names.push(ath(b.value).name);
+            },
+          );
+          closeModal();
+          if (!names.length) break;
+          S.flash =
+            names.join(' and ') +
+            ' start' +
+            (names.length > 1 ? '' : 's') +
+            ' ' +
+            prog(S.prog).name +
+            ' on ' +
+            short(from) +
+            '.';
+          say(S.flash);
+          break;
+        }
+        case 'edit-wk':
+          S.draft = JSON.parse(JSON.stringify(wk(prog(S.prog), t.dataset.wid)));
+          return go('workout');
+        case 'new-wk':
+          S.draft = {
+            wid: 'w' + ++S.seq,
+            name: '',
+            desc: '',
+            rests: {},
+            items: [],
+            isNew: true,
+          };
+          go('workout');
+          document.querySelector('[data-d=name]').focus();
+          return;
+        case 'wk-cancel':
+          S.draft = null;
+          S.picker = null;
+          return go('program');
+        case 'wk-save': {
+          var p = prog(S.prog),
+            dr = S.draft,
+            isNew = dr.isNew;
+          if (!String(dr.name).trim()) {
+            S.flash = 'Give the workout a name, then Save.';
+            nextFocus = '[data-d=name]';
+            break;
+          }
+          normalize(dr.items);
+          delete dr.isNew;
+          dr.items.forEach(function (it) {
+            ['sets', 'reps', 'load', 'sec', 'dist', 'min', 'n'].forEach(function (f) {
+              if (it[f] !== undefined && it[f] !== '' && !isNaN(+it[f])) it[f] = +it[f];
+            });
+          });
+          if (isNew) p.workouts.push(dr);
+          else
+            p.workouts = p.workouts.map(function (w) {
+              return w.wid === dr.wid ? dr : w;
+            });
+          S.draft = null;
+          say('Workout saved. Rows already logged keep what they were logged against.');
+          return go('program');
+        }
+        case 'it-move': {
+          var its = S.draft.items,
+            i = +t.dataset.i,
+            j = i + +t.dataset.dir,
+            tmp = its[i];
+          its[i] = its[j];
+          its[j] = tmp;
+          normalize(its);
+          say(itemName(tmp) + ' moved');
+          break;
+        }
+        case 'it-del': {
+          var gone = S.draft.items.splice(+t.dataset.i, 1)[0];
+          normalize(S.draft.items);
+          say(itemName(gone) + ' removed. Cancel to undo.');
+          break;
+        }
+        case 'ss-link': {
+          var its2 = S.draft.items,
+            k = +t.dataset.i,
+            g = its2[k].ss || its2[k + 1].ss || 'g' + ++S.seq,
+            old = its2[k + 1].ss;
+          its2.forEach(function (x) {
+            if (old && x.ss === old) x.ss = g;
+          });
+          its2[k].ss = g;
+          its2[k + 1].ss = g;
+          normalize(its2);
+          say('Superset made');
+          break;
+        }
+        case 'ss-unlink': {
+          var its3 = S.draft.items,
+            m = +t.dataset.i,
+            g2 = its3[m].ss,
+            ng = 'g' + ++S.seq;
+          for (var q = m + 1; q < its3.length && its3[q].ss === g2; q++) its3[q].ss = ng;
+          normalize(its3);
+          say('Unlinked');
+          break;
+        }
+        case 'pick-open':
+          S.picker = { sel: {}, newOpen: false, q: '' };
+          window.scrollTo(0, 0);
+          nextFocus = '#pk-q';
+          break;
+        case 'pick-close':
+          S.picker = null;
+          nextFocus = '[data-act=pick-open]';
+          break;
+        case 'pick': {
+          var pk = t.dataset.k;
+          if (S.picker.sel[pk]) delete S.picker.sel[pk];
+          else S.picker.sel[pk] = Date.now() + Math.random();
+          break;
+        }
+        case 'ni-open':
+          S.picker.newOpen = true;
+          break;
+        case 'ni-cancel':
+          S.picker.newOpen = false;
+          break;
+        case 'ni-save': {
+          var nm2 = val('ni-name');
+          if (!nm2) return;
+          var nk = 'c' + ++S.seq;
+          S.catalog[nk] = { name: nm2, type: document.getElementById('ni-type').value };
+          S.picker.sel[nk] = Date.now();
+          S.picker.newOpen = false;
+          say(nm2 + ' created and selected');
+          break;
+        }
+        case 'pick-add': {
+          var sel = S.picker.sel,
+            ks = Object.keys(sel).sort(function (a, b) {
+              return sel[a] - sel[b];
+            });
+          ks.forEach(function (ck) {
+            var it = mk(ck, defaults(S.catalog[ck].type));
+            if (
+              S.draft.items.some(function (x) {
+                return x.iid === it.iid;
+              })
+            )
+              it.iid = ck + '_' + ++S.seq;
+            S.draft.items.push(it);
+          });
+          S.picker = null;
+          say(ks.length + ' item' + (ks.length > 1 ? 's' : '') + ' added');
+          break;
+        }
+        case 'wadd':
+          S.weekAdd = +t.dataset.day;
+          break;
+        case 'wadd-cancel':
+          S.weekAdd = null;
+          break;
+        case 'wadd-save': {
+          var pp = prog(S.prog),
+            wid3 = document.getElementById('wa-wid').value,
+            added = [],
+            skipped = [];
+          Array.prototype.forEach.call(
+            document.querySelectorAll('input[name=wa-day]:checked'),
+            function (b) {
+              var dk = +b.value;
+              if (
+                freeOn(pp, dk).some(function (w) {
+                  return w.wid === wid3;
+                })
+              ) {
+                (pp.week[dk] = pp.week[dk] || []).push({
+                  label: val('wa-label'),
+                  wid: wid3,
+                });
+                added.push(DAYS[dk].slice(0, 3));
+              } else skipped.push(DAYS[dk].slice(0, 3));
+            },
+          );
+          if (!added.length && !skipped.length) {
+            S.flash = 'Pick at least one day.';
+            break;
+          }
+          S.weekAdd = null;
+          S.flash =
+            (added.length ? wk(pp, wid3).name + ' added on ' + andList(added) + '.' : '') +
+            (skipped.length ? ' Already on ' + andList(skipped) + ', so skipped.' : '');
+          say(S.flash);
+          break;
+        }
+        case 'wmove': {
+          var wl = prog(S.prog).week[+t.dataset.day],
+            wi = +t.dataset.i,
+            wj = wi + +t.dataset.dir,
+            wt = wl[wi];
+          wl[wi] = wl[wj];
+          wl[wj] = wt;
+          say('Moved');
+          break;
+        }
+        case 'wdel': {
+          prog(S.prog).week[+t.dataset.day].splice(+t.dataset.i, 1);
+          say('Removed from ' + DAYS[+t.dataset.day]);
+          break;
+        }
+        case 'addset': {
+          var xk = S.day + '|' + t.dataset.slot + '|' + t.dataset.iid;
+          S.extra[xk] = (S.extra[xk] || 0) + 1;
+          say('Set added');
+          break;
+        }
+        case 'row': {
+          var slot = t.dataset.slot,
+            pid2 = slot.split('_')[0],
+            P2 = prog(pid2),
+            W = wk(P2, slot.slice(pid2.length + 1));
+          var it2 = W.items.filter(function (x) {
+              return x.iid === t.dataset.iid;
+            })[0],
+            set = +t.dataset.set;
+          var ex = rowEntry(S.day, slot, it2.iid, set),
+            lbl2 = itemName(it2) + (SET_TYPES[itemType(it2)] ? ' set ' + set : '');
+          if (ex && !ex.hidden) {
+            ex.hidden = true;
+            ex.event = null;
+            say(lbl2 + ' un-checked');
+            break;
+          }
+          var v = {},
+            missing = false,
+            bad = false,
+            rid = 'r-' + slot + '-' + it2.iid + '-' + set;
+          fieldsOf(it2).forEach(function (f) {
+            var typed = val(rid + '-' + f.f);
+            if (typed !== '' && isNaN(+typed)) bad = true;
+            v[f.f] = typed !== '' ? +typed : f.p;
+            if (v[f.f] == null || v[f.f] === '') missing = true;
+          });
+          if (bad || missing) {
+            S.err = { at: rid, msg: bad ? 'Numbers only.' : 'Enter a number, then ✓.' };
+            break;
+          }
+          if (S.failNext) {
+            // A ✓ that fails (plan D24): the row un-ticks, keeps what was typed, and says so.
+            S.failNext = false;
+            fieldsOf(it2).forEach(function (f) {
+              S.pending[rid + '-' + f.f] = String(v[f.f]);
+            });
+            S.err = { at: rid, msg: 'Couldn’t save. Try again.' };
+            break;
+          }
+          fieldsOf(it2).forEach(function (f) {
+            delete S.pending[rid + '-' + f.f];
+          });
+          if (ex) {
+            ex.hidden = false;
+            ex.v = v;
+          } else
+            stamp(
+              add({
+                ath: S.ath,
+                day: S.day,
+                cat: 'row',
+                slot: slot,
+                wid: W.wid,
+                iid: it2.iid,
+                set: set,
+                v: v,
+                at: nowTime(),
+              }),
+            );
+          say(lbl2 + ' logged');
+          break;
+        }
+        case 'row-old':
+          // A row whose item has left the workout: it can be un-ticked and ticked back, nothing more.
+          e.hidden = !e.hidden;
+          e.event = null;
+          say(e.nm + (e.hidden ? ' un-checked' : ' logged'));
+          break;
+        case 'modal-close':
+          closeModal();
+          return;
+      }
+      render();
+      // Focus stays where the person was: the same control, or the one the action names; a refusal
+      // focuses its field (accessibility panel, d3 round 1).
+      var to =
+        document.querySelector('[aria-invalid="true"]') ||
+        (nextFocus && document.querySelector(nextFocus)) ||
+        document.querySelector(selectorOf(t));
+      if (to) to.focus();
+    });
+    function selectorOf(t) {
+      return (
+        '[data-act="' +
+        t.dataset.act +
+        '"]' +
+        ['id', 'slot', 'iid', 'set', 'key', 'day', 'i', 'dir', 'wid', 'aid', 'pid']
+          .map(function (k) {
+            return t.dataset[k] != null ? '[data-' + k + '="' + t.dataset[k] + '"]' : '';
+          })
+          .join('')
+      );
+    }
+
+    function openClear() {
+      OPENER = document.activeElement;
+      var A = ath(S.ath),
+        n = live(dayEntries(S.ath, S.day)).length;
+      document.getElementById('modal').innerHTML =
+        '<div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="clr-t" aria-describedby="clr-d">' +
+        '<h2 id="clr-t">Clear ' +
+        esc(dayLabel(S.day).replace(/^Today · |^Yesterday · /, '')) +
+        '? ' +
+        chip('V1-9b B2') +
+        '</h2>' +
+        '<p id="clr-d" class="hint">This hides everything ' +
+        esc(A.name) +
+        ' logged that day: ' +
+        esc(clearSummary(S.ath, S.day)) +
+        '. You can restore it all at once.' +
+        // PRIV-3 requirement 2 (maintainer, 2026-11-15): say the note outlives the clear.
+        (hasEarlier(S.ath, S.day)
+          ? ' A strength session’s “How did it feel?” note is kept, though the day page doesn’t show it.'
+          : '') +
+        '</p>' +
+        '<label class="stack" style="gap:4px"><span>Type <b>delete</b> to confirm</span><input type="text" id="clr-in" autocomplete="off" autocapitalize="none"></label>' +
+        '<div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="modal-close">Cancel</button><button class="btn danger" id="clr-go" data-act="clear-confirm" disabled>Clear day</button></div></div></div>';
+      var inp = document.getElementById('clr-in');
+      inp.focus();
+      inp.addEventListener('input', function () {
+        document.getElementById('clr-go').disabled = inp.value.trim().toLowerCase() !== 'delete';
+      });
+    }
+    function hasEarlier(aid, day) {
+      return live(dayEntries(aid, day)).some(function (e) {
+        return e.cat !== 'row' && e.cat !== 'bw' && e.cat !== 'life';
+      });
+    }
+    function clearSummary(aid, day) {
+      var es = live(dayEntries(aid, day)),
+        parts = [],
+        wks = {},
+        sets = 0,
+        other = 0;
+      es.forEach(function (e) {
+        if (e.cat === 'row') {
+          sets++;
+          wks[e.wn || 'a workout'] = 1;
+        } else if (e.cat === 'bw') parts.push('bodyweight');
+        else if (e.cat === 'life') parts.push(FIELDS[e.key].label.toLowerCase());
+        else other++;
+      });
+      var wn = Object.keys(wks);
+      if (wn.length)
+        parts.unshift(
+          andList(wn) + ' (' + sets + (sets > 1 ? ' sets and checks' : ' set or check') + ')',
+        );
+      if (other) parts.push(other + ' earlier entr' + (other > 1 ? 'ies' : 'y'));
+      return andList(parts);
+    }
+    var OPENER = null;
+    function opened(first) {
+      var m = document.getElementById('modal'),
+        el =
+          m.querySelector(first) ||
+          m.querySelector('button:not([disabled]), input:not([disabled]), select');
+      if (el) el.focus();
+    }
+    function closeModal(keepFocus) {
+      document.getElementById('modal').innerHTML = '';
+      var o = OPENER;
+      OPENER = null;
+      if (keepFocus) return;
+      if (o && document.contains(o)) o.focus();
+      else {
+        var h = document.querySelector('#app h1');
+        if (h) h.focus();
+      }
+    }
+    document.addEventListener('keydown', function (ev) {
+      var m = document.getElementById('modal');
+      if (!m.innerHTML) return;
+      if (ev.key === 'Escape') return closeModal();
+      if (ev.key !== 'Tab') return;
+      // Keep Tab inside the dialog.
+      var f = Array.prototype.filter.call(
+        m.querySelectorAll('button, input, select, textarea'),
+        function (x) {
+          return !x.disabled;
+        },
+      );
+      if (!f.length) return;
+      if (ev.shiftKey && document.activeElement === f[0]) {
+        ev.preventDefault();
+        f[f.length - 1].focus();
+      } else if (!ev.shiftKey && document.activeElement === f[f.length - 1]) {
+        ev.preventDefault();
+        f[0].focus();
+      }
+    });
+
+    function newProgram() {
+      var id = 'p' + ++S.seq;
+      S.programs.push({
+        id: id,
+        fresh: true,
+        name: 'New program',
+        workouts: [],
+        week: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
+      });
+      S.prog = id;
+      S.editing = 'pname';
+      S.screen = 'program';
+    }
+    // Typing in the editor updates the draft without redrawing, so focus stays put.
+    document.addEventListener('input', function (ev) {
+      var el = ev.target;
+      if (el.id === 'pk-q') {
+        S.picker.q = el.value;
+        filterPicker();
+        return;
+      }
+      if (el.dataset && el.dataset.pend) {
+        S.pending[el.id] = el.value;
+        save();
+        return;
+      }
+      var path = el.dataset && el.dataset.d;
+      if (!path || !S.draft) return;
+      var parts = path.split('.');
+      if (parts.length === 1) {
+        S.draft[parts[0]] = el.value;
+        if (parts[0] === 'name')
+          document.getElementById('cnt-name').textContent = el.value.length + ' / 30';
+      } else if (parts[0] === 'rest') S.draft.rests[parts[1]] = el.value;
+      else {
+        S.draft.items[+parts[0]][parts[1]] = el.value;
+        if (parts[1] === 'note') {
+          var c = document.getElementById('cnt-' + parts[0]);
+          if (c) c.textContent = el.value.length + ' / 500';
+        }
+      }
+      save();
+    });
+    // Changing a number on a logged row changes the entry (the V1-24 2b question: is this the amend?).
+    document.addEventListener('change', function (ev) {
+      var el = ev.target,
+        id = el.dataset && el.dataset.row;
+      if (!id) return;
+      var e = S.entries.filter(function (x) {
+        return x.id === id;
+      })[0];
+      if (!e) return;
+      var v = el.value.trim(),
+        old = e.v[el.dataset.f];
+      if (v === '' || isNaN(+v)) {
+        el.value = nf(old);
+        say('Kept ' + old + ': enter a number to change it.');
+        return;
+      }
+      e.v[el.dataset.f] = +v;
+      save();
+      say(label(e) + ' changed to ' + v);
+    });
+    function filterPicker() {
+      var q = ((S.picker && S.picker.q) || '').toLowerCase();
+      var shown = 0;
+      Array.prototype.forEach.call(document.querySelectorAll('#pk-list .pick'), function (b) {
+        b.hidden = q && b.dataset.name.indexOf(q) < 0;
+        if (!b.hidden) shown++;
+      });
+      var none = document.getElementById('pk-none');
+      if (none) none.hidden = shown > 0;
+    }
+
+    // --- review bar ---
+    // A new family has nothing; your sample family is set aside and comes back on any other jump.
+    function useNewFamily() {
+      if (S.family === 'new') return;
+      S.stash = {
+        athletes: S.athletes,
+        entries: S.entries,
+        programs: S.programs,
+        assign: S.assign,
+      };
+      S.athletes = [];
+      S.entries = [];
+      S.programs = [];
+      S.assign = {};
+      S.family = 'new';
+    }
+    function useExistingFamily() {
+      if (S.family !== 'new') return;
+      var f = S.stash || seed();
+      S.athletes = f.athletes;
+      S.entries = f.entries;
+      S.programs = f.programs;
+      S.assign = f.assign;
+      S.stash = null;
+      S.family = 'existing';
+    }
+    function dayOf(a, day) {
+      S.ath = a;
+      S.day = day;
+      S.screen = 'day';
+      S.signedIn = true;
+    }
+    function jump(v) {
+      // Stamp seeded rows before any state changes the program (a URL like #edited jumps before the
+      // first render, and "edited" rewrites the program the stamps are taken from).
+      ensureState();
+      S.editing = null;
+      S.refusal = null;
+      S.flash = null;
+      S.picker = null;
+      S.weekAdd = null;
+      S.draft = null;
+      TODAY = REAL_TODAY;
+      S.today = null;
+      if (v === 'welcome') {
+        useNewFamily();
+        S.signedIn = true;
+        S.screen = 'welcome';
+        render();
+        window.scrollTo(0, 0);
+        return;
+      }
+      useExistingFamily();
+      S.signedIn = true;
+      if (v === 'signin') {
+        S.signedIn = false;
+        S.screen = 'signin';
+      } else if (v === 'picker') S.screen = 'picker';
+      else if (v === 'folded' || v === 'foldedall') {
+        dayOf('a1', TODAY);
+        FOLD.visit = '';
+        daySlots(onPrograms('a1', TODAY), TODAY).forEach(function (x, i) {
+          if (v === 'foldedall' || i === 0) finishWorkout(TODAY, x.key);
+        });
+        if (v === 'foldedall') {
+          // Bodyweight and practice logged too, so the second option has something to fold.
+          var mine = dayEntries('a1', TODAY);
+          if (
+            !live(mine).some(function (e) {
+              return e.cat === 'bw';
+            })
+          )
+            add({ ath: 'a1', day: TODAY, cat: 'bw', value: 112.4, at: nowTime() });
+          if (
+            !live(mine).some(function (e) {
+              return e.cat === 'life' && e.key === 'wrestling_practice';
+            })
+          )
+            add({
+              ath: 'a1',
+              day: TODAY,
+              cat: 'life',
+              key: 'wrestling_practice',
+              value: 90,
+              at: nowTime(),
+            });
+        }
+      } else if (v === 'today') dayOf('a1', TODAY);
+      else if (v === 'yesterday') dayOf('a1', addDays(TODAY, -1));
+      else if (v === 'closed') dayOf('a1', '2026-11-11');
+      else if (v === 'tomorrow') dayOf('a1', '2026-11-16');
+      else if (v === 'sunday') {
+        TODAY = S.today = '2026-11-15';
+        dayOf('a1', TODAY);
+      } else if (v === 'clear') dayOf('a1', addDays(TODAY, -1));
+      else if (v === 'edited') {
+        // The program is edited AFTER yesterday was logged: fewer sets and a heavier bench, pull-ups
+        // removed from Heavy A, push-ups cut to two sets. Logged rows keep what they were logged against.
+        var hw = wk(prog('p1'), 'w2'),
+          mh = wk(prog('p1'), 'w1');
+        hw.items = hw.items.filter(function (x) {
+          return x.iid !== 'pullup';
+        });
+        normalize(hw.items);
+        hw.items.forEach(function (x) {
+          if (x.iid === 'dbbench') {
+            x.sets = 3;
+            x.load = 30;
+          }
+        });
+        mh.items.forEach(function (x) {
+          if (x.iid === 'pushups') x.sets = 2;
+        });
+        dayOf('a1', addDays(TODAY, -1));
+      } else if (v === 'failed') {
+        dayOf('a1', TODAY);
+        S.failNext = true;
+        S.pending['r-p1_w1-neck-1-sec'] = '30';
+        S.err = { at: 'r-p1_w1-neck-1', msg: 'Couldn’t save. Try again.' };
+      } else if (v === 'nomatch') {
+        S.prog = 'p1';
+        S.draft = JSON.parse(JSON.stringify(wk(prog('p1'), 'w2')));
+        S.screen = 'workout';
+        S.picker = { sel: {}, newOpen: false, q: 'kettlebell snatch' };
+      } else if (v === 'noprog') {
+        useNewFamily();
+        S.athletes.push({
+          id: 'a9',
+          name: 'Test Athlete',
+          kind: 'Child',
+          archived: false,
+          life: ['wrestling_practice'],
+        });
+        dayOf('a9', TODAY);
+      } else if (v === 'programs') S.screen = 'programs';
+      else if (v === 'program' || v === 'start') {
+        S.prog = 'p1';
+        S.screen = 'program';
+      } else if (v === 'workout' || v === 'picker2') {
+        S.prog = 'p1';
+        S.draft = JSON.parse(JSON.stringify(wk(prog('p1'), 'w2')));
+        S.screen = 'workout';
+        if (v === 'picker2') S.picker = { sel: {}, newOpen: false, q: '' };
+      } else if (v === 'scratch') newProgram();
+      else if (v === 'copy') {
+        S.prog = 'p1';
+        S.screen = 'program';
+      } else if (v === 'order') dayOf('a1', TODAY);
+      else if (v === 'copied') {
+        S.prog = 'p3';
+        if (
+          !prog('p3').workouts.some(function (w) {
+            return w.from;
+          })
+        ) {
+          var cw = JSON.parse(JSON.stringify(wk(prog('p1'), 'w4')));
+          cw.wid = 'w' + ++S.seq;
+          cw.from = { prog: 'Family program', on: TODAY };
+          prog('p3').workouts.push(cw);
+          prog('p3').week[1].push({ label: 'Evening', wid: cw.wid });
+        }
+        S.screen = 'program';
+      } else if (v === 'settings' || v === 'privacy') S.screen = v;
+      render();
+      window.scrollTo(0, 0);
+      if (v === 'start') openStart();
+      if (v === 'copy') {
+        openCopy('w4');
+        document.getElementById('cp-to').value = 'p3';
+      }
+      if (v === 'order') openOrder();
+      if (v === 'clear') openClear();
+    }
+    document.getElementById('jump').addEventListener('change', function (ev) {
+      if (ev.target.value) jump(ev.target.value);
+      ev.target.value = '';
+    });
+    var foldMode = document.getElementById('foldmode'),
+      foldSec = document.getElementById('foldsec');
+    foldMode.addEventListener('change', function () {
+      FOLD.mode = foldMode.value;
+      FOLD.open = {};
+      FOLD.seenOpen = {};
+      render();
+    });
+    foldSec.addEventListener('change', function () {
+      FOLD.sections = foldSec.checked;
+      FOLD.open = {};
+      FOLD.seenOpen = {};
+      render();
+    });
+    var idsBox = document.getElementById('ids');
+    try {
+      idsBox.checked = localStorage.getItem(KEY + '-ids') === '1';
+    } catch (e) {}
+    function applyIds() {
+      document.querySelector('.phone').classList.toggle('show-ids', idsBox.checked);
+      try {
+        localStorage.setItem(KEY + '-ids', idsBox.checked ? '1' : '0');
+      } catch (e) {}
+    }
+    idsBox.addEventListener('change', applyIds);
+    applyIds();
+    document.getElementById('reset').addEventListener('click', function () {
+      TODAY = REAL_TODAY;
+      closeModal();
+      S = seed();
+      render();
+      say('Data reset');
+    });
+    var start = (location.hash || '').replace('#', '');
+    if (start) jump(start);
+    else render();
+  })();
+</script>
