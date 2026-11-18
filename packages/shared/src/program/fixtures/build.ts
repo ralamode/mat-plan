@@ -207,10 +207,13 @@ function currentPrograms(world: World, athlete: string) {
       );
     }
   }
-  return [
+  const ranked = [
     ...current.filter((a) => !endsToday(world, a)),
     ...current.filter((a) => endsToday(world, a)),
   ];
+  // Each program once, as the day's read places it: by its row that stays, else by the one ending
+  // today (taken off today and put on again from tomorrow is one program, and it stays).
+  return ranked.filter((a, i) => ranked.findIndex((b) => b.prog === a.prog) === i);
 }
 
 /** Its last day is today: `to`, the first day off, is tomorrow, and it has started. */

@@ -1212,6 +1212,17 @@ describe('coach-label-program-ending-today (C32, C37)', () => {
       ]);
     });
 
+    it('🔴 lists a program once when it ends today and starts again tomorrow: it stays', () => {
+      const again = edit(world, (draft) => {
+        draft.assign[athlete]!.push({ prog: 'p911', from: tomorrow });
+      });
+      // Placed by its row that stays, which is after Barbell club in the athlete's order.
+      expect(current(again)).toEqual([
+        ['Barbell club', undefined],
+        ['Camp week', undefined],
+      ]);
+    });
+
     it('🔴 a program that starts later is not ending today, whatever end it carries', () => {
       // An end on the day it starts included: `to` is tomorrow there, as for a program ending today.
       for (const to of [tomorrow, '2026-11-18']) {
