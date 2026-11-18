@@ -315,7 +315,7 @@ gantt
   13b-ii Change                :done, c2b, 3, 4
   13d look ahead, closed days  :done, c3, 3, 4
   12b first real ✓             :crit, done, c4, 8, 9
-  12c on the day page          :crit, c5, 9, 10
+  12c on the day page          :crit, done, c5, 9, 10
   12d Change                   :crit, c6, 10, 11
   15c, 12f                     :c7, 11, 12
 
@@ -355,9 +355,9 @@ gantt
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, and so is 7a-ii, which needed 6b and 6a-iii-b (#586).
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-18, 43 of the 54). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-18, 44 of the 54). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
-  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525), 11c-i (#539) and 14a (#582); lane B's six screen steps (8a to 10b) and both of 7a's (7a-i, 7a-ii); lane C's five (13, 13b, 13b-ii, 13d, and 12b, the first real ✓, #528); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
+  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525), 11c-i (#539) and 14a (#582); lane B's six screen steps (8a to 10b) and both of 7a's (7a-i, 7a-ii); lane C's six (13, 13b, 13b-ii, 13d, 12b, the first real ✓, #528, and 12c, the workouts on the day page, #567); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
   All four of 6a's PRs (6a-iii-b, copying a workout, is #571), 6b (#522) and 6c-i (#588) are merged. Both of 7a's PRs are merged (7a-ii is #586). The bar for 14 and 11c is part merged: 14a and 11c-i are merged, 14b and 11c-ii are not. A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
