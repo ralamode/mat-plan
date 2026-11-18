@@ -313,6 +313,11 @@ flowchart LR
     - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
       DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
       editor reads it as a stale page.
+    - ⏳ **A sixth refusal, `limit_reached` (contract C35, the per-household caps), has no words of
+      its own yet.** Until 7b gives it per-screen copy, `nameRefusal` and `saveRefusal` fall to
+      their default ("Couldn’t save. Try again."), which is the wrong advice for a cap; no screen
+      reaches a real cap before 7b. `saveWeekAction` gains its `weekExceedsDaySlots` branch (so a
+      long day is `limit_reached`, not `invalid`) in lane B's PR before 7b.
     - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
       helper): a week's program, then each workout it names (distinct, at most
       `WEEK_PROBE_LIMIT`); a copy's TARGET program, then its source workout by id alone
