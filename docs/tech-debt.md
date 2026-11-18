@@ -747,6 +747,11 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
   `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
   `messageKey` when that lane next touches it.
+  ✅ **The day screen moved (FAM-1 12c, 2026-11-17)**: each announcement is a new `messageKey`, and
+  `day-screen.test.tsx` proves a repeat is a new node with the same text. ⚠️ **One copy is left:**
+  `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
+  prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
+  at 15c, which wires that dialog.
 - **Severity:** low.
 
 ### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)

@@ -391,6 +391,24 @@ describe('a ✓ that fails', () => {
     expect(second).toBe(first);
   });
 
+  it('the same sentence twice is announced twice: a new node, the same text', async () => {
+    mount(todayTwoPrograms, {
+      wrap: () => ({ logRow: async () => ({ ok: false, reason: ROW_REFUSAL.retry }) }),
+    });
+    const vest = card('Morning habits', 'Vest weight');
+    const said = DAY_COPY.announce.failed(
+      'Vest weight',
+      refusalCopy(ROW_REFUSAL.retry, 'tick').message,
+    );
+    await press(tick(vest));
+    const first = screen.getByRole('status').firstChild;
+    expect(status()).toBe(said);
+    await press(tick(vest));
+    // A live region reads a change; an unchanged node would be silent.
+    expect(screen.getByRole('status').firstChild).not.toBe(first);
+    expect(status()).toBe(said);
+  });
+
   it('a retry with a different number is a new attempt with a new clientId', async () => {
     const control = mount(todayTwoPrograms, { failNext: true });
     const vest = card('Morning habits', 'Vest weight');

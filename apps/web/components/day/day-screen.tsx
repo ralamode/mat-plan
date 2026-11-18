@@ -82,7 +82,9 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const headingId = useId();
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [closed, setClosed] = useState(false);
-  const [message, setMessage] = useState('');
+  // `n` counts announcements: each one is a new node in the live region, so the same sentence twice
+  // in a row is read twice (`Announcer`'s `messageKey`).
+  const [message, setMessage] = useState({ text: '', n: 0 });
   const closedRef = useRef<HTMLDivElement>(null);
 
   // A row's effect depends on these, so each keeps one identity for the life of the day.
@@ -128,9 +130,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
       day: viewedDay,
       actions: pinned(actions, { day: viewedDay, today }),
       readOnly,
-      // A live region announces a change: the same sentence twice in a row would be silent, so
-      // the second one carries a no-break space (U+00A0), which is not collapsed as a space is.
-      announce: (next) => setMessage((was) => (was === next ? `${next}\u00a0` : next)),
+      announce: (text) => setMessage((was) => ({ text, n: was.n + 1 })),
       setRowFailed,
       setRowPending,
       // The notice takes focus, which reads it; the live region would say it a second time.
@@ -197,7 +197,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
             />
           );
         })}
-        <Announcer message={message} />
+        <Announcer message={message.text} messageKey={message.n} />
       </section>
     </DayContext>
   );
