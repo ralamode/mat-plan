@@ -1,0 +1,27 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index 0394abea..481ea789 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -148,22 +148,6 @@ export async function copyWorkout(
+     if (targetWorkouts.filter((w) => w.deletedAt === null).length >= MAX_PROGRAM_WORKOUTS) {
+       return refuse(PROGRAM_REFUSAL.limit_reached);
+     }
+-    // So is a weekday it would go on: no day may hold more than `MAX_DAY_SLOTS` (the read parses the
+-    // week with that cap), and a copy writes its slots without a week draft to parse.
+-    if (draft.weekdays.length > 0) {
+-      const full = await tx
+-        .select({ weekday: schema.blockDayWorkouts.weekday, n: count() })
+-        .from(schema.blockDayWorkouts)
+-        .where(
+-          and(
+-            eq(schema.blockDayWorkouts.blockId, target.id),
+-            inArray(schema.blockDayWorkouts.weekday, [...draft.weekdays]),
+-            isNull(schema.blockDayWorkouts.deletedAt),
+-          ),
+-        )
+-        .groupBy(schema.blockDayWorkouts.weekday);
+-      if (full.some((day) => day.n >= MAX_DAY_SLOTS)) return refuse(PROGRAM_REFUSAL.limit_reached);
+-    }
+ 
+     const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);
+     const folded = foldName(name);

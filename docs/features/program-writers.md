@@ -241,7 +241,8 @@ flowchart TD
     anything. No gate proves a lock (PGlite has one connection) (mutations `new-item-uncapped`,
     `new-item-counts-every-household`, `save-workout-caps-a-replay`,
     `save-workout-counts-removed-workouts`, `save-workout-cap-off-by-one`, `copy-uncapped`,
-    `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`).
+    `save-week-long-day-is-invalid`, `save-week-cap-before-repeat`, `copy-onto-a-full-weekday`,
+    `copy-cap-after-the-name`).
 
 ## Changing it
 

@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index 84c6b6d2..c5471345 100644
+index ecb19e5a..a27b4bb7 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -134,7 +134,6 @@ async function addOrSelect(
-     .select({ n: count() })
-     .from(schema.movements)
-     .where(movementInHousehold(scope));
--  if ((own?.n ?? 0) >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+@@ -130,7 +130,6 @@ async function addOrSelect(
+   // The household's own items, as the picker lists them (live, not shadowed by a catalog item):
+   // the fake's count, from the list already read under the lock.
+   const own = options.filter((option) => option.owner !== 'catalog').length;
+-  if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
  
    const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);
    const [row] = await exec
