@@ -184,6 +184,8 @@ flowchart LR
 16. **The item picker** (step 9) _(maintainer, 2026-11-16)_:
     - **The selection is the editor's**, in pick order, kept across a Close or a back swipe until
       Add; items made in the picker are kept too, so a reopened picker lists them.
+    - **Each row's second line is the movement picker's own** since CAT-3 B2-i (what it tracks,
+      then what it needs; movement-picker invariant 14), so the item picker passes no `describe`.
     - **Add** appends a card per item in pick order (`newCard`): a fresh `prescriptionClientId`, **no
       numbers**, and the unit the type fixes, else the item's own declared unit when the type allows
       it, else none. Focus goes to the first new card's heading; the status line says how many, from

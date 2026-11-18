@@ -2,8 +2,13 @@
 
 import {
   MOVEMENT_NAME_MAX,
+  EQUIPMENT_LABELS,
   MOVEMENT_PICKER_GROUPS,
+  requiresNoEquipment,
+  SUPERVISION_LABELS,
+  TRACKING_TYPE_LABELS,
   existingItem,
+  type CatalogHowTo,
   movementNameSchema,
   searchMovementOptions,
 } from '@mat-plan/shared';
@@ -82,8 +87,6 @@ export type MultiPick = {
   createLabel: (typed: string) => string;
   /** Shown under the create button when nothing matches at all. */
   noMatchHint: string;
-  /** The line under each row's name (what it tracks). */
-  describe: (option: MovementOptionDTO) => string;
   /**
    * The caller's action ("Add 3 items"), beside the picker's own Close: side by side, so the footer
    * is one button tall and the list keeps its room with a phone's keyboard up (maintainer,
@@ -120,6 +123,14 @@ export type MovementPickerProps = {
   returnFocusTo: RefObject<HTMLElement | null>;
   /** Passed to the sheet: once per close, after focus is back (a page-level message's moment). */
   onReturned?: () => void;
+  /**
+   * "How to" (CAT-3 P16): the steps of a library row whose entry has instructions, by its public
+   * id, loaded when the row is opened, or `null` when there are none. A failure is a rejection. **The caller's**, because the steps are read by
+   * slug on the server and the picker imports no server action (invariant 2); an option carries no
+   * slug. With no loader, no row shows "How to": a button that never works teaches people to
+   * ignore it.
+   */
+  howTo?: (publicId: string) => Promise<CatalogHowTo | null>;
 } & (
   | {
       /** `typed` is a deliberate "use as typed" tap: the caller owns where the name goes (P6). */
@@ -170,15 +181,58 @@ export function listedAs(
 /** A row, plus the single tag it earns. One tag per row, by precedence (panel 2 · 5). */
 type Row = { option: MovementOptionDTO; tag: string | null };
 
-/** How a row behaves: a pick (single), or a checkbox with its meta line (multi). */
-type RowMode =
+/** How a row behaves: a pick (single), or a checkbox (multi); both may carry "How to". */
+type RowMode = { howTo: HowToControl | null } & (
   | { kind: 'single'; currentId?: string; onPick: (option: MovementOptionDTO) => void }
   | {
       kind: 'multi';
       selected: ReadonlySet<string>;
-      describe: (option: MovementOptionDTO) => string;
       onPick: (option: MovementOptionDTO) => void;
-    };
+    }
+);
+
+/** The one open "How to": which row on screen, which load, and where its steps are. */
+type HowToState = {
+  /** The row's instance, `${section}:${publicId}`. */
+  key: string;
+  option: MovementOptionDTO;
+  /** This load's number; an answer for any other load is dropped. */
+  request: number;
+  /** Silenced by a newer event (a tick), so the caller's notice speaks. */
+  quiet?: boolean;
+} & (
+  | { status: 'loading'; afterFailure: boolean }
+  | { status: 'none' | 'failed' }
+  | { status: 'ready'; steps: CatalogHowTo }
+);
+
+/** What a row needs to show and work its "How to" button (null: no loader, so no button). */
+type HowToControl = {
+  openKey: string | null;
+  state: HowToState | null;
+  toggle: (key: string, option: MovementOptionDTO) => void;
+  retry: (key: string, option: MovementOptionDTO) => void;
+  hide: () => void;
+};
+
+/**
+ * A row's second line (CAT-3 P14): how it is logged, then what it needs. A household item says
+ * "Custom item" there and never "No equipment": it has no equipment to show.
+ */
+/** A library row's supervision, or `null`: a household item has none (P13). */
+function supervisionOf(option: MovementOptionDTO) {
+  return option.owner === 'catalog' ? option.supervision : null;
+}
+
+export function rowMeta(option: MovementOptionDTO): string {
+  const needs =
+    option.owner === 'household'
+      ? COPY.customItem
+      : requiresNoEquipment(option)
+        ? COPY.emptyEquipment
+        : COPY.equipmentList(option.equipment.map((item) => EQUIPMENT_LABELS[item]));
+  return COPY.rowMeta(TRACKING_TYPE_LABELS[option.trackingType], needs);
+}
 
 /**
  * Ids → options, in the given order, **dropping what the map does not have.**
@@ -206,10 +260,61 @@ export function MovementPicker({
   onPick,
   multiple,
   onReturned,
+  howTo,
 }: MovementPickerProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const headingId = useId();
+
+  // ── "How to" (CAT-3 P16): one row open at a time, its steps loaded by the caller's `howTo` ──────
+  // 🔴 **Keyed by the row ON SCREEN** (`${section}:${publicId}`), not the movement: a movement can
+  // be listed twice (Recent and its group), and two open boxes would share an id. Each load carries
+  // its own number, and an answer is applied only while THAT load is still the open one, read from
+  // state: so every path that resets `how` (reopen, a search change, the takeover) drops a late
+  // answer without having to remember a counter.
+  const [how, setHow] = useState<HowToState | null>(null);
+  const howRequest = useRef(0);
+  const loadHowTo = (key: string, option: MovementOptionDTO, afterFailure = false) => {
+    if (!howTo) return;
+    const request = (howRequest.current += 1);
+    setHow({ key, option, request, status: 'loading', afterFailure });
+    const settle = (next: HowToState) =>
+      setHow((current) =>
+        current && current.request === request && current.key === key ? next : current,
+      );
+    // Through `Promise.resolve().then`, so a loader that THROWS (not rejects) is a failure too, and
+    // the box never sits "loading" forever.
+    Promise.resolve()
+      .then(() => howTo(option.publicId))
+      .then(
+        (steps) =>
+          settle(
+            steps
+              ? { key, option, request, status: 'ready', steps }
+              : { key, option, request, status: 'none' },
+          ),
+        () => settle({ key, option, request, status: 'failed' }),
+      );
+  };
+  const howToControl: HowToControl | null = howTo
+    ? {
+        openKey: how?.key ?? null,
+        state: how,
+        toggle: (key, option) => (how?.key === key ? setHow(null) : loadHowTo(key, option)),
+        retry: (key, option) => loadHowTo(key, option, true),
+        hide: () => setHow(null),
+      }
+    : null;
+  /**
+   * Said in the sheet's one status region while a load has failed, and kept through its retry (so
+   * the region does not fall back to re-reading the search count, criterion 46). It goes with the
+   * box: Hide, a search change or a reopen ends it. **It wins over the caller's `notice`** while it
+   * stands, being the newer event, until a tick or a create silences it (`quiet`).
+   */
+  const howMessage =
+    how && !how.quiet && (how.status === 'failed' || (how.status === 'loading' && how.afterFailure))
+      ? COPY.statusHowToFailed(how.option.name)
+      : '';
 
   // The query resets on every open (UX NIT) — a sheet that reopens holding the last search makes the
   // browse list unreachable without a manual clear.
@@ -222,7 +327,10 @@ export function MovementPicker({
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setQuery('');
+    if (open) {
+      setQuery('');
+      setHow(null);
+    }
   }
 
   // Multi: the search is cleared when the caller's takeover (the new-item form) OPENS, not when it
@@ -234,7 +342,10 @@ export function MovementPicker({
   const [wasTakeover, setWasTakeover] = useState(inTakeover);
   if (inTakeover !== wasTakeover) {
     setWasTakeover(inTakeover);
-    if (inTakeover) setQuery('');
+    if (inTakeover) {
+      setQuery('');
+      setHow(null);
+    }
   }
 
   // 🔴 **The search box takes focus only when there is no on-screen keyboard to raise** (criterion
@@ -278,11 +389,7 @@ export function MovementPicker({
   );
 
   /** The ONE tag a row earns, highest precedence first (Decision 8; panel 2 · 5). */
-  const tagFor = (
-    option: MovementOptionDTO,
-    inSearchResults: boolean,
-    underHouseholdHeading: boolean,
-  ) => {
+  const tagFor = (option: MovementOptionDTO, inSearchResults: boolean) => {
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
     // `also called` fires ONLY for a row the search found through another name, naming that alias:
     // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`). Otherwise it would
@@ -293,18 +400,20 @@ export function MovementPicker({
     const alias = aliasFound.get(option.publicId);
     if (alias !== undefined) return COPY.tagAlsoCalled(alias);
     if (option.publicId === currentId) return COPY.tagCurrent;
-    if (inSearchResults && option.owner === 'catalog') return COPY.groupLabel(option.group);
-    if (option.owner === 'household' && !underHouseholdHeading) return COPY.tagHousehold;
+    if (inSearchResults && option.owner === 'catalog' && option.group) {
+      return COPY.groupLabel(option.group);
+    }
+    // No `household` tag: the row's second line already says "Custom item" (P14), everywhere.
     return null;
   };
 
   const rowsFrom = (
     options: readonly MovementOptionDTO[],
-    opts: { inSearchResults?: boolean; underHouseholdHeading?: boolean } = {},
+    opts: { inSearchResults?: boolean } = {},
   ): Row[] =>
     options.map((option) => ({
       option,
-      tag: tagFor(option, opts.inSearchResults ?? false, opts.underHouseholdHeading ?? false),
+      tag: tagFor(option, opts.inSearchResults ?? false),
     }));
 
   /** The alias each row was found through, by option id (C30's `foundByAlias`). */
@@ -320,7 +429,7 @@ export function MovementPicker({
   // component must not depend on Decision 5's read happening to shadow it.
   const matches = result.matches.map((m) => m.option);
   // Near misses and some-words are only filled when `matches` is empty (the contract's rule). A row
-  // in both is shown, and counted, once: under the similar names (CAT-3 P5).
+  // in both is shown, and counted, once: under "Did you mean" (CAT-3 P5).
   const near = result.near.map((m) => m.option);
   const nearIds = new Set(near.map((o) => o.publicId));
   const someWords = result.someWords.map((m) => m.option).filter((o) => !nearIds.has(o.publicId));
@@ -367,7 +476,7 @@ export function MovementPicker({
   // ── The status region: ONE shape, `{count}. {reason}`, one reason by precedence (panel 2 · 1-2) ──
   const status = (() => {
     if (deferredTrimmed === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
-    // With no matches: "No matches." once, then each list's own count, similar names first (P5).
+    // With no matches: "No matches." once, then each list's own count, close spellings first (P5).
     const count =
       matches.length > 0
         ? COPY.statusCount(matches.length)
@@ -377,16 +486,20 @@ export function MovementPicker({
   })();
 
   const pickExisting = (option: MovementOptionDTO) => {
-    // Multi: a row toggles and the sheet stays open.
-    if (multiple) return multiple.onToggle(option);
+    // Multi: a row toggles and the sheet stays open. A tick is the newer event: the caller's notice
+    // about it speaks, not a How-to failure still standing.
+    if (multiple) {
+      setHow((current) => (current ? { ...current, quiet: true } : current));
+      return multiple.onToggle(option);
+    }
     onPick({ kind: 'existing', option });
     onOpenChange(false);
   };
 
   const selectedSet = useMemo(() => new Set(multiple?.selected ?? []), [multiple?.selected]);
   const mode: RowMode = multiple
-    ? { kind: 'multi', selected: selectedSet, describe: multiple.describe, onPick: pickExisting }
-    : { kind: 'single', currentId, onPick: pickExisting };
+    ? { kind: 'multi', selected: selectedSet, onPick: pickExisting, howTo: howToControl }
+    : { kind: 'single', currentId, onPick: pickExisting, howTo: howToControl };
 
   // Empty groups are omitted, so `wrestling` simply does not render until `C3` seeds it. The DTO
   // carries the group the DAL read out of `MOVEMENT_PICKER_ENTRIES`, so this trusts the DTO rather
@@ -419,7 +532,7 @@ export function MovementPicker({
       returnFocusTo={returnFocusTo}
       onReturned={onReturned}
       initialFocus={prefersKeyboardFocus && !multiple?.takeover ? searchRef : undefined}
-      status={multiple?.notice || status}
+      status={howMessage || multiple?.notice || status}
       headerExtra={
         multiple?.takeover ? undefined : (
           <div>
@@ -433,6 +546,8 @@ export function MovementPicker({
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                // Typing closes an open "How to" (the prototype's rule): the row may leave the list.
+                if (how) setHow(null);
                 multiple?.onQueryChange?.();
               }}
               onKeyDown={(e) => {
@@ -441,7 +556,7 @@ export function MovementPicker({
                 e.preventDefault();
                 if (!enterTarget) {
                   // Nothing to pick. On a phone the Search key still puts the keyboard away, so
-                  // the rows it is covering show: several matches, similar names, some-words.
+                  // the rows it is covering show: several matches, near misses, some-words.
                   if (!prefersKeyboardFocus && hasCandidates) {
                     e.currentTarget.blur();
                   }
@@ -451,6 +566,7 @@ export function MovementPicker({
                 // Multi: Enter SELECTS (never deselects, never creates), then clears for the next.
                 if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget, 'enter');
                 setQuery('');
+                setHow(null);
                 if (!prefersKeyboardFocus) e.currentTarget.blur();
               }}
               maxLength={MOVEMENT_NAME_MAX}
@@ -594,10 +710,7 @@ export function MovementPicker({
                 mode={mode}
                 id={`${headingId}-household`}
                 heading={COPY.household}
-                rows={rowsFrom(
-                  data.options.filter((o) => o.owner === 'household'),
-                  { underHouseholdHeading: true },
-                )}
+                rows={rowsFrom(data.options.filter((o) => o.owner === 'household'))}
               />
             </>
           ) : matches.length > 0 ? (
@@ -608,7 +721,7 @@ export function MovementPicker({
               rows={rowsFrom(matches, { inSearchResults: true })}
             />
           ) : near.length > 0 || someWords.length > 0 ? (
-            // Similar names first, then some-words (P5); each section omits itself when empty.
+            // "Did you mean" first, then some-words (P5); each section omits itself when empty.
             <>
               <Section
                 mode={mode}
@@ -731,90 +844,237 @@ function TodaysProgram({
             {allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
           </h3>
         </summary>
-        <OptionList rows={rowsFrom(options)} mode={mode} />
+        <OptionList rows={rowsFrom(options)} mode={mode} scope={headingId} />
       </details>
     </section>
   );
 }
 
-function OptionList({ rows, mode }: { rows: Row[]; mode: RowMode }) {
-  if (mode.kind === 'multi') {
-    return (
-      <ul className="flex flex-col gap-1">
-        {rows.map(({ option, tag }) => {
-          const checked = mode.selected.has(option.publicId);
-          return (
-            <li key={option.publicId}>
-              {/*
-                A checkbox row (FAM-1 step 9): one target that carries its state, so VoiceOver
-                reads "Bear Crawl, Reps, checkbox, checked". Two columns: the name and its meta
-                line wrap in the first; the box keeps its own column, so ticks line up at 360px.
-              */}
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={checked}
-                {...{ [OPTION_ID_ATTR]: option.publicId }}
-                onClick={() => mode.onPick(option)}
-                // A ticked row is OUTLINED, not filled: muted text on the accent fill is 4.34:1,
-                // under AA (docs/design.md, the rail's open row). The box carries the state, and
-                // the `done` green is not used: it means "logged" (docs/design.md).
-                className="focus-visible:ring-ring hover:border-border aria-checked:border-foreground grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left outline-none focus-visible:ring-3"
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-base wrap-anywhere">{option.name}</span>
-                  <span className="text-muted-foreground text-sm">
-                    {[mode.describe(option), tag].filter(Boolean).join(' · ')}
-                  </span>
-                </span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    'border-muted-foreground flex size-6 items-center justify-center rounded border text-sm',
-                    checked && 'border-primary bg-primary text-primary-foreground',
-                  )}
-                >
-                  {checked ? '✓' : ''}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }
-  const { currentId, onPick } = mode;
+/** A section's rows. `scope` is the section's id: it keys each row's "How to" (one per row on screen). */
+function OptionList({ rows, mode, scope }: { rows: Row[]; mode: RowMode; scope: string }) {
   return (
     <ul className="flex flex-col gap-1">
       {rows.map(({ option, tag }) => (
-        <li key={option.publicId}>
-          <button
-            type="button"
-            onClick={() => onPick(option)}
-            // `aria-current` marks the card's movement; `min-h-12` is the ≥44px tap target.
-            aria-current={option.publicId === currentId ? true : undefined}
-            className="focus-visible:ring-ring hover:bg-accent flex min-h-12 w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-3 py-2 text-left outline-none focus-visible:ring-3"
-          >
-            <span className="min-w-0 break-words text-base">{option.name}</span>
-            {/*
-              ⚠️ `aria-current` on the row already announces it, so the VISIBLE `current` tag is
-              hidden from assistive tech — otherwise the row reads "Back Squat, current, current".
-              Compared against the const itself because only THIS tag duplicates the state:
-              `already in Push A` and `also called RDL` outrank it and say something
-              `aria-current` does not.
-            */}
-            {tag ? (
-              <span
-                aria-hidden={tag === COPY.tagCurrent || undefined}
-                className="text-muted-foreground shrink-0 rounded border px-2 text-xs"
-              >
-                {tag}
-              </span>
-            ) : null}
-          </button>
-        </li>
+        <OptionRow
+          key={option.publicId}
+          option={option}
+          tag={tag}
+          mode={mode}
+          rowKey={`${scope}:${option.publicId}`}
+        />
       ))}
     </ul>
+  );
+}
+
+/**
+ * One option, in either mode (CAT-3 P13, P14, P16). The pick control holds the name, the
+ * supervision label and the second line; "How to" sits beside it, and its steps open under the row.
+ *
+ * - **Multi:** a `button role="checkbox"` with the box on the LEFT (the accepted prototype's), so
+ *   ticks line up whether or not a row has "How to", and no thumb aimed at the box lands on it
+ *   (UX panel, B2). A ticked row is outlined, never filled: muted text on the accent fill is under AA.
+ * - **Single:** a button, `aria-current` on the card's movement. Hover outlines it too, for the same
+ *   contrast reason, now that the row has a muted second line.
+ * - The tag joins the second line: three lines and a tag line left under two rows on a phone with
+ *   the keyboard up (UX panel, B2).
+ * - With a loader, a row without steps keeps the "How to" column empty (the prototype's spacer), so
+ *   the rows' outlines end at one edge and names wrap at one width.
+ */
+function OptionRow({
+  option,
+  tag,
+  mode,
+  rowKey,
+}: {
+  option: MovementOptionDTO;
+  tag: string | null;
+  mode: RowMode;
+  rowKey: string;
+}) {
+  const howButton = useRef<HTMLButtonElement>(null);
+  const supervision = supervisionOf(option);
+  const hasHowTo = mode.howTo !== null && option.owner === 'catalog' && option.hasInstructions;
+  const howState = hasHowTo && mode.howTo?.openKey === rowKey ? mode.howTo.state : null;
+  const howId = `how-to-${rowKey}`;
+  const checked = mode.kind === 'multi' && mode.selected.has(option.publicId);
+  // The row's accessible name reads its parts apart, "Pull-Up, Learn with a coach present, Reps ·
+  // Pull-up bar": stacked spans carry no space between them, so the name ran "Pull-UpLearn with…".
+  const pause = <span className="sr-only">{', '}</span>;
+  const text = (
+    <span className="flex min-w-0 flex-col">
+      <span className="text-base wrap-anywhere">{option.name}</span>
+      {supervision ? (
+        <>
+          {pause}
+          {/* Full contrast in every row state (the prototype's `.sup`; P0 left the contrast owed). */}
+          <span className="text-foreground text-sm font-medium">
+            {SUPERVISION_LABELS[supervision]}
+          </span>
+        </>
+      ) : null}
+      {pause}
+      <span className="text-muted-foreground text-sm wrap-anywhere">
+        {rowMeta(option)}
+        {tag ? (
+          <>
+            {COPY.rowMetaJoin}
+            {/*
+              ⚠️ `aria-current` on a single row already announces it, so the VISIBLE `current` tag
+              is hidden from assistive tech: otherwise the row reads "current, current".
+            */}
+            <span data-row-tag aria-hidden={tag === COPY.tagCurrent || undefined}>
+              {tag}
+            </span>
+          </>
+        ) : null}
+      </span>
+    </span>
+  );
+  return (
+    <li>
+      <div className="flex items-stretch gap-1">
+        {mode.kind === 'multi' ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={checked}
+            {...{ [OPTION_ID_ATTR]: option.publicId }}
+            onClick={() => mode.onPick(option)}
+            className="focus-visible:ring-ring hover:border-border aria-checked:border-foreground grid min-h-12 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left outline-none focus-visible:ring-3"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'border-muted-foreground flex size-6 items-center justify-center rounded border text-sm',
+                checked && 'border-primary bg-primary text-primary-foreground',
+              )}
+            >
+              {checked ? '✓' : ''}
+            </span>
+            {text}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => mode.onPick(option)}
+            // `aria-current` marks the card's movement; `min-h-12` is the ≥44px tap target.
+            aria-current={option.publicId === mode.currentId ? true : undefined}
+            className="focus-visible:ring-ring hover:border-border min-h-12 min-w-0 flex-1 rounded-lg border border-transparent px-3 py-2 text-left outline-none focus-visible:ring-3"
+          >
+            {text}
+          </button>
+        )}
+        {hasHowTo ? (
+          <button
+            ref={howButton}
+            type="button"
+            aria-label={COPY.howToFor(option.name)}
+            aria-expanded={howState !== null}
+            // Only while open: a reference to an element that is not there points at nothing.
+            aria-controls={howState ? howId : undefined}
+            onClick={() => mode.howTo?.toggle(rowKey, option)}
+            // Looks like its own button beside the pick target (the prototype's): underlined, medium,
+            // and a divider at 3:1, so a thumb can tell where the row ends.
+            className="focus-visible:ring-ring hover:bg-muted border-muted-foreground/60 min-h-11 w-17 shrink-0 rounded-lg border-l px-2 text-sm font-medium underline underline-offset-3 outline-none focus-visible:ring-3"
+          >
+            {COPY.howTo}
+          </button>
+        ) : mode.howTo !== null ? (
+          <span aria-hidden className="w-17 shrink-0" />
+        ) : null}
+      </div>
+      {howState && mode.howTo ? (
+        <HowToSteps
+          id={howId}
+          option={option}
+          state={howState}
+          // Focus first, then change: Try again and Hide are inside what they replace (UX panel).
+          onRetry={() => {
+            howButton.current?.focus();
+            mode.howTo?.retry(rowKey, option);
+          }}
+          onHide={() => {
+            howButton.current?.focus();
+            mode.howTo?.hide();
+          }}
+        />
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * The open "How to" (CAT-3 P16, K17): a named region with the name as its heading, **the
+ * supervision label first** whenever the movement has one (from the option, so a loader that leaves
+ * it out cannot drop it), then the steps. All text at full contrast: the box is `bg-muted`, where
+ * muted text is under AA.
+ */
+function HowToSteps({
+  id,
+  option,
+  state,
+  onRetry,
+  onHide,
+}: {
+  id: string;
+  option: MovementOptionDTO;
+  state: HowToState;
+  onRetry: () => void;
+  onHide: () => void;
+}) {
+  const supervision =
+    supervisionOf(option) ?? (state.status === 'ready' ? state.steps.supervision : null);
+  const steps =
+    state.status === 'ready'
+      ? state.steps.instructions
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+      : [];
+  const titleId = `${id}-title`;
+  return (
+    <div
+      id={id}
+      role="region"
+      aria-labelledby={titleId}
+      aria-busy={state.status === 'loading' || undefined}
+      className="bg-muted text-foreground mt-1 flex flex-col gap-2 rounded-lg p-3 text-sm"
+    >
+      <h4 id={titleId} className="font-semibold">
+        {COPY.howToFor(option.name)}
+      </h4>
+      {supervision ? <p className="font-medium">{SUPERVISION_LABELS[supervision]}</p> : null}
+      {state.status === 'loading' ? <p>{COPY.howToLoading}</p> : null}
+      {state.status === 'none' || (state.status === 'ready' && steps.length === 0) ? (
+        <p>{COPY.howToNone}</p>
+      ) : null}
+      {state.status === 'failed' ? (
+        <>
+          <p>{COPY.howToFailed}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="self-start"
+            onClick={onRetry}
+          >
+            {COPY.howToRetry}
+          </Button>
+        </>
+      ) : null}
+      {steps.length > 0 ? (
+        <ol className="list-decimal pl-5">
+          {steps.map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+        </ol>
+      ) : null}
+      {/* Outline, not ghost: a ghost's hover fill is the box's own colour, so it read as text. */}
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={onHide}>
+        {COPY.howToHide}
+      </Button>
+    </div>
   );
 }
 
@@ -840,7 +1100,7 @@ function Section({
       <h3 id={id} className="text-muted-foreground mb-1 text-sm font-semibold">
         {heading}
       </h3>
-      <OptionList rows={rows} mode={mode} />
+      <OptionList rows={rows} mode={mode} scope={id} />
     </section>
   );
 }

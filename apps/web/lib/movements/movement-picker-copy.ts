@@ -1,5 +1,6 @@
 import { MOVEMENT_PICKER_GROUP_LABELS, type MovementPickerGroup } from '@mat-plan/shared';
 
+import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural, quote } from '@/lib/i18n/plural';
 
 /** See `asTypedHint` below for why every word of it is load-bearing. */
@@ -7,21 +8,17 @@ const asTypedHintText = (name: string) =>
   `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
 
 const statusNoMatches = 'No matches.';
+/** Between the parts of a row's second line, and before its tag. */
+const ROW_META_JOIN = ' · ';
+/** A FRAGMENT of `statusNone`'s sentence, not a sentence: it has no terminal period. */
+const statusSomeWords = (n: number) => `${n} with some of your words`;
 /**
- * ⚠️ The noun is **"movement"**, not "match". The first draft read `${n} match` + `es`, which
- * collapsed to the same string for every `n` AND announced "1 matches some of your words" — a
- * ternary that looked like it handled the singular and did not. Through `plural()` now, so the
- * forms are named categories rather than a comparison, and a locale with more of them adds keys
- * here instead of needing this sentence rewritten.
+ * The near misses' count, as the accepted prototype words it ("1 close spelling"): a FRAGMENT of
+ * `statusNone`'s sentence. The heading over them is "Did you mean" (spec P5, amended at the
+ * prototype's sign-off).
  */
-const statusSomeWords = (n: number) =>
-  `${plural(n, {
-    one: `${n} movement matches`,
-    other: `${n} movements match`,
-  })} some of your words.`;
-/** The near misses' count: the same noun as the `near` heading (a test holds the two together). */
 const statusNear = (n: number) =>
-  plural(n, { one: `${n} similar name.`, other: `${n} similar names.` });
+  plural(n, { one: `${n} close spelling`, other: `${n} close spellings` });
 /**
  * Leads the create hint while a similar name is listed (UX panel, B1): the button carries the
  * person's own spelling, so the hint next to it names the movement they may mean and says what to
@@ -59,16 +56,12 @@ export const MOVEMENT_PICKER_COPY = {
   /** The `<details>` summary when every prescribed movement is already on a card (UX1 2). */
   /** ⚠️ "added", not "on your form" — "form" is our word for it, not a twelve-year-old's. */
   todaysProgramAllOnForm: "Today's program (already added)",
-  household: 'Your household',
+  /** A household's own items (CAT-3 P9: "Your custom items", the maintainer's words). */
+  household: 'Your custom items',
   matches: 'Matches',
-  someWords: 'Matches some of your words',
-  /**
-   * Near misses (CAT-3 spec P4, P5), shown above `someWords`. ⚠️ **Interim wording: the prototype
-   * (P0) owns the final heading.** Not "Close spellings": the sheet's ✕ and its last button already
-   * say "Close", and a screen reader may voice the heading as the verb. Not "Did you mean": that
-   * tells someone who typed a new movement correctly that they misspelt it (UX panel, B1).
-   */
-  near: 'Similar names',
+  someWords: 'Has some of your words',
+  /** Near misses (CAT-3 spec P5 as amended at the prototype's sign-off, 2026-11-17). */
+  near: 'Did you mean',
   groupLabel: (group: MovementPickerGroup) => MOVEMENT_PICKER_GROUP_LABELS[group],
 
   // ── Row tags, one per row by precedence (UX2 S2, UX3 4, UX1 8) ──────────────────────────────────
@@ -76,7 +69,35 @@ export const MOVEMENT_PICKER_COPY = {
   /** Only on an alias HIT, naming the alias that hit — panel round 2, gap 5. */
   tagAlsoCalled: (alias: string) => `also called ${alias}`,
   tagCurrent: 'current',
-  tagHousehold: 'household',
+
+  // ── The row's second line (CAT-3 P13, P14) ──────────────────────────────────────────────────────
+  /**
+   * A library movement whose equipment set is empty: just you and the floor. A LABEL, computed on
+   * the row from the set (`requiresNoEquipment`'s rule); the answer is stored nowhere (spec V5,
+   * whose scan forbids naming a field for it).
+   */
+  emptyEquipment: 'No equipment',
+  /** The equipment a library row needs, as a locale's list ("Barbell, Bench"), never a `.join`. */
+  equipmentList: (labels: readonly string[]) => formatList(labels, APP_LOCALE, 'unit'),
+  /** The row's second line (P14): how it is logged, then what it needs. The tag joins with the same mark. */
+  rowMeta: (tracking: string, needs: string) => `${tracking}${ROW_META_JOIN}${needs}`,
+  rowMetaJoin: ROW_META_JOIN,
+  /**
+   * A household's own item, in place of its equipment. 🔴 **Never "No equipment"**: it has no
+   * equipment field at all, and saying it needs none is a claim nobody made (P14).
+   */
+  customItem: 'Custom item',
+
+  // ── "How to" (CAT-3 P16) ────────────────────────────────────────────────────────────────────────
+  howTo: 'How to',
+  howToFor: (name: string) => `How to do ${name}`,
+  howToHide: 'Hide',
+  howToLoading: 'Loading…',
+  howToFailed: "Couldn't load the steps.",
+  howToRetry: 'Try again',
+  howToNone: 'No steps for this movement yet.',
+  /** Said once when the steps fail to load: the box's text is not a live region. */
+  statusHowToFailed: (name: string) => `Couldn't load the steps for ${name}.`,
 
   // ── The status region (criterion 46), as ONE shape: `{count}. {reason}` ─────────────────────────
   /**
@@ -89,8 +110,8 @@ export const MOVEMENT_PICKER_COPY = {
   /**
    * ⚠️ **The terminal period is part of the shape, not punctuation taste.** Panel 2 · 2 decided
    * `{count}. {reason}`; without it a screen reader reads "1 match Already in the list as Pull-Up"
-   * as one breathless clause, and the three count strings disagreed with each other —
-   * `statusNoMatches` and `statusSomeWords` already ended in one.
+   * as one breathless clause. Every count SENTENCE ends in one (`statusCount`, `statusNoMatches`,
+   * `statusNone`); `statusNear` and `statusSomeWords` are fragments that `statusNone` joins.
    */
   /**
    * ⚠️ **The `one` form interpolates `${n}` rather than writing `1`.** `one` is not "the number one"
@@ -104,17 +125,17 @@ export const MOVEMENT_PICKER_COPY = {
   statusSomeWords,
   statusNear,
   /**
-   * The status with no matches (CAT-3 P5): "No matches." once, then each list's own count, similar
-   * names first, each only when it holds a row.
+   * The status with no matches (CAT-3 P5): "No matches." once, then each list's own count, close
+   * spellings first, each only when it holds a row: "No matches. 1 close spelling, 2 with some of
+   * your words." (the accepted prototype's sentence).
    */
-  statusNone: (near: number, someWords: number) =>
-    [
-      statusNoMatches,
+  statusNone: (near: number, someWords: number) => {
+    const parts = [
       near > 0 ? statusNear(near) : null,
       someWords > 0 ? statusSomeWords(someWords) : null,
-    ]
-      .filter(Boolean)
-      .join(' '),
+    ].filter(Boolean);
+    return parts.length === 0 ? statusNoMatches : `${statusNoMatches} ${parts.join(', ')}.`;
+  },
   /** The ONE reason, when "use as typed" is unavailable because the movement is already listed. */
   statusAlreadyListed: (name: string) => `Already in the list as ${name}.`,
 
