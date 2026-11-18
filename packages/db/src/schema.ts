@@ -1665,9 +1665,10 @@ export const prescriptionTargets = pgTable(
  *   `DayPlan.currentPrograms` one per program, each placed by its open or
  *   upcoming row's `idx`, or by the closed row's when it has no other; a reorder writes the place onto
  *   that row. Amendment 4's writers leave at most one current row per program (a same-day put-on
- *   reopens), so "once" is defensive: the table itself allows two (`db:verify` shows the shape). Readers order by `(idx, id)` (A2 §7): on the
- *   take-off day a closed row and another program's open row may share an `idx`, because the order key
- *   covers open rows only.
+ *   reopens), so "once" is defensive: the table itself allows two (`db:verify` shows the shape). The raw assignment read orders `(idx, id)`;
+ *   `currentPrograms` orders `(rank, idx, id)` (ADR 0007 Amendment 5): on the take-off day a closed row
+ *   and another program's open row may share an `idx`, because the order key covers open rows only, so
+ *   every program that stays goes before every program ending today.
  *
  * **Keys.** `public_id` is the row's address (ASSIGN-1's version guard names it; `(profile, block)` is
  * ambiguous once closed rows exist). NO `client_id`: put-on carries none (`assignDraftSchema`); the

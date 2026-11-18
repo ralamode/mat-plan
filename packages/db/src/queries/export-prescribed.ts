@@ -1,4 +1,4 @@
-import type { StrengthMonthRow } from '@mat-plan/db';
+import type { StrengthMonthRow } from './export-month';
 
 /**
  * Resolving the `prescribed` CSV cell: frozen value first, live program only as a fallback
@@ -9,6 +9,10 @@ import type { StrengthMonthRow } from '@mat-plan/db';
  * meaning the single most dangerous expression in this chunk had no unit-level pin at all. A probe
  * found that out: `||` in place of `??` is harmless at the writer, and catastrophic here, and
  * nothing could tell the two apart until this function existed.
+ *
+ * Moved from `apps/web/lib/csv/` beside `foldStrengthMonth` (FAM-1 14a's review, P2), so the export's
+ * `db:verify` proof fills `prescribed` through this function rather than a copy. ⚠️ That proof's rows
+ * are all snapshotted, so it cannot tell `??` from `||`: `./export-prescribed.test.ts` is what pins it.
  */
 
 /**

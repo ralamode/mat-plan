@@ -1,0 +1,30 @@
+diff --git a/packages/db/src/writers/program/copy-workout.ts b/packages/db/src/writers/program/copy-workout.ts
+index e370afd6..9dfd7e87 100644
+--- a/packages/db/src/writers/program/copy-workout.ts
++++ b/packages/db/src/writers/program/copy-workout.ts
+@@ -148,6 +148,12 @@ export async function copyWorkout(
+     if (targetWorkouts.filter((w) => w.deletedAt === null).length >= MAX_PROGRAM_WORKOUTS) {
+       return refuse(PROGRAM_REFUSAL.limit_reached);
+     }
++
++    const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);
++    const folded = foldName(name);
++    if (targetWorkouts.some((w) => w.deletedAt === null && foldName(w.name) === folded)) {
++      return refuse(PROGRAM_REFUSAL.name_taken);
++    }
+     // So is a weekday it would go on: no day may hold more than `MAX_DAY_SLOTS` (the read parses the
+     // week with that cap), and a copy writes its slots without a week draft to parse.
+     if (draft.weekdays.length > 0) {
+@@ -173,12 +179,6 @@ export async function copyWorkout(
+       if (full.some((day) => day.n >= MAX_DAY_SLOTS)) return refuse(PROGRAM_REFUSAL.limit_reached);
+     }
+ 
+-    const name = draft.name ?? (source.blockId === target.id ? copyName(source.name) : source.name);
+-    const folded = foldName(name);
+-    if (targetWorkouts.some((w) => w.deletedAt === null && foldName(w.name) === folded)) {
+-      return refuse(PROGRAM_REFUSAL.name_taken);
+-    }
+-
+     const made = await insertWorkoutOwnedBy(tx, scope, {
+       blockId: target.id,
+       clientId: draft.clientId,

@@ -1,0 +1,29 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index f9a1e2f0..3ec62930 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -1,4 +1,4 @@
+-import { and, desc, eq, sql } from 'drizzle-orm';
++import { and, count, desc, eq, sql } from 'drizzle-orm';
+ 
+ import {
+   existingItem,
+@@ -16,7 +16,7 @@ import { movementOptions } from '../../queries/program/movement-options';
+ import type { HouseholdScope } from '../../scope';
+ import type { Executor } from '../executor';
+ import { findOrCreateTypedMovement } from '../movement-catalog';
+-import { householdRowIs, movementIsAvailableTo, movementIsGlobal } from '../ownership';
++import { householdRowIs, movementInHousehold, movementIsAvailableTo, movementIsGlobal } from '../ownership';
+ import { ADVISORY_LOCK } from '../locks';
+ import { refuse } from './refuse';
+ 
+@@ -126,7 +126,8 @@ async function addOrSelect(
+ 
+   // The household's own items, as the picker lists them (live, not shadowed by a catalog item):
+   // the fake's count, from the list already read under the lock.
+-  const own = options.filter((option) => option.owner !== 'catalog').length;
++  const [all] = await exec.select({ n: count() }).from(schema.movements).where(movementInHousehold(scope));
++  const own = all?.n ?? 0;
+   if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+ 
+   const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);

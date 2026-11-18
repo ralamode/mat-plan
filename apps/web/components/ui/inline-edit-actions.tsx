@@ -30,7 +30,7 @@ export type InlineEditCancelHandlers = Pick<
  *   ✕-alone form may sit on the line under that row, directly under its ✓ (day page, maintainer
  *   2026-11-17).
  * - Both are 44×44 (`icon-lg` + the base `min-h-11`); `focusClassName` swaps the focus ring on a
- *   tinted surface, where the default ring is under 3:1.
+ *   tinted surface, so the pair focuses like the ✓ beside it (docs/design.md).
  */
 export function InlineEditActions({
   confirm,
