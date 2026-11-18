@@ -3,6 +3,14 @@ feature: Delete and restore an entry (ADR 0008's soft delete)
 owns:
   - packages/db/src/writers/hide.ts
   - packages/db/src/queries/hidden-entries.ts
+  - packages/db/src/queries/clear-events.ts
+  - apps/web/app/p/[profileId]/clear-day-actions.ts
+  - apps/web/app/p/[profileId]/clear-day-actions.registry.ts
+  - apps/web/app/p/[profileId]/clear-day-actions.test.ts
+  - packages/shared/src/clear-day-shapes.ts
+  - packages/shared/src/clear-day-shapes.test.ts
+  - packages/shared/src/hide.test.ts
+  - apps/web/lib/dal/entries-restore-clear.test.ts
   - packages/shared/src/hide.ts
 ---
 
@@ -18,21 +26,23 @@ says the same thing; if these two ever disagree, the inventory is right. [ADR 00
 [the plan](../plans/v1-9b-delete-and-restore.md) holds the decisions and their alternatives.
 
 🔴 **Read this before touching anything that reads `entries`.** The invariants here live _between_
-files — one writer, one tombstone-returning reader (plus the clear's day-only pre-read), and every other query in the repo obliged to
+files — one writer, one tombstone-returning reader of VALUES (`hidden-entries.ts`), one of a clear's token and count (`clear-events.ts`, B1-2), plus the clear's day-only pre-read, and every other query in the repo obliged to
 filter. None of them can be checked by looking at a single file.
 
 ## The file map
 
-| File                                                                | What it is                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/hide.ts`                                       | The wire contract: `HIDE_ROW_MAX`, `hideEntriesSchema`, `restoreHiddenSchema`, the token's format, `RESTORE_REASONS`, and `HIDE_REASONS` (B2-0: `'clear_day'`, the one reason). ⚠️ No `N` and no `expired` — the window is `PRIV-3`'s.                                                                                                                                  |
-| `packages/db/src/writers/hide.ts`                                   | **The only module that writes `entries.deleted_at`.** `hideEntries` and `restoreHidden`; since B2-0 `clearDay` and `restoreClear` (both sides of Clear this day, worked out on the server: no id list, no cap) and `UNHIDE`, the one un-hide every writer sets.                                                                                                         |
-| `packages/db/src/queries/hidden-entries.ts`                         | **The only read that returns a tombstone's VALUES.** `hiddenEntriesForDay`, `hiddenDayCounts`. (`writers/single-value.ts`'s pre-read sees a hidden row too, but returns only its day: below.)                                                                                                                                                                           |
-| `packages/db/src/writers/single-value.ts`                           | **The app's first route to `hideEntries`** (V1-24 3b-bw): `clearBodyweight` hides one weigh-in on a blank ✓, and `clearPractice` one practice (3b-life-a), over one core with the metric, its slot and (for practice) its unit pinned. The pre-reads `bodyweightRowForAmend` and `practiceRowForAmend` see a hidden row, but return only its day (reader table, below). |
-| `packages/db/src/writers/bodyweight.ts`                             | `bodyweightSlot` — the day-slot predicate, shared with `restoreHidden`'s holder lookup so the two cannot disagree about what "the slot" is.                                                                                                                                                                                                                             |
-| `packages/db/scripts/verify.ts`                                     | § `V1-9b B1-1b`, the proofs, including the reader audit. B2-0's are `verify/single-values.ts` § `V1-9b B2-0` (lane S's file); `packages/db/src/writers/no-bare-unhide.test.ts` pins `UNHIDE` as the only un-hide.                                                                                                                                                       |
-| _(B1-2)_ `app/p/[profileId]/entry-actions.ts`, `lib/dal/entries.ts` | The actions and the DAL wrapper. Not yet built.                                                                                                                                                                                                                                                                                                                         |
-| _(B1-3)_ `app/p/[profileId]/hidden/`                                | The screen. Cut from Beta 0 (#412).                                                                                                                                                                                                                                                                                                                                     |
+| File                                                                    | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/hide.ts`                                           | The wire contract: `HIDE_ROW_MAX`, `hideEntriesSchema`, `restoreHiddenSchema`, the token's format, `RESTORE_REASONS`, and `HIDE_REASONS` (B2-0: `'clear_day'`, the one reason). ⚠️ No `N` and no `expired` — the window is `PRIV-3`'s.                                                                                                                                                                                                                                                  |
+| `packages/db/src/writers/hide.ts`                                       | **The only module that writes `entries.deleted_at`.** `hideEntries` and `restoreHidden`; since B2-0 `clearDay` and `restoreClear` (both sides of Clear this day, worked out on the server: no id list, no cap) and `UNHIDE`, the one un-hide every writer sets.                                                                                                                                                                                                                         |
+| `packages/db/src/queries/hidden-entries.ts`                             | **The only read that returns a tombstone's VALUES.** `hiddenEntriesForDay`, `hiddenDayCounts`. (`writers/single-value.ts`'s pre-read sees a hidden row too, but returns only its day: below.)                                                                                                                                                                                                                                                                                           |
+| `packages/db/src/writers/single-value.ts`                               | **The app's first route to `hideEntries`** (V1-24 3b-bw): `clearBodyweight` hides one weigh-in on a blank ✓, and `clearPractice` one practice (3b-life-a), over one core with the metric, its slot and (for practice) its unit pinned. The pre-reads `bodyweightRowForAmend` and `practiceRowForAmend` see a hidden row, but return only its day (reader table, below).                                                                                                                 |
+| `packages/db/src/writers/bodyweight.ts`                                 | `bodyweightSlot` — the day-slot predicate, shared with `restoreHidden`'s holder lookup so the two cannot disagree about what "the slot" is.                                                                                                                                                                                                                                                                                                                                             |
+| `packages/db/scripts/verify.ts`                                         | § `V1-9b B1-1b`, the proofs, including the reader audit. B2-0's are `verify/single-values.ts` § `V1-9b B2-0` (lane S's file); `packages/db/src/writers/no-bare-unhide.test.ts` pins `UNHIDE` as the only un-hide.                                                                                                                                                                                                                                                                       |
+| `packages/db/src/queries/clear-events.ts`                               | **One predicate for a clear** (B1-2): `ownedOnDay`, `clearEventOn` (owned ∧ day ∧ `'clear_day'`), `hiddenAtText` (moved here from `hide.ts`, which imports it; no longer exported from the package), and `clearEventsForDay`, the banner's read: every clear of a day, newest first, as a token and a count. `clearDay`'s replay and `restoreClear` use the same predicate, so the banner offers exactly what Restore all restores. A leaf: `hide.ts` imports it, so there is no cycle. |
+| `packages/shared/src/clear-day-shapes.ts`                               | The day-level contract: `restoreClearSchema` (`rowRetickSchema` without the entry), `ClearEvent`, `RESTORE_CLEAR_REFUSALS` (a subset of `ROW_REFUSALS`) and the result `{ ok: true, restored, keptHidden }`.                                                                                                                                                                                                                                                                            |
+| `app/p/[profileId]/clear-day-actions.ts` (+ `.registry.ts`, `.test.ts`) | `restoreClearAction` (B1-2), and `clearDayAction` from B2. **No caller until B2 renders the banner.** Today and yesterday only, an archived athlete's day closed (`closed_day`), no assignment check (C24). The DAL wrappers `dayClearEvents` and `restoreClearedDay` are in `lib/dal/entries.ts`; the latter counts, so no item's `heldBy.value` leaves the DAL.                                                                                                                       |
+| _(B1-3)_ `app/p/[profileId]/hidden/`                                    | The screen. Cut from Beta 0 (#412).                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Invariants that live between files
 
@@ -46,12 +56,12 @@ caught it. There are three:
 | `scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, with a dry run                                                                                                                                                                                                                                                                         | **has been run** |
 | `apps/web/scripts/screenshot-ephemeral.ts`            | a developer, throwaway DB                                                                                                                                                                                                                                                                           | no               |
 
-🔴 **The consequence `B1-3` has to decide, so it is written down here rather than discovered:**
+🔴 **A consequence, written down here rather than discovered** (it was `B1-3`'s to decide; B1-3 is cut, and B2-0's reason settles it for the banner, invariant 1b):
 `hiddenEntriesForDay` does **not** distinguish a row the person hid from a row the _correction_ hid.
 Production already holds correction-hidden weigh-ins, so the moment `B1-3` renders the hidden region
 they appear as restorable items nobody deleted — and restoring one would answer `slot_taken` against
 the keeper the correction left in place. Showing them, hiding them, or labelling them is a product
-call, and it is `B1-3`'s.
+call; it returns if a per-item hidden region is ever built.
 
 **1b · `hide_reason` says which hides are a Clear this day (V1-9b B2-0), and its lifecycle is
 structural.** `'clear_day'` is written by `clearDay` alone: `hideEntries` takes no reason (a private
@@ -62,7 +72,11 @@ refuses a live row with a reason (`23514`), and a source test refuses any other 
 retaken), so the banner does not come back offering a restore that can only refuse. This answers
 invariant 1's open consequence for the banner: a correction-hidden row has no reason, so it never
 counts as a clear. ⚠️ **`restoreClear` replays as `notFound`**: it finds the clear's rows by state its
-own success erases, so a retried Restore all is "already restored", never a refusal (B1-2's action).
+own success erases, so B1-2's action answers a retried Restore all `ok` with 0 restored and 0 kept
+hidden, "nothing left to restore", never a refusal. **One predicate (`clearEventOn`,
+`queries/clear-events.ts`) serves the banner's read, `clearDay`'s replay and `restoreClear`.** A day
+can hold two clears (clear, log again, clear again): the read returns both, newest first, and which
+the banner offers is B2's UX panel's call.
 
 **2 · The event token is TEXT, end to end, and never passes through a `Date`.** A hide event is
 `(profile, day, deleted_at)`. Postgres stores `timestamptz` to **microseconds**; a JavaScript `Date`
@@ -136,9 +150,9 @@ is for program rows only _(maintainer, 2026-11-16)_.
   is wrong until `PRIV-3` ships the purge.
 - **A hidden row HOLDS its `client_id`** (non-partial since B0), so a replay of a hidden write
   conflicts rather than twinning. `writers/checkin.ts` reports that as `own_hidden`; the strength and
-  bodyweight paths still throw (Decision 7), and B1-2 maps it.
+  bodyweight paths still throw, kept as a throw by Decision 7 (no typed replay-of-hidden).
 - **Don't add `includeHidden` to a live reader.** A read of a tombstone's VALUES belongs in
-  `queries/hidden-entries.ts`; a write path that must see a hidden row to answer a replay (the clear's
+  `queries/hidden-entries.ts`, and a read of a clear's token and count in `queries/clear-events.ts`; a write path that must see a hidden row to answer a replay (the clear's
   pre-read, `writers/single-value.ts`) returns the day and nothing more. A flag on a live reader is how
   a deleted set reaches the CSV the export exists for.
 - **`activity_date` is a plain `DATE`.** `hiddenDayCounts` returns it as text; mapping it through a
