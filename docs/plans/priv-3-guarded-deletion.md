@@ -17,16 +17,22 @@
 Pillar **Privacy** (`PRIV-*`). Beta 0, remaining-path item 8: `PRIV-1`'s "deletion run once end to end"
 box. This plan is the whole row; PR 4 waits on `V1-9b` B1-3.
 
-**Order across the Beta 0 deletion tracks** (agreed with `OPS-2`'s draft #494 and `OPS-3`'s draft
-plan, neither on `main` yet). Gate 1 of `parallel-work.md` fails between them on `runbooks.md`,
-`verify.ts`, `mutations/`, `corrections/registry.ts` and the privacy docs, so they run in order:
+**Order across the Beta 0 deletion tracks** _(re-ordered 2026-11-18: `OPS-3` moved to Beta 1, board,
+2026-11-18; the fresh start's chunks from the [CAT-3 spec](../specs/cat-3-movement-library.md))_. Gate 1
+of `parallel-work.md` fails between them on `runbooks.md`, `verify.ts`, `mutations/`,
+`corrections/registry.ts` and the privacy docs, so they run in order:
 
-1. PRIV-3 PR 1 (the graph and its proofs);
-2. `OPS-2` PR 1, then the `OPS-3` restore PR;
-3. the `OPS-3` drill;
-4. PRIV-3 PR 2a, then PR 2b (the household erasure). 2a adds code only; it waits for the drill
-   because it shares `verify.ts`, `mutations/` and `runbooks.md` with the `OPS-3` PRs, not as a gate;
-5. PRIV-3 PR 3, then PR 3b, and `OPS-2` PR 2 (the fixture athlete), one at a time on `registry.ts`.
+1. ✅ PRIV-3 PR 1 (the graph and its proofs, #520) and RC, `create-household` (#546);
+2. `OPS-2` PR 1 (#592);
+3. PRIV-3 PR 2a (the erasure core). It adds code only;
+4. CAT-3 R0's code PR, the one-shot erasure of the seeded household, then R1, the fresh start's
+   runbook and step 5's correction ([plan](./priv-3-fresh-start-prep.md));
+5. R2, the fresh start, on the maintainer's go;
+6. PRIV-3 PR 2b (the household erasure), PR 3, then PR 3b, and `OPS-2` PR 2 (the fixture athlete), one
+   at a time on `registry.ts`.
+
+`OPS-3`'s restore drill is not in this order: it is Beta 1's. It was never a gate on 2a, only a shared
+file set, and the fresh start does not wait for it (K15).
 
 **Against FAM-1** (in build). Three of PRIV-3's PRs touch files FAM-1 has assigned:
 
@@ -363,16 +369,16 @@ from node-postgres as a string, and `'0'` would pass on PGlite but refuse on pro
 The entry sits in `registry.ts` with the others (`CORRECTIONS`, `:818`); its `run` calls
 `src/erasure/`. The pure gates live in `scripts/corrections/erasure-gates.ts` with a colocated test.
 
-| Guard                          | After PR 2b                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolve by `public_id`         | `uuidSchema`, then an unfiltered `householdScopeByPublicId` (a hidden household is still erased). Not `requireLiveHouseholdScope`, whose error message carries the id (`registry.ts:96-102`)                                                                                                                                                                                                                                              |
-| Right database                 | `correctionTargetUrl({ kind })` in `target-url.ts`, the one function that picks the database (`:4-18`), returns nothing under `kind: 'erasure'` without `DATABASE_URL_UNPOOLED`. The runner refuses on that, on `hasHostOverride` (`db-environment.ts:96`, exported), and on `--apply` when `current_database()` names the preview (`namesPreviewDatabase`, `:122`). Messages use `DB_ENV_MESSAGE`'s builder (`:134`)                     |
-| **Seed id (precondition 2)**   | **Refuses** when the household's `public_id`, or a **live** profile's, is in `SEED_PUBLIC_IDS`: _"re-key first (`SEC-6`)"_. That is exactly `SEC-6`'s acceptance, "no committed constant equals a **live** production `public_id`" (`plan.md:1114-1116`). A hidden role-named fixture (`OPS-2` D10's) is erased like any row. The pure gate is unit-tested; a `db:verify` case proves the query feeding it                                |
-| Two targets in one environment | Refuses if `ERASE_ATHLETE_PUBLIC_ID` is set                                                                                                                                                                                                                                                                                                                                                                                               |
-| Pre-flight, lock, transaction  | The core (D3)                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| The rest                       | **A numbered checklist printed by the dry run**: `OPS-3` rehearsed; **merges to `main` frozen and the last `migrate.yml` run green** (a merge mid-erasure would wedge its migration behind the row locks); the 7-day pause and re-confirmation; **a Neon restore branch cut immediately before `--apply`** (the printed LSN is extra precision: a missed branch can be cut at it within Neon's 6-hour window); Clerk deletion; the ledger |
+| Guard                          | After PR 2b                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolve by `public_id`         | `uuidSchema`, then an unfiltered `householdScopeByPublicId` (a hidden household is still erased). Not `requireLiveHouseholdScope`, whose error message carries the id (`registry.ts:96-102`)                                                                                                                                                                                                                                                                                                                                      |
+| Right database                 | `correctionTargetUrl({ kind })` in `target-url.ts`, the one function that picks the database (`:4-18`), returns nothing under `kind: 'erasure'` without `DATABASE_URL_UNPOOLED`. The runner refuses on that, on `hasHostOverride` (`db-environment.ts:96`, exported), and on `--apply` when `current_database()` names the preview (`namesPreviewDatabase`, `:122`). Messages use `DB_ENV_MESSAGE`'s builder (`:134`)                                                                                                             |
+| **Seed id (precondition 2)**   | **Refuses** when the household's `public_id`, or a **live** profile's, is in `SEED_PUBLIC_IDS`: _"re-key first (`SEC-6`)"_. That is exactly `SEC-6`'s acceptance, "no committed constant equals a **live** production `public_id`" (`plan.md:1114-1116`). A hidden role-named fixture (`OPS-2` D10's) is erased like any row. The pure gate is unit-tested; a `db:verify` case proves the query feeding it                                                                                                                        |
+| Two targets in one environment | Refuses if `ERASE_ATHLETE_PUBLIC_ID` is set                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Pre-flight, lock, transaction  | The core (D3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| The rest                       | **A numbered checklist printed by the dry run**: `OPS-3` rehearsed (⚠️ `OPS-3` is Beta 1's since 2026-11-18; whether a Beta 0 deletion waits for it is Q7); **merges to `main` frozen and the last `migrate.yml` run green** (a merge mid-erasure would wedge its migration behind the row locks); the 7-day pause and re-confirmation; **a Neon restore branch cut immediately before `--apply`** (the printed LSN is extra precision: a missed branch can be cut at it within Neon's 6-hour window); Clerk deletion; the ledger |
 
-`SEED_PUBLIC_IDS` is a new set beside the constants in `packages/shared/src/seed-ids.ts`, the pattern of
+`SEED_PUBLIC_IDS` is a set beside the constants in `packages/shared/src/seed-ids.ts` (✅ **created by RC**, #546, as CAT-3's R0 moved it; 2b reads it and does not add it), the pattern of
 `MOVEMENT_SEED_PUBLIC_IDS` (`catalog-movements.ts:400-406`), with a `db:verify` assertion that every
 household and profile row the seed writes is in it, so a fifth seed id cannot slip past. (A prefix test
 was tried once and was wrong, `movement-ownership.ts:99-101`.)
@@ -455,6 +461,17 @@ re-checks with `SET LOCAL lock_timeout` and `statement_timeout`. It re-counts ea
 blocks), and reads `ERASE_REMOVE_BLOCKS` by hidden prompt. The core keeps two modes, and there is no
 ordering trap before step 10. **Without 3b**, a household that answers "remove" means running the whole
 athlete erasure by hand: 4b cannot follow a script that has already committed.
+
+### D8. The fresh start's one-shot erasure (CAT-3 R0)
+
+The seeded household is erased once, at the fresh start, by a dated entry with **no target**,
+`erase-seeded-household-<date>`, through 2a's core. It refuses outside production and once the
+household is gone, and its gate is pure and unit-tested. `erase-household`'s seed-id refusal (D4) and its
+proof are **unchanged**: the one-shot entry does not call that gate, and no re-key runs first (K7
+deletes the household, so a re-key would buy nothing). It brings `kind: 'erasure'`, its three strings
+and the redacted catch forward from 2b. **2b adopts RC's `corrections/redact.ts`** rather than writing
+its own (RC's plan). The design, its runbook (R1) and step 5's correction are in
+[priv-3-fresh-start-prep.md](./priv-3-fresh-start-prep.md).
 
 ## File-by-file changes
 
@@ -634,7 +651,7 @@ that), and that a concurrent insert waits on the locks (PGlite has one connectio
 | No restore point after an irreversible run                               | A branch cut before `--apply` is a checklist step; the LSN is the fallback inside 6 hours                          |
 | PGlite and node-postgres behave differently                              | `count()` / `::int`; P3 runs the core as production does (`pg_current_wal_lsn()` works on PGlite)                  |
 | `verify.ts` keeps growing (9,869 lines; DX-12's trigger, `plan.md:2508`) | Proofs in `verify/erasure.ts`; `verify.ts` loses proof (5)                                                         |
-| A real erasure goes wrong                                                | The restore branch, plus `OPS-3`, whose rehearsal stays a precondition                                             |
+| A real erasure goes wrong                                                | The restore branch, plus `OPS-3` (Beta 1 since 2026-11-18; whether its rehearsal gates a Beta 0 deletion is Q7)    |
 
 **Rollback.** PRs 1 and 2a add code and change no procedure beyond PR 1's two `AND`s. Reverting PR 2b
 or PR 3 brings the hand-SQL section back from git history. A wrong **run** is recovered from the
@@ -690,6 +707,9 @@ kept from the first draft.
 4. **Q4. PR 3 ships in Beta 0** _(2026-11-14; confirmed 2026-11-17)_.
 5. **Q5. Re-key first, then an ordinary hard delete** _(`OPS-2` Q2, 2026-11-16)_ (D6).
 6. **Q6. Script the program removal as PR 3b** (D7).
+7. **Q7, open (asked 2026-11-18, through the board):** `OPS-3` is Beta 1's now. Does a real deletion
+   in Beta 0 (an athlete, a program, a household; not the fresh start, which K15 exempts) wait for its
+   restore drill?
 
 **Board and harness, 2026-11-17.** The fifth module is ruled (above). Lane A has no open PR on its
 two files, so PR 1 is cut now; whichever of it and lane A's `VALIDATE` PR merges second merges `main`.
