@@ -60,6 +60,7 @@ import {
   startEmbeddedPostgres,
   stopChildProcess,
 } from './embedded-pg';
+import { takeSlot } from '../../../.github/scripts/heavy-slot.mjs';
 
 /**
  * The DURABLE FIX for the screenshot flow (chore/screenshot-ephemeral-db).
@@ -1441,6 +1442,9 @@ async function main(): Promise<void> {
     return;
   }
 
+  // One heavy local run machine-wide (DX-18 D3): the build and the throwaway database are the heavy
+  // part, so only this path takes the slot. Exits 2 while another run holds it.
+  takeSlot('screenshot:ephemeral');
   await runEphemeral(route, state, name, timeZone, colorScheme, allowConsole);
 }
 

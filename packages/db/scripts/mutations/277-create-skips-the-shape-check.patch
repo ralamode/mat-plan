@@ -1,0 +1,17 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 9ec3f099..fe5c810f 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -893,12 +893,6 @@ const createHousehold: Correction = {
+       const n = ids.length;
+       ids.forEach((id, i) => {
+         const issue = accountIssue(id);
+-        if (issue === 'shape') {
+-          throw new CorrectionRefusal(
+-            `account ${i + 1} of ${n} is not shaped like a Clerk user id ('user_' followed by 1 to ` +
+-              '64 letters or digits); nothing written',
+-          );
+-        }
+         if (issue === 'fixture-remote') {
+           throw new CorrectionRefusal(
+             `account ${i + 1} of ${n} is the committed e2e fixture principal, which may only be ` +

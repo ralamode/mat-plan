@@ -6,7 +6,7 @@
  * and `packages/db/src/seed.ts` re-exports them for back-compat.
  */
 
-/** The root household ("Home"). */
+/** The root household (named `HOUSEHOLD_DEFAULT_NAME`, in `enums.ts`). */
 export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
 
 // The the kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
@@ -26,6 +26,23 @@ export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
  * the problem it was added to solve.
  */
 export const SEED_PROFILE_3_PUBLIC_ID = '019826b4-0000-7000-8000-000000000003';
+
+/**
+ * Every household and profile `public_id` the seed writes (`PRIV-3` RC, D7), built from the
+ * constants above so no UUID is re-typed. Movement ids keep their own set
+ * (`MOVEMENT_SEED_PUBLIC_IDS`).
+ *
+ * Two readers: `household-claim-2026-10-25` refuses a household id in it outside a local or preview
+ * database, and `create-household-…` proves it never mints one. 🔴 `db:verify`'s post-seed snapshot
+ * holds the seed's households and profiles EQUAL to this set, in both directions, so a seeded row
+ * missing from it (or a member the seed no longer writes) fails there.
+ */
+export const SEED_PUBLIC_IDS: ReadonlySet<string> = new Set([
+  SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_PUBLIC_ID,
+  SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_3_PUBLIC_ID,
+]);
 
 /**
  * The two seeded profiles' display names — **role names, never a real first name** (AGENTS.md -> "No
@@ -53,7 +70,7 @@ export const SEED_PROFILE_3_NAME = 'Athlete Three';
  *
  * Obviously fake on purpose, the `E2E_LOCAL_GATE_PASSWORD` idiom: a random-looking placeholder trips
  * gitleaks, and a reader should be able to tell at a glance that this identifies nobody. The shape
- * still satisfies `lib/env.ts`'s `/^user_[A-Za-z0-9]+$/`, because the principal has to flow through
+ * still satisfies `CLERK_USER_ID_PATTERN` (`clerk.ts`; `lib/env.ts` applies it), because the principal has to flow through
  * the same code paths a real one does.
  */
 export const E2E_SESSION_BYPASS_USER = 'user_000000000000000000000000e2e';

@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   assertDatabaseEnvironment,
+  CLERK_USER_ID_PATTERN,
   E2E_SESSION_BYPASS_USER,
   isLocalDbHost,
 } from '@mat-plan/shared';
@@ -32,7 +33,7 @@ import { z } from 'zod';
  * 🔴 **`SKIP_ENV_VALIDATION` disables zod**, so the schema alone enforces nothing — which is why the
  * real check lives in the refusal below and does not depend on this at all.
  */
-const BYPASS_ID_RE = /^user_[A-Za-z0-9]+$/;
+const BYPASS_ID_RE = CLERK_USER_ID_PATTERN;
 
 export const env = createEnv({
   server: {

@@ -176,7 +176,13 @@ export const households = pgTable('households', {
 
 /**
  * AUTH-1 1b — which Clerk account belongs to which household. **Ships DARK: nothing reads it.**
- * 1c's `getHouseholdScope()` is the first reader; the only writer is a maintainer-run correction.
+ * 1c's `getHouseholdScope()` is the first reader. The only writers are two maintainer-run
+ * corrections: `household-claim-…` (bind an account to an existing household) and, since `PRIV-3` RC,
+ * `create-household-…` (a new household and its accounts).
+ *
+ * 📌 **`ID-1` item 3:** `create-household-…` refuses any account that already has a live membership
+ * as POLICY, and relies on `uq_household_members_clerk_user` below only as its race backstop. If
+ * `ID-1` relaxes that index (a guardian or coach in two households), revisit that correction.
  *
  * **No email column, deliberately.** The person's email and Google identifier live in Clerk — that is
  * the point of using Clerk — so storing the opaque account id and nothing else is the

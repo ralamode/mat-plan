@@ -1,4 +1,10 @@
-import { E2E_SESSION_BYPASS_USER, isLocalDbHost } from '@mat-plan/shared';
+import {
+  databaseNameOf,
+  E2E_SESSION_BYPASS_USER,
+  isLocalDbHost,
+  namesPreviewDatabase,
+  SEED_PUBLIC_IDS,
+} from '@mat-plan/shared';
 
 /**
  * 🔴 **The ONE expression that decides which database a correction touches.**
@@ -36,5 +42,47 @@ export function correctionTargetUrl(): string | undefined {
  */
 export function fixtureBindIsAllowed(clerkUserId: string): boolean {
   if (clerkUserId !== E2E_SESSION_BYPASS_USER) return true;
+  return correctionTargetIsLocal();
+}
+
+/**
+ * Whether the database this run connects to is on this machine. Unset is NOT local: a correction run
+ * with no target named is not a local one, and every caller treats unknown as the riskier case.
+ */
+export function correctionTargetIsLocal(): boolean {
   return isLocalDbHost(correctionTargetUrl() ?? '');
 }
+
+/**
+ * Whether the database this run connects to is the preview estate's, by name (`seed.ts` applies the
+ * same rule to fixtures). Unset or unparseable is NOT the preview.
+ *
+ * ⚠️ There is no positive test for PRODUCTION: its database is named `mat_plan`, like a local one.
+ * This recognises the preview and nothing else.
+ */
+export function correctionTargetIsPreview(): boolean {
+  return namesPreviewDatabase(databaseNameOf(correctionTargetUrl() ?? '') ?? '');
+}
+
+/**
+ * 🔴 **May `household-claim-…` bind an account to the household with this `public_id`? (`PRIV-3` RC,
+ * D6)**
+ *
+ * `true` for every household id outside `SEED_PUBLIC_IDS`. A SEED household id is allowed only on a
+ * local or preview database, where the seed's fixtures may live: the e2e harness, CI's smoke step, a
+ * developer's local claim and a preview claim all bind the seeded household on purpose. Anywhere else
+ * it is refused, so after the fresh start no account can be bound to a seed-namespace household in
+ * production again. Rows that already exist are not touched by this.
+ *
+ * ⚠️ **Compared as hex digits, not as the string typed.** `households.public_id` is a `uuid` column,
+ * and Postgres reads `019826B4-…`, `{019826b4-…}` and the unhyphenated form as the same value, so a
+ * plain `SEED_PUBLIC_IDS.has(input)` would let any of those spellings reach the seeded household.
+ * Stripping to lower-case hex can only make more inputs match, which is the refusing direction.
+ */
+export function seedHouseholdClaimIsAllowed(householdPublicId: string): boolean {
+  if (![...SEED_PUBLIC_IDS].some((id) => uuidHex(id) === uuidHex(householdPublicId))) return true;
+  return correctionTargetIsLocal() || correctionTargetIsPreview();
+}
+
+/** A UUID's spelling reduced to the value Postgres reads: lower-case hex digits, nothing else. */
+const uuidHex = (id: string) => id.toLowerCase().replace(/[^0-9a-f]/g, '');
