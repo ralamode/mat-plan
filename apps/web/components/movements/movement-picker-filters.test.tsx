@@ -524,6 +524,19 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(screen.queryByText(COPY.outsideAll(1, 'squat'), { exact: true })).toBeNull();
   });
 
+  it('⏳ both kinds hidden: the judged count first, then the bare one, never swapped', () => {
+    const bare = Object.fromEntries(
+      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
+    ) as MovementOptionDTO;
+    const BACK = catalogOption('Back Squat', { primaryMuscle: MUSCLE.quadriceps });
+    render(<Harness options={[...OPTIONS.map((o) => (o === FRONT ? bare : o)), BACK]} />);
+    open();
+    withLats();
+    type('squat');
+    // 2 hidden, 1 of them bare: "1 movement … is not in your filters. Your filters also hide 1 more: …"
+    expect(screen.getByText(COPY.outsideLine(2, 1, 'squat', false), { exact: true })).toBeTruthy();
+  });
+
   it('after a hit the rest are "More matches" (row 15)', () => {
     const THRUST = catalogOption('Barbell Hip Thrust', { primaryMuscle: MUSCLE.glutes });
     const SINGLE = catalogOption('Single-Leg Hip Thrusts', { primaryMuscle: MUSCLE.glutes });
