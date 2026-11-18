@@ -512,6 +512,18 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(status()).not.toContain(COPY.statusAlreadyListedOutside(FRONT.name));
   });
 
+  it('⏳ a search that only finds rows with no library data says why the filters hide them', () => {
+    const bare = Object.fromEntries(
+      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
+    ) as MovementOptionDTO;
+    render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
+    open();
+    withLats();
+    type('squat');
+    expect(screen.getByText(COPY.outsideLine(1, 1, 'squat', false), { exact: true })).toBeTruthy();
+    expect(screen.queryByText(COPY.outsideAll(1, 'squat'), { exact: true })).toBeNull();
+  });
+
   it('after a hit the rest are "More matches" (row 15)', () => {
     const THRUST = catalogOption('Barbell Hip Thrust', { primaryMuscle: MUSCLE.glutes });
     const SINGLE = catalogOption('Single-Leg Hip Thrusts', { primaryMuscle: MUSCLE.glutes });
