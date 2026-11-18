@@ -1,7 +1,6 @@
 'use client';
 
 import type { ProgramActions, ProgramView } from '@mat-plan/shared';
-import Link from 'next/link';
 import { useRef } from 'react';
 
 import { NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
@@ -13,6 +12,7 @@ import { StatusLine, useStatusLine } from './status-line';
 import { WeekEditor } from './week-editor/week-editor';
 import { WhosOnIt } from './whos-on-it';
 import { WorkoutsList } from './workouts-list';
+import { BuilderLink } from './route-link';
 
 /**
  * One program's page: who's on it, its workouts and its week (FAM-1 step 8a; plan §8 "Program
@@ -42,9 +42,9 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
     // (7rem: the bar with a two-line message and the iPhone's home bar.)
     <div className="flex flex-col gap-6 [&_:is(input,select,textarea,button,a)]:scroll-mb-28">
       <div className="flex flex-col gap-2">
-        <Link href={PROGRAMS_PATH} className={NAV_LINK_CLASS}>
+        <BuilderLink href={PROGRAMS_PATH} className={NAV_LINK_CLASS}>
           {BUILDER_COPY.backToPrograms}
-        </Link>
+        </BuilderLink>
         <ProgramHeader
           programPublicId={program.programPublicId}
           name={program.name}

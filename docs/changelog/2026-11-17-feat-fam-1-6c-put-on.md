@@ -1,7 +1,7 @@
 # Athletes can be put on a program, and the test database holds the fixture family's programs
 
 FAM-1 step 6c-i, lane P: the database side of "Put someone on". Nothing in the app calls it yet; step
-7a-ii wires it.
+15 wires it.
 
 - `putOn` puts one or more athletes on a program from today or tomorrow. Each goes last in their own
   order of programs and is due all seven days. Someone already on it is left as they are. Someone
