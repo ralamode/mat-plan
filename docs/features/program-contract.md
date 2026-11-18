@@ -445,7 +445,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     (`packages/shared/src/hide.ts`, lane S's) refuses 30 February, month 13 and year 0000, which
     have the token's shape and fail the database's cast, and hour 24 and second 60, which pass
     the cast as the next midnight or minute and so are a second spelling of an instant.
-    Refusing all five keeps one spelling a token, and `rowRetickSchema` takes that rule whole
+    Refusing all five keeps each token to one spelling, and `rowRetickSchema` takes that rule whole
     (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
     real action refuses before anything is read, and the fake changes nothing.
 

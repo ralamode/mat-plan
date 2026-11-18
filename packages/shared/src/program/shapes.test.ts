@@ -585,7 +585,7 @@ describe('the row writes', () => {
   // takes it whole (C31). 30 February, month 13 and year 0000 fail Postgres' `::timestamptz` cast,
   // which would reach the error page where the contract says `bad_value`. Hour 24 and second 60
   // pass the cast as the next midnight or minute: a second spelling of an instant, which no token
-  // the app writes has. Refusing all five keeps one spelling a token.
+  // the app writes has. Refusing all five keeps each token to one spelling.
   it.each([
     ['30 February', '2026-02-30T00:00:00.000000Z'],
     ['month 13', '2026-13-01T00:00:00.000000Z'],
