@@ -27,6 +27,8 @@
  * - **SIGKILL** cannot be trapped: the next run (or `--recover`) restores from the journal, by the
  *   same three-state rule, and ends the orphaned gate.
  * - **At exit** every path any patch touches is byte-identical to what it was at the start.
+ * - **The heavy-run slot** (DX-18 D3, `.github/scripts/heavy-slot.mjs`) is taken first: one heavy
+ *   local run machine-wide. `--recover` does not take it.
  *
  * Usage: `node scripts/mutations.mjs` (all patches) · `node scripts/mutations.mjs --recover` (only
  * restore an interrupted run's journal, then exit).
@@ -48,6 +50,8 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { takeSlot } from '../../../.github/scripts/heavy-slot.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = resolve(HERE, '..');
@@ -287,6 +291,7 @@ function recover() {
 // ── Signals and crashes ─────────────────────────────────────────────────────────────────────────
 let inFlight = null; // the journal of the patch currently applied
 let stopping = false;
+let slot = null; // the machine-wide heavy-run slot (DX-18 D3); `--recover` is not a heavy run
 function stop(reason) {
   if (stopping) return;
   stopping = true;
@@ -298,6 +303,7 @@ function stop(reason) {
     if (restored) clearJournal(); // only now: until the group is ended, the journal names it
   }
   releaseLock();
+  slot?.release(); // dying by a signal skips 'exit', where the slot is otherwise released
   if (typeof reason === 'string') {
     process.removeAllListeners(reason);
     process.kill(process.pid, reason); // die by the same signal, so the shell sees 128+n
@@ -347,6 +353,7 @@ function touchedPaths(path) {
 
 async function main() {
   const recoverOnly = process.argv.includes('--recover');
+  if (!recoverOnly) slot = takeSlot('db:mutations');
   acquireLock();
   if (!recover()) process.exit(1);
   if (recoverOnly) return;
