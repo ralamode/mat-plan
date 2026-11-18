@@ -1183,7 +1183,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           },
           {
             "k": "text",
-            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. ⚠️ "
+            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser on the sign-in screen and on every page once you are signed in (new in this version: no longer on the home page or this one, below). ⚠️ "
           },
           {
             "k": "strong",
@@ -1307,46 +1307,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. "
+        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. ✅ "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "One"
+            "text": "New in this version: opened directly, before you sign in, the home page and this page\nload no Clerk code."
           }
         ]
       },
       {
         "k": "text",
-        "text": " thing is not this app, and it is not tracking: "
+        "text": " Your browser talks to this app, which runs on Vercel (above), and nothing else.\n"
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Clerk's code loads on every page,\nincluding this one"
+            "text": "Clerk's code loads when you open the sign-in screen, and on every page once you are signed in"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's\ndomain — and opens a connection to them. So "
+        "text": ",\nfrom clerk.mat-plan.dev — Clerk's own servers, under a name on this app's domain — and opens a\nconnection to them, so Clerk sees your IP address and your browser there, and so does Cloudflare,\nwhich Clerk puts in front of that address. Two edges, so this is exact: if you reach this page from a\nsigned-in page, Clerk's code is already running in your browser; and "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Clerk sees your IP address and your browser on every\npage you open here"
+            "text": "if you are signed in, opening\nany page directly, this one included, usually sends your browser briefly to Clerk to refresh your\nsign-in"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", whether or not you sign in, and so does Cloudflare, which Clerk puts in front of\nthat address."
+        "text": " (Clerk then sees the address of the page you asked for). The \"before you sign in\" above is\nthe part that holds for everyone."
       }
     ]
   },
@@ -1362,13 +1362,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "This paragraph used to say your browser talked to this app and nothing else, and that the\nsign-in screen was the exception. That was wrong, and it was wrong on this very page"
+            "text": "Until 2026-11-18 Clerk's code loaded on every page, including this one"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — checked\nagainst the live site on 2026-11-03, not assumed. Scoping Clerk's code to the screens that need it is\nworth doing and is not done yet; until it is, the honest version is the one above."
+        "text": ", and an earlier\nversion of this paragraph wrongly said the sign-in screen was the only exception (checked against the\nlive site on 2026-11-03). That is fixed, not just disclosed."
       }
     ]
   },
@@ -1683,7 +1683,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
+        "text": " (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete\nor household, and asking for one program, workout or typed item to be removed. "
       },
       {
         "k": "strong",
@@ -1814,13 +1814,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "no way to permanently remove one single item on demand"
+            "text": "no way to permanently remove one single logged item on demand"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the finest grain for a\npermanent removal is an athlete. Ask, and that is done."
+        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.)"
       }
     ]
   },

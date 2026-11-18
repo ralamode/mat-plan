@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 import { SiteFooter } from '@/components/layout/site-footer';
 import { GitHubMark } from '@/components/landing/github-mark';
@@ -56,7 +55,9 @@ export default function LandingPage() {
           <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
             {/* No `?from=`: sign-in's own redirect config decides where login lands, so "where does
               login land" has one answer (and stays server-resolved if HH-1 makes home dynamic). */}
-            <Link href={SIGN_IN_PATH}>{LANDING_COPY.signInCta}</Link>
+            {/* A plain `<a>`, never `<Link>`: this page has no Clerk provider, and a client navigation
+                would load Clerk with a nonce the page's CSP does not allow (`clerk-root.tsx`). */}
+            <a href={SIGN_IN_PATH}>{LANDING_COPY.signInCta}</a>
           </Button>
         </div>
       </main>

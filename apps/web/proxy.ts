@@ -7,6 +7,7 @@ import {
   clerkIsConfigured,
   clerkPublishableKey,
 } from '@/lib/clerk';
+import { NONCE_HEADER } from '@/lib/constants';
 import { env } from '@/lib/env';
 
 /**
@@ -64,7 +65,7 @@ const RETIRED_GATE_COOKIE = 'mp_gate';
  * - **`script-src` gets no new origin.** Clerk's `clerk.browser.js` and `ui.browser.js` are served
  *   from `clerkOrigin`, but this policy carries `'strict-dynamic'`, which makes a browser IGNORE every
  *   host and scheme source in `script-src` — so adding one would be dead weight that reads like a
- *   protection. The scripts load on the NONCE instead: `<ClerkProvider nonce dynamic>` (app/layout.tsx)
+ *   protection. The scripts load on the NONCE instead: `<ClerkProvider nonce dynamic>` (components/layout/clerk-root.tsx)
  *   feeds the same per-request `x-nonce` this proxy already forwards into
  *   `@clerk/nextjs`'s `DynamicClerkScripts`, which stamps it onto both the `<script>`
  *   (`buildClerkJSScriptAttributes`) and the `<link rel=preload as=script>`. Verified at the pinned
@@ -284,13 +285,13 @@ function withRetiredCookies(request: NextRequest, response: Response): Response 
  * ⚠️ `x-nonce` is unaffected and still `.set()` on a COPY of the inbound headers, so a caller cannot
  * inject it; `proxy.test.ts` pins that overwrite.
  *
- * `x-nonce` is also what `<ClerkProvider nonce>` is given in `app/layout.tsx`, and what
+ * `x-nonce` is also what `<ClerkProvider nonce>` is given in `components/layout/clerk-root.tsx`, and what
  * `@clerk/nextjs`'s own `DynamicClerkScripts` reads straight off this header — so one nonce covers
  * Next's tags, the theme script and Clerk's script tag.
  */
 function forward(request: NextRequest, nonce: string, csp: string): NextResponse {
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set(NONCE_HEADER, nonce);
   requestHeaders.set('Content-Security-Policy', csp);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }

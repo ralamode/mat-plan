@@ -73,7 +73,7 @@ export const env = createEnv({
     // --- AUTH-1 1a: Clerk, wired but DARK. BOTH OPTIONAL BY DESIGN. ---
     // Same rationale as the V1-14a block above, and the same three environments: local dev, CI
     // (`next build` runs with no external service) and un-wired previews legitimately run without
-    // these. Absent => `proxy.ts` composes no `clerkMiddleware()`, `app/layout.tsx` renders no
+    // these. Absent => `proxy.ts` composes no `clerkMiddleware()`, `ClerkRoot` renders no
     // `<ClerkProvider>`, and the app behaves exactly as it did before 1a. Making either REQUIRED
     // would break `pnpm dev` and CI the day 1a merged, and `lib/clerk.ts` is where the "both keys
     // present" predicate lives so the two call sites cannot disagree.

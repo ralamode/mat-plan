@@ -479,13 +479,8 @@ are used. Before R2 come 2a (seven), R0 (five) and R1 (seven), which is 19 again
 
 ### For the maintainer (through the board)
 
-**Q7.** `OPS-3`'s drill now comes before the first invite (#628). An outside family's data is not
-deleted before the drill. Does a deletion **of your own family's** data before then (an athlete, a
-program) also wait for the drill? The options:
-
-- **(a) No (recommended).** The restore branch is held 7 days, as always. The drill gates outside
-  families only.
-- **(b) Yes.** Requests wait until the drill.
+**Q7, answered _(maintainer, 2026-11-18)_: no.** `OPS-3`'s drill gates outside families only; a deletion of
+the maintainer's own family's data does not wait for it.
 
 ### For the spec's owner (the roadmap thread)
 

@@ -65,6 +65,9 @@ are optional and unset, `lib/clerk.ts` renders no provider without them, and the
 all; `e2e/theme.spec.ts` asserts zero requests to any Clerk host. The dashed `proxy.ts ⇢ Clerk` edge
 is the other half 1a wired: `clerkMiddleware()` is composed **inside** `proxy.ts` so `auth()` can
 answer at all, and 1a removed the `api` exclusion from its matcher for that reason.
+✅ **Since 2026-11-18 the `UI ==> CLERK` edge starts only on non-public pages**: the provider renders
+from each non-public segment's layout (`components/layout/clerk-root.tsx`), so `/` and `/privacy`,
+opened directly, fetch no Clerk code ([plan](./plans/td-clerk-off-public-pages.md)).
 
 ## 2. Write path — logging one entry
 
