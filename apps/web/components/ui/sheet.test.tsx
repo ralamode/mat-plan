@@ -30,7 +30,9 @@ function Harness({
   withLink,
   consumerClose,
   onReturned,
+  onEscapeKeyDown,
 }: {
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
   variant?: 'sheet' | 'dialog';
   footer?: React.ReactNode;
   status?: string;
@@ -68,6 +70,7 @@ function Harness({
         }
         status={status}
         onReturned={onReturned}
+        onEscapeKeyDown={onEscapeKeyDown}
       >
         <p>Body</p>
         {withLink ? <a href="/elsewhere">Create a program</a> : null}
@@ -270,6 +273,26 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
     const trigger = openAndCapture();
     expect(document.activeElement).not.toBe(trigger);
     await closeVia(() => fireEvent.keyDown(dialog(), { key: 'Escape' }));
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("keeps the sheet open when the consumer's onEscapeKeyDown prevents the default", () => {
+    // The movement picker's filter panel closes ITSELF on Escape and leaves the list open (CAT-3
+    // B2-ii). Without `preventDefault` the same key closes the sheet, as the test above shows.
+    const onEscapeKeyDown = vi.fn((event: KeyboardEvent) => event.preventDefault());
+    render(<Harness onEscapeKeyDown={onEscapeKeyDown} />);
+    openAndCapture();
+    fireEvent.keyDown(dialog(), { key: 'Escape' });
+    expect(onEscapeKeyDown).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+  });
+
+  it('still closes on Escape when the consumer only listens', async () => {
+    const onEscapeKeyDown = vi.fn();
+    render(<Harness onEscapeKeyDown={onEscapeKeyDown} />);
+    const trigger = openAndCapture();
+    await closeVia(() => fireEvent.keyDown(dialog(), { key: 'Escape' }));
+    expect(onEscapeKeyDown).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(trigger);
   });
 

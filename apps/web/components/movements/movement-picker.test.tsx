@@ -1002,6 +1002,8 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       '@mat-plan/shared',
       '@/components/ui/button',
       '@/components/ui/sheet',
+      // The filter panel (B2-ii): scanned here too, as a file of this folder.
+      '@/components/movements/movement-filter-panel',
       '@/lib/constants',
       '@/lib/utils',
       '@/lib/i18n/plural',

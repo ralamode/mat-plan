@@ -8,6 +8,8 @@ const asTypedHintText = (name: string) =>
   `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
 
 const statusNoMatches = 'No matches.';
+/** "12 movements": a filter choice's count, and the panel's. */
+const movementCount = (n: number) => plural(n, { one: `${n} movement`, other: `${n} movements` });
 /** Between the parts of a row's second line, and before its tag. */
 const ROW_META_JOIN = ' · ';
 /** A FRAGMENT of `statusNone`'s sentence, not a sentence: it has no terminal period. */
@@ -98,6 +100,81 @@ export const MOVEMENT_PICKER_COPY = {
   howToNone: 'No steps for this movement yet.',
   /** Said once when the steps fail to load: the box's text is not a live region. */
   statusHowToFailed: (name: string) => `Couldn't load the steps for ${name}.`,
+
+  // ── Filters (CAT-3 P7 to P10, B2-ii) ────────────────────────────────────────────────────────────
+  /** The control's visible text: "Filters", or "Filters · 3" while three are on. */
+  filters: (on: number) => (on === 0 ? 'Filters' : `Filters · ${on}`),
+  /** Its accessible name carries how many are on (P15). */
+  filtersName: (on: number) => (on === 0 ? 'Filters, none on' : `Filters, ${on} on`),
+  filtersHeading: 'Filters',
+  filtersBack: 'Back to the list',
+  equipmentLegend: 'Equipment',
+  equipmentAny: 'Any equipment',
+  /** The radio; the same words a row with an empty set shows (`emptyEquipment`). */
+  equipmentNoneHint: 'Just you and the floor. A wall, a towel or a partner counts as equipment.',
+  equipmentChosen: 'Uses at least one of…',
+  equipmentChosenHint:
+    'A movement may need more than the one you tick. Each row lists what it needs.',
+  /** The items' own fieldset, under "Uses at least one of…". */
+  equipmentItemsLegend: 'Equipment to use',
+  showAllEquipment: (n: number) => `Show all equipment (${n})`,
+  showFewerEquipment: 'Show fewer',
+  musclesLegend: 'Main muscle',
+  /** A choice's count, said after its label ("Lats, 12 movements"); the digits alone are shown. */
+  choiceCount: movementCount,
+  clearFilters: 'Clear filters',
+  /** What the panel says after Clear filters: "Filters cleared. 120 movements." */
+  filtersCleared: 'Filters cleared',
+  /** The panel's button that shows the list: "Show 12 movements", or "Show 3 results" under a query. */
+  showResults: (n: number, searching: boolean) =>
+    searching
+      ? plural(n, { one: `Show ${n} result`, other: `Show ${n} results` })
+      : plural(n, { one: `Show ${n} movement`, other: `Show ${n} movements` }),
+  nothingFits: 'Nothing fits',
+  /** The panel's visible count (plain text): the region below says the same once per change. */
+  panelCount: (n: number) => `${movementCount(n)}.`,
+  /** Said once per change, in the sheet's one region while the panel is open (P15). */
+  panelStatus: (choice: string, on: boolean, n: number) =>
+    `${choice} ${on ? 'on' : 'off'}. ${movementCount(n)}.`,
+  /** Said when the filters are cleared, or a radio chosen. */
+  panelStatusChoice: (choice: string, n: number) => `${choice}. ${movementCount(n)}.`,
+  /** The line at the top of the list while filters are on (panel row 10). */
+  filtersOnLine: (on: number) =>
+    plural(on, { one: `${on} filter on.`, other: `${on} filters on.` }),
+  /** Under a query, after the rows that pass (P10). */
+  outsideMore: (n: number) =>
+    plural(n, {
+      one: `${n} more is not in your filters.`,
+      other: `${n} more are not in your filters.`,
+    }),
+  /** Under a query, when nothing found passes (P10). */
+  outsideAll: (n: number, query: string) =>
+    plural(n, {
+      one: `${n} movement for ${quote(query)} is not in your filters.`,
+      other: `${n} movements for ${quote(query)} are not in your filters.`,
+    }),
+  /** Browsing with nothing that fits (P10). */
+  noneFit: 'No movements fit your filters.',
+  /** Browsing with a filter on, until B3's tree (P12's heading). */
+  fitHeading: 'Movements that fit your filters',
+  /** The household's items under a filter: a filter cannot judge them (P9). */
+  householdNotFiltered: 'Your custom items (not filtered)',
+  /** After a headingless hit (panel row 15): the hit is a match too. */
+  moreMatches: 'More matches',
+  tagNotInFilters: 'not in your filters',
+  /** The create hint when the similar name the person may mean is outside the filters (row 9). */
+  similarOutside: (name: string) => `${quote(name)} is listed but is not in your filters.`,
+  /** Single mode's footer hint while the similar name is outside the filters (panel row 9). */
+  asTypedHintOutside: (similar: string, typed: string) =>
+    `${quote(similar)} is listed but is not in your filters. ${asTypedHintText(typed)}`,
+  /** The status with nothing in the filters and some outside them (the prototype's words). */
+  statusOutsideOnly: (n: number) => `Nothing in your filters. ${n} outside them.`,
+  /** Said once after the picker opens with filters still on (panel row 10). */
+  statusFiltersKept: (on: number) =>
+    plural(on, {
+      one: `${on} filter still on.`,
+      other: `${on} filters still on.`,
+    }),
 
   // ── The status region (criterion 46), as ONE shape: `{count}. {reason}` ─────────────────────────
   /**
