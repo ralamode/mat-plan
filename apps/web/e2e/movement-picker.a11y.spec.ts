@@ -59,7 +59,9 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
 
   await test.step('the filter panel, with a greyed choice', async () => {
     await filtersButton(page).click();
-    await expect(page.getByRole('heading', { name: COPY.filtersHeading })).toBeFocused();
+    await expect(
+      page.getByRole('heading', { name: COPY.filtersHeading, exact: true }),
+    ).toBeFocused();
     await expect(muscle(page, 'Neck')).toHaveAttribute('aria-disabled', 'true');
     await check(page, 'filter panel');
   });
@@ -68,7 +70,9 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
     await muscle(page, 'Quads').check();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByRole('heading', { name: COPY.filtersHeading })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: COPY.filtersHeading, exact: true })).toHaveCount(
+      0,
+    );
     await expect(filtersButton(page)).toBeFocused();
     await expect(filtersButton(page)).toHaveAccessibleName(COPY.filtersName(1));
   });
