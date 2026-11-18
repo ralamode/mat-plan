@@ -1,12 +1,12 @@
-diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 4f96cfb1..320462d3 100644
---- a/packages/db/src/writers/day/log-row.ts
-+++ b/packages/db/src/writers/day/log-row.ts
-@@ -379,7 +379,6 @@ export async function logRow(
-       .where(
-         and(
-           eq(schema.prescriptions.publicId, write.prescriptionPublicId),
--          eq(schema.prescriptions.workoutId, workout.id),
-         ),
-       );
-     const prescription = rows[0];
+diff --git a/packages/db/src/writers/day/row-steps.ts b/packages/db/src/writers/day/row-steps.ts
+index 862fa27b..18a53d83 100644
+--- a/packages/db/src/writers/day/row-steps.ts
++++ b/packages/db/src/writers/day/row-steps.ts
+@@ -152,7 +152,6 @@ export async function rowItem(
+         'publicId' in args.prescription
+           ? eq(schema.prescriptions.publicId, args.prescription.publicId)
+           : eq(schema.prescriptions.id, args.prescription.id),
+-        eq(schema.prescriptions.workoutId, args.workoutId),
+       ),
+     );
+   const prescription = rows[0];
