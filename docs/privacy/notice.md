@@ -210,8 +210,8 @@ weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the 
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
 does not record who did. A cleared one is not removed from the database, and it is **not in the
-export** (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete
-or household. **Nothing automatically removes a hidden row.** You should know that before you log
+export** (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete
+or household, and asking for one program, workout or typed item to be removed. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
 **What is being built, so you know what to expect.** A **Clear this day** control, which hides
@@ -230,8 +230,9 @@ field, as above. Two things are worth saying plainly about every clear:
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
   until a removal that runs a set number of days later is built.
 
-There is still **no way to permanently remove one single item on demand** — the finest grain for a
-permanent removal is an athlete. Ask, and that is done.
+There is still **no way to permanently remove one single logged item on demand**: the finest grain for
+removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
+on request.)
 
 ## Getting your data out
 

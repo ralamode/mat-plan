@@ -711,7 +711,9 @@ kept from the first draft.
 8. **Q8. Removing one program, workout or item on request has no pause**; its restore branch is held 3
    days _(2026-11-18)_.
 9. **Q9. An adult athlete on a removed program is told first, on their own channel, and cannot cancel**
-   _(2026-11-18)_.
+   _(2026-11-18)_; before the apply they are sent their own full copy (their assignment rows and targets on
+   it, which the in-app export does not hold; privacy lens on #632). How long "told first" lasts before
+   the apply is asked of the maintainer.
 10. **Q10. A typed item a log still names is refused, and the household is told which athletes**
     _(2026-11-18)_.
 11. **The principle, for every removal, in the runbook now and in the app later** _(2026-11-18,
