@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  * red each time a lane filled a stub in, and this file is the contract owner's: the lane would have
  * to edit it, and owe its guide. What a screen renders is tested beside the screen.
  */
-type Mounted = { screen: string; props: Record<string, unknown> };
+type Mounted = { screen: string; props: Record<string, unknown>; prefetch?: boolean };
 const { mounted, probe } = vi.hoisted(() => {
   const mounted = { calls: [] as Mounted[] };
   // Hoisted with the mocks below, which run before any other line of this file.
@@ -30,14 +30,26 @@ const { mounted, probe } = vi.hoisted(() => {
   };
   return { mounted, probe };
 });
-vi.mock('@/components/program-builder/programs-list-screen', () => ({
-  ProgramsListScreen: probe('programs-list'),
+/**
+ * A builder screen's probe also records what `BuilderLinkPrefetch` says where the screen is
+ * mounted: that is what each of its links would read.
+ */
+async function builderProbe(name: string) {
+  const { use } = await import('react');
+  const { BuilderLinkPrefetch } = await import('@/components/program-builder/route-link');
+  return (props: Record<string, unknown>) => {
+    mounted.calls.push({ screen: name, props, prefetch: use(BuilderLinkPrefetch) });
+    return null;
+  };
+}
+vi.mock('@/components/program-builder/programs-list-screen', async () => ({
+  ProgramsListScreen: await builderProbe('programs-list'),
 }));
-vi.mock('@/components/program-builder/program-screen', () => ({
-  ProgramScreen: probe('program'),
+vi.mock('@/components/program-builder/program-screen', async () => ({
+  ProgramScreen: await builderProbe('program'),
 }));
-vi.mock('@/components/program-builder/workout-editor-screen', () => ({
-  WorkoutEditorScreen: probe('workout-editor'),
+vi.mock('@/components/program-builder/workout-editor-screen', async () => ({
+  WorkoutEditorScreen: await builderProbe('workout-editor'),
 }));
 vi.mock('@/components/day/day-screen', () => ({ DayScreen: probe('day') }));
 // The three parts the day page places itself (plan D34), which the day case mounts around the screen.
@@ -141,6 +153,17 @@ describe('the preview harness', () => {
       const [first] = Object.values(actions);
       const result = await first!({});
       expect(result.reason === PROGRAM_REFUSAL.retry).toBe(entry.failNext);
+    },
+  );
+
+  it.each(PREVIEW_SCREEN_NAMES.filter((name) => name !== 'day'))(
+    '%s: its links do not prefetch, since a fixture id is no real page',
+    (name) => {
+      const [fixture] = PREVIEW_SCREENS[name].fixtures;
+      render(<PreviewHarness screen={name} fixture={fixture!} failNext={false} />);
+      const builder = mounted.calls.filter((call) => call.screen === name);
+      expect(builder.length).toBeGreaterThan(0);
+      expect(builder.map((call) => call.prefetch)).toEqual(builder.map(() => false));
     },
   );
 

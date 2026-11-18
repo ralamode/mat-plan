@@ -81,7 +81,7 @@ flowchart LR
 | `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. The program fake's clock is `ProgramView.today`.                                                                                                                                                                                                                                                                                                                                                                                            |
 | `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture: the test library as library rows (`catalogOptionOf` over `CATALOG_FIXTURE`) and the prototype's items as the household's own, one row a name (a name in both is the library's row under the item's id when the two log alike, else the household's item); and `previewHowTo(publicId)`, the preview's "How to" read. Here because its shape is the web's `MovementOptionDTO`.                                                                                                                                                         |
 | `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props. It hands the picker `previewHowTo` as its "How to" loader.                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props. It hands the picker `previewHowTo` as its "How to" loader. It wraps every screen in `<BuilderLinkPrefetch value={false}>`, so no builder link prefetches a fixture id's page (a 404).                                                                                                                                                                                                                                                                |
 | `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `apps/web/e2e/program-preview-a11y.spec.ts`       | Walks every state of the registry: axe, 44px targets, no sideways scroll at 360px.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
@@ -208,7 +208,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    in `apps/web` outside `apps/web/app/design/program/` imports the fakes, `picker-options` or the
    fixtures subpath, and nothing outside it names the route: `fakes.test.ts` and
    `preview-registry.test.ts` scan `apps/web` for both. The data lanes' proofs in
-   `packages/db/scripts/verify/` do import the fixtures subpath: that is invariant 3.
+   `packages/db/scripts/verify/` do import the fixtures subpath: that is invariant 3. So may a
+   test: the unit tests are not in the scan, and the end-to-end tests under `apps/web/e2e/` are
+   left out of the fakes-and-fixtures scan by directory, so a spec reads a fixture's names and
+   never re-types them. In return nothing in the app may import from `e2e/` or from `scripts/` (the
+   same test file checks it), or a helper there could carry a fixture into a route.
 5. **A fake follows the prototype's rules and each rule has a test** (`fakes.test.ts`; plan §8,
    "Behaviour"). A fake and a real action parse an input with the same schema, so a screen sees the
    same refusal on the preview route and in production.
@@ -448,6 +452,32 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     Refusing all five keeps each token to one spelling, and `rowRetickSchema` takes that rule whole
     (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
     real action refuses before anything is read, and the fake changes nothing.
+30. **A household's own items, a program's workouts and a weekday's workouts each have a cap, and
+    passing one is `limit_reached`** (contract change C35; maintainer, 2026-11-18: "Approve 500 /
+    50 / 30"). `MAX_HOUSEHOLD_ITEMS` (500: the items a household made, never the library's),
+    `MAX_PROGRAM_WORKOUTS` (50: a saved new workout and a copy alike) and `MAX_DAY_SLOTS` (30: one
+    weekday of one program's week), in `program-shapes.ts`. The refusal is its own word because
+    `invalid` reads as "something typed is wrong" and a screen marks a field for it.
+    - **Never capped:** an edit of a workout that exists; a replay of a create (the same client
+      id answers as the first call did); `newItem` for a name that already names an item, which
+      selects it (invariant 15).
+    - **For a create the cap is judged before the name**, so a full program says so and nobody
+      renames a workout only to be told the program is full.
+    - **The weekday cap is in `weekDaysSchema`**, so a week past it fails the parse.
+      `weekExceedsDaySlots(draft)` tells that from any other failure, as `weekRepeatsAWorkout`
+      does for a repeat, and **a repeat is asked first**: `once_per_day`, then `limit_reached`,
+      then `invalid`. The fake answers this way; lane P's writers and the real actions follow in
+      their own PRs, and until they do the real `saveWeek` answers `invalid` for a long day.
+    - **The workouts cap is the program's the write lands in.** For a copy into another program
+      that is the other program's, never the source's. ⚠️ The fake holds only the program on
+      screen, so it counts that one alone: a copy into another program is never refused by the
+      fake, and a save for a program that is not on screen is not counted either. The real
+      writers count the destination.
+    - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
+      `weekDaysSchema`. That is safe: every writer parses the draft first, and the week's table
+      is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      caps (`ProgramView.workouts` has none), and how many programs a household has is not
+      capped.
 
 ## Traps
 
@@ -569,7 +599,10 @@ under its own CAT-3 heading).
     move to `custom`, one section after the filtered matches (a custom item that is a hit stays
     first in `matches`), and `passesMovementFilters` answering `false` for one is never a reason
     to hide it; (c) **what the filters removed is counted** in `outsideFilters`, and the screen
-    never falls back to the whole list. With no filter on (`movementFiltersOn` is zero, which
+    never falls back to the whole list. ⏳ Until the catalog's fresh start `outsideWithoutData` says how
+    many of those have no taxonomy at all (the old built-ins with no library entry, spec K22),
+    so the screen can tell "needs something else" from "nothing is known"; after the fresh start
+    it is always zero and the field goes. With no filter on (`movementFiltersOn` is zero, which
     includes "chosen" with nothing ticked) the result is the unfiltered one and a custom item
     sits among `matches`.
 16. **Equipment is one choice of three, and changing it clears nothing.** `any`, `none` (the set

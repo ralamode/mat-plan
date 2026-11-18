@@ -74,6 +74,7 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
       ['invalid', 'Give the program a name.'],
       ['not_found', 'This program no longer exists.'],
       ['once_per_day', 'Couldn’t save. Try again.'],
+      ['limit_reached', 'Couldn’t save. Try again.'],
       ['retry', 'Couldn’t save. Try again.'],
     ]);
   });
