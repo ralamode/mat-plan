@@ -27,13 +27,14 @@ fills the directory and changes none of them.
 Batch numbers follow the review sheet, so they need not be consecutive here: a batch merges once
 it is approved, one batch PR at a time.
 
-| Batch | Family                            | Entries |
-| ----- | --------------------------------- | ------- |
-| 1     | Mobility and stretching           | 50      |
-| 2     | Core, carries and sleds           | 58      |
-| 3     | Vertical pull and push            | 58      |
-| 4     | Horizontal push and pull          | 57      |
-| 5     | Conditioning machines and running | 54      |
+| Batch | Family                                                                               | Entries |
+| ----- | ------------------------------------------------------------------------------------ | ------- |
+| 1     | Mobility and stretching                                                              | 50      |
+| 2     | Core, carries and sleds                                                              | 58      |
+| 3     | Vertical pull and push                                                               | 58      |
+| 4     | Horizontal push and pull                                                             | 57      |
+| 5     | Conditioning machines and running                                                    | 54      |
+| 6     | Correction: supervised instructions name the coach (K17), 4 edits of shipped entries | 0 new   |
 
 ## How a batch arrives
 
