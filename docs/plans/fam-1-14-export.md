@@ -302,6 +302,53 @@ it:
   changes that assertion and runs `e2e:local`. The stale `checkinMonthRows` mock
   (`export-prescribed.test.ts:20`) becomes the real query or is deleted.
 
+### 14b — file by file (2026-11-18, after Q2)
+
+Written from the constraints above and Q2's answer (the long format). Size: about 250 lines plus docs.
+
+- **EDIT `packages/db/src/queries/export-month.ts`.**
+  - **NEW `bodyweightEntry()`**: the one conjunct for "this entry is a bodyweight reading",
+    `activity_types.key = SEED_ACTIVITY_TYPE_KEYS.weighIn` (the constant, in place of the literal
+    `'weigh_in'`). `bodyweightMonthRows` uses it.
+  - **NEW `checkinMonthRows(db, { profilePublicId, month, scope })`**: every live entry of the month
+    with `movement_id IS NULL` and NOT `bodyweightEntry()`, under `isLiveProfile`. It selects date,
+    activity key, `metric_key`, `value_num`, `value_text`, unit and notes, ordered by
+    `(activity_date, id)`. The day's check-ins have no session order to keep.
+- **EDIT `packages/shared/src/csv/checkins.ts`.** `CHECKINS_HEADER` becomes
+  `date,activity,metric,value,unit,notes`, and `CheckinsRow` is retyped to match.
+  - `activity` and `metric` are written through `csvToken()`. That helper is NEW in `columns.ts`, the
+    one `_`→`-` rule, which `csvMovement` and `csvSessionType` then call.
+  - `value` is `formatNumeric(value_num)` when there is one, else `value_text`, else empty.
+  - `unit` is the stored unit code (`min`, `count`, `bool`, `timing`), never a load spelling.
+  - The legacy nine-column docblock goes, and so does `header-only in reality`.
+- **EDIT `apps/web/lib/dal/export.ts`.** The check-ins file is built from `checkinMonthRows`, and
+  the comment that called it header-only is removed.
+- **Tests.**
+  - `packages/shared/src/csv/checkins.test.ts` (NEW): the header, one row per kind, a `bool` habit,
+    a `timing` Wake, calisthenics' metrics told apart, and a quoted note.
+  - `apps/web/lib/dal/export-prescribed.test.ts`: its stale `checkinMonthRows` mock becomes the real
+    query's mock, and one case reads the file.
+  - `apps/web/e2e/export-full-day.spec.ts:161`: it now asserts the check-ins file's rows, not
+    header-only. `e2e:local` runs once.
+- **`db:verify`** (`verify/day.ts`, with `verifyExport`). One proof, `14b: every live entry of a month
+lands in exactly one file`:
+  - it logs a weigh-in, a practice, a calisthenics day (two metrics), an old check-in metric, a
+    program row and a hidden check-in;
+  - it reads all three month queries;
+  - it asserts every live entry's id appears in exactly one of them, that no check-in row carries
+    `bodyweight`, and that the hidden one is in none.
+- **Mutations 368–370** (lane E's block):
+  - the check-ins read drops `movement_id IS NULL`, so strength rows appear twice;
+  - it drops NOT `bodyweightEntry()`, so a weigh-in appears twice;
+  - it drops `deleted_at`, so a hidden check-in leaks.
+- **Docs.**
+  - `docs/csv-export-contract.md`: the check-ins section, now the long format.
+  - `docs/privacy/notice.md`: the export paragraph names check-ins; the "does not yet include" list
+    loses them.
+  - `docs/privacy/data-inventory.md`: §6's first omission bullet is rewritten; §3 and §6 gain
+    `value_text` and `notes` as exported free text; a dated re-read entry.
+  - `write-path.md` and `day-writers.md`; a changelog fragment.
+
 ## Out of scope (sent to the board)
 
 - **Who may download bodyweight.** `.github/SECURITY.md:134` says "the household operator". The
